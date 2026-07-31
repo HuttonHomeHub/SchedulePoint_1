@@ -17,7 +17,7 @@ import type { SeedApproximation, SeedFinding, SeedPlanResult } from './report.js
  * anything it could not finish, naming it in the report.
  */
 
-/** The API is day-denominated (TECH_DEBT #77); this is where minutes meet that ceiling. */
+/** The API is day-denominated (TECH_DEBT #78); this is where minutes meet that ceiling. */
 const MINUTES_PER_DAY = 1440;
 
 export interface SeedTarget {
@@ -27,6 +27,8 @@ export interface SeedTarget {
 
 interface Created {
   id: string;
+  /** Every mutable row carries an optimistic-lock version; every PATCH must echo it back. */
+  version?: number;
 }
 
 export async function seedPlan(
@@ -57,21 +59,71 @@ export async function seedPlan(
   try {
     const org = `/api/v1/organizations/${target.orgSlug}`;
 
+    // The two ORG-GLOBAL libraries, read ONCE up front: both outlive a seed run, so a re-seed into
+    // the same organisation must reuse rather than collide on the org-uniques. Resolved before the
+    // calendar loop because that loop is the first consumer.
+    const existingResourceIdByCode = await listExisting(
+      client,
+      `${org}/resources`,
+      findings,
+      (r) => r.code,
+    );
+    // ORG-scoped calendars are the shared library and outlive a run, so a re-seed must reuse them by
+    // name rather than colliding on `uq_calendars_org_name`. PROJECT ones belong to this run's
+    // project and are always created fresh.
+    const existingOrgCalendarIdByName = await listExisting(
+      client,
+      `${org}/calendars?scope=org`,
+      findings,
+      (c) => c.name,
+    );
+
     // 1. Calendars. A PROJECT-scoped one is created under the target project; an ORG one in the
     //    shared library (ADR-0053 §1) — the scope is part of what the catalogue is testing, so it is
     //    honoured rather than flattened.
     const calendarIdByKey = new Map<string, string>();
     for (const calendar of spec.calendars) {
+      const mask = toWeekdayMask(calendar.days);
+      if (mask === 0) {
+        // A **window-only** calendar: the base week is entirely non-working and all work comes from
+        // dated exception windows (the fixture's turnaround calendar). ADR-0036 §"window-only base
+        // weeks" supports this at the engine, but `CreateCalendarDto` puts `@Min(1)` on the mask, so
+        // no client can express it. Recorded as a finding rather than fudged into a working week —
+        // inventing a Monday would make the seeded plan schedule differently from the fixture and
+        // say nothing about it. See TECH_DEBT #79.
+        findings.push({
+          entity: 'calendar',
+          sourceRef: calendar.key,
+          code: 'WINDOW_ONLY_CALENDAR_UNSUPPORTED',
+          detail:
+            `“${calendar.name}” has a non-working base week (all work comes from dated exception ` +
+            'windows). The calendars API requires workingWeekdays >= 1, so it cannot be created; ' +
+            'activities on it will inherit the plan calendar instead.',
+        });
+        continue;
+      }
+      const reusable =
+        calendar.scope === 'ORG' ? existingOrgCalendarIdByName.get(calendar.name) : undefined;
+      if (reusable !== undefined) {
+        calendarIdByKey.set(calendar.key, reusable);
+        continue;
+      }
       try {
         const created = await client.post<Created>(`${org}/calendars`, {
           name: calendar.name,
           scope: calendar.scope,
           ...(calendar.scope === 'PROJECT' ? { projectId: target.projectId } : {}),
-          workingWeekdays: toWeekdayMask(calendar.days),
+          workingWeekdays: mask,
         });
         calendarIdByKey.set(calendar.key, created.id);
         counts.calendars += 1;
+        // One row per date: a date_range expansion can overlap a single-date exception in the same
+        // calendar (the fixture does exactly this), and the API rejects the second as a duplicate.
+        // First-wins, because the single-date entry is the more specific statement.
+        const seenDates = new Set<string>();
         for (const exception of calendar.exceptions) {
+          if (seenDates.has(exception.date)) continue;
+          seenDates.add(exception.date);
           await client.post(`${org}/calendars/${created.id}/exceptions`, {
             date: exception.date,
             isWorking: exception.windows.length > 0,
@@ -84,8 +136,17 @@ export async function seedPlan(
     }
 
     // 2. Resources — org-scoped, so parents before children (a GROUP must exist to be one).
+    // The resource library is ORG-GLOBAL and survives between runs, so a second seed into the same
+    // organisation would collide on `uq_resources_org_code`. Resolve first, create only what is new
+    // — the same resolve-or-create rule the importer uses, for the same reason.
     const resourceIdByKey = new Map<string, string>();
     for (const resource of [...spec.resources].sort((a, b) => depth(a, spec) - depth(b, spec))) {
+      const existing =
+        resource.code === null ? undefined : existingResourceIdByCode.get(resource.code);
+      if (existing !== undefined) {
+        resourceIdByKey.set(resource.key, existing);
+        continue;
+      }
       try {
         const created = await client.post<Created>(`${org}/resources`, {
           name: resource.name,
@@ -117,9 +178,8 @@ export async function seedPlan(
       ...(spec.plan.description === null ? {} : { description: spec.plan.description }),
       plannedStart: spec.plan.dataDate,
       schedulingMode: spec.plan.options.schedulingMode,
-      ...(spec.plan.defaultCalendarKey === null
-        ? {}
-        : { calendarId: calendarIdByKey.get(spec.plan.defaultCalendarKey) }),
+      // NOT `calendarId`: `CreatePlanDto` does not accept one — the plan's default calendar is set by
+      // the update below, alongside the scheduling options. Sending it here is a 422.
     });
     planId = plan.id;
 
@@ -128,6 +188,10 @@ export async function seedPlan(
 
       try {
         await client.patch(planPath, {
+          version: plan.version ?? 1,
+          ...(spec.plan.defaultCalendarKey === null
+            ? {}
+            : { calendarId: calendarIdByKey.get(spec.plan.defaultCalendarKey) }),
           progressRecalcMode: spec.plan.options.progressRecalcMode,
           useExpectedFinishDates: spec.plan.options.useExpectedFinishDates,
           criticalPathDefinition: spec.plan.options.criticalPathDefinition,
@@ -145,6 +209,7 @@ export async function seedPlan(
 
       // 4. Activities, parents last (a WBS parent is another activity, so all must exist first).
       const activityIdByKey = new Map<string, string>();
+      const activityVersionById = new Map<string, number>();
       for (const activity of spec.activities) {
         try {
           const created = await client.post<Created>(`${planPath}/activities`, {
@@ -177,14 +242,53 @@ export async function seedPlan(
               ? {}
               : { budgetedExpense: activity.budgetedExpense }),
             ...(activity.actualExpense === null ? {} : { actualExpense: activity.actualExpense }),
+            // ADR-0043 models these as absolute working-INSTANTS; the API takes a calendar date, so
+            // the time of day is dropped and said so. Same family as TECH_DEBT #78.
             ...(activity.externalEarlyStart === null
               ? {}
-              : { externalEarlyStart: activity.externalEarlyStart }),
+              : {
+                  externalEarlyStart: toApiDate(
+                    activity.externalEarlyStart,
+                    activity.code,
+                    'externalEarlyStart',
+                    approximations,
+                  ),
+                }),
             ...(activity.externalLateFinish === null
               ? {}
-              : { externalLateFinish: activity.externalLateFinish }),
+              : {
+                  externalLateFinish: toApiDate(
+                    activity.externalLateFinish,
+                    activity.code,
+                    'externalLateFinish',
+                    approximations,
+                  ),
+                }),
+            // These three belong to the ACTIVITY, not the progress endpoint: `percentCompleteType`
+            // and `physicalPercentComplete` choose and carry the measure that earns value without
+            // moving a date (ADR-0042), and `expectedFinish` is inert unless the plan opts in
+            // (ADR-0035 §9). Sending them to /progress is a 422 — its DTO owns schedule progress only.
+            ...(activity.progress === null
+              ? {}
+              : {
+                  percentCompleteType: activity.progress.percentCompleteType,
+                  ...(activity.progress.physicalPercentComplete === null
+                    ? {}
+                    : { physicalPercentComplete: activity.progress.physicalPercentComplete }),
+                  ...(activity.progress.expectedFinish === null
+                    ? {}
+                    : {
+                        expectedFinish: toApiDate(
+                          activity.progress.expectedFinish,
+                          activity.code,
+                          'expectedFinish',
+                          approximations,
+                        ),
+                      }),
+                }),
           });
           activityIdByKey.set(activity.key, created.id);
+          activityVersionById.set(created.id, created.version ?? 1);
           counts.activities += 1;
         } catch (error) {
           record('activity', activity.code, error);
@@ -195,13 +299,17 @@ export async function seedPlan(
       //    per child — the endpoint exists precisely for this and takes the plan lock once.
       const parented = spec.activities
         .filter((a) => a.parentKey !== null && activityIdByKey.has(a.key))
-        .map((a) => ({
-          activityId: activityIdByKey.get(a.key)!,
-          parentId: activityIdByKey.get(a.parentKey!) ?? null,
-        }));
+        .map((a) => {
+          const id = activityIdByKey.get(a.key)!;
+          return {
+            id,
+            parentId: activityIdByKey.get(a.parentKey!) ?? null,
+            version: activityVersionById.get(id) ?? 1,
+          };
+        });
       if (parented.length > 0) {
         try {
-          await client.patch(`${planPath}/activities/parents`, { assignments: parented });
+          await client.patch(`${planPath}/activities/parents`, { parents: parented });
         } catch (error) {
           record('wbs-parents', spec.seedName, error);
         }
@@ -246,23 +354,66 @@ export async function seedPlan(
         }
       }
 
+      // Re-read the version of every activity that is ABOUT to be progressed. The WBS-parents batch
+      // above bumps the `version` of each row it reparents, so the versions captured at create time
+      // are stale for exactly the rows most likely to carry progress — a 409 on twenty of them.
+      //
+      // Fetched per activity rather than by listing the plan: the list caps at 100 and this plan has
+      // 147, so a single page would silently leave the tail stale — the same class of quiet
+      // wrongness, just further down. Only a handful of activities carry progress, so this is a few
+      // requests, not a scan.
+      for (const activity of spec.activities.filter((a) => a.progress !== null)) {
+        const activityId = activityIdByKey.get(activity.key);
+        if (activityId === undefined) continue;
+        try {
+          const row = await client.get<{ version: number }>(`${org}/activities/${activityId}`);
+          activityVersionById.set(activityId, row.version);
+        } catch (error) {
+          record('activity-version', activity.code, error);
+        }
+      }
+
       for (const activity of spec.activities) {
         const activityId = activityIdByKey.get(activity.key);
         if (activityId === undefined) continue;
         if (activity.progress !== null) {
+          const progress = activity.progress;
           try {
+            // `status` is DERIVED by the service from the actuals — sending it is a 422. The DTO
+            // owns schedule progress only; the measure and the physical value went on the create.
             await client.patch(`${org}/activities/${activityId}/progress`, {
-              status: activity.progress.status,
-              percentComplete: activity.progress.percentComplete,
-              percentCompleteType: activity.progress.percentCompleteType,
+              version: activityVersionById.get(activityId) ?? 1,
+              percentComplete: progress.percentComplete,
               ...omitNulls({
-                physicalPercentComplete: activity.progress.physicalPercentComplete,
-                actualStart: activity.progress.actualStart,
-                actualFinish: activity.progress.actualFinish,
-                remainingDurationMinutes: activity.progress.remainingDurationMinutes,
-                suspendDate: activity.progress.suspendDate,
-                resumeDate: activity.progress.resumeDate,
-                expectedFinish: activity.progress.expectedFinish,
+                actualStart: dateOrNull(
+                  progress.actualStart,
+                  activity.code,
+                  'actualStart',
+                  approximations,
+                ),
+                actualFinish: dateOrNull(
+                  progress.actualFinish,
+                  activity.code,
+                  'actualFinish',
+                  approximations,
+                ),
+                remainingDurationDays: toRemainingDays(
+                  progress.remainingDurationMinutes,
+                  activity.code,
+                  approximations,
+                ),
+                suspendDate: dateOrNull(
+                  progress.suspendDate,
+                  activity.code,
+                  'suspendDate',
+                  approximations,
+                ),
+                resumeDate: dateOrNull(
+                  progress.resumeDate,
+                  activity.code,
+                  'resumeDate',
+                  approximations,
+                ),
               }),
             });
           } catch (error) {
@@ -340,7 +491,7 @@ function toWeekdayMask(days: SeedSpec['calendars'][number]['days']): number {
 
 /**
  * Working minutes → the whole working days the API accepts, recording the rounding when it is not
- * exact. See TECH_DEBT #77: `CreateActivityDto` exposes only an integer `durationDays`, so an
+ * exact. See TECH_DEBT #78: `CreateActivityDto` exposes only an integer `durationDays`, so an
  * activity finer than a day **cannot be authored by any client**, and the seeded plan is a near copy
  * rather than a faithful one. Saying so in the report is what keeps it a test bed instead of a trap.
  */
@@ -353,7 +504,7 @@ function toDays(activity: SeedActivity, approximations: SeedApproximation[]): nu
       sourceRef: activity.code,
       detail: `duration ${activity.durationMinutes} min → ${rounded} day(s)`,
       reason:
-        'the public activity API accepts only whole working days (TECH_DEBT #77); the engine and ' +
+        'the public activity API accepts only whole working days (TECH_DEBT #78); the engine and ' +
         'storage are minute-granular, so this value is reachable by import but not by any client',
     });
   }
@@ -372,10 +523,101 @@ function toLagDays(
       entity: 'dependency',
       sourceRef,
       detail: `lag ${lagMinutes} min → ${rounded} day(s)`,
-      reason: 'the public dependency API accepts only whole working days (TECH_DEBT #77)',
+      reason: 'the public dependency API accepts only whole working days (TECH_DEBT #78)',
     });
   }
   return rounded;
+}
+
+/**
+ * An ADR-0043/0035 working-INSTANT → the calendar date the API accepts, recording the dropped time
+ * of day. The engine works to the minute; no client can say so. Same family as TECH_DEBT #78.
+ */
+function toApiDate(
+  instant: string,
+  sourceRef: string,
+  field: string,
+  approximations: SeedApproximation[],
+): string {
+  const date = instant.slice(0, 10);
+  if (!instant.endsWith('T00:00')) {
+    approximations.push({
+      entity: 'activity',
+      sourceRef,
+      detail: `${field} ${instant} \u2192 ${date}`,
+      reason:
+        'the API accepts a calendar date for this field, so the time of day is dropped; the engine ' +
+        'and storage are minute-granular (TECH_DEBT #78)',
+    });
+  }
+  return date;
+}
+
+/** {@link toApiDate} for a nullable field, keeping `null` as `null` for `omitNulls`. */
+function dateOrNull(
+  instant: string | null,
+  sourceRef: string,
+  field: string,
+  approximations: SeedApproximation[],
+): string | null {
+  return instant === null ? null : toApiDate(instant, sourceRef, field, approximations);
+}
+
+/** Remaining duration: minutes in the spec, whole days at the API (TECH_DEBT #78 again). */
+function toRemainingDays(
+  minutes: number | null,
+  sourceRef: string,
+  approximations: SeedApproximation[],
+): number | null {
+  if (minutes === null) return null;
+  const days = minutes / MINUTES_PER_DAY;
+  const rounded = Math.round(days);
+  if (rounded !== days) {
+    approximations.push({
+      entity: 'activity',
+      sourceRef,
+      detail: `remaining duration ${minutes} min \u2192 ${rounded} day(s)`,
+      reason: 'the progress API accepts only whole working days (TECH_DEBT #78)',
+    });
+  }
+  return rounded;
+}
+
+/**
+ * An org-global library's existing rows, keyed by whatever identifies them — so a **re-seed into the
+ * same organisation reuses** rather than colliding on the org-unique. Resources and ORG calendars
+ * both outlive a run, which is what made the second real run collide twenty-two times.
+ *
+ * The standard envelope means `client.get` has already unwrapped `{ data }` to the array itself;
+ * reading a `.items` off it silently yielded nothing, so every row looked new. 100 is the API's page
+ * ceiling. A failure to read is a finding, not fatal — the run then attempts creates and reports what
+ * the API says, which is strictly more informative than stopping.
+ */
+async function listExisting(
+  client: SeedClient,
+  path: string,
+  findings: SeedFinding[],
+  keyOf: (row: { id: string; code?: string | null; name?: string }) => string | null | undefined,
+): Promise<Map<string, string>> {
+  const byKey = new Map<string, string>();
+  const separator = path.includes('?') ? '&' : '?';
+  try {
+    const rows = await client.get<Array<{ id: string; code?: string | null; name?: string }>>(
+      `${path}${separator}limit=100`,
+    );
+    for (const row of rows) {
+      const key = keyOf(row);
+      if (key !== null && key !== undefined) byKey.set(key, row.id);
+    }
+  } catch (error) {
+    findings.push({
+      entity: 'library',
+      sourceRef: path,
+      code: 'LIBRARY_LIST_FAILED',
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return byKey;
 }
 
 /** Drop the null-valued keys, so an absent optional stays absent rather than an explicit null. */

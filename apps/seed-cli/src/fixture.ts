@@ -23,7 +23,7 @@ import {
  *
  * Durations arrive in **hours** and the spec model is in working minutes; the further conversion to
  * the whole days the public API accepts happens in the runner, where the loss can be reported per
- * activity (TECH_DEBT #77).
+ * activity (TECH_DEBT #78).
  */
 
 const MINUTES_PER_HOUR = 60;
@@ -73,6 +73,19 @@ const RESOURCE_KIND: Readonly<Record<string, SeedResourceKind>> = {
   NONLABOUR: 'EQUIPMENT',
   NONLABOR: 'EQUIPMENT',
   MATERIAL: 'MATERIAL',
+};
+
+/**
+ * P6 names its uniform loading curve `LINEAR`; the domain calls the same profile `UNIFORM`
+ * (ADR-0044). Everything else shares a name.
+ */
+const CURVE_TYPE: Readonly<Record<string, SeedSpec['assignments'][number]['curveType']>> = {
+  LINEAR: 'UNIFORM',
+  UNIFORM: 'UNIFORM',
+  BELL: 'BELL',
+  FRONT_LOADED: 'FRONT_LOADED',
+  BACK_LOADED: 'BACK_LOADED',
+  DOUBLE_PEAK: 'DOUBLE_PEAK',
 };
 
 const STATUS = {
@@ -233,10 +246,17 @@ export function fixtureSpec(): SeedSpec {
       description:
         'The full ADR-0034 conformance fixture as a live plan. Every capability the XER cannot ' +
         'carry is here; the seed report names what could not be placed at all.',
-      dataDate: '2026-01-05',
-      defaultCalendarKey: fixture.calendars.find((c) => c.is_default)?.id ?? null,
+      // The fixture's own **data date**, not its `planned_start`. They are different dates
+      // (2026-03-02 vs 2026-01-05) and confusing them is not cosmetic: the data date floors every
+      // computed early start (ADR-0023/0033), so an unprogressed activity lands on it — which is
+      // exactly the "everything starts 02 Mar 2026" the WBS summaries were reported showing. It also
+      // makes every actual in the fixture legal; against 2026-01-05 the API rightly refused twenty
+      // of them with ACTUAL_AFTER_DATA_DATE.
+      dataDate: isoDate(fixture.project.data_date),
+      defaultCalendarKey:
+        fixture.project.default_calendar ?? fixture.calendars.find((c) => c.is_default)?.id ?? null,
       currencyCode: 'GBP',
-      options: DEFAULT_SEED_PLAN_OPTIONS,
+      options: planOptions(fixture.project.scheduling_options),
     },
     calendars,
     resources,
@@ -249,7 +269,7 @@ export function fixtureSpec(): SeedSpec {
       unitsPerHour: assignment.units_per_hour ?? null,
       isDriving: assignment.driving ?? false,
       actualUnits: assignment.actual_units ?? null,
-      curveType: (assignment.curve as SeedSpec['assignments'][number]['curveType']) ?? 'UNIFORM',
+      curveType: CURVE_TYPE[assignment.curve ?? ''] ?? 'UNIFORM',
     })),
     unplaceable,
   };
@@ -283,6 +303,37 @@ function datesBetween(from: string, to: string): string[] {
     dates.push(new Date(at).toISOString().slice(0, 10));
   }
   return dates;
+}
+
+/**
+ * The fixture's P6-worded scheduling options → the plan's own switches. Read rather than defaulted,
+ * because several of these ARE capabilities the catalogue exists to exercise: the fixture turns
+ * `use_expected_finish_dates` ON, and without it `con_expected_finish` is inert (ADR-0035 §9) — the
+ * capability would be present in the data and unexercised in the plan.
+ */
+function planOptions(source: FixtureSchedulingOptions | undefined): SeedSpec['plan']['options'] {
+  if (source === undefined) return DEFAULT_SEED_PLAN_OPTIONS;
+  return {
+    ...DEFAULT_SEED_PLAN_OPTIONS,
+    useExpectedFinishDates: source.use_expected_finish_dates ?? false,
+    makeOpenEndsCritical: source.make_open_ended_activities_critical ?? false,
+    levelResources: source.level_resources_during_scheduling ?? false,
+    ignoreExternalRelationships: source.ignore_relationships_to_and_from_other_projects ?? false,
+    progressRecalcMode:
+      source.when_scheduling_progressed_activities_use === 'PROGRESS_OVERRIDE'
+        ? 'PROGRESS_OVERRIDE'
+        : source.when_scheduling_progressed_activities_use === 'ACTUAL_DATES'
+          ? 'ACTUAL_DATES'
+          : 'RETAINED_LOGIC',
+    criticalPathDefinition:
+      source.define_critical_activities_as === 'LONGEST_PATH' ? 'LONGEST_PATH' : 'TOTAL_FLOAT',
+    totalFloatMode:
+      source.compute_total_float_as === 'START_FLOAT'
+        ? 'START'
+        : source.compute_total_float_as === 'SMALLEST_OF_START_AND_FINISH_FLOAT'
+          ? 'SMALLEST'
+          : 'FINISH',
+  };
 }
 
 function constraintOf(constraint: FixtureConstraint | null | undefined): SeedConstraintType | null {
@@ -335,7 +386,21 @@ interface FixtureException {
   note?: string | null;
   work?: Array<[string, string]>;
 }
+interface FixtureSchedulingOptions {
+  ignore_relationships_to_and_from_other_projects?: boolean;
+  make_open_ended_activities_critical?: boolean;
+  use_expected_finish_dates?: boolean;
+  level_resources_during_scheduling?: boolean;
+  when_scheduling_progressed_activities_use?: string;
+  define_critical_activities_as?: string;
+  compute_total_float_as?: string;
+}
 interface FixtureShape {
+  project: {
+    data_date: string;
+    default_calendar?: string | null;
+    scheduling_options?: FixtureSchedulingOptions;
+  };
   calendars: Array<{
     id: string;
     name: string;

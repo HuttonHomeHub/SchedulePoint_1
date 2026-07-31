@@ -57,8 +57,13 @@ export interface SeedClientOptions {
   onRequest?: (info: { method: string; path: string; status: number; ms: number }) => void;
 }
 
-/** The rate-limit back-off schedule, in ms. Four attempts, then the 429 surfaces as an error. */
-const BACKOFF_MS = [500, 1500, 4000, 10_000];
+/**
+ * The rate-limit back-off schedule, in ms. The API's global throttle is a **60-second window**, so a
+ * schedule that gives up inside a minute cannot clear it — the first version summed to 16 s and lost
+ * six requests on a burst of calendar exceptions. These sum past the window, and `Retry-After` (when
+ * the server sends one) overrides them.
+ */
+const BACKOFF_MS = [1_000, 5_000, 15_000, 30_000, 61_000];
 
 export class SeedClient {
   private readonly baseUrl: string;
@@ -180,7 +185,10 @@ export class SeedClient {
       if (response.ok) return parsed;
 
       if (response.status === 429 && attempt < BACKOFF_MS.length) {
-        await sleep(BACKOFF_MS[attempt]!);
+        const retryAfter = Number(response.headers.get('Retry-After'));
+        await sleep(
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : BACKOFF_MS[attempt]!,
+        );
         continue;
       }
 

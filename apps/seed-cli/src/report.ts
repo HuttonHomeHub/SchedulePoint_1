@@ -10,7 +10,7 @@ import type { SeedUnplaceable } from '@repo/seed';
  * - **unplaceable** — the application has no concept for this at all (the fixture's roles,
  *   activity-code types and UDF definitions). Not a bug; a boundary.
  * - **approximated** — it was created, but not faithfully. The API is day-denominated, so an hour
- *   duration is rounded (TECH_DEBT #77). The seeded plan is then a *near* copy, and saying so is the
+ *   duration is rounded (TECH_DEBT #78). The seeded plan is then a *near* copy, and saying so is the
  *   difference between a test bed and a trap.
  * - **finding** — the API refused something a Planner should be able to do. This is a **product**
  *   defect the seed run discovered, and the run continues so that one gap does not hide the rest.
