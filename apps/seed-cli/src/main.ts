@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 
-import { negativeCases, scaleShapeOf } from '@repo/seed';
+import { negativeCases, scaleShapeOf, scaleSpec } from '@repo/seed';
 import {
   formatNegativeReport,
   formatReport,
@@ -16,6 +16,7 @@ import {
 import { parseArgs, USAGE } from './args.js';
 import { coverageReport, formatCoverage } from './capabilities/coverage.js';
 import { capabilityFamilyKeys, capabilitySpecs } from './capabilities/index.js';
+import { fixtureSpec } from './fixture.js';
 import { KNOWN_TIERS, loadSpecs } from './specs.js';
 
 /**
@@ -33,13 +34,38 @@ import { KNOWN_TIERS, loadSpecs } from './specs.js';
  * ```
  */
 
+/**
+ * Every plan the catalogue can build, as `tier<TAB>seedName<TAB>name`.
+ *
+ * The scale tier is parameterised, so it contributes one row at the default size rather than an
+ * infinite family — the playbook documents the tier, not each possible count.
+ */
+function planInventory(): string[] {
+  const rows = [fixtureSpec(), ...capabilitySpecs(), scaleSpec({ activities: 500 })].map(
+    (spec) => `${spec.tier}\t${spec.seedName}\t${spec.plan.name}`,
+  );
+  // The negative tier's hosts are throwaway and named per run, so the inventory lists the CASES —
+  // which is what a playbook row about hostile input would name.
+  for (const negative of negativeCases()) {
+    rows.push(`negative\t${negative.id}\t${negative.description}`);
+  }
+  return rows;
+}
+
 async function main(): Promise<number> {
-  const { args, coverage } = parseArgs(process.argv.slice(2));
+  const { args, coverage, listPlans } = parseArgs(process.argv.slice(2));
 
   // Reporting mode: answers "does the catalogue cover everything?" without a running instance, a
   // database or credentials. It is a property of the plans, not of any deployment.
   if (coverage) {
     process.stdout.write(`${formatCoverage(coverageReport(capabilitySpecs()))}\n`);
+    return 0;
+  }
+
+  // Also a reporting mode, and also server-free: what the builders produce is a property of the
+  // code, and `pnpm check:playbook` must be runnable in CI with no database and no credentials.
+  if (listPlans) {
+    for (const line of planInventory()) process.stdout.write(`${line}\n`);
     return 0;
   }
 

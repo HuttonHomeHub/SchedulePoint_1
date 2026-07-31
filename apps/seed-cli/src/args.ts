@@ -51,18 +51,28 @@ fixture says it must not is a PRODUCT FINDING, not a test to relax.
 Reporting only (no --url and no writes)
   --coverage          Print which of the fixture's capability keys the capability plans reach,
                       and which are unreachable through the product, with the reason for each
+  --list-plans        Print every plan the builders produce, tab-separated: tier, seed name,
+                      plan name. This is what "pnpm check:playbook" compares the playbook against.
 
 The seeder gets no privileged path. If it cannot create something as a Planner, a Planner cannot
 either — that is reported as a FINDING, and the run continues so one gap cannot hide the rest.
 `.trim();
 
 /** The value-less switches, so `--coverage --tier capability` does not eat `--tier` as a value. */
-const BOOLEAN_FLAGS = new Set(['verbose', 'coverage']);
+const BOOLEAN_FLAGS = new Set(['verbose', 'coverage', 'list-plans']);
 
 export interface ParsedArgv {
   args: Args | null;
   /** Reporting mode: print the coverage table and exit without connecting to anything. */
   coverage: boolean;
+  /**
+   * Reporting mode: print every plan the builders produce, one per line, and exit.
+   *
+   * Exists for `pnpm check:playbook` (ADR-0066 M5.3). The gate must compare the playbook against
+   * what the code *actually builds*, not against a hand-kept list that would drift in exactly the
+   * way the playbook itself does.
+   */
+  listPlans: boolean;
 }
 
 export function parseArgs(argv: readonly string[]): ParsedArgv {
@@ -83,13 +93,15 @@ export function parseArgs(argv: readonly string[]): ParsedArgv {
   }
 
   const coverage = switches.has('coverage');
+  const listPlans = switches.has('list-plans');
   const required = ['url', 'org', 'project', 'email', 'password'] as const;
-  if (required.some((key) => !flags.has(key))) return { args: null, coverage };
+  if (required.some((key) => !flags.has(key))) return { args: null, coverage, listPlans };
 
   const concurrency = flags.get('concurrency');
   const activities = flags.get('activities');
   return {
     coverage,
+    listPlans,
     args: {
       url: flags.get('url')!,
       org: flags.get('org')!,

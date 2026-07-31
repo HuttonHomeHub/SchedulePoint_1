@@ -55,6 +55,14 @@ jobs:
       - name: Check documentation links
         run: pnpm check:doc-links
 
+      # The playbook says which plan proves what. Its rows name plans by id, and a row pointing at
+      # a plan that no longer exists sends a reader to seed nothing and conclude the feature is
+      # broken. The reverse — a plan nobody documented — is worse: it gets seeded, looks plausible
+      # and demonstrates nothing, which is the state the whole catalogue exists to end (ADR-0066
+      # M5.3). Needs no database and no credentials; the inventory is built in memory.
+      - name: Check the test playbook
+        run: pnpm check:playbook
+
       - name: Unit tests
         run: pnpm test
 
