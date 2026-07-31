@@ -255,6 +255,7 @@ failure should surface at the earliest step that can see it.
 | 2   | `pnpm test`                        | always                                                                               |
 | 3   | `scripts/e2e-local.sh api`         | you touched `apps/api` — service, controller, DTO, schema or migration               |
 | 4   | `scripts/e2e-local.sh web:<suite>` | you **added or changed** a flag-on Playwright suite, or changed a surface one drives |
+| 5   | `pnpm check:playbook`              | you added, renamed or removed a seed-catalogue plan (ADR-0066)                       |
 
 `scripts/e2e-local.sh` brings up Postgres, creates the `app` role and `app_test`
 database **with the same credentials CI uses**, applies migrations, finds the
