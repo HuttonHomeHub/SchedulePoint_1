@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 
-import { scaleShapeOf } from '@repo/seed';
+import { negativeCases, scaleShapeOf } from '@repo/seed';
 import {
+  formatNegativeReport,
   formatReport,
+  runNegativeCase,
   SeedClient,
   SeedHttpError,
   seedPlan,
+  type NegativeResult,
   type SeedReport,
 } from '@repo/seed-http';
 
@@ -67,6 +70,32 @@ async function main(): Promise<number> {
     const message = error instanceof SeedHttpError ? error.message : String(error);
     process.stderr.write(`Could not sign in: ${message}\n`);
     return 2;
+  }
+
+  // The negative tier is not a set of plans to seed — it is a set of attempts to make. It has its
+  // own runner and its own report, because "which plans were created" is the wrong question about
+  // it: the answer worth having is what the API refused.
+  if (args.tier === 'negative') {
+    // Each case's host is throwaway and plan names are unique per project, so a run needs its own
+    // namespace or a re-run collides with itself on every case.
+    const runId = args.runId ?? String(Date.now());
+    const results: NegativeResult[] = [];
+    process.stderr.write(`Negative tier, run ${runId} — 18 hostile attempts.\n`);
+    for (const negative of negativeCases(runId)) {
+      process.stderr.write(`Attempting ${negative.id}…\n`);
+      results.push(
+        await runNegativeCase(client, { orgSlug: args.org, projectId: args.project }, negative),
+      );
+    }
+    process.stdout.write(`${formatNegativeReport(results)}\n`);
+    if (args.out !== undefined) {
+      writeFileSync(args.out, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
+      process.stderr.write(`Full report written to ${args.out}\n`);
+    }
+    // A disagreement is a product finding to read, not a process to fail — the same rule the plan
+    // tiers follow. Only a case that never ran exits non-zero, because that one means the run did
+    // not answer the question it was asked.
+    return results.some((result) => result.outcome === 'INCONCLUSIVE') ? 3 : 0;
   }
 
   const specs = loadSpecs(args.tier, {

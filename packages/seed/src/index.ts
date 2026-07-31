@@ -10,3 +10,4 @@
 export * from './spec.js';
 export * from './pairwise/index.js';
 export * from './scale/index.js';
+export * from './negative/index.js';

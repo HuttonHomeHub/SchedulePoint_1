@@ -54,8 +54,12 @@ describe('parseArgs', () => {
 });
 
 describe('loadSpecs', () => {
-  it('resolves every advertised tier to at least one plan', () => {
-    for (const tier of KNOWN_TIERS) expect(loadSpecs(tier).length, tier).toBeGreaterThan(0);
+  it('resolves every plan-producing tier to at least one plan', () => {
+    // `negative` is excluded on purpose and not as an oversight: it produces attempts, not a
+    // catalogue, and `main.ts` routes it to its own runner before this function is ever consulted.
+    const planTiers = KNOWN_TIERS.filter((tier) => tier !== 'negative');
+    for (const tier of planTiers) expect(loadSpecs(tier).length, tier).toBeGreaterThan(0);
+    expect(loadSpecs('negative')).toEqual([]);
   });
 
   it('returns nothing for an unknown tier or family, rather than throwing', () => {

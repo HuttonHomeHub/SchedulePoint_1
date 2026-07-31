@@ -38,6 +38,10 @@ export function loadSpecs(tier: string, options: LoadOptions = {}): SeedSpec[] {
           : requested;
       return [scaleSpec({ activities })];
     }
+    case 'negative':
+      // Not plans. `--tier negative` is handled by its own runner in `main.ts`; this arm exists so
+      // the tier is a known name rather than falling through to "try one of: …".
+      return [];
     case 'all':
       // The fixture first: it is the one plan that exercises every capability at once, so a run
       // interrupted halfway has still produced the broadest thing the catalogue offers. Scale is
@@ -50,4 +54,4 @@ export function loadSpecs(tier: string, options: LoadOptions = {}): SeedSpec[] {
 }
 
 /** The tiers `--tier` accepts today, for the CLI's usage text and its error message. */
-export const KNOWN_TIERS = ['fixture', 'capability', 'scale', 'all'] as const;
+export const KNOWN_TIERS = ['fixture', 'capability', 'scale', 'negative', 'all'] as const;
