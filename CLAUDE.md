@@ -20,11 +20,20 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 19 API modules
-> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~590 web
-> source files with 17 flag-scoped Playwright suites, and 60 ADRs. The CPM/GPM
-> engine is real and its conformance matrix is closed (ADR-0034). Read the code
-> before assuming anything is missing — this banner said the opposite for months
-> after it stopped being true, which is exactly the failure it now warns against.
+> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~670 web
+> source files with 18 flag-scoped Playwright suites beside the base journey, and
+> 66 ADRs (counted 2026-07-31 — every number here is `ls | wc -l`, not memory).
+> The CPM/GPM engine is real and its conformance matrix is closed (ADR-0034).
+> Read the code before assuming anything is missing — this banner said the
+> opposite for months after it stopped being true, which is exactly the failure
+> it now warns against.
+>
+> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): 36
+> documented seeded plans and hostile cases created through the public REST API,
+> keyed to [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md), which says which plan
+> proves what and what _wrong_ looks like. Use it before hand-building a plan to
+> reproduce something — and note what it exists to cover: the conformance harness
+> proves the **engine**, never a write path, a DTO or a guard.
 >
 > The **Gantt view shipped** on 2026-07-28 (ADR-0059, `VITE_GANTT_VIEW`
 > default-on) — read-only by design, with WBS rows, the baseline variance bar and

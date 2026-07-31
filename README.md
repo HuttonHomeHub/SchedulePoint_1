@@ -12,9 +12,12 @@
 </div>
 
 > **Project status: SchedulePoint is substantially built.** 19 API modules, 25
-> Prisma models across 41 migrations, a React client with 16 flag-scoped
-> Playwright suites, and 59 ADRs. The CPM/GPM engine is real and its conformance
-> matrix is closed (ADR-0034). The **Gantt view shipped** on 2026-07-28
+> Prisma models across 41 migrations, a React client with 18 flag-scoped
+> Playwright suites beside the base journey, and 66 ADRs. The CPM/GPM engine is
+> real and its conformance matrix is closed (ADR-0034), and the **application**
+> has its own test bed as of 2026-07-31 — 36 documented seeded plans and hostile
+> cases created through the public REST API (ADR-0066, and the
+> [test playbook](docs/TEST_PLAYBOOK.md)). The **Gantt view shipped** on 2026-07-28
 > (ADR-0059), substantially delivering the brief's last outstanding Must-have —
 > §8 words it "read-primary; edit supported", and Gantt editing stays deferred
 > (ADR-0059 M5). The other open question is the deployment target. See the [roadmap](docs/ROADMAP.md) and
@@ -42,7 +45,7 @@ have yet.
 ## ✨ Tech stack
 
 - **Monorepo:** [Turborepo](https://turbo.build) + [pnpm](https://pnpm.io) workspaces
-- **Frontend:** [React](https://react.dev) + [TypeScript](https://www.typescriptlang.org) + [Vite](https://vite.dev), [Tailwind CSS v4](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com), [Lucide](https://lucide.dev)
+- **Frontend:** [React](https://react.dev) + [TypeScript](https://www.typescriptlang.org) + [Vite](https://vite.dev), [Tailwind CSS v4](https://tailwindcss.com), hand-rolled [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/) primitives (no component library — see [`CLAUDE.md`](CLAUDE.md) §5), [Lucide](https://lucide.dev)
 - **Backend:** [NestJS](https://nestjs.com) + TypeScript
 - **Database:** [PostgreSQL](https://www.postgresql.org) via [Prisma](https://www.prisma.io)
 - **API:** REST, documented with [OpenAPI](https://swagger.io/specification/)
