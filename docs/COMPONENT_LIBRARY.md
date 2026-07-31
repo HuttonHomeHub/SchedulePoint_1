@@ -210,6 +210,14 @@ selection** (the control is the thing being acted on, so leaving focus behind wo
 user on an option that is no longer current). Callers supply `label`, `value`, `onChange`,
 `options`, and may add sizing classes — never colour.
 
+`value` may be **`null`** for a question with **no answer yet** — a choice the user must make
+rather than one with a default (the import dialog's resource-name collisions). The APG rule then
+applies and the primitive enforces it: the **first** option carries the group's single tab stop,
+so an unanswered group is still reachable. Deriving the tab stop from `value === option` alone
+would give every option `tabIndex={-1}` and make it keyboard-unreachable — a WCAG 2.1.1 failure
+that renders perfectly. Do **not** reach for `null` to express a default; if one of the options is
+the safe answer, pass it.
+
 `ToggleChip` (`components/ui/toggle-chip.tsx`) is a CVA `aria-pressed` button. Its pressed
 state changes **fill and border**, so it never signals state by hue alone (WCAG 1.4.1).
 **A chip that filters owes an announcement**: filtering a list without changing an announced
