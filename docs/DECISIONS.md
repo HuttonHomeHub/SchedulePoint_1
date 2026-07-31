@@ -1595,3 +1595,52 @@ the interchange commit assigns `laneIndex` sequentially by source order. That, n
 dominant source of "up and off the canvas". Auto-arrange is the existing remedy and it works; nothing
 tells a planner to run it. Left as a product question rather than fixed here, because packing at
 import needs computed dates that do not exist until the recalculation that follows the insert.
+
+---
+
+## 2026-07-31 — The seed catalogue (ADR-0066 M0–M5): what a test bed for the _application_ found
+
+The engine has had a conformance harness since ADR-0034, and it proves nothing about the
+application: it feeds `computeSchedule` directly and never touches Prisma, a service, a DTO or the
+API. The catalogue closes that — 36 documented plans and cases across five tiers, every one created
+through the **public REST API** by an ordinary client that signs in, obeys RBAC and holds the pen.
+
+Recorded here because the findings, not the tooling, are the deliverable.
+
+**What it found, per tier.** M1 (the fixture plan) found the seeder producing a plan that _looked_
+right and was not, which became TECH_DEBT **#78/#79/#80** — three write-path gaps where the engine
+and the storage support something (sub-day durations, window-only calendars, intraday shift
+patterns) and **no public write path can create it**. That class is invisible to an engine harness
+by construction: the harness never uses a write path. M3 (the pairwise differential) put the engine
+in as its own oracle over the API. M4 (scale) fed TECH_DEBT **#75** a realistic scene and changed
+its answer. M5 (hostile input) ran 18 negative attempts against the real API and found the
+interchange exporter silently downgrading **Level of Effort to a task**.
+
+**The LOE export defect is the epic's premise paying out**, so it is worth the detail. The import
+adapter maps `TT_LOE → LEVEL_OF_EFFORT`; the emitter maps `LEVEL_OF_EFFORT → TT_LOE`; both are
+correct. `export.service.ts` coerced the type to `TASK` **before the emitter ever saw it**,
+justified by a docblock claiming it "matches how the import adapter coerces the same two kinds" — a
+sentence that stopped being true when the importer was fixed, and that nothing then re-read.
+ADR-0050's mapping-contract table already promised "`TT_LOE` ⇄ `LEVEL_OF_EFFORT`, exact both ways":
+**the document was right and the code was wrong**, which is the reverse of the usual drift ADR-0058
+is written about. It survived because nothing in the repo looked at both interchange directions at
+once — the export suite asserts fields it chose, on plans built for the purpose, and a hand-built
+fixture can only lose what its author put in it. The round-trip e2e now sends a _generated_
+catalogue plan out and back and diffs everything: 45/45 activities, 64/64 links, 0 type changes.
+
+**And one finding about the catalogue itself.** M4's generator passed every declared shape
+assertion — density, WBS depth, milestone fraction, progress front, all correct — while producing a
+plan that was **96% critical with an average total float of zero**: one queue, not a programme. No
+test caught it. A Postgres query against the live seeded result did. The lesson is the one the
+epic exists to make: a generator that asserts its own _inputs_ proves nothing about the _shape of
+the answer_, and the check that mattered (`longestChainFraction`, verified failing at 0.992 against
+its 0.4 bound before being relied on) had to be written against the computed schedule.
+
+**Two things are deliberately not gates.** A seeded plan that the product refuses is reported as a
+**finding**, not an exit code — failing the process would make an operator stop reading exactly
+when there is something to read. And a _drop_ in the round-trip diff is not automatically a defect,
+because ADR-0050 records what XER cannot carry; only the core network is asserted, the rest is
+measured and printed. What **is** gated is `pnpm check:playbook`, which compares
+`docs/TEST_PLAYBOOK.md` against `seed --list-plans` in both directions — the second direction being
+the one worth the effort, since a plan nobody documented gets seeded, looks plausible, and
+demonstrates nothing, which is the exact state the catalogue was built to end.

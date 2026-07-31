@@ -86,16 +86,19 @@ SchedulePoint/
 │   │   ├── src/features/     #   Feature-first app code
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
-│   └── api/                  # NestJS REST API (@repo/api)
-│       ├── src/modules/      #   19 feature modules
-│       ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
-│       ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│       ├── prisma/           #   Schema (25 models) + 41 migrations
-│       └── test/             #   Supertest API e2e specs
+│   ├── api/                  # NestJS REST API (@repo/api)
+│   │   ├── src/modules/      #   19 feature modules
+│   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
+│   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
+│   │   ├── prisma/           #   Schema (25 models) + 41 migrations
+│   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
+│   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
 │   ├── config/               # Shared ESLint + tsconfig presets (@repo/config)
 │   ├── interchange/          # Pure schedule-interchange model/parsers (ADR-0050)
 │   ├── engine-conformance/   # Engine-free conformance fixture + loaders (ADR-0034)
+│   ├── seed/                 # Pure SeedSpec model + pairwise/scale/negative builders (ADR-0066)
+│   ├── seed-http/            # The seeder as an ordinary REST client (ADR-0066)
 │   └── types/                # Shared cross-boundary types/DTOs (@repo/types)
 ├── docs/                     # Architecture, guides, ADRs, roadmap, decisions
 ├── scripts/                  # Repo automation (bootstrap, etc.)

@@ -57,11 +57,14 @@ apps/
   web/                  React + Vite client              (@repo/web)
   api/                  NestJS REST API                  (@repo/api)
     src/modules/schedule/engine/   The pure CPM/GPM engine
+  seed-cli/             Test-catalogue seeder CLI        (@repo/seed-cli)
 packages/
   config/               Shared ESLint + tsconfig         (@repo/config)
   types/                Shared cross-boundary types      (@repo/types)
   interchange/          XER/MSPDI canonical model        (@repo/interchange)
   engine-conformance/   Engine-free conformance fixture  (@repo/engine-conformance)
+  seed/                 Pure test-plan specs/generators  (@repo/seed)
+  seed-http/            The REST seeder client           (@repo/seed-http)
 docs/                   Architecture, guides, ADRs, roadmap
 scripts/                Repository automation
 ```
@@ -101,6 +104,17 @@ docker compose up -d
 | `pnpm test`      | Run unit tests                          |
 | `pnpm test:e2e`  | Run end-to-end tests                    |
 | `pnpm changeset` | Record a versioned, user-visible change |
+
+Repository-health checks (also run in CI):
+
+| Command                | Description                                                            |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `pnpm check:doc-links` | Every Markdown link in `docs/` resolves                                |
+| `pnpm check:playbook`  | [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md) matches the catalogue |
+
+To fill a running instance with test data, see the
+[test playbook](docs/TEST_PLAYBOOK.md) — it says which seeded plan proves what,
+and what _wrong_ looks like for each.
 
 ## 📚 Documentation
 

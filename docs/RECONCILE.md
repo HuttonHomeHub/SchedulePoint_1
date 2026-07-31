@@ -143,6 +143,15 @@ Write what changed and, more importantly, **what was found wrong**, in
 [`DECISIONS.md`](DECISIONS.md). The findings are the evidence that the next
 pass is worth running. Update the date at the top of this file.
 
+## Passes run
+
+| Date       | Trigger                       | What it found                                                                                                                                                                                                                                                                                   |
+| ---------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-31 | ADR-0066 epic boundary (M5.5) | `CLAUDE.md` had **no ADR-0066 entry at all** — five milestones with nothing in the operating manual; the repo-layout tree omitted all three new workspace packages; `docs/ARCHITECTURE.md` and `docs/ROADMAP.md` were silent on the epic. Found by grepping for the ADR number, not by reading. |
+
+Older passes are recorded in the ADRs and commits they produced (ADR-0058 was
+written after four of them); this table starts where the epic-boundary rule did.
+
 ## The one rule
 
 **Verify the claim; do not trust the document.** Every drift found so far was a

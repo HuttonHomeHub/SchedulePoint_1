@@ -77,6 +77,20 @@ keep `main` releasable.
   soft-delete/Recently-Deleted flow via a hand-rolled APG `Menu` primitive and a
   shell-layer CRUD coordinator (no backend change).
 
+- **The seed catalogue (ADR-0066).** A test bed that proves the **application**, not just the engine.
+  The ADR-0034 harness feeds `computeSchedule` — a pure function — so all 117 capability keys were
+  proven at the engine and none at the application; two defects found on one day were green at the
+  engine and wrong in the product. Five tiers of plan created through the **public REST API**:
+  the 129-activity fixture, 16 per-capability plans, a 63-case pairwise covering array differentialled
+  against the engine on the same inputs, a parameterised scale generator, and the 18 hostile cases.
+  `docs/TEST_PLAYBOOK.md` says which plan proves what and what _wrong_ looks like;
+  `pnpm check:playbook` gates that its rows resolve in both directions.
+  **What it found** is the argument for it: three write-path gaps no existing gate could report
+  (TECH_DEBT #78/#79/#80 — the largest being that ADR-0036's intraday shift patterns are authorable
+  by nothing), the first honest answer to the draw-performance question (TECH_DEBT #75 — the _scene_
+  dominates the number), and a live export defect that downgraded every Level of Effort activity to a
+  task on the way out. The CPM engine is not modified and the ADR-0034 parity gate is untouched.
+
 ## Delivered — TSLD canvas & editing surface
 
 - **The TSLD graphical canvas** — the flagship primary editing surface (ADR-0026).

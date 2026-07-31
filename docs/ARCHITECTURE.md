@@ -85,6 +85,23 @@ Engine-**free** loaders, Zod schemas and coverage reporting for the versioned
 P6-class benchmark fixture (ADR-0034). Kept engine-free so the structural CI
 gate cannot accidentally depend on the thing it is validating.
 
+### `packages/seed` and `packages/seed-http` — the seed catalogue
+
+`@repo/seed` is the pure `SeedSpec` model and the builders that produce it: the
+per-capability plans, the pairwise covering array, the scale generator and the
+negative cases (ADR-0066). It knows how to **describe** a plan and never how to
+create one — no HTTP, no Prisma, no DTOs — which is what lets one spec feed both
+the seeder and the differential that runs `computeSchedule` on the same inputs.
+
+`@repo/seed-http` is the seeder: an ordinary REST client that signs in, obeys
+RBAC and holds the ADR-0028 pen. It gets **no privileged path**, deliberately —
+if it cannot create something as a Planner, a Planner cannot either, and that is
+reported as a finding. `apps/seed-cli` is the thin command around it.
+
+Why a package rather than a script: the pairwise differential in `apps/api`
+imports the _same_ seeder the CLI uses. A second one would drift, and the whole
+premise is that the seeder is an ordinary client.
+
 ### `packages/types` — shared contracts
 
 Framework-free TypeScript types/DTO shapes shared by web and api. The single
