@@ -1,5 +1,56 @@
 # @repo/web
 
+## 0.62.0
+
+### Minor Changes
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The canvas now says what it is doing while you author (ADR-0064 M1, `VITE_CANVAS_AUTHORING_FLOW`
+  default-on): a band above the diagram naming the armed tool, the click it expects and — mid-link —
+  which endpoint you already picked; a confirmation naming the direction that was created, with an
+  Undo; keyboard parity so the Link tool works without a pointer; an empty plan that names the first
+  gesture; and recalculation held while a two-click pick is open, so the bars cannot move between your
+  two clicks.
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Behind `VITE_CANVAS_AUTHORING_FLOW` (default off): the canvas says which tool is armed and what the
+  next click will do — including which endpoint a half-finished link has already picked — and confirms
+  a created link with its **direction** plus an Undo. The band sits in the chrome above the diagram,
+  so it never covers a bar you are trying to click, and takes no height at all when nothing is armed.
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Route dependency links around the bars between their lanes instead of straight through them, and
+  make the direction arrowhead legible at Month zoom. The vertical corridor now steps aside when a bar
+  stands in it — a bounded, deterministic search with a two-corridor fallback through the inter-lane
+  gutter — so a line no longer appears to touch work it has nothing to do with. Behind
+  `VITE_CANVAS_LINK_ROUTING` (default on); flag-off draws the previous line point for point.
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The canvas's name-a-new-activity popover gets a visible **Name** label, a submit called "Add to
+  plan" (it was "Add", the same name as the toolbar's Add split-button on the same screen), and a
+  shaded-with-a-reason submit instead of a natively disabled one — so it says why it cannot be used
+  and keeps your focus when it flips.
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Give every canvas authoring tool the same way out. The Add split-button's primary region now arms
+  and disarms the tool (it previously only opened its kind menu, while the neighbouring Link button
+  armed — two adjacent controls doing different things on the same click, on a surface where the
+  armed tool decides what the next canvas click means). Arming and closing the Add and Link tools is
+  now announced, so the change is not conveyed only by a label on a control you may not be looking at.
+
+### Patch Changes
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix five defects found by the canvas authoring & routing enablement reviews: the link confirmation
+  no longer replays a stale "Linked A → B" (with an Undo bound to a different edit) the next time the
+  Link tool is armed; the Add and Link split buttons return focus to their operable half rather than
+  the caret, which is outside the tab order; pointer-driven link picks and pick-drops are announced,
+  including the recalculation-cap drop nobody asked for; and Cancel in the create popover no longer
+  looks and behaves enabled while announcing "unavailable" during a save it cannot abort.
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Draw a hub's many outgoing links as one trunk with branches instead of a comb of near-identical
+  verticals. Corridors within six pixels snap to a shared line, unless doing so would put a link back
+  through a bar it was routed around. Part of `VITE_CANVAS_LINK_ROUTING`.
+
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix the TSLD ruler's overprinted month label. When the viewport starts a day or two before a month
+  boundary, the pinned "which month am I looking at" label and the boundary's own label were drawn a
+  few pixels apart and ran together (`JuAug`). The pinned label now sits at the left edge where it
+  belongs, and stands down when the real boundary would overprint it.
+
 ## 0.61.0
 
 ### Minor Changes
