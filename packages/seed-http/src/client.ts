@@ -75,7 +75,7 @@ export class SeedClient {
   private readonly queue: Array<() => void> = [];
 
   constructor(options: SeedClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = stripTrailingSlashes(options.baseUrl);
     this.origin = options.origin ?? this.baseUrl;
     this.onRequest = options.onRequest;
     this.limit = options.concurrency ?? 6;
@@ -221,6 +221,25 @@ export class SeedClient {
     return [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ');
   }
 }
+
+/**
+ * Trim trailing `/` so `baseUrl` and a leading-slash path concatenate cleanly.
+ *
+ * Deliberately not `replace(/\/+$/, '')`. That regex backtracks quadratically on a long run of
+ * slashes *before* a non-slash character — measured at 166/642/2,520 ms for 20k/40k/80k slashes,
+ * the 4×-per-doubling signature — which CodeQL flagged as `js/polynomial-redos`. The finding stands
+ * even though the input here is an operator's own `--url` rather than a remote one: a scan cannot
+ * see that distinction, and neither can the next caller who reuses this client with an input that
+ * *is* remote. A backward walk is O(n), needs no engine, and reads more plainly than the pattern it
+ * replaces.
+ */
+export function stripTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === SLASH) end -= 1;
+  return url.slice(0, end);
+}
+
+const SLASH = '/'.charCodeAt(0);
 
 function safeJson(text: string): unknown {
   try {

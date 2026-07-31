@@ -594,3 +594,28 @@ start/end minute, validated non-overlapping and ordered), a matching `windows` a
 exception DTO, the repository taking them instead of deriving, and an editor for the weekly pattern.
 The engine and the storage need no change — that is the whole shape of the problem. Worth doing
 together with #78, since a sub-day duration is meaningless without a sub-day calendar to spend it on.
+
+### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
+
+CodeQL flags `writeFileSync(args.out, JSON.stringify(results))` in `apps/seed-cli/src/main.ts` as
+"network data written to file" — the negative tier's report contains the API's own response codes
+and messages, which are network-sourced, and they land on disk.
+
+**Assessed as a false positive for this call site, and left open rather than silenced.** The rule
+guards against a remote payload reaching a file that something later executes or parses unsafely.
+Neither half holds here: the **path** is `args.out`, an operator's own CLI argument and not
+network-derived, so there is no traversal; and the **content** goes through `JSON.stringify`, so a
+hostile response body cannot break out of the JSON it is quoted into. Writing that report is the
+entire purpose of the flag — the run exists to record what the API refused.
+
+Deliberately **not** worked around. The available moves were to drop `--out`, to write the report
+somewhere the operator did not choose, or to launder the values through a copy so the taint tracker
+loses them; the first two make the tool worse and the third changes nothing real while making the
+code lie about why it exists. A scanner finding that a reviewer has assessed and disagreed with
+should be dismissed in the GitHub UI with that reasoning attached, which is a repo-admin action.
+
+Kept as an entry so the next person to see the alert finds the analysis rather than repeating it.
+The sibling alert from the same scan — `js/polynomial-redos` on `client.ts` — **was** real and was
+fixed (`stripTrailingSlashes`, with a regression test measured against the old implementation
+first). One of two is the ordinary ratio, and it is the reason the pair should be read rather than
+batch-dismissed.
