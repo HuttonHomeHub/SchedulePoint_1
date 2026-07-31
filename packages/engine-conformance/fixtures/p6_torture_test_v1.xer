@@ -1,0 +1,424 @@
+ERMHDR	18.8	2026-03-02	Project Management	admin	SchedulePoint	SchedulePoint	Project	UTF-8
+%T	PROJECT
+%F	proj_id	proj_short_name	last_recalc_date	plan_start_date	clndr_id
+%R	SP_PLAN	Unit 300 Amine Regeneration Package - Construction & Commissioning	2026-03-02	2026-03-02	CAL-01
+%T	CALENDAR
+%F	clndr_id	clndr_name	default_flag	day_hr_cnt	clndr_data
+%R	CAL-01	5-Day Day Shift (8h)	Y	8	(0||CalendarData()((0||DaysOfWeek()((0||1()())(0||2()((s|08:00|f|12:00)(s|13:00|f|17:00)))(0||3()((s|08:00|f|12:00)(s|13:00|f|17:00)))(0||4()((s|08:00|f|12:00)(s|13:00|f|17:00)))(0||5()((s|08:00|f|12:00)(s|13:00|f|17:00)))(0||6()((s|08:00|f|12:00)(s|13:00|f|17:00)))(0||7()())))(0||Exceptions()((0||d|46023())(0||d|46115())(0||d|46118())(0||d|46146())(0||d|46167())(0||d|46265())(0||d|46381())(0||d|46384())(0||d|46377())(0||d|46378())(0||d|46379())(0||d|46380())(0||d|46382())(0||d|46383())(0||d|46385())(0||d|46386())(0||d|46387())(0||d|46388())))))
+%R	CAL-02	6-Day Construction (10h, Mon-Sat)	N	8	(0||CalendarData()((0||DaysOfWeek()((0||1()())(0||2()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||3()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||4()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||5()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||6()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||7()((s|07:00|f|12:00)(s|12:30|f|17:30)))))(0||Exceptions()((0||d|46023())(0||d|46115())(0||d|46118())(0||d|46146())(0||d|46167())(0||d|46265())(0||d|46381())(0||d|46384())(0||d|46377())(0||d|46378())(0||d|46379())(0||d|46380())(0||d|46382())(0||d|46383())(0||d|46385())(0||d|46386())(0||d|46387())(0||d|46388())))))
+%R	CAL-03	7-Day 24-Hour Continuous	N	8	(0||CalendarData()((0||DaysOfWeek()((0||1()((s|00:00|f|24:00)))(0||2()((s|00:00|f|24:00)))(0||3()((s|00:00|f|24:00)))(0||4()((s|00:00|f|24:00)))(0||5()((s|00:00|f|24:00)))(0||6()((s|00:00|f|24:00)))(0||7()((s|00:00|f|24:00)))))(0||Exceptions()())))
+%R	CAL-04	Night Shift (Mon-Fri 20:00-06:00)	N	8	(0||CalendarData()((0||DaysOfWeek()((0||1()())(0||2()((s|20:00|f|24:00)))(0||3()((s|00:00|f|06:00)(s|20:00|f|24:00)))(0||4()((s|00:00|f|06:00)(s|20:00|f|24:00)))(0||5()((s|00:00|f|06:00)(s|20:00|f|24:00)))(0||6()((s|00:00|f|06:00)(s|20:00|f|24:00)))(0||7()((s|00:00|f|06:00)))))(0||Exceptions()((0||d|46023())(0||d|46115())(0||d|46118())(0||d|46146())(0||d|46167())(0||d|46265())(0||d|46381())(0||d|46384())(0||d|46377())(0||d|46378())(0||d|46379())(0||d|46380())(0||d|46382())(0||d|46383())(0||d|46385())(0||d|46386())(0||d|46387())(0||d|46388())))))
+%R	CAL-05	Turnaround Window (12h, 05-Oct to 16-Oct-2026 only)	N	8	(0||CalendarData()((0||DaysOfWeek()((0||1()((s|08:00|f|17:00)))(0||2()((s|08:00|f|17:00)))(0||3()((s|08:00|f|17:00)))(0||4()((s|08:00|f|17:00)))(0||5()((s|08:00|f|17:00)))(0||6()((s|08:00|f|17:00)))(0||7()((s|08:00|f|17:00)))))(0||Exceptions()((0||d|46300((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46301((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46302((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46303((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46304((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46305((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46306((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46307((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46308((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46309((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46310((s|06:00|f|12:00)(s|12:30|f|18:30)))(0||d|46311((s|06:00|f|12:00)(s|12:30|f|18:30)))))))
+%R	CAL-06	Heavy Lift / Weather Window (8h, non-work 01-Nov to 28-Feb)	N	8	(0||CalendarData()((0||DaysOfWeek()((0||1()())(0||2()((s|08:00|f|16:00)))(0||3()((s|08:00|f|16:00)))(0||4()((s|08:00|f|16:00)))(0||5()((s|08:00|f|16:00)))(0||6()((s|08:00|f|16:00)))(0||7()())))(0||Exceptions()((0||d|46023())(0||d|46115())(0||d|46118())(0||d|46146())(0||d|46167())(0||d|46265())(0||d|46381())(0||d|46384())(0||d|46377())(0||d|46378())(0||d|46379())(0||d|46380())(0||d|46382())(0||d|46383())(0||d|46385())(0||d|46386())(0||d|46387())(0||d|46388())(0||d|46327())(0||d|46328())(0||d|46329())(0||d|46330())(0||d|46331())(0||d|46332())(0||d|46333())(0||d|46334())(0||d|46335())(0||d|46336())(0||d|46337())(0||d|46338())(0||d|46339())(0||d|46340())(0||d|46341())(0||d|46342())(0||d|46343())(0||d|46344())(0||d|46345())(0||d|46346())(0||d|46347())(0||d|46348())(0||d|46349())(0||d|46350())(0||d|46351())(0||d|46352())(0||d|46353())(0||d|46354())(0||d|46355())(0||d|46356())(0||d|46357())(0||d|46358())(0||d|46359())(0||d|46360())(0||d|46361())(0||d|46362())(0||d|46363())(0||d|46364())(0||d|46365())(0||d|46366())(0||d|46367())(0||d|46368())(0||d|46369())(0||d|46370())(0||d|46371())(0||d|46372())(0||d|46373())(0||d|46374())(0||d|46375())(0||d|46376())(0||d|46389())(0||d|46390())(0||d|46391())(0||d|46392())(0||d|46393())(0||d|46394())(0||d|46395())(0||d|46396())(0||d|46397())(0||d|46398())(0||d|46399())(0||d|46400())(0||d|46401())(0||d|46402())(0||d|46403())(0||d|46404())(0||d|46405())(0||d|46406())(0||d|46407())(0||d|46408())(0||d|46409())(0||d|46410())(0||d|46411())(0||d|46412())(0||d|46413())(0||d|46414())(0||d|46415())(0||d|46416())(0||d|46417())(0||d|46418())(0||d|46419())(0||d|46420())(0||d|46421())(0||d|46422())(0||d|46423())(0||d|46424())(0||d|46425())(0||d|46426())(0||d|46427())(0||d|46428())(0||d|46429())(0||d|46430())(0||d|46431())(0||d|46432())(0||d|46433())(0||d|46434())(0||d|46435())(0||d|46436())(0||d|46437())(0||d|46438())(0||d|46439())(0||d|46440())(0||d|46441())(0||d|46442())(0||d|46443())(0||d|46444())(0||d|46445())(0||d|46446())))))
+%R	RCAL-CRANE600	600t Crawler Crane Availability (27-Jul to 21-Aug-2026)	N	8	(0||CalendarData()((0||DaysOfWeek()((0||1()((s|08:00|f|17:00)))(0||2()((s|08:00|f|17:00)))(0||3()((s|08:00|f|17:00)))(0||4()((s|08:00|f|17:00)))(0||5()((s|08:00|f|17:00)))(0||6()((s|08:00|f|17:00)))(0||7()((s|08:00|f|17:00)))))(0||Exceptions()((0||d|46230((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46231((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46232((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46233((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46234((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46235((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46236((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46237((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46238((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46239((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46240((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46241((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46242((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46243((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46244((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46245((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46246((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46247((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46248((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46249((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46250((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46251((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46252((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46253((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46254((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||d|46255((s|07:00|f|12:00)(s|12:30|f|17:30)))))))
+%R	RCAL-SPECIALIST	HV Specialist (Mon-Thu, 4-day week, 10h)	N	8	(0||CalendarData()((0||DaysOfWeek()((0||1()())(0||2()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||3()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||4()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||5()((s|07:00|f|12:00)(s|12:30|f|17:30)))(0||6()())(0||7()())))(0||Exceptions()((0||d|46023())(0||d|46115())(0||d|46118())(0||d|46146())(0||d|46167())(0||d|46265())(0||d|46381())(0||d|46384())(0||d|46377())(0||d|46378())(0||d|46379())(0||d|46380())(0||d|46382())(0||d|46383())(0||d|46385())(0||d|46386())(0||d|46387())(0||d|46388())))))
+%T	PROJWBS
+%F	wbs_id	proj_id	parent_wbs_id	wbs_short_name	wbs_name
+%R	WBS:TT	SP_PLAN		TT	Unit 300 Amine Regeneration Package
+%R	WBS:TT.1	SP_PLAN	WBS:TT	TT.1	Project Management & Controls
+%R	WBS:TT.2	SP_PLAN	WBS:TT	TT.2	Engineering & Procurement
+%R	WBS:TT.3	SP_PLAN	WBS:TT	TT.3	Site Establishment & Enabling
+%R	WBS:TT.4	SP_PLAN	WBS:TT	TT.4	CWA-100 Civils & Underground
+%R	WBS:TT.4.1	SP_PLAN	WBS:TT.4	TT.4.1	Piling
+%R	WBS:TT.4.2	SP_PLAN	WBS:TT.4	TT.4.2	Foundations
+%R	WBS:TT.4.3	SP_PLAN	WBS:TT.4	TT.4.3	Underground Services
+%R	WBS:TT.5	SP_PLAN	WBS:TT	TT.5	CWA-200 Structural Steel & Pipe Rack
+%R	WBS:TT.6	SP_PLAN	WBS:TT	TT.6	CWA-300 Mechanical & Equipment
+%R	WBS:TT.7	SP_PLAN	WBS:TT	TT.7	CWA-400 Piping
+%R	WBS:TT.7.1	SP_PLAN	WBS:TT.7	TT.7.1	Above-Ground Piping
+%R	WBS:TT.7.2	SP_PLAN	WBS:TT.7	TT.7.2	Hydrotest
+%R	WBS:TT.8	SP_PLAN	WBS:TT	TT.8	CWA-500 Electrical & Instrumentation
+%R	WBS:TT.9	SP_PLAN	WBS:TT	TT.9	CWA-600 Insulation, Fireproofing & Painting
+%R	WBS:TT.10	SP_PLAN	WBS:TT	TT.10	Turnaround Tie-ins
+%R	WBS:TT.11	SP_PLAN	WBS:TT	TT.11	Pre-Commissioning & Commissioning
+%R	WBS:TT.12	SP_PLAN	WBS:TT	TT.12	Handover & Demobilisation
+%T	TASK
+%F	task_id	proj_id	wbs_id	task_code	task_name	task_type	target_drtn_hr_cnt	clndr_id	status_code	cstr_type	cstr_date	cstr_type2	cstr_date2	complete_pct	phys_complete_pct	complete_pct_type	act_start_date	act_end_date	suspend_date	resume_date	reend_date	remain_drtn_hr_cnt
+%R	A1000	SP_PLAN	WBS:TT.1	A1000	Notice to Proceed	TT_Mile	0	CAL-01	TK_Complete	CS_MSOA	2026-01-05			100	0	CP_Drtn	2026-01-05	2026-01-05				0
+%R	A1010	SP_PLAN	WBS:TT.1	A1010	Construction Management & Supervision	TT_LOE	0	CAL-01	TK_Active					18	0	CP_Drtn	2026-01-05					0
+%R	A1020	SP_PLAN	WBS:TT.1	A1020	QA/QC Surveillance	TT_LOE	0	CAL-01	TK_Active					15	0	CP_Drtn	2026-01-26					0
+%R	A1030	SP_PLAN	WBS:TT.1	A1030	HSE Management & Permit Control	TT_LOE	0	CAL-02	TK_Active					16	0	CP_Drtn	2026-01-05					0
+%R	A1040	SP_PLAN	WBS:TT.1	A1040	Project Controls & Reporting	TT_LOE	0	CAL-01	TK_Active					18	0	CP_Drtn	2026-01-05					0
+%R	A2000	SP_PLAN	WBS:TT.2	A2000	Site Access Granted (Contract Milestone)	TT_Mile	0	CAL-01	TK_Complete	CS_MSO	2026-01-19			100	0	CP_Drtn	2026-01-19	2026-01-19				0
+%R	A2100	SP_PLAN	WBS:TT.2	A2100	IFC Civil Drawings Received	TT_FinMile	0	CAL-01	TK_Complete					100	0	CP_Drtn	2026-01-16	2026-01-16				0
+%R	A2110	SP_PLAN	WBS:TT.2	A2110	IFC Structural Drawings Received	TT_FinMile	0	CAL-01	TK_Complete					100	0	CP_Drtn	2026-01-30	2026-01-30				0
+%R	A2120	SP_PLAN	WBS:TT.2	A2120	IFC Piping Isometrics Rev 0	TT_FinMile	0	CAL-01	TK_NotStart													
+%R	A2200	SP_PLAN	WBS:TT.2	A2200	Absorber Column T-301 Delivered to Site	TT_FinMile	0	CAL-03	TK_NotStart													
+%R	A2210	SP_PLAN	WBS:TT.2	A2210	Module PAU-301 Delivered to Site	TT_FinMile	0	CAL-03	TK_NotStart													
+%R	A2220	SP_PLAN	WBS:TT.2	A2220	Amine Pumps P-301A/B Delivered	TT_FinMile	0	CAL-01	TK_NotStart													
+%R	A2230	SP_PLAN	WBS:TT.2	A2230	HV Switchgear Delivered	TT_FinMile	0	CAL-03	TK_NotStart													
+%R	A2300	SP_PLAN	WBS:TT.2	A2300	Structural Steel Batch 1 Delivered	TT_Task	40	CAL-01	TK_Complete					100	0	CP_Drtn	2026-02-09	2026-02-13				0
+%R	A2310	SP_PLAN	WBS:TT.2	A2310	Structural Steel Batch 2 Delivered	TT_Task	40	CAL-01	TK_NotStart													
+%R	A2320	SP_PLAN	WBS:TT.2	A2320	Pipe Spools Batch 1 Delivered	TT_Task	80	CAL-01	TK_NotStart													
+%R	A2330	SP_PLAN	WBS:TT.2	A2330	Pipe Spools Batch 2 Delivered	TT_Task	80	CAL-01	TK_NotStart													
+%R	A3000	SP_PLAN	WBS:TT.3	A3000	Mobilise to Site	TT_Task	40	CAL-01	TK_Complete					100	0	CP_Drtn	2026-01-05	2026-01-09				0
+%R	A3010	SP_PLAN	WBS:TT.3	A3010	Site Establishment & Welfare	TT_Task	100	CAL-02	TK_Complete					100	0	CP_Drtn	2026-01-19	2026-01-31				0
+%R	A3020	SP_PLAN	WBS:TT.3	A3020	Site Hoarding & Security	TT_Task	60	CAL-02	TK_Complete					100	0	CP_Drtn	2026-01-12	2026-01-19				0
+%R	A3030	SP_PLAN	WBS:TT.3	A3030	Temporary Power Installation	TT_Task	80	CAL-02	TK_Complete					100	0	CP_Drtn	2026-02-02	2026-02-11				0
+%R	A3040	SP_PLAN	WBS:TT.3	A3040	Access Roads & Laydown (Temporary)	TT_Task	120	CAL-02	TK_Active					100	0	CP_Drtn	2026-01-26					0
+%R	A3100	SP_PLAN	WBS:TT.3	A3100	Scaffolding - Erect / Maintain / Dismantle	TT_LOE	0	CAL-02	TK_NotStart													
+%R	A3800	SP_PLAN	WBS:TT.3	A3800	Temporary Power Supply - Final Period of Operation	TT_Task	240	CAL-03	TK_NotStart													
+%R	A3900	SP_PLAN	WBS:TT.3	A3900	Temporary Facilities Removal & Site Clean	TT_Task	100	CAL-02	TK_NotStart	CS_MEOA	2026-11-30											
+%R	A4100	SP_PLAN	WBS:TT.4	A4100	Site Clearance & Earthworks	TT_Task	150	CAL-02	TK_Complete					100	0	CP_Drtn	2026-01-26	2026-02-13				0
+%R	A4110	SP_PLAN	WBS:TT.4	A4110	Ground Improvement / Piling Mat	TT_Task	80	CAL-02	TK_Complete					100	0	CP_Drtn	2026-02-02	2026-02-13				0
+%R	A4200	SP_PLAN	WBS:TT.4.1	A4200	Piling - Zone A	TT_Task	200	CAL-02	TK_Active					40	35	CP_Phys	2026-02-16					120
+%R	A4210	SP_PLAN	WBS:TT.4.1	A4210	Piling - Zone B	TT_Task	180	CAL-02	TK_Active					17	0	CP_Drtn	2026-02-23		2026-02-27			150
+%R	A4220	SP_PLAN	WBS:TT.4.1	A4220	Pile Integrity Testing	TT_Task	40	CAL-01	TK_Active					40	0	CP_Drtn	2026-02-25					24
+%R	A4230	SP_PLAN	WBS:TT.4.1	A4230	Pile Cropping	TT_Task	120	CAL-02	TK_Active					50	0	CP_Drtn	2026-02-17		2026-02-19	2026-03-09		60
+%R	A4300	SP_PLAN	WBS:TT.4.2	A4300	Excavate Foundations - Zone A	TT_Task	100	CAL-02	TK_NotStart	CS_MSOA	2026-03-16											
+%R	A4310	SP_PLAN	WBS:TT.4.2	A4310	Blinding Concrete - Zone A	TT_Task	30	CAL-02	TK_NotStart													
+%R	A4320	SP_PLAN	WBS:TT.4.2	A4320	Rebar & Formwork - Zone A	TT_Task	120	CAL-02	TK_NotStart													
+%R	A4330	SP_PLAN	WBS:TT.4.2	A4330	Pour Foundations - Zone A	TT_Task	40	CAL-02	TK_NotStart													
+%R	A4340	SP_PLAN	WBS:TT.4.2	A4340	Concrete Cure - Zone A	TT_Task	168	CAL-03	TK_NotStart													
+%R	A4350	SP_PLAN	WBS:TT.4.2	A4350	Strip Formwork - Zone A	TT_Task	40	CAL-02	TK_NotStart													
+%R	A4360	SP_PLAN	WBS:TT.4.2	A4360	Backfill - Zone A	TT_Task	60	CAL-02	TK_NotStart													
+%R	A4400	SP_PLAN	WBS:TT.4.2	A4400	Excavate Foundations - Zone B	TT_Task	100	CAL-02	TK_NotStart													
+%R	A4410	SP_PLAN	WBS:TT.4.2	A4410	Blinding Concrete - Zone B	TT_Task	30	CAL-02	TK_NotStart													
+%R	A4420	SP_PLAN	WBS:TT.4.2	A4420	Rebar & Formwork - Zone B	TT_Task	120	CAL-02	TK_NotStart													
+%R	A4430	SP_PLAN	WBS:TT.4.2	A4430	Pour Foundations - Zone B	TT_Task	40	CAL-02	TK_NotStart													
+%R	A4440	SP_PLAN	WBS:TT.4.2	A4440	Strip Formwork - Zone B	TT_Task	40	CAL-02	TK_NotStart													
+%R	A4450	SP_PLAN	WBS:TT.4.2	A4450	Backfill - Zone B	TT_Task	60	CAL-02	TK_NotStart													
+%R	A4500	SP_PLAN	WBS:TT.4.3	A4500	Underground Piping & Drainage	TT_Task	160	CAL-02	TK_NotStart													
+%R	A4510	SP_PLAN	WBS:TT.4.3	A4510	Underground Electrical Ducts	TT_Task	120	CAL-02	TK_NotStart													
+%R	A4520	SP_PLAN	WBS:TT.4.3	A4520	Cathodic Protection Installation	TT_Task	60	CAL-02	TK_NotStart													
+%R	A4600	SP_PLAN	WBS:TT.4.3	A4600	Permanent Hardstanding & Roads	TT_Task	140	CAL-02	TK_NotStart													
+%R	A4999	SP_PLAN	WBS:TT.4	A4999	Civils Complete	TT_FinMile	0	CAL-01	TK_NotStart													
+%R	A5100	SP_PLAN	WBS:TT.5	A5100	Erect Pipe Rack Steel - Zone A	TT_Task	200	CAL-02	TK_NotStart													
+%R	A5110	SP_PLAN	WBS:TT.5	A5110	Grout Baseplates - Zone A	TT_Task	40	CAL-02	TK_NotStart													
+%R	A5120	SP_PLAN	WBS:TT.5	A5120	Torque & Plumb Steel - Zone A	TT_Task	60	CAL-02	TK_NotStart													
+%R	A5130	SP_PLAN	WBS:TT.5	A5130	Handrails & Grating - Zone A	TT_Task	100	CAL-02	TK_NotStart													
+%R	A5200	SP_PLAN	WBS:TT.5	A5200	Erect Pipe Rack Steel - Zone B	TT_Task	220	CAL-02	TK_NotStart	CS_MSOA	2026-05-04	CS_MEOB	2026-06-26									
+%R	A5210	SP_PLAN	WBS:TT.5	A5210	Grout Baseplates - Zone B	TT_Task	40	CAL-02	TK_NotStart													
+%R	A5220	SP_PLAN	WBS:TT.5	A5220	Torque & Plumb Steel - Zone B	TT_Task	60	CAL-02	TK_NotStart													
+%R	A5230	SP_PLAN	WBS:TT.5	A5230	Handrails & Grating - Zone B	TT_Task	100	CAL-02	TK_NotStart													
+%R	A5300	SP_PLAN	WBS:TT.5	A5300	Erect Equipment Support Steel	TT_Task	120	CAL-02	TK_NotStart													
+%R	A5400	SP_PLAN	WBS:TT.5	A5400	Steel Inspection & Punchlist	TT_Task	40	CAL-01	TK_NotStart													
+%R	A5500	SP_PLAN	WBS:TT.5	A5500	Night Shift Steel Bolt-Up (SIMOPS)	TT_Task	60	CAL-04	TK_NotStart													
+%R	A6000	SP_PLAN	WBS:TT.6	A6000	Heavy Lift Study & Ground Bearing Check	TT_Task	40	CAL-01	TK_NotStart													
+%R	A6100	SP_PLAN	WBS:TT.6	A6100	Set Module PAU-301 (Heavy Lift)	TT_Rsrc	60	CAL-06	TK_NotStart													
+%R	A6200	SP_PLAN	WBS:TT.6	A6200	Set Absorber Column T-301	TT_Task	80	CAL-06	TK_NotStart												2026-08-14 16:00	
+%R	A6300	SP_PLAN	WBS:TT.6	A6300	Set Amine Pumps P-301A/B	TT_Task	60	CAL-02	TK_NotStart													
+%R	A6400	SP_PLAN	WBS:TT.6	A6400	Set Heat Exchangers E-301/302	TT_Task	80	CAL-02	TK_NotStart													
+%R	A6500	SP_PLAN	WBS:TT.6	A6500	Mechanical Alignment & Grouting	TT_Task	100	CAL-02	TK_NotStart													
+%R	A6600	SP_PLAN	WBS:TT.6	A6600	Equipment Punchlist	TT_Task	40	CAL-01	TK_NotStart													
+%R	A7100	SP_PLAN	WBS:TT.7.1	A7100	Pipe Erection - Rack Zone A	TT_Task	300	CAL-02	TK_NotStart													
+%R	A7110	SP_PLAN	WBS:TT.7.1	A7110	Pipe Supports - Zone A	TT_Task	120	CAL-02	TK_NotStart													
+%R	A7120	SP_PLAN	WBS:TT.7.1	A7120	Small Bore & Tubing - Zone A	TT_Task	140	CAL-02	TK_NotStart													
+%R	A7130	SP_PLAN	WBS:TT.7.1	A7130	Valve Installation - Zone A	TT_Task	80	CAL-02	TK_NotStart													
+%R	A7200	SP_PLAN	WBS:TT.7.1	A7200	Pipe Erection - Rack Zone B	TT_Task	320	CAL-02	TK_NotStart													
+%R	A7210	SP_PLAN	WBS:TT.7.1	A7210	Pipe Supports - Zone B	TT_Task	120	CAL-02	TK_NotStart													
+%R	A7220	SP_PLAN	WBS:TT.7.1	A7220	Small Bore & Tubing - Zone B	TT_Task	140	CAL-02	TK_NotStart													
+%R	A7230	SP_PLAN	WBS:TT.7.1	A7230	Valve Installation - Zone B	TT_Task	80	CAL-02	TK_NotStart													
+%R	A7300	SP_PLAN	WBS:TT.7.1	A7300	Equipment Piping & In-Battery Tie-ins	TT_Task	200	CAL-02	TK_NotStart													
+%R	A7400	SP_PLAN	WBS:TT.7.1	A7400	NDT & Weld Inspection	TT_Task	80	CAL-01	TK_NotStart													
+%R	A7500	SP_PLAN	WBS:TT.7.1	A7500	Punchlist & Reinstatement (Piping)	TT_Task	60	CAL-02	TK_NotStart													
+%R	A7550	SP_PLAN	WBS:TT.7.1	A7550	Piping Turnover Package Sign-off	TT_Task	0	CAL-01	TK_NotStart													
+%R	A7600	SP_PLAN	WBS:TT.7.2	A7600	Hydrotest Preparation	TT_Task	80	CAL-02	TK_NotStart	CS_MSOB	2026-09-30											
+%R	A7700	SP_PLAN	WBS:TT.7.2	A7700	Hydrotest - System 300-01	TT_Task	60	CAL-02	TK_NotStart													
+%R	A7710	SP_PLAN	WBS:TT.7.2	A7710	Hydrotest Hold / Stabilisation	TT_Task	24	CAL-03	TK_NotStart													
+%R	A7720	SP_PLAN	WBS:TT.7.2	A7720	Depressurise, Drain & Dry	TT_Task	40	CAL-02	TK_NotStart													
+%R	A7730	SP_PLAN	WBS:TT.7.2	A7730	Hydrotest - System 300-02	TT_Task	60	CAL-02	TK_NotStart													
+%R	A7740	SP_PLAN	WBS:TT.7.2	A7740	Reinstatement Post-Hydrotest	TT_Task	80	CAL-02	TK_NotStart													
+%R	A8000	SP_PLAN	WBS:TT.8	A8000	Cable Tray & Containment	TT_Task	160	CAL-02	TK_NotStart													
+%R	A8010	SP_PLAN	WBS:TT.8	A8010	Cable Pulling - Power	TT_Task	200	CAL-02	TK_NotStart													
+%R	A8020	SP_PLAN	WBS:TT.8	A8020	Cable Pulling - Control & Instrument	TT_Task	180	CAL-02	TK_NotStart													
+%R	A8100	SP_PLAN	WBS:TT.8	A8100	Local Panels & Junction Boxes	TT_Task	100	CAL-02	TK_NotStart													
+%R	A8200	SP_PLAN	WBS:TT.8	A8200	Instrument Installation	TT_Task	160	CAL-02	TK_NotStart													
+%R	A8300	SP_PLAN	WBS:TT.8	A8300	HV Switchgear Installation & Termination	TT_Rsrc	120	CAL-01	TK_NotStart													
+%R	A8400	SP_PLAN	WBS:TT.8	A8400	Cable Termination & Glanding	TT_Task	200	CAL-02	TK_NotStart													
+%R	A8500	SP_PLAN	WBS:TT.8	A8500	Loop Checks & Continuity Testing	TT_Task	120	CAL-01	TK_NotStart													
+%R	A8600	SP_PLAN	WBS:TT.8	A8600	Fibre & Network Commissioning	TT_Task	60	CAL-01	TK_NotStart													
+%R	A8700	SP_PLAN	WBS:TT.8	A8700	Energise Permanent Power (HV)	TT_Task	40	CAL-01	TK_NotStart													
+%R	A9000	SP_PLAN	WBS:TT.9	A9000	Fireproofing - Structural Steel	TT_Task	140	CAL-02	TK_NotStart													
+%R	A9100	SP_PLAN	WBS:TT.9	A9100	Insulation - Piping & Equipment	TT_Task	240	CAL-02	TK_NotStart													
+%R	A9200	SP_PLAN	WBS:TT.9	A9200	Painting - Touch-up & Final Coat	TT_Task	160	CAL-02	TK_NotStart													
+%R	A9300	SP_PLAN	WBS:TT.9	A9300	Labelling, Tagging & Line Marking	TT_Task	60	CAL-01	TK_NotStart													
+%R	A9400	SP_PLAN	WBS:TT.9	A9400	Final Site Clean & Snagging Prep	TT_Task	80	CAL-02	TK_NotStart	CS_ALAP												
+%R	A10000	SP_PLAN	WBS:TT.10	A10000	Tie-in Preparation & Isolation Planning	TT_Task	80	CAL-01	TK_NotStart													
+%R	A10100	SP_PLAN	WBS:TT.10	A10100	TA Window Opens	TT_Mile	0	CAL-03	TK_NotStart	CS_MANDSTART	2026-10-05											
+%R	A10200	SP_PLAN	WBS:TT.10	A10200	Break Containment & Isolate Existing Lines	TT_Task	24	CAL-05	TK_NotStart													
+%R	A10300	SP_PLAN	WBS:TT.10	A10300	Hot Tap / Tie-in Welds (12 no.)	TT_Task	96	CAL-05	TK_NotStart													
+%R	A10400	SP_PLAN	WBS:TT.10	A10400	Tie-in NDT & PWHT	TT_Task	36	CAL-05	TK_NotStart													
+%R	A10450	SP_PLAN	WBS:TT.10	A10450	Legacy Control System - Parallel Run	TT_Task	120	CAL-03	TK_NotStart													
+%R	A10460	SP_PLAN	WBS:TT.10	A10460	Legacy Instrument Air - Maintain Supply	TT_Task	200	CAL-03	TK_NotStart													
+%R	A10500	SP_PLAN	WBS:TT.10	A10500	TA Window Closes	TT_FinMile	0	CAL-03	TK_NotStart	CS_MANDFIN	2026-10-16											
+%R	A10600	SP_PLAN	WBS:TT.10	A10600	Reinstate Insulation & Painting (Tie-ins)	TT_Task	60	CAL-02	TK_NotStart													
+%R	A11000	SP_PLAN	WBS:TT.11	A11000	Commissioning Start	TT_Mile	0	CAL-01	TK_NotStart													
+%R	A11050	SP_PLAN	WBS:TT.11	A11050	System Walkdowns & Punch Clear (300-01)	TT_Task	80	CAL-02	TK_NotStart													
+%R	A11100	SP_PLAN	WBS:TT.11	A11100	Commissioning - System 300-01	TT_Task	160	CAL-03	TK_NotStart													
+%R	A11200	SP_PLAN	WBS:TT.11	A11200	Commissioning - System 300-02	TT_Task	140	CAL-03	TK_NotStart													
+%R	A11300	SP_PLAN	WBS:TT.11	A11300	Commissioning - System 300-03 (Utilities)	TT_Task	120	CAL-03	TK_NotStart													
+%R	A11400	SP_PLAN	WBS:TT.11	A11400	Nitrogen Purge & Leak Test	TT_Task	72	CAL-03	TK_NotStart													
+%R	A11500	SP_PLAN	WBS:TT.11	A11500	Performance / Functional Testing	TT_Task	96	CAL-03	TK_NotStart													
+%R	A11600	SP_PLAN	WBS:TT.11	A11600	Operator Training	TT_Task	80	CAL-01	TK_NotStart													
+%R	A12000	SP_PLAN	WBS:TT.11	A12000	Mechanical Completion (MC)	TT_FinMile	0	CAL-01	TK_NotStart	CS_MEOB	2026-11-06											
+%R	A9500	SP_PLAN	WBS:TT.12	A9500	Client-Supplied Spares - Receipt & Storage	TT_Task	40	CAL-01	TK_NotStart													
+%R	A12100	SP_PLAN	WBS:TT.12	A12100	Punchlist Category A Clearance	TT_Task	80	CAL-02	TK_NotStart													
+%R	A12200	SP_PLAN	WBS:TT.12	A12200	Handover Dossiers & As-Builts	TT_Task	120	CAL-01	TK_NotStart													
+%R	A12300	SP_PLAN	WBS:TT.12	A12300	Care, Custody & Control Transfer	TT_Task	40	CAL-01	TK_NotStart													
+%R	A12500	SP_PLAN	WBS:TT.12	A12500	Ready For Start-Up (RFSU)	TT_FinMile	0	CAL-01	TK_NotStart	CS_MEO	2026-12-04											
+%R	A12600	SP_PLAN	WBS:TT.12	A12600	Demobilise Plant & Equipment	TT_Task	60	CAL-02	TK_NotStart													
+%R	A12700	SP_PLAN	WBS:TT.12	A12700	Marine Demob - Barge & Heavy Lift Removal	TT_Task	80	CAL-06	TK_NotStart													
+%R	A13000	SP_PLAN	WBS:TT.12	A13000	Project Complete	TT_FinMile	0	CAL-01	TK_NotStart													
+%T	TASKPRED
+%F	task_pred_id	task_id	pred_task_id	pred_type	lag_hr_cnt
+%R	R0001	A1010	A1000	PR_SS	0
+%R	R0002	A13000	A1010	PR_FF	0
+%R	R0003	A1020	A4100	PR_SS	0
+%R	R0004	A12000	A1020	PR_FF	0
+%R	R0005	A1030	A3000	PR_SS	0
+%R	R0006	A12500	A1030	PR_FF	0
+%R	R0007	A1040	A1000	PR_SS	0
+%R	R0008	A13000	A1040	PR_FF	0
+%R	R0009	A3100	A7100	PR_SS	0
+%R	R0010	A9200	A3100	PR_FF	0
+%R	R0011	A2000	A1000	PR_FS	0
+%R	R0012	A2110	A2100	PR_FS	80
+%R	R0013	A2120	A2110	PR_FS	160
+%R	R0014	A2300	A2110	PR_FS	40
+%R	R0015	A2310	A2110	PR_FS	320
+%R	R0016	A2320	A2120	PR_FS	240
+%R	R0017	A2330	A2320	PR_FS	160
+%R	R0018	A3000	A1000	PR_FS	0
+%R	R0019	A3010	A3000	PR_FS	0
+%R	R0020	A3010	A2000	PR_FS	0
+%R	R0021	A3020	A3000	PR_FS	0
+%R	R0022	A3030	A3010	PR_FS	0
+%R	R0023	A3040	A3020	PR_FS	0
+%R	R0024	A5500	A3030	PR_FS	0
+%R	R0025	A6100	A3040	PR_FS	0
+%R	R0026	A3800	A8700	PR_SF	0
+%R	R0027	A3900	A3800	PR_FS	0
+%R	R0028	A4100	A3010	PR_FS	0
+%R	R0029	A4100	A2100	PR_FS	0
+%R	R0030	A4110	A4100	PR_SS	60
+%R	R0031	A4200	A4110	PR_FS	0
+%R	R0032	A4210	A4200	PR_SS	40
+%R	R0033	A4220	A4200	PR_FS	0
+%R	R0034	A4230	A4200	PR_SS	48
+%R	R0035	A4300	A4230	PR_FS	0
+%R	R0036	A4300	A4220	PR_FS	0
+%R	R0037	A4310	A4300	PR_FS	0
+%R	R0038	A4320	A4310	PR_FS	0
+%R	R0039	A4330	A4320	PR_FS	0
+%R	R0040	A4340	A4330	PR_FS	0
+%R	R0041	A4350	A4340	PR_FS	0
+%R	R0042	A4360	A4350	PR_FS	-20
+%R	R0043	A4400	A4210	PR_FS	0
+%R	R0044	A4400	A4300	PR_FF	20
+%R	R0045	A4410	A4400	PR_FS	0
+%R	R0046	A4420	A4410	PR_FS	0
+%R	R0047	A4430	A4420	PR_FS	0
+%R	R0048	A4440	A4430	PR_FS	168
+%R	R0049	A4450	A4440	PR_FS	0
+%R	R0050	A4500	A4110	PR_FS	0
+%R	R0051	A4500	A4300	PR_SS	40
+%R	R0052	A4510	A4500	PR_SS	0
+%R	R0053	A4520	A4510	PR_FF	0
+%R	R0054	A4600	A4450	PR_FS	0
+%R	R0055	A4600	A4360	PR_FS	0
+%R	R0056	A4600	A4110	PR_FS	0
+%R	R0057	A4999	A4360	PR_FS	0
+%R	R0058	A4999	A4450	PR_FS	0
+%R	R0059	A4999	A4520	PR_FS	0
+%R	R0060	A4999	A4600	PR_FS	0
+%R	R0061	A5100	A4350	PR_FS	0
+%R	R0062	A5100	A2300	PR_FS	80
+%R	R0063	A5110	A5100	PR_SS	80
+%R	R0064	A5120	A5100	PR_FF	0
+%R	R0065	A5130	A5100	PR_FS	0
+%R	R0066	A5500	A5100	PR_SS	40
+%R	R0067	A5200	A4440	PR_FS	0
+%R	R0068	A5200	A2310	PR_FS	0
+%R	R0069	A5210	A5200	PR_SS	80
+%R	R0070	A5220	A5200	PR_FF	0
+%R	R0071	A5230	A5200	PR_FS	0
+%R	R0072	A5300	A4350	PR_FS	0
+%R	R0073	A5300	A2300	PR_FS	0
+%R	R0074	A5400	A5110	PR_FS	0
+%R	R0075	A5400	A5120	PR_FS	0
+%R	R0076	A5400	A5210	PR_FS	0
+%R	R0077	A5400	A5220	PR_FS	0
+%R	R0078	A5400	A5500	PR_FS	0
+%R	R0079	A6000	A2110	PR_FS	0
+%R	R0080	A6100	A6000	PR_FS	400
+%R	R0081	A6100	A2210	PR_FS	0
+%R	R0082	A6100	A5300	PR_FS	0
+%R	R0083	A6200	A6100	PR_SS	0
+%R	R0084	A6200	A2200	PR_FS	0
+%R	R0085	A6300	A6100	PR_SS	80
+%R	R0086	A6400	A2220	PR_FS	0
+%R	R0087	A6400	A5300	PR_FS	0
+%R	R0088	A6500	A6200	PR_FS	0
+%R	R0089	A6500	A6400	PR_FS	0
+%R	R0090	A6600	A6500	PR_FS	0
+%R	R0091	A7100	A5100	PR_SS	50
+%R	R0092	A7100	A2320	PR_FS	0
+%R	R0093	A7110	A7100	PR_SS	0
+%R	R0094	A7120	A7100	PR_FF	40
+%R	R0095	A7130	A7100	PR_FS	0
+%R	R0096	A7130	A7110	PR_FS	0
+%R	R0097	A7200	A5200	PR_SS	50
+%R	R0098	A7200	A2330	PR_FS	0
+%R	R0099	A7210	A7200	PR_SS	0
+%R	R0100	A7220	A7200	PR_FF	40
+%R	R0101	A7230	A7200	PR_FS	0
+%R	R0102	A7230	A7210	PR_FS	0
+%R	R0103	A7300	A6500	PR_FS	0
+%R	R0104	A7300	A6300	PR_SS	0
+%R	R0105	A7400	A7100	PR_FF	0
+%R	R0106	A7400	A7200	PR_FF	0
+%R	R0107	A7400	A7300	PR_FF	0
+%R	R0108	A7550	A7400	PR_FS	0
+%R	R0109	A7600	A7550	PR_FS	0
+%R	R0110	A7600	A7120	PR_FS	0
+%R	R0111	A7600	A7220	PR_FS	0
+%R	R0112	A7600	A7130	PR_FS	0
+%R	R0113	A7600	A7230	PR_FS	0
+%R	R0114	A7700	A7600	PR_FS	0
+%R	R0115	A7730	A7600	PR_FS	0
+%R	R0116	A7710	A7700	PR_FS	0
+%R	R0117	A7720	A7710	PR_FS	0
+%R	R0118	A7740	A7720	PR_FS	0
+%R	R0119	A7740	A7730	PR_FS	0
+%R	R0120	A7500	A7740	PR_FS	0
+%R	R0121	A8000	A5130	PR_FS	0
+%R	R0122	A8000	A5230	PR_FS	0
+%R	R0123	A8010	A8000	PR_SS	-40
+%R	R0124	A8020	A8000	PR_SS	80
+%R	R0125	A8100	A8000	PR_FS	0
+%R	R0126	A8200	A7100	PR_FF	40
+%R	R0127	A8200	A7200	PR_FF	40
+%R	R0128	A8300	A2230	PR_FS	40
+%R	R0129	A8300	A8100	PR_FS	0
+%R	R0130	A8400	A8010	PR_FS	0
+%R	R0131	A8400	A8020	PR_FS	0
+%R	R0132	A8400	A8300	PR_FS	0
+%R	R0133	A8500	A8400	PR_FS	0
+%R	R0134	A8500	A8200	PR_FS	0
+%R	R0135	A8600	A8500	PR_FS	0
+%R	R0136	A8700	A8500	PR_FS	0
+%R	R0137	A9000	A5220	PR_FF	-30
+%R	R0138	A9000	A5120	PR_FS	0
+%R	R0139	A9100	A7740	PR_FS	0
+%R	R0140	A9100	A8500	PR_SS	80
+%R	R0141	A9200	A9100	PR_SS	80
+%R	R0142	A9200	A9000	PR_FS	0
+%R	R0143	A9300	A9200	PR_SS	40
+%R	R0144	A9400	A9200	PR_FS	0
+%R	R0145	A9400	A9300	PR_FS	0
+%R	R0146	A10000	A7400	PR_FS	0
+%R	R0147	A10100	A10000	PR_FS	0
+%R	R0148	A10200	A10100	PR_FS	0
+%R	R0149	A10300	A10200	PR_FS	0
+%R	R0150	A10400	A10300	PR_FS	0
+%R	R0151	A10500	A10400	PR_FS	0
+%R	R0152	A10450	A11100	PR_SF	16
+%R	R0153	A10460	A11200	PR_SF	-8
+%R	R0154	A10600	A10500	PR_FS	0
+%R	R0155	A11000	A8600	PR_FS	0
+%R	R0156	A11000	A9300	PR_FS	0
+%R	R0157	A11000	A10500	PR_FS	0
+%R	R0158	A11050	A11000	PR_FS	0
+%R	R0159	A11050	A7740	PR_FS	0
+%R	R0160	A11100	A11050	PR_FS	0
+%R	R0161	A11200	A11100	PR_FS	24
+%R	R0162	A11300	A11000	PR_FS	0
+%R	R0163	A11300	A8700	PR_FS	0
+%R	R0164	A11400	A11100	PR_FS	0
+%R	R0165	A11400	A11200	PR_FS	0
+%R	R0166	A11500	A11400	PR_FS	0
+%R	R0167	A11500	A11300	PR_FS	0
+%R	R0168	A11600	A11300	PR_FS	0
+%R	R0169	A12000	A11500	PR_FS	0
+%R	R0170	A12000	A9400	PR_FS	0
+%R	R0171	A12000	A6600	PR_FS	0
+%R	R0172	A12000	A7500	PR_FS	0
+%R	R0173	A12000	A10600	PR_FS	0
+%R	R0174	A12000	A10450	PR_FS	0
+%R	R0175	A12000	A10460	PR_FS	0
+%R	R0176	A12000	A4999	PR_FS	0
+%R	R0177	A12000	A5400	PR_FS	0
+%R	R0178	A12100	A12000	PR_FS	0
+%R	R0179	A12200	A12000	PR_FS	0
+%R	R0180	A12200	A9500	PR_FS	0
+%R	R0181	A12300	A12100	PR_FS	0
+%R	R0182	A12300	A12200	PR_FS	0
+%R	R0183	A12300	A11600	PR_FS	0
+%R	R0184	A12500	A12300	PR_FS	0
+%R	R0185	A12600	A12300	PR_FS	0
+%R	R0186	A12700	A12600	PR_FS	0
+%R	R0187	A13000	A12500	PR_FS	0
+%R	R0188	A13000	A12600	PR_FS	0
+%T	RSRC
+%F	rsrc_id	rsrc_short_name	rsrc_name	rsrc_type	clndr_id
+%R	LAB-SUP	LAB-SUP	Supervisor	RT_Labor	CAL-01
+%R	LAB-QA	LAB-QA	QA/QC Inspector	RT_Labor	CAL-01
+%R	LAB-CIVIL	LAB-CIVIL	Civil Operative	RT_Labor	CAL-02
+%R	LAB-STEEL	LAB-STEEL	Steel Erector	RT_Labor	CAL-02
+%R	LAB-PIPE	LAB-PIPE	Pipefitter	RT_Labor	CAL-02
+%R	LAB-WELD	LAB-WELD	Coded Welder	RT_Labor	CAL-02
+%R	LAB-EI	LAB-EI	E&I Technician	RT_Labor	CAL-02
+%R	LAB-EI-SPEC	LAB-EI-SPEC	HV Specialist	RT_Labor	RCAL-SPECIALIST
+%R	LAB-INS	LAB-INS	Insulator	RT_Labor	CAL-02
+%R	LAB-PAINT	LAB-PAINT	Painter / Blaster	RT_Labor	CAL-02
+%R	LAB-SCAF	LAB-SCAF	Scaffolder	RT_Labor	CAL-02
+%R	LAB-COMM	LAB-COMM	Commissioning Technician	RT_Labor	CAL-03
+%R	NL-CRANE600	NL-CRANE600	600t Crawler Crane	RT_Equip	RCAL-CRANE600
+%R	NL-CRANE200	NL-CRANE200	200t Crawler Crane	RT_Equip	CAL-02
+%R	NL-MEWP	NL-MEWP	MEWP / Cherry Picker	RT_Equip	CAL-02
+%R	NL-WELDSET	NL-WELDSET	Welding Set	RT_Equip	CAL-02
+%R	NL-HYDROPUMP	NL-HYDROPUMP	Hydrotest Pump Unit	RT_Equip	CAL-02
+%R	NL-EXCAV	NL-EXCAV	30t Excavator	RT_Equip	CAL-02
+%R	MAT-CONC	MAT-CONC	Ready-mix Concrete	RT_Mat	CAL-03
+%R	MAT-STEEL	MAT-STEEL	Structural Steel	RT_Mat	CAL-03
+%R	MAT-SPOOL	MAT-SPOOL	Pipe Spools	RT_Mat	CAL-03
+%R	MAT-CABLE	MAT-CABLE	Cable	RT_Mat	CAL-03
+%T	TASKRSRC
+%F	taskrsrc_id	task_id	rsrc_id	target_qty	target_qty_per_hr	driving_flag	act_reg_qty
+%R	AS0001	A1010	LAB-SUP	3600	3	Y	620
+%R	AS0002	A1020	LAB-QA	2000	2	Y	300
+%R	AS0003	A1030	LAB-SUP	1600	1	Y	260
+%R	AS0004	A3100	LAB-SCAF	4800	6	Y	0
+%R	AS0005	A3010	LAB-CIVIL	600	6	Y	600
+%R	AS0006	A4100	LAB-CIVIL	1800	12	Y	1860
+%R	AS0007	A4100	NL-EXCAV	300	2	N	320
+%R	AS0008	A4200	LAB-CIVIL	2000	10	Y	1200
+%R	AS0009	A4200	NL-EXCAV	200	1	N	120
+%R	AS0010	A4210	LAB-CIVIL	1800	10	Y	300
+%R	AS0011	A4220	LAB-QA	80	2	Y	32
+%R	AS0012	A4230	LAB-CIVIL	720	6	Y	360
+%R	AS0013	A4330	MAT-CONC	850	21.25	N	0
+%R	AS0014	A4430	MAT-CONC	780	19.5	N	0
+%R	AS0015	A5100	LAB-STEEL	1200	6	Y	0
+%R	AS0016	A5100	NL-CRANE200	200	1	N	0
+%R	AS0017	A5100	MAT-STEEL	120	0.6	N	0
+%R	AS0018	A5200	LAB-STEEL	1320	6	Y	0
+%R	AS0019	A5200	NL-CRANE200	220	1	N	0
+%R	AS0020	A5200	MAT-STEEL	135	0.61	N	0
+%R	AS0021	A5500	LAB-STEEL	240	4	Y	0
+%R	AS0022	A6100	NL-CRANE600	60	1	Y	0
+%R	AS0023	A6100	LAB-STEEL	480	8	N	0
+%R	AS0024	A6200	NL-CRANE600	80	1	Y	0
+%R	AS0025	A6200	LAB-STEEL	480	6	N	0
+%R	AS0026	A7100	LAB-PIPE	2400	8	Y	0
+%R	AS0027	A7100	LAB-WELD	1104	4	N	0
+%R	AS0028	A7100	NL-MEWP	600	2	N	0
+%R	AS0029	A7100	MAT-SPOOL	220	0.73	N	0
+%R	AS0030	A7200	LAB-PIPE	2560	8	Y	0
+%R	AS0031	A7200	LAB-WELD	1280	4	N	0
+%R	AS0032	A7200	MAT-SPOOL	240	0.75	N	0
+%R	AS0033	A7700	NL-HYDROPUMP	60	1	Y	0
+%R	AS0034	A7700	LAB-PIPE	240	4	N	0
+%R	AS0035	A7730	NL-HYDROPUMP	60	1	Y	0
+%R	AS0036	A7730	LAB-PIPE	240	4	N	0
+%R	AS0037	A8010	LAB-EI	1600	8	Y	0
+%R	AS0038	A8010	MAT-CABLE	12000	60	N	0
+%R	AS0039	A8300	LAB-EI-SPEC	240	2	Y	0
+%R	AS0040	A10300	LAB-WELD	768	8	Y	0
+%R	AS0041	A10300	NL-WELDSET	768	8	N	0
+%R	AS0042	A11100	LAB-COMM	640	4	Y	0
+%R	AS0043	A11200	LAB-COMM	560	4	Y	0
+%R	AS0044	A9100	LAB-INS	1920	8	Y	0
+%R	AS0045	A9200	LAB-PAINT	960	6	Y	0
+%E

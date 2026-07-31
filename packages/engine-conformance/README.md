@@ -15,6 +15,7 @@ fixtures/
                             #   22 resources, 45 assignments, 13 scenarios, coverage_index
   negative_cases.json       # 18 hostile inputs (load one at a time; must reject/repair/report)
   TEST_MATRIX.md            # human-readable map: what every object is trying to break
+  p6_torture_test_v1.xer    # the same programme as a P6 XER — the file to IMPORT for manual testing
   csv/                      # the same data as flat tables (import-friendly)
   tools/                    # the upstream Python generator + validator (reference only; not run in CI)
 src/
@@ -48,6 +49,33 @@ The fixture was authored by the product owner (see `fixtures/README.md`) and is 
 canonical generator/validator — but CI runs the **TypeScript** port so no Python is added to the
 pipeline. Re-running the generator is a **reviewed change**: update `src/schema.ts` in the same PR so
 the loader tests catch any shape drift.
+
+### The `.xer` rendering, and what it cannot carry
+
+`fixtures/p6_torture_test_v1.xer` is the same programme as a P6 XER — the file to **import** when
+testing the product by hand. It is a rendering, not a second source of truth: the JSON is
+authoritative and the XER is what survives the format.
+
+Two things about it are worth knowing before drawing conclusions from an import.
+
+First, the format is lossy in ways the fixture is not, and the losses fall into kinds. Some fields
+have **no XER column** — `duration_type`, the external inter-project instants, the per-relationship
+lag calendar, resource `max_units_per_hour` and `price_per_unit`, assignment `curve`/`role`/lag — so
+levelling, Earned Value, loading curves and inter-project dates cannot be reached by importing this
+file at all. Some have **no XER table**: the four expenses and the eight activity steps. Exercising
+those needs a seeding path, not a better file.
+
+Second, this file was **corrected on 2026-07-31**. Its five `LEVEL_OF_EFFORT` activities (`A1010`,
+`A1020`, `A1030`, `A1040`, `A3100`) were previously written as zero-duration `TT_Task` rows, because
+the importer had no `TT_LOE` mapping — so a capability the engine fully implements was invisible to
+every manual test, and the LOE activities collapsed to points instead of spanning their logic. The
+mapping now exists both ways and the file says `TT_LOE`. `A6200`'s `reend_date` was likewise blank
+and is now set, so `con_expected_finish` has data (the behaviour still needs the plan's
+`useExpectedFinishDates` option on — ADR-0035 §9).
+
+The lesson generalises: a coverage key can be **named in the index, present in the file, and still
+not exercised**, because the attribute that discriminates it was dropped in translation. Check the
+imported plan, not the fixture, when asking whether something is tested.
 
 ## Scope
 
