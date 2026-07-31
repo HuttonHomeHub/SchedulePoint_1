@@ -105,10 +105,10 @@ async function drawAndName(calendar: WorkingDayCalendar | null): Promise<ReturnT
   fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
   fireEvent.pointerMove(canvas, { clientX: 120, clientY: 50, pointerId: 1 });
   fireEvent.pointerUp(canvas, { clientX: 120, clientY: 50, pointerId: 1 });
-  fireEvent.change(await screen.findByLabelText('New activity name'), {
+  fireEvent.change(await screen.findByLabelText('Name'), {
     target: { value: 'Pour slab' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add to plan' }));
   await waitFor(() => expect(onCreate).toHaveBeenCalled());
   return onCreate;
 }

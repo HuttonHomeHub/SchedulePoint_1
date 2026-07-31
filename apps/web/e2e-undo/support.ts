@@ -69,7 +69,7 @@ export async function drawTask(
   await page.getByRole('menuitemradio', { name: 'Task' }).click();
   await canvas(page).click({ position: pos });
   const form = page.getByRole('form', { name: 'Name the new activity' });
-  await form.getByRole('textbox', { name: 'New activity name' }).fill(name);
-  await form.getByRole('button', { name: 'Add' }).click();
+  await form.getByLabel('Name').fill(name);
+  await form.getByRole('button', { name: 'Add to plan' }).click();
   await expect(form).toBeHidden();
 }

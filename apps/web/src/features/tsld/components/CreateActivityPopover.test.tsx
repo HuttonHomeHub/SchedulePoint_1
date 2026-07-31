@@ -17,7 +17,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof CreateActivityPopo
       {...overrides}
     />,
   );
-  return { onCommit, onCancel, input: screen.getByLabelText('New activity name') };
+  return { onCommit, onCancel, input: screen.getByLabelText('Name') };
 }
 
 describe('CreateActivityPopover', () => {
@@ -29,13 +29,34 @@ describe('CreateActivityPopover', () => {
   it('commits the trimmed name on submit', () => {
     const { onCommit, input } = setup();
     fireEvent.change(input, { target: { value: '  Excavate  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to plan' }));
     expect(onCommit).toHaveBeenCalledWith('Excavate');
   });
 
-  it('disables Add for an empty name', () => {
+  /**
+   * Shaded with a reason, not natively disabled (ADR-0064 T8, the `ScopeSaveBar` precedent). The
+   * submit flips on the first keystroke; a natively disabled button under focus is blurred to
+   * `<body>`, which is SC 2.4.3 on the happy path. It stays in the tab order and inert instead —
+   * and it says WHY, linked by `aria-describedby` rather than merely sitting next to the sentence.
+   */
+  it('shades Add activity with its reason for an empty name, without leaving the tab order', () => {
+    const { onCommit } = setup();
+    const submit = screen.getByRole('button', { name: 'Add to plan' });
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
+    expect(submit).not.toBeDisabled();
+    const reason = document.getElementById(submit.getAttribute('aria-describedby') ?? '');
+    expect(reason).toHaveTextContent('Enter a name to add this activity.');
+    fireEvent.click(submit);
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('names the submit apart from every Add control on the same screen', () => {
     setup();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    // Two on-screen controls sharing an accessible name is ambiguous by voice and in a screen
+    // reader's controls list. The canvas toolbar's split-button is "Add"; the flag-off legacy
+    // toolbar's is "Add activity". This one must be neither, which is why it names the destination.
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
   });
 
   it('cancels on Escape from the input', () => {
@@ -53,9 +74,23 @@ describe('CreateActivityPopover', () => {
     expect(input).toHaveFocus();
   });
 
-  it('disables the field and shows Saving… while saving', () => {
+  it('keeps the field and the submit focusable while saving, and says so', () => {
     setup({ saving: true });
-    expect(screen.getByLabelText('New activity name')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    // `readOnly`, not `disabled`: a disabled input is removed from the tab order mid-save, taking
+    // the user's focus with it — the same defect as a natively disabled Save.
+    expect(screen.getByLabelText('Name')).toHaveAttribute('readonly');
+    const submit = screen.getByRole('button', { name: 'Saving…' });
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
+    expect(submit).toHaveAttribute('aria-busy', 'true');
+    expect(submit).not.toBeDisabled();
+  });
+
+  it('gives the name field a VISIBLE label, not only an accessible one', () => {
+    setup();
+    // The field always had an `aria-label`, so axe was clean and the gap was invisible to tooling —
+    // a sighted planner met a bare box whose only clue vanished on the first keystroke (WCAG 3.3.2).
+    const label = screen.getByText('Name');
+    expect(label.tagName).toBe('LABEL');
+    expect(label).toHaveAttribute('for', screen.getByLabelText('Name').id);
   });
 });

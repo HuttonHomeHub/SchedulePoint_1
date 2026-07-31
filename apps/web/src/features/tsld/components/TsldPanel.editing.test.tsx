@@ -121,9 +121,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     fireEvent.pointerUp(canvas, { clientX: 120, clientY: 50, pointerId: 1 });
 
     // The name popover opens; name it and commit.
-    const input = await screen.findByLabelText('New activity name');
+    const input = await screen.findByLabelText('Name');
     fireEvent.change(input, { target: { value: 'Pour slab' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to plan' }));
 
     await waitFor(() =>
       expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Pour slab' })),
@@ -136,15 +136,13 @@ describe('TsldPanel editing (M2, flag on)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
     fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
     fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
-    fireEvent.change(await screen.findByLabelText('New activity name'), {
+    fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Pour slab' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to plan' }));
 
     // Popover closes (row persisted → never re-POSTs) and the conflict shows in the banner.
-    await waitFor(() =>
-      expect(screen.queryByLabelText('New activity name')).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByLabelText('Name')).not.toBeInTheDocument());
     expect(screen.getByRole('alert')).toHaveTextContent('Recalculating elsewhere.');
     expect(onCreate).toHaveBeenCalledTimes(1);
   });
@@ -155,13 +153,13 @@ describe('TsldPanel editing (M2, flag on)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
     fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
     fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
-    fireEvent.change(await screen.findByLabelText('New activity name'), {
+    fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Excavate' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to plan' }));
 
     expect(await screen.findByText('That name is taken')).toBeInTheDocument();
-    expect(screen.getByLabelText('New activity name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
     expect(onCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -337,7 +335,7 @@ describe('TsldPanel editing (M2, flag on)', () => {
   it('opens the create popover pre-filled with n (keyboard create parity)', async () => {
     const { listbox } = renderEditing();
     fireEvent.keyDown(listbox, { key: 'n' });
-    expect(await screen.findByLabelText('New activity name')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Name')).toBeInTheDocument();
   });
 
   it('returns focus to the activity list when an n-opened create popover is closed', async () => {
@@ -566,7 +564,7 @@ describe('TsldPanel editing (M2, flag on)', () => {
 
     const cancel = await screen.findByRole('button', { name: 'Cancel' });
     fireEvent.click(cancel);
-    expect(screen.queryByLabelText('New activity name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
   });
 
