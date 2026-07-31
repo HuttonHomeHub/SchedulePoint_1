@@ -14,8 +14,9 @@ import type { RenderActivity, RenderEdge } from '../src/features/tsld/render/ren
  *
  * ## What this does NOT do
  *
- * **It does not schedule.** The bars are laid out in the generator's own band-and-chain order — each
- * band starts where the previous one ended, and within a band each activity follows the last — which
+ * **It does not schedule.** The bars are laid out in the generator's own band-and-chain order — within
+ * a band each activity follows the last, a phase's bands run concurrently, and each phase starts part
+ * way into the one before (see {@link PHASE_OVERLAP}) — which
  * is a *layout*, not a CPM result. The real dates come from the engine, and nothing here approximates
  * it: the painter's cost depends on how many bars there are, what type each is, which lane it sits in
  * and how wide it is, and none of those needs a date to be *correct*, only plausible. Reading a
