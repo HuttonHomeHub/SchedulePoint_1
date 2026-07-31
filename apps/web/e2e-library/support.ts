@@ -70,12 +70,12 @@ export async function drawActivity(
   name: string,
   pos: { x: number; y: number },
 ): Promise<void> {
-  await page.getByRole('button', { name: /^Add(ing .+)?$/ }).click();
+  await page.getByRole('button', { name: /^Activity type:/ }).click();
   await page.getByRole('menuitemradio', { name: 'Task' }).click();
   await canvas(page).click({ position: pos });
   const form = page.getByRole('form', { name: 'Name the new activity' });
-  await form.getByRole('textbox', { name: 'New activity name' }).fill(name);
-  await form.getByRole('button', { name: 'Add' }).click();
+  await form.getByLabel('Name').fill(name);
+  await form.getByRole('button', { name: 'Add to plan' }).click();
   await expect(form).toBeHidden();
 }
 

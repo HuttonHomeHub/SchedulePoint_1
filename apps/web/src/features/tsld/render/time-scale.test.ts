@@ -295,3 +295,47 @@ describe('todayDayFraction', () => {
     expect(todayDayFraction(Date.now(), Infinity)).toBeUndefined();
   });
 });
+
+/**
+ * **The `JuAug` overprint** (ADR-0064 T18). The ruler labels the month in view even when its 1st is
+ * off-screen, by emitting a "sticky" tick at the first visible column. When the viewport starts a
+ * day or two before a boundary, that sticky label and the boundary's own are drawn a few pixels
+ * apart and overprint into an unreadable smear — which is what a planner actually sees on screen.
+ */
+describe('rulerTicks — the sticky first label', () => {
+  const size = { width: 800, height: 400 };
+
+  it('pins the sticky label to the left edge, not to its off-screen column', () => {
+    // Origin scrolled so the first visible day is mid-month: the sticky tick's seed column is off
+    // screen at a negative x, and a label drawn there is simply not visible.
+    const view = { originX: -500, originY: 0, pxPerDay: 20 };
+    const { months } = rulerTicks(view, size, '2026-06-15');
+    expect(months[0]?.x).toBe(0);
+  });
+
+  it('drops the sticky label when the next boundary would overprint it', () => {
+    // A viewport starting one day before the 1st: the boundary lands ~20 px from the pinned label.
+    const view = { originX: 0, originY: 0, pxPerDay: 20 };
+    const { months } = rulerTicks(view, size, '2026-06-30');
+    const labels = months.map((m) => m.label);
+    // Both would read as one word. The boundary's own label wins — it is the one in the right place.
+    expect(labels.filter((l) => l === 'Jun')).toHaveLength(0);
+    expect(labels[0]).toBe('Jul');
+  });
+
+  it('keeps both when they are far enough apart to read', () => {
+    const view = { originX: 0, originY: 0, pxPerDay: 20 };
+    const { months } = rulerTicks(view, size, '2026-06-01');
+    expect(months[0]?.label).toBe('Jun');
+    expect(months[1]?.label).toBe('Jul');
+  });
+
+  it('honours a caller-measured gap over the default', () => {
+    const view = { originX: 0, originY: 0, pxPerDay: 20 };
+    // 10 px apart is fine for a narrow measured label, and an overprint for a wide one.
+    const narrow = rulerTicks(view, size, '2026-06-30', 8);
+    expect(narrow.months[0]?.label).toBe('Jun');
+    const wide = rulerTicks(view, size, '2026-06-30', 60);
+    expect(wide.months[0]?.label).toBe('Jul');
+  });
+});

@@ -259,12 +259,19 @@ function MenuSection({ children }: { children: React.ReactNode }): React.ReactEl
 
 /**
  * The **Add split-button** (ADR-0032 M4) — the canvas-first replacement for the plain "Add activity"
- * toggle. An APG menu-button: the trigger arms/labels the current draw kind and opens a `Menu` to
- * pick Task / Start-milestone / Finish-milestone; picking one arms add-mode with that kind (the
- * canvas then collapses milestone draws to a zero-duration point). While adding, the menu also offers
- * "Stop adding" so the mode is leaveable from the toolbar, not only via Escape on the canvas. Pen-gated
- * as one focusable control (spreads `itemProps`), so it stays a single roving-tabindex stop and the
- * whole authoring group disables together when the pen isn't held.
+ * toggle. A **true** split button (ADR-0064 T3, matching {@link LinkControl}): the primary region
+ * arms and disarms the tool with the current draw kind; the caret opens the `Menu` to pick Task /
+ * Start-milestone / Finish-milestone, and picking one still arms with that kind (the canvas then
+ * collapses milestone draws to a zero-duration point).
+ *
+ * The primary region became a toggle because the two adjacent authoring controls otherwise did
+ * different things on the same click: Link armed its tool, Add opened a menu. That is the shape the
+ * epic's founding defect took — a planner who believes a tool is armed and is wrong is one click
+ * from an edit they did not intend — so the arm/disarm contract is uniform across every tool rather
+ * than per control. "Stop adding" stays in the menu as the second route out.
+ *
+ * Pen-gated as one focusable control (the primary carries `itemProps`), so it stays a single
+ * roving-tabindex stop and the whole authoring group disables together when the pen isn't held.
  */
 function AddActivityControl({
   ctx,
@@ -274,6 +281,17 @@ function AddActivityControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  /**
+   * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
+   *
+   * `Menu` restores focus here on Escape and on every item pick. Pointing that at `triggerRef` sent
+   * focus to the caret — which is `tabIndex={-1}` and therefore not in the sequential tab order — so
+   * after the most ordinary interaction with this control (pick a type, or Escape out) a keyboard
+   * user's next Tab jumped to whatever came next in raw DOM order rather than the next toolbar item
+   * (WCAG 2.4.3). `IsolateControl` below has always done this correctly; these two did not.
+   */
+  const mainButtonRef = useRef<HTMLButtonElement>(null);
+
   const disabled = api.disabled;
   const activeLabel = ACTIVITY_TYPE_LABELS[ctx.createType];
   // Reflect an armed LOE tool on the trigger (B4): fold it into the pressed state AND swap the label to
@@ -289,39 +307,70 @@ function AddActivityControl({
   // Flag-off (`CANVAS_ACTIVITY_TYPES` dark) the LOE tool is unreachable, so `isLoeSpanning` is never true
   // and the label/active reflection collapses to today's plain "Add", byte-for-byte.
   const loeTooFew = ctx.loeSpanActivityCount < 2;
+  const armed = ctx.isAddingActivity || ctx.isLoeSpanning;
+  // The primary region's action, which follows whichever tool this control currently reflects: it
+  // arms Add when nothing is armed, and disarms whatever IS armed. Routing an armed LOE through
+  // `toggleAddActivity` would swap one armed tool for another — a trigger that reads "Pick start
+  // driver" and, when pressed, starts drawing bars instead.
+  const toggleArmed = ctx.isLoeSpanning ? ctx.toggleLoeSpanMode : ctx.toggleAddActivity;
   return (
     <>
-      <button
-        {...api.itemProps}
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-disabled={disabled || undefined}
-        title={disabled ? ADD_DISABLED_REASON : undefined}
-        onClick={() => {
-          if (!disabled) toggle();
-        }}
-        className={cn(
-          toolbarControlVariants({
-            active: ctx.isAddingActivity || ctx.isLoeSpanning || open,
-            disabled,
-          }),
-        )}
+      <span
+        className={cn(toolbarControlVariants({ active: armed || open, disabled }), 'gap-0 p-0')}
       >
-        <Plus aria-hidden="true" className="size-4" />
-        <span className="truncate">{triggerLabel}</span>
-        {/* The split look, not a split button — see `toolbarSplitCaretVariants`. */}
-        <span className={toolbarSplitCaretVariants()}>
+        <button
+          {...api.itemProps}
+          ref={mainButtonRef}
+          type="button"
+          aria-pressed={armed}
+          aria-disabled={disabled || undefined}
+          title={
+            disabled
+              ? ADD_DISABLED_REASON
+              : ctx.isLoeSpanning
+                ? 'Stop the level-of-effort pick'
+                : ctx.isAddingActivity
+                  ? 'Stop adding'
+                  : `Add ${activeLabel.toLowerCase()}`
+          }
+          onClick={() => {
+            if (!disabled) toggleArmed();
+          }}
+          onKeyDown={(e) => {
+            // ArrowDown from the primary opens the type menu and moves into it, so the caret needs
+            // no tab stop of its own (APG split button) — mirroring `LinkControl`.
+            if (e.key === 'ArrowDown' && !disabled) {
+              e.preventDefault();
+              toggle();
+            }
+          }}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          <span className="truncate">{triggerLabel}</span>
+        </button>
+        <button
+          ref={triggerRef}
+          type="button"
+          tabIndex={-1}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-disabled={disabled || undefined}
+          aria-label={`Activity type: ${activeLabel}`}
+          onClick={() => {
+            if (!disabled) toggle();
+          }}
+          className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
+        >
           <ChevronDown aria-hidden="true" className="size-3.5" />
-        </span>
-      </button>
+        </button>
+      </span>
       <Menu
         open={open}
         onClose={close}
         anchor={anchor}
         label="Add activity type"
-        restoreFocusRef={triggerRef}
+        restoreFocusRef={mainButtonRef}
       >
         <MenuSection>Draw on the canvas</MenuSection>
         {ADD_ACTIVITY_TYPES.map((type) => (
@@ -419,32 +468,88 @@ function LinkControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  /**
+   * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
+   *
+   * `Menu` restores focus here on Escape and on every item pick. Pointing that at `triggerRef` sent
+   * focus to the caret — which is `tabIndex={-1}` and therefore not in the sequential tab order — so
+   * after the most ordinary interaction with this control (pick a type, or Escape out) a keyboard
+   * user's next Tab jumped to whatever came next in raw DOM order rather than the next toolbar item
+   * (WCAG 2.4.3). `IsolateControl` below has always done this correctly; these two did not.
+   */
+  const mainButtonRef = useRef<HTMLButtonElement>(null);
+
   const disabled = api.disabled;
   return (
     <>
-      <button
-        {...api.itemProps}
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-disabled={disabled || undefined}
-        title={disabled ? LINK_DISABLED_REASON : `Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
-        onClick={() => {
-          if (!disabled) toggle();
-        }}
-        className={cn(toolbarControlVariants({ active: ctx.isLinking || open, disabled }))}
+      {/*
+       * A **true** split button, unlike Add's split *look*. The primary region arms and disarms the
+       * tool with the current type; the caret opens the type menu. They are separated because the
+       * old single trigger only opened the menu — clicking "Link" armed nothing, so the still-armed
+       * Add tool took the next canvas click and silently created an activity where the planner meant
+       * to pick a link endpoint. Measured: 0 dependencies from 6 link attempts (ADR-0064).
+       *
+       * One tab stop is preserved: the primary carries `api.itemProps` (the roving stop) and the
+       * caret is `tabIndex={-1}`, reached with ArrowDown — the APG split-button arrangement. The
+       * pair sits in a `div` that carries the control chrome so the two regions read as one control.
+       */}
+      <span
+        className={cn(
+          toolbarControlVariants({ active: ctx.isLinking || open, disabled }),
+          'gap-0 p-0',
+        )}
       >
-        <Spline aria-hidden="true" className="size-4" />
-        <span className="truncate">{ctx.isLinking ? `Linking · ${ctx.linkType}` : 'Link'}</span>
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
-      </button>
+        <button
+          {...api.itemProps}
+          ref={mainButtonRef}
+          type="button"
+          aria-pressed={ctx.isLinking}
+          aria-disabled={disabled || undefined}
+          title={
+            disabled
+              ? LINK_DISABLED_REASON
+              : ctx.isLinking
+                ? 'Stop linking'
+                : `Link with ${LINK_TYPE_LABELS[ctx.linkType]}`
+          }
+          onClick={() => {
+            if (!disabled) ctx.toggleLinkMode();
+          }}
+          onKeyDown={(e) => {
+            // ArrowDown from the primary opens the type menu and moves into it, so the caret needs
+            // no tab stop of its own (APG split button).
+            if (e.key === 'ArrowDown' && !disabled) {
+              e.preventDefault();
+              toggle();
+            }
+          }}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
+        >
+          <Spline aria-hidden="true" className="size-4" />
+          <span className="truncate">{ctx.isLinking ? `Linking · ${ctx.linkType}` : 'Link'}</span>
+        </button>
+        <button
+          ref={triggerRef}
+          type="button"
+          tabIndex={-1}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-disabled={disabled || undefined}
+          aria-label={`Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
+          onClick={() => {
+            if (!disabled) toggle();
+          }}
+          className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
+        >
+          <ChevronDown aria-hidden="true" className="size-3.5" />
+        </button>
+      </span>
       <Menu
         open={open}
         onClose={close}
         anchor={anchor}
         label="Link type"
-        restoreFocusRef={triggerRef}
+        restoreFocusRef={mainButtonRef}
       >
         {LINK_TYPES.map(({ type, label }) => (
           <MenuItem

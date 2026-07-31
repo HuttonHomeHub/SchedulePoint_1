@@ -16,7 +16,7 @@ import {
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
-import type { EditIntent, LoeSpanStep } from '../interaction/gesture-machine';
+import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
@@ -58,6 +58,7 @@ import {
 } from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
+import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
 import { sceneTopOffset, TsldCanvas, type PendingGhost } from './TsldCanvas';
@@ -69,7 +70,8 @@ import { TsldViewControls } from './TsldViewControls';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
@@ -205,6 +207,21 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /**
+   * Undo the last plan edit — the **existing** ADR-0048 inverse, passed in by the host that owns the
+   * command stack. The mode band's link confirmation offers it (ADR-0064 T5); absent, the
+   * confirmation still states what was created but shows no Undo, because a button that cannot undo
+   * anything is worse than none.
+   */
+  onUndoLastEdit?: (() => void) | undefined;
+  /**
+   * The plan's auto-recalculation coalescer's hold seam (ADR-0064 T7), supplied by the host that
+   * owns it. While a two-click pick is open the panel takes a hold, so a coalesced recalculation
+   * cannot move the bars between the planner's two clicks. Absent ⇒ today's cadence exactly.
+   */
+  recalcHold?: { hold: (token: symbol) => void; release: (token: symbol) => void } | undefined;
+  /** Forwarded to the canvas: drop an open link pick because the schedule is about to move (T7). */
+  dropLinkPickSignal?: number;
   /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
    * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
    * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
@@ -347,6 +364,9 @@ export function TsldPanel({
   onResize,
   onLag,
   onLink,
+  onUndoLastEdit,
+  recalcHold,
+  dropLinkPickSignal = 0,
   onLoeSpan,
   onAutoArrange,
   onOpenLogic,
@@ -446,6 +466,36 @@ export function TsldPanel({
   // abandon — so the disarm effect below announces "cancelled/closed" only on a genuine cancel, never
   // after the success announcement (spec B2 sequencing). Set by `runLoeSpan` just before it disarms.
   const loeCommitDisarmRef = useRef(false);
+  /**
+   * The Link tool's open pick and the last link created — the two things the ADR-0064 mode band
+   * states that no other state already holds. Both are inert with the flag off: nothing writes
+   * them, so the band renders `null` and the surface is byte-for-byte the prior one.
+   */
+  const [linkPickedId, setLinkPickedId] = useState<string | null>(null);
+  const [lastLink, setLastLink] = useState<{
+    predecessorName: string;
+    successorName: string;
+    linkType: string;
+    /**
+     * Which **arming of the Link tool** created this link. The confirmation renders only while that
+     * is still the current arming, so it cannot outlive the session it belongs to.
+     *
+     * This replaces an `atMode: EditMode` field that was always set to the literal `'link'` and
+     * only ever read inside a `mode === 'link'` branch — a guard that could never be false. The
+     * effect was that once a planner had made one link, **every later arming of the tool replayed
+     * that confirmation**, next to an Undo wired to the top of the command stack — which by then
+     * was some other, more recent edit. A sentence naming one link beside a button that discards a
+     * different one is worse than no sentence. Found by the ADR-0064 enablement UX review.
+     */
+    armGeneration: number;
+  } | null>(null);
+  /**
+   * Bumped on every arming of the Link tool. Held as **both** a ref and state on purpose: the
+   * commit callback needs the current value without re-subscribing (the ref), and the render needs
+   * to react when it changes (the state).
+   */
+  const linkArmGenerationRef = useRef(0);
+  const [linkArmGeneration, setLinkArmGeneration] = useState(0);
   // Mirror the live picked-start id so the mode effect can read it at disarm time WITHOUT listing
   // `loeStartId` as a dep (which would re-announce the arm prompt on every pick).
   const loeStartIdRef = useRef(loeStartId);
@@ -486,6 +536,87 @@ export function TsldPanel({
       hadStart ? 'Level of effort (hammock) cancelled.' : 'Level of effort (hammock) tool closed.',
     );
   }, [mode, announce, setLoeStartId]);
+
+  /**
+   * Announce the **Add** and **Link** tools arming and disarming (ADR-0064 T3, WCAG 4.1.3).
+   *
+   * The canvas is `aria-hidden` (ADR-0026 D7), so a tool change is otherwise conveyed only by the
+   * toolbar label — visible, and silent to anyone not looking at it. Which tool is armed decides
+   * what the next canvas click *means*, so it is exactly the state change that must not be silent.
+   * `loe` is excluded because the effect above already speaks its richer prompt; announcing here as
+   * well would say two different things about the same transition.
+   */
+  const announcedModeRef = useRef<EditMode>(mode);
+  useEffect(() => {
+    const previous = announcedModeRef.current;
+    if (previous === mode) return;
+    announcedModeRef.current = mode;
+    if (mode === 'add-activity') {
+      announce(modeStatementText({ kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }));
+    } else if (mode === 'link') {
+      // A fresh arming of the tool is a fresh session: bump the generation so any confirmation from
+      // a PREVIOUS arming stops matching and the band goes back to prompting. See the state's
+      // docblock — this replaces an `atMode` guard that could never be false.
+      linkArmGenerationRef.current += 1;
+      setLinkArmGeneration(linkArmGenerationRef.current);
+      announce(modeStatementText({ kind: 'linking', linkType }));
+    } else if (previous === 'add-activity' || previous === 'link') {
+      announce('Tool closed. Select mode.');
+    }
+  }, [mode, announce, createType, linkType]);
+
+  /**
+   * Hold the coalesced recalculation while a two-click pick is open (ADR-0064 T7), and release it on
+   * every exit — commit, Escape, disarm, unmount. The token is per-panel and stable, so a release
+   * can only ever open this panel's own hold.
+   *
+   * The cleanup is the load-bearing half. A leaked hold does not fail loudly: the plan's dates
+   * simply stop updating for the rest of the session, and the only symptom is a canvas that quietly
+   * disagrees with the schedule. Releasing in the effect's cleanup means every exit path — including
+   * ones nobody has thought of yet — releases by construction rather than by remembering to.
+   */
+  const [recalcHoldToken] = useState(() => Symbol('tsld-pick-hold'));
+  const emptyStateReasonId = useId();
+  const recalcHoldRef = useRef(recalcHold);
+  useEffect(() => {
+    recalcHoldRef.current = recalcHold;
+  });
+  const pickIsOpen = CANVAS_AUTHORING_FLOW_ENABLED && linkPickedId !== null;
+  useEffect(() => {
+    if (!pickIsOpen) return;
+    const seam = recalcHoldRef.current;
+    seam?.hold(recalcHoldToken);
+    return () => seam?.release(recalcHoldToken);
+  }, [pickIsOpen, recalcHoldToken]);
+
+  /**
+   * What the mode band says, or null for "say nothing and take no height". Derived rather than
+   * stored: every input already exists, and a second copy of "which tool is armed" is exactly the
+   * kind of state that drifts from the one the canvas actually obeys.
+   */
+  const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
+    ? null
+    : mode === 'add-activity'
+      ? { kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }
+      : mode === 'loe'
+        ? { kind: 'loe', startPicked: loeStartId !== null }
+        : mode === 'link'
+          ? linkPickedId
+            ? {
+                kind: 'linkPicking',
+                linkType,
+                predecessorName:
+                  activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
+              }
+            : lastLink?.armGeneration === linkArmGeneration
+              ? {
+                  kind: 'linked',
+                  predecessorName: lastLink.predecessorName,
+                  successorName: lastLink.successorName,
+                  linkType: lastLink.linkType,
+                }
+              : { kind: 'linking', linkType }
+          : null;
 
   /**
    * The pinned WBS band (ADR-0063). Derived HERE rather than inside the canvas because
@@ -903,6 +1034,47 @@ export function TsldPanel({
       runLoeSpan(loeStartId, current.id);
       return;
     }
+    /**
+     * **Keyboard parity for the two-click Link tool** (ADR-0064 T6). With the tool armed, Enter on
+     * the focused activity picks the predecessor; Enter on a *different* one commits the link with
+     * the armed FS/SS/FF type — the exact sequence the pointer performs.
+     *
+     * Without this the Link tool was pointer-only: a keyboard user could reach the Logic dialog
+     * (the branch below) and create the same link there, so the *capability* existed, but the tool
+     * on the toolbar did nothing for them. Gated on `mode === 'link'`, so Enter outside the tool
+     * still opens the Logic tab exactly as it did — tested both ways.
+     */
+    if (
+      CANVAS_AUTHORING_FLOW_ENABLED &&
+      editingEnabled &&
+      mode === 'link' &&
+      onLink &&
+      event.key === 'Enter'
+    ) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current) return;
+      if (linkPickedId === null) {
+        setLinkPickedId(current.id);
+        announce(
+          modeStatementText({ kind: 'linkPicking', linkType, predecessorName: current.name }),
+        );
+        return;
+      }
+      if (current.id === linkPickedId) {
+        announce('That’s the predecessor — pick a different activity as the successor.');
+        return;
+      }
+      const predecessorId = linkPickedId;
+      setLinkPickedId(null);
+      // The anchor positions the create popover, which a `link` intent never opens; the LOE
+      // keyboard path passes nothing for the same reason. Zero is the honest "no pointer here".
+      onIntent(
+        { kind: 'link', predecessorId, successorId: current.id, type: linkType },
+        { x: 0, y: 0 },
+      );
+      return;
+    }
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
     // creating links, so link-draw introduces no pointer-only capability (WCAG 2.1.1).
     if (event.key === 'Enter' && onOpenLogic) {
@@ -1135,6 +1307,36 @@ export function TsldPanel({
     }
   };
 
+  /**
+   * The Link tool's per-pick feedback from the **canvas**, the exact sibling of
+   * `handleLoeSpanStep` above — and for the same reason: the canvas is `aria-hidden` (ADR-0026 D7),
+   * so a pick made with the pointer is otherwise a silent state change.
+   *
+   * This was `setLinkPickedId` passed raw, which meant the keyboard path announced its picks (it
+   * calls `announce` inline) and the pointer path announced nothing. Worse, the two **drop** routes
+   * — the first Escape, and the ADR-0064 T7 recalculation-cap drop — also came through here, and
+   * the cap drop happens with **no user gesture at all**. A screen-reader user mid-pick was given
+   * no notice their pick had gone, so their next Enter was read as a fresh predecessor rather than
+   * the successor they intended: a wrong link, silently. (WCAG 4.1.3; found by the ADR-0064
+   * enablement accessibility review.)
+   */
+  const handleLinkPickStep = (predecessorId: string | null): void => {
+    setLinkPickedId(predecessorId);
+    if (predecessorId === null) {
+      // Only worth saying if something was actually open — this also fires on the seeding echo.
+      if (linkPickedId !== null) announce('Link pick dropped. Pick the predecessor again.');
+      return;
+    }
+    const picked = activities.find((a) => a.id === predecessorId);
+    announce(
+      modeStatementText({
+        kind: 'linkPicking',
+        linkType,
+        predecessorName: picked?.name ?? 'the picked activity',
+      }),
+    );
+  };
+
   const onIntent = (intent: EditIntent, anchor: Point): void => {
     // Ignore a new gesture while a create popover or a reposition is already in flight.
     if (pendingCreate || pendingReposition) return;
@@ -1343,7 +1545,16 @@ export function TsldPanel({
           if (outcome.conflict) showConflict(outcome.conflict);
           // Announce only when the link was actually created (never on a cycle/duplicate reject).
           if (outcome.applied) {
-            announce(`Linked “${pred?.name ?? 'activity'}” to “${succ?.name ?? 'activity'}”.`);
+            // One source for the sentence: the band shows it and the live region speaks it, both
+            // from `modeStatementText`. Two strings agree the day they are written and diverge the
+            // day one is edited.
+            const created = {
+              predecessorName: pred?.name ?? 'activity',
+              successorName: succ?.name ?? 'activity',
+              linkType: intent.type,
+            };
+            setLastLink({ ...created, armGeneration: linkArmGenerationRef.current });
+            announce(modeStatementText({ kind: 'linked', ...created }));
           }
         })
         .catch((err: unknown) => {
@@ -1470,6 +1681,51 @@ export function TsldPanel({
 
       {!chromeless && showDiagram ? <TsldLegend /> : null}
 
+      {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
+          overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
+          it costs no canvas height in the state the canvas is in most of the time. */}
+      <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
+
+      {/*
+        **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
+        completely blank canvas, and nothing on it says what the first gesture is — the surface is
+        at its least self-explanatory exactly when the planner knows least.
+
+        Shaded with a reason rather than hidden without the pen (ADR-0062 M6's finding, twice): a
+        Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
+        right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
+      */}
+      {CANVAS_AUTHORING_FLOW_ENABLED && showDiagram && activities.length === 0 ? (
+        <div
+          data-testid="canvas-empty-state"
+          className="border-border text-muted-foreground flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2 text-sm"
+        >
+          <p>This plan has no activities yet.</p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            aria-disabled={!editingEnabled}
+            {...(editingEnabled ? {} : { 'aria-describedby': emptyStateReasonId })}
+            onClick={(event) => {
+              if (!editingEnabled) {
+                event.preventDefault();
+                return;
+              }
+              setMode('add-activity');
+            }}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          >
+            Draw the first activity
+          </Button>
+          {editingEnabled ? null : (
+            <span id={emptyStateReasonId} className="sr-only">
+              Start editing this plan to draw activities.
+            </span>
+          )}
+        </div>
+      ) : null}
+
       <div
         className={
           fill
@@ -1480,6 +1736,9 @@ export function TsldPanel({
         {showDiagram && dataDate ? (
           <>
             <TsldCanvas
+              onLinkPickStep={handleLinkPickStep}
+              dropLinkPickSignal={dropLinkPickSignal}
+              linkPickPredecessorId={linkPickedId}
               activities={renderActivities}
               edges={renderEdges}
               dataDate={dataDate}

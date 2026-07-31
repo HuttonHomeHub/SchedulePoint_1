@@ -1428,3 +1428,120 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   Found by checking the roadmap's "still pending" claim against the code instead of believing it
   (ADR-0058); the same pass corrected the Gantt's "closed the last Must-have" claim, which the brief
   words "read-primary; **edit supported**".
+
+- **The reversed link (ADR-0064 A2) is closed as _unreproduced_, and its likely cause was the Link
+  trigger that armed nothing (2026-07-30).** The epic opened on two observations from one driving
+  session: six link attempts that created **zero** dependencies, and one link that recorded
+  `Reinforce → Set out` after clicking _Set out_ then _Reinforce_. The plan (CQ-1) required the
+  second to be diagnosed with evidence before anything was "fixed", because the gesture reducer maps
+  the **first** click to the predecessor and carries no inversion on any path — so the cause had to
+  be elsewhere, and recording "fixed" for a defect we never explained is the failure ADR-0058 exists
+  to name.
+
+  `apps/web/e2e-authoring-flow/link-direction.spec.ts` drives the two-click pick against a real API
+  with the pen enforced and the coalesced auto-recalculation live, sweeping the inter-click delay
+  across the 500 ms debounce boundary (0 / 250 / 600 / 1500 ms quiescent, 0 / 900 ms with a
+  recalculation genuinely in flight — armed by drawing a task on the canvas, since an API-direct
+  write would never schedule one). Each bar's click point is **measured**, not assumed: the harness
+  walks one canvas column in `select` mode and reads the canvas's own parallel listbox back, then
+  re-probes the same two pixels after the pick. That is what makes the outcomes distinguishable —
+  no row at all means a click was dropped; a reversed row with a **changed** map means the scene
+  moved between the clicks; a reversed row with the map intact means a third mechanism.
+
+  **All seven cases recorded exactly one dependency, in click order, with the map unchanged.** A2
+  does not reproduce, and is closed as unreproduced rather than as fixed.
+
+  What the same session's _other_ observation does explain is A1c, and it is now pinned: the Link
+  split-button's primary region used to open its type menu and arm **nothing**, so a planner who
+  clicked "Link" and then clicked two bars was still in **Add** mode and drew two activities. That
+  is where the zero dependencies came from, and it is also the shape most likely to be read as a
+  reversal — the click sequence the planner counted was not the sequence the machine received. The
+  invariant is therefore stated as a **replacement**, not as "Link arms": arming Link while Add is
+  armed leaves Add disarmed, the next canvas click picks an endpoint, and the plan's activity count
+  does not change. Asserting only the dependency would pass on a run that _also_ drew two strays.
+
+- **The canvas now says which tool is armed (ADR-0064 M1, 2026-07-31).** Six surfaces landed
+  together behind `VITE_CANVAS_AUTHORING_FLOW`, flipped default-on the same day once the flag-on
+  journey was green locally: the mode statement band, the link confirmation with its direction and
+  Undo, keyboard pick parity for the Link tool, recalculation quiescence during an open pick, and
+  the empty-plan state. The defect fixes they sit on — the Link trigger arming its tool, the uniform
+  disarm contract, the create popover's visible label and distinct submit — ship **outside** the
+  flag, because gating them would mean writing parity suites that pin a bug.
+
+  Three things this epic taught that outlive it. **A `[VERIFIED]` tag is a claim, not a fact**: two
+  of this spec's carried one and were wrong, both written by the same person who drove the session
+  they came from. **Measure the thing you are about to assert about**: the diagnostic only produced
+  an answer once it stopped trusting the pixel it drew at and started asking the canvas which bar
+  was there. And **a helper that fixes one hazard can introduce another** — the selection-clearing
+  helper added to stop the floating actions bar covering a pick point clicked while Add was still
+  armed, opening a create popover over the very points it was protecting.
+
+- **Link corridors now step around bars, and the draw budget turned out to be fiction
+  (ADR-0065 / ADR-0064 M2, 2026-07-31).** `VITE_CANVAS_LINK_ROUTING` default-on. The geometry is
+  one optional parameter on the existing `routeOrthogonal` rather than a second router, so flag-off
+  is byte-identical by construction; the interval index comes from the same `activityRect` the bars
+  draw from; the search is bounded and fixed-order because a route that varies between frames reads
+  as the diagram twitching.
+
+  The part worth remembering is not the routing. Building the gate meant writing
+  `apps/web/scripts/measure-link-routing.mjs`, which paints the real painter against a **real 2D
+  context in Chromium** — and the first thing it reported was that the **already-shipped** canvas
+  runs at 16.7–23.1 ms p95 at 2,000 activities against ADR-0026 §16's stated ≤ 4 ms. Nobody had
+  ever run it. TECH_DEBT #59 has said "the budget has never been measured on the hardware envelope
+  it names" for months, and the number was quoted in ADR after ADR as though it were being met.
+
+  Two smaller lessons from the same afternoon. **A budget fixture that does not exercise the code
+  it budgets is worse than none** — the first run of `paint.routing-budget.test.ts` reported _zero_
+  extra segments, because the fixture's edge offset was an exact multiple of the lane count and
+  every "long-range" edge was same-lane. And **a dead branch survives a green suite**: the first
+  draft of the five-point fallback ran `candidates.find(free)` after a loop that had already
+  returned on any hit, so it could only ever emit the plain elbow. It was caught by reading the code
+  back, not by a test — a test would have passed.
+
+- **A hub's comb of verticals became one trunk (ADR-0065 §5 / ADR-0064 M3, 2026-07-31).** Same flag.
+  The rule that matters is not the snapping, it is the refusal: a corridor only joins the trunk if
+  the trunk x is free across the lanes that corridor crosses, so bundling can never put a line back
+  through the bar the milestone before it moved that line off. It also moves the **line only** — the
+  lag anchors, their handles and their hit zones are computed before the bundler runs and are not
+  passed to it, so the plan's stated M3 risk is answered by what the function can reach rather than
+  by care.
+
+  Two things recorded rather than smoothed over. The plan's gate said "if M2 measures badly, M3
+  becomes the remedy for the cost" — **it is not**: the painter batches every edge into one path, so
+  overlapping verticals cost what separate ones did, and the re-measurement found no change either
+  way. M3 stands on legibility alone. And the gate's other input, a ux review of what the remaining
+  problem actually is, was **not run** in this session.
+
+- **The enablement review pass found five defects that had passed a human read (ADR-0064/0065,
+  2026-07-31).** Five specialists over the combined epic diff; performance passed, the other four
+  blocked. What they found, in descending order of how badly it would have bitten:
+
+  1. **A stale link confirmation beside a live Undo.** `lastLink` was guarded by an `atMode` field
+     always set to the literal `'link'` and only read inside a `mode === 'link'` branch — a
+     condition that can never be false. So once a planner had made one link, **every later arming of
+     the Link tool replayed "Linked A → B"**, next to an Undo bound to the top of the command stack,
+     which by then was a different, more recent edit. A sentence naming one link beside a button
+     that discards another. Now a per-arming generation; the regression test was verified to fail
+     against the old guard before being kept.
+  2. **Focus restored to a `tabIndex={-1}` node.** Both new split buttons passed
+     `restoreFocusRef={triggerRef}` — the caret's ref, deliberately outside the tab order — so after
+     picking a type or pressing Escape, the next Tab went wherever raw DOM order led (WCAG 2.4.3).
+     `IsolateControl`, in the same file, had always done it correctly with a separate
+     `mainButtonRef`. The reviewer reproduced it against the real toolbar rather than reading it.
+  3. **The Link tool's pointer picks were silent.** The keyboard path announced inline; the pointer
+     path was wired to a raw `setState`. Both **drop** routes came through the same callback,
+     including the recalculation-cap drop that fires with no user gesture — so a screen-reader user
+     mid-pick got no notice their pick had gone, and their next Enter was read as a fresh
+     predecessor. The LOE tool's equivalent handler, twenty lines up, had been right all along.
+  4. **A Cancel that could not cancel.** Moving off native `disabled` (correct — SC 2.4.3) gave the
+     submit a click guard and shading; Cancel got the `aria-disabled` attribute alone, so it
+     announced "unavailable" while staying lit and clickable — and `onCancel` cannot abort the
+     in-flight create, so it would have closed the popover and let the activity appear anyway.
+     Switching the input to `readOnly` had re-opened Escape as the same route.
+  5. **Untested wiring at three seams** — the Undo path, the hold/release pairing, and the
+     drop-signal round trip — all covered now, plus the two derived flags.
+
+  The pattern is worth naming: **four of the five are a correct pattern applied to one control and
+  not its neighbour.** Not one was a design mistake; every one was an inconsistency inside a diff
+  whose own docblocks described the right thing. That is what a specialist gate catches and a human
+  read does not, and it is the third epic running where that has been true.

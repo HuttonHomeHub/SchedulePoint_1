@@ -19,6 +19,7 @@
     "test:e2e:workspace": "playwright test --config playwright.workspace.config.ts --pass-with-no-tests",
     "test:e2e:toolbar": "playwright test --config playwright.toolbar.config.ts --pass-with-no-tests",
     "test:e2e:authoring": "playwright test --config playwright.authoring.config.ts --pass-with-no-tests",
+    "test:e2e:authoring-flow": "playwright test --config playwright.authoring-flow.config.ts --pass-with-no-tests",
     "test:e2e:programme": "playwright test --config playwright.programme.config.ts --pass-with-no-tests",
     "test:e2e:notes": "playwright test --config playwright.notes.config.ts --pass-with-no-tests",
     "test:e2e:undo": "playwright test --config playwright.undo.config.ts --pass-with-no-tests",

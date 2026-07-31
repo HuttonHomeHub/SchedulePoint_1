@@ -346,3 +346,87 @@ the measured numbers. Raised by the ADR-0063 M6 backend-performance gate as an o
 confirmed defect — the design (plan-scoped key, skipped on the uncontended path) is otherwise sound.
 Related: the parent-chain walk inside that lock has **no depth cap**, unlike the resource tree's
 documented ≤ 10 (ADR-0053 §3).
+
+### 75. Is ≤ 4 ms p95 the right draw budget? (measured for the first time, and missed)
+
+ADR-0026 §16 states ≤ 4 ms p95 at 2,000 activities, and #59 records that it had never been measured
+on real hardware. It now has been, for the first time — by `apps/web/scripts/measure-link-routing.mjs`,
+which paints the real `paintScene` against a real 2D context in Chromium over 120 panning frames at
+2,000 activities and ~1,500 long-range dependencies:
+
+| zoom                                 | routing off (p50 / p95) | routing on (p50 / p95) |
+| ------------------------------------ | ----------------------- | ---------------------- |
+| whole plan (2px/day, nothing culled) | 13.3 / 16.7 ms          | 17.7 / 22.6 ms         |
+| week (12px/day, cull working)        | 18.1 / 23.1 ms          | 21.6 / 26.9 ms         |
+
+**The `routing off` column is today's shipped painter**, so the overrun is pre-existing and was not
+caused by ADR-0065 — that change adds 3.4–5.9 ms p95 on top of it, and was enabled anyway with the
+number in hand.
+
+**The open question is the target, not the painter.** 4 ms was written in ADR-0026 when the canvas
+drew bars, links and a grid. It now also draws month bands, a WBS band, float and drift tails,
+non-working hatching, flanking dates, arrowheads, lag runs and handles — every one of them an
+accepted decision with its own ADR. A budget set before two thirds of the picture existed, never
+once measured against it, is more likely to be the wrong number than an indictment of nine
+subsequent features. What matters to a planner is that panning and dragging feel smooth, which is a
+question about **frame pacing under `requestAnimationFrame`**, not about one function's wall-clock.
+
+Two caveats on the numbers above, stated rather than buried: the browser is a **headless container
+Chromium with software rasterisation**, close to a worst case for canvas fill and explicitly _not_
+the "mid-tier laptop and iPad-class Safari" envelope #59 names; and the fixture is adversarial by
+construction (fifty fully-occupied lanes, every edge spanning seven of them) because a gentler one
+would not exercise the code being budgeted.
+
+**What would close it**, in order:
+
+1. **Decide what to measure.** Dropped frames and input-to-paint latency during a pan/drag on a
+   representative plan, rather than `paintScene`'s own duration on a synthetic worst case. The
+   current script measures the latter because that is what could be measured without a seeded
+   database; it is a starting point, not the benchmark.
+2. **Decide what "representative" is.** 2,000 activities is ADR-0026's stated ceiling, but nobody
+   has checked it against a real programme. The largest plan the product owner actually runs, and
+   the largest an imported XER produces, are both facts we can get.
+3. **Run it on the envelope ADR-0026 names** — a mid-tier laptop and an iPad — with the same script,
+   which takes a checkout and one command.
+4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
+   answer is "smooth at 2,000, and 16 ms is fine because it is one frame at 60 Hz", the budget was
+   simply wrong and should say so. If it is not smooth, ADR-0026's own reserved escalations —
+   dirty-region repainting, then WebGL — are the route, and they now have a measurement to aim at.
+
+Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
+itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
+
+### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
+
+Five specialist reviews ran over the combined authoring + routing diff. Every **blocking** finding
+was fixed with a regression test (see `docs/DECISIONS.md`), as was one non-blocking one — the
+`toolbarSplitCaretVariants` docblock, which still said a true split button "would need its own
+composite-stop design. Until that lands…" while two had since landed on it. That was corrected in
+the same pass rather than deferred, because ADR-0058 makes documentation drift a defect class here
+and the fix was a comment. These are the rest, recorded rather than rushed:
+
+- **Two hoists that would shrink the measured routing cost** (performance review). `activityRect` is
+  computed three times per visible activity per frame with routing on — once in `cull()`, once in
+  `laneIntervalIndex`, once in the `rects` map the bar layer builds later; and `crossedLanes` is
+  computed twice per edge (`routeOrthogonal`, then `bundleCorridors`). Both are pure duplicated work
+  with an obvious fix (build `rects` before the edge block; carry the crossed-lane list on the
+  per-edge descriptor). They are inside an overhead already measured and accepted, so they belong
+  with **#75** rather than blocking a release.
+- **A fourth hand-rolled "message + optional action" strip.** `EditConflictBanner`,
+  `CanvasModeBand` and the new canvas empty state are three near-identical rounded-bordered strips,
+  none reusing the others and only one going through `cn()`/CVA. Extract a shared primitive before a
+  fifth lands.
+- **The split-button composite is duplicated** between `AddActivityControl` and `LinkControl` —
+  identical wrapper, primary classes, caret classes and ArrowDown handler. Two real consumers is the
+  threshold `docs/COMPONENT_LIBRARY.md` sets for extraction, and the focus-restore defect above is
+  exactly what duplication of this shape produces.
+- **`ArrowUp` does not open either type menu** (only `ArrowDown`). `IsolateControl` handles both.
+  Not a 2.1.1 failure — `ArrowDown` gives full reachability — but inconsistent.
+- **No flag-off regression for the _pointer_ two-click link pick.** The echo plumbing
+  (`onLinkPickStep`/`linkPickPredecessorId`/`dropLinkPickSignal`) is wired unconditionally on top of
+  the pre-existing ADR-0032 M5 gesture, and nothing proves it is inert with the epic's flag off; the
+  only tests touching pointer-driven dependency creation exercise the old edge-drag.
+- **The pen-loss-mid-pick case is untested at every layer** — no test takes the pen away, or lets it
+  expire, while a link pick is open, and asserts the 409/423 surfaces and the pick is abandoned
+  safely. `docs/TESTING.md` says that trap is only testable against a real API, so it belongs in
+  `e2e-authoring-flow`.

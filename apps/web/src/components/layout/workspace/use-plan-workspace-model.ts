@@ -404,9 +404,22 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     announce,
     onLockLost: pen.onWriteRejected,
   });
+  /**
+   * Bumped when a recalculation hold expires (ADR-0064 T7) — the canvas drops any open link pick,
+   * because the bars are about to move and a pick taken against the old positions is no longer the
+   * pick the planner made. A counter rather than a boolean: the canvas needs "this is a new
+   * request", not "a request is outstanding".
+   */
+  const [dropLinkPickSignal, setDropLinkPickSignal] = useState(0);
   const autoRecalc = usePlanAutoRecalc(orgSlug, planId, {
     enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
     onMessage: announce,
+    onHoldExpired: () => {
+      setDropLinkPickSignal((n) => n + 1);
+      announce(
+        'Schedule recalculated — the unfinished link was dropped. Pick the predecessor again.',
+      );
+    },
   });
   // Any structural edit — from the canvas, the activities table, or the logic editor — should
   // auto-recalc. Watching only the row *count* misses in-place edits that change the schedule
@@ -1345,6 +1358,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.
     undoRedo,
+    /** The ADR-0064 T7 quiescence seam + its drop signal, handed to the canvas by the workspace. */
+    autoRecalcHold: { hold: autoRecalc.hold, release: autoRecalc.release },
+    dropLinkPickSignal,
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,

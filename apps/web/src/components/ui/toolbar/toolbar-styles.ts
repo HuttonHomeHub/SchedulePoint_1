@@ -18,11 +18,21 @@ import { cva } from 'class-variance-authority';
  * The **split-button caret** treatment: a hairline divider before the caret, so a control that
  * both acts and opens a menu *reads* as two halves.
  *
- * It is the **look only**, deliberately (ADR-0055 §3 / spec §4.7 D11). A true split button is two
- * focusable halves, which inside a toolbar means two roving-tabindex stops in one item — that
- * re-opens the a11y gate ADR-0031 closed, and would need its own composite-stop design. Until
- * that lands, the Add control stays one stop that opens a menu; this variant only gives it the
- * affordance a planner recognises. `Toolbar.test.tsx` asserts the single stop.
+ * Originally the **look only** (ADR-0055 §3 / spec §4.7 D11): a true split button is two focusable
+ * halves, which inside a toolbar risks two roving-tabindex stops in one item — the a11y gate
+ * ADR-0031 closed.
+ *
+ * **That is no longer what its consumers do.** ADR-0064 made the Add and Link controls real split
+ * buttons: two `<button>`s, the primary carrying the roving `itemProps` and the caret held out of
+ * the sequence with `tabIndex={-1}` and reached by `ArrowDown`. The pair is still exactly **one**
+ * roving stop — `Toolbar.test.tsx` and `tsld-toolbar-authoring.test.tsx` both assert that — so the
+ * gate stayed closed; what changed is that the affordance is now operable rather than decorative.
+ *
+ * Two rules for the next consumer, both learnt the hard way. `restoreFocusRef` must point at the
+ * **primary**, never the caret: the caret is outside the tab order, so restoring focus there strands
+ * a keyboard user (WCAG 2.4.3 — shipped, and caught by the ADR-0064 enablement review). And the
+ * composite is now duplicated across two controls; a third should extract it rather than copy it
+ * (`docs/TECH_DEBT.md` #76).
  */
 export const toolbarSplitCaretVariants = cva(
   'border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70',

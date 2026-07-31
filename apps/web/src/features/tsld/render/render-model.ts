@@ -578,19 +578,114 @@ export function dependencyPolyline(
  * don't collapse onto one vertical run; it is clamped inside the gap so the elbow never cuts
  * back across the anchored bar edge, and the default `0` keeps the legacy shape byte-for-byte.
  */
+/**
+ * A lane's occupied horizontal spans, sorted by `x0` and non-overlapping after construction.
+ * Screen pixels, for the frame this was built from.
+ */
+export interface LaneIntervals {
+  readonly spans: readonly (readonly [number, number])[];
+}
+
+/** Per-lane occupied x-spans for the visible frame (ADR-0064 M2 T14). */
+export type LaneIntervalIndex = ReadonlyMap<number, LaneIntervals>;
+
+/** How many corridor candidates a single edge may try before falling back (ADR-0064 T15). */
+export const MAX_CORRIDOR_CANDIDATES = 4;
+
+/**
+ * Build the per-lane interval index a link route consults to avoid drawing through bars.
+ *
+ * **Pure, and derived from `activityRect` — the one existing source of a bar's geometry.** A
+ * milestone is a diamond and a WBS summary is a wider bracket; re-deriving either here would give
+ * routing a second opinion about where a bar is, and the two would disagree exactly when it
+ * mattered. Merging overlapping spans keeps the free test a single binary search rather than a scan
+ * (two bars can legitimately overlap in a lane — `lane-overlap.ts` models that conflict).
+ */
+export function laneIntervalIndex(
+  activities: readonly RenderActivity[],
+  view: Viewport,
+  dataDate: string,
+): LaneIntervalIndex {
+  const byLane = new Map<number, [number, number][]>();
+  for (const activity of activities) {
+    const rect = activityRect(activity, view, dataDate);
+    if (!rect) continue;
+    const lane = activity.laneIndex;
+    const list = byLane.get(lane);
+    const span: [number, number] = [rect.x, rect.x + rect.w];
+    if (list) list.push(span);
+    else byLane.set(lane, [span]);
+  }
+  const index = new Map<number, LaneIntervals>();
+  for (const [lane, spans] of byLane) {
+    spans.sort((a, b) => a[0] - b[0]);
+    const merged: [number, number][] = [];
+    for (const span of spans) {
+      const last = merged[merged.length - 1];
+      if (last && span[0] <= last[1]) last[1] = Math.max(last[1], span[1]);
+      else merged.push([span[0], span[1]]);
+    }
+    index.set(lane, { spans: merged });
+  }
+  return index;
+}
+
+/** Is screen-x `x` clear of every bar in `lane`? Binary search over the merged spans. */
+export function isLaneFreeAt(index: LaneIntervalIndex, lane: number, x: number): boolean {
+  const lane_ = index.get(lane);
+  if (!lane_) return true;
+  const spans = lane_.spans;
+  let lo = 0;
+  let hi = spans.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const span = spans[mid]!;
+    if (x < span[0]) hi = mid - 1;
+    else if (x > span[1]) lo = mid + 1;
+    else return false;
+  }
+  return true;
+}
+
+/**
+ * The lanes a vertical run between two lane-centres crosses, **excluding the two endpoints' own
+ * lanes** — a link is allowed to touch the bars it connects, and forbidding that would make every
+ * route fall back.
+ */
+function crossedLanes(fromLane: number, toLane: number): number[] {
+  const lo = Math.min(fromLane, toLane);
+  const hi = Math.max(fromLane, toLane);
+  const lanes: number[] = [];
+  for (let lane = lo + 1; lane < hi; lane += 1) lanes.push(lane);
+  return lanes;
+}
+
 export function routeOrthogonal(
   from: Point,
   to: Point,
   type: DependencyType,
   view: Viewport,
   elbowShift = 0,
+  /**
+   * Obstacle awareness (ADR-0064 M2). **Absent ⇒ this function returns exactly what it always
+   * returned** — that default is the parity gate, and it is why the new path could be added without
+   * a flag inside the geometry itself.
+   */
+  obstacles?: {
+    index: LaneIntervalIndex;
+    fromLane: number;
+    toLane: number;
+    /** Lane pitch and bar height, so the 5-point fallback can find the inter-lane gutter. */
+    laneHeight: number;
+    barHeight: number;
+  },
 ): Point[] {
   if (from.y === to.y) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
   const gap = Math.min(12, Math.max(4, view.pxPerDay));
   const shift = elbowShift === 0 ? 0 : Math.max(-(gap - 1), Math.min(gap - 1, elbowShift));
-  const elbow =
+  const preferred =
     type === 'FS'
       ? from.x + gap + shift
       : type === 'SS'
@@ -598,7 +693,147 @@ export function routeOrthogonal(
         : type === 'FF'
           ? Math.max(from.x, to.x) + gap + shift
           : (from.x + to.x) / 2 + shift; // SF
-  return [from, { x: elbow, y: from.y }, { x: elbow, y: to.y }, to];
+  const fourPoint = (elbow: number): Point[] => [
+    from,
+    { x: elbow, y: from.y },
+    { x: elbow, y: to.y },
+    to,
+  ];
+  if (!obstacles) return fourPoint(preferred);
+
+  const crossed = crossedLanes(obstacles.fromLane, obstacles.toLane);
+  // Nothing between the two lanes to hit: today's elbow is already correct, and taking the
+  // candidate path anyway would risk moving a line that had no reason to move.
+  if (crossed.length === 0) return fourPoint(preferred);
+
+  const free = (x: number): boolean =>
+    crossed.every((lane) => isLaneFreeAt(obstacles.index, lane, x));
+  if (free(preferred)) return fourPoint(preferred);
+
+  /**
+   * A **bounded** candidate list, tried in a fixed order so the same input always produces the same
+   * line — a route that varies between frames reads as the diagram twitching. The order runs from
+   * "closest to what we would have drawn" outwards, so a corridor is only abandoned for a reason.
+   */
+  const candidates = [
+    preferred + gap * 2,
+    preferred - gap * 2,
+    (from.x + to.x) / 2,
+    Math.max(from.x, to.x) + gap * 3,
+  ].slice(0, MAX_CORRIDOR_CANDIDATES);
+  for (const candidate of candidates) {
+    if (free(candidate)) return fourPoint(candidate);
+  }
+
+  /**
+   * No single corridor is clear. Route via **two** corridors joined by a short horizontal leg in
+   * the inter-lane gutter — the band between one lane's bar bottom and the next lane's bar top,
+   * where a bar can never be. This is the VHV shape, and it is the last structured attempt: if the
+   * gutter itself is unusable the line falls back to today's elbow, because bounded work is the
+   * contract and an unbounded search on the paint path is how a draw budget dies.
+   */
+  const gutterLane = Math.min(obstacles.fromLane, obstacles.toLane);
+  const gutterY =
+    (gutterLane + 1) * obstacles.laneHeight -
+    (obstacles.laneHeight - obstacles.barHeight) / 2 -
+    view.originY;
+  // Each leg only has to clear the lanes IT crosses, which is why this can succeed where a single
+  // corridor could not: the near leg runs from the source lane down to the gutter, the far leg from
+  // the gutter to the target lane, and neither spans the blocked middle.
+  const near = preferred + gap * 2;
+  const far = (from.x + to.x) / 2;
+  return [
+    from,
+    { x: near, y: from.y },
+    { x: near, y: gutterY },
+    { x: far, y: gutterY },
+    { x: far, y: to.y },
+    to,
+  ];
+}
+
+// ── Trunk/branch bundling of co-linear corridors (ADR-0065 M3, the SAME flag) ────────────────────
+
+/**
+ * How far apart (px) two vertical corridors may sit and still be drawn as one trunk.
+ *
+ * Six pixels is the fan-out cap (`FAN_OUT_MAX_PX`), and that is not a coincidence: the spread this
+ * bundles away is largely the fan-out's own, plus the small type-dependent gap. Wider would start
+ * merging corridors a reader can tell apart, which would move a line for no visible gain.
+ */
+export const BUNDLE_TOLERANCE_PX = 6;
+
+/** One routed line, with the lanes its corridors cross — the bundler needs both. */
+export interface BundleCandidate {
+  line: Point[];
+  fromLane: number;
+  toLane: number;
+}
+
+/**
+ * Snap near-coincident vertical corridors onto a shared trunk, **in place**.
+ *
+ * A hub with a dozen successors draws a dozen verticals two or three pixels apart: a comb, which
+ * reads as noise rather than as "these all follow that". Snapping them to one x makes the picture
+ * say what the logic says — one trunk, branching at each successor's lane.
+ *
+ * Three properties, in the order they matter:
+ *
+ * 1. **It never undoes the routing.** A corridor is only moved onto the trunk if the trunk x is
+ *    *free across the lanes that corridor crosses*. Without that check, bundling would cheerfully
+ *    snap an obstacle-avoiding corridor back through the bar M2 moved it off — the new feature
+ *    silently reverting the old one, on the plans where both matter most.
+ * 2. **It is deterministic.** Groups are swept over a sorted list and the trunk is the group's
+ *    median, so the same frame always bundles the same way. The tie-break carries the candidate's
+ *    index, because two corridors at an identical x must still order stably.
+ * 3. **It moves the line only.** Lag anchors, their drag handles and their hit zones keep today's
+ *    per-edge geometry — they are computed before this runs and are not passed in. That is the
+ *    ADR-0065 M3 risk mitigation, and it is structural: this function cannot reach them.
+ *
+ * Returns the number of corridors actually moved, so a test can assert it did something rather
+ * than assert the absence of a change it never attempted.
+ */
+export function bundleCorridors(
+  candidates: readonly BundleCandidate[],
+  index: LaneIntervalIndex,
+  tolerancePx = BUNDLE_TOLERANCE_PX,
+): number {
+  type Corridor = { candidate: number; at: number; x: number; lanes: number[] };
+  const corridors: Corridor[] = [];
+  candidates.forEach((candidate, c) => {
+    const lanes = crossedLanes(candidate.fromLane, candidate.toLane);
+    if (lanes.length === 0) return; // adjacent lanes: nothing crosses, nothing to bundle
+    for (let i = 0; i + 1 < candidate.line.length; i += 1) {
+      const a = candidate.line[i]!;
+      const b = candidate.line[i + 1]!;
+      if (a.x === b.x && a.y !== b.y) corridors.push({ candidate: c, at: i, x: a.x, lanes });
+    }
+  });
+  if (corridors.length < 2) return 0;
+  corridors.sort((p, q) => p.x - q.x || p.candidate - q.candidate || p.at - q.at);
+
+  let moved = 0;
+  let start = 0;
+  while (start < corridors.length) {
+    let end = start + 1;
+    while (end < corridors.length && corridors[end]!.x - corridors[start]!.x <= tolerancePx) {
+      end += 1;
+    }
+    if (end - start > 1) {
+      const trunk = corridors[start + ((end - start) >> 1)]!.x;
+      for (let i = start; i < end; i += 1) {
+        const corridor = corridors[i]!;
+        if (corridor.x === trunk) continue;
+        if (!corridor.lanes.every((lane) => isLaneFreeAt(index, lane, trunk))) continue;
+        const line = candidates[corridor.candidate]!.line;
+        line[corridor.at] = { x: trunk, y: line[corridor.at]!.y };
+        line[corridor.at + 1] = { x: trunk, y: line[corridor.at + 1]!.y };
+        moved += 1;
+      }
+    }
+    start = end;
+  }
+  return moved;
 }
 
 // ── Time-true lag anchoring + arrowheads (ADR-0052 M1, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──
@@ -805,14 +1040,31 @@ export function dependencyPolylineTimeTrue(
 export const ARROWHEAD_PX = 5;
 
 /**
+ * The routed arrowhead's length along the line (ADR-0064 M2 T17). A 5 px equilateral head is legible
+ * at Day zoom and close to invisible at Month, where the whole link is a few pixels of dashed rule —
+ * so a planner reading a compressed programme cannot tell which end of a tie is which, which is the
+ * one thing the head exists to say.
+ *
+ * **Length, not size**: `ARROWHEAD_HALF_W_PX` is deliberately held at the fan-out step rather than
+ * scaled with the length. Widening the barbs past `FAN_OUT_STEP_PX` would push each head across its
+ * neighbour's line in a fanned bundle (ADR-0052 M5), trading one legibility problem for another —
+ * and direction reads off the head's *point*, which is a function of its length.
+ */
+export const ARROWHEAD_ROUTED_PX = 8;
+
+/**
  * The three vertices of the directional arrowhead at a polyline's successor end (ADR-0052): the
  * tip is the last point, the two barbs sit `size` back along the final non-degenerate segment,
- * half a `size` either side of it. Pure vertex math — the painter batches the fills. Null for a
+ * `halfWidth` either side of it. Pure vertex math — the painter batches the fills. Null for a
  * degenerate line (fewer than two distinct points), where no direction exists.
+ *
+ * `halfWidth` defaults to `size / 2`, which is the equilateral head every existing caller draws —
+ * so the added parameter changes nothing it is not passed to.
  */
 export function arrowhead(
   points: readonly Point[],
   size = ARROWHEAD_PX,
+  halfWidth = size / 2,
 ): [Point, Point, Point] | null {
   const tip = points[points.length - 1];
   if (!tip) return null;
@@ -829,7 +1081,7 @@ export function arrowhead(
     const uy = dy / len;
     const baseX = tip.x - ux * size;
     const baseY = tip.y - uy * size;
-    const half = size / 2;
+    const half = halfWidth;
     return [
       { x: tip.x, y: tip.y },
       { x: baseX - uy * half, y: baseY + ux * half },
@@ -866,6 +1118,14 @@ export const FAN_OUT_STEP_PX = 3;
 /** Cap (px) on a fan-out offset: a very crowded bar edge saturates rather than spilling the
  * anchors off the bar (BAR_HEIGHT/2 = 9px; ±6 keeps every anchor visibly on it). */
 export const FAN_OUT_MAX_PX = 6;
+
+/**
+ * Half the **routed** arrowhead's width across (ADR-0064 T17), pinned to the fan-out step rather
+ * than derived from {@link ARROWHEAD_ROUTED_PX} — see that constant for why the head grows in
+ * length only. Declared here, below `FAN_OUT_STEP_PX`, because a module-level `const` cannot read
+ * one declared after it.
+ */
+export const ARROWHEAD_HALF_W_PX = FAN_OUT_STEP_PX;
 
 /** The signed vertical offsets (px) a fanned-out edge applies at each of its two ends. */
 export interface FanOutOffsets {

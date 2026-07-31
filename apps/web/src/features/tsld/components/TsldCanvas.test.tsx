@@ -321,3 +321,64 @@ describe('liveResize / liveLag readouts (ADR-0052 M3 — pure overlay helpers)',
     expect(liveLag({ kind: 'idle' }, VIEW)).toBeNull();
   });
 });
+
+/**
+ * **The recalculation-hold drop path** (ADR-0064 T7). When the 10-second cap expires, the workspace
+ * recalculates anyway and bumps `dropLinkPickSignal`; the canvas must abandon the open pick and say
+ * so upward, leaving the tool armed — the planner did not ask to stop linking, the schedule moved
+ * underneath them.
+ *
+ * A pointer-driven pick needs a hit test against a canvas with real layout, which jsdom does not
+ * provide (`TsldPanel.disarm.test.tsx` defers that half to Playwright for the same reason). The
+ * pick is therefore seeded through `linkPickPredecessorId` — the same prop the panel uses to keep
+ * the canvas and the panel agreeing about an open pick — which reaches the identical `gestureRef`
+ * state the pointer path produces.
+ */
+describe('TsldCanvas — dropping an open link pick on the shell signal (T7)', () => {
+  function renderWithPick(signal: number, onLinkPickStep: () => void) {
+    return render(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        mode="link"
+        canLink
+        linkPickPredecessorId={ACTIVITIES[0]!.id}
+        dropLinkPickSignal={signal}
+        onLinkPickStep={onLinkPickStep}
+      />,
+    );
+  }
+
+  it('reports the pick dropped when the signal changes', () => {
+    const onLinkPickStep = vi.fn();
+    const { rerender } = renderWithPick(0, onLinkPickStep);
+    onLinkPickStep.mockClear(); // ignore the seeding echo
+    rerender(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        mode="link"
+        canLink
+        linkPickPredecessorId={ACTIVITIES[0]!.id}
+        dropLinkPickSignal={1}
+        onLinkPickStep={onLinkPickStep}
+      />,
+    );
+    expect(onLinkPickStep).toHaveBeenCalledWith(null);
+  });
+
+  it('treats the initial 0 as "nothing has asked yet", not as a drop', () => {
+    // The off-by-one that would silently cancel the first pick of every session.
+    const onLinkPickStep = vi.fn();
+    renderWithPick(0, onLinkPickStep);
+    expect(onLinkPickStep).not.toHaveBeenCalledWith(null);
+  });
+});

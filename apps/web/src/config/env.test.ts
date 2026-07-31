@@ -159,3 +159,54 @@ describe('ACTIVITY_EDITOR_CONVERGENCE_ENABLED', () => {
     vi.resetModules();
   });
 });
+
+describe('CANVAS_AUTHORING_FLOW_ENABLED', () => {
+  // Derived from the canvas-authoring flag, not read beside it: every surface behind it states or
+  // steers a canvas-first authoring tool, so with canvas authoring off there is no armed tool to
+  // state and the band/confirmation/quiescence would be inert scaffolding. Deriving the constant
+  // makes that pair unrepresentable; this asserts the `&&` is actually the right way round.
+  it('is off whenever canvas authoring is off, however it is set', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_CANVAS_AUTHORING', 'false');
+    vi.stubEnv('VITE_CANVAS_AUTHORING_FLOW', 'true');
+    const env = await import('./env');
+    expect(env.CANVAS_AUTHORING_ENABLED).toBe(false);
+    expect(env.CANVAS_AUTHORING_FLOW_ENABLED).toBe(false);
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('defaults ON when nothing is set', async () => {
+    vi.resetModules();
+    const env = await import('./env');
+    expect(env.CANVAS_AUTHORING_FLOW_ENABLED).toBe(true);
+    vi.resetModules();
+  });
+});
+
+describe('CANVAS_LINK_ROUTING_ENABLED', () => {
+  // Derived from the direct-manipulation flag for a structural reason, not a stylistic one: the
+  // routing is reached only through the refreshed link path's fanned anchors (`scene.visualRefresh`),
+  // which is the sole branch composing `routeOrthogonal` directly. With direct manipulation off
+  // there is no branch to enter, so the pair would be silently inert rather than merely unused.
+  it('is off whenever direct manipulation is off, however it is set', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_CANVAS_DIRECT_MANIPULATION', 'false');
+    vi.stubEnv('VITE_CANVAS_LINK_ROUTING', 'true');
+    const env = await import('./env');
+    expect(env.CANVAS_DIRECT_MANIPULATION_ENABLED).toBe(false);
+    expect(env.CANVAS_LINK_ROUTING_ENABLED).toBe(false);
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('can be switched off on its own — the rollback contract', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_CANVAS_LINK_ROUTING', 'false');
+    const env = await import('./env');
+    expect(env.CANVAS_DIRECT_MANIPULATION_ENABLED).toBe(true);
+    expect(env.CANVAS_LINK_ROUTING_ENABLED).toBe(false);
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+});

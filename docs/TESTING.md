@@ -125,7 +125,49 @@ each as its own step. **A flag with no flag-on journey is untested in the state
 users actually see** — add the suite and the CI step in the same pull request as
 the flag.
 
+`apps/web/e2e-authoring-flow/` is **both** — a flag-on journey for
+`VITE_CANVAS_AUTHORING_FLOW`, and a diagnostic whose `link-direction.spec.ts`
+half deliberately does not depend on that flag, because the defects it measures
+were fixed outside it.
+
+The diagnostic half exists because the behaviour it measures **cannot be reached
+from a unit test at all**: the canvas gesture reducer maps the first click of a
+two-click link to the predecessor with no inversion on any path, so only a real
+browser, a real recalculation cadence and a real server can say which of those
+clicks actually became a pick. When a defect report and the code disagree, that
+gap is where the answer is — write the suite that measures it rather than the
+test that re-states the code.
+
 Journeys include automated accessibility assertions.
+
+**`VITE_CANVAS_LINK_ROUTING` deliberately has no journey of its own**, and that is
+the exception the rule above should have to argue with rather than a lapse. What
+it changes is which pixels a line occupies inside a canvas that is `aria-hidden`
+by design (ADR-0026 D7) — there is no accessible name, role or text for a journey
+to assert against, and a screenshot comparison would pin antialiasing. It is
+covered instead by two gates that can each fail for a specific reason:
+`link-routing.test.ts` on what the geometry returns (including the no-obstacle
+byte-identity, point for point) and `paint.routing-budget.test.ts` on what the
+**painter** does with it — that flag-off still draws through the obstacle, that
+flag-on does not, and that the extra work is bounded. The routing is exercised
+end to end by every existing canvas journey, since it is now default-on.
+
+### Measuring the canvas in a real browser
+
+`apps/web/scripts/measure-link-routing.mjs` paints the real `paintScene` against
+a real 2D context in Chromium and prints the per-frame distribution at 2,000
+activities, routing off and on, at two zooms. It is **not** a test and does not
+run in CI: absolute timings on a shared runner are noise, which is the reasoning
+the counting-stub budget gates already record.
+
+```bash
+pnpm --filter @repo/web exec node scripts/measure-link-routing.mjs 200
+```
+
+Run it on a machine whose numbers mean something, and quote the machine with the
+result. Its first run is why `docs/TECH_DEBT.md` #75 exists: ADR-0026 §16's ≤ 4 ms
+p95 budget had been quoted for months without anyone measuring it, and the
+already-shipped painter turned out to be four to six times over it.
 
 ### Running a Playwright suite locally
 

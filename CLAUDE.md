@@ -913,6 +913,76 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   step) proves the permission model and the no-activity-lost invariant against a real API with the
   pen enforced — the only place the optimistic-`version` trap is testable at all.
 
+- **ADR-0064** _(Accepted; M1 landed, `VITE_CANVAS_AUTHORING_FLOW` **default-on** 2026-07-31)_ —
+  Canvas authoring flow: the tool-mode contract and recalculation quiescence. Opened on two reports
+  from one driving session — six link attempts producing **zero** dependencies, and one link
+  recorded the wrong way round — and its first act was to **diagnose rather than fix**. The
+  `e2e-authoring-flow` harness drives the two-click pick against a real API with the pen enforced,
+  sweeping the inter-click delay across the 500 ms debounce, and **measures** which bar each pixel
+  is (probing in `select` mode and reading the canvas's own parallel listbox) before and after the
+  pick, so "a click was dropped", "the scene moved" and "something else" produce different evidence.
+  Every case recorded one dependency, in click order, map unchanged: the reversed link is closed
+  **unreproduced**, not fixed. What the same session's other report _does_ explain is that the Link
+  trigger armed **nothing** — so the planner was still in Add mode and drew two activities, which is
+  also the shape most likely to be reported as a reversal. Two of the spec's own `[VERIFIED]` claims
+  were wrong, including "Escape does nothing for the Add tool": the test written to fail on it
+  passed first run. The decisions: **one arm/disarm contract** across all four modes (both
+  split-buttons arm from the primary region, Escape returns to `select`, the open link pick takes
+  the first Escape and the tool the second, every transition announced); a **mode statement band in
+  the chrome above the scene, never over it** — the canvas already carries three overlays and a
+  fourth eventually lands on the bar you meant to click; a link confirmation naming the
+  **direction** with an ADR-0048 Undo; **token-based, capped recalculation holds** so the bars
+  cannot move between a planner's two clicks, released in an effect cleanup because a leaked hold
+  fails silently; and keyboard pick parity seeded **into** the canvas gesture so keyboard and
+  pointer are one pick. **The CPM engine is not imported** — the ADR-0034 parity gate is untouched
+  by construction; quiescence changes when the client asks, never what the server computes.
+  **The enablement review (§7) is part of the milestone.** Five specialists over the combined diff;
+  performance passed, four blocked on **five** defects that had passed a human read — a confirmation
+  that replayed on every later arming beside an Undo bound to a _different_ edit (the guard field
+  was always `'link'` and only read inside a `mode === 'link'` branch, so it could never be false);
+  both split buttons restoring focus to their `tabIndex={-1}` caret (WCAG 2.4.3); the Link tool's
+  pointer picks and both drop routes silent while the keyboard path announced (WCAG 4.1.3 — and one
+  of those drops fires with no user gesture); a Cancel that announced "unavailable" while staying
+  lit during a save it cannot abort; and three untested seams. **Four of the five are one correct
+  pattern applied to a control and not its neighbour** — not design errors, inconsistencies inside a
+  diff whose own docblocks described the right thing. Every fix carries a regression test verified
+  to fail against the old code first. Seven non-blocking findings are `docs/TECH_DEBT.md` #76.
+
+- **ADR-0065** _(Accepted; ADR-0064 M2, `VITE_CANVAS_LINK_ROUTING` **default-on** 2026-07-31)_ —
+  Canvas link routing: orthogonal corridors that step around bars. A line drawn straight through an
+  unrelated bar makes the reader disprove a relationship the picture appears to assert, which is
+  the opposite of what a TSLD is for. Obstacle awareness is **one optional parameter of the existing
+  `routeOrthogonal`** — absent, it returns exactly what it always returned, point for point — so the
+  parity argument is structural: there is one route function, and a second `routeOrthogonalAvoiding`
+  would have drifted invisibly (the ADR-0062 finding). The per-lane interval index is derived from
+  the **same `activityRect` the bar layer draws from** (a milestone is a diamond, a summary a wider
+  bracket; a second opinion would disagree exactly when it mattered), rebuilt per frame over the
+  **culled** set, and the corridor search is **bounded and fixed-order** — determinism matters more
+  than the shape, because a route that varies between frames reads as the diagram twitching. The
+  arrowhead grows in **length only** (8 px, half-width pinned to `FAN_OUT_STEP_PX`): widening the
+  barbs would push each head across its neighbour in a fanned bundle. **Diagonals are rejected** —
+  on a time-scaled diagram x _is_ time, so a diagonal asserts work across the days it crosses, and
+  that channel already belongs to ADR-0056's hatch and ADR-0054's tails; the ten-shape Net Point
+  taxonomy is a vocabulary for describing routes, not ten branches to keep consistent.
+  **The measurement is the notable part.** `apps/web/scripts/measure-link-routing.mjs` paints the
+  real painter against a real 2D context in Chromium — and reports that the **pre-existing** painter
+  runs at 16.7–23.1 ms p95 at 2,000 activities, i.e. **4–6× ADR-0026 §16's ≤ 4 ms**, which had never
+  been measured (TECH_DEBT #59 said so; nobody had run it). Routing adds 3.4–5.9 ms on top. The
+  number was put to the product owner with a recommendation to leave the flag off; the decision was
+  to **enable it and reopen the budget instead**, since a target set before the canvas carried
+  bands, tails, hatching, dates and arrowheads — and never once met — is more likely wrong than nine
+  accepted features are. That is now `docs/TECH_DEBT.md` **#75**, which asks what to measure (frame
+  pacing under rAF, not one function's wall-clock), on what plan, on what hardware, before setting a
+  number to replace §16's. **M3 (§5) bundles near-identical corridors onto one trunk** — a hub's
+  dozen verticals two pixels apart is a comb, not a picture of logic — with the rule that bundling
+  may **never** snap a corridor back through the bar M2 moved it off (a free-check per corridor,
+  because otherwise the newest feature silently reverts the previous one on exactly the dense plans
+  where both matter), and moving the **line only**: lag anchors, handles and hit zones keep today's
+  per-edge geometry, which the bundler structurally cannot reach. Re-measured, bundling costs
+  nothing detectable — and it does not _save_ anything either, so the plan's "M3 is the remedy for
+  the cost" reading is recorded as **not holding**. The CPM engine is not imported; the ADR-0034
+  parity gate is untouched.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

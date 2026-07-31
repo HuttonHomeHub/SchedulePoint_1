@@ -84,6 +84,7 @@ import type { SelectionAnchor } from '../toolbar/selection-actions';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
+  CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
@@ -193,6 +194,29 @@ export interface TsldCanvasProps {
    * syncs: the first pick (`start`), a rejected same-activity re-pick (`reprompt`), or a cancelling
    * empty click (`cancel`). The committed span arrives via {@link onIntent} as a `loeSpan` intent. */
   onLoeSpanStep?: (step: LoeSpanStep) => void;
+  /**
+   * The two-click **Link** tool's open pick (ADR-0064 T4): the picked predecessor's id, or null
+   * when no pick is open. Mirrors {@link onLoeSpanStep}'s shape — the shell needs it to state
+   * *which* endpoint is picked, and the gesture machine is the only thing that knows.
+   *
+   * Emitted on every transition of the picking state, including the Escape that drops a pick, so
+   * the shell never has to infer "still picking?" from a stale render.
+   */
+  onLinkPickStep?: (predecessorId: string | null) => void;
+  /**
+   * Bumped by the shell to **drop an open link pick** without disarming the tool (ADR-0064 T7). The
+   * one caller is the recalculation hold hitting its cap: the bars are about to move, so a pick
+   * taken against the old positions is no longer the pick the planner made. Signal-shaped like
+   * `fitSignal` because the shell is asking for an action, not describing a state.
+   */
+  dropLinkPickSignal?: number;
+  /**
+   * The shell's picked link predecessor, seeded INTO the internal gesture (ADR-0064 T6) — the exact
+   * mirror of {@link loePickStartId}. Without it the keyboard pick and the pointer pick would be
+   * two separate notions of "which endpoint is chosen", and picking by keyboard then clicking the
+   * successor would start a second pick instead of committing the first.
+   */
+  linkPickPredecessorId?: string | null;
   /** The LOE tool's picked **start driver** id, controlled by `TsldPanel` (Stage D) — the single source
    * of truth for the pick, mirroring the inbound {@link selectedId} pattern. A keyboard-side pick (the
    * listbox Enter) sets this; the canvas seeds its internal gesture from it so the NEXT pointer click
@@ -545,6 +569,9 @@ export function TsldCanvas({
   canLink = false,
   onIntent,
   onLoeSpanStep,
+  onLinkPickStep,
+  dropLinkPickSignal = 0,
+  linkPickPredecessorId = null,
   loePickStartId = null,
   onExitAddMode,
   pending = null,
@@ -648,9 +675,13 @@ export function TsldCanvas({
   // Read by the window key listener (set up once), so it sees the current mode/handler.
   const modeRef = useRef(mode);
   const exitAddModeRef = useRef(onExitAddMode);
+  // Read by the window key listener (set up once) so an Escape that drops a pick can tell the shell,
+  // which is otherwise left stating a pick the machine has already discarded.
+  const linkPickStepRef = useRef(onLinkPickStep);
   useEffect(() => {
     modeRef.current = mode;
     exitAddModeRef.current = onExitAddMode;
+    linkPickStepRef.current = onLinkPickStep;
   });
 
   // Edge handles are the flag-off edge-drag affordance. Canvas-first authoring (ADR-0032 M5) replaces
@@ -702,6 +733,10 @@ export function TsldCanvas({
     // The M4 bar visual refresh rides the SAME env flag (one flag, one flag-off parity gate);
     // its own scene field keeps the two render changes independently testable in the painter.
     visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+    // Obstacle-aware link corridors (ADR-0064 M2). A build-time constant like its siblings; flag-off
+    // the painter builds no interval index and the geometry takes its no-obstacle default, which is
+    // today's line point-for-point.
+    linkRouting: CANVAS_LINK_ROUTING_ENABLED,
     // M5 hover-driven incident-link highlight — null until the idle-hover branch publishes.
     hoverId: null,
     // The visible lag-anchor handles ride the SAME gate as their grab zones (`lagArmed`), so the
@@ -783,6 +818,7 @@ export function TsldCanvas({
       flaggedIds,
       timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
       visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+      linkRouting: CANVAS_LINK_ROUTING_ENABLED,
       // Preserve the live hover highlight across a data/selection rebuild (M5) — the pointer
       // hasn't moved, so the hovered bar's ties should not flicker off. Flag-off this is
       // always null (the branch that writes it never runs), keeping the scene byte-identical.
@@ -988,6 +1024,43 @@ export function TsldCanvas({
       interactionDirtyRef.current = true;
     }
   }, [loePickStartId, mode]);
+
+  // Seed the internal gesture from the shell's picked predecessor, so the keyboard pick (listbox
+  // Enter) and the pointer pick are ONE state (ADR-0064 T6) — the `loePickStartId` precedent.
+  useEffect(() => {
+    if (mode !== 'link') return;
+    const g = gestureRef.current;
+    if (linkPickPredecessorId) {
+      if (g.kind !== 'linkPicking' || g.predecessorId !== linkPickPredecessorId) {
+        gestureRef.current = { kind: 'linkPicking', predecessorId: linkPickPredecessorId };
+        syncGestureSource();
+        interactionDirtyRef.current = true;
+      }
+      return;
+    }
+    if (g.kind === 'linkPicking') {
+      gestureRef.current = IDLE;
+      syncGestureSource();
+      interactionDirtyRef.current = true;
+    }
+    // `syncGestureSource` is redefined per render and is deliberately not a dependency.
+  }, [linkPickPredecessorId, mode]);
+
+  // Drop an open link pick on the shell's signal (ADR-0064 T7). Skips the initial render — a `0`
+  // signal means "nothing has asked yet", not "drop now" — and leaves the tool armed, because the
+  // planner did not ask to stop linking; the schedule moved underneath them.
+  const droppedPickSignalRef = useRef(dropLinkPickSignal);
+  useEffect(() => {
+    if (dropLinkPickSignal === droppedPickSignalRef.current) return;
+    droppedPickSignalRef.current = dropLinkPickSignal;
+    if (gestureRef.current.kind !== 'linkPicking') return;
+    gestureRef.current = IDLE;
+    syncGestureSource();
+    interactionDirtyRef.current = true;
+    linkPickStepRef.current?.(null);
+    // `syncGestureSource` is a plain function redefined each render and is intentionally not a
+    // dependency: this effect must run on a signal change and nothing else.
+  }, [dropLinkPickSignal]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1332,6 +1405,7 @@ export function TsldCanvas({
         gestureRef.current = IDLE;
         syncGestureSource();
         interactionDirtyRef.current = true;
+        linkPickStepRef.current?.(null);
       } else if (
         editing &&
         (modeRef.current === 'add-activity' ||
@@ -1690,6 +1764,9 @@ export function TsldCanvas({
             interactionDirtyRef.current = true;
             if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
             if (loe) onLoeSpanStep?.(loe);
+            if (mode === 'link') {
+              onLinkPickStep?.(state.kind === 'linkPicking' ? state.predecessorId : null);
+            }
             return;
           }
           onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));

@@ -15,6 +15,7 @@ import {
   isResizeEligibleType,
   labelPlacement,
   lagAnchorPoints,
+  laneIntervalIndex,
   lagRunSegment,
   linkHighlightIds,
   loeBracketRects,
@@ -28,6 +29,9 @@ import {
   truncateToWidth,
   BAR_HEIGHT,
   BAR_RADIUS,
+  ARROWHEAD_HALF_W_PX,
+  bundleCorridors,
+  ARROWHEAD_ROUTED_PX,
   ELAPSED_DAY_WALK,
   EMPHASIS_STROKE_W,
   LABEL_FONT,
@@ -336,6 +340,19 @@ export interface TsldScene {
    * read when {@link TsldScene.lagHandles} is on; absent ⇒ every handle draws at rest.
    */
   activeLagId?: string | null | undefined;
+  // ── Canvas link routing (ADR-0064 M2, behind `VITE_CANVAS_LINK_ROUTING`) ──────────────────────
+  /**
+   * Route a link's vertical corridor **around** the bars between its two lanes rather than through
+   * them. Read only on the refreshed link path (`visualRefresh`), which is the one branch that
+   * composes `routeOrthogonal` directly; the two legacy branches go through
+   * `dependencyPolyline`/`dependencyPolylineTimeTrue`, which do not take obstacles, so they cannot
+   * change shape whatever this field says.
+   *
+   * Absent/false ⇒ the painter never builds the interval index and never passes one ⇒ the geometry
+   * takes its no-obstacle default ⇒ **byte-for-byte today's edge layer**. That is the parity gate,
+   * and it is structural: there is one route function, not two.
+   */
+  linkRouting?: boolean | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -1012,6 +1029,21 @@ export function paintScene(
     // `visualRefresh` is off ⇒ byte-for-byte today's edge layer.
     const refresh = scene.visualRefresh === true;
     const fanOut = refresh ? edgeFanOutFor(scene.edges) : null;
+    /**
+     * Obstacle awareness for the corridor (ADR-0064 M2). Built **once per frame, from the culled
+     * set** — a route is drawn inside the viewport, so a bar outside it cannot be visibly crossed,
+     * and building over the whole plan would make an O(N) pass out of a layer whose whole budget
+     * argument is that it is O(visible). Rebuilt each frame rather than memoised because it is a
+     * function of the viewport, which is exactly what changes while panning.
+     */
+    const laneIndex =
+      refresh && scene.linkRouting === true
+        ? laneIntervalIndex(
+            scene.activities.filter((a) => visibleIds.has(a.id)),
+            view,
+            scene.dataDate,
+          )
+        : null;
     const highlightIds = refresh ? linkHighlightIds(scene.selectedId, scene.hoverId) : null;
     if (refresh && workingWalk) lagRuns = [];
     // Handles ride the SAME gate as the runs plus their own scene flag: they are only meaningful
@@ -1067,8 +1099,46 @@ export function paintScene(
         off && off.pred !== 0 ? { x: anchors.pred.x, y: anchors.pred.y + off.pred } : anchors.pred;
       const to =
         off && off.succ !== 0 ? { x: anchors.succ.x, y: anchors.succ.y + off.succ } : anchors.succ;
-      return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0);
+      if (!laneIndex) return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0);
+      return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0, {
+        index: laneIndex,
+        fromLane: pred.laneIndex,
+        toLane: succ.laneIndex,
+        laneHeight: LANE_HEIGHT,
+        barHeight: BAR_HEIGHT,
+      });
     };
+    /**
+     * Every visible edge's line, computed **once** for the frame (ADR-0065 M3). It was previously
+     * computed inside the draw passes; it has to move out because bundling is a decision about all
+     * the lines together, and it cannot be taken while one of them is half-drawn.
+     *
+     * The set is identical to what the passes drew before — same visibility and endpoint checks, in
+     * scene order — so the lag runs and handles `lineOf` collects on the way past are collected
+     * exactly once each, as they were.
+     */
+    const lines = new Map<RenderEdge, Point[]>();
+    for (const edge of scene.edges) {
+      if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
+      const pred = byId.get(edge.predecessorId);
+      const succ = byId.get(edge.successorId);
+      if (!pred || !succ) continue;
+      const line = lineOf(edge, pred, succ);
+      if (line) lines.set(edge, line);
+    }
+    if (laneIndex && lines.size > 1) {
+      // Trunk/branch bundling (ADR-0065 M3): a hub's dozen near-identical verticals become one
+      // trunk. Rides the SAME flag as the routing it bundles — a comb is only worth merging once
+      // the corridors are chosen deliberately, and the free-check it does needs that index anyway.
+      bundleCorridors(
+        [...lines.entries()].map(([edge, line]) => ({
+          line,
+          fromLane: byId.get(edge.predecessorId)?.laneIndex ?? 0,
+          toLane: byId.get(edge.successorId)?.laneIndex ?? 0,
+        })),
+        laneIndex,
+      );
+    }
     const drawEdges = (driving: boolean, highlighted = false): void => {
       const heads: [Point, Point, Point][] = [];
       ctx.beginPath();
@@ -1077,16 +1147,17 @@ export function paintScene(
         // With a highlight active, the base passes skip incident edges and the highlight passes
         // draw ONLY them (on top, restyled). No highlight ⇒ the predicate is never consulted.
         if (highlightIds && edgeTouches(edge, highlightIds) !== highlighted) continue;
-        if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
-        const pred = byId.get(edge.predecessorId);
-        const succ = byId.get(edge.successorId);
-        if (!pred || !succ) continue;
-        const line = lineOf(edge, pred, succ);
+        const line = lines.get(edge);
         if (!line) continue;
         if (refresh) drawRoundedPolyline(ctx, line);
         else drawPolyline(ctx, line);
         if (workingWalk) {
-          const head = arrowhead(line);
+          // The routed head (T17) is longer along the line but no wider — legible where a Month-zoom
+          // link is a few pixels of rule, without a barb crossing its neighbour in a fanned bundle.
+          // It rides the routing flag, so flag-off is the same five-pixel head it has always been.
+          const head = laneIndex
+            ? arrowhead(line, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
+            : arrowhead(line);
           if (head) heads.push(head);
         }
       }
