@@ -1,6 +1,6 @@
 # ADR-0066: The seed catalogue, and the engine as the application's oracle
 
-- **Status:** Accepted (M0–M4 landed; M5 in progress)
+- **Status:** Accepted (M0–M5 landed)
 - **Date:** 2026-07-31
 - **Supersedes:** nothing
 - **Builds on:** ADR-0034 (engine conformance), ADR-0035 (CPM semantics), ADR-0028 (the pen),
@@ -235,6 +235,32 @@ Three things it found, and the first is the milestone's own premise landing on i
   spans twenty-eight years at 2,000 activities, so nine bars in ten were culled and the comparison
   was measuring the cull. The layout now runs a phase's bands concurrently. A benchmark that
   flatters is worse than none, and this one flattered on its first attempt.
+
+**What M5 found, and the one product fix the epic made.** The negative tier ran all 18 hostile cases
+against a live instance and **every one behaved as the fixture requires** — including the three the
+engine's own suite marks `it.todo` because a pure function cannot own them (N09 negative duration,
+N17 milestone-with-duration, N11's zero-working-time calendar). Nothing in the repository previously
+demonstrated those were handled anywhere.
+
+The round trip (M5.4) is where the epic's premise paid out again. Seeding a generated catalogue plan,
+exporting it to XER and re-importing it turned **every Level of Effort activity into a task** — the
+_same defect_ that motivated this ADR, alive on the export side. The cause is worth stating exactly:
+
+- `xer-adapter.ts` maps `TT_LOE → LEVEL_OF_EFFORT` (fixed when the importer defect was found).
+- `xer-emit.ts` maps `LEVEL_OF_EFFORT → TT_LOE` (supported, with a comment noting the exhaustive
+  `Record` "caught `LEVEL_OF_EFFORT` here the moment it was added on the import side").
+- `export.service.ts` coerced it to `TASK` **before the emitter ever saw it**, justified by a
+  docblock saying that "matches how the import adapter coerces the same two kinds" — a sentence that
+  stopped being true when the importer was fixed, and that nobody re-read.
+
+ADR-0050's own mapping-contract table already promised "XER exact both ways incl. `TT_LOE` ⇄
+`LEVEL_OF_EFFORT`". **The document was right and the code was wrong** — the reverse of the drift
+ADR-0058 is usually about, and a reminder that a contract table is not a gate. One line fixed it;
+`HAMMOCK` stays coerced because neither format has an equivalent. After the fix the diff is 45/45
+activities, 64/64 links, 0 type changes.
+
+Nothing else in the repository looks at both interchange directions at once, which is why a defect
+sitting between two correct halves survived a human reviewer, an export suite and an import suite.
 
 **No schema change, no API change, no web change.** Deliberately: a seeder that needs a schema change
 is a seeder that is not using the product. An endpoint the seeder finds missing is recorded as a
