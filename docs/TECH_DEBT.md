@@ -399,8 +399,11 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
 Five specialist reviews ran over the combined authoring + routing diff. Every **blocking** finding
-was fixed with a regression test (see `docs/DECISIONS.md`). These are the non-blocking remainder,
-recorded rather than rushed into an enablement pass:
+was fixed with a regression test (see `docs/DECISIONS.md`), as was one non-blocking one — the
+`toolbarSplitCaretVariants` docblock, which still said a true split button "would need its own
+composite-stop design. Until that lands…" while two had since landed on it. That was corrected in
+the same pass rather than deferred, because ADR-0058 makes documentation drift a defect class here
+and the fix was a comment. These are the rest, recorded rather than rushed:
 
 - **Two hoists that would shrink the measured routing cost** (performance review). `activityRect` is
   computed three times per visible activity per frame with routing on — once in `cull()`, once in
@@ -417,8 +420,6 @@ recorded rather than rushed into an enablement pass:
   identical wrapper, primary classes, caret classes and ArrowDown handler. Two real consumers is the
   threshold `docs/COMPONENT_LIBRARY.md` sets for extraction, and the focus-restore defect above is
   exactly what duplication of this shape produces.
-- **`toolbarSplitCaretVariants`' docblock is now false** — it says a true split button "would need
-  its own composite-stop design. Until that lands…", and two of them have since landed on it.
 - **`ArrowUp` does not open either type menu** (only `ArrowDown`). `IsolateControl` handles both.
   Not a 2.1.1 failure — `ArrowDown` gives full reachability — but inconsistent.
 - **No flag-off regression for the _pointer_ two-click link pick.** The echo plumbing
