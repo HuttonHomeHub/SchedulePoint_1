@@ -603,6 +603,11 @@ Each task is one PR. `main` stays releasable throughout: the unflagged M1 fixes 
 strictly corrective and carry regression tests; everything additive sits behind a
 default-off flag with a parity suite until its enablement task.
 
+> **Delivered 2026-07-31, released in `web-v0.62.0`.** M1–M3 landed and **both flags are
+> default-on**; the "default-off" wording throughout this plan records each flag's state at
+> **introduction**, before its own enablement task flipped it (T13, T21). ADR-0064 and ADR-0065 are
+> the current statement of behaviour. M4 remains deferred by CQ-4.
+
 **Flags introduced:** `VITE_CANVAS_AUTHORING_FLOW` (M1), `VITE_CANVAS_LINK_ROUTING`
 (M2/M3). Both default-off on introduction, flipped in their own task, with the flag-off
 parity suites **kept** afterwards as the rollback contract (the ADR-0053 M6 precedent).

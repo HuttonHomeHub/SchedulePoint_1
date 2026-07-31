@@ -11,10 +11,17 @@
   gesture; and recalculation held while a two-click pick is open, so the bars cannot move between your
   two clicks.
 
-- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Behind `VITE_CANVAS_AUTHORING_FLOW` (default off): the canvas says which tool is armed and what the
-  next click will do — including which endpoint a half-finished link has already picked — and confirms
-  a created link with its **direction** plus an Undo. The band sits in the chrome above the diagram,
-  so it never covers a bar you are trying to click, and takes no height at all when nothing is armed.
+- [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Behind `VITE_CANVAS_AUTHORING_FLOW` (**default on**): the canvas says which tool is armed and what
+  the next click will do — including which endpoint a half-finished link has already picked — and
+  confirms a created link with its **direction** plus an Undo. The band sits in the chrome above the
+  diagram, so it never covers a bar you are trying to click, and takes no height at all when nothing
+  is armed.
+
+  _Corrected after release: this entry originally read "(default off)". The changeset was written
+  while the flag was still off and was not revisited when it was flipped later in the same epic —
+  the flag shipped **on** in 0.62.0, as the first entry above states. The wording is fixed here
+  rather than left standing, because a changelog that contradicts itself about whether a feature is
+  switched on is worse than one that admits an edit._
 
 - [#198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/198) [`1737ec4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1737ec48af3b0236c6f5ed53e6f3820fc105b05f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Route dependency links around the bars between their lanes instead of straight through them, and
   make the direction arrowhead legible at Month zoom. The vertical corridor now steps aside when a bar
