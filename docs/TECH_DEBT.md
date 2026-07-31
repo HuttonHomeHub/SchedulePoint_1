@@ -527,3 +527,35 @@ turnaround or a shutdown programme needs, and the failure is a flat refusal with
 seams that consume it — specifically whether a plan default calendar may be window-only (an activity
 inheriting it would have no base working time at all), which is the question the `@Min(1)` was
 probably standing in for. Worth an API e2e that creates one and recalculates over it.
+
+### 80. Intraday shift patterns exist in the engine and in storage, and no write path can create one
+
+ADR-0036 was called the **gating** rework: it moved the engine and storage from working-days to
+working-**minutes** and added intraday shift patterns — split shifts, night shifts crossing midnight,
+asymmetric weeks where Friday is a half day. The engine implements all of it, the
+`calendar_shifts` / `calendar_exception_windows` tables hold it, and the ADR-0034 goldens are green
+on it.
+
+**Nothing in the product can author one.** `fullDayShiftsFromMask` in `calendar.repository.ts`
+derives a calendar's shifts from the 7-bit weekday mask — a working day is `[0, 1440)` and a
+non-working day is absent — and it is used by the single `create`, by `update`, by `createException`
+and by the interchange batch alike. There is no shift-window field on any DTO. So every calendar in
+every database is a whole-day calendar, and the minute-granular machinery underneath is exercised
+only by unit tests and the conformance adapter.
+
+Found by the ADR-0066 M2 coverage report, which is the point of it: four of the fixture's 117
+capability keys (`cal_split_shift`, `cal_night_crosses_midnight`, `cal_asymmetric_week`,
+`cal_forces_split`) have no capability plan and cannot have one. They are excepted in
+`apps/seed-cli/src/capabilities/coverage.ts` with this number.
+
+**Impact — the largest of the three write-path gaps** (#78 durations, #79 the window-only mask, this
+one). A planner working a two-shift site or a night-shift possession cannot describe their working
+week at all, and the schedule they get is silently a whole-day approximation of it. It also caps the
+fidelity of every import: an XER or MSPDI carrying real shift patterns is flattened on the way in
+with nothing said, because the mapper has nowhere to put them.
+
+**What would close it:** a `shifts` array on the calendar create/update DTOs (weekday +
+start/end minute, validated non-overlapping and ordered), a matching `windows` array on the
+exception DTO, the repository taking them instead of deriving, and an editor for the weekly pattern.
+The engine and the storage need no change — that is the whole shape of the problem. Worth doing
+together with #78, since a sub-day duration is meaningless without a sub-day calendar to spend it on.

@@ -1,6 +1,6 @@
 # ADR-0066: The seed catalogue, and the engine as the application's oracle
 
-- **Status:** Accepted (M0 landed; M1–M5 in progress)
+- **Status:** Accepted (M0–M2 landed; M3–M5 in progress)
 - **Date:** 2026-07-31
 - **Supersedes:** nothing
 - **Builds on:** ADR-0034 (engine conformance), ADR-0035 (CPM semantics), ADR-0028 (the pen),
@@ -135,6 +135,33 @@ missing member — before being relied on.
 - The fixture's roles, activity-code types and UDF definitions have **no SchedulePoint concept**.
   They are reported as unplaceable, never dropped silently — the ADR-0050 discipline applied to
   seeding, so a reader can tell "the app cannot hold this" apart from "the seeder forgot".
+
+**What M2 found, which is the argument for the whole ADR restated as evidence.** The capability
+tier's coverage report resolves **109 of the 117** keys to a plan. The other eight are not gaps in
+the catalogue — they are capabilities the **engine implements and no client can author**, which is
+exactly the asymmetry a harness that feeds `computeSchedule` directly is structurally unable to see:
+
+- **Four to TECH_DEBT #80**, the largest of them: `fullDayShiftsFromMask` derives every calendar's
+  shifts from the weekday mask on the single create, the update and the interchange batch alike, so
+  ADR-0036's intraday shift patterns — the headline of the rework it called _gating_ — exist in the
+  engine and in storage and can be created by nothing.
+- **Two to #79**, the `@Min(1)` on the mask forbidding a window-only base week.
+- **Two with no product concept at all** (a role; a per-assignment lag).
+
+M1 had already produced **#78** the same way. Four write-path gaps, none of which any existing gate
+could have reported, all found by asking one computable question about plans rather than about code.
+
+Two decisions worth recording because a reader will otherwise re-derive them:
+
+- The implementation plan named **seven** families; the catalogue ships **nine**. Relationship
+  types, lag, network shape and float — about thirty keys — had no family in that list, and folding
+  them into a neighbour would have produced two plans too big to read by hand, which is the one
+  property this tier exists to have.
+- Three families ship as **matched pairs over the same activities** (Retained Logic / Progress
+  Override, external / external-ignored, resources / levelling). A plan-level switch that changes
+  every date cannot be demonstrated inside one plan: you see an answer with no way to tell whether
+  the other setting differs. The pair is the evidence, and if the two plans agree the setting is not
+  being read.
 
 **No schema change, no API change, no web change.** Deliberately: a seeder that needs a schema change
 is a seeder that is not using the product. An endpoint the seeder finds missing is recorded as a

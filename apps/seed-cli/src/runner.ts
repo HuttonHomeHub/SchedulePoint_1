@@ -165,7 +165,14 @@ export async function seedPlan(
         });
         resourceIdByKey.set(resource.key, created.id);
         counts.resources += 1;
-        if (resource.archived) await client.post(`${org}/resources/${created.id}/archive`, {});
+        // Archiving is an optimistic write like any other and takes the row's `version`; posting an
+        // empty body is a 422 naming `version`, not a no-op. The create's version is still current
+        // here because nothing has touched the row in between.
+        if (resource.archived) {
+          await client.post(`${org}/resources/${created.id}/archive`, {
+            version: created.version ?? 1,
+          });
+        }
       } catch (error) {
         record('resource', resource.key, error);
       }
@@ -173,14 +180,36 @@ export async function seedPlan(
 
     // 3. The plan. Its scheduling options are a separate PATCH: `POST /plans` takes the identity and
     //    the mandatory data date, and the options are an update — mirroring how a planner does it.
-    const plan = await client.post<Created>(`${org}/projects/${target.projectId}/plans`, {
-      name: spec.plan.name,
-      ...(spec.plan.description === null ? {} : { description: spec.plan.description }),
-      plannedStart: spec.plan.dataDate,
-      schedulingMode: spec.plan.options.schedulingMode,
-      // NOT `calendarId`: `CreatePlanDto` does not accept one — the plan's default calendar is set by
-      // the update below, alongside the scheduling options. Sending it here is a 422.
-    });
+    let plan: Created;
+    try {
+      plan = await client.post<Created>(`${org}/projects/${target.projectId}/plans`, {
+        name: spec.plan.name,
+        ...(spec.plan.description === null ? {} : { description: spec.plan.description }),
+        plannedStart: spec.plan.dataDate,
+        schedulingMode: spec.plan.options.schedulingMode,
+        // NOT `calendarId`: `CreatePlanDto` does not accept one — the plan's default calendar is set
+        // by the update below, alongside the scheduling options. Sending it here is a 422.
+      });
+    } catch (error) {
+      // A name collision is NOT a finding: plan names are unique per project by design and a
+      // Planner would be refused identically. Reusing the existing plan would be worse than
+      // skipping — its contents are whatever a previous run left, which a reader would then take
+      // for this catalogue's. Reported as its own outcome so the summary line stays true.
+      if (error instanceof SeedHttpError && error.status === 409) {
+        return {
+          seedName: spec.seedName,
+          planId: null,
+          alreadyExists: true,
+          counts,
+          seedMs: Date.now() - started,
+          recalculateMs: null,
+          unplaceable: [...spec.unplaceable],
+          approximations,
+          findings,
+        };
+      }
+      throw error;
+    }
     planId = plan.id;
 
     await PenHolder.withPen(client, target.orgSlug, plan.id, async () => {
@@ -381,48 +410,59 @@ export async function seedPlan(
           try {
             // `status` is DERIVED by the service from the actuals — sending it is a 422. The DTO
             // owns schedule progress only; the measure and the physical value went on the create.
-            await client.patch(`${org}/activities/${activityId}/progress`, {
-              version: activityVersionById.get(activityId) ?? 1,
-              percentComplete: progress.percentComplete,
-              ...omitNulls({
-                actualStart: dateOrNull(
-                  progress.actualStart,
-                  activity.code,
-                  'actualStart',
-                  approximations,
-                ),
-                actualFinish: dateOrNull(
-                  progress.actualFinish,
-                  activity.code,
-                  'actualFinish',
-                  approximations,
-                ),
-                remainingDurationDays: toRemainingDays(
-                  progress.remainingDurationMinutes,
-                  activity.code,
-                  approximations,
-                ),
-                suspendDate: dateOrNull(
-                  progress.suspendDate,
-                  activity.code,
-                  'suspendDate',
-                  approximations,
-                ),
-                resumeDate: dateOrNull(
-                  progress.resumeDate,
-                  activity.code,
-                  'resumeDate',
-                  approximations,
-                ),
-              }),
-            });
+            const updated = await client.patch<Created>(
+              `${org}/activities/${activityId}/progress`,
+              {
+                version: activityVersionById.get(activityId) ?? 1,
+                percentComplete: progress.percentComplete,
+                ...omitNulls({
+                  actualStart: dateOrNull(
+                    progress.actualStart,
+                    activity.code,
+                    'actualStart',
+                    approximations,
+                  ),
+                  actualFinish: dateOrNull(
+                    progress.actualFinish,
+                    activity.code,
+                    'actualFinish',
+                    approximations,
+                  ),
+                  remainingDurationDays: toRemainingDays(
+                    progress.remainingDurationMinutes,
+                    activity.code,
+                    approximations,
+                  ),
+                  suspendDate: dateOrNull(
+                    progress.suspendDate,
+                    activity.code,
+                    'suspendDate',
+                    approximations,
+                  ),
+                  resumeDate: dateOrNull(
+                    progress.resumeDate,
+                    activity.code,
+                    'resumeDate',
+                    approximations,
+                  ),
+                }),
+              },
+            );
+            // The progress write bumped the row, and steps below is an optimistic write on the
+            // SAME activity — so take the new version from the response rather than re-reading it.
+            if (updated.version !== undefined) activityVersionById.set(activityId, updated.version);
           } catch (error) {
             record('progress', activity.code, error);
           }
         }
         if (activity.steps.length > 0) {
           try {
-            await client.put(`${org}/activities/${activityId}/steps`, { steps: activity.steps });
+            // `version` is the parent ACTIVITY's — the whole replace bumps it, so a stale one 409s
+            // and nothing changes. Omitting it is a 422, not a default.
+            await client.put(`${org}/activities/${activityId}/steps`, {
+              version: activityVersionById.get(activityId) ?? 1,
+              steps: activity.steps,
+            });
           } catch (error) {
             record('steps', activity.code, error);
           }
@@ -445,6 +485,7 @@ export async function seedPlan(
     return {
       seedName: spec.seedName,
       planId,
+      alreadyExists: false,
       counts,
       seedMs,
       recalculateMs,
@@ -464,6 +505,7 @@ export async function seedPlan(
     return {
       seedName: spec.seedName,
       planId: null,
+      alreadyExists: false,
       counts,
       seedMs: Date.now() - started,
       recalculateMs: null,

@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 
+import { parseArgs, USAGE } from './args.js';
+import { coverageReport, formatCoverage } from './capabilities/coverage.js';
+import { capabilityFamilyKeys, capabilitySpecs } from './capabilities/index.js';
 import { SeedClient, SeedHttpError } from './client.js';
 import { formatReport, type SeedReport } from './report.js';
 import { seedPlan } from './runner.js';
-import { loadSpecs } from './specs.js';
+import { KNOWN_TIERS, loadSpecs } from './specs.js';
 
 /**
  * `schedulepoint-seed` — creates the ADR-0066 test catalogue in a **running** instance, over the
@@ -21,74 +24,16 @@ import { loadSpecs } from './specs.js';
  * ```
  */
 
-interface Args {
-  url: string;
-  org: string;
-  project: string;
-  email: string;
-  password: string;
-  tier: string;
-  signUpName?: string;
-  out?: string;
-  concurrency?: number;
-  verbose: boolean;
-}
-
-const USAGE = `
-schedulepoint-seed — seed the SchedulePoint test catalogue into a running instance (ADR-0066)
-
-Required
-  --url <base>        Base URL of the instance, e.g. http://localhost:3000
-  --org <slug>        Organisation slug to seed into
-  --project <uuid>    Target project id (plans are created under it)
-  --email <address>   A Planner or Org Admin in that organisation
-  --password <pass>   Their password
-
-Optional
-  --tier <name>       fixture | capability | pairwise | scale | negative | all   (default: fixture)
-  --sign-up <name>    Create the user if sign-in fails. Do NOT use against a shared host.
-  --out <file>        Write the full JSON report here as well as summarising it
-  --concurrency <n>   Requests in flight (default 6). Raise only against a machine you own.
-  --verbose           Log every request
-
-The seeder gets no privileged path. If it cannot create something as a Planner, a Planner cannot
-either — that is reported as a FINDING, and the run continues so one gap cannot hide the rest.
-`.trim();
-
-function parseArgs(argv: readonly string[]): Args | null {
-  const flags = new Map<string, string>();
-  let verbose = false;
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i]!;
-    if (token === '--verbose') {
-      verbose = true;
-      continue;
-    }
-    if (!token.startsWith('--')) continue;
-    const next = argv[i + 1];
-    if (next === undefined || next.startsWith('--')) continue;
-    flags.set(token.slice(2), next);
-    i += 1;
-  }
-  const required = ['url', 'org', 'project', 'email', 'password'] as const;
-  if (required.some((key) => !flags.has(key))) return null;
-  const concurrency = flags.get('concurrency');
-  return {
-    url: flags.get('url')!,
-    org: flags.get('org')!,
-    project: flags.get('project')!,
-    email: flags.get('email')!,
-    password: flags.get('password')!,
-    tier: flags.get('tier') ?? 'fixture',
-    ...(flags.has('sign-up') ? { signUpName: flags.get('sign-up')! } : {}),
-    ...(flags.has('out') ? { out: flags.get('out')! } : {}),
-    ...(concurrency === undefined ? {} : { concurrency: Number(concurrency) }),
-    verbose,
-  };
-}
-
 async function main(): Promise<number> {
-  const args = parseArgs(process.argv.slice(2));
+  const { args, coverage } = parseArgs(process.argv.slice(2));
+
+  // Reporting mode: answers "does the catalogue cover everything?" without a running instance, a
+  // database or credentials. It is a property of the plans, not of any deployment.
+  if (coverage) {
+    process.stdout.write(`${formatCoverage(coverageReport(capabilitySpecs()))}\n`);
+    return 0;
+  }
+
   if (args === null) {
     process.stdout.write(`${USAGE}\n`);
     return 1;
@@ -118,9 +63,14 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const specs = loadSpecs(args.tier);
+  const specs = loadSpecs(args.tier, args.family);
   if (specs.length === 0) {
-    process.stderr.write(`No specs for tier "${args.tier}".\n`);
+    // Say which of the two names was wrong. "No specs for tier X" when the tier was fine and the
+    // family was misspelt sends a reader looking in the wrong place.
+    const reason = KNOWN_TIERS.includes(args.tier as (typeof KNOWN_TIERS)[number])
+      ? `family "${args.family ?? ''}" — try one of: ${capabilityFamilyKeys().join(', ')}`
+      : `tier "${args.tier}" — try one of: ${KNOWN_TIERS.join(', ')}`;
+    process.stderr.write(`No plans for ${reason}\n`);
     return 1;
   }
 
@@ -143,10 +93,12 @@ async function main(): Promise<number> {
     process.stderr.write(`Full report written to ${args.out}\n`);
   }
 
-  // A failed plan is an exit code; a FINDING is not. A finding means the product refused something,
-  // which is information the run exists to produce — failing the process on it would make an
-  // operator stop reading exactly when there is something to read.
-  return report.plans.some((plan) => plan.planId === null) ? 3 : 0;
+  // A failed plan is an exit code; a FINDING is not, and neither is `alreadyExists`. A finding
+  // means the product refused something, which is information the run exists to produce — failing
+  // the process on it would make an operator stop reading exactly when there is something to read.
+  // `alreadyExists` means the plan is there and this run did not create it; exiting non-zero on a
+  // re-run into the same project would make the honest case look like a broken one.
+  return report.plans.some((plan) => plan.planId === null && !plan.alreadyExists) ? 3 : 0;
 }
 
 main()

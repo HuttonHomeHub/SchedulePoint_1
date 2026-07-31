@@ -33,6 +33,15 @@ export interface SeedFinding {
 export interface SeedPlanResult {
   seedName: string;
   planId: string | null;
+  /**
+   * The target project already holds a plan of this name, so nothing was created.
+   *
+   * This is **not** a finding and must not be reported as one: plan names are unique per project by
+   * design, and a Planner cannot create a second one either. Reusing the existing plan would be
+   * worse than skipping — its contents are whatever a previous run left, which a reader would then
+   * take for this catalogue's. Distinguished from a failure so the run's exit code stays honest.
+   */
+  alreadyExists: boolean;
   counts: {
     calendars: number;
     resources: number;
@@ -59,7 +68,14 @@ export interface SeedReport {
 export function formatReport(report: SeedReport): string {
   const lines: string[] = [`Seeded into ${report.orgSlug} (${report.baseUrl})`, ''];
   for (const plan of report.plans) {
-    const status = plan.planId === null ? 'FAILED' : 'ok';
+    const status = plan.alreadyExists ? 'exists' : plan.planId === null ? 'FAILED' : 'ok';
+    if (plan.alreadyExists) {
+      lines.push(
+        `  ${status.padEnd(7)} ${plan.seedName} — already in this project, nothing created. ` +
+          'Seed into a fresh project, or delete the existing plan first.',
+      );
+      continue;
+    }
     lines.push(
       `  ${status.padEnd(7)} ${plan.seedName} — ${plan.counts.activities} activities, ` +
         `${plan.counts.dependencies} links, ${plan.counts.resources} resources ` +
