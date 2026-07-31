@@ -386,6 +386,36 @@ would not exercise the code being budgeted.
 2. **Decide what "representative" is.** 2,000 activities is ADR-0026's stated ceiling, but nobody
    has checked it against a real programme. The largest plan the product owner actually runs, and
    the largest an imported XER produces, are both facts we can get.
+   **Partly answered — ADR-0066 M4.3.** The seed catalogue's scale generator now produces a plan of
+   a declared, asserted shape (three-level WBS, 1.6 links per activity, milestones, LOE hammocks, a
+   progressed front), and `measure-link-routing.mjs` takes it as a second scene. Both scenes were
+   run back to back on **the same container** so only the picture differs:
+
+   | scene                    | zoom                 | routing off (p50 / p95) | routing on (p50 / p95) |
+   | ------------------------ | -------------------- | ----------------------- | ---------------------- |
+   | grid (synthetic lattice) | whole plan (2px/day) | 9.4 / 11.6 ms           | 12.7 / 20.9 ms         |
+   | grid                     | week (12px/day)      | 11.3 / 14.2 ms          | 13.4 / 17.7 ms         |
+   | scale (realistic)        | whole plan (2px/day) | 14.6 / 18.7 ms          | 16.1 / 23.5 ms         |
+   | scale                    | week (12px/day)      | 5.5 / 6.7 ms            | 5.5 / 6.7 ms           |
+
+   Two things fall out, and they point opposite ways. At **whole-plan zoom the realistic plan is
+   dearer** — 18.7 vs 11.6 ms baseline — which is what 2,160 bars (the WBS summaries are bars too),
+   a dozen bar widths and 3,200 links cost against 2,000 uniform bars and 1,493. At the **working
+   zoom it is less than half** — 6.7 vs 14.2 ms, with routing free to two decimal places — because
+   real logic is dense inside a band and sparse across bands, so the cull actually works. The
+   synthetic lattice, whose every edge spans seven lanes, defeats the cull by construction and had
+   been standing in for a programme.
+   So the honest summary is that **the scene dominates the number**, which is the reason this entry
+   exists. It does not rescue the 4 ms budget: the realistic plan misses it 4.7× at whole-plan zoom.
+   It does say the working zoom — where a planner spends their time — sits at 6.7 ms p95, inside one
+   60 Hz frame.
+   One trap worth recording, because it produced a much prettier and entirely false number first: a
+   generated plan laid out nose-to-tail spans **28 years** at 2,000 activities, so the "whole plan"
+   zoom culled roughly nine bars in ten and reported 4.6 ms p95. It looked like the budget being met.
+   The layout now runs a phase's bands concurrently (`scripts/scale-scene.ts`), which puts the plan
+   at about two and a half years and fills the viewport — that is what makes the two scenes
+   comparable at all.
+
 3. **Run it on the envelope ADR-0026 names** — a mid-tier laptop and an iPad — with the same script,
    which takes a checkout and one command.
 4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real

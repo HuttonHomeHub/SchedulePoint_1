@@ -1,6 +1,6 @@
 # ADR-0066: The seed catalogue, and the engine as the application's oracle
 
-- **Status:** Accepted (M0–M3 landed; M4–M5 in progress)
+- **Status:** Accepted (M0–M4 landed; M5 in progress)
 - **Date:** 2026-07-31
 - **Supersedes:** nothing
 - **Builds on:** ADR-0034 (engine conformance), ADR-0035 (CPM semantics), ADR-0028 (the pen),
@@ -185,6 +185,34 @@ Two decisions worth recording because a reader will otherwise re-derive them:
   every date cannot be demonstrated inside one plan: you see an answer with no way to tell whether
   the other setting differs. The pair is the evidence, and if the two plans agree the setting is not
   being read.
+
+**What M4 measured, and the number it retracted.** The scale tier generates a plan of a **declared
+shape** — three-level WBS, 1.6 links per activity, ~4% milestones, LOE hammocks _with span anchors_,
+a progressed front at the data date, 35% assigned — and `scale.spec.ts` asserts every one of those
+against the generated plan at 500 and 2,000, because a measurement is quoted against the shape and a
+generator that silently drifted to 0.9 links per activity would still produce a number. The floor is
+12 activities and the mix is deliberately **not** asserted there: 4% of twelve is half a milestone,
+so the claim has no meaning at any tolerance.
+
+Two things it found:
+
+- **The seeder's ceiling is the throttle, and it is reported rather than tuned around.** A
+  2,000-activity plan is ≈ 6,500 write requests and a 5,000 one ≈ 16,200, against a global
+  100-per-60-second limit — ≈ 65 and ≈ 162 minutes. The CLI prints that estimate _before_ it starts,
+  because the alternative is discovering it forty minutes in. It does not raise or bypass the
+  limiter: a seeder that took a privileged path would stop being a client, which is the premise of
+  the whole ADR.
+- **TECH_DEBT #75's "decide what representative is" is now half-answered, and the answer is that the
+  scene dominates the number.** Painting the realistic plan instead of the synthetic lattice, back to
+  back on one machine, moves p95 from 11.6 → 18.7 ms at whole-plan zoom (2,160 bars and 3,200 links
+  against 2,000 and 1,493) and from 14.2 → **6.7 ms** at the working zoom, where routing costs
+  nothing measurable — because real logic is local, so the cull works, and the lattice's every-edge-
+  spans-seven-lanes construction defeats it. The full table is in TECH_DEBT #75.
+  The retraction is worth more than the numbers: the **first** realistic run reported 4.6 ms p95 at
+  whole-plan zoom and looked like the budget being met. It was wrong — a plan laid out nose-to-tail
+  spans twenty-eight years at 2,000 activities, so nine bars in ten were culled and the comparison
+  was measuring the cull. The layout now runs a phase's bands concurrently. A benchmark that
+  flatters is worse than none, and this one flattered on its first attempt.
 
 **No schema change, no API change, no web change.** Deliberately: a seeder that needs a schema change
 is a seeder that is not using the product. An endpoint the seeder finds missing is recorded as a

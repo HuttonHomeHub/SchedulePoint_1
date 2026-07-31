@@ -14,6 +14,7 @@ interface Args {
   password: string;
   tier: string;
   family?: string;
+  activities?: number;
   signUpName?: string;
   out?: string;
   concurrency?: number;
@@ -31,8 +32,10 @@ Required
   --password <pass>   Their password
 
 Optional
-  --tier <name>       fixture | capability | all   (default: fixture)
+  --tier <name>       fixture | capability | scale | all   (default: fixture)
   --family <name>     Capability tier only: seed just one family (see --coverage for the list)
+  --activities <n>    Scale tier only: activities to generate (default 500). A generated plan is
+                      deterministic, so the same count always produces the same plan.
   --sign-up <name>    Create the user if sign-in fails. Do NOT use against a shared host.
   --out <file>        Write the full JSON report here as well as summarising it
   --concurrency <n>   Requests in flight (default 6). Raise only against a machine you own.
@@ -77,6 +80,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgv {
   if (required.some((key) => !flags.has(key))) return { args: null, coverage };
 
   const concurrency = flags.get('concurrency');
+  const activities = flags.get('activities');
   return {
     coverage,
     args: {
@@ -87,6 +91,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgv {
       password: flags.get('password')!,
       tier: flags.get('tier') ?? 'fixture',
       ...(flags.has('family') ? { family: flags.get('family')! } : {}),
+      ...(activities === undefined ? {} : { activities: Number(activities) }),
       ...(flags.has('sign-up') ? { signUpName: flags.get('sign-up')! } : {}),
       ...(flags.has('out') ? { out: flags.get('out')! } : {}),
       ...(concurrency === undefined ? {} : { concurrency: Number(concurrency) }),

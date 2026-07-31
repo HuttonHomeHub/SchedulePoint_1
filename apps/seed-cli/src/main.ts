@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 
+import { scaleShapeOf } from '@repo/seed';
 import {
   formatReport,
   SeedClient,
@@ -68,7 +69,10 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const specs = loadSpecs(args.tier, args.family);
+  const specs = loadSpecs(args.tier, {
+    ...(args.family === undefined ? {} : { family: args.family }),
+    ...(args.activities === undefined ? {} : { activities: args.activities }),
+  });
   if (specs.length === 0) {
     // Say which of the two names was wrong. "No specs for tier X" when the tier was fine and the
     // family was misspelt sends a reader looking in the wrong place.
@@ -77,6 +81,28 @@ async function main(): Promise<number> {
       : `tier "${args.tier}" — try one of: ${KNOWN_TIERS.join(', ')}`;
     process.stderr.write(`No plans for ${reason}\n`);
     return 1;
+  }
+
+  // A scale plan is thousands of writes, and the API throttles every client at 100 requests per
+  // 60 s (`RATE_LIMIT_LIMIT`). The seeder does not raise it and does not route around it — it is an
+  // ordinary client, and a seeder that quietly bypassed the limiter would stop measuring the thing
+  // being measured. So the cost is stated up front rather than discovered forty minutes in.
+  for (const spec of specs.filter((item) => item.tier === 'scale')) {
+    const shape = scaleShapeOf(spec);
+    const requests =
+      shape.leaves +
+      shape.summaries +
+      shape.dependencies +
+      shape.assignments +
+      shape.progressed * 2;
+    process.stderr.write(
+      `${spec.seedName}: ${String(shape.leaves)} activities, ${String(shape.summaries)} WBS ` +
+        `summaries, ${String(shape.dependencies)} links (${shape.edgesPerActivity.toFixed(2)} per ` +
+        `activity), ${String(shape.assignments)} assignments.\n` +
+        `  ≈ ${String(requests)} write requests. At the API's default 100/60 s throttle that is ` +
+        `≈ ${String(Math.round(requests / 100))} minutes; raise RATE_LIMIT_LIMIT on an instance ` +
+        'you own if you want it sooner.\n',
+    );
   }
 
   const report: SeedReport = {

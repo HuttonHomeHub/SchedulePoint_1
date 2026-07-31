@@ -7,7 +7,7 @@
  * numbers are quoted with the machine they came from. The CI-safe half of the same question — is
  * the extra work *bounded* — lives in `paint.routing-budget.test.ts`.
  *
- *   node scripts/measure-link-routing.mjs [frames]
+ *   node scripts/measure-link-routing.mjs [frames] [scale|grid]
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -17,6 +17,14 @@ import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 
 const frames = Number(process.argv[2] ?? 120);
+// Which picture to paint. `scale` is the ADR-0066 generator's realistic programme; `grid` is the
+// original synthetic lattice, kept because ADR-0065's published numbers were measured on it and a
+// silent swap would make this run incomparable with the one already quoted.
+const scene = process.argv[3] ?? 'scale';
+if (scene !== 'scale' && scene !== 'grid') {
+  console.error(`Unknown scene "${scene}" — expected "scale" or "grid".`);
+  process.exit(1);
+}
 const out = mkdtempSync(join(tmpdir(), 'sp-bench-'));
 const bundle = join(out, 'bench.js');
 
@@ -57,8 +65,11 @@ try {
   await page.addScriptTag({ path: bundle });
   // The callback is serialised and evaluated in the PAGE, where `window` is the bench's own
   // global; this file itself runs in Node, which is why the rule fires and why it is wrong here.
-  // eslint-disable-next-line no-undef
-  const result = await page.evaluate((n) => window.__benchLinkRouting(n), frames);
+  const result = await page.evaluate(
+    // eslint-disable-next-line no-undef
+    ([n, s]) => window.__benchLinkRouting(n, s),
+    /** @type {[number, 'scale' | 'grid']} */ ([frames, scene]),
+  );
   const row = (label, r) =>
     `  ${label.padEnd(12)} p50 ${r.p50.toFixed(2)}ms   p95 ${r.p95.toFixed(2)}ms   max ${r.max.toFixed(2)}ms`;
   const blocks = result.results.map(
@@ -68,7 +79,7 @@ try {
       `p95 ${(r.on.p95 - r.off.p95).toFixed(2)}ms`,
   );
   console.log(
-    `\n[ADR-0065 T21] Chromium, 2,000 activities / ${result.edges} long-range edges, ` +
+    `\n[ADR-0065 T21 / ADR-0066 M4.3] Chromium, scene "${scene}": ${result.scene}, ` +
       `${frames} panning frames per case${blocks.join('\n')}\n`,
   );
 } finally {

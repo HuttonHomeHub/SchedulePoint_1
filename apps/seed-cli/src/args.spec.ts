@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseArgs } from './args.js';
-import { KNOWN_TIERS, loadSpecs } from './specs.js';
+import { DEFAULT_SCALE_ACTIVITIES, KNOWN_TIERS, loadSpecs } from './specs.js';
 
 /**
  * Argument parsing and tier resolution (ADR-0066 M2.3). Small surface, but two of these are
@@ -60,12 +60,35 @@ describe('loadSpecs', () => {
 
   it('returns nothing for an unknown tier or family, rather than throwing', () => {
     expect(loadSpecs('pairwise')).toEqual([]);
-    expect(loadSpecs('capability', 'not-a-family')).toEqual([]);
+    expect(loadSpecs('capability', { family: 'not-a-family' })).toEqual([]);
+  });
+
+  it('sizes the scale tier from --activities, and defaults without it', () => {
+    const [sized] = loadSpecs('scale', { activities: 750 });
+    const [defaulted] = loadSpecs('scale');
+    expect(sized?.activities.filter((a) => a.type !== 'WBS_SUMMARY')).toHaveLength(750);
+    expect(defaulted?.activities.filter((a) => a.type !== 'WBS_SUMMARY')).toHaveLength(
+      DEFAULT_SCALE_ACTIVITIES,
+    );
+  });
+
+  it('falls back to the default rather than generating an empty plan from NaN', () => {
+    // `--activities lots` parses to NaN, which would flow through every count in the generator and
+    // come out as a plan with nothing in it — a run that looks like it worked.
+    expect(loadSpecs('scale', { activities: Number('lots') })[0]?.activities.length).toBe(
+      loadSpecs('scale')[0]?.activities.length,
+    );
+  });
+
+  it('keeps the scale tier out of `all`', () => {
+    // `all` is what an operator types to get the catalogue. A scale plan is thousands of requests
+    // and tens of minutes — something you ask for, never something a convenience alias does to you.
+    expect(loadSpecs('all').some((spec) => spec.tier === 'scale')).toBe(false);
   });
 
   it('narrows the capability tier by family', () => {
     const all = loadSpecs('capability');
-    const one = loadSpecs('capability', 'cost');
+    const one = loadSpecs('capability', { family: 'cost' });
     expect(one.length).toBeGreaterThan(0);
     expect(one.length).toBeLessThan(all.length);
   });
@@ -73,7 +96,7 @@ describe('loadSpecs', () => {
   it('ignores --family on the fixture tier instead of returning nothing', () => {
     // The fixture is one plan with no families. Returning an empty list would read as "that family
     // does not exist" when the real answer is "that filter does not apply here".
-    expect(loadSpecs('fixture', 'cost')).toHaveLength(1);
+    expect(loadSpecs('fixture', { family: 'cost' })).toHaveLength(1);
   });
 
   it('puts the fixture first in the `all` tier', () => {

@@ -18,6 +18,8 @@ import type {
   Viewport,
 } from '../src/features/tsld/render/render-model';
 
+import { scaleScene } from './scale-scene';
+
 const PALETTE: TsldPalette = {
   gridLine: '#e5e7eb',
   gridLineDay: '#eef0f3',
@@ -88,18 +90,39 @@ function percentile(sorted: number[], p: number): number {
   return sorted[idx] ?? 0;
 }
 
+/**
+ * The two pictures, and why both are kept.
+ *
+ * `grid` is the original synthetic scene — 2,000 identical five-day bars in a regular lattice. It is
+ * **retained deliberately**: ADR-0065's published numbers were measured on it, and replacing it
+ * would silently make this run incomparable with the one already quoted in the ADR.
+ *
+ * `scale` is the ADR-0066 scale generator's plan (see `scale-scene.ts`) — the same activity count in
+ * a shape a planner would recognise. It is the honest answer to "what does the painter cost", and
+ * the difference between the two is itself a finding.
+ */
+const SCENES = {
+  grid: (): { activities: RenderActivity[]; edges: RenderEdge[]; summary: string } => ({
+    activities: plan(),
+    edges: edges(),
+    summary: `${String(COUNT)} uniform bars, ${String(COUNT - EDGE_SPAN)} fixed-span links`,
+  }),
+  scale: () => scaleScene(COUNT),
+} as const;
+export type SceneName = keyof typeof SCENES;
+
 function run(
   canvas: HTMLCanvasElement,
   linkRouting: boolean,
   frames: number,
   pxPerDay: number,
+  source: { activities: RenderActivity[]; edges: RenderEdge[] },
 ): BenchResult {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('no 2d context');
-  const activities = plan();
   const scene: TsldScene = {
-    activities,
-    edges: edges(),
+    activities: source.activities,
+    edges: source.edges,
     dataDate: '2026-01-01',
     visualRefresh: true,
     timeTrueLinks: true,
@@ -139,27 +162,34 @@ type Zoom = keyof typeof ZOOMS;
 
 declare global {
   interface Window {
-    __benchLinkRouting: (frames: number) => {
+    __benchLinkRouting: (
+      frames: number,
+      scene: SceneName,
+    ) => {
       edges: number;
+      scene: string;
       results: { zoom: Zoom; pxPerDay: number; off: BenchResult; on: BenchResult }[];
     };
   }
 }
 
-window.__benchLinkRouting = (frames: number) => {
+window.__benchLinkRouting = (frames: number, sceneName: SceneName) => {
   const canvas = document.querySelector('canvas');
   if (!canvas) throw new Error('no canvas');
+  // Built ONCE, outside the timed loop: generating the plan is not what is being measured, and
+  // rebuilding it per frame would fold the generator's cost into the painter's number.
+  const source = SCENES[sceneName]();
   const results = (Object.keys(ZOOMS) as Zoom[]).map((zoom) => {
     const pxPerDay = ZOOMS[zoom];
     // Warm-up, discarded: the first paint pays for font resolution and the label width memo.
-    run(canvas, false, 20, pxPerDay);
-    run(canvas, true, 20, pxPerDay);
+    run(canvas, false, 20, pxPerDay, source);
+    run(canvas, true, 20, pxPerDay, source);
     return {
       zoom,
       pxPerDay,
-      off: run(canvas, false, frames, pxPerDay),
-      on: run(canvas, true, frames, pxPerDay),
+      off: run(canvas, false, frames, pxPerDay, source),
+      on: run(canvas, true, frames, pxPerDay, source),
     };
   });
-  return { edges: edges().length, results };
+  return { edges: source.edges.length, scene: source.summary, results };
 };
