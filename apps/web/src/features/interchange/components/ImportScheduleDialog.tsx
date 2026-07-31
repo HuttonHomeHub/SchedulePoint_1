@@ -1,3 +1,4 @@
+import type { ResourceCollisionResolution } from '@repo/interchange';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -11,6 +12,7 @@ import {
 import { downloadReport } from '../lib/report-download';
 
 import { InterchangeReportTable } from './InterchangeReportTable';
+import { ResourceCollisionResolver } from './ResourceCollisionResolver';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -101,16 +103,25 @@ function ImportFlow({
   // opts them into the shared organisation library instead. It shapes the MAPPING, so changing it
   // re-runs the dry-run — the report a planner confirms must describe the import they will get.
   const [globalCalendarsShared, setGlobalCalendarsShared] = useState(false);
+  // The planner's answer to each resource-name collision the dry-run reported, keyed by `resourceKey`.
+  // Cleared whenever the report is re-fetched: an answer belongs to the report that raised it, and a
+  // stale one would be silently applied to a collision the planner never saw.
+  const [resolutions, setResolutions] = useState<Record<string, ResourceCollisionResolution>>({});
 
   const startDryRun = (picked: File, shared: boolean): void => {
+    setResolutions({});
     dryRun.mutate(
       { file: picked, ...(shared ? { globalCalendarScope: 'ORG' as const } : {}) },
       {
         // Announce that the report resolved so a screen-reader user not focused on the mounting
         // report region still hears it — the Confirm button silently enabling otherwise (WCAG 4.1.3).
         onSuccess: (report) => {
+          const collisions = report.resourceCollisions?.length ?? 0;
           announce(
-            `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.`,
+            `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.` +
+              (collisions > 0
+                ? ` ${collisions} resource ${collisions === 1 ? 'name needs' : 'names need'} an answer before importing.`
+                : ''),
           );
         },
       },
@@ -141,9 +152,13 @@ function ImportFlow({
   };
 
   const onConfirm = (): void => {
-    if (!file || !dryRun.isSuccess || commit.isPending) return;
+    if (!file || !dryRun.isSuccess || commit.isPending || unansweredCount > 0) return;
     commit.mutate(
-      { file, ...(globalCalendarsShared ? { globalCalendarScope: 'ORG' as const } : {}) },
+      {
+        file,
+        ...(globalCalendarsShared ? { globalCalendarScope: 'ORG' as const } : {}),
+        ...(collisions.length > 0 ? { resourceResolutions: resolutions } : {}),
+      },
       {
         onSuccess: ({ planId, report }) => {
           announce(`Imported schedule — ${report.mapped.activities} activities. Opening the plan.`);
@@ -162,7 +177,13 @@ function ImportFlow({
     (dryRun.isError ? toImportError(dryRun.error).message : null) ??
     (commit.isError ? toImportError(commit.error).message : null);
 
-  const canConfirm = dryRun.isSuccess && !commit.isPending;
+  const collisions = dryRun.isSuccess ? (dryRun.data.resourceCollisions ?? []) : [];
+  const unansweredCount = collisions.filter(
+    (collision) => resolutions[collision.resourceKey] === undefined,
+  ).length;
+  // Shaded, not hidden, and with the reason beside it: a Confirm that simply does nothing is the
+  // dead end this whole feature exists to remove.
+  const canConfirm = dryRun.isSuccess && !commit.isPending && unansweredCount === 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -246,6 +267,31 @@ function ImportFlow({
         )}
       </FormSection>
 
+      {/* Step 3 exists only when there is something to answer — unlike step 2, an empty version of it
+          would describe a decision this import does not have. A resource whose CODE matches a library
+          row never appears: a code is an identifier, so matching one is not a guess. */}
+      {collisions.length > 0 ? (
+        <FormSection
+          title="3 · Resolve resource names"
+          description="These resources share a name with one already in your organisation, but nothing identifies them as the same row. Choose for each — there is no safe default, so nothing is imported until you do."
+        >
+          <ResourceCollisionResolver
+            collisions={collisions}
+            resolutions={resolutions}
+            onChange={(resourceKey, resolution) => {
+              commit.reset();
+              setResolutions((previous) => ({ ...previous, [resourceKey]: resolution }));
+            }}
+          />
+          <p className="text-muted-foreground text-xs">
+            <strong className="font-medium">Use the existing one</strong> links this import to the
+            resource already in your library — the file’s own rate and calendar for it are not
+            imported. <strong className="font-medium">Import a copy</strong> keeps them, as a second
+            resource under a new name; levelling and Earned Value then see the two as separate.
+          </p>
+        </FormSection>
+      ) : null}
+
       {commit.isPending ? (
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
           <Spinner label="Importing the schedule…" />
@@ -253,15 +299,26 @@ function ImportFlow({
         </div>
       ) : null}
 
-      <div className="border-border flex justify-end gap-2 border-t pt-4">
+      <div className="border-border flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+        {unansweredCount > 0 ? (
+          <p id="interchange-confirm-blocked" className="text-muted-foreground mr-auto text-sm">
+            {unansweredCount === 1
+              ? 'Answer the resource above to import.'
+              : `Answer the ${unansweredCount} resources above to import.`}
+          </p>
+        ) : null}
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
         <Button
           type="button"
           onClick={onConfirm}
-          disabled={!canConfirm}
+          // `aria-disabled`, not the native attribute: a natively-disabled button drops focus to
+          // <body> the moment the last answer lands, and the reason must stay announceable.
+          aria-disabled={!canConfirm}
+          aria-describedby={unansweredCount > 0 ? 'interchange-confirm-blocked' : undefined}
           aria-busy={commit.isPending}
+          className={canConfirm ? undefined : 'cursor-not-allowed opacity-50'}
         >
           {commit.isPending ? 'Importing…' : 'Confirm import'}
         </Button>

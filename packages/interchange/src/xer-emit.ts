@@ -35,12 +35,20 @@ import type { XerTableData } from './xer-serialiser.js';
 /** The P6 XER version string we advertise. A widely-compatible recent P6 schema; see the mapping contract. */
 export const EXPORT_XER_VERSION = '18.8';
 
-/** Canonical activity type → P6 `task_type`. `WBS_SUMMARY` has no `TASK` mapping (emitted via PROJWBS). */
+/**
+ * Canonical activity type → P6 `task_type`. `WBS_SUMMARY` has no `TASK` mapping (emitted via PROJWBS).
+ *
+ * The `Record` is **exhaustive over the canonical union**, not an open string map, so adding a type
+ * to `CANONICAL_ACTIVITY_TYPES` and forgetting to emit it is a compile error rather than a plan that
+ * exports as something it is not. That is what caught `LEVEL_OF_EFFORT` here the moment it was added
+ * on the import side.
+ */
 const TYPE_TO_TASK_TYPE: Readonly<Record<Exclude<CanonicalActivityType, 'WBS_SUMMARY'>, string>> = {
   TASK: 'TT_Task',
   RESOURCE_DEPENDENT: 'TT_Rsrc',
   START_MILESTONE: 'TT_Mile',
   FINISH_MILESTONE: 'TT_FinMile',
+  LEVEL_OF_EFFORT: 'TT_LOE',
 };
 
 /**

@@ -77,10 +77,15 @@ describe('ImportScheduleDialog', () => {
     globalThis.fetch = vi.fn();
   });
 
-  it('starts idle: a file picker and a disabled Confirm', () => {
+  it('starts idle: a file picker and a shaded Confirm', () => {
     renderDialog();
     expect(screen.getByLabelText('Schedule file (.xer or .xml)')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
+    // `aria-disabled`, not the native attribute — a natively-disabled button leaves the tab order,
+    // taking any reason attached to it with it.
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('dry-runs the picked file and renders the report (counts + repair list)', async () => {
@@ -97,7 +102,10 @@ describe('ImportScheduleDialog', () => {
     expect(url).toBe('/api/v1/organizations/acme/projects/proj-1/interchange/dry-run');
     expect(init?.method).toBe('POST');
     expect(init?.body).toBeInstanceOf(FormData);
-    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toHaveAttribute(
+      'aria-disabled',
+      'false',
+    );
   });
 
   it('confirm → commit hits the commit endpoint, opens the plan, and closes', async () => {
@@ -164,7 +172,10 @@ describe('ImportScheduleDialog', () => {
     pickFile();
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Primavera P6/);
-    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('blocks an oversize file client-side with a friendly message and no upload', () => {
@@ -227,6 +238,110 @@ describe('ImportScheduleDialog', () => {
       await waitFor(() => expect(h.navigate).toHaveBeenCalled());
       expect(vi.mocked(fetch).mock.calls[2]![0]).toContain('/interchange/commit');
       expect(scopeOf(2)).toBe('ORG');
+    });
+  });
+
+  describe('resource-name collisions (ADR-0050)', () => {
+    const COLLIDING: InterchangeReport = {
+      ...REPORT,
+      resourceCollisions: [
+        {
+          resourceKey: 'RSRC:RA',
+          name: 'Site Crew',
+          code: 'CREW-Z',
+          existing: { id: 'res-1', name: 'Site Crew', code: 'CREW-A', archived: false },
+        },
+      ],
+    };
+
+    /** The `resourceResolutions` field of the Nth fetch call, parsed back from its JSON string. */
+    function resolutionsOf(callIndex: number): unknown {
+      const body = vi.mocked(fetch).mock.calls[callIndex]![1]!.body as FormData;
+      const raw = body.get('resourceResolutions');
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    }
+
+    it('blocks Confirm with a reason until every collision is answered', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: COLLIDING }));
+      renderDialog();
+      pickFile();
+      await screen.findByText('214');
+
+      const confirm = screen.getByRole('button', { name: 'Confirm import' });
+      expect(confirm).toHaveAttribute('aria-disabled', 'true');
+      // Blocked, but the reason is attached to the control rather than only sitting near it — a
+      // natively-disabled button would take both itself and the reason out of the tab order.
+      const reasonId = confirm.getAttribute('aria-describedby');
+      expect(reasonId).toBeTruthy();
+      expect(document.getElementById(reasonId!)).toHaveTextContent(/Answer the resource above/);
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Use the existing one' }));
+      expect(screen.getByRole('button', { name: 'Confirm import' })).toHaveAttribute(
+        'aria-disabled',
+        'false',
+      );
+    });
+
+    it('sends the answers with the commit', async () => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(jsonResponse(200, { data: COLLIDING }))
+        .mockResolvedValueOnce(
+          jsonResponse(200, { data: { planId: 'plan-9', report: COLLIDING } }),
+        );
+      renderDialog();
+      pickFile();
+      await screen.findByText('214');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Import a copy' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
+
+      await waitFor(() => expect(h.navigate).toHaveBeenCalled());
+      expect(vi.mocked(fetch).mock.calls[1]![0]).toContain('/interchange/commit');
+      expect(resolutionsOf(1)).toEqual({ 'RSRC:RA': 'CREATE_COPY' });
+    });
+
+    it('names the library row it clashes with, so a planner can tell if it is the same crew', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: COLLIDING }));
+      renderDialog();
+      pickFile();
+
+      expect(await screen.findByText(/Already in this organisation as CREW-A/)).toBeInTheDocument();
+    });
+
+    it('sends no resolutions field at all when the report reported no collisions', async () => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(jsonResponse(200, { data: REPORT }))
+        .mockResolvedValueOnce(jsonResponse(200, { data: { planId: 'plan-9', report: REPORT } }));
+      renderDialog();
+      pickFile();
+      await screen.findByText('214');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
+      await waitFor(() => expect(h.navigate).toHaveBeenCalled());
+      // Byte-for-byte the pre-collision request — an absent field is the server's own default path.
+      expect(
+        (vi.mocked(fetch).mock.calls[1]![1]!.body as FormData).has('resourceResolutions'),
+      ).toBe(false);
+    });
+
+    it('discards answers when the report is re-fetched — they belonged to the old one', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: COLLIDING }));
+      renderDialog();
+      pickFile();
+      await screen.findByText('214');
+      fireEvent.click(screen.getByRole('radio', { name: 'Use the existing one' }));
+      expect(screen.getByRole('button', { name: 'Confirm import' })).toHaveAttribute(
+        'aria-disabled',
+        'false',
+      );
+
+      pickFile(2048); // a different file — a new report, and the old answer must not ride along
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Confirm import' })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        ),
+      );
     });
   });
 });

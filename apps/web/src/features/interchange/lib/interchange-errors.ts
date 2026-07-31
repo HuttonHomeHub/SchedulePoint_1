@@ -15,7 +15,7 @@ export const MAX_UPLOAD_LABEL = '16 MiB';
  * focused for a re-pick on `oversize`/`unparseable`), and `message` is always safe to render verbatim.
  */
 export interface ImportError {
-  kind: 'oversize' | 'unparseable' | 'no-file' | 'network' | 'unknown';
+  kind: 'oversize' | 'unparseable' | 'no-file' | 'unresolved-resources' | 'network' | 'unknown';
   message: string;
 }
 
@@ -53,6 +53,16 @@ export function toImportError(error: unknown): ImportError {
       const reason = reasonOf(error);
       if (reason === 'NO_FILE') {
         return { kind: 'no-file', message: 'Choose a file to import.' };
+      }
+      if (reason === 'UNRESOLVED_RESOURCE_COLLISIONS') {
+        // The dialog answers these before it lets Confirm run, so reaching here means the library
+        // CHANGED between the review and the commit — someone created a resource of that name
+        // meanwhile. Re-parsing is the honest fix: the answers belong to the report that raised them.
+        return {
+          kind: 'unresolved-resources',
+          message:
+            'A resource in this file now clashes with one in your organisation that was not there when the report was made. Choose the file again to review the conflicts.',
+        };
       }
       if (reason === 'UNPARSEABLE_FILE') {
         return {

@@ -432,6 +432,23 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
     const isSummary = activity.type === 'WBS_SUMMARY';
     const isMilestone = activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE';
 
+    // MSPDI has no Level-of-Effort concept — MS Project's nearest idea is a manually-scheduled
+    // summary, which is a different object with different rules — so an LOE emits as an ordinary
+    // task. That is a real loss of meaning, not a formatting difference: the reader sees a task with
+    // a duration where the plan holds an activity whose span is derived from its logic and which
+    // never drives anything. Reported per activity rather than once, because "which ones" is the
+    // question a planner reconciling the two files will actually ask. (XER round-trips it exactly,
+    // via `TT_LOE`.)
+    if (activity.type === 'LEVEL_OF_EFFORT') {
+      findings.push({
+        kind: 'drop',
+        entity: 'activity',
+        sourceRef: activity.code,
+        detail: `"${activity.name}" is a Level of Effort; written as an ordinary task with its duration`,
+        reason: 'MSPDI has no level-of-effort activity type (ADR-0035 §21)',
+      });
+    }
+
     const children: MspdiNode[] = [
       leaf('UID', activity.id),
       leaf('Name', activity.name),

@@ -431,38 +431,52 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
   safely. `docs/TESTING.md` says that trap is only testable against a real API, so it belongs in
   `e2e-authoring-flow`.
 
-### 77. The demo Unit 300 XER does not exercise the whole capability matrix
+### 77. The demo Unit 300 file is a lossy rendering of the conformance fixture
 
 The product owner asked for "a full logic plan with all constraints and logic types to ensure every
-feature was tested". The demo file
-(`SchedulePointDemoUnit300AminePackage.xer`, 18 WBS nodes / 126 activities / 188 relationships) is
-strong where the XER format is expressive and silent where it is not. What it **does** cover, audited
-against the file rather than assumed: all four relationship types (143 FS / 25 SS / 17 FF / 3 SF)
-with positive, zero and negative lag; nine constraint codes including both mandatory kinds and one
-ALAP; `TT_Task`/`TT_Mile`/`TT_FinMile`/`TT_Rsrc`; six project calendars plus two resource calendars,
-including a window-only turnaround calendar; complete / in-progress / not-started with `CP_Drtn` and
-`CP_Phys`; two suspends and one resume; 22 resources across labour, plant and material with driving
-flags.
+feature was tested". Investigating the demo file
+(`SchedulePointDemoUnit300AminePackage.xer`) turned up something better than an answer: **the full
+plan already exists.** The XER is a rendering of
+`packages/engine-conformance/fixtures/p6_torture_test_v1.json` — the ADR-0034 benchmark. Same
+activity codes (`A1000` Notice to Proceed), same WBS (`TT.1`), and 188 relationships in both.
 
-The gaps, in the order they matter:
+That fixture carries a **`coverage_index`: 117 named capabilities mapped to the objects that
+exercise them.** So "does the test plan cover everything?" is a computable question, not a matter of
+opinion — and the answer is that the fixture covers it and the **XER rendering loses part of it.**
 
-- **No `TT_LOE`.** Level of Effort (ADR-0035 §21) — span-from-logic, never-critical, the N12
-  no-span flag — is not exercised at all, and it is one of the harder behaviours in the engine.
-- **No expected-finish** (`reend_date` is empty on every row), so ADR-0035 §9 never fires.
-- **No zero-duration `TT_Task`** — only zero-duration milestones. The "a zero-duration task is not a
-  milestone" rule (ADR-0035 §M4-F1) has no representative.
-- **No `clndr_type` on any CALENDAR row**, so ADR-0053 §5's tier decision always takes its default
-  branch and the "source global calendar → ORG" path is never reached by this file.
-- **Thin on the mandatory/ALAP cases** — one row each, so a produce-and-flag regression would move
-  exactly one number.
+Measured, not estimated. Object presence was checked by id against the file; attribute survival by
+running the real `importXer` over it and inspecting the resulting graph.
 
-And the features the XER format cannot carry at all, which therefore need in-app setup (or a
-seeded plan) rather than a better file: weighted activity steps and cost accrual (ADR-0044), resource
-capacity `max_units_per_hour` so levelling can trigger (ADR-0041), unit rates and costs for Earned
-Value (ADR-0042), loading curves, external / inter-project dates (ADR-0043), and cross-plan
-dependencies (ADR-0045).
+**Present and carried** (verified through the importer): all four relationship types with positive,
+zero and negative lag; 10 primary + 1 secondary constraint + 1 ALAP; 20 progressed activities with
+physical %-complete; 2 suspends; 126 per-activity calendars; 143 WBS parents; 22 resources and 45
+assignments **including `unitsPerHour` and `actualUnits` on every one**; 8 calendars resolving to
+5 ORG + 3 PROJECT (so the ADR-0053 tier decision _is_ exercised — via the resource-reference rule,
+not `clndr_type`, which is absent from every row).
 
-Two options, for the product owner to pick: extend the existing file where the format allows (the
-first five bullets) and script the rest, or build a second, deliberately synthetic "conformance
-demo" plan whose only job is one representative of every matrix row. The first keeps one realistic
-programme; the second is what actually closes the ask.
+**Lost, in four distinct ways** — the distinction matters because each needs a different fix:
+
+1. **Type lost in transit.** The fixture's 5 `LEVEL_OF_EFFORT` activities (`A1010`, `A1020`,
+   `A1030`, `A1040`, `A3100`) arrived as zero-duration `TASK`s, because the importer had no
+   `TT_LOE` mapping. **Fixed** — the mapping now exists both ways. The demo file still says
+   `TT_Task`, so it needs regenerating for `type_loe`, `loe_span_start`, `loe_span_end`,
+   `loe_spans_project` and `loe_different_calendar_to_span_ends` to actually fire.
+2. **The XER has no column for it.** `duration_type` (→ the three `dt_*` keys), the external
+   inter-project instants (→ `interproject` + four `net_external_*` keys), the per-relationship lag
+   calendar (→ two `lag_calendar_*` keys), resource `max_units_per_hour` (→ `levelling_test`,
+   `res_overallocation`) and `price_per_unit` (→ `cost_actual`), and assignment `curve` /`role` /
+   `assignment_lag_h` (→ four `res_curve_*` plus `res_role`, `res_assignment_lag`). Verified: **0 of
+   22** imported resources carry a cost rate or a capacity ceiling.
+3. **The XER has no table for it.** Expenses (`E001`–`E004` → `cost_expense`, `cost_overrun` and the
+   three `accrual_*` keys) and activity steps (→ `code_steps`). Also the fixture's three
+   `WBS_SUMMARY` _activities_ (`W4000`, `W5000`, `W7000`) are absent — 129 fixture activities render
+   as 126 tasks.
+4. **Column present, data empty.** `reend_date` exists on the TASK table and is blank on every row,
+   so `con_expected_finish` (`A6200`) never fires. A one-cell fix.
+
+**So the recommendation changes.** Hand-editing the XER, or authoring a second synthetic plan, both
+duplicate a fixture that already exists and would immediately drift from it. The work worth doing is
+a **faithful renderer from `p6_torture_test_v1.json` into an importable plan** — XER for what the
+format carries, and a seeding path (API or direct) for groups 2 and 3, which no XER can express. The
+`coverage_index` then becomes an executable checklist: assert every one of the 117 keys is reachable
+in the seeded plan, and the question stops needing a human to re-answer it.

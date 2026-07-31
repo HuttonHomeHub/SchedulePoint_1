@@ -1,4 +1,8 @@
-import { interchangeReportSchema, type InterchangeReport } from '@repo/interchange';
+import {
+  interchangeReportSchema,
+  type InterchangeReport,
+  type ResourceCollisionResolution,
+} from '@repo/interchange';
 import type { ApiError, ApiResponse, CalendarScope } from '@repo/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -21,11 +25,25 @@ const FILE_FIELD = 'file';
  */
 const GLOBAL_CALENDAR_SCOPE_FIELD = 'globalCalendarScope';
 
+/**
+ * The optional multipart field carrying the planner's answer to each resource-name collision the
+ * dry-run reported, as a JSON object keyed by `resourceKey`. There is no default: the server refuses
+ * a commit that leaves one unanswered (422 `UNRESOLVED_RESOURCE_COLLISIONS`) rather than guessing
+ * between reusing a library row and duplicating a crew.
+ */
+const RESOURCE_RESOLUTIONS_FIELD = 'resourceResolutions';
+
 /** One interchange upload: the picked file plus the import options that shape the mapping. */
 export interface InterchangeUpload {
   file: File;
   /** Omit for the safe default (`PROJECT`) — the field is then absent from the request. */
   globalCalendarScope?: CalendarScope;
+  /**
+   * One answer per `report.resourceCollisions[].resourceKey`. Only the commit needs these; the
+   * dry-run ignores them (it re-reports the collisions either way), so the dialog sends them only
+   * where they mean something.
+   */
+  resourceResolutions?: Record<string, ResourceCollisionResolution>;
 }
 
 /**
@@ -43,6 +61,9 @@ async function postFile<T>(path: string, upload: InterchangeUpload): Promise<T> 
   // Omitted entirely at the default, so the request stays byte-for-byte the pre-ADR-0053 one.
   if (upload.globalCalendarScope !== undefined) {
     form.append(GLOBAL_CALENDAR_SCOPE_FIELD, upload.globalCalendarScope);
+  }
+  if (upload.resourceResolutions !== undefined) {
+    form.append(RESOURCE_RESOLUTIONS_FIELD, JSON.stringify(upload.resourceResolutions));
   }
 
   let response: Response;

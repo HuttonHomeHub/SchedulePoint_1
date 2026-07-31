@@ -114,6 +114,33 @@ export class ResourceRepository {
     await db.resource.createMany({ data: [...rows] });
   }
 
+  /**
+   * Every active resource name in the org that STARTS WITH one of `prefixes` — the import's
+   * copy-name probe (ADR-0050 / ADR-0053 §5). When a planner answers a name collision with
+   * "import a separate copy", the copy needs a name `uq_resources_org_name` will accept, and the
+   * candidates are the base name plus an `(imported <date>)` suffix. A probe for the BASE names
+   * alone would miss exactly the case that matters — the same file imported twice on the same day,
+   * where the first copy already holds the first candidate — so this matches by prefix and lets the
+   * caller pick the first free variant in memory.
+   *
+   * ARCHIVED rows are included: archiving does not free the name (ADR-0053 §4), so an archived row
+   * still blocks the insert and must still be disambiguated around.
+   */
+  async findTakenNamesWithPrefixes(
+    params: { organizationId: string; prefixes: readonly string[] },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Set<string>> {
+    if (params.prefixes.length === 0) return new Set();
+    const rows = await db.resource.findMany({
+      where: this.active({
+        organizationId: params.organizationId,
+        OR: params.prefixes.map((prefix) => ({ name: { startsWith: prefix } })),
+      }),
+      select: { name: true },
+    });
+    return new Set(rows.map((row) => row.name));
+  }
+
   /** An active resource scoped to its organisation (anti-IDOR). */
   findActiveByIdInOrg(
     id: string,

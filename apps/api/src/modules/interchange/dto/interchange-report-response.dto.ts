@@ -1,5 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { InterchangeReport, ReportFinding, ReportFindingKind } from '@repo/interchange';
+import type {
+  InterchangeReport,
+  ReportFinding,
+  ReportFindingKind,
+  ResourceCollision,
+} from '@repo/interchange';
 
 /**
  * One line in the interchange report: a value that was approximated, a structural repair, or an
@@ -70,6 +75,49 @@ export class InterchangeCountsResponseDto {
   assignments?: number;
 }
 
+/** The library resource an imported one collides with, named so a planner can tell whether it is the same crew. */
+export class ExistingResourceResponseDto {
+  @ApiProperty({ description: 'Id of the existing library resource.' })
+  id!: string;
+
+  @ApiProperty({ description: 'Name of the existing library resource — the value that collided.' })
+  name!: string;
+
+  @ApiProperty({ type: String, nullable: true, description: 'Its code, if it has one.' })
+  code!: string | null;
+
+  @ApiProperty({
+    description:
+      'Whether it is archived. An archived resource still holds its name (ADR-0053 §4), so it still ' +
+      'collides; reusing it will unarchive it.',
+  })
+  archived!: boolean;
+}
+
+/**
+ * A resource-name collision the planner must answer before the commit will run. Deliberately NOT a
+ * `ReportFinding`: the three finding kinds all describe something the import already decided, whereas
+ * this is a question it cannot answer alone. Answers are sent back on the commit as
+ * `resourceResolutions`, keyed by `resourceKey`.
+ */
+export class ResourceCollisionResponseDto {
+  @ApiProperty({ description: 'The key to answer this collision under, in `resourceResolutions`.' })
+  resourceKey!: string;
+
+  @ApiProperty({ description: 'The incoming resource’s name — the value that collided.' })
+  name!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'The incoming resource’s code, if any.',
+  })
+  code!: string | null;
+
+  @ApiProperty({ type: ExistingResourceResponseDto })
+  existing!: ExistingResourceResponseDto;
+}
+
 /**
  * The pre-commit interchange report returned by the dry-run: detected format/version, mapped counts,
  * and the approximation / repair / drop findings. This is the runtime instance of ADR-0050's mapping
@@ -105,6 +153,16 @@ export class InterchangeReportResponseDto {
   @ApiProperty({ type: ReportFindingResponseDto, isArray: true })
   drops!: ReportFindingResponseDto[];
 
+  @ApiProperty({
+    type: ResourceCollisionResponseDto,
+    isArray: true,
+    required: false,
+    description:
+      'Resource-name collisions to answer before committing. Absent means none — the same ' +
+      'omitted-when-empty idiom the `mapped` sub-counts use.',
+  })
+  resourceCollisions?: ResourceCollisionResponseDto[];
+
   /** Map a pure-pipeline report to its API representation (the shapes are identical; this documents it). */
   static from(report: InterchangeReport): InterchangeReportResponseDto {
     return {
@@ -130,8 +188,21 @@ export class InterchangeReportResponseDto {
       approximations: report.approximations.map(toFinding),
       repairs: report.repairs.map(toFinding),
       drops: report.drops.map(toFinding),
+      ...(report.resourceCollisions === undefined
+        ? {}
+        : { resourceCollisions: report.resourceCollisions.map(toCollision) }),
     };
   }
+}
+
+/** Map one pure `ResourceCollision` to its response shape (identical; this documents the contract). */
+function toCollision(collision: ResourceCollision): ResourceCollisionResponseDto {
+  return {
+    resourceKey: collision.resourceKey,
+    name: collision.name,
+    code: collision.code,
+    existing: { ...collision.existing },
+  };
 }
 
 /** Map one pure `ReportFinding` to its response shape, dropping `reason` when absent (exact-optional). */

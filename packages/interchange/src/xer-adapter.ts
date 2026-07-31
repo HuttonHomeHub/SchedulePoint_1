@@ -48,12 +48,21 @@ const TABLE = {
   taskRsrc: 'TASKRSRC',
 } as const;
 
-/** P6 `task_type` → canonical activity type. Types outside scope (e.g. `TT_LOE`) are absent (coerced + reported). */
+/**
+ * P6 `task_type` → canonical activity type. A type absent from this map is coerced to `TASK` and
+ * reported — which is the right answer only when the product genuinely has no equivalent
+ * (`TT_WBS`, and P6's hammock), and was the wrong answer for `TT_LOE` for as long as it sat here.
+ */
 const TASK_TYPE_TO_CANONICAL: Readonly<Record<string, CanonicalActivityType>> = {
   TT_Task: 'TASK',
   TT_Rsrc: 'RESOURCE_DEPENDENT', // resource-dependent scheduling (ADR-0039, M2).
   TT_Mile: 'START_MILESTONE',
   TT_FinMile: 'FINISH_MILESTONE',
+  // Level of Effort (ADR-0035 §21). P6 gives an LOE a `target_drtn_hr_cnt` like any other task and
+  // SchedulePoint carries it through, but neither engine uses it as the span: an LOE covers the
+  // earliest SS-predecessor start to the latest FF-successor finish. Its duration is consumed only
+  // as a lag bound, so importing it verbatim is harmless and keeps a round-trip lossless.
+  TT_LOE: 'LEVEL_OF_EFFORT',
 };
 
 /** P6 `pred_type` → canonical relationship type. */
@@ -492,9 +501,13 @@ export function adaptXerToCanonical(
     }
 
     // Duration: XER stores hours (`target_drtn_hr_cnt`); ×60 → working-minutes. A milestone is 0; a
-    // TASK / RESOURCE_DEPENDENT carries a real duration.
+    // TASK / RESOURCE_DEPENDENT carries a real duration. A `LEVEL_OF_EFFORT` carries one too: P6
+    // gives it a duration like any other task and both engines take its SPAN from logic instead
+    // (earliest SS-predecessor start → latest FF-successor finish, ADR-0035 §21), consuming the
+    // duration only as a lag bound. Zeroing it here would lose data on a round-trip for no gain —
+    // a summary is the type that genuinely has no duration of its own, and it is not in this branch.
     let durationMinutes = 0;
-    if (type === 'TASK' || type === 'RESOURCE_DEPENDENT') {
+    if (type === 'TASK' || type === 'RESOURCE_DEPENDENT' || type === 'LEVEL_OF_EFFORT') {
       const hours = numField(row, 'target_drtn_hr_cnt') ?? numField(row, 'remain_drtn_hr_cnt') ?? 0;
       const coerced = hoursToMinutes(hours, false);
       durationMinutes = coerced.minutes;

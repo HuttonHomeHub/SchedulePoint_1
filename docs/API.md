@@ -345,10 +345,10 @@ contract) **without writing anything**, then a separate **commit** creates the p
 Contributor); the authoritative org-scope check is on the **target project** (anti-IDOR). Uploads are
 multipart with a **byte cap enforced at the boundary** (→ 413 before the file is fully buffered).
 
-| Method | Path                                        | Notes                                                                                                                                                                                                                                                      |
-| ------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. Optional form field `globalCalendarScope=PROJECT\|ORG` (default `PROJECT`). 422 unrecognised/malformed/no file or bad option · 413 oversize. `interchange:import`. |
-| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. Same optional `globalCalendarScope` field. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413.                       |
+| Method | Path                                        | Notes                                                                                                                                                                                                                                                                                        |
+| ------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. Optional form fields `globalCalendarScope=PROJECT\|ORG` (default `PROJECT`) and `resourceResolutions` (JSON). 422 unrecognised/malformed/no file or bad option · 413 oversize. `interchange:import`. |
+| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. Same optional form fields. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413, plus 422 `UNRESOLVED_RESOURCE_COLLISIONS`.                              |
 
 The dry-run is **read-only** (returns `200`, not `201` — no resource is created). A parseable file returns
 its report **even when it needed repairs** (dangling edge dropped, duplicate `(pred,succ,type)`
@@ -368,6 +368,27 @@ dependency — the whole transaction rolls back), or a recalculation failure (co
 created**. Same authz (`interchange:import`), org-scope (anti-IDOR) and byte cap (→ 413) as the dry-run.
 Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays);
 activities are laid out on a deterministic lane per source order.
+
+**Resource-name collisions** are the one thing an import will not decide for you. A source resource whose
+`code` matches a library row **is** that row — a code is an identifier, and matching one is not a guess. The
+ambiguous case is a code that matches nothing while the **name** is already taken: `uq_resources_org_name`
+refuses the insert, and both ways out change real data. So the dry-run reports each one in
+`report.resourceCollisions` (`{ resourceKey, name, code, existing: { id, name, code, archived } }`, **absent
+when there are none**), and the commit takes an answer per resource in the optional `resourceResolutions`
+form field — a JSON object keyed by `resourceKey`:
+
+- **`REUSE_EXISTING`** — bind the imported assignments to the library row already there. The file's own rate
+  and calendar for that resource are **not** imported.
+- **`CREATE_COPY`** — create a separate resource, renamed `"<name> (imported <date>)"`, so the file's own
+  rate and calendar survive.
+
+Either answer is recorded as a `repair` finding on the post-commit report. A collision with **no** answer
+fails the commit with **422 `UNRESOLVED_RESOURCE_COLLISIONS`** (`details.collisions` carries the unanswered
+list) rather than being guessed: the resource library is org-global, and levelling, over-allocation and
+Earned Value all read from one pool — reusing the wrong row discards rates for a crew that may not be the
+same crew, and duplicating one splits its demand across two rows that each look half-loaded. Calendars take
+the **opposite** route on purpose (always created, suffixed, reported): a duplicated calendar is inert until
+something is scheduled on it, so there is nothing to ask about.
 
 **Imported calendars land in the target project, not the shared library** (ADR-0053 §5). An import
 creates each calendar at **`PROJECT`** scope pinned to the target project — so a fresh import adds

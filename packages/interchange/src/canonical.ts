@@ -26,9 +26,20 @@ export type InterchangeFormat = z.infer<typeof interchangeFormatSchema>;
 
 /**
  * Canonical activity types. M1's network scope carried only `TASK` / `START_MILESTONE` /
- * `FINISH_MILESTONE`; M2 adds `WBS_SUMMARY` (the WBS-hierarchy summary node, ADR-0038) and
+ * `FINISH_MILESTONE`; M2 added `WBS_SUMMARY` (the WBS-hierarchy summary node, ADR-0038) and
  * `RESOURCE_DEPENDENT` (an activity that schedules on its driving resource's calendar, ADR-0039).
- * `LEVEL_OF_EFFORT` / `HAMMOCK` remain out of scope (coerced to `TASK` + reported).
+ *
+ * `LEVEL_OF_EFFORT` joins them because the coercion was **wrong, not conservative**. This list said
+ * LOE was "out of scope, coerced to `TASK` + reported" — true when it was written, and untrue from
+ * the day the LOE engine shipped (ADR-0035 §21). The consequence is not a missing feature but a
+ * misleading one: an LOE derives its span from its logic (earliest SS-predecessor start → latest
+ * FF-successor finish) and never drives anything, whereas a `TASK` schedules from a duration and
+ * does drive. So a P6 file's supervision or site-management LOE imported as a task with a duration —
+ * a different schedule, arrived at honestly, reported as an approximation, and wrong.
+ *
+ * `HAMMOCK` genuinely stays out: the `ActivityType` enum carries the label but nothing in the engine
+ * consumes it, so importing one would name a behaviour the product does not have. That is the real
+ * test for this list — not "is there an enum member" but "is there an implementation behind it".
  */
 export const CANONICAL_ACTIVITY_TYPES = [
   'TASK',
@@ -36,6 +47,7 @@ export const CANONICAL_ACTIVITY_TYPES = [
   'FINISH_MILESTONE',
   'WBS_SUMMARY',
   'RESOURCE_DEPENDENT',
+  'LEVEL_OF_EFFORT',
 ] as const;
 export const canonicalActivityTypeSchema = z.enum(CANONICAL_ACTIVITY_TYPES);
 export type CanonicalActivityType = z.infer<typeof canonicalActivityTypeSchema>;

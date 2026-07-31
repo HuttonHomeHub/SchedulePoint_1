@@ -218,6 +218,16 @@ function resourceOnlyXer(): string {
 }
 
 /**
+ * The same two resource NAMES as {@link resourceOnlyXer} under DIFFERENT codes — the resource-name
+ * collision. Nothing identifies these as the rows already in the library (the codes miss), but the
+ * org-unique `uq_resources_org_name` will refuse the insert, so the import must ask rather than guess.
+ * Before the collision prompt existed, importing this after `resourceOnlyXer` was a flat 409.
+ */
+function collidingResourceXer(): string {
+  return resourceOnlyXer().replace('CREW-A', 'CREW-Z').replace('MAT-C', 'MAT-Z');
+}
+
+/**
  * A three-calendar XER exercising every `clndr_type` (ADR-0053 §5): a project calendar an activity uses,
  * a P6 GLOBAL (`CA_Base`) calendar, and a RESOURCE (`CA_Rsrc`) calendar an imported labour resource
  * holds. The three land at three different places, which is the whole point of the M5 mapping.
@@ -755,6 +765,133 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       }),
     ]);
     expect(secondDriving?.resourceId).toBe(firstDriving?.resourceId);
+  });
+
+  // ---- Resource-name collisions: ask, never guess -------------------------
+
+  /**
+   * Import `resourceOnlyXer` into a fresh project, then dry-run `collidingResourceXer` (same names,
+   * different codes) into a second project. Returns the second project and the collisions reported.
+   */
+  async function seedCollision(): Promise<{
+    actor: Actor;
+    orgId: string;
+    projectId: string;
+    collisions: { resourceKey: string; name: string; existing: { name: string } }[];
+  }> {
+    const { actor, orgId } = await adminWithOrg();
+    await actor.agent
+      .post(commitUrl(await makeProject(actor)))
+      .attach('file', Buffer.from(resourceOnlyXer(), 'utf8'), 'resourced.xer')
+      .expect(201);
+
+    const projectId = await makeSecondProject(actor);
+    const dry = await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(collidingResourceXer(), 'utf8'), 'colliding.xer')
+      .expect(200);
+    return { actor, orgId, projectId, collisions: dry.body.data.resourceCollisions ?? [] };
+  }
+
+  it('dry-run REPORTS a resource-name collision instead of leaving it to blow up on commit', async () => {
+    const { collisions } = await seedCollision();
+
+    // Both names are taken by the first import's rows; the codes (CREW-Z / MAT-Z) match nothing, so
+    // neither row is IDENTIFIED — which is precisely the ambiguity the planner has to settle.
+    expect(collisions.map((c) => c.name).sort()).toEqual(['Ready-Mix', 'Site Crew']);
+    // Each names the library row it clashes with, so a planner can tell whether it is the same crew.
+    expect(collisions.every((c) => c.existing.name === c.name)).toBe(true);
+    expect(collisions.every((c) => c.resourceKey.length > 0)).toBe(true);
+  });
+
+  it('refuses a commit that leaves a reported collision unanswered (422, naming them)', async () => {
+    const { actor, orgId, projectId } = await seedCollision();
+
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(collidingResourceXer(), 'utf8'), 'colliding.xer')
+      .expect(422);
+
+    expect(res.body.error.details.reason).toBe('UNRESOLVED_RESOURCE_COLLISIONS');
+    expect(res.body.error.details.collisions).toHaveLength(2);
+    // Nothing was created — the refusal happens inside the one transaction that writes the graph.
+    expect(await prisma.resource.count({ where: { organizationId: orgId, deletedAt: null } })).toBe(
+      2,
+    );
+    expect(await prisma.plan.count({ where: { projectId, deletedAt: null } })).toBe(0);
+  });
+
+  it('REUSE_EXISTING binds the imported assignments to the library rows already there', async () => {
+    const { actor, orgId, projectId, collisions } = await seedCollision();
+    const resolutions = Object.fromEntries(
+      collisions.map((c) => [c.resourceKey, 'REUSE_EXISTING']),
+    );
+
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .field('resourceResolutions', JSON.stringify(resolutions))
+      .attach('file', Buffer.from(collidingResourceXer(), 'utf8'), 'colliding.xer')
+      .expect(201);
+
+    // No new library rows: the two imported resources resolved onto the two that were already there.
+    expect(await prisma.resource.count({ where: { organizationId: orgId, deletedAt: null } })).toBe(
+      2,
+    );
+    const driving = await prisma.resourceAssignment.findFirstOrThrow({
+      where: { activity: { planId: res.body.data.planId as string }, isDriving: true },
+      include: { resource: true },
+    });
+    // Bound to the ORIGINAL row — code CREW-A, not the file's CREW-Z. The file's own code did not
+    // overwrite it, which is exactly what "reuse" costs and why the report says so.
+    expect(driving.resource.code).toBe('CREW-A');
+    expect(res.body.data.report.repairs).toContainEqual(
+      expect.objectContaining({
+        entity: 'resource',
+        detail: expect.stringContaining('matched to the existing library resource'),
+      }),
+    );
+  });
+
+  it('CREATE_COPY creates a separate, renamed resource so the file’s own rate and calendar survive', async () => {
+    const { actor, orgId, projectId, collisions } = await seedCollision();
+    const resolutions = Object.fromEntries(collisions.map((c) => [c.resourceKey, 'CREATE_COPY']));
+
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .field('resourceResolutions', JSON.stringify(resolutions))
+      .attach('file', Buffer.from(collidingResourceXer(), 'utf8'), 'colliding.xer')
+      .expect(201);
+
+    // Four rows now — the two originals plus two copies, each under a name the org-unique accepts.
+    const resources = await prisma.resource.findMany({
+      where: { organizationId: orgId, deletedAt: null },
+      orderBy: { name: 'asc' },
+    });
+    expect(resources).toHaveLength(4);
+    const copy = resources.find((r) => r.code === 'CREW-Z');
+    expect(copy?.name).toMatch(/^Site Crew \(imported \d{4}-\d{2}-\d{2}\)$/);
+    expect(res.body.data.report.repairs).toContainEqual(
+      expect.objectContaining({
+        entity: 'resource',
+        detail: expect.stringContaining('was created as'),
+      }),
+    );
+  });
+
+  it('rejects a malformed resourceResolutions field with a 422 rather than a 500', async () => {
+    const { actor, projectId } = await seedCollision();
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .field('resourceResolutions', 'not-json')
+      .attach('file', Buffer.from(collidingResourceXer(), 'utf8'), 'colliding.xer')
+      .expect(422);
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .field('resourceResolutions', JSON.stringify({ 'RSRC:RA': 'MERGE_SOMEHOW' }))
+      .attach('file', Buffer.from(collidingResourceXer(), 'utf8'), 'colliding.xer')
+      .expect(422);
   });
 
   // ---- M5: calendar tiering (ADR-0053 §5, US-9) ---------------------------
