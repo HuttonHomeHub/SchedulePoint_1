@@ -334,9 +334,19 @@ function decimalOrNull(value: { toNumber(): number } | null): number | null {
 }
 
 /**
- * Map a stored `ActivityType` to the export-graph vocabulary. HAMMOCK / LEVEL_OF_EFFORT are not part of the
- * interchange activity set (M4a) — the exporter serialises the five supported kinds — so they are coerced to
- * the nearest supported type (`TASK`), matching how the import adapter coerces the same two kinds.
+ * Map a stored `ActivityType` to the export-graph vocabulary.
+ *
+ * **`LEVEL_OF_EFFORT` passes through.** It used to be coerced to `TASK` here, justified by a docblock
+ * saying that "matches how the import adapter coerces the same two kinds" — which stopped being true
+ * when the importer was fixed. XER has `TT_LOE`, `xer-adapter.ts` reads it and `xer-emit.ts` emits it;
+ * only this function stood in the way. The result was that exporting a plan and re-importing it turned
+ * every LOE into a task: the *same defect* that motivated ADR-0066, alive on the other side, kept
+ * alive by a comment describing behaviour that had already been corrected. Found by the M5.4
+ * round-trip diff, which is the only thing in the repository that looks at both directions at once.
+ *
+ * `HAMMOCK` really is coerced: neither format has an equivalent and the emitter has no mapping for it,
+ * so `TASK` is the honest nearest kind. ADR-0050's rule applies — the approximation is recorded in the
+ * mapping contract rather than left for a reader to discover.
  */
 function toExportActivityType(type: Activity['type']): ExportGraph['activities'][number]['type'] {
   switch (type) {
@@ -344,10 +354,10 @@ function toExportActivityType(type: Activity['type']): ExportGraph['activities']
     case 'FINISH_MILESTONE':
     case 'WBS_SUMMARY':
     case 'RESOURCE_DEPENDENT':
+    case 'LEVEL_OF_EFFORT':
       return type;
     case 'TASK':
     case 'HAMMOCK':
-    case 'LEVEL_OF_EFFORT':
     default:
       return 'TASK';
   }

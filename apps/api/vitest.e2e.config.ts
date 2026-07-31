@@ -12,6 +12,10 @@ export default defineConfig({
     environment: 'node',
     passWithNoTests: true,
     include: ['test/**/*.e2e-spec.ts'],
+    // The ADR-0066 pairwise differential seeds 63 plans over real HTTP and gets its own script
+    // and CI step (`test:e2e:pairwise`). Excluded here so it is not run twice, and so its
+    // wall-clock is attributed to a step a reader can see rather than buried in this one.
+    exclude: ['test/pairwise/**'],
     root: '.',
     testTimeout: 30_000,
     hookTimeout: 30_000,

@@ -12,9 +12,12 @@
 </div>
 
 > **Project status: SchedulePoint is substantially built.** 19 API modules, 25
-> Prisma models across 41 migrations, a React client with 16 flag-scoped
-> Playwright suites, and 59 ADRs. The CPM/GPM engine is real and its conformance
-> matrix is closed (ADR-0034). The **Gantt view shipped** on 2026-07-28
+> Prisma models across 41 migrations, a React client with 18 flag-scoped
+> Playwright suites beside the base journey, and 66 ADRs. The CPM/GPM engine is
+> real and its conformance matrix is closed (ADR-0034), and the **application**
+> has its own test bed as of 2026-07-31 — 36 documented seeded plans and hostile
+> cases created through the public REST API (ADR-0066, and the
+> [test playbook](docs/TEST_PLAYBOOK.md)). The **Gantt view shipped** on 2026-07-28
 > (ADR-0059), substantially delivering the brief's last outstanding Must-have —
 > §8 words it "read-primary; edit supported", and Gantt editing stays deferred
 > (ADR-0059 M5). The other open question is the deployment target. See the [roadmap](docs/ROADMAP.md) and
@@ -42,7 +45,7 @@ have yet.
 ## ✨ Tech stack
 
 - **Monorepo:** [Turborepo](https://turbo.build) + [pnpm](https://pnpm.io) workspaces
-- **Frontend:** [React](https://react.dev) + [TypeScript](https://www.typescriptlang.org) + [Vite](https://vite.dev), [Tailwind CSS v4](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com), [Lucide](https://lucide.dev)
+- **Frontend:** [React](https://react.dev) + [TypeScript](https://www.typescriptlang.org) + [Vite](https://vite.dev), [Tailwind CSS v4](https://tailwindcss.com), hand-rolled [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/) primitives (no component library — see [`CLAUDE.md`](CLAUDE.md) §5), [Lucide](https://lucide.dev)
 - **Backend:** [NestJS](https://nestjs.com) + TypeScript
 - **Database:** [PostgreSQL](https://www.postgresql.org) via [Prisma](https://www.prisma.io)
 - **API:** REST, documented with [OpenAPI](https://swagger.io/specification/)
@@ -57,11 +60,14 @@ apps/
   web/                  React + Vite client              (@repo/web)
   api/                  NestJS REST API                  (@repo/api)
     src/modules/schedule/engine/   The pure CPM/GPM engine
+  seed-cli/             Test-catalogue seeder CLI        (@repo/seed-cli)
 packages/
   config/               Shared ESLint + tsconfig         (@repo/config)
   types/                Shared cross-boundary types      (@repo/types)
   interchange/          XER/MSPDI canonical model        (@repo/interchange)
   engine-conformance/   Engine-free conformance fixture  (@repo/engine-conformance)
+  seed/                 Pure test-plan specs/generators  (@repo/seed)
+  seed-http/            The REST seeder client           (@repo/seed-http)
 docs/                   Architecture, guides, ADRs, roadmap
 scripts/                Repository automation
 ```
@@ -101,6 +107,17 @@ docker compose up -d
 | `pnpm test`      | Run unit tests                          |
 | `pnpm test:e2e`  | Run end-to-end tests                    |
 | `pnpm changeset` | Record a versioned, user-visible change |
+
+Repository-health checks (also run in CI):
+
+| Command                | Description                                                            |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `pnpm check:doc-links` | Every Markdown link in `docs/` resolves                                |
+| `pnpm check:playbook`  | [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md) matches the catalogue |
+
+To fill a running instance with test data, see the
+[test playbook](docs/TEST_PLAYBOOK.md) — it says which seeded plan proves what,
+and what _wrong_ looks like for each.
 
 ## 📚 Documentation
 

@@ -78,6 +78,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 | 51 | **TSLD visual-refresh fast-follows (ADR-0052 M4/M5, `VITE_CANVAS_DIRECT_MANIPULATION` reviews)** | Non-blocking items deferred from the M4/M5 specialist reviews (perf/component/ux), all behind the default-off flag: (a) **perf** — there is still **no automated draw-budget/perf gate** for the TSLD canvas: ADR-0026's ≤ 4 ms p95 @ 2,000-activities budget is documented but unenforced in CI, and M5 briefly shipped a per-frame `computeEdgeFanOut` recompute (5–11 ms alone at 2,000 activities / 4,000 edges) that only review caught — a benchmark test (e.g. a vitest bench or a Playwright trace assertion over the synthetic 2,000-activity scene) would have failed it automatically. (b) **perf** — `classifyHit` iterates **all** activities per call (per pointer-move while the resize/lag zones are armed); cull the candidates to the visible set / a spatial bucket before default-on so hover cost is bounded by the viewport like the paint. (c) **ux** — the lag-run dash pattern (`[2,2]`) vs the non-driving link dash (`[4,3]`) may be too subtle a distinction at typical zoom; consider a visually distinct treatment (weight/colour-with-shape or a tick pattern) if planners misread lag runs as slack ties. (d) **component** — the M5 fan-out `elbowShift` derives from the **predecessor-side** offset only (`routeOrthogonal`'s last argument), so a bundle crowded ONLY on the successor side with identical anchor days gets no elbow separation — the lines still overlap on their vertical run. | All minor and flag-gated: (a) is a repo-wide testing gap the M5 near-miss made concrete; (b) only bites on very large plans with editing armed; (c)/(d) are legibility polish on rare topologies. | Add an automated canvas draw-budget check (bench or trace-based) before the flag flips default-on; cull `classifyHit` to visible candidates; revisit the lag-run treatment with planner feedback; fold the successor-side offset into `elbowShift` when the fan-out is next touched. |
 | 53 | **Library `q` search is an unindexed (bounded) ILIKE — `pg_trgm` GIN deferred (ADR-0053 §4 / M4)** | The M4 search on `calendars`/`resources` uses Prisma `contains` + `mode: 'insensitive'`, i.e. `name ILIKE '%q%'` (OR'd with `code` on resources). A **leading-wildcard, case-insensitive** match is not a btree range, so no existing or addable btree index can serve it — not the `(organization_id, created_at, id)` composites, not `text_pattern_ops` (left-anchored only), not an expression index on `lower(name)` (prefix only). The chosen plan is deliberate: the leading equality on `organization_id` bounds the candidate set to **one tenant** in cursor order and the ILIKE is a recheck over it — a bounded filter, not a table-wide seq scan, at the ADR-0053 sizing of ≲1,000 calendars / ≲5,000 resources per tenant. For the same measure-first reason the archive filter added **no** index: `archived_at` is tri-state (`exclude`/`include`/`only`), so a partial `WHERE archived_at IS NULL` twin would serve only the default and would today be a byte-for-byte duplicate of the existing composite (no row is archived yet). | Low today and bounded by tenant size; it degrades linearly if a tenant's library grows well past the assumed ceiling (import-heavy tenants are the likely first case), or if archived rows come to dominate a library so the default list scans mostly-filtered entries. Both show up as list/search p95 creep, never as incorrect results. **Measured at the ADR-0053 ceiling during the M6 backend-performance review** (Postgres 16, every migration applied, one org seeded with 1,000 calendars / 5,000 resources): worst-case resource search (no match, full candidate scan) **3.8 ms**; a match at the tail of cursor order **3.2 ms**; the 1,000-calendar case **0.56 ms** — all two orders of magnitude inside the 200 ms p95 budget, confirming the deferral is correct at the stated scale. A committed seeded-benchmark test (so the claim is pinned in CI rather than living in a migration comment and this row) is still outstanding. Escalate only on further measurement (`docs/PERFORMANCE.md`): (a) a `pg_trgm` GIN index on `lower(name)` (`gin_trgm_ops`) — note it needs `CREATE EXTENSION pg_trgm`, a privileged one-off DDL step the app's DB role may not hold, which is part of why it is deferred; (b) a partial `(organization_id, created_at, id) WHERE deleted_at IS NULL AND archived_at IS NULL` composite if archived rows dominate; (c) a partial ORG-tier calendar composite if PROJECT rows dominate the org list (ADR-0053 "Follow-ups"). |
 | 56 | **Pure gesture→overlay helpers live in `TsldCanvas.tsx` rather than a pure module** | Raised by the ADR-0054 M6 component review against `gestureSourceId` / `gestureGhostDetail`, but the finding is older and wider than this epic: `ghostRect`, `liveResize`, `lagChip` and their siblings — all pure `GestureState → overlay geometry` functions with no React, DOM or canvas dependency — already sit at the top of `apps/web/src/features/tsld/components/TsldCanvas.tsx` and are exported solely for unit tests. The ADR-0026 architecture puts pure render logic in `features/tsld/render/*`, so the whole cluster is on the wrong side of that seam. Moving only the two new ones was rejected as making the file _less_ consistent, not more. | Maintainability only — the functions are pure and fully unit-tested where they are. Cost is that a reviewer must read a 1,500-line component file to review pure geometry, and that the component file is the de-facto home for logic the architecture says lives elsewhere. | Move the whole cluster to a `render/gesture-overlay.ts` module in one pass (mechanical: re-export, update the two test files' imports), rather than migrating helpers piecemeal as each epic touches them. |
+| 57 | **Recycle-bin list has no index for its filter or its sort, and the screen pages it to exhaustion** | The `deleted_at IS NOT NULL` filter and the `ORDER BY deleted_at DESC, id ASC` on all three `UNION ALL` branches are unindexed: `clients`/`projects`/`plans` each index `(organization_id, created_at, id)`, none carry `deleted_at`. So Postgres filters and top-N sorts over **every** row for the org in that table, live rows included. That predates TECH_DEBT #22 and was deliberately deferred there as measure-first. What #22 did not weigh: the screen fetches via `apiFetchAllPages` (`use-deleted-items.ts`), which walks `?limit=100` to exhaustion — so the scan is re-run **per page**, making one screen-open cost `O(pages x org rows)` rather than `O(org rows)`. #22's own commit used that same pagination-amplification argument to justify fixing the row over-fetch immediately; it applies with more force here, and I did not apply it consistently. | Grows with an org's total row count, not its deleted-row count, and multiplies by page count. Harmless on a small org; an org that has ever created and deleted a lot of plans pays it on every visit to Recently deleted. | **Measure first — this is still unmeasured** (the reviewing agent had no database either). Get an `EXPLAIN ANALYZE` at realistic row counts; if it confirms the scan, add the partial index already named in `recycle-bin.repository.ts` — `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` per table. Also worth asking whether the screen should page to exhaustion at all. Raised by the backend-performance-reviewer agent, 2026-07-27. |
 
 ## Principles for managing debt
 
@@ -137,7 +138,6 @@ to distrust.
 envelope (a mid-tier laptop, iPad-class Safari), record dropped frames while scrolling, and note
 the numbers in ADR-0059. Deliberately **not** turned into a CI gate: a millisecond threshold
 measured on a runner would be noise dressed as a guarantee.
-| 57 | **Recycle-bin list has no index for its filter or its sort, and the screen pages it to exhaustion** | The `deleted_at IS NOT NULL` filter and the `ORDER BY deleted_at DESC, id ASC` on all three `UNION ALL` branches are unindexed: `clients`/`projects`/`plans` each index `(organization_id, created_at, id)`, none carry `deleted_at`. So Postgres filters and top-N sorts over **every** row for the org in that table, live rows included. That predates TECH_DEBT #22 and was deliberately deferred there as measure-first. What #22 did not weigh: the screen fetches via `apiFetchAllPages` (`use-deleted-items.ts`), which walks `?limit=100` to exhaustion — so the scan is re-run **per page**, making one screen-open cost `O(pages x org rows)` rather than `O(org rows)`. #22's own commit used that same pagination-amplification argument to justify fixing the row over-fetch immediately; it applies with more force here, and I did not apply it consistently. | Grows with an org's total row count, not its deleted-row count, and multiplies by page count. Harmless on a small org; an org that has ever created and deleted a lot of plans pays it on every visit to Recently deleted. | **Measure first — this is still unmeasured** (the reviewing agent had no database either). Get an `EXPLAIN ANALYZE` at realistic row counts; if it confirms the scan, add the partial index already named in `recycle-bin.repository.ts` — `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` per table. Also worth asking whether the screen should page to exhaustion at all. Raised by the backend-performance-reviewer agent, 2026-07-27. |
 
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
 
@@ -386,6 +386,41 @@ would not exercise the code being budgeted.
 2. **Decide what "representative" is.** 2,000 activities is ADR-0026's stated ceiling, but nobody
    has checked it against a real programme. The largest plan the product owner actually runs, and
    the largest an imported XER produces, are both facts we can get.
+   **Partly answered — ADR-0066 M4.3.** The seed catalogue's scale generator now produces a plan of
+   a declared, asserted shape (three-level WBS, 1.6 links per activity, milestones, LOE hammocks, a
+   progressed front), and `measure-link-routing.mjs` takes it as a second scene. Both scenes were
+   run back to back on **the same container** so only the picture differs.
+   The figures were taken before a topology defect was found in the generator — its bands ran in
+   series, so the plan was one long chain (ADR-0066 M4). That defect was in the plan's **logic**,
+   not in the picture: `scale-scene.ts` lays the bars out itself and never reads the engine, and it
+   had already been fixed to run phases concurrently. The numbers therefore still describe the shape
+   the generator now produces.
+
+   | scene                    | zoom                 | routing off (p50 / p95) | routing on (p50 / p95) |
+   | ------------------------ | -------------------- | ----------------------- | ---------------------- |
+   | grid (synthetic lattice) | whole plan (2px/day) | 9.4 / 11.6 ms           | 12.7 / 20.9 ms         |
+   | grid                     | week (12px/day)      | 11.3 / 14.2 ms          | 13.4 / 17.7 ms         |
+   | scale (realistic)        | whole plan (2px/day) | 14.6 / 18.7 ms          | 16.1 / 23.5 ms         |
+   | scale                    | week (12px/day)      | 5.5 / 6.7 ms            | 5.5 / 6.7 ms           |
+
+   Two things fall out, and they point opposite ways. At **whole-plan zoom the realistic plan is
+   dearer** — 18.7 vs 11.6 ms baseline — which is what 2,160 bars (the WBS summaries are bars too),
+   a dozen bar widths and 3,200 links cost against 2,000 uniform bars and 1,493. At the **working
+   zoom it is less than half** — 6.7 vs 14.2 ms, with routing free to two decimal places — because
+   real logic is dense inside a band and sparse across bands, so the cull actually works. The
+   synthetic lattice, whose every edge spans seven lanes, defeats the cull by construction and had
+   been standing in for a programme.
+   So the honest summary is that **the scene dominates the number**, which is the reason this entry
+   exists. It does not rescue the 4 ms budget: the realistic plan misses it 4.7× at whole-plan zoom.
+   It does say the working zoom — where a planner spends their time — sits at 6.7 ms p95, inside one
+   60 Hz frame.
+   One trap worth recording, because it produced a much prettier and entirely false number first: a
+   generated plan laid out nose-to-tail spans **28 years** at 2,000 activities, so the "whole plan"
+   zoom culled roughly nine bars in ten and reported 4.6 ms p95. It looked like the budget being met.
+   The layout now runs a phase's bands concurrently (`scripts/scale-scene.ts`), which puts the plan
+   at about two and a half years and fills the viewport — that is what makes the two scenes
+   comparable at all.
+
 3. **Run it on the envelope ADR-0026 names** — a mid-tier laptop and an iPad — with the same script,
    which takes a checkout and one command.
 4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
@@ -480,3 +515,107 @@ a **faithful renderer from `p6_torture_test_v1.json` into an importable plan** �
 format carries, and a seeding path (API or direct) for groups 2 and 3, which no XER can express. The
 `coverage_index` then becomes an executable checklist: assert every one of the 117 keys is reachable
 in the seeded plan, and the question stops needing a human to re-answer it.
+
+### 78. The public activity/dependency API is day-denominated, so sub-day durations and lags cannot be authored
+
+Found while building the ADR-0066 seeder. ADR-0036 moved the engine and storage to
+working-**minutes** (`activities.duration_minutes`, `dependencies.lag_minutes`) and shipped intraday
+shift calendars — but `CreateActivityDto` / `UpdateActivityDto` expose only `durationDays`, and
+`CreateDependencyDto` only `lagDays`, both `@IsInt()`. The service multiplies by 1440. **There is no
+minutes field on any DTO.**
+
+The asymmetry is what makes it a defect rather than a limit: **the interchange commit writes
+`duration_minutes` directly**, bypassing the DTO. So an XER carrying a 4-hour activity imports and
+schedules correctly — and then no client, including the web app, can create a comparable one, and
+any edit that touches the duration silently rounds it to whole days. (An edit that does _not_ touch
+the duration preserves the minutes, so the value is not destroyed on unrelated saves.)
+
+**Impact — medium.** The hour-granular calendar rework that ADR-0036 called _gating_ is reachable by
+import but not by hand, so a planner can neither author nor correct the schedules the engine was
+rebuilt to support. It also caps the seed catalogue: the ADR-0066 seeder is API-only by design, so it
+must round and report rather than reproduce the fixture faithfully.
+
+**What would close it:** add `durationMinutes` / `lagMinutes` to the create+update DTOs as an
+alternative to the day fields (mutually exclusive, 422 if both), thread them through the services,
+and surface an hours/minutes control in the activity editor. Until then the seeder rounds to whole
+days and **names every rounding in its report** — never silently.
+
+> Numbering note: this entry was first written as #77, which was already taken by the entry above.
+> Renumbered rather than left ambiguous — the ADR-0058 rule applied to this file's own bookkeeping.
+
+### 79. A window-only calendar is supported by the engine and rejected by the API
+
+ADR-0036 explicitly supports a **window-only base week**: every weekday non-working, with all work
+arriving from dated exception windows. The fixture uses one (a plant turnaround whose only working
+time is the shutdown window), the engine schedules it correctly, and the storage holds it.
+
+`CreateCalendarDto` puts `@Min(1)` on `workingWeekdays`. A zero mask is therefore a 422, so **no
+client can express the calendar the engine supports** — the same import-versus-author asymmetry as
+#78, in a different corner. The seeder reports it as a finding and leaves the affected activities on
+the plan calendar rather than inventing a working week for them: fudging in a Monday would make the
+seeded plan schedule differently from the fixture and say nothing about it.
+
+**Impact — low but sharp.** It affects one calendar shape, but that shape is exactly the one a
+turnaround or a shutdown programme needs, and the failure is a flat refusal with no workaround.
+
+**What would close it:** relax the validator to `@Min(0)` and decide what a zero mask means at the
+seams that consume it — specifically whether a plan default calendar may be window-only (an activity
+inheriting it would have no base working time at all), which is the question the `@Min(1)` was
+probably standing in for. Worth an API e2e that creates one and recalculates over it.
+
+### 80. Intraday shift patterns exist in the engine and in storage, and no write path can create one
+
+ADR-0036 was called the **gating** rework: it moved the engine and storage from working-days to
+working-**minutes** and added intraday shift patterns — split shifts, night shifts crossing midnight,
+asymmetric weeks where Friday is a half day. The engine implements all of it, the
+`calendar_shifts` / `calendar_exception_windows` tables hold it, and the ADR-0034 goldens are green
+on it.
+
+**Nothing in the product can author one.** `fullDayShiftsFromMask` in `calendar.repository.ts`
+derives a calendar's shifts from the 7-bit weekday mask — a working day is `[0, 1440)` and a
+non-working day is absent — and it is used by the single `create`, by `update`, by `createException`
+and by the interchange batch alike. There is no shift-window field on any DTO. So every calendar in
+every database is a whole-day calendar, and the minute-granular machinery underneath is exercised
+only by unit tests and the conformance adapter.
+
+Found by the ADR-0066 M2 coverage report, which is the point of it: four of the fixture's 117
+capability keys (`cal_split_shift`, `cal_night_crosses_midnight`, `cal_asymmetric_week`,
+`cal_forces_split`) have no capability plan and cannot have one. They are excepted in
+`apps/seed-cli/src/capabilities/coverage.ts` with this number.
+
+**Impact — the largest of the three write-path gaps** (#78 durations, #79 the window-only mask, this
+one). A planner working a two-shift site or a night-shift possession cannot describe their working
+week at all, and the schedule they get is silently a whole-day approximation of it. It also caps the
+fidelity of every import: an XER or MSPDI carrying real shift patterns is flattened on the way in
+with nothing said, because the mapper has nowhere to put them.
+
+**What would close it:** a `shifts` array on the calendar create/update DTOs (weekday +
+start/end minute, validated non-overlapping and ordered), a matching `windows` array on the
+exception DTO, the repository taking them instead of deriving, and an editor for the weekly pattern.
+The engine and the storage need no change — that is the whole shape of the problem. Worth doing
+together with #78, since a sub-day duration is meaningless without a sub-day calendar to spend it on.
+
+### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
+
+CodeQL flags `writeFileSync(args.out, JSON.stringify(results))` in `apps/seed-cli/src/main.ts` as
+"network data written to file" — the negative tier's report contains the API's own response codes
+and messages, which are network-sourced, and they land on disk.
+
+**Assessed as a false positive for this call site, and left open rather than silenced.** The rule
+guards against a remote payload reaching a file that something later executes or parses unsafely.
+Neither half holds here: the **path** is `args.out`, an operator's own CLI argument and not
+network-derived, so there is no traversal; and the **content** goes through `JSON.stringify`, so a
+hostile response body cannot break out of the JSON it is quoted into. Writing that report is the
+entire purpose of the flag — the run exists to record what the API refused.
+
+Deliberately **not** worked around. The available moves were to drop `--out`, to write the report
+somewhere the operator did not choose, or to launder the values through a copy so the taint tracker
+loses them; the first two make the tool worse and the third changes nothing real while making the
+code lie about why it exists. A scanner finding that a reviewer has assessed and disagreed with
+should be dismissed in the GitHub UI with that reasoning attached, which is a repo-admin action.
+
+Kept as an entry so the next person to see the alert finds the analysis rather than repeating it.
+The sibling alert from the same scan — `js/polynomial-redos` on `client.ts` — **was** real and was
+fixed (`stripTrailingSlashes`, with a regression test measured against the old implementation
+first). One of two is the ordinary ratio, and it is the reason the pair should be read rather than
+batch-dismissed.

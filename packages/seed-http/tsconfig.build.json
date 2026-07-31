@@ -1,0 +1,20 @@
+{
+  // Emits the consumable build (dist/*.js + *.d.ts) — the ADR-0019 build contract. `apps/api` and the
+  // web review dialog typecheck against these flat declarations, not the source (the source uses
+  // `import.meta`-style ESM resolution a CommonJS/Node consumer cannot process directly).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    // Leaf build: no incremental/composite state, so a clean `dist` is always emitted
+    // (a stale *.tsbuildinfo must never make tsc skip emit in CI).
+    "composite": false,
+    "incremental": false,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts", "src/**/*.fixtures.ts"]
+}

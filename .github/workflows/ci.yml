@@ -55,6 +55,14 @@ jobs:
       - name: Check documentation links
         run: pnpm check:doc-links
 
+      # The playbook says which plan proves what. Its rows name plans by id, and a row pointing at
+      # a plan that no longer exists sends a reader to seed nothing and conclude the feature is
+      # broken. The reverse — a plan nobody documented — is worse: it gets seeded, looks plausible
+      # and demonstrates nothing, which is the state the whole catalogue exists to end (ADR-0066
+      # M5.3). Needs no database and no credentials; the inventory is built in memory.
+      - name: Check the test playbook
+        run: pnpm check:playbook
+
       - name: Unit tests
         run: pnpm test
 
@@ -127,6 +135,16 @@ jobs:
       # share the test database, so running them in parallel could race.
       - name: API end-to-end tests
         run: pnpm --filter @repo/api test:e2e
+
+      # The ADR-0066 pairwise differential: seed 63 generated plans over real HTTP,
+      # recalculate each, and compare the application against `computeSchedule` run on
+      # the SAME spec. Its own step so the wall-clock is attributed rather than hidden,
+      # and it runs the WHOLE covering array — a truncated one is not a covering array,
+      # and "the pairwise differential passes" would quietly stop meaning what it says.
+      # Measured at ~145 s locally over 63 plans; if it ever becomes the long pole,
+      # shard it rather than shortening it.
+      - name: Pairwise differential (seed catalogue)
+        run: pnpm --filter @repo/api test:e2e:pairwise
 
       - name: Install Playwright browsers
         run: pnpm --filter @repo/web exec playwright install --with-deps

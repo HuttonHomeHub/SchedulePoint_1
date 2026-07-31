@@ -19,6 +19,12 @@ COPY apps/web/package.json apps/web/
 COPY packages/config/package.json packages/config/
 COPY packages/types/package.json packages/types/
 COPY packages/interchange/package.json packages/interchange/
+# @repo/seed is a devDependency used by ONE hand-run bench script, not by `src`. It is here
+# because `apps/web/tsconfig.json` deliberately includes `scripts/` so the benchmark cannot
+# drift from the painter it measures — which makes it part of the `tsc --noEmit` the build
+# runs, whether or not a byte of it reaches the bundle. Omitting it fails the image build with
+# implicit-`any` errors in a file no local gate can flag, because a local checkout has it.
+COPY packages/seed/package.json packages/seed/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @repo/web...
 
@@ -33,6 +39,7 @@ ENV VITE_API_URL=$VITE_API_URL
 # server). @repo/web consumes both @repo/types and @repo/interchange (its Zod schemas).
 RUN pnpm --filter @repo/types build \
     && pnpm --filter @repo/interchange build \
+    && pnpm --filter @repo/seed build \
     && pnpm --filter @repo/web build
 
 # --- Runtime: static files served by nginx -----------------------------------

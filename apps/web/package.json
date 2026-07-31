@@ -57,6 +57,7 @@
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "catalog:",
     "@repo/config": "workspace:*",
+    "@repo/seed": "workspace:*",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",

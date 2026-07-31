@@ -1,0 +1,38 @@
+{
+  "name": "@repo/seed",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure, engine-free seed-plan substrate: the SeedSpec model and the builders that produce it (ADR-0066). Knows how to DESCRIBE a plan; never how to talk to a server.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist .turbo coverage *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@types/node": "^22.10.7",
+    "eslint": "^9.39.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

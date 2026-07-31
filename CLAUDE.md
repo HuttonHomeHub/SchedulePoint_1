@@ -20,11 +20,20 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 19 API modules
-> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~590 web
-> source files with 17 flag-scoped Playwright suites, and 60 ADRs. The CPM/GPM
-> engine is real and its conformance matrix is closed (ADR-0034). Read the code
-> before assuming anything is missing — this banner said the opposite for months
-> after it stopped being true, which is exactly the failure it now warns against.
+> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~670 web
+> source files with 18 flag-scoped Playwright suites beside the base journey, and
+> 66 ADRs (counted 2026-07-31 — every number here is `ls | wc -l`, not memory).
+> The CPM/GPM engine is real and its conformance matrix is closed (ADR-0034).
+> Read the code before assuming anything is missing — this banner said the
+> opposite for months after it stopped being true, which is exactly the failure
+> it now warns against.
+>
+> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): 36
+> documented seeded plans and hostile cases created through the public REST API,
+> keyed to [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md), which says which plan
+> proves what and what _wrong_ looks like. Use it before hand-building a plan to
+> reproduce something — and note what it exists to cover: the conformance harness
+> proves the **engine**, never a write path, a DTO or a guard.
 >
 > The **Gantt view shipped** on 2026-07-28 (ADR-0059, `VITE_GANTT_VIEW`
 > default-on) — read-only by design, with WBS rows, the baseline variance bar and
@@ -86,16 +95,19 @@ SchedulePoint/
 │   │   ├── src/features/     #   Feature-first app code
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
-│   └── api/                  # NestJS REST API (@repo/api)
-│       ├── src/modules/      #   19 feature modules
-│       ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
-│       ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│       ├── prisma/           #   Schema (25 models) + 41 migrations
-│       └── test/             #   Supertest API e2e specs
+│   ├── api/                  # NestJS REST API (@repo/api)
+│   │   ├── src/modules/      #   19 feature modules
+│   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
+│   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
+│   │   ├── prisma/           #   Schema (25 models) + 41 migrations
+│   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
+│   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
 │   ├── config/               # Shared ESLint + tsconfig presets (@repo/config)
 │   ├── interchange/          # Pure schedule-interchange model/parsers (ADR-0050)
 │   ├── engine-conformance/   # Engine-free conformance fixture + loaders (ADR-0034)
+│   ├── seed/                 # Pure SeedSpec model + pairwise/scale/negative builders (ADR-0066)
+│   ├── seed-http/            # The seeder as an ordinary REST client (ADR-0066)
 │   └── types/                # Shared cross-boundary types/DTOs (@repo/types)
 ├── docs/                     # Architecture, guides, ADRs, roadmap, decisions
 ├── scripts/                  # Repo automation (bootstrap, etc.)
@@ -145,6 +157,9 @@ SchedulePoint/
 See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
 
 - **Every bug fix ships with a regression test.** Every feature ships with tests.
+- **Which seeded plan demonstrates which capability** — and what _wrong_ looks like
+  for each — is [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md) (ADR-0066), gated
+  by `pnpm check:playbook`.
 - **Unit** (Vitest) for pure logic and components; **integration/e2e** (Supertest)
   for API endpoints against a real Postgres; **end-to-end** (Playwright) for
   critical user journeys.
@@ -984,6 +999,25 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   the cost" reading is recorded as **not holding**. The CPM engine is not imported; the ADR-0034
   parity gate is untouched.
 
+- **ADR-0066** _(Accepted; M0–M5 landed)_ — The seed catalogue, and the engine as the
+  application's oracle. The ADR-0034 harness feeds `computeSchedule` — a pure function — so all 117
+  capability keys are proven **at the engine** and none **at the application**; two defects found on
+  one day (the importer coercing `TT_LOE` to a task, `parentId` never reaching the engine) were
+  green at the engine and wrong in the product, and no gate could have caught either. So: plans
+  created through the **public REST API** in five tiers — fixture, per-capability, pairwise, scale,
+  hostile — with `docs/TEST_PLAYBOOK.md` naming which plan proves what and `pnpm check:playbook`
+  gating that its rows resolve **in both directions**. The load-bearing decision is that the
+  pairwise differential builds the engine's input **from the `SeedSpec`, never from the persisted
+  rows**: reading the database back would reuse the very assembly both defects lived in, and the
+  comparison would agree with itself. What it found is the argument restated as evidence — three
+  write-path gaps no existing gate could report (TECH_DEBT #78/#79/#80, the largest being that
+  ADR-0036's intraday shift patterns are authorable by nothing), a scale generator that held every
+  declared shape number while being **one queue** (96% critical, ten years for 500 activities), a
+  draw benchmark measuring the cull rather than the painter, and — from the M5.4 round trip — the
+  exporter still downgrading every Level of Effort to a task, kept alive by a docblock describing
+  importer behaviour that had already been corrected. **The CPM engine is not modified and the
+  ADR-0034 parity gate is untouched.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -1058,7 +1092,8 @@ When operating in this repo, Claude Code should:
 6. **Never commit secrets**, disable TLS verification, or weaken security/a11y
    gates to make CI pass.
 7. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
-   push" — `pnpm lint && pnpm typecheck && pnpm test`, **plus
+   push" — `pnpm lint && pnpm typecheck && pnpm test` (plus `pnpm check:playbook`
+   when you add or rename a seed plan), **plus
    `scripts/e2e-local.sh api` when you touched `apps/api`, plus
    `scripts/e2e-local.sh web:<suite>` when you added or changed a flag-on
    Playwright suite** — before declaring work done, and report failures

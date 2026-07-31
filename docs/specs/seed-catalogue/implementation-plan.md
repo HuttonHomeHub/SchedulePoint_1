@@ -5,8 +5,19 @@ Stage 5 of docs/PROCESS.md. Stages 1–4 are in feature-spec.md.
 
 # Implementation Plan: the Seed Catalogue & Test Playbook
 
-**Status:** Proposed — awaiting approval
+**Status:** Delivered — M0–M5 landed 2026-07-31 (ADR-0066 Accepted)
 **Spec:** [`feature-spec.md`](feature-spec.md)
+
+> The plan below is the **approved** breakdown, kept as written so the estimate can be read
+> against what happened. What each milestone actually **found** — which is the point of a test
+> bed, and not something a plan can predict — is recorded in
+> [`../../adr/0066-the-seed-catalogue-and-the-engine-as-oracle.md`](../../adr/0066-the-seed-catalogue-and-the-engine-as-oracle.md),
+> and the plans themselves are documented in [`../../TEST_PLAYBOOK.md`](../../TEST_PLAYBOOK.md).
+>
+> One deviation worth naming: M4's generator passed **every** declared shape assertion while
+> producing a plan that was 96% critical — one queue, not a programme. No test caught it; a
+> Postgres query against the seeded result did. The fix added `longestChainFraction` to the
+> shape, verified failing at 0.992 against its 0.4 bound before being relied on.
 
 ---
 
