@@ -21,9 +21,11 @@ import {
  * - **A three-level WBS** — phases → sub-phases → work — with the leaves spread evenly, so no band
  *   holds a large share of the plan and no summary is childless.
  * - **Logic density around 1.6 edges per activity**, built the way a programme is built: chained
- *   within a band, handed over between bands, then topped up with cross-band links. Wiring random
- *   pairs to the same edge count produces a shallow graph whose longest path is a fraction as long,
- *   which is precisely the thing a scale measurement is supposed to stress.
+ *   within a band, handed on to the same band of the next phase — so a phase's bands run as
+ *   concurrent streams — and topped up with skip links inside a band. Wiring random pairs to the
+ *   same edge count produces a shallow graph whose longest path is a fraction as long; wiring them
+ *   all in series produces one queue. Both are asserted against, the second only after a live run
+ *   caught it (see {@link ScaleShape.longestChainFraction}).
  * - **A realistic mix** — some milestones, a few LOE hammocks *with span anchors* (an LOE with no
  *   logic has no dates at all, so generating one would measure nothing), a scattering of
  *   constraints, a progressed front at the data date, and resource assignments on a fraction.
@@ -51,6 +53,17 @@ export interface ScaleShape {
   constrainedFraction: number;
   progressedFraction: number;
   assignedFraction: number;
+  /**
+   * The most activities any single dependency chain may contain, as a fraction of the plan.
+   *
+   * This is the guard on the failure the docblock above names, and it was **added after the first
+   * live run failed it**: linking each band's last activity to the next band's first produced one
+   * spine through the whole plan, so the engine returned 96% of tasks critical with zero float and a
+   * ten-year duration for 500 activities. Every other declared number was correct, which is exactly
+   * why this one now has a test — a plan can hold its density, its tree and its mix and still be a
+   * single queue, and nothing but the longest path says so.
+   */
+  longestChainFraction: number;
 }
 
 export const SCALE_SHAPE: ScaleShape = {
@@ -61,6 +74,7 @@ export const SCALE_SHAPE: ScaleShape = {
   constrainedFraction: 0.05,
   progressedFraction: 0.12,
   assignedFraction: 0.35,
+  longestChainFraction: 0.4,
 };
 
 /**
@@ -228,30 +242,45 @@ export function scaleSpec(options: ScaleOptions): SeedSpec {
     }
   }
 
-  // 2. Link band to band at their boundaries: the last of one feeds the first of the next. That is
-  //    the hand-over a programme actually has, and it is what makes the WBS rollup non-trivial.
-  for (let band = 1; band < leafKeysByBand.length; band += 1) {
-    const from = leafKeysByBand[band - 1]?.filter((key) => !isLoe(key)).at(-1);
+  // 2. Hand over between phases, along **parallel streams**. Band k of a phase is fed by band k of
+  //    the phase before, so the plan runs as `SUB_PHASES_PER_PHASE` concurrent streams rather than
+  //    one queue — which is what a programme is, and what gives most activities float.
+  //
+  //    The first attempt linked each band's last activity to the next band's first, globally. That
+  //    reads like a hand-over and is in fact a single chain through the entire plan: the live 500
+  //    run came back 96% critical, every task at zero float, ten years long. The unit tests all
+  //    passed, because density, depth and mix were each correct — a plan can be exactly the declared
+  //    shape and still be one queue. `longestChainFraction` is the assertion that was missing.
+  for (let band = SUB_PHASES_PER_PHASE; band < leafKeysByBand.length; band += 1) {
+    const from = leafKeysByBand[band - SUB_PHASES_PER_PHASE]?.filter((key) => !isLoe(key)).at(-1);
     const to = leafKeysByBand[band]?.find((key) => !isLoe(key));
     if (from !== undefined && to !== undefined) dependencies.push(link(from, to));
   }
 
-  // 3. Top up to the declared density with cross-band links, forward-only in leaf order so the
-  //    graph stays acyclic **by construction** rather than by a cycle check that would have to
-  //    reject a generated plan — and an LOE is never an endpoint, so its span stays its own.
-  const chainableLeaves = leafKeysByBand.flat().filter((key) => !isLoe(key));
+  // 3. Top up to the declared density with **skip links inside a band** — activity 3 feeding
+  //    activity 7 of the same sequence, the coordination a real band has. Forward in the band's own
+  //    order, so the graph stays acyclic by construction rather than by a cycle check that would
+  //    have to reject a generated plan, and an LOE is never an endpoint so its span stays its own.
+  //
+  //    Confined to a band deliberately. The first version drew across the whole plan with a span of
+  //    up to thirteen, which regularly crossed into the next band — a *parallel* stream — and
+  //    chained the streams back together: even after the phase-stream fix above, the longest chain
+  //    was still 66% of the plan. A skip inside a band adds density without adding path length,
+  //    because it short-circuits a sequence that already exists.
+  const bandsOfChainable = leafKeysByBand.map((band) => band.filter((key) => !isLoe(key)));
   const target = Math.round(leafCount * SCALE_SHAPE.edgesPerActivity);
   const seen = new Set(dependencies.map((d) => `${d.predecessorKey}->${d.successorKey}`));
-  let guard = target * 8;
+  let guard = target * 12;
   while (dependencies.length < target && guard > 0) {
     guard -= 1;
-    const fromIndex = Math.floor(random() * (chainableLeaves.length - 1));
-    // Forward, and not adjacent — an adjacent pair is already chained above, so an adjacent draw
-    // would be rejected by the dedupe and waste the budget.
-    const toIndex = fromIndex + 2 + Math.floor(random() * 12);
-    if (toIndex >= chainableLeaves.length) continue;
-    const from = chainableLeaves[fromIndex]!;
-    const to = chainableLeaves[toIndex]!;
+    const band = bandsOfChainable[Math.floor(random() * bandsOfChainable.length)];
+    if (band === undefined || band.length < 4) continue;
+    const fromIndex = Math.floor(random() * (band.length - 3));
+    // Not adjacent — an adjacent pair is already chained above, so it would only hit the dedupe.
+    const toIndex = fromIndex + 2 + Math.floor(random() * (band.length - fromIndex - 2));
+    const from = band[fromIndex]!;
+    const to = band[toIndex]!;
+    if (from === to) continue;
     const dedupeKey = `${from}->${to}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);

@@ -194,7 +194,25 @@ generator that silently drifted to 0.9 links per activity would still produce a 
 12 activities and the mix is deliberately **not** asserted there: 4% of twelve is half a milestone,
 so the claim has no meaning at any tolerance.
 
-Two things it found:
+Three things it found, and the first is the milestone's own premise landing on itself:
+
+- **The generated plan was one queue, and every declared number was correct.** The first live 500
+  run seeded cleanly — 540 activities, 800 links, no findings, every WBS summary correctly dated
+  (the ADR-0038 rollup this whole ADR was written after) — and the engine came back with **96% of
+  tasks critical, average total float zero, and a ten-year duration for 500 activities**. The cause
+  was step 2 of the topology: linking each band's last activity to the next band's first reads like
+  a hand-over and is in fact a single spine through the entire plan. The unit tests all passed,
+  because density, WBS depth, activity mix, acyclicity and determinism were each exactly as
+  declared. **A plan can be precisely the shape you specified and still be a queue**, and nothing
+  but the longest path says so. `longestChainFraction` is the assertion that was missing; bands now
+  hand over to the same band of the next phase, so the plan runs as four concurrent streams and the
+  longest chain is 25% of the plan rather than 99%. The regression test was verified to fail against
+  the old topology (0.992 against a 0.4 bound) before being relied on.
+  Two smaller notes on it: the top-up links had to be confined to a band as well — drawn across the
+  whole plan they crossed into neighbouring _parallel_ streams and re-serialised it to 66% even
+  after the phase fix — and the scene layout used by the draw benchmark had **already** been fixed
+  to run phases concurrently, so for one commit the picture and the logic disagreed about the same
+  plan. The drawing was right and the logic was wrong.
 
 - **The seeder's ceiling is the throttle, and it is reported rather than tuned around.** A
   2,000-activity plan is ≈ 6,500 write requests and a 5,000 one ≈ 16,200, against a global

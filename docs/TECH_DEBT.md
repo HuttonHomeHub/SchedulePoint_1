@@ -389,7 +389,12 @@ would not exercise the code being budgeted.
    **Partly answered — ADR-0066 M4.3.** The seed catalogue's scale generator now produces a plan of
    a declared, asserted shape (three-level WBS, 1.6 links per activity, milestones, LOE hammocks, a
    progressed front), and `measure-link-routing.mjs` takes it as a second scene. Both scenes were
-   run back to back on **the same container** so only the picture differs:
+   run back to back on **the same container** so only the picture differs.
+   The figures were taken before a topology defect was found in the generator — its bands ran in
+   series, so the plan was one long chain (ADR-0066 M4). That defect was in the plan's **logic**,
+   not in the picture: `scale-scene.ts` lays the bars out itself and never reads the engine, and it
+   had already been fixed to run phases concurrently. The numbers therefore still describe the shape
+   the generator now produces.
 
    | scene                    | zoom                 | routing off (p50 / p95) | routing on (p50 / p95) |
    | ------------------------ | -------------------- | ----------------------- | ---------------------- |

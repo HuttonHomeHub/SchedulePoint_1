@@ -62,6 +62,25 @@ describe('scaleSpec', () => {
     expect(drifted).toEqual([]);
   });
 
+  it.each(MIX_SIZES)('is not one long queue at %i — the longest-chain bound', (activities) => {
+    const spec = scaleSpec({ activities });
+    const leaves = spec.activities.filter((a) => a.type !== 'WBS_SUMMARY').length;
+    const chain = longestChain(spec);
+    // The assertion the first version of this file did not have, and the live 500-activity run is
+    // what exposed the gap: the plan held its density, its tree and its whole activity mix, and the
+    // engine still came back 96% critical at zero float over ten years, because linking each band's
+    // last activity to the next band's first is one spine through everything. Every declared number
+    // was right. Only the longest path says a plan is a queue.
+    expect({ chain, of: leaves }).toEqual({
+      chain: expect.any(Number) as number,
+      of: leaves,
+    });
+    expect(chain / leaves).toBeLessThanOrEqual(SCALE_SHAPE.longestChainFraction);
+    // And not trivially short either — a plan with no sequences would have no critical path to find
+    // and would measure the engine on nothing.
+    expect(chain).toBeGreaterThan(leaves / 20);
+  });
+
   it('builds a three-level WBS with no childless summary and no orphan leaf', () => {
     const spec = scaleSpec({ activities: 500 });
     const byKey = new Map(spec.activities.map((activity) => [activity.key, activity]));
@@ -210,6 +229,40 @@ function depthOf(spec: SeedSpec): number {
     deepest = Math.max(deepest, depth);
   }
   return deepest;
+}
+
+/**
+ * The most activities on any single dependency chain — the plan's longest path, ignoring durations.
+ * Computed here rather than taken from the engine: the engine is not a dependency of this package,
+ * and the claim being tested is about the *shape of the graph*, not about scheduling.
+ */
+export function longestChain(spec: SeedSpec): number {
+  const successors = new Map<string, string[]>();
+  const indegree = new Map<string, number>();
+  for (const activity of spec.activities) indegree.set(activity.key, 0);
+  for (const dependency of spec.dependencies) {
+    indegree.set(dependency.successorKey, (indegree.get(dependency.successorKey) ?? 0) + 1);
+    const bucket = successors.get(dependency.predecessorKey);
+    if (bucket === undefined) successors.set(dependency.predecessorKey, [dependency.successorKey]);
+    else bucket.push(dependency.successorKey);
+  }
+
+  const depth = new Map<string, number>();
+  const queue = [...indegree.entries()].filter(([, n]) => n === 0).map(([key]) => key);
+  for (const key of queue) depth.set(key, 1);
+  let longest = 0;
+  while (queue.length > 0) {
+    const key = queue.shift()!;
+    const here = depth.get(key) ?? 1;
+    longest = Math.max(longest, here);
+    for (const successor of successors.get(key) ?? []) {
+      depth.set(successor, Math.max(depth.get(successor) ?? 1, here + 1));
+      const remaining = (indegree.get(successor) ?? 0) - 1;
+      indegree.set(successor, remaining);
+      if (remaining === 0) queue.push(successor);
+    }
+  }
+  return longest;
 }
 
 /** Kahn's algorithm. A shorter order than the node count means a cycle. */
