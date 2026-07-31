@@ -1,6 +1,7 @@
 # ADR-0064: Canvas authoring flow — the tool-mode contract and recalculation quiescence
 
-- **Status:** Accepted (M1 landed; `VITE_CANVAS_AUTHORING_FLOW` default-on 2026-07-31)
+- **Status:** Accepted (M1–M3 landed + the enablement review folded; `VITE_CANVAS_AUTHORING_FLOW`
+  and `VITE_CANVAS_LINK_ROUTING` default-on 2026-07-31)
 - **Date:** 2026-07-31
 - **Spec:** [`docs/specs/canvas-authoring-and-routing/`](../specs/canvas-authoring-and-routing/)
 
@@ -69,6 +70,22 @@ because "linked A and B" would have been equally true of the reversed row the ep
 Its sentence comes from an exported pure function that the live-region announcement also calls, so
 the spoken and printed wording cannot drift.
 
+**The confirmation is scoped to the arming that produced it.** It carries the generation of the Link
+arming it was created in, and renders only while that is still current. The first attempt used the
+armed _tool_ as the guard, which reads as equivalent and is not: the field was always `'link'` and
+only ever read inside a `mode === 'link'` branch, so it could never be false. The effect was that
+after one link, **every later arming replayed that confirmation** — beside an Undo bound to the top
+of the command stack, which by then was a different, more recent edit. A sentence naming one link
+next to a button that discards another is worse than saying nothing. Found by the enablement UX
+review (§7).
+
+**Every pick step is announced, whichever device made it.** The pointer path was originally wired to
+a raw state setter while the keyboard path announced inline — so the two disagreed about whether
+anything had been said. Both **drop** routes share that callback, and one of them (the §4 cap) fires
+with no user gesture at all: a screen-reader user mid-pick learned nothing, and their next Enter was
+read as a fresh predecessor rather than the successor they meant. The LOE tool's equivalent handler,
+twenty lines away, had been right since Stage D. WCAG 4.1.3.
+
 ### 4. Recalculation quiescence during an open pick
 
 A coalesced recalculation landing between the two clicks moves the bars, and the second click lands
@@ -102,6 +119,27 @@ twice).
 The **defect fixes** ship unflagged; the **additive surface** ships behind
 `VITE_CANVAS_AUTHORING_FLOW`. Gating the fixes would mean writing parity suites that pin a bug, and
 keeping two copies of the mode logic in one file — which ADR-0061 rejected for the dialog refactor.
+
+### 7. The enablement review is part of the milestone, not a formality
+
+Five specialists ran over the combined diff before the flags were trusted: ux, accessibility,
+component, performance (passed) and test-engineer. Four blocked, on **five** defects that had passed
+a human read — the stale confirmation and the silent pointer picks above, plus `restoreFocusRef`
+pointing both new split buttons at their `tabIndex={-1}` caret (so a keyboard user's next Tab left
+the toolbar entirely — WCAG 2.4.3), a Cancel carrying `aria-disabled` with neither a click guard nor
+shading (announcing "unavailable" while staying lit, on a control whose `onCancel` cannot abort the
+in-flight create), and three untested seams.
+
+**Four of the five are one correct pattern applied to a control and not its neighbour.** The submit
+got a click guard, Cancel did not. `IsolateControl` got a separate focus ref, the two new split
+buttons did not. The LOE tool announced its pointer picks, the Link tool did not. None was a design
+error; each was an inconsistency inside a diff whose own docblocks described the right thing — which
+is precisely the class a reviewer reading for consistency finds and an author reading for intent
+does not. This is the third epic running where that has held, and it is the argument for running the
+gate rather than reserving it for epics that feel risky.
+
+Every fix carries a regression test **verified to fail against the old code before being kept** —
+the discipline that separates a regression test from a test that happens to pass.
 
 ## Consequences
 

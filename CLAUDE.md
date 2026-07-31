@@ -936,6 +936,17 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   fails silently; and keyboard pick parity seeded **into** the canvas gesture so keyboard and
   pointer are one pick. **The CPM engine is not imported** — the ADR-0034 parity gate is untouched
   by construction; quiescence changes when the client asks, never what the server computes.
+  **The enablement review (§7) is part of the milestone.** Five specialists over the combined diff;
+  performance passed, four blocked on **five** defects that had passed a human read — a confirmation
+  that replayed on every later arming beside an Undo bound to a _different_ edit (the guard field
+  was always `'link'` and only read inside a `mode === 'link'` branch, so it could never be false);
+  both split buttons restoring focus to their `tabIndex={-1}` caret (WCAG 2.4.3); the Link tool's
+  pointer picks and both drop routes silent while the keyboard path announced (WCAG 4.1.3 — and one
+  of those drops fires with no user gesture); a Cancel that announced "unavailable" while staying
+  lit during a save it cannot abort; and three untested seams. **Four of the five are one correct
+  pattern applied to a control and not its neighbour** — not design errors, inconsistencies inside a
+  diff whose own docblocks described the right thing. Every fix carries a regression test verified
+  to fail against the old code first. Seven non-blocking findings are `docs/TECH_DEBT.md` #76.
 
 - **ADR-0065** _(Accepted; ADR-0064 M2, `VITE_CANVAS_LINK_ROUTING` **default-on** 2026-07-31)_ —
   Canvas link routing: orthogonal corridors that step around bars. A line drawn straight through an
