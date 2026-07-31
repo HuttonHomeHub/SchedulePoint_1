@@ -8,3 +8,4 @@
  * See `docs/specs/seed-catalogue/feature-spec.md`.
  */
 export * from './spec.js';
+export * from './pairwise/index.js';
