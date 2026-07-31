@@ -1,5 +1,56 @@
 # @repo/interchange
 
+## 0.6.0
+
+### Minor Changes
+
+- [#202](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/202) [`d118978`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d118978979e50385c28234198cc06c2606d952ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Import and export P6 Level-of-Effort activities instead of flattening them to tasks
+
+  `CANONICAL_ACTIVITY_TYPES` omitted `LEVEL_OF_EFFORT`, so an XER's `TT_LOE` was coerced to `TASK`
+  (reported as an approximation) and export had no mapping back. The comment called it "out of scope" —
+  true when written, and untrue from the day the LOE engine shipped (ADR-0035 §21).
+
+  The cost was not a missing feature but a wrong one. An LOE derives its span from its logic (earliest
+  SS-predecessor start → latest FF-successor finish) and never drives anything; a `TASK` schedules from
+  a duration and does. So an imported supervision or site-management LOE became an ordinary task and
+  changed the schedule around it.
+
+  XER now round-trips it exactly, duration included — P6 writes one and the engine consumes it as a lag
+  bound, so dropping it would be lossy for no gain. MSPDI has no equivalent, so an LOE still writes as
+  an ordinary task there, but is now **reported per activity** rather than silently. `HAMMOCK` stays
+  out of scope on the honest test: the enum has the label, but no engine code consumes it.
+
+- [#202](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/202) [`d118978`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d118978979e50385c28234198cc06c2606d952ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Import: ask about a resource-name collision instead of blocking on it
+
+  Importing a file that names a resource the organisation already has — under that name but not
+  under a code that identifies it as the same row — used to fail with a bare
+  `409 A resource with these details already exists.`, with no way forward short of renaming or
+  deleting the library row by hand.
+
+  The dry-run now reports each collision (`report.resourceCollisions`), naming the incoming
+  resource and the library row it clashes with, and the commit takes an answer per resource in a
+  new `resourceResolutions` field: `REUSE_EXISTING` binds the imported assignments to the row
+  already there, `CREATE_COPY` creates a separate resource under a disambiguated name so the
+  file's own rate and calendar survive. Both answers are recorded as `repair` findings on the
+  post-commit report — "reuse" silently drops the file's rate and calendar for that resource, and
+  that is worth saying out loud.
+
+  A collision left unanswered fails the commit with a named list
+  (`422 UNRESOLVED_RESOURCE_COLLISIONS`) rather than being guessed: a resource library is
+  org-global, and levelling, over-allocation and Earned Value all read from one pool, so reusing
+  the wrong row and duplicating one crew are both wrong in ways a report line cannot undo. A code
+  match is still an identity match and asks nothing.
+
+  The import dialog gains a third step listing each clash with the library row it clashes with,
+  and a choice per resource. Confirm stays shaded with the reason attached to it (`aria-disabled`,
+  not the native attribute — a natively-disabled button leaves the tab order and takes the reason
+  with it) until every one is answered. Answers are discarded whenever the report is re-fetched:
+  an answer belongs to the report that raised it.
+
+  `SegmentedControl` now accepts `value={null}` for a question with no answer yet, and gives the
+  first option the group's tab stop — otherwise every option is `tabIndex={-1}` and an unanswered
+  group is unreachable by keyboard (WCAG 2.1.1).
+
 ## 0.5.0
 
 ### Minor Changes

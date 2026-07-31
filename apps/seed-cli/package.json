@@ -1,6 +1,6 @@
 {
   "name": "@repo/seed-cli",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Seeds the SchedulePoint test catalogue into a RUNNING instance over the public REST API (ADR-0066). Never touches the database directly.",
   "license": "MIT",

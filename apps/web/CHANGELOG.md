@@ -1,5 +1,55 @@
 # @repo/web
 
+## 0.63.0
+
+### Minor Changes
+
+- [#202](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/202) [`d118978`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d118978979e50385c28234198cc06c2606d952ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Import: ask about a resource-name collision instead of blocking on it
+
+  Importing a file that names a resource the organisation already has — under that name but not
+  under a code that identifies it as the same row — used to fail with a bare
+  `409 A resource with these details already exists.`, with no way forward short of renaming or
+  deleting the library row by hand.
+
+  The dry-run now reports each collision (`report.resourceCollisions`), naming the incoming
+  resource and the library row it clashes with, and the commit takes an answer per resource in a
+  new `resourceResolutions` field: `REUSE_EXISTING` binds the imported assignments to the row
+  already there, `CREATE_COPY` creates a separate resource under a disambiguated name so the
+  file's own rate and calendar survive. Both answers are recorded as `repair` findings on the
+  post-commit report — "reuse" silently drops the file's rate and calendar for that resource, and
+  that is worth saying out loud.
+
+  A collision left unanswered fails the commit with a named list
+  (`422 UNRESOLVED_RESOURCE_COLLISIONS`) rather than being guessed: a resource library is
+  org-global, and levelling, over-allocation and Earned Value all read from one pool, so reusing
+  the wrong row and duplicating one crew are both wrong in ways a report line cannot undo. A code
+  match is still an identity match and asks nothing.
+
+  The import dialog gains a third step listing each clash with the library row it clashes with,
+  and a choice per resource. Confirm stays shaded with the reason attached to it (`aria-disabled`,
+  not the native attribute — a natively-disabled button leaves the tab order and takes the reason
+  with it) until every one is answered. Answers are discarded whenever the report is re-fetched:
+  an answer belongs to the report that raised it.
+
+  `SegmentedControl` now accepts `value={null}` for a question with no answer yet, and gives the
+  first option the group's tab stop — otherwise every option is `tabIndex={-1}` and an unanswered
+  group is unreachable by keyboard (WCAG 2.1.1).
+
+### Patch Changes
+
+- [#204](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/204) [`745e7a3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/745e7a3264eb65cf94dce6547573cacca9e1187a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Reconciliation pass for the seed-catalogue epic: CLAUDE.md's ADR list gains ADR-0066 (it was absent entirely), the pre-push gate and CI documentation gain `pnpm check:playbook`, and `docs/TEST_PLAYBOOK.md` is linked from the testing standards.
+
+- [#204](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/204) [`745e7a3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/745e7a3264eb65cf94dce6547573cacca9e1187a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the seed catalogue's negative tier (`seed --tier negative`): the 18 hostile cases of the conformance fixture, attempted one write each against the real API, reporting observed behaviour against declared expectation. Run against a live instance, all 18 behave as the fixture requires — including the three the pure engine marks `todo` because they are API-boundary concerns it cannot own.
+
+- [#204](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/204) [`745e7a3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/745e7a3264eb65cf94dce6547573cacca9e1187a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add a second scene to the hand-run draw benchmark (`scripts/measure-link-routing.mjs [frames] [scale|grid]`), built from the ADR-0066 scale generator instead of the synthetic lattice. The realistic plan costs 6.7 ms p95 at the working zoom against the lattice's 14.2 ms, and 18.7 vs 11.6 ms with nothing culled — the scene dominates the number, which is recorded against TECH_DEBT [#75](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/75). No product behaviour changes.
+
+- [#204](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/204) [`745e7a3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/745e7a3264eb65cf94dce6547573cacca9e1187a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix the scale generator's topology: its bands ran in series, so a generated plan was one dependency chain through almost every activity — the engine returned 96% of tasks critical at zero float and a ten-year duration for 500 activities. Bands now hand over to the same band of the next phase, running as four concurrent streams. Adds `longestChainFraction` to the declared shape, with a regression test verified to fail against the old topology.
+
+- [#204](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/204) [`745e7a3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/745e7a3264eb65cf94dce6547573cacca9e1187a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add `docs/TEST_PLAYBOOK.md` — per capability, which seeded plan proves it, what to look at, what correct looks like, and what wrong looks like — gated by a new `pnpm check:playbook` that compares every row against the plans the builders actually produce, in both directions.
+
+- Updated dependencies [[`d118978`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d118978979e50385c28234198cc06c2606d952ff), [`d118978`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d118978979e50385c28234198cc06c2606d952ff)]:
+  - @repo/interchange@0.6.0
+
 ## 0.62.1
 
 ### Patch Changes
