@@ -193,6 +193,15 @@ export interface TsldCanvasProps {
    * syncs: the first pick (`start`), a rejected same-activity re-pick (`reprompt`), or a cancelling
    * empty click (`cancel`). The committed span arrives via {@link onIntent} as a `loeSpan` intent. */
   onLoeSpanStep?: (step: LoeSpanStep) => void;
+  /**
+   * The two-click **Link** tool's open pick (ADR-0064 T4): the picked predecessor's id, or null
+   * when no pick is open. Mirrors {@link onLoeSpanStep}'s shape — the shell needs it to state
+   * *which* endpoint is picked, and the gesture machine is the only thing that knows.
+   *
+   * Emitted on every transition of the picking state, including the Escape that drops a pick, so
+   * the shell never has to infer "still picking?" from a stale render.
+   */
+  onLinkPickStep?: (predecessorId: string | null) => void;
   /** The LOE tool's picked **start driver** id, controlled by `TsldPanel` (Stage D) — the single source
    * of truth for the pick, mirroring the inbound {@link selectedId} pattern. A keyboard-side pick (the
    * listbox Enter) sets this; the canvas seeds its internal gesture from it so the NEXT pointer click
@@ -545,6 +554,7 @@ export function TsldCanvas({
   canLink = false,
   onIntent,
   onLoeSpanStep,
+  onLinkPickStep,
   loePickStartId = null,
   onExitAddMode,
   pending = null,
@@ -648,9 +658,13 @@ export function TsldCanvas({
   // Read by the window key listener (set up once), so it sees the current mode/handler.
   const modeRef = useRef(mode);
   const exitAddModeRef = useRef(onExitAddMode);
+  // Read by the window key listener (set up once) so an Escape that drops a pick can tell the shell,
+  // which is otherwise left stating a pick the machine has already discarded.
+  const linkPickStepRef = useRef(onLinkPickStep);
   useEffect(() => {
     modeRef.current = mode;
     exitAddModeRef.current = onExitAddMode;
+    linkPickStepRef.current = onLinkPickStep;
   });
 
   // Edge handles are the flag-off edge-drag affordance. Canvas-first authoring (ADR-0032 M5) replaces
@@ -1332,6 +1346,7 @@ export function TsldCanvas({
         gestureRef.current = IDLE;
         syncGestureSource();
         interactionDirtyRef.current = true;
+        linkPickStepRef.current?.(null);
       } else if (
         editing &&
         (modeRef.current === 'add-activity' ||
@@ -1690,6 +1705,9 @@ export function TsldCanvas({
             interactionDirtyRef.current = true;
             if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
             if (loe) onLoeSpanStep?.(loe);
+            if (mode === 'link') {
+              onLinkPickStep?.(state.kind === 'linkPicking' ? state.predecessorId : null);
+            }
             return;
           }
           onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));

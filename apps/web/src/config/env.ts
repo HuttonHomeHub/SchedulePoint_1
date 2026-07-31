@@ -983,3 +983,29 @@ export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
  */
 export const WBS_IMPROVEMENTS_ENABLED =
   ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_WBS_IMPROVEMENTS);
+
+/**
+ * **Canvas authoring flow** (`VITE_CANVAS_AUTHORING_FLOW`, default **off**) — the *additive* half of
+ * ADR-0064 M1: a mode statement band that says which tool is armed and what click it expects, a link
+ * confirmation carrying the direction that was created plus an Undo, keyboard parity for the Link
+ * tool's two-click pick, quiescence of the coalesced recalculation while a pick is open, and an
+ * empty-plan state that names the first gesture.
+ *
+ * The epic's **defect fixes** deliberately ship *outside* this flag (the Link trigger arming its
+ * tool, the uniform disarm contract, the create popover's label and submit). Gating them would mean
+ * writing parity suites that pin a bug, and keeping two copies of the mode logic in one file — which
+ * ADR-0061 explicitly rejected for the dialog refactor. The split is CQ-3's recorded decision, not a
+ * convenience.
+ *
+ * It is **`AND`-ed with {@link CANVAS_AUTHORING_ENABLED}**, for the ADR-0062 reason: every surface
+ * here states or steers a canvas-first authoring tool, and with canvas-first authoring off there is
+ * no armed tool to state. Deriving the constant makes that pair unrepresentable rather than merely
+ * untested.
+ *
+ * Rollback: set `VITE_CANVAS_AUTHORING_FLOW=false` and rebuild the web image. Nothing persisted
+ * depends on it — the recalculation hold is in-memory and released on every exit path, so a flag
+ * flip mid-session cannot leave one open. The flag-off parity suites are kept and pinned rather
+ * than weakened; they are the rollback contract.
+ */
+export const CANVAS_AUTHORING_FLOW_ENABLED =
+  CANVAS_AUTHORING_ENABLED && flagDefaultOff(import.meta.env.VITE_CANVAS_AUTHORING_FLOW);

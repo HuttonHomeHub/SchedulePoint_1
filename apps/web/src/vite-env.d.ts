@@ -93,4 +93,6 @@ interface ImportMetaEnv {
   readonly VITE_ACTIVITY_EDITOR_CONVERGENCE?: string;
   /** WBS improvements — managing a summary's membership from the summary, dissolving a grouping without deleting the work in it, the derived Unassigned bucket, and the pinned WBS band on the canvas (docs/specs/wbs-improvements/). "true"/"1" enables it; off by default until the enablement gate. */
   readonly VITE_WBS_IMPROVEMENTS?: string;
+  /** ADR-0064 M1 — the additive canvas authoring-flow surface (band, confirmation, quiescence). */
+  readonly VITE_CANVAS_AUTHORING_FLOW?: string;
 }

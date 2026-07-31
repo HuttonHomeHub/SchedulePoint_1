@@ -58,6 +58,7 @@ import {
 } from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
+import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
 import { sceneTopOffset, TsldCanvas, type PendingGhost } from './TsldCanvas';
@@ -69,7 +70,7 @@ import { TsldViewControls } from './TsldViewControls';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -206,6 +207,13 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /**
+   * Undo the last plan edit — the **existing** ADR-0048 inverse, passed in by the host that owns the
+   * command stack. The mode band's link confirmation offers it (ADR-0064 T5); absent, the
+   * confirmation still states what was created but shows no Undo, because a button that cannot undo
+   * anything is worse than none.
+   */
+  onUndoLastEdit?: (() => void) | undefined;
   /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
    * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
    * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
@@ -348,6 +356,7 @@ export function TsldPanel({
   onResize,
   onLag,
   onLink,
+  onUndoLastEdit,
   onLoeSpan,
   onAutoArrange,
   onOpenLogic,
@@ -447,6 +456,24 @@ export function TsldPanel({
   // abandon — so the disarm effect below announces "cancelled/closed" only on a genuine cancel, never
   // after the success announcement (spec B2 sequencing). Set by `runLoeSpan` just before it disarms.
   const loeCommitDisarmRef = useRef(false);
+  /**
+   * The Link tool's open pick and the last link created — the two things the ADR-0064 mode band
+   * states that no other state already holds. Both are inert with the flag off: nothing writes
+   * them, so the band renders `null` and the surface is byte-for-byte the prior one.
+   */
+  const [linkPickedId, setLinkPickedId] = useState<string | null>(null);
+  const [lastLink, setLastLink] = useState<{
+    predecessorName: string;
+    successorName: string;
+    linkType: string;
+    /**
+     * The tool that was armed when the link landed. The confirmation renders only while that is
+     * still the armed tool, which is what makes it disappear on any arm/disarm **without an
+     * effect** — the alternative (clear-on-mode-change in a `useEffect`) is a setState in an effect
+     * for state React can simply derive.
+     */
+    atMode: EditMode;
+  } | null>(null);
   // Mirror the live picked-start id so the mode effect can read it at disarm time WITHOUT listing
   // `loeStartId` as a dep (which would re-announce the arm prompt on every pick).
   const loeStartIdRef = useRef(loeStartId);
@@ -503,15 +530,37 @@ export function TsldPanel({
     if (previous === mode) return;
     announcedModeRef.current = mode;
     if (mode === 'add-activity') {
-      announce(
-        `Add ${ACTIVITY_TYPE_LABELS[createType].toLowerCase()}: click the diagram to draw. Escape to stop.`,
-      );
+      announce(modeStatementText({ kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }));
     } else if (mode === 'link') {
-      announce(`Link ${linkType}: click the predecessor, then the successor. Escape to stop.`);
+      announce(modeStatementText({ kind: 'linking', linkType }));
     } else if (previous === 'add-activity' || previous === 'link') {
       announce('Tool closed. Select mode.');
     }
   }, [mode, announce, createType, linkType]);
+
+  /**
+   * What the mode band says, or null for "say nothing and take no height". Derived rather than
+   * stored: every input already exists, and a second copy of "which tool is armed" is exactly the
+   * kind of state that drifts from the one the canvas actually obeys.
+   */
+  const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
+    ? null
+    : mode === 'add-activity'
+      ? { kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }
+      : mode === 'loe'
+        ? { kind: 'loe', startPicked: loeStartId !== null }
+        : mode === 'link'
+          ? linkPickedId
+            ? {
+                kind: 'linkPicking',
+                linkType,
+                predecessorName:
+                  activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
+              }
+            : lastLink?.atMode === 'link'
+              ? { kind: 'linked', ...lastLink }
+              : { kind: 'linking', linkType }
+          : null;
 
   /**
    * The pinned WBS band (ADR-0063). Derived HERE rather than inside the canvas because
@@ -1369,7 +1418,16 @@ export function TsldPanel({
           if (outcome.conflict) showConflict(outcome.conflict);
           // Announce only when the link was actually created (never on a cycle/duplicate reject).
           if (outcome.applied) {
-            announce(`Linked “${pred?.name ?? 'activity'}” to “${succ?.name ?? 'activity'}”.`);
+            // One source for the sentence: the band shows it and the live region speaks it, both
+            // from `modeStatementText`. Two strings agree the day they are written and diverge the
+            // day one is edited.
+            const created = {
+              predecessorName: pred?.name ?? 'activity',
+              successorName: succ?.name ?? 'activity',
+              linkType: intent.type,
+            };
+            setLastLink({ ...created, atMode: 'link' });
+            announce(modeStatementText({ kind: 'linked', ...created }));
           }
         })
         .catch((err: unknown) => {
@@ -1496,6 +1554,11 @@ export function TsldPanel({
 
       {!chromeless && showDiagram ? <TsldLegend /> : null}
 
+      {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
+          overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
+          it costs no canvas height in the state the canvas is in most of the time. */}
+      <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
+
       <div
         className={
           fill
@@ -1506,6 +1569,7 @@ export function TsldPanel({
         {showDiagram && dataDate ? (
           <>
             <TsldCanvas
+              onLinkPickStep={setLinkPickedId}
               activities={renderActivities}
               edges={renderEdges}
               dataDate={dataDate}

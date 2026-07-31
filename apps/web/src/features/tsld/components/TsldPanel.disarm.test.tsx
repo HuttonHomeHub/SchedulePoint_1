@@ -146,10 +146,14 @@ describe('TsldPanel — the tool arm/disarm contract', () => {
    * The canvas is `aria-hidden` (ADR-0026 D7), so arming a tool changes only the toolbar's visible
    * label. Which tool is armed decides what the next canvas click means, which makes it exactly the
    * state change that must not be silent (WCAG 4.1.3).
+   *
+   * The wording comes from `modeStatementText`, the same function the ADR-0064 mode band renders —
+   * so the spoken sentence and the printed one cannot drift. That sharing is why these expectations
+   * changed when the band landed, and why they will not change independently again.
    */
   it.each([
-    ['add-activity', /^Add task: click the diagram to draw/],
-    ['link', /^Link FS: click the predecessor/],
+    ['add-activity', /^Adding task — click the diagram to draw/],
+    ['link', /^Linking FS — click the predecessor/],
   ] as const)('announces the %s tool arming and closing', (arm, armed) => {
     announceSpy.mockClear();
     render(<Harness arm={arm} />);
