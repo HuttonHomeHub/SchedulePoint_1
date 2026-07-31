@@ -84,6 +84,7 @@ import type { SelectionAnchor } from '../toolbar/selection-actions';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
+  CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
@@ -732,6 +733,10 @@ export function TsldCanvas({
     // The M4 bar visual refresh rides the SAME env flag (one flag, one flag-off parity gate);
     // its own scene field keeps the two render changes independently testable in the painter.
     visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+    // Obstacle-aware link corridors (ADR-0064 M2). A build-time constant like its siblings; flag-off
+    // the painter builds no interval index and the geometry takes its no-obstacle default, which is
+    // today's line point-for-point.
+    linkRouting: CANVAS_LINK_ROUTING_ENABLED,
     // M5 hover-driven incident-link highlight — null until the idle-hover branch publishes.
     hoverId: null,
     // The visible lag-anchor handles ride the SAME gate as their grab zones (`lagArmed`), so the
@@ -813,6 +818,7 @@ export function TsldCanvas({
       flaggedIds,
       timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
       visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+      linkRouting: CANVAS_LINK_ROUTING_ENABLED,
       // Preserve the live hover highlight across a data/selection rebuild (M5) — the pointer
       // hasn't moved, so the hovered bar's ties should not flicker off. Flag-off this is
       // always null (the branch that writes it never runs), keeping the scene byte-identical.

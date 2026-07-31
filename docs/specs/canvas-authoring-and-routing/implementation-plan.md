@@ -521,6 +521,14 @@ near-identical verticals.
 problem is _parallel-run density_ rather than something else. If M2 measures badly, M3
 becomes the remedy for the cost, not for the look.
 
+> **Resolved 2026-07-31 — built, and the gate's second clause did not survive contact.**
+> T21 measured badly (see ADR-0065 and `docs/TECH_DEBT.md` #75), which by the sentence above
+> would make M3 the remedy for the cost. **It is not**: the painter batches every edge into
+> one path, so bundled verticals cost exactly what separate ones did, and re-measuring after
+> T22 landed found no change in either direction. M3 shipped on the legibility outcome alone.
+> The gate's other input — a ux review of what the remaining problem actually is — was **not
+> run**; that is a gap in the evidence, recorded rather than papered over.
+
 ##### Task 22 — Trunk/branch merging behind the same flag
 
 - **Description:** Group edges sharing a corridor within a tolerance; emit one trunk and

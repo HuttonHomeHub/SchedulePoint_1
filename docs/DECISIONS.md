@@ -1475,3 +1475,39 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   was there. And **a helper that fixes one hazard can introduce another** — the selection-clearing
   helper added to stop the floating actions bar covering a pick point clicked while Add was still
   armed, opening a create popover over the very points it was protecting.
+
+- **Link corridors now step around bars, and the draw budget turned out to be fiction
+  (ADR-0065 / ADR-0064 M2, 2026-07-31).** `VITE_CANVAS_LINK_ROUTING` default-on. The geometry is
+  one optional parameter on the existing `routeOrthogonal` rather than a second router, so flag-off
+  is byte-identical by construction; the interval index comes from the same `activityRect` the bars
+  draw from; the search is bounded and fixed-order because a route that varies between frames reads
+  as the diagram twitching.
+
+  The part worth remembering is not the routing. Building the gate meant writing
+  `apps/web/scripts/measure-link-routing.mjs`, which paints the real painter against a **real 2D
+  context in Chromium** — and the first thing it reported was that the **already-shipped** canvas
+  runs at 16.7–23.1 ms p95 at 2,000 activities against ADR-0026 §16's stated ≤ 4 ms. Nobody had
+  ever run it. TECH_DEBT #59 has said "the budget has never been measured on the hardware envelope
+  it names" for months, and the number was quoted in ADR after ADR as though it were being met.
+
+  Two smaller lessons from the same afternoon. **A budget fixture that does not exercise the code
+  it budgets is worse than none** — the first run of `paint.routing-budget.test.ts` reported _zero_
+  extra segments, because the fixture's edge offset was an exact multiple of the lane count and
+  every "long-range" edge was same-lane. And **a dead branch survives a green suite**: the first
+  draft of the five-point fallback ran `candidates.find(free)` after a loop that had already
+  returned on any hit, so it could only ever emit the plain elbow. It was caught by reading the code
+  back, not by a test — a test would have passed.
+
+- **A hub's comb of verticals became one trunk (ADR-0065 §5 / ADR-0064 M3, 2026-07-31).** Same flag.
+  The rule that matters is not the snapping, it is the refusal: a corridor only joins the trunk if
+  the trunk x is free across the lanes that corridor crosses, so bundling can never put a line back
+  through the bar the milestone before it moved that line off. It also moves the **line only** — the
+  lag anchors, their handles and their hit zones are computed before the bundler runs and are not
+  passed to it, so the plan's stated M3 risk is answered by what the function can reach rather than
+  by care.
+
+  Two things recorded rather than smoothed over. The plan's gate said "if M2 measures badly, M3
+  becomes the remedy for the cost" — **it is not**: the painter batches every edge into one path, so
+  overlapping verticals cost what separate ones did, and the re-measurement found no change either
+  way. M3 stands on legibility alone. And the gate's other input, a ux review of what the remaining
+  problem actually is, was **not run** in this session.

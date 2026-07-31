@@ -346,3 +346,52 @@ the measured numbers. Raised by the ADR-0063 M6 backend-performance gate as an o
 confirmed defect — the design (plan-scoped key, skipped on the uncontended path) is otherwise sound.
 Related: the parent-chain walk inside that lock has **no depth cap**, unlike the resource tree's
 documented ≤ 10 (ADR-0053 §3).
+
+### 75. Is ≤ 4 ms p95 the right draw budget? (measured for the first time, and missed)
+
+ADR-0026 §16 states ≤ 4 ms p95 at 2,000 activities, and #59 records that it had never been measured
+on real hardware. It now has been, for the first time — by `apps/web/scripts/measure-link-routing.mjs`,
+which paints the real `paintScene` against a real 2D context in Chromium over 120 panning frames at
+2,000 activities and ~1,500 long-range dependencies:
+
+| zoom                                 | routing off (p50 / p95) | routing on (p50 / p95) |
+| ------------------------------------ | ----------------------- | ---------------------- |
+| whole plan (2px/day, nothing culled) | 13.3 / 16.7 ms          | 17.7 / 22.6 ms         |
+| week (12px/day, cull working)        | 18.1 / 23.1 ms          | 21.6 / 26.9 ms         |
+
+**The `routing off` column is today's shipped painter**, so the overrun is pre-existing and was not
+caused by ADR-0065 — that change adds 3.4–5.9 ms p95 on top of it, and was enabled anyway with the
+number in hand.
+
+**The open question is the target, not the painter.** 4 ms was written in ADR-0026 when the canvas
+drew bars, links and a grid. It now also draws month bands, a WBS band, float and drift tails,
+non-working hatching, flanking dates, arrowheads, lag runs and handles — every one of them an
+accepted decision with its own ADR. A budget set before two thirds of the picture existed, never
+once measured against it, is more likely to be the wrong number than an indictment of nine
+subsequent features. What matters to a planner is that panning and dragging feel smooth, which is a
+question about **frame pacing under `requestAnimationFrame`**, not about one function's wall-clock.
+
+Two caveats on the numbers above, stated rather than buried: the browser is a **headless container
+Chromium with software rasterisation**, close to a worst case for canvas fill and explicitly _not_
+the "mid-tier laptop and iPad-class Safari" envelope #59 names; and the fixture is adversarial by
+construction (fifty fully-occupied lanes, every edge spanning seven of them) because a gentler one
+would not exercise the code being budgeted.
+
+**What would close it**, in order:
+
+1. **Decide what to measure.** Dropped frames and input-to-paint latency during a pan/drag on a
+   representative plan, rather than `paintScene`'s own duration on a synthetic worst case. The
+   current script measures the latter because that is what could be measured without a seeded
+   database; it is a starting point, not the benchmark.
+2. **Decide what "representative" is.** 2,000 activities is ADR-0026's stated ceiling, but nobody
+   has checked it against a real programme. The largest plan the product owner actually runs, and
+   the largest an imported XER produces, are both facts we can get.
+3. **Run it on the envelope ADR-0026 names** — a mid-tier laptop and an iPad — with the same script,
+   which takes a checkout and one command.
+4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
+   answer is "smooth at 2,000, and 16 ms is fine because it is one frame at 60 Hz", the budget was
+   simply wrong and should say so. If it is not smooth, ADR-0026's own reserved escalations —
+   dirty-region repainting, then WebGL — are the route, and they now have a measurement to aim at.
+
+Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
+itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).

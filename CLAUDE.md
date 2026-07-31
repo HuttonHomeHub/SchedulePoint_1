@@ -937,6 +937,41 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   pointer are one pick. **The CPM engine is not imported** — the ADR-0034 parity gate is untouched
   by construction; quiescence changes when the client asks, never what the server computes.
 
+- **ADR-0065** _(Accepted; ADR-0064 M2, `VITE_CANVAS_LINK_ROUTING` **default-on** 2026-07-31)_ —
+  Canvas link routing: orthogonal corridors that step around bars. A line drawn straight through an
+  unrelated bar makes the reader disprove a relationship the picture appears to assert, which is
+  the opposite of what a TSLD is for. Obstacle awareness is **one optional parameter of the existing
+  `routeOrthogonal`** — absent, it returns exactly what it always returned, point for point — so the
+  parity argument is structural: there is one route function, and a second `routeOrthogonalAvoiding`
+  would have drifted invisibly (the ADR-0062 finding). The per-lane interval index is derived from
+  the **same `activityRect` the bar layer draws from** (a milestone is a diamond, a summary a wider
+  bracket; a second opinion would disagree exactly when it mattered), rebuilt per frame over the
+  **culled** set, and the corridor search is **bounded and fixed-order** — determinism matters more
+  than the shape, because a route that varies between frames reads as the diagram twitching. The
+  arrowhead grows in **length only** (8 px, half-width pinned to `FAN_OUT_STEP_PX`): widening the
+  barbs would push each head across its neighbour in a fanned bundle. **Diagonals are rejected** —
+  on a time-scaled diagram x _is_ time, so a diagonal asserts work across the days it crosses, and
+  that channel already belongs to ADR-0056's hatch and ADR-0054's tails; the ten-shape Net Point
+  taxonomy is a vocabulary for describing routes, not ten branches to keep consistent.
+  **The measurement is the notable part.** `apps/web/scripts/measure-link-routing.mjs` paints the
+  real painter against a real 2D context in Chromium — and reports that the **pre-existing** painter
+  runs at 16.7–23.1 ms p95 at 2,000 activities, i.e. **4–6× ADR-0026 §16's ≤ 4 ms**, which had never
+  been measured (TECH_DEBT #59 said so; nobody had run it). Routing adds 3.4–5.9 ms on top. The
+  number was put to the product owner with a recommendation to leave the flag off; the decision was
+  to **enable it and reopen the budget instead**, since a target set before the canvas carried
+  bands, tails, hatching, dates and arrowheads — and never once met — is more likely wrong than nine
+  accepted features are. That is now `docs/TECH_DEBT.md` **#75**, which asks what to measure (frame
+  pacing under rAF, not one function's wall-clock), on what plan, on what hardware, before setting a
+  number to replace §16's. **M3 (§5) bundles near-identical corridors onto one trunk** — a hub's
+  dozen verticals two pixels apart is a comb, not a picture of logic — with the rule that bundling
+  may **never** snap a corridor back through the bar M2 moved it off (a free-check per corridor,
+  because otherwise the newest feature silently reverts the previous one on exactly the dense plans
+  where both matter), and moving the **line only**: lag anchors, handles and hit zones keep today's
+  per-edge geometry, which the bundler structurally cannot reach. Re-measured, bundling costs
+  nothing detectable — and it does not _save_ anything either, so the plan's "M3 is the remedy for
+  the cost" reading is recorded as **not holding**. The CPM engine is not imported; the ADR-0034
+  parity gate is untouched.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

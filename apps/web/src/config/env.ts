@@ -35,9 +35,16 @@ export function flagDefaultOn(value: string | undefined): boolean {
 }
 
 /**
- * Reads a boolean `VITE_` flag that defaults **OFF**: enabled only when the operator
- * explicitly opts in with `"true"`/`"1"`. Used for in-progress features whose quality
- * gates (a11y, e2e, perf) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared.
+ * Reads a boolean `VITE_` flag that defaults **OFF**: enabled only when the operator explicitly
+ * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
+ * {@link flagDefaultOn} in its own enablement task once its gates are green.
+ *
+ * **It currently has no consumer, and that is the healthy state** — it means no feature is
+ * mid-flight. Kept rather than deleted because the next flag needs it on day one, and it is
+ * covered by `env.test.ts` including the case-sensitivity that makes `"TRUE"` read as off.
+ *
+ * (The sentence this replaces had been corrupted by an earlier edit into two spliced halves
+ * naming five long-closed debt items — noticed only when the last consumer went away.)
  */
 export function flagDefaultOff(value: string | undefined): boolean {
   return value === 'true' || value === '1';
@@ -1010,3 +1017,35 @@ export const WBS_IMPROVEMENTS_ENABLED =
  */
 export const CANVAS_AUTHORING_FLOW_ENABLED =
   CANVAS_AUTHORING_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING_FLOW);
+
+/**
+ * **Canvas link routing** (`VITE_CANVAS_LINK_ROUTING`, default **on** since 2026-07-31) —
+ * ADR-0064 M2 / ADR-0065: a link's
+ * vertical corridor steps aside when a bar stands in it, instead of being drawn straight through
+ * the bar. The geometry is obstacle-aware only when the painter hands it an interval index; absent,
+ * `routeOrthogonal` returns exactly what it always returned, so **flag-off is byte-identical by
+ * construction** rather than by a second code path (`link-routing.test.ts` asserts that
+ * point-for-point over a fixture corpus, and `paint.routing-parity.test.ts` asserts it through the
+ * painter).
+ *
+ * It is **`AND`-ed with {@link CANVAS_DIRECT_MANIPULATION_ENABLED}**: the routing is reached through
+ * the refreshed link path's fanned-out anchors (`scene.visualRefresh`), which is the only branch
+ * that composes `routeOrthogonal` directly. With direct manipulation off there is no such branch to
+ * enter, so deriving the constant makes the inert pair unrepresentable rather than merely untested.
+ *
+ * **Default-on with the cost known, not assumed.** `scripts/measure-link-routing.mjs` paints the
+ * real painter against a real 2D context in Chromium at 2,000 activities: routing adds
+ * **+3.4–5.9 ms p95**, on a baseline that is itself 13–23 ms — i.e. already 4–6× over ADR-0026
+ * §16's stated ≤ 4 ms, which had never been measured before that script existed (`TECH_DEBT` #59).
+ * The product owner took the trade explicitly, and the open question is now whether **4 ms was ever
+ * the right number** rather than whether this feature fits under it (`TECH_DEBT` #75). Recording it
+ * here because "we enabled it and the budget was already blown" is exactly the kind of fact that
+ * otherwise survives only in a pull-request comment.
+ *
+ * Rollback: set `VITE_CANVAS_LINK_ROUTING=false` and rebuild the web image. Nothing persisted
+ * depends on it — routing is a per-frame display decision and no route is stored. The flag-off
+ * parity gates (`link-routing.test.ts`, `paint.routing-budget.test.ts`) are kept and pinned rather
+ * than weakened; they are the rollback contract, and they are also what makes the rollback cheap.
+ */
+export const CANVAS_LINK_ROUTING_ENABLED =
+  CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_LINK_ROUTING);

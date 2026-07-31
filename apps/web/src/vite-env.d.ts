@@ -95,4 +95,5 @@ interface ImportMetaEnv {
   readonly VITE_WBS_IMPROVEMENTS?: string;
   /** ADR-0064 M1 — the additive canvas authoring-flow surface (band, confirmation, quiescence). */
   readonly VITE_CANVAS_AUTHORING_FLOW?: string;
+  readonly VITE_CANVAS_LINK_ROUTING?: string;
 }
