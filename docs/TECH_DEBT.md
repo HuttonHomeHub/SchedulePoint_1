@@ -446,11 +446,23 @@ flags.
 
 The gaps, in the order they matter:
 
-- **No `TT_LOE`.** Level of Effort (ADR-0035 §21) — span-from-logic, never-critical, the N12
-  no-span flag — is not exercised at all, and it is one of the harder behaviours in the engine.
+- **No `TT_LOE` — because the importer could not accept one.** Level of Effort (ADR-0035 §21) is one
+  of the harder behaviours in the engine and was not exercised at all. Chasing why turned up the
+  actual cause: `CANONICAL_ACTIVITY_TYPES` omitted `LEVEL_OF_EFFORT`, so import coerced `TT_LOE` to
+  `TASK` (reported) and export had no mapping back. Fixed, with the mapping-contract row ADR-0050
+  never had.
+
+  The file itself is the evidence, and it corrects an earlier version of this entry that claimed
+  there were **no zero-duration `TT_Task` rows**. There are six — `A1010` Construction Management &
+  Supervision, `A1020` QA/QC Surveillance, `A1030` HSE Management & Permit Control, `A1040` Project
+  Controls & Reporting, `A3100` Scaffolding Erect/Maintain/Dismantle, `A7550` Piping Turnover
+  Package Sign-off — and every one of them is a textbook Level of Effort authored as a zero-duration
+  task because the real type could not get through the door. So the plan already _modelled_ LOE; the
+  format path forced a workaround that schedules differently. Those six become `TT_LOE` when the file
+  is extended. (A zero-duration `TT_Task` is therefore covered incidentally, but deliberately keeping
+  one is still worthwhile — it is the ADR-0035 M4-F1 "a zero-duration task is not a milestone" case.)
+
 - **No expected-finish** (`reend_date` is empty on every row), so ADR-0035 §9 never fires.
-- **No zero-duration `TT_Task`** — only zero-duration milestones. The "a zero-duration task is not a
-  milestone" rule (ADR-0035 §M4-F1) has no representative.
 - **No `clndr_type` on any CALENDAR row**, so ADR-0053 §5's tier decision always takes its default
   branch and the "source global calendar → ORG" path is never reached by this file.
 - **Thin on the mandatory/ALAP cases** — one row each, so a produce-and-flag regression would move

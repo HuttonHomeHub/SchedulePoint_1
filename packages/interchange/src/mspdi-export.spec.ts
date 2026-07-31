@@ -213,6 +213,34 @@ describe('exportMspdi', () => {
     expect(exported.report.mapped.activities).toBe(0);
   });
 
+  /**
+   * MSPDI has no Level-of-Effort concept, so an LOE writes as an ordinary task — the same coercion
+   * that was wrong for XER (which has `TT_LOE`) is correct here. What must not happen is doing it
+   * quietly: the reader would see a task with a duration where the plan holds an activity whose span
+   * comes from its logic, with no way to tell from the file.
+   *
+   * Named per activity rather than once for the file, because a planner reconciling an MSPDI export
+   * against the plan needs to know *which* ones changed meaning, not merely that some did.
+   */
+  it('reports each Level of Effort as a drop, since MSPDI cannot express one', () => {
+    const base = buildExportGraph();
+    const graph = {
+      ...base,
+      activities: base.activities.map((a) =>
+        a.key === 'A1' ? { ...a, type: 'LEVEL_OF_EFFORT' as const } : a,
+      ),
+    };
+    const exported = exportMspdi({ graph });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+
+    const loeDrops = exported.report.drops.filter((d) => d.detail.includes('Level of Effort'));
+    expect(loeDrops).toHaveLength(1);
+    expect(loeDrops[0]?.sourceRef).toBe('A1000'); // the activity's code, so it is findable
+    // It is still written — a drop of MEANING, not of the row. The plan is not silently shortened.
+    expect(tasksOf(exported.bytes)).toHaveLength(base.activities.length);
+  });
+
   it('serialises a constraint + resource (no longer drops) so they round-trip (M4c)', () => {
     const original = buildExportGraph({
       activities: buildExportGraph().activities.map((a) =>

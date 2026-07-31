@@ -56,6 +56,33 @@ describe('exportXer', () => {
     expect(toComparable(reimported.graph)).toEqual(toComparable(original));
   });
 
+  /**
+   * A Level of Effort survives the XER round trip as an LOE, not as a task.
+   *
+   * The two facts asserted together are the point. Its **type** must come back, because an LOE and a
+   * TASK schedule differently — an LOE spans its SS/FF logic and never drives, a TASK schedules from
+   * a duration and does. And its **duration** must come back, because P6 writes one and dropping it
+   * would make export→import lossy for a field the file plainly carries.
+   */
+  it('round-trips a Level of Effort as LEVEL_OF_EFFORT, duration intact', () => {
+    const original = buildExportGraph();
+    const loe = { ...original.activities[0]!, type: 'LEVEL_OF_EFFORT' as const };
+    const graph = { ...original, activities: [loe, ...original.activities.slice(1)] };
+
+    const exported = exportXer({ graph });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    expect(asText(exported.bytes)).toContain('TT_LOE');
+
+    const reimported = importSchedule({ content: exported.bytes, filename: 'loe.xer' });
+    expect(reimported.ok).toBe(true);
+    if (!reimported.ok) return;
+    expect(toComparable(reimported.graph)).toEqual(toComparable(graph));
+    // Belt and braces: `toComparable` could in principle normalise the type away.
+    expect(reimported.graph.activities[0]?.type).toBe('LEVEL_OF_EFFORT');
+    expect(reimported.graph.activities[0]?.durationMinutes).toBe(loe.durationMinutes);
+  });
+
   it('round-trips a fractional-hour duration exactly (90 min → 1.5h → 90 min)', () => {
     const original = buildExportGraph({
       activities: buildExportGraph().activities.map((a) =>

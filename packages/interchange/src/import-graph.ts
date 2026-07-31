@@ -42,8 +42,9 @@ const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected a "YYYY-
 /**
  * The activity types an import can produce. Identical to the canonical set — the domain `ActivityType`
  * values SchedulePoint interchange supports: the M1 network kinds plus M2's `WBS_SUMMARY` (ADR-0038) and
- * `RESOURCE_DEPENDENT` (ADR-0039). LEVEL_OF_EFFORT / HAMMOCK stay out of scope (the adapter coerces them
- * to `TASK` + reports). Re-exported here so import-graph consumers do not reach back into the canonical
+ * `RESOURCE_DEPENDENT` (ADR-0039), and `LEVEL_OF_EFFORT` (ADR-0035 §21). `HAMMOCK` stays out of scope —
+ * the `ActivityType` enum has the label but no engine code behind it, so the adapter coerces it to
+ * `TASK` + reports. Re-exported here so import-graph consumers do not reach back into the canonical
  * vocabulary.
  */
 export const importActivityTypeSchema = canonicalActivityTypeSchema;

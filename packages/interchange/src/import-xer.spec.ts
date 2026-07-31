@@ -250,15 +250,40 @@ describe('importXer — repair branches (repaired graph AND report entry)', () =
     expect(hasRepair(report.repairs, 'renamed')).toBe(true);
   });
 
-  it('coerces an unmapped activity type to TASK and reports it', () => {
+  /**
+   * This case used `TT_LOE` as its unmapped example — which is how the coercion outlived its reason.
+   * SchedulePoint's LOE engine shipped (ADR-0035 §21) and nothing here changed, so the file that
+   * proved a P6 Level of Effort was silently turned into a task read as proof the mapper was right.
+   *
+   * The coercion itself is still correct behaviour and still worth pinning; it just needs a type the
+   * product genuinely does not have. P6's hammock is the honest example — the `ActivityType` enum
+   * carries a `HAMMOCK` label but no engine code consumes it, so importing one would name a
+   * behaviour that does not exist.
+   */
+  it('coerces a genuinely unsupported activity type to TASK and reports it', () => {
+    const hammock: XerTableSpec = {
+      name: 'TASK',
+      fields: ['task_id', 'proj_id', 'task_code', 'task_name', 'task_type', 'target_drtn_hr_cnt'],
+      rows: [['T1', 'P1', 'A1000', 'Hammock', 'TT_Hammock', '8']],
+    };
+    const { graph, report } = importOk(xerWith(hammock));
+    expect(graph.activities[0]?.type).toBe('TASK');
+    expect(report.approximations.some((a) => a.detail.includes('TT_Hammock'))).toBe(true);
+  });
+
+  it('imports a P6 Level of Effort as LEVEL_OF_EFFORT, not a task', () => {
     const loe: XerTableSpec = {
       name: 'TASK',
       fields: ['task_id', 'proj_id', 'task_code', 'task_name', 'task_type', 'target_drtn_hr_cnt'],
-      rows: [['T1', 'P1', 'A1000', 'Hammock', 'TT_LOE', '8']],
+      rows: [['T1', 'P1', 'A1000', 'Site supervision', 'TT_LOE', '8']],
     };
     const { graph, report } = importOk(xerWith(loe));
-    expect(graph.activities[0]?.type).toBe('TASK');
-    expect(report.approximations.some((a) => a.detail.includes('TT_LOE'))).toBe(true);
+    expect(graph.activities[0]?.type).toBe('LEVEL_OF_EFFORT');
+    // Not an approximation: the product has this type, so nothing was given up.
+    expect(report.approximations.some((a) => a.detail.includes('TT_LOE'))).toBe(false);
+    // P6 gives an LOE a duration; the engine derives its span from SS/FF logic instead and consumes
+    // the duration only as a lag bound. Carried verbatim so a round-trip is lossless.
+    expect(graph.activities[0]?.durationMinutes).toBeGreaterThan(0);
   });
 
   it('maps an RSRC table to the resource library (M2)', () => {
@@ -400,7 +425,7 @@ describe('importXer — nothing is silently dropped', () => {
       ],
       rows: [
         ['T1', 'P1', 'W1', 'DUP', 'One', 'TT_Task', '8', 'CS_MSO', '2026-01-06 00:00'], // real constraint (M2)
-        ['T2', 'P1', 'W1', 'DUP', 'Two', 'TT_LOE', '8', '', ''], // duplicate code + unmapped type
+        ['T2', 'P1', 'W1', 'DUP', 'Two', 'TT_Hammock', '8', '', ''], // duplicate code + unmapped type
       ],
     };
     const pred = predTable([
@@ -434,7 +459,7 @@ describe('importXer — nothing is silently dropped', () => {
     expect(report.repairs.some((r) => r.detail.includes('renamed'))).toBe(true);
     expect(report.repairs.some((r) => r.detail.includes('de-duplicated'))).toBe(true);
     expect(report.repairs.some((r) => r.detail.includes('dangling'))).toBe(true);
-    expect(report.approximations.some((a) => a.detail.includes('TT_LOE'))).toBe(true);
+    expect(report.approximations.some((a) => a.detail.includes('TT_Hammock'))).toBe(true);
     // The primary constraint is carried on the real activity (not dropped).
     expect(graph.activities.find((a) => a.code === 'DUP')?.constraintType).toBe('MSO');
   });
