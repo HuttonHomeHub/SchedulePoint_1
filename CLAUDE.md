@@ -913,6 +913,30 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   step) proves the permission model and the no-activity-lost invariant against a real API with the
   pen enforced — the only place the optimistic-`version` trap is testable at all.
 
+- **ADR-0064** _(Accepted; M1 landed, `VITE_CANVAS_AUTHORING_FLOW` **default-on** 2026-07-31)_ —
+  Canvas authoring flow: the tool-mode contract and recalculation quiescence. Opened on two reports
+  from one driving session — six link attempts producing **zero** dependencies, and one link
+  recorded the wrong way round — and its first act was to **diagnose rather than fix**. The
+  `e2e-authoring-flow` harness drives the two-click pick against a real API with the pen enforced,
+  sweeping the inter-click delay across the 500 ms debounce, and **measures** which bar each pixel
+  is (probing in `select` mode and reading the canvas's own parallel listbox) before and after the
+  pick, so "a click was dropped", "the scene moved" and "something else" produce different evidence.
+  Every case recorded one dependency, in click order, map unchanged: the reversed link is closed
+  **unreproduced**, not fixed. What the same session's other report _does_ explain is that the Link
+  trigger armed **nothing** — so the planner was still in Add mode and drew two activities, which is
+  also the shape most likely to be reported as a reversal. Two of the spec's own `[VERIFIED]` claims
+  were wrong, including "Escape does nothing for the Add tool": the test written to fail on it
+  passed first run. The decisions: **one arm/disarm contract** across all four modes (both
+  split-buttons arm from the primary region, Escape returns to `select`, the open link pick takes
+  the first Escape and the tool the second, every transition announced); a **mode statement band in
+  the chrome above the scene, never over it** — the canvas already carries three overlays and a
+  fourth eventually lands on the bar you meant to click; a link confirmation naming the
+  **direction** with an ADR-0048 Undo; **token-based, capped recalculation holds** so the bars
+  cannot move between a planner's two clicks, released in an effect cleanup because a leaked hold
+  fails silently; and keyboard pick parity seeded **into** the canvas gesture so keyboard and
+  pointer are one pick. **The CPM engine is not imported** — the ADR-0034 parity gate is untouched
+  by construction; quiescence changes when the client asks, never what the server computes.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

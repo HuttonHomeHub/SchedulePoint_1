@@ -214,6 +214,14 @@ export interface TsldPanelProps {
    * anything is worse than none.
    */
   onUndoLastEdit?: (() => void) | undefined;
+  /**
+   * The plan's auto-recalculation coalescer's hold seam (ADR-0064 T7), supplied by the host that
+   * owns it. While a two-click pick is open the panel takes a hold, so a coalesced recalculation
+   * cannot move the bars between the planner's two clicks. Absent ⇒ today's cadence exactly.
+   */
+  recalcHold?: { hold: (token: symbol) => void; release: (token: symbol) => void } | undefined;
+  /** Forwarded to the canvas: drop an open link pick because the schedule is about to move (T7). */
+  dropLinkPickSignal?: number;
   /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
    * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
    * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
@@ -357,6 +365,8 @@ export function TsldPanel({
   onLag,
   onLink,
   onUndoLastEdit,
+  recalcHold,
+  dropLinkPickSignal = 0,
   onLoeSpan,
   onAutoArrange,
   onOpenLogic,
@@ -537,6 +547,30 @@ export function TsldPanel({
       announce('Tool closed. Select mode.');
     }
   }, [mode, announce, createType, linkType]);
+
+  /**
+   * Hold the coalesced recalculation while a two-click pick is open (ADR-0064 T7), and release it on
+   * every exit — commit, Escape, disarm, unmount. The token is per-panel and stable, so a release
+   * can only ever open this panel's own hold.
+   *
+   * The cleanup is the load-bearing half. A leaked hold does not fail loudly: the plan's dates
+   * simply stop updating for the rest of the session, and the only symptom is a canvas that quietly
+   * disagrees with the schedule. Releasing in the effect's cleanup means every exit path — including
+   * ones nobody has thought of yet — releases by construction rather than by remembering to.
+   */
+  const [recalcHoldToken] = useState(() => Symbol('tsld-pick-hold'));
+  const emptyStateReasonId = useId();
+  const recalcHoldRef = useRef(recalcHold);
+  useEffect(() => {
+    recalcHoldRef.current = recalcHold;
+  });
+  const pickIsOpen = CANVAS_AUTHORING_FLOW_ENABLED && linkPickedId !== null;
+  useEffect(() => {
+    if (!pickIsOpen) return;
+    const seam = recalcHoldRef.current;
+    seam?.hold(recalcHoldToken);
+    return () => seam?.release(recalcHoldToken);
+  }, [pickIsOpen, recalcHoldToken]);
 
   /**
    * What the mode band says, or null for "say nothing and take no height". Derived rather than
@@ -976,6 +1010,47 @@ export function TsldPanel({
         return;
       }
       runLoeSpan(loeStartId, current.id);
+      return;
+    }
+    /**
+     * **Keyboard parity for the two-click Link tool** (ADR-0064 T6). With the tool armed, Enter on
+     * the focused activity picks the predecessor; Enter on a *different* one commits the link with
+     * the armed FS/SS/FF type — the exact sequence the pointer performs.
+     *
+     * Without this the Link tool was pointer-only: a keyboard user could reach the Logic dialog
+     * (the branch below) and create the same link there, so the *capability* existed, but the tool
+     * on the toolbar did nothing for them. Gated on `mode === 'link'`, so Enter outside the tool
+     * still opens the Logic tab exactly as it did — tested both ways.
+     */
+    if (
+      CANVAS_AUTHORING_FLOW_ENABLED &&
+      editingEnabled &&
+      mode === 'link' &&
+      onLink &&
+      event.key === 'Enter'
+    ) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === selectedId);
+      if (!current) return;
+      if (linkPickedId === null) {
+        setLinkPickedId(current.id);
+        announce(
+          modeStatementText({ kind: 'linkPicking', linkType, predecessorName: current.name }),
+        );
+        return;
+      }
+      if (current.id === linkPickedId) {
+        announce('That’s the predecessor — pick a different activity as the successor.');
+        return;
+      }
+      const predecessorId = linkPickedId;
+      setLinkPickedId(null);
+      // The anchor positions the create popover, which a `link` intent never opens; the LOE
+      // keyboard path passes nothing for the same reason. Zero is the honest "no pointer here".
+      onIntent(
+        { kind: 'link', predecessorId, successorId: current.id, type: linkType },
+        { x: 0, y: 0 },
+      );
       return;
     }
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
@@ -1559,6 +1634,46 @@ export function TsldPanel({
           it costs no canvas height in the state the canvas is in most of the time. */}
       <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
 
+      {/*
+        **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
+        completely blank canvas, and nothing on it says what the first gesture is — the surface is
+        at its least self-explanatory exactly when the planner knows least.
+
+        Shaded with a reason rather than hidden without the pen (ADR-0062 M6's finding, twice): a
+        Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
+        right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
+      */}
+      {CANVAS_AUTHORING_FLOW_ENABLED && showDiagram && activities.length === 0 ? (
+        <div
+          data-testid="canvas-empty-state"
+          className="border-border text-muted-foreground flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2 text-sm"
+        >
+          <p>This plan has no activities yet.</p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            aria-disabled={!editingEnabled}
+            {...(editingEnabled ? {} : { 'aria-describedby': emptyStateReasonId })}
+            onClick={(event) => {
+              if (!editingEnabled) {
+                event.preventDefault();
+                return;
+              }
+              setMode('add-activity');
+            }}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          >
+            Draw the first activity
+          </Button>
+          {editingEnabled ? null : (
+            <span id={emptyStateReasonId} className="sr-only">
+              Start editing this plan to draw activities.
+            </span>
+          )}
+        </div>
+      ) : null}
+
       <div
         className={
           fill
@@ -1570,6 +1685,8 @@ export function TsldPanel({
           <>
             <TsldCanvas
               onLinkPickStep={setLinkPickedId}
+              dropLinkPickSignal={dropLinkPickSignal}
+              linkPickPredecessorId={linkPickedId}
               activities={renderActivities}
               edges={renderEdges}
               dataDate={dataDate}

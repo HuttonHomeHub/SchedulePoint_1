@@ -125,13 +125,18 @@ each as its own step. **A flag with no flag-on journey is untested in the state
 users actually see** — add the suite and the CI step in the same pull request as
 the flag.
 
-Not every suite is scoped to a flag. `apps/web/e2e-authoring-flow/` exists because
-the behaviour it measures **cannot be reached from a unit test at all**: the canvas
-gesture reducer maps the first click of a two-click link to the predecessor with no
-inversion on any path, so only a real browser, a real recalculation cadence and a
-real server can say which of those clicks actually became a pick. When a defect
-report and the code disagree, that gap is where the answer is — write the suite
-that measures it rather than the test that re-states the code.
+`apps/web/e2e-authoring-flow/` is **both** — a flag-on journey for
+`VITE_CANVAS_AUTHORING_FLOW`, and a diagnostic whose `link-direction.spec.ts`
+half deliberately does not depend on that flag, because the defects it measures
+were fixed outside it.
+
+The diagnostic half exists because the behaviour it measures **cannot be reached
+from a unit test at all**: the canvas gesture reducer maps the first click of a
+two-click link to the predecessor with no inversion on any path, so only a real
+browser, a real recalculation cadence and a real server can say which of those
+clicks actually became a pick. When a defect report and the code disagree, that
+gap is where the answer is — write the suite that measures it rather than the
+test that re-states the code.
 
 Journeys include automated accessibility assertions.
 

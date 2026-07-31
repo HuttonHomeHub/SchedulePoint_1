@@ -202,6 +202,20 @@ export interface TsldCanvasProps {
    * the shell never has to infer "still picking?" from a stale render.
    */
   onLinkPickStep?: (predecessorId: string | null) => void;
+  /**
+   * Bumped by the shell to **drop an open link pick** without disarming the tool (ADR-0064 T7). The
+   * one caller is the recalculation hold hitting its cap: the bars are about to move, so a pick
+   * taken against the old positions is no longer the pick the planner made. Signal-shaped like
+   * `fitSignal` because the shell is asking for an action, not describing a state.
+   */
+  dropLinkPickSignal?: number;
+  /**
+   * The shell's picked link predecessor, seeded INTO the internal gesture (ADR-0064 T6) — the exact
+   * mirror of {@link loePickStartId}. Without it the keyboard pick and the pointer pick would be
+   * two separate notions of "which endpoint is chosen", and picking by keyboard then clicking the
+   * successor would start a second pick instead of committing the first.
+   */
+  linkPickPredecessorId?: string | null;
   /** The LOE tool's picked **start driver** id, controlled by `TsldPanel` (Stage D) — the single source
    * of truth for the pick, mirroring the inbound {@link selectedId} pattern. A keyboard-side pick (the
    * listbox Enter) sets this; the canvas seeds its internal gesture from it so the NEXT pointer click
@@ -555,6 +569,8 @@ export function TsldCanvas({
   onIntent,
   onLoeSpanStep,
   onLinkPickStep,
+  dropLinkPickSignal = 0,
+  linkPickPredecessorId = null,
   loePickStartId = null,
   onExitAddMode,
   pending = null,
@@ -1002,6 +1018,43 @@ export function TsldCanvas({
       interactionDirtyRef.current = true;
     }
   }, [loePickStartId, mode]);
+
+  // Seed the internal gesture from the shell's picked predecessor, so the keyboard pick (listbox
+  // Enter) and the pointer pick are ONE state (ADR-0064 T6) — the `loePickStartId` precedent.
+  useEffect(() => {
+    if (mode !== 'link') return;
+    const g = gestureRef.current;
+    if (linkPickPredecessorId) {
+      if (g.kind !== 'linkPicking' || g.predecessorId !== linkPickPredecessorId) {
+        gestureRef.current = { kind: 'linkPicking', predecessorId: linkPickPredecessorId };
+        syncGestureSource();
+        interactionDirtyRef.current = true;
+      }
+      return;
+    }
+    if (g.kind === 'linkPicking') {
+      gestureRef.current = IDLE;
+      syncGestureSource();
+      interactionDirtyRef.current = true;
+    }
+    // `syncGestureSource` is redefined per render and is deliberately not a dependency.
+  }, [linkPickPredecessorId, mode]);
+
+  // Drop an open link pick on the shell's signal (ADR-0064 T7). Skips the initial render — a `0`
+  // signal means "nothing has asked yet", not "drop now" — and leaves the tool armed, because the
+  // planner did not ask to stop linking; the schedule moved underneath them.
+  const droppedPickSignalRef = useRef(dropLinkPickSignal);
+  useEffect(() => {
+    if (dropLinkPickSignal === droppedPickSignalRef.current) return;
+    droppedPickSignalRef.current = dropLinkPickSignal;
+    if (gestureRef.current.kind !== 'linkPicking') return;
+    gestureRef.current = IDLE;
+    syncGestureSource();
+    interactionDirtyRef.current = true;
+    linkPickStepRef.current?.(null);
+    // `syncGestureSource` is a plain function redefined each render and is intentionally not a
+    // dependency: this effect must run on a signal change and nothing else.
+  }, [dropLinkPickSignal]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

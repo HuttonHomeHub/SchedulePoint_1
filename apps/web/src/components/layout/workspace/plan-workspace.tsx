@@ -145,6 +145,11 @@ function Adr0030PlanWorkspace({
       onResize={model.onTsldResize}
       onLag={model.onTsldLag}
       onLink={model.onTsldLink}
+      // Quiescence during an open two-click pick + the ADR-0048 inverse the link confirmation
+      // offers (ADR-0064 T5/T7). Both inert with `VITE_CANVAS_AUTHORING_FLOW` off.
+      recalcHold={model.autoRecalcHold}
+      dropLinkPickSignal={model.dropLinkPickSignal}
+      onUndoLastEdit={model.undoRedo.canUndo ? model.undoRedo.undo : undefined}
       onAutoArrange={model.onTsldAutoArrange}
       onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}

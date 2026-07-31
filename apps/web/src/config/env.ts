@@ -985,7 +985,8 @@ export const WBS_IMPROVEMENTS_ENABLED =
   ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_WBS_IMPROVEMENTS);
 
 /**
- * **Canvas authoring flow** (`VITE_CANVAS_AUTHORING_FLOW`, default **off**) — the *additive* half of
+ * **Canvas authoring flow** (`VITE_CANVAS_AUTHORING_FLOW`, default **on** since 2026-07-31) — the
+ * *additive* half of
  * ADR-0064 M1: a mode statement band that says which tool is armed and what click it expects, a link
  * confirmation carrying the direction that was created plus an Undo, keyboard parity for the Link
  * tool's two-click pick, quiescence of the coalesced recalculation while a pick is open, and an
@@ -1008,4 +1009,4 @@ export const WBS_IMPROVEMENTS_ENABLED =
  * than weakened; they are the rollback contract.
  */
 export const CANVAS_AUTHORING_FLOW_ENABLED =
-  CANVAS_AUTHORING_ENABLED && flagDefaultOff(import.meta.env.VITE_CANVAS_AUTHORING_FLOW);
+  CANVAS_AUTHORING_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING_FLOW);

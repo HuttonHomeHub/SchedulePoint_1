@@ -8,12 +8,13 @@ import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { TsldPanel } from './TsldPanel';
 
 /**
- * **The flag-off parity suite for the mode band** (ADR-0064 T4) — the rollback contract.
+ * **The flag-off parity suite for the whole ADR-0064 additive surface** — the rollback contract.
  *
- * With `VITE_CANVAS_AUTHORING_FLOW` off, every authoring tool still arms and disarms exactly as it
- * did before the epic, and the band never renders in any mode. Kept and pinned rather than deleted
- * on the day the flag flips: a parity suite is only worth anything if it is still strict when
- * somebody needs to roll back.
+ * With `VITE_CANVAS_AUTHORING_FLOW` off there is no band, no empty state and no keyboard link pick,
+ * and Enter on the listbox still opens the Logic tab exactly as it always did. The T3 disarm fix is
+ * asserted here too, because it ships OUTSIDE the flag and must not quietly become conditional on
+ * it. Kept and pinned rather than deleted when the flag flips: a parity suite is only worth
+ * anything if it is still strict on the day somebody needs to roll back.
  */
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
@@ -94,7 +95,19 @@ function activity(id: string, name: string, laneIndex: number): ActivitySummary 
 const A = activity('a', 'Set out', 0);
 const B = activity('b', 'Reinforce', 1);
 
-function Harness({ arm }: { arm: 'select' | 'add-activity' | 'link' | 'loe' }): React.ReactElement {
+function Harness({
+  arm,
+  activities = [A, B],
+  canEdit = true,
+  onLink,
+  onOpenLogic,
+}: {
+  arm: 'select' | 'add-activity' | 'link' | 'loe';
+  activities?: ActivitySummary[];
+  canEdit?: boolean;
+  onLink?: React.ComponentProps<typeof TsldPanel>['onLink'];
+  onOpenLogic?: (activity: ActivitySummary) => void;
+}): React.ReactElement {
   const canvasUi = useTsldCanvasUiState();
   useEffect(() => {
     canvasUi.setMode(arm);
@@ -102,18 +115,20 @@ function Harness({ arm }: { arm: 'select' | 'add-activity' | 'link' | 'loe' }): 
   }, []);
   return (
     <TsldPanel
-      activities={[A, B]}
+      activities={activities}
       dependencies={NO_DEPS}
       dataDate="2026-01-01"
-      canEdit
+      canEdit={canEdit}
       canvasUi={canvasUi}
       onCreate={() => Promise.resolve({ recalcConflict: null })}
+      {...(onLink ? { onLink } : {})}
+      {...(onOpenLogic ? { onOpenLogic } : {})}
       fill
     />
   );
 }
 
-describe('TsldPanel — mode statement band (flag OFF parity)', () => {
+describe('TsldPanel — ADR-0064 additive surface (flag OFF parity)', () => {
   it.each(['select', 'add-activity', 'link', 'loe'] as const)(
     'renders no band in %s mode',
     (arm) => {
@@ -122,10 +137,25 @@ describe('TsldPanel — mode statement band (flag OFF parity)', () => {
     },
   );
 
-  it('still disarms on Escape — the fix is outside the flag, and stays outside it', () => {
+  it('renders no empty state on an empty plan', () => {
+    render(<Harness arm="select" activities={[]} />);
+    expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
+  });
+
+  it('Enter in link mode opens the Logic tab — the keyboard pick is behind the flag', () => {
+    const onOpenLogic = vi.fn();
+    const onLink = vi.fn();
+    render(<Harness arm="link" onLink={onLink} onOpenLogic={onOpenLogic} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(onOpenLogic).toHaveBeenCalledOnce();
+    expect(onLink).not.toHaveBeenCalled();
+  });
+
+  it('still disarms on Escape — the T3 fix is outside the flag, and stays outside it', () => {
     render(<Harness arm="add-activity" />);
     fireEvent.keyDown(window, { key: 'Escape' });
-    // The announcement is the unflagged T3 behaviour, so it is present with the flag off too.
     expect(announceSpy).toHaveBeenCalledWith('Tool closed. Select mode.');
   });
 });

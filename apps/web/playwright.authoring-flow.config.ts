@@ -61,6 +61,11 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             env: {
+              // The epic's additive surface under test (ADR-0064 M1). The suite's diagnostic half
+              // deliberately does not depend on it — the defect fixes ship unflagged — but the
+              // journey half does, and a flag-on suite is the only place the flag is exercised in
+              // the state users will actually see.
+              VITE_CANVAS_AUTHORING_FLOW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               VITE_CANVAS_TOOLBAR: 'true',
               VITE_CANVAS_WORKSPACE: 'true',

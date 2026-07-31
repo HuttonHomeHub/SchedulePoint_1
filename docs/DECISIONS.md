@@ -1459,3 +1459,19 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   invariant is therefore stated as a **replacement**, not as "Link arms": arming Link while Add is
   armed leaves Add disarmed, the next canvas click picks an endpoint, and the plan's activity count
   does not change. Asserting only the dependency would pass on a run that _also_ drew two strays.
+
+- **The canvas now says which tool is armed (ADR-0064 M1, 2026-07-31).** Six surfaces landed
+  together behind `VITE_CANVAS_AUTHORING_FLOW`, flipped default-on the same day once the flag-on
+  journey was green locally: the mode statement band, the link confirmation with its direction and
+  Undo, keyboard pick parity for the Link tool, recalculation quiescence during an open pick, and
+  the empty-plan state. The defect fixes they sit on — the Link trigger arming its tool, the uniform
+  disarm contract, the create popover's visible label and distinct submit — ship **outside** the
+  flag, because gating them would mean writing parity suites that pin a bug.
+
+  Three things this epic taught that outlive it. **A `[VERIFIED]` tag is a claim, not a fact**: two
+  of this spec's carried one and were wrong, both written by the same person who drove the session
+  they came from. **Measure the thing you are about to assert about**: the diagnostic only produced
+  an answer once it stopped trusting the pixel it drew at and started asking the canvas which bar
+  was there. And **a helper that fixes one hazard can introduce another** — the selection-clearing
+  helper added to stop the floating actions bar covering a pick point clicked while Add was still
+  armed, opening a create popover over the very points it was protecting.

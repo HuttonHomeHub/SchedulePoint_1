@@ -5,6 +5,18 @@ import { useRecalculateCommand } from './use-schedule';
 /** Trailing debounce (ms) that coalesces a burst of structural edits into one recalc (ADR-0032 M3). */
 export const AUTO_RECALC_DEBOUNCE_MS = 500;
 
+/**
+ * How long a {@link PlanAutoRecalc.hold} may defer a recalculation before it fires anyway
+ * (ADR-0064 T7).
+ *
+ * A hold exists so the bars do not move under a planner's hand between the two clicks of a link.
+ * It must therefore be **capped**, because the thing holding it is a human gesture: someone who
+ * arms the Link tool, clicks one bar and goes to lunch would otherwise leave the plan's dates stale
+ * for the rest of the session, with nothing on screen saying why. Ten seconds is far longer than
+ * any real two-click pick and far shorter than "until the tab is closed".
+ */
+export const AUTO_RECALC_HOLD_CAP_MS = 10_000;
+
 export interface PlanAutoRecalc {
   /** Request a coalesced recalculation after a structural edit — trailing-debounced + single-flight. */
   notify: () => void;
@@ -17,6 +29,17 @@ export interface PlanAutoRecalc {
   flush: (onSuccess?: () => void) => void;
   /** True while a recalculation POST is in flight (drives the manual button's busy state). */
   isPending: boolean;
+  /**
+   * Defer coalesced recalculations while a two-click gesture is open (ADR-0064 T7). While any hold
+   * is open a {@link PlanAutoRecalc.notify} records the request but does not fire; the last
+   * {@link PlanAutoRecalc.release} fires it, coalesced into one run.
+   *
+   * **Token-based**, not a boolean or a counter, so a caller can only ever release its own hold —
+   * a stray extra `release()` from one surface cannot unblock another's open pick.
+   */
+  hold: (token: symbol) => void;
+  /** Release a hold taken with {@link PlanAutoRecalc.hold}. Idempotent and unknown-token-safe. */
+  release: (token: symbol) => void;
 }
 
 /**
@@ -37,7 +60,16 @@ export interface PlanAutoRecalc {
 export function usePlanAutoRecalc(
   orgSlug: string,
   planId: string,
-  opts: { enabled: boolean; onMessage?: (message: string) => void },
+  opts: {
+    enabled: boolean;
+    onMessage?: (message: string) => void;
+    /**
+     * Called when a hold hits {@link AUTO_RECALC_HOLD_CAP_MS} and the deferred recalculation fires
+     * anyway. The caller's open gesture is no longer safe — the bars are about to move — so it must
+     * drop it and say so. Nothing here decides what "drop it" means; that belongs to whoever holds.
+     */
+    onHoldExpired?: () => void;
+  },
 ): PlanAutoRecalc {
   const recalc = useRecalculateCommand(orgSlug, planId);
   const recalcRef = useRef(recalc);
@@ -53,6 +85,15 @@ export function usePlanAutoRecalc(
   // The queued single-flight re-run calls `fire` again; go through a ref so `fire`'s closure never
   // references itself (stale-closure-safe, and satisfies react-hooks).
   const fireRef = useRef<() => void>(() => {});
+  /**
+   * Open holds (ADR-0064 T7). A `Set` of tokens rather than a count, so a double-release is a no-op
+   * instead of silently opening the gate on somebody else's pick.
+   */
+  const holdsRef = useRef<Set<symbol>>(new Set());
+  /** A `notify()` arrived while held, so the last release owes a recalculation. */
+  const heldNotifyRef = useRef(false);
+  /** The cap timer, armed by the FIRST hold and cleared by the last release. */
+  const holdCapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fire = useCallback((): void => {
     const { enabled, onMessage } = optsRef.current;
@@ -95,9 +136,55 @@ export function usePlanAutoRecalc(
   });
 
   const notify = useCallback((): void => {
+    // Held: remember that a recalculation is owed, and let the last release schedule it. No timer is
+    // armed, so a burst of edits during one open pick still becomes exactly one run afterwards.
+    if (holdsRef.current.size > 0) {
+      heldNotifyRef.current = true;
+      return;
+    }
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(fire, AUTO_RECALC_DEBOUNCE_MS);
   }, [fire]);
+
+  /** Clear the cap timer. Safe to call when none is armed. */
+  const clearHoldCap = useCallback((): void => {
+    if (holdCapRef.current) {
+      clearTimeout(holdCapRef.current);
+      holdCapRef.current = null;
+    }
+  }, []);
+
+  const hold = useCallback((token: symbol): void => {
+    const first = holdsRef.current.size === 0;
+    holdsRef.current.add(token);
+    if (!first) return;
+    // The cap is armed by the FIRST hold and measured from there, not reset by later ones — the
+    // question it answers is "how long has the schedule been stale", and that clock starts once.
+    holdCapRef.current = setTimeout(() => {
+      holdCapRef.current = null;
+      holdsRef.current.clear();
+      optsRef.current.onHoldExpired?.();
+      if (heldNotifyRef.current) {
+        heldNotifyRef.current = false;
+        fireRef.current();
+      }
+    }, AUTO_RECALC_HOLD_CAP_MS);
+  }, []);
+
+  const release = useCallback(
+    (token: symbol): void => {
+      if (!holdsRef.current.delete(token)) return; // unknown or already-released token: no-op
+      if (holdsRef.current.size > 0) return;
+      clearHoldCap();
+      if (!heldNotifyRef.current) return;
+      heldNotifyRef.current = false;
+      // Debounce from here rather than firing instantly: releasing a pick is usually the middle of a
+      // burst (commit → the next edit), and the whole point of the coalescer is to see the burst out.
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(fire, AUTO_RECALC_DEBOUNCE_MS);
+    },
+    [fire, clearHoldCap],
+  );
 
   const flush = useCallback(
     (onSuccess?: () => void): void => {
@@ -106,15 +193,39 @@ export function usePlanAutoRecalc(
         timerRef.current = null;
       }
       if (onSuccess) manualSuccessRef.current = onSuccess;
+      // An explicit Recalculate is the user overruling the hold, not a coalesced edit: fire now and
+      // drop the holds, so the surface that took one is told its gesture is no longer protected.
+      if (holdsRef.current.size > 0) {
+        holdsRef.current.clear();
+        clearHoldCap();
+        heldNotifyRef.current = false;
+        optsRef.current.onHoldExpired?.();
+      }
       fire();
     },
-    [fire],
+    [fire, clearHoldCap],
   );
 
   useEffect(() => {
     mountedRef.current = true;
+    // Copied into the effect so the cleanup clears the set this effect saw, not whatever the ref
+    // points at by then (react-hooks/exhaustive-deps). Same object in practice — the ref is never
+    // reassigned — but "in practice" is how ref-in-cleanup bugs are always described.
+    const holds = holdsRef.current;
     return () => {
       mountedRef.current = false;
+      if (holdCapRef.current) {
+        clearTimeout(holdCapRef.current);
+        holdCapRef.current = null;
+      }
+      // A hold cannot outlive the hook that owns it — an unmount with a pick still open must not
+      // suppress the trailing flush below, which is the only thing that saves a just-made edit.
+      holds.clear();
+      if (heldNotifyRef.current && optsRef.current.enabled && !inFlightRef.current) {
+        heldNotifyRef.current = false;
+        recalcRef.current.run({});
+        return;
+      }
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -127,7 +238,7 @@ export function usePlanAutoRecalc(
   // Stable identity except when `isPending` flips, so a consumer can safely depend on it (the toolbar
   // context memo) without churning every render (notify/flush are already stable).
   return useMemo(
-    () => ({ notify, flush, isPending: recalc.isPending }),
-    [notify, flush, recalc.isPending],
+    () => ({ notify, flush, hold, release, isPending: recalc.isPending }),
+    [notify, flush, hold, release, recalc.isPending],
   );
 }
