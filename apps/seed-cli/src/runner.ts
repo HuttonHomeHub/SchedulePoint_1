@@ -67,7 +67,7 @@ export async function seedPlan(
           name: calendar.name,
           scope: calendar.scope,
           ...(calendar.scope === 'PROJECT' ? { projectId: target.projectId } : {}),
-          workingWeekdays: calendar.days.filter((d) => d.windows.length > 0).map((d) => d.weekday),
+          workingWeekdays: toWeekdayMask(calendar.days),
         });
         calendarIdByKey.set(calendar.key, created.id);
         counts.calendars += 1;
@@ -321,6 +321,21 @@ export async function seedPlan(
       findings,
     };
   }
+}
+
+/**
+ * The calendars API takes a **7-bit mask, Monday-indexed** (`@repo/types` WEEKDAYS[0] === 'MONDAY'),
+ * while the spec model numbers weekdays 0 = Sunday … 6 = Saturday. Getting this wrong shifts every
+ * working week by a day and nothing fails — the calendar is still valid, just describing a different
+ * week — so the conversion is named rather than inlined.
+ */
+function toWeekdayMask(days: SeedSpec['calendars'][number]['days']): number {
+  let mask = 0;
+  for (const day of days) {
+    if (day.windows.length === 0) continue;
+    mask |= 1 << ((day.weekday + 6) % 7);
+  }
+  return mask;
 }
 
 /**

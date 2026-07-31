@@ -26,9 +26,20 @@ export class SeedHttpError extends Error {
     readonly details: unknown,
     readonly path: string,
   ) {
-    super(`${status} ${code} on ${path}: ${message}`);
+    // `details` carries the class-validator field messages, and WITHOUT them a 422 reads only as
+    // "Validation failed." — which names no field and makes every finding unactionable. The first
+    // real run produced 79 of those before this was added; the detail is the whole value.
+    super(`${status} ${code} on ${path}: ${message}${formatDetails(details)}`);
     this.name = 'SeedHttpError';
   }
+}
+
+/** Render the API's `details` (usually a string[] of field messages) onto the error message. */
+function formatDetails(details: unknown): string {
+  if (Array.isArray(details)) return ` — ${details.map(String).join('; ')}`;
+  if (typeof details === 'string') return ` — ${details}`;
+  if (details !== null && typeof details === 'object') return ` — ${JSON.stringify(details)}`;
+  return '';
 }
 
 export interface SeedClientOptions {
