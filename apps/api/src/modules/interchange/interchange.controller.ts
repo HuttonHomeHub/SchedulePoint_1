@@ -71,13 +71,14 @@ export class InterchangeController {
   @ApiBody({
     description:
       'The schedule file to parse (a P6 `.xer` or an MSPDI `.xml`), sent as the `file` multipart ' +
-      'field, plus the optional `globalCalendarScope` form field (ADR-0053 §5).',
+      'field, plus the optional `globalCalendarScope` (ADR-0053 §5) and `resourceResolutions` form fields.',
     schema: {
       type: 'object',
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
         globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
+        resourceResolutions: { type: 'string', example: '{"RSRC:1234":"REUSE_EXISTING"}' },
       },
     },
   })
@@ -120,13 +121,14 @@ export class InterchangeController {
   @ApiBody({
     description:
       'The schedule file to import (a P6 `.xer` or an MSPDI `.xml`), sent as the `file` multipart ' +
-      'field, plus the optional `globalCalendarScope` form field (ADR-0053 §5).',
+      'field, plus the optional `globalCalendarScope` (ADR-0053 §5) and `resourceResolutions` form fields.',
     schema: {
       type: 'object',
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
         globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
+        resourceResolutions: { type: 'string', example: '{"RSRC:1234":"REUSE_EXISTING"}' },
       },
     },
   })
@@ -145,7 +147,10 @@ export class InterchangeController {
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiPayloadTooLargeResponse({ description: 'The uploaded file exceeds the maximum size.' })
   @ApiUnprocessableEntityResponse({
-    description: 'No file, or the file is not a recognised/parseable schedule file.',
+    description:
+      'No file · the file is not a recognised/parseable schedule file · or the file names a resource ' +
+      'whose name the organisation already holds and `resourceResolutions` did not answer it ' +
+      '(`UNRESOLVED_RESOURCE_COLLISIONS`, with the unanswered collisions in `error.details`).',
   })
   async commit(
     @CurrentUser() principal: Principal,
@@ -171,7 +176,12 @@ export class InterchangeController {
  * pure pipeline as its own documented default rather than as an explicit `undefined`.
  */
 function toImportOptions(options: InterchangeImportOptionsDto): InterchangeImportOptions {
-  return options.globalCalendarScope === undefined
-    ? {}
-    : { globalCalendarScope: options.globalCalendarScope };
+  return {
+    ...(options.globalCalendarScope === undefined
+      ? {}
+      : { globalCalendarScope: options.globalCalendarScope }),
+    ...(options.resourceResolutions === undefined
+      ? {}
+      : { resourceResolutions: options.resourceResolutions }),
+  };
 }

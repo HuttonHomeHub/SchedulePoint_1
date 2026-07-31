@@ -64,6 +64,45 @@ export const interchangeCountsSchema = z
   .strict();
 export type InterchangeCounts = z.infer<typeof interchangeCountsSchema>;
 
+/**
+ * What to do about an imported resource whose **name** is already taken in the target organisation.
+ *
+ * This is deliberately **not** a `ReportFinding`. The three finding kinds all describe something the
+ * import already decided; a collision is a question it cannot answer alone. A resource library is
+ * org-global and levelling, over-allocation and Earned Value all read from one pool, so guessing has
+ * consequences a report line cannot undo: reuse the wrong row and the file's rates and calendar are
+ * silently discarded, duplicate it and one crew's demand is split across two rows that each look
+ * half-loaded.
+ *
+ * Calendars take the opposite route on purpose (`IMPORTED_NAME_SUFFIX`) — a duplicated calendar is
+ * inert until something is scheduled on it, so suffixing is safe there and merely noisy.
+ */
+export const RESOURCE_COLLISION_RESOLUTIONS = ['REUSE_EXISTING', 'CREATE_COPY'] as const;
+export const resourceCollisionResolutionSchema = z.enum(RESOURCE_COLLISION_RESOLUTIONS);
+export type ResourceCollisionResolution = z.infer<typeof resourceCollisionResolutionSchema>;
+
+export const resourceCollisionSchema = z
+  .object({
+    /** The import graph's key for the incoming resource — what a resolution is keyed by. */
+    resourceKey: z.string().min(1),
+    /** The incoming resource's name: the value that collided. */
+    name: z.string().min(1),
+    /** The incoming resource's code, when the source file carries one. */
+    code: z.string().min(1).nullable(),
+    /** The library row it collides with, named so a planner can tell whether it is the same crew. */
+    existing: z
+      .object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+        code: z.string().min(1).nullable(),
+        /** Archived rows still collide — archive is orthogonal to delete (ADR-0053 §4). */
+        archived: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict();
+export type ResourceCollision = z.infer<typeof resourceCollisionSchema>;
+
 /** The full pre-commit / post-commit interchange report shown in the dry-run review dialog. */
 export const interchangeReportSchema = z
   .object({
@@ -76,6 +115,13 @@ export const interchangeReportSchema = z
     approximations: z.array(reportFindingSchema),
     repairs: z.array(reportFindingSchema),
     drops: z.array(reportFindingSchema),
+    /**
+     * Resource-name collisions the planner must resolve before the commit will run. **Optional, and
+     * absent means none** — the same additive idiom the `mapped` sub-counts use, so every consumer
+     * predating this field keeps working. Only the API populates it: detecting a collision needs the
+     * org library, which the pure package deliberately cannot see.
+     */
+    resourceCollisions: z.array(resourceCollisionSchema).optional(),
   })
   .strict();
 export type InterchangeReport = z.infer<typeof interchangeReportSchema>;
