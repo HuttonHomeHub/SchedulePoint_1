@@ -1545,3 +1545,53 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   not its neighbour.** Not one was a design mistake; every one was an inconsistency inside a diff
   whose own docblocks described the right thing. That is what a specialist gate catches and a human
   read does not, and it is the third epic running where that has been true.
+
+---
+
+## 2026-07-31 — Three defects from the imported Unit 300 programme
+
+The product owner imported a real 18-node / 126-activity P6 programme and reported that most WBS
+summaries started on the project data date and drew on the canvas rather than the WBS band, that the
+band's rows "didn't tally", and that logic lines "go up and off the canvas and back down". Three
+separate defects, each reproduced against the actual file before anything was changed.
+
+**1. `parentId` never reached the CPM engine (the big one, and server-side).**
+`ScheduleActivityRow` had no `parentId`, `loadActivities` did not select it, and `toEngineActivity`
+did not pass it — so **every** `WBS_SUMMARY` arrived at `computeSchedule` childless and took
+ADR-0035 §24's _empty-summary_ branch: collapse to a zero-length point at the data date. Reproduced
+end to end: all 18 summaries came back `ES = EF = 2026-03-02` despite every one of them having
+between 2 and 13 children. With the seam fixed they roll up correctly (the root now spans
+2026-01-05 → 2027-03-04, the whole programme).
+
+Two things about how it hid for so long are worth keeping. First, the empty-summary convention is a
+_defined_ answer, so nothing errored, no count was wrong, and the failure rendered as a 2px sliver on
+the project start — which reads as a rendering nit, not as the engine being fed the wrong graph.
+Second, `compute.wbs.spec.ts` constructs `EngineActivity` objects directly and passes `parentId` in
+by hand, so the engine's own rollup suite was green throughout **and would have stayed green through
+any fix**. The regression test therefore had to go in at the service seam
+(`schedule.e2e-spec.ts`), nested two levels deep so it also pins the deepest-first ordering, and was
+verified to fail against the old loader before being kept.
+
+**2. An over-cap WBS summary rendered nowhere.** The band stacks three depths (ADR-0063 §3) and skips
+anything deeper; `deriveWbsBandSource` lifted **every** summary out of the scene regardless. So a
+depth-3 summary was skipped by one and removed by the other — invisible and unselectable — while
+`wbs-band.ts`'s own docblock said it "is still an ordinary bar in the diagram". Fixed by making the
+cap one exported predicate (`isWithinBandDepth`) that both halves call, which is the ADR-0065
+"one route function, not two" rule applied to a filter. Not what the product owner hit (their tree is
+exactly three deep) but found while confirming that it wasn't.
+
+**3. Auto-arrange minimised lane count, not link length — and the measurement refuted the first
+hypothesis.** The guess was that `packLanes` was scattering a chain; measured on the real programme it
+does the opposite, taking mean |Δlane| per link from 13.0 to 2.3 and lanes from 144 to 13. The
+residual problem is real but smaller: first-fit is _indifferent_ between equally-free lanes, so a
+successor routinely lands as far as possible from its predecessor. Passing the plan's logic in as an
+optional hint — choose the nearest free lane, never open one you would not have opened — gives mean
+1.83, halves the links spanning more than five lanes, and uses **exactly the same 13 lanes**. The
+hint is one optional parameter of the one packer, absent ⇒ byte-identical, for the reason ADR-0065
+gives about `routeOrthogonal`.
+
+Worth recording separately: the state the planner actually meets **on import** is 144 lanes, because
+the interchange commit assigns `laneIndex` sequentially by source order. That, not the packer, is the
+dominant source of "up and off the canvas". Auto-arrange is the existing remedy and it works; nothing
+tells a planner to run it. Left as a product question rather than fixed here, because packing at
+import needs computed dates that do not exist until the recalculation that follows the insert.

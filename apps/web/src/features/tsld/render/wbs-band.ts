@@ -19,6 +19,19 @@ import { daysBetween, screenXOfDay, type Size, type Viewport } from './render-mo
 /** How many nesting levels the band renders, stacked (ADR-0063 §3). Depth 0 is the outermost. */
 export const WBS_BAND_MAX_DEPTH = 2;
 
+/**
+ * Whether a group at this depth is one the band draws — the **one** expression of the ADR-0063 §3 cap.
+ *
+ * It is a named export rather than an inline comparison because it has a THIRD caller outside this
+ * module: the host's scene filter. The cap only holds together if "the band draws it" and "the scene
+ * stops drawing it" are the same predicate; when they were two, a summary past the cap was dropped by
+ * the scene and skipped by the band, so it rendered nowhere at all — while this file's own docblock
+ * said it stayed in the diagram.
+ */
+export function isWithinBandDepth(depth: number): boolean {
+  return depth >= 0 && depth <= WBS_BAND_MAX_DEPTH;
+}
+
 /** One stacked sub-row's height, in CSS px. */
 export const WBS_BAND_ROW_HEIGHT = 16;
 
@@ -79,7 +92,7 @@ export function wbsBandHeight(renderedDepths: number): number {
 export function wbsBandDepths(groups: readonly WbsBandGroup[]): number {
   const depths = new Set<number>();
   for (const group of groups) {
-    if (group.depth >= 0 && group.depth <= WBS_BAND_MAX_DEPTH) depths.add(group.depth);
+    if (isWithinBandDepth(group.depth)) depths.add(group.depth);
   }
   return depths.size;
 }
@@ -108,7 +121,7 @@ export function wbsBandBars(
   view: Viewport,
   size: Size,
 ): WbsBandBar[] {
-  const rendered = groups.filter((g) => g.depth >= 0 && g.depth <= WBS_BAND_MAX_DEPTH);
+  const rendered = groups.filter((g) => isWithinBandDepth(g.depth));
   // The sub-row a depth occupies: the depths actually present, in order. See `wbsBandDepths`.
   const rowOfDepth = new Map<number, number>();
   for (const depth of [...new Set(rendered.map((g) => g.depth))].sort((a, b) => a - b)) {

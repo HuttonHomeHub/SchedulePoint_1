@@ -913,7 +913,8 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   step) proves the permission model and the no-activity-lost invariant against a real API with the
   pen enforced — the only place the optimistic-`version` trap is testable at all.
 
-- **ADR-0064** _(Accepted; M1 landed, `VITE_CANVAS_AUTHORING_FLOW` **default-on** 2026-07-31)_ —
+- **ADR-0064** _(Accepted; M1–M3 landed + the enablement review folded, released in `web-v0.62.0`;
+  `VITE_CANVAS_AUTHORING_FLOW` **default-on** 2026-07-31)_ —
   Canvas authoring flow: the tool-mode contract and recalculation quiescence. Opened on two reports
   from one driving session — six link attempts producing **zero** dependencies, and one link
   recorded the wrong way round — and its first act was to **diagnose rather than fix**. The

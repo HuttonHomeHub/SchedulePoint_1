@@ -1028,6 +1028,10 @@ function toEngineActivity(
     id: row.id,
     durationMinutes: row.durationMinutes,
     type: row.type,
+    // WBS containment (ADR-0038) — the input to the §24 summary rollup. Orthogonal to the dependency
+    // graph, so a plan with no summary is byte-identical with it or without it; a plan WITH summaries
+    // is not, which is how its absence went unnoticed (see `ScheduleActivityRow.parentId`).
+    parentId: row.parentId,
     constraintType: row.constraintType,
     constraintDate: row.constraintDate ? formatCalendarDate(row.constraintDate) : null,
     secondaryConstraintType: row.secondaryConstraintType,

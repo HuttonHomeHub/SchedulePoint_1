@@ -66,6 +66,33 @@ describe('deriveWbsBandSource', () => {
   });
 
   /**
+   * The cap's other half. The band stacks `WBS_BAND_MAX_DEPTH + 1` levels and skips anything deeper
+   * (ADR-0063 §3), leaving it "an ordinary bar in the diagram" — which only holds if the scene keeps
+   * it. It did not: every `WBS_SUMMARY` was lifted out regardless of depth, so a summary past the cap
+   * was skipped by the band, removed from the scene, and rendered nowhere at all. Nothing errored and
+   * nothing looked broken; a phase was simply absent from the picture.
+   *
+   * Four levels deep, so the innermost (depth 3) is over the cap while its three ancestors are not.
+   */
+  it('keeps an over-cap summary in the scene, since the band will not draw it', () => {
+    const nested: ActivitySummary[] = [0, 1, 2, 3].map((depth) =>
+      anActivity({
+        id: `d${depth}`,
+        name: `Level ${depth}`,
+        type: 'WBS_SUMMARY',
+        ...(depth === 0 ? {} : { parentId: `d${depth - 1}` }),
+        earlyStart: '2026-01-01',
+        earlyFinish: '2026-03-31',
+      }),
+    );
+    const source = deriveWbsBandSource(nested, { enabled: true, toggleOn: true });
+    // The band takes the three it can stack…
+    expect(source.groups?.filter((g) => g.depth <= 2).map((g) => g.id)).toEqual(['d0', 'd1', 'd2']);
+    // …and the scene keeps exactly the one it cannot, so no summary is lost between them.
+    expect(source.sceneActivities.map((a) => a.id)).toEqual(['d3']);
+  });
+
+  /**
    * `null` and `[]` are different answers — "the band is off" and "the band is on with nothing in
    * it" — and a caller that treated them the same would reserve height for an empty strip, or drop
    * a band the user had switched on.

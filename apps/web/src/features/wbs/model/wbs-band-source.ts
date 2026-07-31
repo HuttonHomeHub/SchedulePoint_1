@@ -2,7 +2,12 @@ import type { ActivitySummary } from '@repo/types';
 
 import { wbsBandGroups, type WbsBandGroupInput } from './wbs-groups';
 
-import { wbsBandDepths, wbsBandHeight, type BarDateSource } from '@/features/tsld';
+import {
+  isWithinBandDepth,
+  wbsBandDepths,
+  wbsBandHeight,
+  type BarDateSource,
+} from '@/features/tsld';
 
 /**
  * **One** derivation of "is the WBS band on, what goes in it, and what is left for the scene"
@@ -58,10 +63,18 @@ export function deriveWbsBandSource(
     return { active: false, groups: null, height: 0, sceneActivities: activities };
   }
   const groups = wbsBandGroups(activities, { source: options.source ?? 'early' });
+  // A summary leaves the scene ONLY when the band is actually going to draw it. The band caps its
+  // stacked depth (ADR-0063 §3), so lifting every summary out unconditionally made a depth-3 one
+  // disappear from both surfaces at once — invisible, unselectable on the canvas, and contradicting
+  // `wbs-band.ts`'s own docblock, which says such a summary "is still an ordinary bar in the diagram".
+  // Keyed on `isWithinBandDepth`, imported from the band, so the two halves of the cap are one rule.
+  const bandIds = new Set(
+    groups.filter((g) => g.id !== null && isWithinBandDepth(g.depth)).map((g) => g.id),
+  );
   return {
     active: true,
     groups,
     height: wbsBandHeight(wbsBandDepths(groups)),
-    sceneActivities: activities.filter((a) => a.type !== 'WBS_SUMMARY'),
+    sceneActivities: activities.filter((a) => a.type !== 'WBS_SUMMARY' || !bandIds.has(a.id)),
   };
 }

@@ -21,6 +21,18 @@ export interface ScheduleActivityRow {
   id: string;
   durationMinutes: number;
   type: ActivityType;
+  /**
+   * The activity's **WBS parent** (ADR-0038), which the engine's summary-rollup pass reads to find a
+   * `WBS_SUMMARY`'s direct children (ADR-0035 §24).
+   *
+   * It is loaded here because leaving it out is not inert: a summary with no visible children takes
+   * §24's **empty-summary** branch and collapses to a zero-length point at the data date. That is a
+   * defined, plausible-looking answer, which is why it shipped — every summary in an imported P6
+   * programme drew as a 2px sliver on the project start, and nothing anywhere reported an error.
+   * Absent/null still means "top level"; the distinction this column carries is exactly the one the
+   * empty-summary convention cannot make on its own.
+   */
+  parentId: string | null;
   constraintType: ConstraintType | null;
   constraintDate: Date | null;
   /** Secondary constraint (ADR-0035 §10, M4): drives the backward pass only. */
@@ -209,6 +221,9 @@ export class ScheduleRepository {
         id: true,
         durationMinutes: true,
         type: true,
+        // The WBS containment tree (ADR-0038) — see `ScheduleActivityRow.parentId` for why omitting
+        // it produces a wrong schedule rather than an inert one.
+        parentId: true,
         constraintType: true,
         constraintDate: true,
         secondaryConstraintType: true,

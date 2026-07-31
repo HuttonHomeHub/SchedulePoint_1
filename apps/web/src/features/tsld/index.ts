@@ -34,4 +34,9 @@ export { todayDayFraction } from './render/time-scale';
  * band's *content* derivation and needs to know how tall the band that shows it will be — the one
  * allowed direction across this seam (D8 forbids `tsld → other feature`, not the reverse).
  */
-export { wbsBandDepths, wbsBandHeight, WBS_BAND_MAX_DEPTH } from './render/wbs-band';
+export {
+  isWithinBandDepth,
+  wbsBandDepths,
+  wbsBandHeight,
+  WBS_BAND_MAX_DEPTH,
+} from './render/wbs-band';
