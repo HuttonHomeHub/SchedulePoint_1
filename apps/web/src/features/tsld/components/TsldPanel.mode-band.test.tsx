@@ -1,7 +1,7 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useEffect } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
@@ -99,12 +99,16 @@ function Harness({
   canEdit = true,
   onLink,
   onOpenLogic,
+  onUndoLastEdit,
+  recalcHold,
 }: {
   arm: 'select' | 'add-activity' | 'link' | 'loe';
   activities?: ActivitySummary[];
   canEdit?: boolean;
   onLink?: React.ComponentProps<typeof TsldPanel>['onLink'];
   onOpenLogic?: (activity: ActivitySummary) => void;
+  onUndoLastEdit?: () => void;
+  recalcHold?: React.ComponentProps<typeof TsldPanel>['recalcHold'];
 }): React.ReactElement {
   const canvasUi = useTsldCanvasUiState();
   useEffect(() => {
@@ -112,17 +116,26 @@ function Harness({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- arm once on mount
   }, []);
   return (
-    <TsldPanel
-      activities={activities}
-      dependencies={NO_DEPS}
-      dataDate="2026-01-01"
-      canEdit={canEdit}
-      canvasUi={canvasUi}
-      onCreate={() => Promise.resolve({ recalcConflict: null })}
-      {...(onLink ? { onLink } : {})}
-      {...(onOpenLogic ? { onOpenLogic } : {})}
-      fill
-    />
+    <>
+      {/* Lets a test start a FRESH arming of a tool — the state the stale-confirmation
+          regression below is about. Nothing in the panel exposes this from outside. */}
+      <button type="button" onClick={() => canvasUi.setMode('link')}>
+        re-arm link
+      </button>
+      <TsldPanel
+        activities={activities}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit={canEdit}
+        canvasUi={canvasUi}
+        onCreate={() => Promise.resolve({ recalcConflict: null })}
+        {...(onLink ? { onLink } : {})}
+        {...(onOpenLogic ? { onOpenLogic } : {})}
+        {...(onUndoLastEdit ? { onUndoLastEdit } : {})}
+        {...(recalcHold ? { recalcHold } : {})}
+        fill
+      />
+    </>
   );
 }
 
@@ -222,5 +235,133 @@ describe('TsldPanel — canvas empty state (T9)', () => {
   it('says nothing once the plan has any activity at all', () => {
     render(<Harness arm="select" />);
     expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * **The link confirmation and its Undo** (ADR-0064 T5). The leaf component's own suite proves it
+ * calls a passed-in `onUndo`; what was untested is the thing a planner actually does — create a
+ * link, read what it says, press Undo. The component review flagged it as the ADR-0062 M6 shape: a
+ * feature that reads as covered because a suite with the right name exists.
+ */
+describe('TsldPanel — the link confirmation names the direction and undoes it (T5)', () => {
+  it('states the created link, then hands the Undo back to the host', async () => {
+    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    const onUndoLastEdit = vi.fn();
+    render(<Harness arm="link" onLink={onLink} onUndoLastEdit={onUndoLastEdit} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // picks A
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // → B
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // commits
+
+    // The direction is the whole point of the sentence — "linked" without it is what the planner
+    // could not verify in the driving session that opened this epic.
+    const band = await screen.findByTestId('canvas-mode-band');
+    expect(band).toHaveTextContent('Linked “Set out” → “Reinforce” (FS).');
+
+    fireEvent.click(within(band).getByRole('button', { name: 'Undo' }));
+    expect(onUndoLastEdit).toHaveBeenCalledOnce();
+  });
+
+  it('does not replay the confirmation the next time the tool is armed', async () => {
+    // THE regression. `lastLink` used to be guarded by an `atMode` field that was always `'link'`
+    // and only read inside a `mode === 'link'` branch — a condition that could never be false. So
+    // once a planner had made one link, every later arming replayed "Linked A → B" beside an Undo
+    // bound to the top of the command stack, which by then was a different, more recent edit.
+    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(<Harness arm="link" onLink={onLink} onUndoLastEdit={vi.fn()} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(await screen.findByTestId('canvas-mode-band')).toHaveTextContent('Linked “Set out”');
+
+    fireEvent.keyDown(window, { key: 'Escape' }); // disarm
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+
+    // Re-arm: a fresh session, so the band must prompt rather than congratulate.
+    fireEvent.click(screen.getByRole('button', { name: 're-arm link' }));
+    const band = screen.getByTestId('canvas-mode-band');
+    expect(band).toHaveTextContent('Linking FS — click the predecessor');
+    expect(band).not.toHaveTextContent('Linked');
+    // …and no Undo, which is the half that could have discarded the wrong edit.
+    expect(within(band).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
+  it('says nothing when the API rejected the link', async () => {
+    // A cycle or duplicate resolves `applied: false`. Announcing a link that does not exist is
+    // worse than announcing nothing.
+    const onLink = vi
+      .fn()
+      .mockResolvedValue({ applied: false, conflict: 'That would make a loop.' });
+    render(<Harness arm="link" onLink={onLink} onUndoLastEdit={vi.fn()} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    await waitFor(() => expect(onLink).toHaveBeenCalled());
+    expect(screen.queryByTestId('canvas-mode-band')).not.toHaveTextContent('Linked');
+  });
+});
+
+/**
+ * **The recalculation hold** (ADR-0064 T7), at the composition rather than the hook.
+ *
+ * `use-plan-auto-recalc.test.ts` covers the token API thoroughly; what had no fast test is that the
+ * PANEL takes exactly one hold while a pick is open and releases it on every exit path. The epic's
+ * own framing is why that matters: a leaked hold does not fail loudly — the plan's dates simply
+ * stop updating for the rest of the session.
+ */
+describe('TsldPanel — recalculation quiescence while a pick is open (T7)', () => {
+  function seam(): {
+    hold: Mock<(token: symbol) => void>;
+    release: Mock<(token: symbol) => void>;
+  } {
+    return { hold: vi.fn<(token: symbol) => void>(), release: vi.fn<(token: symbol) => void>() };
+  }
+
+  it('holds while the pick is open and releases when it commits', async () => {
+    const recalcHold = seam();
+    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(<Harness arm="link" onLink={onLink} recalcHold={recalcHold} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+
+    expect(recalcHold.hold, 'nothing is held before a pick opens').not.toHaveBeenCalled();
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // opens the pick
+    expect(recalcHold.hold).toHaveBeenCalledOnce();
+    expect(recalcHold.release).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // commits
+    await waitFor(() => expect(recalcHold.release).toHaveBeenCalledOnce());
+    // Same token both ways: a mismatched release would silently free someone else's hold.
+    expect(recalcHold.release.mock.calls[0]?.[0]).toBe(recalcHold.hold.mock.calls[0]?.[0]);
+  });
+
+  it('releases when the tool is disarmed mid-pick', () => {
+    const recalcHold = seam();
+    render(<Harness arm="link" onLink={vi.fn()} recalcHold={recalcHold} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(recalcHold.hold).toHaveBeenCalledOnce();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(recalcHold.release).toHaveBeenCalledOnce();
+  });
+
+  it('releases on unmount — the exit path nobody remembers', () => {
+    const recalcHold = seam();
+    const { unmount } = render(<Harness arm="link" onLink={vi.fn()} recalcHold={recalcHold} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(recalcHold.hold).toHaveBeenCalledOnce();
+    unmount();
+    expect(recalcHold.release).toHaveBeenCalledOnce();
   });
 });

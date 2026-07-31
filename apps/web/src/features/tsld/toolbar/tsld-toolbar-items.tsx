@@ -281,6 +281,17 @@ function AddActivityControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  /**
+   * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
+   *
+   * `Menu` restores focus here on Escape and on every item pick. Pointing that at `triggerRef` sent
+   * focus to the caret — which is `tabIndex={-1}` and therefore not in the sequential tab order — so
+   * after the most ordinary interaction with this control (pick a type, or Escape out) a keyboard
+   * user's next Tab jumped to whatever came next in raw DOM order rather than the next toolbar item
+   * (WCAG 2.4.3). `IsolateControl` below has always done this correctly; these two did not.
+   */
+  const mainButtonRef = useRef<HTMLButtonElement>(null);
+
   const disabled = api.disabled;
   const activeLabel = ACTIVITY_TYPE_LABELS[ctx.createType];
   // Reflect an armed LOE tool on the trigger (B4): fold it into the pressed state AND swap the label to
@@ -309,6 +320,7 @@ function AddActivityControl({
       >
         <button
           {...api.itemProps}
+          ref={mainButtonRef}
           type="button"
           aria-pressed={armed}
           aria-disabled={disabled || undefined}
@@ -358,7 +370,7 @@ function AddActivityControl({
         onClose={close}
         anchor={anchor}
         label="Add activity type"
-        restoreFocusRef={triggerRef}
+        restoreFocusRef={mainButtonRef}
       >
         <MenuSection>Draw on the canvas</MenuSection>
         {ADD_ACTIVITY_TYPES.map((type) => (
@@ -456,6 +468,17 @@ function LinkControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  /**
+   * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
+   *
+   * `Menu` restores focus here on Escape and on every item pick. Pointing that at `triggerRef` sent
+   * focus to the caret — which is `tabIndex={-1}` and therefore not in the sequential tab order — so
+   * after the most ordinary interaction with this control (pick a type, or Escape out) a keyboard
+   * user's next Tab jumped to whatever came next in raw DOM order rather than the next toolbar item
+   * (WCAG 2.4.3). `IsolateControl` below has always done this correctly; these two did not.
+   */
+  const mainButtonRef = useRef<HTMLButtonElement>(null);
+
   const disabled = api.disabled;
   return (
     <>
@@ -478,6 +501,7 @@ function LinkControl({
       >
         <button
           {...api.itemProps}
+          ref={mainButtonRef}
           type="button"
           aria-pressed={ctx.isLinking}
           aria-disabled={disabled || undefined}
@@ -525,7 +549,7 @@ function LinkControl({
         onClose={close}
         anchor={anchor}
         label="Link type"
-        restoreFocusRef={triggerRef}
+        restoreFocusRef={mainButtonRef}
       >
         {LINK_TYPES.map(({ type, label }) => (
           <MenuItem

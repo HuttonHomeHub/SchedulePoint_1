@@ -83,7 +83,11 @@ export function CreateActivityPopover({
         value={name}
         onChange={(event) => setName(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') {
+          // Guarded on `saving` for the same reason as the Cancel button below. Previously the
+          // input was natively `disabled` while saving, which suppressed keydown entirely; moving
+          // it to `readOnly` (to keep focus, SC 2.4.3) re-opened Escape as a route to a cancel that
+          // cannot actually stop the in-flight write.
+          if (event.key === 'Escape' && !saving) {
             event.preventDefault();
             onCancel();
           }
@@ -108,7 +112,26 @@ export function CreateActivityPopover({
         </p>
       ) : null}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} aria-disabled={saving}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-disabled={saving}
+          // The same guard + shading the submit carries, and for a sharper reason: the create
+          // promise is already in flight and cannot be aborted, so a Cancel that "worked" would
+          // close the popover and then let the activity appear anyway — the control would be
+          // lying. It previously had the `aria-disabled` attribute alone, which announced
+          // "unavailable" to a screen-reader user while staying fully lit and fully clickable
+          // for everyone else.
+          onClick={(event) => {
+            if (saving) {
+              event.preventDefault();
+              return;
+            }
+            onCancel();
+          }}
+          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+        >
           Cancel
         </Button>
         <Button

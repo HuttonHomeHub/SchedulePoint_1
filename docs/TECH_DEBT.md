@@ -395,3 +395,37 @@ would not exercise the code being budgeted.
 
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
+
+### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
+
+Five specialist reviews ran over the combined authoring + routing diff. Every **blocking** finding
+was fixed with a regression test (see `docs/DECISIONS.md`). These are the non-blocking remainder,
+recorded rather than rushed into an enablement pass:
+
+- **Two hoists that would shrink the measured routing cost** (performance review). `activityRect` is
+  computed three times per visible activity per frame with routing on — once in `cull()`, once in
+  `laneIntervalIndex`, once in the `rects` map the bar layer builds later; and `crossedLanes` is
+  computed twice per edge (`routeOrthogonal`, then `bundleCorridors`). Both are pure duplicated work
+  with an obvious fix (build `rects` before the edge block; carry the crossed-lane list on the
+  per-edge descriptor). They are inside an overhead already measured and accepted, so they belong
+  with **#75** rather than blocking a release.
+- **A fourth hand-rolled "message + optional action" strip.** `EditConflictBanner`,
+  `CanvasModeBand` and the new canvas empty state are three near-identical rounded-bordered strips,
+  none reusing the others and only one going through `cn()`/CVA. Extract a shared primitive before a
+  fifth lands.
+- **The split-button composite is duplicated** between `AddActivityControl` and `LinkControl` —
+  identical wrapper, primary classes, caret classes and ArrowDown handler. Two real consumers is the
+  threshold `docs/COMPONENT_LIBRARY.md` sets for extraction, and the focus-restore defect above is
+  exactly what duplication of this shape produces.
+- **`toolbarSplitCaretVariants`' docblock is now false** — it says a true split button "would need
+  its own composite-stop design. Until that lands…", and two of them have since landed on it.
+- **`ArrowUp` does not open either type menu** (only `ArrowDown`). `IsolateControl` handles both.
+  Not a 2.1.1 failure — `ArrowDown` gives full reachability — but inconsistent.
+- **No flag-off regression for the _pointer_ two-click link pick.** The echo plumbing
+  (`onLinkPickStep`/`linkPickPredecessorId`/`dropLinkPickSignal`) is wired unconditionally on top of
+  the pre-existing ADR-0032 M5 gesture, and nothing proves it is inert with the epic's flag off; the
+  only tests touching pointer-driven dependency creation exercise the old edge-drag.
+- **The pen-loss-mid-pick case is untested at every layer** — no test takes the pen away, or lets it
+  expire, while a link pick is open, and asserts the 409/423 surfaces and the pick is abandoned
+  safely. `docs/TESTING.md` says that trap is only testable against a real API, so it belongs in
+  `e2e-authoring-flow`.

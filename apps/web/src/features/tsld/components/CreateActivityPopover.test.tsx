@@ -94,3 +94,40 @@ describe('CreateActivityPopover', () => {
     expect(label).toHaveAttribute('for', screen.getByLabelText('Name').id);
   });
 });
+
+/**
+ * **Cancel must not lie while a create is in flight** (ADR-0064 enablement review, ux + component
+ * both raised it). The submit was correctly moved off the native `disabled` attribute with a click
+ * guard and shading; Cancel got the `aria-disabled` attribute alone — announcing "unavailable" to a
+ * screen-reader user while staying fully lit and fully clickable for everyone else.
+ *
+ * The consequence was not cosmetic. `onCancel` closes the popover but cannot abort the in-flight
+ * `onCreate` promise, so a Cancel that "worked" would close the popover and then let the activity
+ * appear anyway.
+ */
+describe('CreateActivityPopover — Cancel during a save', () => {
+  it('does not cancel on click while saving', () => {
+    const onCancel = vi.fn();
+    setup({ saving: true, onCancel });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('does not cancel on Escape while saving', () => {
+    // The input is `readOnly` rather than `disabled` (to keep focus), which re-opened this route:
+    // a natively disabled input dispatches no keydown at all.
+    const onCancel = vi.fn();
+    setup({ saving: true, onCancel });
+    fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Escape' });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('still cancels both ways when nothing is in flight', () => {
+    const onCancel = vi.fn();
+    setup({ saving: false, onCancel });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+    fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalledTimes(2);
+  });
+});

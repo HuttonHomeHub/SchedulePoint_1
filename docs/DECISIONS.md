@@ -1511,3 +1511,37 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   overlapping verticals cost what separate ones did, and the re-measurement found no change either
   way. M3 stands on legibility alone. And the gate's other input, a ux review of what the remaining
   problem actually is, was **not run** in this session.
+
+- **The enablement review pass found five defects that had passed a human read (ADR-0064/0065,
+  2026-07-31).** Five specialists over the combined epic diff; performance passed, the other four
+  blocked. What they found, in descending order of how badly it would have bitten:
+
+  1. **A stale link confirmation beside a live Undo.** `lastLink` was guarded by an `atMode` field
+     always set to the literal `'link'` and only read inside a `mode === 'link'` branch — a
+     condition that can never be false. So once a planner had made one link, **every later arming of
+     the Link tool replayed "Linked A → B"**, next to an Undo bound to the top of the command stack,
+     which by then was a different, more recent edit. A sentence naming one link beside a button
+     that discards another. Now a per-arming generation; the regression test was verified to fail
+     against the old guard before being kept.
+  2. **Focus restored to a `tabIndex={-1}` node.** Both new split buttons passed
+     `restoreFocusRef={triggerRef}` — the caret's ref, deliberately outside the tab order — so after
+     picking a type or pressing Escape, the next Tab went wherever raw DOM order led (WCAG 2.4.3).
+     `IsolateControl`, in the same file, had always done it correctly with a separate
+     `mainButtonRef`. The reviewer reproduced it against the real toolbar rather than reading it.
+  3. **The Link tool's pointer picks were silent.** The keyboard path announced inline; the pointer
+     path was wired to a raw `setState`. Both **drop** routes came through the same callback,
+     including the recalculation-cap drop that fires with no user gesture — so a screen-reader user
+     mid-pick got no notice their pick had gone, and their next Enter was read as a fresh
+     predecessor. The LOE tool's equivalent handler, twenty lines up, had been right all along.
+  4. **A Cancel that could not cancel.** Moving off native `disabled` (correct — SC 2.4.3) gave the
+     submit a click guard and shading; Cancel got the `aria-disabled` attribute alone, so it
+     announced "unavailable" while staying lit and clickable — and `onCancel` cannot abort the
+     in-flight create, so it would have closed the popover and let the activity appear anyway.
+     Switching the input to `readOnly` had re-opened Escape as the same route.
+  5. **Untested wiring at three seams** — the Undo path, the hold/release pairing, and the
+     drop-signal round trip — all covered now, plus the two derived flags.
+
+  The pattern is worth naming: **four of the five are a correct pattern applied to one control and
+  not its neighbour.** Not one was a design mistake; every one was an inconsistency inside a diff
+  whose own docblocks described the right thing. That is what a specialist gate catches and a human
+  read does not, and it is the third epic running where that has been true.

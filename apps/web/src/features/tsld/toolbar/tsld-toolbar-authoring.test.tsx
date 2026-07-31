@@ -210,3 +210,48 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
     });
   });
 });
+
+/**
+ * **Focus must come back to the half that is in the tab order** (WCAG 2.4.3; found by the ADR-0064
+ * enablement accessibility review, which reproduced it against the real toolbar).
+ *
+ * Both split buttons passed `restoreFocusRef={triggerRef}` — the *caret's* ref. The caret is
+ * `tabIndex={-1}`, deliberately, so the pair occupies one roving stop. So after the most ordinary
+ * interaction with either control — pick a type, or Escape out — focus sat on a node the browser's
+ * sequential tab order skips, and the next Tab jumped to whatever came next in raw DOM order rather
+ * than to the next toolbar item. `IsolateControl` in the same file had always done this correctly
+ * with a separate `mainButtonRef`; these two had not.
+ */
+describe('Add / Link split buttons — focus restore (a11y)', () => {
+  it.each([
+    ['Activity type:', 'Add'],
+    ['Link type:', 'Link'],
+  ])('returns focus to the primary half, not the caret, after Escape (%s)', (caretPrefix) => {
+    render(doRow(ctx({ hasDiagram: true })));
+    const caret = screen.getByRole('button', { name: new RegExp(`^${caretPrefix}`) });
+    fireEvent.click(caret);
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(document.activeElement).not.toBe(caret);
+    expect(document.activeElement).toHaveAttribute('aria-pressed');
+    // The primary is the roving stop; the caret is deliberately excluded from it.
+    expect(caret).toHaveAttribute('tabindex', '-1');
+  });
+
+  it.each([['Activity type:'], ['Link type:']])(
+    'returns focus to the primary half after picking an item (%s)',
+    (caretPrefix) => {
+      render(doRow(ctx({ hasDiagram: true })));
+      const caret = screen.getByRole('button', { name: new RegExp(`^${caretPrefix}`) });
+      fireEvent.click(caret);
+      // The type pickers are `menuitemradio` (a single-select set), not plain `menuitem`.
+      const items = screen
+        .getAllByRole('menuitemradio')
+        .filter((i) => i.getAttribute('aria-disabled') !== 'true');
+      const pick = items[items.length - 1];
+      if (!pick) throw new Error('no enabled menu item to pick');
+      fireEvent.click(pick);
+      expect(document.activeElement).not.toBe(caret);
+      expect(document.activeElement).toHaveAttribute('aria-pressed');
+    },
+  );
+});

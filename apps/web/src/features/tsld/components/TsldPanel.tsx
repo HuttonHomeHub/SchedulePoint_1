@@ -477,13 +477,25 @@ export function TsldPanel({
     successorName: string;
     linkType: string;
     /**
-     * The tool that was armed when the link landed. The confirmation renders only while that is
-     * still the armed tool, which is what makes it disappear on any arm/disarm **without an
-     * effect** — the alternative (clear-on-mode-change in a `useEffect`) is a setState in an effect
-     * for state React can simply derive.
+     * Which **arming of the Link tool** created this link. The confirmation renders only while that
+     * is still the current arming, so it cannot outlive the session it belongs to.
+     *
+     * This replaces an `atMode: EditMode` field that was always set to the literal `'link'` and
+     * only ever read inside a `mode === 'link'` branch — a guard that could never be false. The
+     * effect was that once a planner had made one link, **every later arming of the tool replayed
+     * that confirmation**, next to an Undo wired to the top of the command stack — which by then
+     * was some other, more recent edit. A sentence naming one link beside a button that discards a
+     * different one is worse than no sentence. Found by the ADR-0064 enablement UX review.
      */
-    atMode: EditMode;
+    armGeneration: number;
   } | null>(null);
+  /**
+   * Bumped on every arming of the Link tool. Held as **both** a ref and state on purpose: the
+   * commit callback needs the current value without re-subscribing (the ref), and the render needs
+   * to react when it changes (the state).
+   */
+  const linkArmGenerationRef = useRef(0);
+  const [linkArmGeneration, setLinkArmGeneration] = useState(0);
   // Mirror the live picked-start id so the mode effect can read it at disarm time WITHOUT listing
   // `loeStartId` as a dep (which would re-announce the arm prompt on every pick).
   const loeStartIdRef = useRef(loeStartId);
@@ -542,6 +554,11 @@ export function TsldPanel({
     if (mode === 'add-activity') {
       announce(modeStatementText({ kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }));
     } else if (mode === 'link') {
+      // A fresh arming of the tool is a fresh session: bump the generation so any confirmation from
+      // a PREVIOUS arming stops matching and the band goes back to prompting. See the state's
+      // docblock — this replaces an `atMode` guard that could never be false.
+      linkArmGenerationRef.current += 1;
+      setLinkArmGeneration(linkArmGenerationRef.current);
       announce(modeStatementText({ kind: 'linking', linkType }));
     } else if (previous === 'add-activity' || previous === 'link') {
       announce('Tool closed. Select mode.');
@@ -591,8 +608,13 @@ export function TsldPanel({
                 predecessorName:
                   activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
               }
-            : lastLink?.atMode === 'link'
-              ? { kind: 'linked', ...lastLink }
+            : lastLink?.armGeneration === linkArmGeneration
+              ? {
+                  kind: 'linked',
+                  predecessorName: lastLink.predecessorName,
+                  successorName: lastLink.successorName,
+                  linkType: lastLink.linkType,
+                }
               : { kind: 'linking', linkType }
           : null;
 
@@ -1285,6 +1307,36 @@ export function TsldPanel({
     }
   };
 
+  /**
+   * The Link tool's per-pick feedback from the **canvas**, the exact sibling of
+   * `handleLoeSpanStep` above — and for the same reason: the canvas is `aria-hidden` (ADR-0026 D7),
+   * so a pick made with the pointer is otherwise a silent state change.
+   *
+   * This was `setLinkPickedId` passed raw, which meant the keyboard path announced its picks (it
+   * calls `announce` inline) and the pointer path announced nothing. Worse, the two **drop** routes
+   * — the first Escape, and the ADR-0064 T7 recalculation-cap drop — also came through here, and
+   * the cap drop happens with **no user gesture at all**. A screen-reader user mid-pick was given
+   * no notice their pick had gone, so their next Enter was read as a fresh predecessor rather than
+   * the successor they intended: a wrong link, silently. (WCAG 4.1.3; found by the ADR-0064
+   * enablement accessibility review.)
+   */
+  const handleLinkPickStep = (predecessorId: string | null): void => {
+    setLinkPickedId(predecessorId);
+    if (predecessorId === null) {
+      // Only worth saying if something was actually open — this also fires on the seeding echo.
+      if (linkPickedId !== null) announce('Link pick dropped. Pick the predecessor again.');
+      return;
+    }
+    const picked = activities.find((a) => a.id === predecessorId);
+    announce(
+      modeStatementText({
+        kind: 'linkPicking',
+        linkType,
+        predecessorName: picked?.name ?? 'the picked activity',
+      }),
+    );
+  };
+
   const onIntent = (intent: EditIntent, anchor: Point): void => {
     // Ignore a new gesture while a create popover or a reposition is already in flight.
     if (pendingCreate || pendingReposition) return;
@@ -1501,7 +1553,7 @@ export function TsldPanel({
               successorName: succ?.name ?? 'activity',
               linkType: intent.type,
             };
-            setLastLink({ ...created, atMode: 'link' });
+            setLastLink({ ...created, armGeneration: linkArmGenerationRef.current });
             announce(modeStatementText({ kind: 'linked', ...created }));
           }
         })
@@ -1684,7 +1736,7 @@ export function TsldPanel({
         {showDiagram && dataDate ? (
           <>
             <TsldCanvas
-              onLinkPickStep={setLinkPickedId}
+              onLinkPickStep={handleLinkPickStep}
               dropLinkPickSignal={dropLinkPickSignal}
               linkPickPredecessorId={linkPickedId}
               activities={renderActivities}
