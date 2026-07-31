@@ -65,6 +65,7 @@ const activityRow = (
   // Storage is working-minutes (ADR-0036); a whole day = 1440 min on the all-minutes calendar.
   durationMinutes: durationDays * 1440,
   type: 'TASK',
+  parentId: null,
   constraintType: null,
   constraintDate: null,
   secondaryConstraintType: null,

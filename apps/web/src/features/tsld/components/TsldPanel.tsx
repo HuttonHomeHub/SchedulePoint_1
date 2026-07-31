@@ -1194,6 +1194,12 @@ export function TsldPanel({
   // Pure `packLanes` computes the minimal set of moves; undated activities have no x-span → keep
   // their lane. (Returns [] when the plan isn't schedulable — a dead case, since the toolbar only
   // renders when editing is enabled, which already requires a data date.)
+  //
+  // The plan's logic goes in as a hint so the packer, choosing among lanes that are already free,
+  // puts an activity near its predecessors rather than in whichever lane happened to free up first.
+  // It cannot change the lane COUNT (see `packLanes`) — only how far a link has to travel, which on
+  // an imported programme is the difference between a readable diagram and one whose lines leave the
+  // top of the viewport and come back lower down.
   const computeArrangeChanges = (): { id: string; laneIndex: number }[] => {
     if (dataDate === null) return [];
     const packItems = activities.flatMap((a) =>
@@ -1208,7 +1214,13 @@ export function TsldPanel({
             },
           ],
     );
-    return packLanes(packItems);
+    const predecessorsOf = new Map<string, string[]>();
+    for (const dependency of dependencies) {
+      const existing = predecessorsOf.get(dependency.successor.id);
+      if (existing) existing.push(dependency.predecessor.id);
+      else predecessorsOf.set(dependency.successor.id, [dependency.predecessor.id]);
+    }
+    return packLanes(packItems, predecessorsOf);
   };
 
   // Toolbar click: compute the pack up front so an already-tidy diagram reports "nothing to move"

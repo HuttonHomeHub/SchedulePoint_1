@@ -140,6 +140,28 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     return res.body.data.id as string;
   }
 
+  /** A zero-duration `WBS_SUMMARY` grouping node (ADR-0038), optionally under another summary. */
+  async function makeSummary(
+    actor: Actor,
+    planId: string,
+    name: string,
+    parentId?: string,
+  ): Promise<string> {
+    const res = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name, durationDays: 0, type: 'WBS_SUMMARY', ...(parentId ? { parentId } : {}) })
+      .expect(201);
+    return res.body.data.id as string;
+  }
+
+  /** File an existing activity under a summary. `version` 1: nothing has bumped the row yet. */
+  async function setParent(actor: Actor, activityId: string, parentId: string): Promise<void> {
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${activityId}`)
+      .send({ parentId, version: 1 })
+      .expect(200);
+  }
+
   async function link(actor: Actor, planId: string, pred: string, succ: string): Promise<void> {
     await actor.agent
       .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
@@ -559,6 +581,47 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await outsider.agent
       .get(`/api/v1/organizations/other/plans/${planId}/schedule/earned-value`)
       .expect(404);
+  });
+
+  it('rolls a WBS summary up from its children, nested, on recalculate (ADR-0038 / ADR-0035 §24)', async () => {
+    // The regression this pins is a LOADER omission, not engine arithmetic — which is exactly why it
+    // needs an e2e. `loadActivities` did not select `parentId`, so every summary reached the engine
+    // childless and took §24's **empty-summary** branch: a zero-length point at the data date. That is
+    // a defined answer, so nothing errored; an imported P6 programme simply drew every phase as a 2px
+    // sliver on the project start. `compute.wbs.spec.ts` passes `parentId` straight in, so it was green
+    // throughout and would have stayed green through any fix — the seam is the only place this is
+    // visible. Nested on purpose: the pass resolves deepest-first, so a one-level case would pass even
+    // if the depth ordering were wrong.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const top = await makeSummary(actor, planId, 'Civils');
+    const inner = await makeSummary(actor, planId, 'Piling', top);
+    // A(3) → B(4), both filed under the inner summary; C(2) sits directly under the outer one.
+    const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 4);
+    const c = await makeActivity(actor, planId, 'C', 2);
+    await link(actor, planId, a, b);
+    await setParent(actor, a, inner);
+    await setParent(actor, b, inner);
+    await setParent(actor, c, top);
+
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const acts = await activitiesByName(actor, planId);
+    // A 01-01→01-03, B 01-04→01-07, C 01-01→01-02 (no calendar: every day works).
+    expect(acts.get('Piling')).toMatchObject({
+      earlyStart: '2026-01-01',
+      earlyFinish: '2026-01-07',
+    });
+    // The outer summary spans its own child C *and* the inner summary's rolled-up span — proof the
+    // nested level resolved before its parent read it.
+    expect(acts.get('Civils')).toMatchObject({
+      earlyStart: '2026-01-01',
+      earlyFinish: '2026-01-07',
+    });
+    // Not the data-date collapse that shipped: a summary reduced to a zero-length point would satisfy
+    // a start-only assertion, so the finish is the one that matters.
+    expect(acts.get('Civils')?.earlyFinish).not.toBe('2026-01-01');
   });
 
   it('a mandatory pin that breaks logic is produced, flagged, and counted (ADR-0035 §7)', async () => {
