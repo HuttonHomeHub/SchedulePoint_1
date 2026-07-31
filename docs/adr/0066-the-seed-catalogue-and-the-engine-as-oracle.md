@@ -207,7 +207,11 @@ Three things it found, and the first is the milestone's own premise landing on i
   but the longest path says so. `longestChainFraction` is the assertion that was missing; bands now
   hand over to the same band of the next phase, so the plan runs as four concurrent streams and the
   longest chain is 25% of the plan rather than 99%. The regression test was verified to fail against
-  the old topology (0.992 against a 0.4 bound) before being relied on.
+  the old topology (0.992 against a 0.4 bound) before being relied on, and the fix was then re-seeded
+  into a live instance and read back **from the engine**, not from the graph maths that motivated it:
+  37% of tasks critical (was 96%), average total float 29 working days with a maximum of 109 (was
+  zero throughout), a 140-activity plan spanning under a year (was ten years for 500), and still no
+  undated activity — the WBS rollup that this ADR exists for is unaffected.
   Two smaller notes on it: the top-up links had to be confined to a band as well — drawn across the
   whole plan they crossed into neighbouring _parallel_ streams and re-serialised it to 66% even
   after the phase fix — and the scene layout used by the draw benchmark had **already** been fixed
