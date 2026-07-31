@@ -218,9 +218,15 @@ export async function seedPlan(
       try {
         await client.patch(planPath, {
           version: plan.version ?? 1,
-          ...(spec.plan.defaultCalendarKey === null
-            ? {}
-            : { calendarId: calendarIdByKey.get(spec.plan.defaultCalendarKey) }),
+          // `null` means NO calendar, and it has to be sent explicitly. Omitting the field leaves
+          // the org's seeded "Standard" five-day calendar in place (M5-C1), so a spec asking for an
+          // all-days plan would quietly get a working week — every date off, nothing failing. Found
+          // by the M3 differential, where the engine (reading the spec's null) and the application
+          // (holding the default) disagreed by four days on the same plan.
+          calendarId:
+            spec.plan.defaultCalendarKey === null
+              ? null
+              : (calendarIdByKey.get(spec.plan.defaultCalendarKey) ?? null),
           progressRecalcMode: spec.plan.options.progressRecalcMode,
           useExpectedFinishDates: spec.plan.options.useExpectedFinishDates,
           criticalPathDefinition: spec.plan.options.criticalPathDefinition,

@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 
+import {
+  formatReport,
+  SeedClient,
+  SeedHttpError,
+  seedPlan,
+  type SeedReport,
+} from '@repo/seed-http';
+
 import { parseArgs, USAGE } from './args.js';
 import { coverageReport, formatCoverage } from './capabilities/coverage.js';
 import { capabilityFamilyKeys, capabilitySpecs } from './capabilities/index.js';
-import { SeedClient, SeedHttpError } from './client.js';
-import { formatReport, type SeedReport } from './report.js';
-import { seedPlan } from './runner.js';
 import { KNOWN_TIERS, loadSpecs } from './specs.js';
 
 /**

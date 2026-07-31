@@ -70,8 +70,8 @@ function caseSpec(caseId: string, row: DimensionAssignment): SeedSpec {
   // instant, the LOE because the engine derives its span from the logic (ADR-0035 §21).
   const zeroDuration = isMilestone || subjectType === 'LEVEL_OF_EFFORT';
 
-  const calendars = calendarsFor(row);
-  const resources = resourcesFor(row);
+  const calendars = calendarsFor(caseId, row);
+  const resources = resourcesFor(caseId, row);
 
   return {
     seedName: `pairwise-${caseId}`,
@@ -212,7 +212,16 @@ function progressFor(row: DimensionAssignment, zeroDuration: boolean): SeedActiv
   };
 }
 
-function calendarsFor(row: DimensionAssignment): SeedSpec['calendars'] {
+/**
+ * Every case seeds into the SAME project, and a PROJECT calendar's name is unique per project
+ * (ADR-0053 §1), so the names carry the case id. Without it the second case 409s on the first
+ * one's calendars — which is what happened, and it is a collision in the CATALOGUE rather than a
+ * product defect, so it is fixed here rather than reported as a finding.
+ *
+ * The ORG calendar deliberately keeps a stable name: the seeder resolves the shared library by
+ * name and reuses it, so a per-case name would add one org-global calendar per case.
+ */
+function calendarsFor(caseId: string, row: DimensionAssignment): SeedSpec['calendars'] {
   const week = (weekdays: number[]) =>
     [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
       weekday,
@@ -222,21 +231,21 @@ function calendarsFor(row: DimensionAssignment): SeedSpec['calendars'] {
   return [
     {
       key: 'PW_PLAN_CAL',
-      name: `Pairwise plan week`,
+      name: `Pairwise plan week ${caseId}`,
       scope: 'PROJECT',
       days: week([1, 2, 3, 4, 5]),
       exceptions: [],
     },
     {
       key: 'PW_CAL_5',
-      name: `Pairwise five-day`,
+      name: `Pairwise five-day ${caseId}`,
       scope: 'PROJECT',
       days: week([1, 2, 3, 4, 5]),
       exceptions: [],
     },
     {
       key: 'PW_CAL_24',
-      name: `Pairwise 24-hour`,
+      name: `Pairwise 24-hour ${caseId}`,
       scope: 'PROJECT',
       days: week([0, 1, 2, 3, 4, 5, 6]),
       exceptions: [],
@@ -257,12 +266,17 @@ function calendarsFor(row: DimensionAssignment): SeedSpec['calendars'] {
   ];
 }
 
-function resourcesFor(row: DimensionAssignment): SeedSpec['resources'] {
+/**
+ * The resource carries the case id too, for the same reason the calendars do — a name and a code
+ * are unique per ORGANISATION (ADR-0053), and every case seeds into one. Reusing a single resource
+ * across cases is not an option: its kind, capacity and calendar are three of the dimensions.
+ */
+function resourcesFor(caseId: string, row: DimensionAssignment): SeedSpec['resources'] {
   return [
     {
       key: 'PW_RES',
-      name: `Pairwise ${String(row.resourceKind).toLowerCase()}`,
-      code: null,
+      name: `Pairwise ${String(row.resourceKind).toLowerCase()} ${caseId}`,
+      code: `PW-${caseId}`,
       kind: row.resourceKind as SeedResourceKind,
       // Only a driving resource needs its own calendar — and only a non-MATERIAL one may hold one.
       calendarKey: row.driving === 'yes' ? 'PW_CAL_RES' : null,

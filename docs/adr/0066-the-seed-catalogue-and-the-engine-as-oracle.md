@@ -1,6 +1,6 @@
 # ADR-0066: The seed catalogue, and the engine as the application's oracle
 
-- **Status:** Accepted (M0–M2 landed; M3–M5 in progress)
+- **Status:** Accepted (M0–M3 landed; M4–M5 in progress)
 - **Date:** 2026-07-31
 - **Supersedes:** nothing
 - **Builds on:** ADR-0034 (engine conformance), ADR-0035 (CPM semantics), ADR-0028 (the pen),
@@ -150,6 +150,29 @@ exactly the asymmetry a harness that feeds `computeSchedule` directly is structu
 
 M1 had already produced **#78** the same way. Four write-path gaps, none of which any existing gate
 could have reported, all found by asking one computable question about plans rather than about code.
+
+**What M3 shipped, and what it is allowed to claim.** The covering array is **63 cases over 26
+dimensions with zero legal pairs uncovered**, and the differential runs all of them against a real
+PostgreSQL in ~145 s. Three things about it are worth stating because each was a decision:
+
+- **The suite has been seen to fail.** A differential that has never failed reports the same green
+  whether it is comparing carefully or comparing nothing. So the LOE defect is reintroduced —
+  written straight into the persisted row after a clean seed, exactly as the importer used to make
+  it — and the guard asserts the comparison catches it. That guard was itself verified by blinding
+  the comparison and watching it fail with the message it was given.
+- **CI runs the whole array, not a prefix.** A truncated covering array is not a covering array, and
+  "the pairwise differential passes" would not have changed wording to say so. It is its own CI step
+  so the cost is attributed to a line a reader can see rather than hidden inside the API e2e run —
+  the plan's stated risk for this task being that a slow suite gets quietly disabled.
+- **What it cannot claim.** It cannot tell us the engine is right; the ADR-0034 goldens do that per
+  capability against documented semantics. It catches what lies between the engine and the screen.
+  It also covers **pairs only** — three- and four-way interactions are not covered and will not be.
+
+Building it found one real seeder infidelity, and the way it surfaced is the design working:
+`defaultCalendarKey: null` in a spec left the org's seeded five-day "Standard" calendar on the plan,
+so the engine (reading the spec's null) and the application (holding the default) disagreed by four
+days. The seeder now sends `calendarId: null` explicitly. Nothing else would have caught that — the
+plan looked correct, and every date in it was wrong.
 
 Two decisions worth recording because a reader will otherwise re-derive them:
 
