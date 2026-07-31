@@ -164,7 +164,26 @@ function weekdayIndex(iso: string): number {
  * Build the ruler bands for the current viewport. Day/month rows are omitted below their
  * legibility thresholds so labels never collide; the caller renders whichever rows are present.
  */
-export function rulerTicks(view: Viewport, size: Size, dataDate: string): RulerModel {
+/**
+ * How close a real month/year boundary may come to the pinned "sticky" label before that label is
+ * suppressed (ADR-0064 T18).
+ *
+ * The ruler labels the month in view even when its 1st is off-screen, by emitting a **sticky** tick
+ * at the first visible column. When the viewport happens to start a day or two before a boundary,
+ * that sticky label and the boundary's own label are drawn a few pixels apart and overprint — the
+ * `JuAug` a planner sees. This is the width below which the two cannot both be read; the painter
+ * can pass a measured value, and the default is a conservative constant covering a three-letter
+ * month at the ruler's type size.
+ */
+export const STICKY_LABEL_MIN_GAP_PX = 28;
+
+export function rulerTicks(
+  view: Viewport,
+  size: Size,
+  dataDate: string,
+  /** Measured label width, when the caller has a 2D context; else the documented default. */
+  minLabelGapPx: number = STICKY_LABEL_MIN_GAP_PX,
+): RulerModel {
   const firstDay = Math.floor((0 - view.originX) / view.pxPerDay) - 1;
   const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay) + 1;
   const showDays = view.pxPerDay >= DAY_ROW_MIN_PX_PER_DAY;
@@ -188,10 +207,13 @@ export function rulerTicks(view: Viewport, size: Size, dataDate: string): RulerM
     const first = off === firstDay;
     if (showDays) days.push({ x: screenXOfDay(off, view), label: String(d) });
     if (showMonths && (first || d === 1)) {
-      months.push({ x: screenXOfDay(off, view), label: MONTHS_SHORT[m - 1]! });
+      // The sticky label is **pinned to x = 0**, not to the off-screen first column it was seeded
+      // from — it names the month you are looking at, so it belongs at the left edge rather than
+      // wherever the viewport happens to have been scrolled to.
+      months.push({ x: first ? 0 : screenXOfDay(off, view), label: MONTHS_SHORT[m - 1]! });
     }
     if (first || (d === 1 && m === 1)) {
-      years.push({ x: screenXOfDay(off, view), label: String(y) });
+      years.push({ x: first ? 0 : screenXOfDay(off, view), label: String(y) });
     }
     d += 1;
     if (d > daysInMonth(y, m)) {
@@ -203,7 +225,24 @@ export function rulerTicks(view: Viewport, size: Size, dataDate: string): RulerM
       }
     }
   }
-  return { years, months, days };
+  // Drop a sticky label the next real boundary would overprint. Done here rather than in the
+  // painter because it is a property of the model — two labels that cannot both be read is not a
+  // drawing detail — and because the painter would have to re-derive which tick was the sticky one.
+  return {
+    years: dropOverprintedSticky(years, minLabelGapPx),
+    months: dropOverprintedSticky(months, minLabelGapPx),
+    days,
+  };
+}
+
+/**
+ * Remove the pinned first label when the following tick is closer than `minGapPx`, which is the
+ * `JuAug` overprint. Only the first tick can be sticky, so only it is ever a candidate.
+ */
+function dropOverprintedSticky(ticks: RulerTick[], minGapPx: number): RulerTick[] {
+  const [sticky, next] = ticks;
+  if (!sticky || !next) return ticks;
+  return next.x - sticky.x < minGapPx ? ticks.slice(1) : ticks;
 }
 
 /** Days in month `m` (1–12) of year `y`, Gregorian (UTC-agnostic — pure arithmetic). */

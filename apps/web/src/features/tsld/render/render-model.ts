@@ -578,19 +578,114 @@ export function dependencyPolyline(
  * don't collapse onto one vertical run; it is clamped inside the gap so the elbow never cuts
  * back across the anchored bar edge, and the default `0` keeps the legacy shape byte-for-byte.
  */
+/**
+ * A lane's occupied horizontal spans, sorted by `x0` and non-overlapping after construction.
+ * Screen pixels, for the frame this was built from.
+ */
+export interface LaneIntervals {
+  readonly spans: readonly (readonly [number, number])[];
+}
+
+/** Per-lane occupied x-spans for the visible frame (ADR-0064 M2 T14). */
+export type LaneIntervalIndex = ReadonlyMap<number, LaneIntervals>;
+
+/** How many corridor candidates a single edge may try before falling back (ADR-0064 T15). */
+export const MAX_CORRIDOR_CANDIDATES = 4;
+
+/**
+ * Build the per-lane interval index a link route consults to avoid drawing through bars.
+ *
+ * **Pure, and derived from `activityRect` — the one existing source of a bar's geometry.** A
+ * milestone is a diamond and a WBS summary is a wider bracket; re-deriving either here would give
+ * routing a second opinion about where a bar is, and the two would disagree exactly when it
+ * mattered. Merging overlapping spans keeps the free test a single binary search rather than a scan
+ * (two bars can legitimately overlap in a lane — `lane-overlap.ts` models that conflict).
+ */
+export function laneIntervalIndex(
+  activities: readonly RenderActivity[],
+  view: Viewport,
+  dataDate: string,
+): LaneIntervalIndex {
+  const byLane = new Map<number, [number, number][]>();
+  for (const activity of activities) {
+    const rect = activityRect(activity, view, dataDate);
+    if (!rect) continue;
+    const lane = activity.laneIndex;
+    const list = byLane.get(lane);
+    const span: [number, number] = [rect.x, rect.x + rect.w];
+    if (list) list.push(span);
+    else byLane.set(lane, [span]);
+  }
+  const index = new Map<number, LaneIntervals>();
+  for (const [lane, spans] of byLane) {
+    spans.sort((a, b) => a[0] - b[0]);
+    const merged: [number, number][] = [];
+    for (const span of spans) {
+      const last = merged[merged.length - 1];
+      if (last && span[0] <= last[1]) last[1] = Math.max(last[1], span[1]);
+      else merged.push([span[0], span[1]]);
+    }
+    index.set(lane, { spans: merged });
+  }
+  return index;
+}
+
+/** Is screen-x `x` clear of every bar in `lane`? Binary search over the merged spans. */
+export function isLaneFreeAt(index: LaneIntervalIndex, lane: number, x: number): boolean {
+  const lane_ = index.get(lane);
+  if (!lane_) return true;
+  const spans = lane_.spans;
+  let lo = 0;
+  let hi = spans.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const span = spans[mid]!;
+    if (x < span[0]) hi = mid - 1;
+    else if (x > span[1]) lo = mid + 1;
+    else return false;
+  }
+  return true;
+}
+
+/**
+ * The lanes a vertical run between two lane-centres crosses, **excluding the two endpoints' own
+ * lanes** — a link is allowed to touch the bars it connects, and forbidding that would make every
+ * route fall back.
+ */
+function crossedLanes(fromLane: number, toLane: number): number[] {
+  const lo = Math.min(fromLane, toLane);
+  const hi = Math.max(fromLane, toLane);
+  const lanes: number[] = [];
+  for (let lane = lo + 1; lane < hi; lane += 1) lanes.push(lane);
+  return lanes;
+}
+
 export function routeOrthogonal(
   from: Point,
   to: Point,
   type: DependencyType,
   view: Viewport,
   elbowShift = 0,
+  /**
+   * Obstacle awareness (ADR-0064 M2). **Absent ⇒ this function returns exactly what it always
+   * returned** — that default is the parity gate, and it is why the new path could be added without
+   * a flag inside the geometry itself.
+   */
+  obstacles?: {
+    index: LaneIntervalIndex;
+    fromLane: number;
+    toLane: number;
+    /** Lane pitch and bar height, so the 5-point fallback can find the inter-lane gutter. */
+    laneHeight: number;
+    barHeight: number;
+  },
 ): Point[] {
   if (from.y === to.y) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
   const gap = Math.min(12, Math.max(4, view.pxPerDay));
   const shift = elbowShift === 0 ? 0 : Math.max(-(gap - 1), Math.min(gap - 1, elbowShift));
-  const elbow =
+  const preferred =
     type === 'FS'
       ? from.x + gap + shift
       : type === 'SS'
@@ -598,7 +693,63 @@ export function routeOrthogonal(
         : type === 'FF'
           ? Math.max(from.x, to.x) + gap + shift
           : (from.x + to.x) / 2 + shift; // SF
-  return [from, { x: elbow, y: from.y }, { x: elbow, y: to.y }, to];
+  const fourPoint = (elbow: number): Point[] => [
+    from,
+    { x: elbow, y: from.y },
+    { x: elbow, y: to.y },
+    to,
+  ];
+  if (!obstacles) return fourPoint(preferred);
+
+  const crossed = crossedLanes(obstacles.fromLane, obstacles.toLane);
+  // Nothing between the two lanes to hit: today's elbow is already correct, and taking the
+  // candidate path anyway would risk moving a line that had no reason to move.
+  if (crossed.length === 0) return fourPoint(preferred);
+
+  const free = (x: number): boolean =>
+    crossed.every((lane) => isLaneFreeAt(obstacles.index, lane, x));
+  if (free(preferred)) return fourPoint(preferred);
+
+  /**
+   * A **bounded** candidate list, tried in a fixed order so the same input always produces the same
+   * line — a route that varies between frames reads as the diagram twitching. The order runs from
+   * "closest to what we would have drawn" outwards, so a corridor is only abandoned for a reason.
+   */
+  const candidates = [
+    preferred + gap * 2,
+    preferred - gap * 2,
+    (from.x + to.x) / 2,
+    Math.max(from.x, to.x) + gap * 3,
+  ].slice(0, MAX_CORRIDOR_CANDIDATES);
+  for (const candidate of candidates) {
+    if (free(candidate)) return fourPoint(candidate);
+  }
+
+  /**
+   * No single corridor is clear. Route via **two** corridors joined by a short horizontal leg in
+   * the inter-lane gutter — the band between one lane's bar bottom and the next lane's bar top,
+   * where a bar can never be. This is the VHV shape, and it is the last structured attempt: if the
+   * gutter itself is unusable the line falls back to today's elbow, because bounded work is the
+   * contract and an unbounded search on the paint path is how a draw budget dies.
+   */
+  const gutterLane = Math.min(obstacles.fromLane, obstacles.toLane);
+  const gutterY =
+    (gutterLane + 1) * obstacles.laneHeight -
+    (obstacles.laneHeight - obstacles.barHeight) / 2 -
+    view.originY;
+  // Each leg only has to clear the lanes IT crosses, which is why this can succeed where a single
+  // corridor could not: the near leg runs from the source lane down to the gutter, the far leg from
+  // the gutter to the target lane, and neither spans the blocked middle.
+  const near = preferred + gap * 2;
+  const far = (from.x + to.x) / 2;
+  return [
+    from,
+    { x: near, y: from.y },
+    { x: near, y: gutterY },
+    { x: far, y: gutterY },
+    { x: far, y: to.y },
+    to,
+  ];
 }
 
 // ── Time-true lag anchoring + arrowheads (ADR-0052 M1, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──
