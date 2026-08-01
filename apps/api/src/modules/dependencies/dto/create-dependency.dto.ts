@@ -3,6 +3,7 @@ import { DependencyType, LagCalendarSource } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
 
+import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
 /**
@@ -29,14 +30,32 @@ export class CreateDependencyDto {
     minimum: -3650,
     maximum: 3650,
     default: 0,
-    description: 'Signed lag in working days (a lead is negative).',
+    description:
+      'Signed lag in working days (a lead is negative). Mutually exclusive with `lagMinutes`.',
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(-3650)
   @Max(3650)
+  @IsMutuallyExclusiveWith('lagMinutes')
   lagDays?: number;
+
+  @ApiPropertyOptional({
+    minimum: -5256000,
+    maximum: 5256000,
+    description:
+      'Signed lag in working MINUTES — the unit storage and the engine use (ADR-0036). A ' +
+      'two-hour cure time before a follow-on trade is `lagMinutes: 120`, which `lagDays` ' +
+      'cannot express. Mutually exclusive with `lagDays`; sending both is a 422.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-5256000)
+  @Max(5256000)
+  @IsMutuallyExclusiveWith('lagDays')
+  lagMinutes?: number;
 
   @ApiPropertyOptional({
     enum: LagCalendarSource,

@@ -34,8 +34,19 @@ export class DependencyResponseDto implements DependencySummary {
   @ApiProperty({ enum: DependencyType })
   type!: DependencyType;
 
-  @ApiProperty({ description: 'Signed lag in working days (a lead is negative).' })
+  @ApiProperty({
+    description:
+      'Signed lag in working days (a lead is negative), ROUNDED from the stored minutes. Read ' +
+      '`lagMinutes` for the exact value of a sub-day lag.',
+  })
   lagDays!: number;
+
+  @ApiProperty({
+    description:
+      'Signed lag in working MINUTES — what is stored and what the engine applies (ADR-0036). ' +
+      'Exposed so a sub-day lag reads back exactly rather than as a rounded 0 (TECH_DEBT #78).',
+  })
+  lagMinutes!: number;
 
   @ApiProperty({
     enum: LagCalendarSource,
@@ -71,8 +82,10 @@ export class DependencyResponseDto implements DependencySummary {
       id: entity.id,
       planId: entity.planId,
       type: entity.type,
-      // Stored as signed working-minutes (ADR-0036); the public field stays signed days.
+      // Stored as signed working-minutes (ADR-0036). Both exposed: days for existing clients,
+      // minutes so a sub-day lag survives the round trip.
       lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY),
+      lagMinutes: entity.lagMinutes,
       lagCalendar: entity.lagCalendar,
       predecessor: {
         id: entity.predecessor.id,

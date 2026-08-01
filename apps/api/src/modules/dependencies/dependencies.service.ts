@@ -190,7 +190,13 @@ export class DependenciesService {
             predecessorId: dto.predecessorId,
             successorId: dto.successorId,
             ...(dto.type ? { type: dto.type } : {}),
-            ...(dto.lagDays !== undefined ? { lagMinutes: dto.lagDays * MINUTES_PER_DAY } : {}),
+            // Mutually exclusive at the DTO; minutes is the storage unit, days a convenience
+            // over it (TECH_DEBT #78).
+            ...(dto.lagMinutes !== undefined
+              ? { lagMinutes: dto.lagMinutes }
+              : dto.lagDays !== undefined
+                ? { lagMinutes: dto.lagDays * MINUTES_PER_DAY }
+                : {}),
             ...(dto.lagCalendar ? { lagCalendar: dto.lagCalendar } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
@@ -228,7 +234,10 @@ export class DependenciesService {
 
     const patch: DependencyPatch = {};
     if (dto.type !== undefined) patch.type = dto.type;
+    // Mutually exclusive at the DTO, so at most one fires. `lagMinutes` lets a client edit a
+    // sub-day lag without rounding it away (TECH_DEBT #78).
     if (dto.lagDays !== undefined) patch.lagMinutes = dto.lagDays * MINUTES_PER_DAY;
+    if (dto.lagMinutes !== undefined) patch.lagMinutes = dto.lagMinutes;
     if (dto.lagCalendar !== undefined) patch.lagCalendar = dto.lagCalendar;
 
     try {

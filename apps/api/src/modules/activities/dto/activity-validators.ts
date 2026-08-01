@@ -9,9 +9,10 @@ const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MIL
 
 /**
  * A milestone (start/finish) is a point in time, so its duration must be 0.
- * Applied to `durationDays`; validates only when `type` is present in the same
- * payload (a definition update that doesn't change `type` can't be checked here —
- * the service coerces milestone durations to 0 defensively).
+ * Applied to `durationDays` **and** `durationMinutes` (TECH_DEBT #78) — the rule is about the
+ * quantity, not the unit, so a milestone cannot acquire a duration by being asked for in minutes.
+ * Validates only when `type` is present in the same payload (a definition update that doesn't
+ * change `type` can't be checked here — the service coerces milestone durations to 0 defensively).
  */
 export function IsZeroWhenMilestone(options?: ValidationOptions) {
   return function (object: object, propertyName: string): void {
@@ -26,8 +27,8 @@ export function IsZeroWhenMilestone(options?: ValidationOptions) {
           if (type === undefined || !MILESTONE_TYPES.includes(type)) return true;
           return value === undefined || value === 0;
         },
-        defaultMessage(): string {
-          return 'durationDays must be 0 for a milestone activity.';
+        defaultMessage(args: ValidationArguments): string {
+          return `${args.property} must be 0 for a milestone activity.`;
         },
       },
     });

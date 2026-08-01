@@ -99,6 +99,65 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     return { actor, orgId, planId: plan.body.data.id as string };
   }
 
+  /**
+   * TECH_DEBT #78. ADR-0036 moved storage and the engine to working-MINUTES and shipped intraday
+   * calendars, but the public DTOs exposed only whole days — so a 4-hour lift was importable and
+   * not authorable, and any edit that touched the duration rounded it to whole days. These cover
+   * the write path AND the read path: exposing `durationMinutes` on the request without exposing it
+   * on the response would let a client author a sub-day activity and only ever see it as 0 days.
+   */
+  describe('sub-day durations (TECH_DEBT #78)', () => {
+    it('authors a 4-hour activity, reads it back exactly, and edits it without rounding', async () => {
+      const { actor, planId } = await setup();
+      const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+
+      const created = await actor.agent
+        .post(base)
+        .send({ name: 'Crane lift', durationMinutes: 240 })
+        .expect(201);
+      // 240 minutes is 0 whole days: the day field rounds, and that is exactly why the minute
+      // field has to be readable — otherwise the value is invisible the moment it is stored.
+      expect(created.body.data).toMatchObject({ durationMinutes: 240, durationDays: 0 });
+      const id = created.body.data.id as string;
+
+      const got = await actor.agent.get(`/api/v1/organizations/acme/activities/${id}`).expect(200);
+      expect(got.body.data.durationMinutes).toBe(240);
+
+      // The edit that used to destroy it: a duration change now expressible in the same unit.
+      const edited = await actor.agent
+        .patch(`/api/v1/organizations/acme/activities/${id}`)
+        .send({ durationMinutes: 90, version: created.body.data.version })
+        .expect(200);
+      expect(edited.body.data).toMatchObject({ durationMinutes: 90, durationDays: 0 });
+    });
+
+    it('refuses a payload carrying both units rather than picking a winner', async () => {
+      const { actor, planId } = await setup();
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Ambiguous', durationDays: 2, durationMinutes: 240 })
+        .expect(422);
+      expect(JSON.stringify(res.body)).toContain('send one, not both');
+    });
+
+    it('still refuses a milestone a duration, whichever unit it arrives in', async () => {
+      const { actor, planId } = await setup();
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Bad milestone', type: 'START_MILESTONE', durationMinutes: 240 })
+        .expect(422);
+    });
+
+    it('keeps the day field working unchanged for every existing client', async () => {
+      const { actor, planId } = await setup();
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Ordinary', durationDays: 3 })
+        .expect(201);
+      expect(res.body.data).toMatchObject({ durationDays: 3, durationMinutes: 3 * 1440 });
+    });
+  });
+
   it('creates an activity with defaults, gets and lists it', async () => {
     const { actor, planId } = await setup();
     const res = await actor.agent
