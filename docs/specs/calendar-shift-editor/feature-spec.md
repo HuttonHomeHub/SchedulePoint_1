@@ -279,7 +279,23 @@ exception hours, with no add/remove controls and no preset menu, and is told why
 Only the ones whose answers change design or scope. Defaults are stated and will be proceeded on if
 not overridden.
 
-> **Q1 (CRITICAL) — does M0′ add `PATCH …/exceptions/:exceptionId`?**
+> **ANSWERED 2026-08-01 by the product owner. Every default was confirmed**, and one question was
+> added and answered with them (Q0 below). Q3 was additionally settled by events — M0 landed as its
+> own commit ahead of any web work. The questions are kept with their reasoning rather than
+> collapsed into a decision list, because the reasoning is what a later reader needs.
+
+> **Q0 (CRITICAL, raised during the answer round) — when is the flatten-on-rename defect fixed?**
+> A calendar carrying real shift windows loses them if anyone opens it in the web form and saves —
+> even a rename. `CalendarFormDialog` seeds `workingWeekdays` from the loaded calendar
+> (`CalendarFormDialog.tsx:174`) and always submits it; `updateIfVersionMatches` deletes and rewrites
+> every shift row whenever that field is present (`calendar.repository.ts:580–585`). Silent data
+> loss, no error, no cue. Exposure is narrow **today** — only an API-authored shift calendar can be
+> flattened, and the importer does not create one — but it widens the moment M1 ships an editor.
+> **ANSWERED: fix now, unflagged, ahead of the editor.** The form stops asserting a week it did not
+> author; a regression test pins the **request body** of a rename-only save, which is the only place
+> the defect is visible.
+
+> **Q1 (CRITICAL) — does M0′ add `PATCH …/exceptions/:exceptionId`?** — **ANSWERED: yes, now.**
 > There is no exception edit path at all today (F4). Without it, correcting a window means
 > delete-then-recreate: two writes, a new id, and a moment in which a holiday has become a normal
 > working day.
@@ -288,7 +304,7 @@ label, version }`, replacing the window set atomically, activating the `version`
 > already exists. It is ~1 controller method + 1 repository method + the existing service shape, and
 > it removes an entire class of half-applied edit from M3.
 
-> **Q2 (CRITICAL) — is `<input type="time">` acceptable, given it cannot express 24:00?**
+> **Q2 (CRITICAL) — is `<input type="time">` acceptable, given it cannot express 24:00?** — **ANSWERED: no; option (a), the `HH:MM` text field.**
 > The storage contract's end value for a full day and for the first half of a night shift is
 > `endMinute: 1440` = **24:00**. `<input type="time">` has a maximum of 23:59 and cannot represent
 > it. The options are (a) a text field with an `HH:MM` pattern that accepts `24:00`, (b) `type="time"`
@@ -297,19 +313,19 @@ label, version }`, replacing the window set atomically, activating the `version`
 > **Default: (a).** A text input, `inputmode="numeric"`, strict `HH:MM` parse, `24:00` accepted on the
 > end field only, format stated in an `aria-describedby` hint. (c) is rejected outright.
 
-> **Q3 (CRITICAL) — does M0′ block M1, or may they run in parallel?**
+> **Q3 (CRITICAL) — does M0′ block M1, or may they run in parallel?** — **ANSWERED by events: M0 landed first**, as `248bd65`/`e08f3a0`.
 > M0′ is unflagged API work; M1–M3 are flagged web work. They touch disjoint files except
 > `@repo/types` (already updated).
 > **Default: M0′ lands first as its own PR** — the 500 (F3) is live and default-on, and the doc/seeder
 > drift (F5) should not sit behind a flagged web epic.
 
-> **Q4 (non-blocking) — preset names.** "Standard week (Mon–Fri, 08:00–17:00)", "Two shift
+> **Q4 (non-blocking) — preset names.** — **ANSWERED: the five below.** Continental's exact hours still to confirm during M2; the mechanism does not depend on them. "Standard week (Mon–Fri, 08:00–17:00)", "Two shift
 > (06:00–14:00, 14:00–22:00)", "Continental (rotating 12-hour, Mon–Sun)", "24/7", "Window-only".
 > **Default: those five, with their hours in the label**, because a preset whose hours are invisible
 > is a guess. Exact Continental hours to be confirmed by the product owner during M2; the mechanism
 > does not depend on them.
 
-> **Q5 (non-blocking) — does the calendar library table summarise shifts?**
+> **Q5 (non-blocking) — does the calendar library table summarise shifts?** — **ANSWERED: yes, minimally.**
 > `formatWorkingWeekdays` currently renders "Mon–Fri" and cannot say "Two shift".
 > **Default: yes, minimally** — append the distinct window count when a calendar is not whole-day
 > ("Mon–Fri · 2 shifts"), behind the flag, so the table does not claim a shift calendar is an

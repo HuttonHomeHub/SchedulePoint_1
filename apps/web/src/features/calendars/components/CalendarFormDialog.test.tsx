@@ -41,7 +41,16 @@ describe('CalendarFormDialog', () => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(CALENDAR_DETAIL);
   });
 
-  it('seeds the form in edit mode and PATCHes with the row version and mask', async () => {
+  /** The PATCH body of the last request — the only place the flattening defect is visible. */
+  async function patchedBody(): Promise<Record<string, unknown>> {
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const patchCall = vi.mocked(apiFetch).mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(patchCall).toBeDefined();
+    expect(patchCall![0]).toBe('/organizations/acme/calendars/cal-1');
+    return JSON.parse(patchCall![1]?.body as string) as Record<string, unknown>;
+  }
+
+  it('seeds the form in edit mode and PATCHes with the row version', async () => {
     renderDialog({ calendar: CALENDAR });
 
     const name = screen.getByLabelText('Name');
@@ -50,16 +59,53 @@ describe('CalendarFormDialog', () => {
     fireEvent.change(name, { target: { value: 'Standard UK' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const patchCall = vi.mocked(apiFetch).mock.calls.find(([, init]) => init?.method === 'PATCH');
-    expect(patchCall).toBeDefined();
-    const [path, init] = patchCall!;
-    expect(path).toBe('/organizations/acme/calendars/cal-1');
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      name: 'Standard UK',
-      workingWeekdays: 31,
-      version: 3,
-    });
+    expect(await patchedBody()).toMatchObject({ name: 'Standard UK', version: 3 });
+  });
+
+  /**
+   * This assertion is INVERTED from what it used to be — it asserted `workingWeekdays: 31` on a
+   * rename, i.e. it pinned the defect. The repository replaces every stored shift row whenever the
+   * field is present, so submitting an unchanged mask flattened a split shift to whole days on a
+   * save that had nothing to do with the week (spec Q0). Silent: no error, and the response looks
+   * fine because the mask really is Mon–Fri either way.
+   */
+  it('omits `workingWeekdays` when the week was not touched, so stored hours survive a rename', async () => {
+    renderDialog({ calendar: CALENDAR });
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Standard UK' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await patchedBody()).not.toHaveProperty('workingWeekdays');
+  });
+
+  it('sends `workingWeekdays` when the planner actually changes the week', async () => {
+    renderDialog({ calendar: CALENDAR });
+
+    // Mon–Fri (31) plus Saturday (bit 5) = 63.
+    fireEvent.click(screen.getByRole('button', { name: 'Saturday' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await patchedBody()).toMatchObject({ workingWeekdays: 63 });
+  });
+
+  it('says the week is shown simplified when the calendar works specific hours', () => {
+    const splitShift: CalendarSummary = {
+      ...CALENDAR,
+      // Monday 08:00–12:00 and 13:00–17:00 — a split shift the seven checkboxes cannot express.
+      shifts: [
+        { weekday: 0, startMinute: 480, endMinute: 720 },
+        { weekday: 0, startMinute: 780, endMinute: 1020 },
+      ],
+    };
+    renderDialog({ calendar: splitShift });
+
+    expect(screen.getByText(/works specific hours/i)).toBeInTheDocument();
+  });
+
+  it('says nothing extra for an ordinary whole-day calendar', () => {
+    renderDialog({ calendar: CALENDAR });
+
+    expect(screen.queryByText(/works specific hours/i)).not.toBeInTheDocument();
   });
 
   it('POSTs a new calendar in create mode', async () => {

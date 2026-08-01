@@ -5,6 +5,7 @@ import { useEffect, useId, type Ref } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 
 import { useCreateCalendar, useUpdateCalendar } from '../api/use-calendars';
+import { hasIntradayDetail } from '../model/shift-summary';
 import {
   calendarFormSchema,
   CALENDAR_SCOPE_LABELS,
@@ -188,10 +189,26 @@ export function CalendarFormDialog({
   const blockedByOrgPermission =
     noTierAvailable || (showScopeChoice && orgTierUnavailable && chosenScope !== 'PROJECT');
 
+  // The week is shown as seven checkboxes, which cannot express a split shift or a half-day
+  // (ADR-0036 §2). Say so rather than letting the form imply the mask is the whole truth.
+  const weekIsSimplified = isEdit && hasIntradayDetail(calendar.shifts);
+
   const onSubmit = handleSubmit((values) => {
     if (isEdit) {
+      // Send `workingWeekdays` ONLY when the planner actually changed it. The repository replaces
+      // every shift row whenever this field is present, so a rename-only save used to silently
+      // flatten a split shift to whole days — no error, no cue, and visible only in the request
+      // body (spec Q0). Omitting it leaves the stored week untouched, which is what "I renamed a
+      // calendar" should mean.
+      const weekChanged = values.workingWeekdays !== calendar.workingWeekdays;
+      const { workingWeekdays, ...rest } = values;
       update.mutate(
-        { calendarId: calendar.id, version: calendar.version, ...values },
+        {
+          calendarId: calendar.id,
+          version: calendar.version,
+          ...rest,
+          ...(weekChanged ? { workingWeekdays } : {}),
+        },
         {
           onSuccess: () => {
             announce(`Calendar “${values.name}” saved.`);
@@ -325,6 +342,13 @@ export function CalendarFormDialog({
               title="Working week"
               description="The days work happens on. Everything scheduled on this calendar counts its duration in these days."
             >
+              {weekIsSimplified ? (
+                <p className="text-muted-foreground text-sm" role="note">
+                  This calendar works specific hours — a split shift or a part day. The days below
+                  show <em>which</em> days work, not their hours. Changing them replaces those hours
+                  with whole days; leave them alone and the hours are kept.
+                </p>
+              ) : null}
               <Controller
                 control={control}
                 name="workingWeekdays"

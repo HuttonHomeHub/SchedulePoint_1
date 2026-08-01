@@ -54,15 +54,28 @@ function createBody(input: CalendarFormValues) {
   };
 }
 
-function updateBody(input: CalendarFormValues & { version: number }) {
+/**
+ * The PATCH body. `workingWeekdays` is **omitted entirely when the caller did not supply one** —
+ * not defaulted — because the repository replaces every stored shift row whenever the field is
+ * present. Sending a mask the planner never touched is how a split shift got flattened to whole
+ * days by a rename (spec Q0); the API has always treated the field as optional, and this type now
+ * says so too.
+ */
+function updateBody(input: UpdateCalendarInput) {
   return {
     name: input.name,
-    workingWeekdays: input.workingWeekdays,
+    ...(input.workingWeekdays === undefined ? {} : { workingWeekdays: input.workingWeekdays }),
     description: optional(input.description) ?? null,
     version: input.version,
     ...scopeBody(input),
   };
 }
+
+/** An edit: the form's values with the week optional, plus the row's optimistic-locking version. */
+export type UpdateCalendarInput = Omit<CalendarFormValues, 'workingWeekdays'> & {
+  workingWeekdays?: number;
+  version: number;
+};
 
 /**
  * The management filters a calendar list may carry (ADR-0053 §4 / US-8): a case-insensitive `q`
@@ -230,7 +243,7 @@ export function useCreateCalendar(orgSlug: string) {
 export function useUpdateCalendar(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { calendarId: string; version: number } & CalendarFormValues) =>
+    mutationFn: (input: { calendarId: string } & UpdateCalendarInput) =>
       apiFetch<CalendarDetail>(`/organizations/${orgSlug}/calendars/${input.calendarId}`, {
         method: 'PATCH',
         body: JSON.stringify(updateBody(input)),
