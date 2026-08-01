@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CalendarFormDialog } from './CalendarFormDialog';
 
+import type * as Env from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -13,7 +14,7 @@ vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 // `library-scoping-flag-off.test.tsx` and by `CalendarFormDialog.test.tsx`, which are kept rather
 // than weakened — they are the rollback contract (ADR-0053 M6).
 vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/config/env')>()),
+  ...(await importOriginal<typeof Env>()),
   CALENDAR_SHIFT_EDITOR_ENABLED: true,
 }));
 

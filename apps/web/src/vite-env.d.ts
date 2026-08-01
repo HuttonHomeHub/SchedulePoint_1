@@ -96,4 +96,6 @@ interface ImportMetaEnv {
   /** ADR-0064 M1 — the additive canvas authoring-flow surface (band, confirmation, quiescence). */
   readonly VITE_CANVAS_AUTHORING_FLOW?: string;
   readonly VITE_CANVAS_LINK_ROUTING?: string;
+  /** ADR-0067 — author a calendar's working HOURS, not just its working days. Default off. */
+  readonly VITE_CALENDAR_SHIFT_EDITOR?: string;
 }
