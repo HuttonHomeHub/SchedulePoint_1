@@ -180,7 +180,11 @@ export class CalendarsService {
       const calendar = await this.calendars.create({
         organizationId: organization.id,
         name: dto.name,
-        workingWeekdays: dto.workingWeekdays,
+        // Exactly one of these is set — the DTO refuses both and refuses neither. Spread
+        // conditionally rather than passing `undefined`: `exactOptionalPropertyTypes` treats an
+        // explicit undefined as a present key, which is not what "the caller sent one form" means.
+        ...(dto.workingWeekdays === undefined ? {} : { workingWeekdays: dto.workingWeekdays }),
+        ...(dto.shifts === undefined ? {} : { shifts: dto.shifts }),
         description: dto.description ?? null,
         scope,
         projectId,
@@ -228,6 +232,7 @@ export class CalendarsService {
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.description !== undefined) patch.description = dto.description;
     if (dto.workingWeekdays !== undefined) patch.workingWeekdays = dto.workingWeekdays;
+    if (dto.shifts !== undefined) patch.shifts = dto.shifts;
 
     const target = this.resolveTargetScope(existing, dto);
     if (target !== null) {
