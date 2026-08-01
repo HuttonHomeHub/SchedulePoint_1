@@ -69,6 +69,9 @@ function makeModel(over: Record<string, unknown> = {}): Model {
     planId: 'p1',
     activities: { data: [ACTIVITY], isPending: false, isError: false },
     calendars: { data: [], isPending: false, isError: false },
+    // The plan row: the dialogs read its `calendarId` to resolve the duration field's
+    // working-hours factor (ADR-0070). Absent leaves that field in whole working days.
+    plan: { data: { calendarId: null } },
     canWrite: false,
     canManageLogic: true,
     canEditSchedule: true,

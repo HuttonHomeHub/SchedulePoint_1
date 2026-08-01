@@ -137,6 +137,7 @@ export function ActivitiesTable({
   varianceByActivityId,
   noteCountByActivityId,
   calendars = [],
+  planCalendarId,
   calendarsLoading = false,
   calendarsError = false,
 }: {
@@ -189,6 +190,12 @@ export function ActivitiesTable({
   calendarsLoading?: boolean;
   /** The calendars list failed to load — forwarded to the edit dialog's picker to surface it. */
   calendarsError?: boolean;
+  /**
+   * The plan's own calendar id — what an activity's empty `calendarId` ("inherit") resolves to.
+   * Route-composed like {@link calendars}; forwarded to the editors so the duration field can read
+   * its working-hours factor (ADR-0070). Absent leaves that field in whole working days.
+   */
+  planCalendarId?: string;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -810,6 +817,7 @@ export function ActivitiesTable({
           calendars={calendars}
           calendarsLoading={calendarsLoading}
           calendarsError={calendarsError}
+          {...(planCalendarId === undefined ? {} : { planCalendarId })}
           planActivities={activities.data ?? []}
           activity={intended}
           {...(editorIntent ? { intent: editorIntent } : {})}
@@ -827,6 +835,7 @@ export function ActivitiesTable({
               calendars={calendars}
               calendarsLoading={calendarsLoading}
               calendarsError={calendarsError}
+              {...(planCalendarId === undefined ? {} : { planCalendarId })}
               planActivities={activities.data ?? []}
               planActivitiesLoading={activities.isPending}
               planActivitiesError={activities.isError}

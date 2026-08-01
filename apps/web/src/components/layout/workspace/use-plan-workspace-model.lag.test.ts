@@ -88,6 +88,7 @@ const DEPENDENCY: DependencySummary = {
   planId: 'p1',
   type: 'SS',
   lagDays: 2,
+  lagMinutes: 960,
   lagCalendar: 'TWENTY_FOUR_HOUR',
   predecessor: { id: 'a1', code: 'A10', name: 'Excavate' },
   successor: { id: 'a2', code: 'A20', name: 'Pour' },
@@ -194,6 +195,7 @@ describe('onTsldLag (ADR-0052 M3)', () => {
       dependencyId: 'd1',
       type: 'SS',
       lagDays: 2,
+      lagMinutes: 960,
       lagCalendar: 'TWENTY_FOUR_HOUR',
       version: 7,
     });

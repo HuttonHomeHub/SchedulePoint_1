@@ -14,7 +14,7 @@ const general = {
   code: 'A100',
   type: 'TASK' as const,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME' as const,
-  durationDays: 5,
+  duration: '5',
   parentId: '',
   description: '',
 };
@@ -42,6 +42,8 @@ describe('scope bodies — exact key sets', () => {
   it('generalBody sends only General keys', () => {
     expect(Object.keys(generalBody(general)).sort()).toEqual(
       ['code', 'description', 'durationDays', 'durationType', 'name', 'parentId', 'type'].sort(),
+      // `durationDays` because no `hoursPerDay` was passed — the degraded whole-days path. With a
+      // factor the same builder sends `durationMinutes` instead; never both (ADR-0070).
     );
   });
 
@@ -95,17 +97,17 @@ describe('scope bodies — ported value mappings', () => {
   });
 
   it('forces duration 0 for a duration-derived type', () => {
-    expect(generalBody({ ...general, type: 'START_MILESTONE', durationDays: 9 }).durationDays).toBe(
+    expect(generalBody({ ...general, type: 'START_MILESTONE', duration: '9' }).durationDays).toBe(
       0,
     );
-    expect(generalBody({ ...general, type: 'WBS_SUMMARY', durationDays: 9 }).durationDays).toBe(0);
-    expect(generalBody({ ...general, type: 'LEVEL_OF_EFFORT', durationDays: 9 }).durationDays).toBe(
+    expect(generalBody({ ...general, type: 'WBS_SUMMARY', duration: '9' }).durationDays).toBe(0);
+    expect(generalBody({ ...general, type: 'LEVEL_OF_EFFORT', duration: '9' }).durationDays).toBe(
       0,
     );
   });
 
   it('keeps an entered duration for a task', () => {
-    expect(generalBody({ ...general, durationDays: 7 }).durationDays).toBe(7);
+    expect(generalBody({ ...general, duration: '7' }).durationDays).toBe(7);
   });
 
   it('clears both sides of a constraint together', () => {

@@ -5,7 +5,7 @@ import {
   type DependencySummary,
 } from '@repo/types';
 import { DURATION_TYPES } from '@repo/types';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 
 import { costBody, generalBody, schedulingBody } from '../api/scope-bodies';
@@ -13,6 +13,14 @@ import { useUpdateActivityFields } from '../api/use-activities';
 import { activityContextFacts, activitySubtitle } from '../lib/activity-editor-context';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import type { ActivityEditorIntent, ActivityEditorTab } from '../lib/activity-editor-intent';
+import {
+  DURATION_NEEDS_WHOLE_DAYS,
+  durationHelp,
+  durationLabel,
+  durationWriteFields,
+} from '../model/duration-field';
+import { effectiveHoursPerDay } from '../model/effective-hours-per-day';
+import { useDurationSeed } from '../model/use-duration-seed';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
@@ -125,6 +133,7 @@ export function ActivityEditorDialog({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
+  planCalendarId,
   planActivities = [],
   logic,
   notesSlot,
@@ -149,6 +158,12 @@ export function ActivityEditorDialog({
   calendarsLoading?: boolean;
   /** The calendar list failed — surfaced in the picker, not swallowed. */
   calendarsError?: boolean;
+  /**
+   * The plan's own calendar id — what an activity's empty `calendarId` ("inherit") resolves to.
+   * Route-composed like {@link calendars}; needed only to read the duration field's working-hours
+   * factor (ADR-0070). Absent leaves that field in whole working days.
+   */
+  planCalendarId?: string;
   planActivities?: ActivitySummary[];
   /**
    * Composition-root wiring for the **Logic** tab, grouped so the tab's seams arrive and leave
@@ -203,9 +218,44 @@ export function ActivityEditorDialog({
     if (intent) setActive(intent.tab);
   }
 
-  const general = useScopeForm(activityGeneralSchema, seedGeneral, activity, open);
+  // The General scope seeds its duration from the factor known at OPEN; `useDurationSeed` below
+  // re-reads it once the calendar list lands, so a sub-day duration is never shown (or saved) as
+  // its rounded day. The seed factor deliberately reads the SAVED calendar, not a watched one —
+  // nothing is watched yet at this point in the render.
+  const seedFactor = effectiveHoursPerDay(calendars, {
+    activityCalendarId: activity?.calendarId ?? '',
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+  });
+  const general = useScopeForm(
+    activityGeneralSchema,
+    (a) => seedGeneral(a, seedFactor),
+    activity,
+    open,
+  );
   const scheduling = useScopeForm(activitySchedulingSchema, seedScheduling, activity, open);
   const cost = useScopeForm(activityCostSchema, seedCost, activity, open);
+
+  // The live factor follows the calendar the SCHEDULING scope currently selects — a planner can
+  // change the calendar and the duration in one visit, and the two tabs must agree (ADR-0070 §3).
+  const scopeCalendarId = useWatch({ control: scheduling.form.control, name: 'calendarId' });
+  const hoursPerDay = effectiveHoursPerDay(calendars, {
+    activityCalendarId: scopeCalendarId ?? '',
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+  });
+  // Hoisted rather than inlined, for the same reason as in `ActivityFormDialog`: an arrow rebuilt
+  // per render defeats the React Compiler's memoization downstream of it.
+  const generalSetValue = general.form.setValue;
+  const setDuration = useCallback(
+    (text: string) => generalSetValue('duration', text),
+    [generalSetValue],
+  );
+  useDurationSeed({
+    open,
+    hoursPerDay,
+    activity,
+    isDirty: Boolean(general.form.formState.dirtyFields.duration),
+    setDuration,
+  });
 
   const type = useWatch({ control: general.form.control, name: 'type' });
   const constraintType = useWatch({ control: scheduling.form.control, name: 'constraintType' });
@@ -413,11 +463,25 @@ export function ActivityEditorDialog({
                   noValidate
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void general.form.handleSubmit((values) =>
-                      saveScope('general', generalBody(values), 'General', () =>
+                    void general.form.handleSubmit((values) => {
+                      // The one check the schema deliberately cannot make (ADR-0070): reachable
+                      // only on the degraded whole-days path, where `4h` is well-formed text this
+                      // field cannot express without a factor.
+                      if (
+                        !isDurationDerivedType(values.type) &&
+                        durationWriteFields(values.duration, hoursPerDay) === null
+                      ) {
+                        general.form.setError(
+                          'duration',
+                          { message: DURATION_NEEDS_WHOLE_DAYS },
+                          { shouldFocus: true },
+                        );
+                        return;
+                      }
+                      saveScope('general', generalBody(values, hoursPerDay), 'General', () =>
                         general.form.reset(values),
-                      ),
-                    )(event);
+                      );
+                    })(event);
                   }}
                   className="flex flex-col gap-4"
                 >
@@ -474,12 +538,20 @@ export function ActivityEditorDialog({
                           together — the pair has always been one decision. */}
                       {!isDurationDerivedType(type) ? (
                         <TextField
-                          label="Duration (working days)"
-                          type="number"
-                          min={0}
+                          label={durationLabel(hoursPerDay)}
+                          // Text, not a number input, once the factor is known: "2d 4h" is not a
+                          // number, and a number input refuses the characters before the parser
+                          // ever sees them.
+                          type={hoursPerDay === undefined ? 'number' : 'text'}
+                          {...(hoursPerDay === undefined
+                            ? { min: 0 }
+                            : { inputMode: 'text' as const })}
+                          {...(durationHelp(hoursPerDay) === undefined
+                            ? {}
+                            : { hint: durationHelp(hoursPerDay) })}
                           disabled={!gating.general.writable}
-                          error={general.form.formState.errors.durationDays?.message}
-                          {...general.form.register('durationDays', { valueAsNumber: true })}
+                          error={general.form.formState.errors.duration?.message}
+                          {...general.form.register('duration')}
                         />
                       ) : null}
                       {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (

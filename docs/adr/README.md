@@ -92,3 +92,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0066](0066-the-seed-catalogue-and-the-engine-as-oracle.md)               | The seed catalogue & the engine as oracle          | Accepted           |
 | [0067](0067-calendar-shift-editor-and-storage-honesty.md)                 | Calendar shift editor & storage honesty            | Proposed           |
 | [0068](0068-calendar-hours-per-day.md)                                    | A calendar carries an hours-per-day                | Accepted           |
+| [0069](0069-shared-lane-layout-and-packing-at-import.md)                  | Shared lane layout & packing at import             | Accepted           |
+| [0070](0070-sub-day-durations-and-lags-in-the-authoring-surface.md)       | Sub-day durations & lags in the authoring surface  | Accepted           |

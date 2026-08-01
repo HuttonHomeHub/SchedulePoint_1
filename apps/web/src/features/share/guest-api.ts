@@ -88,6 +88,8 @@ export interface GuestActivity {
   name: string;
   type: ActivityType;
   durationDays: number;
+  /** The exact stored duration in working minutes (ADR-0070) — `durationDays` rounds it. */
+  durationMinutes: number;
   laneIndex: number;
   earlyStart: string | null;
   earlyFinish: string | null;
@@ -108,6 +110,8 @@ export interface GuestDependency {
   successorId: string;
   type: DependencyType;
   lagDays: number;
+  /** The exact stored lag in signed working minutes (ADR-0070) — `lagDays` rounds it. */
+  lagMinutes: number;
 }
 
 // --- Endpoint readers -----------------------------------------------------------------------------
@@ -176,6 +180,7 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     description: null,
     type: activity.type,
     durationDays: activity.durationDays,
+    durationMinutes: activity.durationMinutes,
     constraintType: null,
     constraintDate: null,
     secondaryConstraintType: null,
@@ -248,6 +253,7 @@ export function toDependencySummary(
     planId,
     type: dependency.type,
     lagDays: dependency.lagDays,
+    lagMinutes: dependency.lagMinutes,
     lagCalendar: 'PROJECT_DEFAULT',
     predecessor: endpoint(dependency.predecessorId),
     successor: endpoint(dependency.successorId),

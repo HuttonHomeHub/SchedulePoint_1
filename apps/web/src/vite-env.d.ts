@@ -98,4 +98,6 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_LINK_ROUTING?: string;
   /** ADR-0067 — author a calendar's working HOURS, not just its working days. Default off. */
   readonly VITE_CALENDAR_SHIFT_EDITOR?: string;
+  /** ADR-0070 — type a duration or lag in days, hours and minutes. Default off. */
+  readonly VITE_SUB_DAY_DURATIONS?: string;
 }

@@ -50,6 +50,7 @@ function activity(over: Partial<GuestActivity> = {}): GuestActivity {
     name: 'Excavate',
     type: 'TASK',
     durationDays: 5,
+    durationMinutes: 2400,
     laneIndex: 0,
     earlyStart: '2026-01-05',
     earlyFinish: '2026-01-09',

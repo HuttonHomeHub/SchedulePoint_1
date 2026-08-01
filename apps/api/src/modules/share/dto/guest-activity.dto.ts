@@ -42,8 +42,20 @@ export class GuestActivityDto {
   @ApiProperty({ enum: ActivityType })
   type!: ActivityType;
 
-  @ApiProperty({ description: 'Working days (milestones are 0).' })
+  @ApiProperty({
+    description:
+      'Working days on this activity’s calendar (ADR-0068), rounded from the stored minutes ' +
+      '(milestones are 0). A sub-day activity reads back here as 0 — read `durationMinutes`.',
+  })
   durationDays!: number;
+
+  @ApiProperty({
+    description:
+      'Working MINUTES — what is stored and what the engine scheduled on (ADR-0036). In scope ' +
+      'because it is the exact form of a field already exposed: without it a guest sees a ' +
+      'four-hour activity as `durationDays: 0` and cannot tell it apart from a milestone.',
+  })
+  durationMinutes!: number;
 
   @ApiProperty({ description: 'Graphical y-lane / vertical position on the TSLD canvas.' })
   laneIndex!: number;
@@ -86,8 +98,10 @@ export class GuestActivityDto {
       code: entity.code,
       name: entity.name,
       type: entity.type,
-      // Stored in working-minutes (ADR-0036); the public field stays whole working days.
+      // Stored in working-minutes (ADR-0036); both forms are exposed, the exact one and the
+      // day-rounded one a reader expects to see on a bar.
       durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
+      durationMinutes: entity.durationMinutes,
       laneIndex: entity.laneIndex,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),

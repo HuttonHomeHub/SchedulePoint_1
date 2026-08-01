@@ -30,6 +30,7 @@ const BASE: ActivitySummary = {
   description: null,
   type: 'RESOURCE_DEPENDENT',
   durationDays: 5,
+  durationMinutes: 2400,
   constraintType: null,
   constraintDate: null,
   secondaryConstraintType: null,

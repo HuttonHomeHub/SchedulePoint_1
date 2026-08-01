@@ -6,10 +6,19 @@ import {
   type ActivitySummary,
   type CalendarSummary,
 } from '@repo/types';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
+import {
+  DURATION_NEEDS_WHOLE_DAYS,
+  durationHelp,
+  durationLabel,
+  durationWriteFields,
+  seedDurationText,
+} from '../model/duration-field';
+import { effectiveHoursPerDay } from '../model/effective-hours-per-day';
+import { useDurationSeed } from '../model/use-duration-seed';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
@@ -88,6 +97,7 @@ export function ActivityFormDialog({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
+  planCalendarId,
   planActivities = [],
   planActivitiesLoading = false,
   planActivitiesError = false,
@@ -109,6 +119,13 @@ export function ActivityFormDialog({
   calendarsLoading?: boolean;
   /** The calendars list failed to load — surface it rather than silently offering only "inherit". */
   calendarsError?: boolean;
+  /**
+   * The plan's own calendar id — what `calendarId: ''` ("inherit") resolves to. Route-composed like
+   * {@link calendars}, and needed only to read the activity's working-hours factor (ADR-0070): a
+   * host that cannot supply it leaves the duration field in whole working days, which is what the
+   * field has always been.
+   */
+  planCalendarId?: string;
   /**
    * The plan's activities — the pool the WBS-nesting picker draws valid parents from (the summaries
    * within it, ADR-0038, F8). The **unfiltered** list: the dialog derives the summaries (and excludes
@@ -140,7 +157,8 @@ export function ActivityFormDialog({
     reset,
     control,
     setValue,
-    formState: { errors },
+    setError,
+    formState: { errors, dirtyFields },
   } = useForm<ActivityFormValues>({
     resolver: zodResolver(activityFormSchema),
     defaultValues: {
@@ -148,7 +166,7 @@ export function ActivityFormDialog({
       code: '',
       type: 'TASK',
       durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-      durationDays: 1,
+      duration: '1',
       constraintType: '',
       constraintDate: '',
       secondaryConstraintType: '',
@@ -178,7 +196,15 @@ export function ActivityFormDialog({
         // Always seed from the row so a stored value round-trips even when the picker is hidden
         // (flag off) — an edit then never silently resets the duration type. Defaults to the API default.
         durationType: activity?.durationType ?? 'FIXED_DURATION_AND_UNITS_TIME',
-        durationDays: activity?.durationDays ?? 1,
+        // Seeded on the factor known at OPEN; `useDurationSeed` re-reads it once the calendar list
+        // lands, so a sub-day duration is never shown (or saved) as its rounded day.
+        duration: seedDurationText(
+          activity,
+          effectiveHoursPerDay(calendars, {
+            activityCalendarId: activity?.calendarId ?? '',
+            ...(planCalendarId === undefined ? {} : { planCalendarId }),
+          }),
+        ),
         constraintType: activity?.constraintType ?? '',
         constraintDate: activity?.constraintDate ?? '',
         // Always seed the M4 advanced fields from the row so a stored value round-trips even when the
@@ -255,6 +281,23 @@ export function ActivityFormDialog({
     );
     return toCalendarOptions(offerable, { grouped: groupCalendars });
   }, [calendars, calendarId, calendarQuery, groupCalendars]);
+  // The duration field's day↔minute factor, read from the calendar the FORM currently selects — not
+  // the saved one, because a planner can change the calendar and the duration in the same edit
+  // (ADR-0070 §3). `undefined` = not known, which degrades the field to whole working days.
+  const hoursPerDay = effectiveHoursPerDay(calendars, {
+    activityCalendarId: calendarId ?? '',
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+  });
+  // Hoisted rather than inlined: an arrow rebuilt per render defeats the React Compiler's
+  // memoization of everything downstream of it (`Existing memoization could not be preserved`).
+  const setDuration = useCallback((text: string) => setValue('duration', text), [setValue]);
+  useDurationSeed({
+    open,
+    hoursPerDay,
+    activity,
+    isDirty: Boolean(dirtyFields.duration),
+    setDuration,
+  });
   // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off
   // option so opening the form never coerces it (US-2). Derived from the live field value, so
   // it appears when a parked value is selected and disappears once the planner changes away.
@@ -267,9 +310,24 @@ export function ActivityFormDialog({
       : null;
 
   const onSubmit = handleSubmit((values) => {
+    // The one check the schema deliberately cannot make (ADR-0070): whether this text converts on
+    // THIS activity's calendar. Only reachable on the degraded whole-days path, where `4h` is a
+    // well-formed duration the field simply cannot express.
+    if (
+      !isDurationDerivedType(values.type) &&
+      durationWriteFields(values.duration, hoursPerDay) === null
+    ) {
+      setError('duration', { message: DURATION_NEEDS_WHOLE_DAYS }, { shouldFocus: true });
+      return;
+    }
     if (isEdit) {
       update.mutate(
-        { activityId: activity.id, version: activity.version, ...values },
+        {
+          activityId: activity.id,
+          version: activity.version,
+          ...values,
+          ...(hoursPerDay === undefined ? {} : { hoursPerDay }),
+        },
         {
           onSuccess: (saved) => {
             announce(`Activity “${values.name}” saved.`);
@@ -281,12 +339,15 @@ export function ActivityFormDialog({
         },
       );
     } else {
-      create.mutate(values, {
-        onSuccess: () => {
-          announce(`Activity “${values.name}” created.`);
-          onClose();
+      create.mutate(
+        { ...values, ...(hoursPerDay === undefined ? {} : { hoursPerDay }) },
+        {
+          onSuccess: () => {
+            announce(`Activity “${values.name}” created.`);
+            onClose();
+          },
         },
-      });
+      );
     }
   });
 
@@ -375,11 +436,16 @@ export function ActivityFormDialog({
                   ) : null
                 ) : (
                   <TextField
-                    label="Duration (working days)"
-                    type="number"
-                    min={0}
-                    error={errors.durationDays?.message}
-                    {...register('durationDays', { valueAsNumber: true })}
+                    label={durationLabel(hoursPerDay)}
+                    // Text, not `type="number"`, once the factor is known: "2d 4h" is not a number,
+                    // and a number input would refuse the characters before the parser ever saw them.
+                    type={hoursPerDay === undefined ? 'number' : 'text'}
+                    {...(hoursPerDay === undefined ? { min: 0 } : { inputMode: 'text' as const })}
+                    {...(durationHelp(hoursPerDay) === undefined
+                      ? {}
+                      : { hint: durationHelp(hoursPerDay) })}
+                    error={errors.duration?.message}
+                    {...register('duration')}
                   />
                 )}
                 {/* A resource-dependent activity keeps its own duration (it behaves exactly like a task for

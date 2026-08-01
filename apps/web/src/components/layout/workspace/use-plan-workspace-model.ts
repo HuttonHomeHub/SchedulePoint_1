@@ -712,7 +712,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           type: activity.type,
           // Round-trip the duration type unchanged (ADR-0040) — a canvas move must not reset it.
           durationType: activity.durationType,
-          durationDays: activity.durationDays,
+          // The exact stored minutes (ADR-0070) — resending the ROUNDED day here silently
+          // flattened a sub-day activity to zero on every canvas move.
+          duration: String(activity.durationDays),
+          durationMinutes: activity.durationMinutes,
           description: activity.description ?? undefined,
           // Round-trip the Earned-Value inputs unchanged (EV4b, ADR-0042) — the update body always
           // sends them, so a canvas move must resend the stored values (money minor → major units) or
@@ -831,6 +834,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
                 constraintDate: addCalendarDays(plannedStart!, startDay),
               }
             : {}),
+          // The resize is a DAY drag on a day-scaled diagram, so it sets days — and takes
+          // precedence over the exact-minutes round-trip the spread above carries (ADR-0070).
           durationDays,
         });
         // Record the resize for undo (ADR-0048) — the single user edit, NOT the follow-up recalc.

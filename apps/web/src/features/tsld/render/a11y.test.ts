@@ -20,6 +20,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     description: null,
     type: 'TASK',
     durationDays: 3,
+    durationMinutes: 1440,
     constraintType: null,
     constraintDate: null,
     secondaryConstraintType: null,
@@ -109,6 +110,7 @@ function edge(
     planId: 'p1',
     type: 'FS',
     lagDays: 0,
+    lagMinutes: 0,
     lagCalendar: 'PROJECT_DEFAULT',
     isDriving: false,
     version: 1,
@@ -237,6 +239,7 @@ describe('summarizeLogic (Tier 2)', () => {
         successor: ep('x', 'Excavate'),
         type: 'SS',
         lagDays: 3,
+        lagMinutes: 1440,
         isDriving: true,
       }),
       edge({
@@ -244,6 +247,7 @@ describe('summarizeLogic (Tier 2)', () => {
         successor: ep('s1', 'Pour'),
         type: 'FS',
         lagDays: -1,
+        lagMinutes: -480,
         isDriving: true,
       }),
     ];

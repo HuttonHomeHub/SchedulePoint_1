@@ -233,6 +233,9 @@ describe('ShareGuestService', () => {
         successorId: 'a2',
         type: 'FS',
         lagDays: 0,
+        // The exact stored lag joined the guest scope with ADR-0070: a rounded day cannot tell a
+        // two-hour cure from no lag at all.
+        lagMinutes: 0,
       });
     });
   });

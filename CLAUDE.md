@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 19 API modules
-> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~670 web
-> source files with 18 flag-scoped Playwright suites beside the base journey, and
-> 66 ADRs (counted 2026-07-31 — every number here is `ls | wc -l`, not memory).
+> (`apps/api/src/modules/`), 25 Prisma models across 42 migrations, ~700 web
+> source files with 19 flag-scoped Playwright suites beside the base journey, and
+> 70 ADRs (recounted 2026-08-01 — every number here is `ls | wc -l`, not memory).
 > The CPM/GPM engine is real and its conformance matrix is closed (ADR-0034).
 > Read the code before assuming anything is missing — this banner said the
 > opposite for months after it stopped being true, which is exactly the failure
@@ -1068,6 +1068,29 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   correct plan arranged badly, which one press of Auto-arrange fixes. **The CPM engine is not
   imported and the recalc parity gate is untouched** — `lane_index` is presentation and
   `computeSchedule` has never seen it.
+
+- **ADR-0070** _(Accepted; M0–M2 landed, behind `VITE_SUB_DAY_DURATIONS`)_ — Sub-day durations and
+  lags in the authoring surface. ADR-0036 moved storage and the engine to working **minutes** a year
+  ago, ADR-0068 made a _day_ a per-calendar quantity, and `api-v0.34.0` put `durationMinutes` /
+  `lagMinutes` on the public DTOs — and **nothing in the product could type one**: a four-hour lift
+  or a 30-minute cure lag could be imported, scheduled, levelled and exported, and never entered.
+  The same shape as ADR-0067, one field along, found the same way (ADR-0058's _verify the claim_,
+  applied to the 25 activity-update DTO fields against the web editor). The field becomes **text**
+  with a `d`/`h`/`m` grammar (`2d 4h`, `90m`, `1.5d`); a **bare number still means days**, which is
+  what makes it not a migration. Weeks are **refused, not guessed** — a construction week is five
+  days to one planner and seven to another and SchedulePoint has no setting to disambiguate. The
+  load-bearing decision is that `hoursPerDay` is a **required parameter** of the parser and the
+  formatter, never defaulted: after ADR-0068 defaulting to 24 reads a planner's `1d` on an
+  eight-hour calendar as three days' work and defaulting to 8 does the reverse, both silently and
+  both changing dates — so the compiler enforces the ordering. The factor is read from the calendar
+  the **form** currently selects (a planner can change calendar and duration in one edit, and only
+  the client knows the pending choice); where it cannot be resolved the field degrades to whole
+  working days, which is the same code path as flag-off, so the rollback contract and the
+  not-yet-loaded state cannot rot separately. It also closed a live defect: a canvas move resent the
+  **rounded** duration, flattening a sub-day activity to zero on every drag. Cross-plan lag is
+  deliberately out of scope (its DTO carries no minutes). **The CPM engine is not imported and the
+  ADR-0034 parity gate is untouched** — this changes only which of two already-supported write
+  fields the client sends.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

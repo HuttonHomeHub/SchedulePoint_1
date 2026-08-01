@@ -89,6 +89,9 @@ export function ActivityBottomPanel({
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
           calendarsError={model.calendars.isError}
+          {...(model.plan.data?.calendarId == null
+            ? {}
+            : { planCalendarId: model.plan.data.calendarId })}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
             : {})}

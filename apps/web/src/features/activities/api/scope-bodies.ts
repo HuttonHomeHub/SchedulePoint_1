@@ -1,3 +1,4 @@
+import { durationWriteFields } from '../model/duration-field';
 import { isDurationDerivedType } from '../schemas/activity-schemas';
 import type {
   ActivityCostValues,
@@ -25,8 +26,17 @@ import { majorInputToMinor } from '@/lib/format-money';
 const optional = (value: string | undefined): string | undefined =>
   value && value.length > 0 ? value : undefined;
 
-/** Identity, duration, hierarchy, description. */
-export function generalBody(values: ActivityGeneralValues): Record<string, unknown> {
+/**
+ * Identity, duration, hierarchy, description.
+ *
+ * `hoursPerDay` is the activity's effective working-hours factor (ADR-0070). It decides which of
+ * the two mutually-exclusive duration fields this body carries — `durationMinutes` when the factor
+ * is known, `durationDays` when it is not — never both, which the API rejects by design.
+ */
+export function generalBody(
+  values: ActivityGeneralValues,
+  hoursPerDay?: number,
+): Record<string, unknown> {
   return {
     name: values.name,
     code: optional(values.code) ?? null,
@@ -34,7 +44,13 @@ export function generalBody(values: ActivityGeneralValues): Record<string, unkno
     durationType: values.durationType,
     // A duration-derived type (milestone / LOE / WBS summary) always stores 0 — the engine owns
     // its span, so sending the field's stale number would be a lie the API would have to reject.
-    durationDays: isDurationDerivedType(values.type) ? 0 : values.durationDays,
+    //
+    // Text the parser cannot read emits **no duration key at all**, so the PATCH leaves the stored
+    // value alone. Unreachable through the form (the schema refuses it first), and the alternative —
+    // defaulting to `durationDays: 0` — would turn an unreadable field into a silently erased one.
+    ...(isDurationDerivedType(values.type)
+      ? { durationDays: 0 }
+      : (durationWriteFields(values.duration, hoursPerDay) ?? {})),
     parentId: values.parentId ? values.parentId : null,
     description: optional(values.description) ?? null,
   };

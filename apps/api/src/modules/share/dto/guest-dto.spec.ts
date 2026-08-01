@@ -152,6 +152,10 @@ describe('GuestActivityDto', () => {
         'name',
         'type',
         'durationDays',
+        // The EXACT form of a field already in scope (ADR-0070). A rounded day is a lie for a
+        // sub-day activity: without this a guest sees a four-hour lift as `durationDays: 0` and
+        // cannot tell it apart from a milestone.
+        'durationMinutes',
         'laneIndex',
         'earlyStart',
         'earlyFinish',
@@ -174,6 +178,7 @@ describe('GuestActivityDto', () => {
   it('maps duration minutes → working days and echoes the CPM/progress values', () => {
     expect(dto).toMatchObject({
       durationDays: 2, // 2880 / 1440
+      durationMinutes: 2880, // the exact stored value, unrounded
       isCritical: true,
       totalFloat: 5,
       status: 'IN_PROGRESS',
@@ -212,14 +217,15 @@ describe('GuestDependencyDto', () => {
 
   it('exposes ONLY id, endpoints (by id), type and lag', () => {
     expect(Object.keys(dto).sort()).toEqual(
-      ['id', 'predecessorId', 'successorId', 'type', 'lagDays'].sort(),
+      // `lagMinutes` joined the scope with ADR-0070, for the same reason as `durationMinutes`:
+      // it is the exact form of `lagDays`, not a new datum.
+      ['id', 'predecessorId', 'successorId', 'type', 'lagDays', 'lagMinutes'].sort(),
     );
   });
 
   it.each([
     'organizationId',
     'planId',
-    'lagMinutes',
     'lagCalendar',
     'isDriving',
     'predecessor',
@@ -234,8 +240,9 @@ describe('GuestDependencyDto', () => {
     expect(dto).not.toHaveProperty(key);
   });
 
-  it('maps lag minutes → signed working days', () => {
+  it('maps lag minutes → signed working days, and echoes the exact minutes', () => {
     expect(dto.lagDays).toBe(2); // 2880 / 1440
+    expect(dto.lagMinutes).toBe(2880);
   });
 });
 

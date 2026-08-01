@@ -33,6 +33,14 @@
 /** Minutes in one hour — the only fixed factor here; days are per-calendar (ADR-0068). */
 const MINUTES_PER_HOUR = 60;
 
+/**
+ * The longest a working day can be. Used by {@link checkDurationText} to bound a duration without
+ * knowing the real factor: a bigger `hoursPerDay` yields more minutes for the same typed days, so
+ * a value accepted at 24 is accepted on every shorter calendar too. Nothing rounds on this path —
+ * it exists so form validation can run before the calendar list has resolved.
+ */
+const MAX_HOURS_PER_DAY = 24;
+
 /** Why a duration string could not be read. Each maps to one sentence a planner can act on. */
 export type DurationParseFailure =
   'empty' | 'unreadable' | 'negative' | 'unknown-unit' | 'repeated-unit' | 'too-large';
@@ -61,6 +69,20 @@ const MAX_DURATION_MINUTES = 10_000 * 24 * 60;
 
 /** `2d`, `4.5h`, `90m` — a number (optionally fractional) followed by its unit. */
 const PART = /^(\d+(?:\.\d+)?)([dhm])$/;
+
+/**
+ * Is this text a well-formed duration, **without** knowing the calendar it will be measured on?
+ * Returns the failure reason, or `null` when it reads.
+ *
+ * Every rule the grammar has is factor-independent except the magnitude bound, which is checked
+ * here at the longest possible day ({@link MAX_HOURS_PER_DAY}) — the strictest reading, so anything
+ * this accepts is accepted for real. That is what lets the form's zod schema validate the field
+ * before the calendar list has resolved, without the schema inventing a factor of its own.
+ */
+export function checkDurationText(text: string): DurationParseFailure | null {
+  const result = parseDurationText(text, MAX_HOURS_PER_DAY);
+  return result.ok ? null : result.reason;
+}
 
 /**
  * Read a typed duration into whole working minutes on a calendar of `hoursPerDay` hours.

@@ -62,6 +62,9 @@ function makeModel(over: Partial<Record<string, unknown>> = {}): PlanWorkspaceMo
     planId: 'p1',
     activities: { data: ACTIVITIES },
     calendars: { data: [], isPending: false, isError: false },
+    // The plan row: the dialogs read its `calendarId` to resolve the duration field's
+    // working-hours factor (ADR-0070). Absent leaves that field in whole working days.
+    plan: { data: { calendarId: null } },
     editActivityId: null,
     deleteActivityId: null,
     setEditActivityId: vi.fn(),

@@ -14,6 +14,7 @@ const DEP: DependencySummary = {
   planId: 'pl1',
   type: 'FS',
   lagDays: 3,
+  lagMinutes: 1440,
   lagCalendar: 'PROJECT_DEFAULT',
   predecessor: { id: 'a1', code: null, name: 'Excavate' },
   successor: { id: 'b1', code: null, name: 'Pour slab' },

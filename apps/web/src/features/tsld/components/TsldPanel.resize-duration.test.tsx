@@ -34,6 +34,7 @@ function fourDayOverAWeekend(): ActivitySummary {
     description: null,
     type: 'TASK',
     durationDays: 4,
+    durationMinutes: 1920,
     constraintType: null,
     constraintDate: null,
     secondaryConstraintType: null,

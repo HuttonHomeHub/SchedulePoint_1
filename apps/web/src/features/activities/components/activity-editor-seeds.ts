@@ -1,5 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 
+import { seedDurationText } from '../model/duration-field';
 import type {
   ActivityCostValues,
   ActivityGeneralValues,
@@ -21,13 +22,16 @@ import { minorToMajorInput } from '@/lib/format-money';
  * A create seeds the API defaults, so an unopened tab saves exactly what the server would default.
  */
 
-export function seedGeneral(activity: ActivitySummary | undefined): ActivityGeneralValues {
+export function seedGeneral(
+  activity: ActivitySummary | undefined,
+  hoursPerDay?: number,
+): ActivityGeneralValues {
   return {
     name: activity?.name ?? '',
     code: activity?.code ?? '',
     type: activity?.type ?? 'TASK',
     durationType: activity?.durationType ?? 'FIXED_DURATION_AND_UNITS_TIME',
-    durationDays: activity?.durationDays ?? 1,
+    duration: seedDurationText(activity, hoursPerDay),
     parentId: activity?.parentId ?? '',
     description: activity?.description ?? '',
   };

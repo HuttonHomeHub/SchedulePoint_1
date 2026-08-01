@@ -322,8 +322,20 @@ export interface ActivitySummary {
   name: string;
   description: string | null;
   type: ActivityType;
-  /** Working days (milestones are 0). */
+  /**
+   * Working days **on this activity's own calendar** (ADR-0068) — an eight-hour calendar counts 480
+   * working minutes to the day, not 1440 — rounded from the stored minutes. Milestones are 0, and so
+   * is anything shorter than half a day: read {@link ActivitySummary.durationMinutes} for the exact
+   * value.
+   */
   durationDays: number;
+  /**
+   * Working **minutes** — what is stored and what the CPM engine schedules on (ADR-0036). Exposed so
+   * a sub-day duration can be read back exactly; without it a four-hour activity is only ever
+   * visible as `durationDays: 0` (TECH_DEBT #78). The unit the authoring surface writes in
+   * (ADR-0070).
+   */
+  durationMinutes: number;
   constraintType: ConstraintType | null;
   constraintDate: string | null;
   /**
@@ -613,7 +625,18 @@ export interface DependencySummary {
   id: string;
   planId: string;
   type: DependencyType;
+  /**
+   * Signed working days on this edge's **lag calendar** (a lead is negative), rounded from the
+   * stored minutes. A sub-day lag reads back as 0 here — read {@link DependencySummary.lagMinutes}
+   * for the exact value.
+   */
   lagDays: number;
+  /**
+   * Signed working **minutes** — what is stored and what the engine applies (ADR-0036). Exposed so a
+   * sub-day lag (a two-hour cure before a follow-on trade) can be read back exactly, and the unit
+   * the authoring surface writes in (ADR-0070).
+   */
+  lagMinutes: number;
   /**
    * The calendar the lag is measured on (ADR-0036 §6, M3). `PROJECT_DEFAULT` (the default)
    * and `PREDECESSOR`/`SUCCESSOR` all schedule the lag on the plan calendar today — the last

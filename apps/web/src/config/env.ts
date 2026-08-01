@@ -39,9 +39,10 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * **It currently has no consumer, and that is the healthy state** — it means no feature is
- * mid-flight. Kept rather than deleted because the next flag needs it on day one, and it is
- * covered by `env.test.ts` including the case-sensitivity that makes `"TRUE"` read as off.
+ * Its consumer today is {@link SUB_DAY_DURATIONS_ENABLED} (ADR-0070), which is mid-flight. When
+ * that flips, this helper goes back to having none — which is the healthy state, and why it is kept
+ * rather than deleted: the next flag needs it on day one. Covered by `env.test.ts`, including the
+ * case-sensitivity that makes `"TRUE"` read as off.
  *
  * (The sentence this replaces had been corrupted by an earlier edit into two spliced halves
  * naming five long-closed debt items — noticed only when the last consumer went away.)
@@ -1086,3 +1087,30 @@ export const CANVAS_LINK_ROUTING_ENABLED =
 export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CALENDAR_SHIFT_EDITOR,
 );
+
+/**
+ * **Sub-day durations and lags** (`VITE_SUB_DAY_DURATIONS`, default **OFF**) — ADR-0070, the
+ * authoring half of ADR-0036's minutes.
+ *
+ * ADR-0036 moved storage and the CPM engine to working minutes; ADR-0068 made a *day* a
+ * per-calendar quantity; `api-v0.34.0` put `durationMinutes` and `lagMinutes` on the public DTOs so
+ * a sub-day value could be authored and read back exactly. **Nothing in the product could type
+ * one** — the activity editor offered a whole-number *days* box and the dependency editor a
+ * whole-number *days* lag, so a four-hour lift or a 30-minute cure lag could be imported,
+ * scheduled, levelled and exported, and never entered.
+ *
+ * Flag ON reads both fields as text with a `d`/`h`/`m` grammar (`2d 4h`, `90m`, `1.5d`) and sends
+ * the minute-denominated field; a **bare number still means days**, so every value a planner has
+ * already learnt to type keeps its meaning.
+ *
+ * Rollback: set `VITE_SUB_DAY_DURATIONS=false` and rebuild the web image. Nothing persisted depends
+ * on it — the API has accepted both `durationDays` and `durationMinutes` since `api-v0.34.0`, and a
+ * sub-day duration authored with the flag on keeps scheduling identically with it off; it simply
+ * reads back rounded to whole days again, which the field's label says out loud. The flag-off parity
+ * suite is kept, not weakened: it is the rollback contract.
+ *
+ * The flag exists at all — unlike ADR-0061's deliberately unflagged layout work — because this
+ * changes **which field of the write DTO carries the value**. A wrong day↔minute factor is a wrong
+ * date, silently, so the rollback has to be a switch rather than a revert.
+ */
+export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOff(import.meta.env.VITE_SUB_DAY_DURATIONS);
