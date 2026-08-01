@@ -30,35 +30,40 @@ export interface CoverageException {
  * and no client can create it. That asymmetry is precisely what ADR-0066 was written to surface.
  */
 export const UNREACHABLE: Readonly<Record<string, CoverageException>> = {
-  // ── No intraday shift patterns on any write path (TECH_DEBT #80) ───────────────────────────
-  // `fullDayShiftsFromMask` in `calendar.repository.ts` derives every calendar's shifts from the
-  // weekday mask, on the single create, the update AND the interchange batch. So a calendar day is
-  // always the whole day, and ADR-0036's intraday shift patterns — its headline capability — have
-  // no author anywhere in the product.
+  // ── The SEEDER still sends a weekday mask, not shift windows (TECH_DEBT #80, narrowed) ─────
+  // This block used to say "no write path accepts shift windows", which was true when it was
+  // written and stopped being true in api-v0.34.0: `CreateCalendarDto.shifts` takes them, and the
+  // flagged web editor authors them. What remains is narrower and belongs here rather than to the
+  // API — a `SeedSpec` calendar carries working DAYS, so the seeder has nothing to send. Reaching
+  // these four needs the SeedSpec model to carry windows, not another API change.
   cal_split_shift: {
-    reason: 'a working day is always the full day: no write path accepts shift windows',
+    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
     debt: 80,
   },
   cal_night_crosses_midnight: {
-    reason: 'needs two adjacent-day windows; no write path accepts shift windows',
+    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
     debt: 80,
   },
   cal_asymmetric_week: {
-    reason: 'needs different hours per weekday; the mask carries working/not, never hours',
+    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
     debt: 80,
   },
   cal_forces_split: {
-    reason: 'needs an intraday gap for the work to split across; no write path accepts one',
+    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
     debt: 80,
   },
-
-  // ── The weekday mask must name at least one working day (TECH_DEBT #79) ────────────────────
+  // ── Expressible now, but no catalogue plan seeds one (TECH_DEBT #79, narrowed) ─────────────
+  // These two were excepted as "a mask of 0 is a 422". That stopped being true in api-v0.34.0, and
+  // the seeder now sends 0 rather than refusing, so the *cause* recorded here was wrong. What is
+  // still true is smaller and is stated instead of inherited: no plan in the catalogue has a
+  // window-only calendar, so nothing demonstrates the capability end to end. The remedy is a seed
+  // plan, not another API change — which is a different piece of work from the one #79 tracked.
   cal_window_only: {
-    reason: 'a non-working base week with dated working windows is a 422: workingWeekdays >= 1',
+    reason: 'creatable since api-v0.34.0 and the seeder sends it; no catalogue plan has one yet',
     debt: 79,
   },
   cal_empty_base_week: {
-    reason: 'same @Min(1) on the mask — the engine supports it, the API refuses it',
+    reason: 'creatable since api-v0.34.0 and the seeder sends it; no catalogue plan has one yet',
     debt: 79,
   },
 

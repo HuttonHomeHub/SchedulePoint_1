@@ -1,4 +1,4 @@
-import type { SeedActivity, SeedSpec } from '@repo/seed';
+import type { SeedSpec } from '@repo/seed';
 
 import { SeedHttpError, type SeedClient } from './client.js';
 import { PenHolder } from './pen.js';
@@ -83,25 +83,13 @@ export async function seedPlan(
     //    honoured rather than flattened.
     const calendarIdByKey = new Map<string, string>();
     for (const calendar of spec.calendars) {
+      // A mask of 0 is a **window-only** calendar: the base week is entirely non-working and all
+      // work comes from dated exception windows (the fixture's turnaround calendar). It is sent as
+      // an ordinary create — `MIN_WORKING_WEEKDAYS_MASK` became 0 when TECH_DEBT #79 closed. This
+      // file previously refused it and reported a finding quoting a `@Min(1)` that no longer
+      // exists, which is the drift ADR-0058 is about: the comment described a limitation, the
+      // limitation was fixed, and the comment kept being believed.
       const mask = toWeekdayMask(calendar.days);
-      if (mask === 0) {
-        // A **window-only** calendar: the base week is entirely non-working and all work comes from
-        // dated exception windows (the fixture's turnaround calendar). ADR-0036 §"window-only base
-        // weeks" supports this at the engine, but `CreateCalendarDto` puts `@Min(1)` on the mask, so
-        // no client can express it. Recorded as a finding rather than fudged into a working week —
-        // inventing a Monday would make the seeded plan schedule differently from the fixture and
-        // say nothing about it. See TECH_DEBT #79.
-        findings.push({
-          entity: 'calendar',
-          sourceRef: calendar.key,
-          code: 'WINDOW_ONLY_CALENDAR_UNSUPPORTED',
-          detail:
-            `“${calendar.name}” has a non-working base week (all work comes from dated exception ` +
-            'windows). The calendars API requires workingWeekdays >= 1, so it cannot be created; ' +
-            'activities on it will inherit the plan calendar instead.',
-        });
-        continue;
-      }
       const reusable =
         calendar.scope === 'ORG' ? existingOrgCalendarIdByName.get(calendar.name) : undefined;
       if (reusable !== undefined) {
@@ -251,7 +239,12 @@ export async function seedPlan(
             name: activity.name,
             code: activity.code,
             type: activity.type,
-            durationDays: toDays(activity, approximations),
+            // Minutes, not days (ADR-0068). `durationMinutes` became authorable when TECH_DEBT #78
+            // closed, and sending it removes BOTH problems the old `toDays` had: the rounding it
+            // had to report as an approximation, and — since a day is now the calendar's working
+            // day, not a constant 1440 — a day-denominated value that would mean different things
+            // on different calendars. Minutes are what the SeedSpec holds and what storage holds.
+            durationMinutes: activity.durationMinutes,
             durationType: activity.durationType,
             accrualType: activity.accrualType,
             scheduleAsLateAsPossible: activity.scheduleAsLateAsPossible,
@@ -360,7 +353,9 @@ export async function seedPlan(
             predecessorId,
             successorId,
             type: dependency.type,
-            lagDays: toLagDays(dependency.lagMinutes, dependency.predecessorKey, approximations),
+            // Minutes, for the same reason as the duration above — and here it matters more, since
+            // a lag's day factor varies per relationship with its `lagCalendar` (ADR-0068 §4).
+            lagMinutes: dependency.lagMinutes,
             lagCalendar: dependency.lagCalendarSource,
           });
           counts.dependencies += 1;
@@ -535,46 +530,6 @@ function toWeekdayMask(days: SeedSpec['calendars'][number]['days']): number {
     mask |= 1 << ((day.weekday + 6) % 7);
   }
   return mask;
-}
-
-/**
- * Working minutes → the whole working days the API accepts, recording the rounding when it is not
- * exact. See TECH_DEBT #78: `CreateActivityDto` exposes only an integer `durationDays`, so an
- * activity finer than a day **cannot be authored by any client**, and the seeded plan is a near copy
- * rather than a faithful one. Saying so in the report is what keeps it a test bed instead of a trap.
- */
-function toDays(activity: SeedActivity, approximations: SeedApproximation[]): number {
-  const days = activity.durationMinutes / MINUTES_PER_DAY;
-  const rounded = Math.round(days);
-  if (rounded !== days) {
-    approximations.push({
-      entity: 'activity',
-      sourceRef: activity.code,
-      detail: `duration ${activity.durationMinutes} min → ${rounded} day(s)`,
-      reason:
-        'the public activity API accepts only whole working days (TECH_DEBT #78); the engine and ' +
-        'storage are minute-granular, so this value is reachable by import but not by any client',
-    });
-  }
-  return rounded;
-}
-
-function toLagDays(
-  lagMinutes: number,
-  sourceRef: string,
-  approximations: SeedApproximation[],
-): number {
-  const days = lagMinutes / MINUTES_PER_DAY;
-  const rounded = Math.round(days);
-  if (rounded !== days) {
-    approximations.push({
-      entity: 'dependency',
-      sourceRef,
-      detail: `lag ${lagMinutes} min → ${rounded} day(s)`,
-      reason: 'the public dependency API accepts only whole working days (TECH_DEBT #78)',
-    });
-  }
-  return rounded;
 }
 
 /**
