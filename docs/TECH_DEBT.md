@@ -622,9 +622,10 @@ capability keys (`cal_split_shift`, `cal_night_crosses_midnight`, `cal_asymmetri
 
 **Impact — the largest of the three write-path gaps** (#78 durations, #79 the window-only mask, this
 one). A planner working a two-shift site or a night-shift possession cannot describe their working
-week at all, and the schedule they get is silently a whole-day approximation of it. It also caps the
-fidelity of every import: an XER or MSPDI carrying real shift patterns is flattened on the way in
-with nothing said, because the mapper has nowhere to put them.
+week at all, and the schedule they get is silently a whole-day approximation of it. It also capped the
+fidelity of every import: an XER or MSPDI carrying real shift patterns was flattened on the way in
+with nothing said, because the mapper had nowhere to put them — **that half is now closed too**
+(see the closing note below).
 
 **What would close it:** a `shifts` array on the calendar create/update DTOs (weekday +
 start/end minute, validated non-overlapping and ordered), a matching `windows` array on the
@@ -647,10 +648,25 @@ which is the same defect the weekly half fixed.
 Only a single day is authorable, so it always equals `date` today — the point is that the contract
 stops hiding a column. Authoring a multi-day exception stays out of scope.
 
-The **seeder and the coverage report still describe the pre-0.34.0 world** — six `cal_*` capability
-keys are listed as unreachable quoting `fullDayShiftsFromMask`, which no longer derives anything the
-caller supplied. Reconciling them (and making the seeder emit shift patterns) is the next slice, and
-is what turns "the API accepts it" into "a seeded plan proves it".
+**CLOSED 2026-08-01.** The three remaining halves all landed with the ADR-0067 editor and the
+ADR-0068 factor:
+
+- **The editor.** `WeeklyShiftEditor` replaces seven weekday checkboxes with a per-day window list,
+  so the shape the API had accepted since `api-v0.34.0` is now authorable by a person. Behind
+  `VITE_CALENDAR_SHIFT_EDITOR`, default-on.
+- **The seeder and the coverage report.** The six `cal_*` exceptions quoting `fullDayShiftsFromMask`
+  are gone — that derivation no longer touches anything the caller supplied — and
+  `capability-shift-calendars` seeds nine calendars whose working **days** are identical and whose
+  **hours** are not, so every one of those keys is proven by a plan rather than excepted. That is
+  what turns "the API accepts it" into "a seeded plan proves it".
+- **Import.** `ImportCalendarBatchInput` now carries `shifts` verbatim plus `hoursPerDayMinutes`, and
+  the pure mapper emits per-weekday windows rather than a mask, so an imported two-shift calendar
+  arrives as a two-shift calendar. Windows are validated and repaired on the way in (see #82) rather
+  than reaching the engine unchecked.
+
+What deliberately did **not** close: multi-day exception **authoring** (`endDate` is exposed on the
+read, so nothing is hidden by the deferral), and the flag-off path, which keeps the flattening
+behaviour as the stated rollback contract.
 
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 

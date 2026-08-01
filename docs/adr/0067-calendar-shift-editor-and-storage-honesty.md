@@ -176,16 +176,21 @@ the five specialist reviews, the flag-on journey, and a seeded catalogue plan.
 
 - **Positive.** A planner can describe the working week their programme actually runs on. Six
   ADR-0066 capability keys become reachable and the coverage report starts telling the truth. The
-  flatten-on-unrelated-save regression is closed. `docs/TECH_DEBT.md` loses two rows entirely (#78,
-  #79) and #80 shrinks to what is left. One primitive serves both window surfaces, so they cannot
-  drift.
+  flatten-on-unrelated-save regression is closed. `docs/TECH_DEBT.md` loses three rows entirely (#78,
+  #79, #80). One primitive serves both window surfaces, so they cannot drift.
 - **Negative / new debt.** A shared primitive is a standing obligation. Flag-off keeps the flattening
-  behaviour, which is the accepted rollback cost and is stated in the flag's docblock. `interchange`
-  still flattens shifts on import (`ImportCalendarBatchInput` carries only `workingWeekdays`) — now
-  tractable, and recorded as a new debt row rather than fixed here. Multi-day exception **authoring**
+  behaviour, which is the accepted rollback cost and is stated in the flag's docblock. Multi-day exception **authoring**
   stays deferred; `endDate` on read means nothing is hidden by that. Q2's `HH:MM` text field is a
   hand-rolled control where a native one nearly fits, because `<input type="time">` cannot express
   24:00 — the single most common end value in this domain.
+- **Corrected 2026-08-01.** This section originally read "`interchange` still flattens shifts on
+  import (`ImportCalendarBatchInput` carries only `workingWeekdays`) — now tractable, and recorded as
+  a new debt row rather than fixed here." That was true when written and stopped being true within
+  the epic: the ADR-0068 slice reshaped `ImportCalendarBatchInput` to carry `shifts` verbatim plus
+  `hoursPerDayMinutes`, and the pure mapper now emits per-weekday windows rather than a mask. So an
+  imported two-shift calendar arrives as a two-shift calendar. The stale sentence survived the same
+  gate pass that folded ten defects, which is the ADR-0058 failure inside the ADR that names it —
+  recorded here rather than quietly deleted.
 - **Neutral.** ADR-0036 is **completed, not amended**: §2 already specified everything this authors.
   ADR-0024's calendar model, ADR-0053's tiers and archive lifecycle, and ADR-0028's pen model are all
   unchanged — a calendar is org-scoped library data, not plan structure, so it is not pen-gated, as
