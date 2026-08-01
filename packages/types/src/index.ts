@@ -919,6 +919,52 @@ export const WorkingWeekdays = {
 export const MINUTES_PER_CALENDAR_DAY = 1440;
 
 /**
+ * The day↔minute factor a calendar carries when nobody has said otherwise (ADR-0068).
+ *
+ * `1440` is not a placeholder: it is the constant every service multiplied `durationDays` by
+ * before the column existed, so a calendar left at this value behaves exactly as it always has.
+ */
+export const DEFAULT_HOURS_PER_DAY_MINUTES = MINUTES_PER_CALENDAR_DAY;
+
+/**
+ * A sensible standard working day for a weekly pattern — the **default** a calendar takes when its
+ * shifts are written and no explicit hours-per-day is supplied (ADR-0068 §1).
+ *
+ * The rule is the **modal** daily working-minutes among days that work at all, ties broken toward
+ * the **longest**. A 9h Mon–Thu with a 5h Friday derives 9h, which is what a P6 user would type.
+ *
+ * It is deliberately a default applied **once, at the write**, not a standing derivation: were it
+ * evaluated on read, shortening one Friday would silently reinterpret the stored duration of every
+ * activity on the calendar. And it has no answer for a **window-only** calendar (no shifts at all,
+ * work coming only from positive exceptions) — every candidate rule yields 0, and `durationDays × 0`
+ * zeroes the activity — so that case returns {@link DEFAULT_HOURS_PER_DAY_MINUTES} rather than a
+ * number the data cannot support.
+ */
+export function deriveHoursPerDayMinutes(shifts: readonly CalendarShift[]): number {
+  const perWeekday = new Map<number, number>();
+  for (const shift of shifts) {
+    const worked = shift.endMinute - shift.startMinute;
+    if (worked <= 0) continue;
+    perWeekday.set(shift.weekday, (perWeekday.get(shift.weekday) ?? 0) + worked);
+  }
+  if (perWeekday.size === 0) return DEFAULT_HOURS_PER_DAY_MINUTES;
+
+  const counts = new Map<number, number>();
+  for (const minutes of perWeekday.values()) {
+    counts.set(minutes, (counts.get(minutes) ?? 0) + 1);
+  }
+  let best = 0;
+  let bestCount = 0;
+  for (const [minutes, count] of counts) {
+    if (count > bestCount || (count === bestCount && minutes > best)) {
+      best = minutes;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
  * The tiers a calendar can belong to (ADR-0053 §1). `ORG` is the shared organisation
  * library — the only tier before ADR-0053, and still the default; `PROJECT` is local to
  * one project (listed and selectable only within it), so a one-off shutdown calendar
@@ -985,6 +1031,18 @@ export interface CalendarSummary {
   workingWeekdays: number;
   /** The weekly pattern as stored: explicit intraday windows (ADR-0036 §2). */
   shifts: CalendarShift[];
+  /**
+   * This calendar's **standard working day**, in hours (P6 `day_hr_cnt`; ADR-0068). It is the
+   * day↔minute factor for every day-denominated field measured on this calendar — a
+   * `durationDays` of 1 is `hoursPerDay × 60` working minutes, not always 1440.
+   *
+   * May be fractional (7.5). Read {@link CalendarSummary.hoursPerDayMinutes} for the stored value:
+   * this one is derived from it and can round, exactly as `durationDays` does beside
+   * `durationMinutes`.
+   */
+  hoursPerDay: number;
+  /** The stored truth behind {@link CalendarSummary.hoursPerDay}. `1440` is a 24-hour day. */
+  hoursPerDayMinutes: number;
   /** Which tier this calendar belongs to (ADR-0053 §1). */
   scope: CalendarScope;
   /** The owning project when `scope` is `PROJECT`; `null` for an `ORG` calendar. */

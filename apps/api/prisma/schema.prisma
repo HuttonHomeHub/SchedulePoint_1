@@ -1419,6 +1419,34 @@ model Calendar {
   // the horizon" is a cross-row/temporal property enforced at the engine factory + the
   // N11/N16 iteration cap (ADR-0036 §5), not a DB CHECK (the DAG-invariant precedent).
 
+  // The calendar's STANDARD WORKING DAY in minutes — the day↔minute factor for every
+  // day-denominated public field measured on this calendar (P6 `day_hr_cnt`; ADR-0068, amending
+  // ADR-0036 §7). Storage and the engine are MINUTES; `durationDays`/`lagDays`/`totalFloat` are a
+  // convenience over them, and THIS COLUMN is the conversion. 1440 (24h) is a constant default, so
+  // every existing row keeps the `× 1440` behaviour the services had before this column existed —
+  // no data migration, no behaviour change.
+  //
+  // NOT NULL rather than nullable-and-derive, deliberately. A standing derivation would make this
+  // factor a function of the `shifts` rows above, so shortening one Friday would silently
+  // reinterpret the stored duration of every activity on this calendar — no pen held (ADR-0028),
+  // no recalculation asked for, no version the client could compare. It also has no answer for a
+  // window-only calendar (empty base week — valid, see the shifts note above), where every
+  // candidate rule derives 0 and `durationDays × 0` zeroes the activity. Instead the SERVICE
+  // derives a default (`deriveHoursPerDayMinutes`) at the moment a weekly pattern is written and
+  // stores the result; an explicit client value always overrides it.
+  //
+  // Minutes, not `Decimal(4,2)` hours: this multiplies into a WRITE that determines stored minutes
+  // and therefore dates, so the product must be exactly integral. 7.5h is 450 exactly. The DTO
+  // exposes `hoursPerDay` beside `hoursPerDayMinutes`, the pair ActivityResponseDto already uses.
+  //
+  // NEVER read by the CPM engine: the WorkingTimeCalendar port is addWorkingTime/workingTimeBetween
+  // over shift + exception rows only, so this cannot reach `computeSchedule` and the ADR-0034 recalc
+  // parity gate is structurally untouched. Bounds: ck_calendars_hours_per_day_minutes_range (raw
+  // SQL, 1..1440). "Must not exceed the pattern's longest day" is deliberately NOT a CHECK — it is
+  // cross-row, the same reason no working-time guard lives here, and a P6 day_hr_cnt of 8 on a
+  // calendar with a 10-hour Saturday is normal. No index: read only by id alongside its own row.
+  hoursPerDayMinutes Int @default(1440) @map("hours_per_day_minutes")
+
   // RETIRED from the pickers, but still entirely VALID (ADR-0053 §4). NULL = active. This is
   // ORTHOGONAL to `deleted_at`, not a second flavour of it: an archived calendar STAYS BOUND to
   // its plans, activities and resources and still schedules identically — only NEW bindings are
@@ -1610,6 +1638,13 @@ model Baseline {
   capturedAt            DateTime  @default(now()) @map("captured_at") @db.Timestamptz(3)
   dataDate              DateTime? @map("data_date") @db.Date
   capturedProjectFinish DateTime? @map("captured_project_finish") @db.Date
+
+  // The plan calendar's hours-per-day AT CAPTURE (ADR-0068 §5) — ADR-0025's snapshot-copy rule
+  // applied to the day↔minute factor. Without it, editing a calendar's hours-per-day would
+  // retroactively change what a frozen baseline reports as its captured durations and float, and a
+  // snapshot that moves is not a snapshot. Same constant 1440 default, so every existing baseline
+  // reads exactly as it does today. Bounds: ck_baselines_hours_per_day_minutes_range (raw SQL).
+  hoursPerDayMinutes Int @default(1440) @map("hours_per_day_minutes")
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)

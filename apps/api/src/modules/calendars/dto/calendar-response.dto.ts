@@ -16,6 +16,9 @@ import type {
 
 import { CalendarExceptionWindowDto, CalendarShiftDto } from './calendar-shift.dto';
 
+/** Hours↔minutes for the public `hoursPerDay` pair (ADR-0068). */
+const MINUTES_PER_HOUR = 60;
+
 /** Public representation of a calendar (list shape — no exceptions embedded). */
 export class CalendarResponseDto implements CalendarSummary {
   @ApiProperty({ format: 'uuid' })
@@ -74,6 +77,21 @@ export class CalendarResponseDto implements CalendarSummary {
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
+  @ApiProperty({
+    description:
+      'The calendar’s standard working day in hours (P6 `day_hr_cnt`; ADR-0068) — the day↔minute ' +
+      'factor for every day-denominated field measured on this calendar. May be fractional; read ' +
+      '`hoursPerDayMinutes` for the exact stored value.',
+  })
+  hoursPerDay!: number;
+
+  @ApiProperty({
+    minimum: 1,
+    maximum: 1440,
+    description: 'The stored truth behind `hoursPerDay`. `1440` is a 24-hour day.',
+  })
+  hoursPerDayMinutes!: number;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -86,15 +104,19 @@ export class CalendarResponseDto implements CalendarSummary {
       name: entity.name,
       description: entity.description,
       // Storage is intraday shift rows (ADR-0036); the public field stays a weekday mask —
-      // a weekday is "working" if it carries any shift. Every API-created calendar is
-      // full-day-per-weekday, so this round-trips exactly (richer shift calendars aren't
-      // API-authorable yet — M1 follow-on).
+      // a weekday is "working" if it carries any shift. It is a LOSSY summary and has been since
+      // `shifts` became authorable (create/update both accept them): a split shift or a half-day
+      // Friday is visible only in `shifts` below. Read that field, not this one, to know the hours.
       workingWeekdays: WorkingWeekdays.fromIndices(entity.shifts.map((shift) => shift.weekday)),
       shifts: entity.shifts.map((shift) => ({
         weekday: shift.weekday,
         startMinute: shift.startMinute,
         endMinute: shift.endMinute,
       })),
+      // Both spellings, like `durationDays` beside `durationMinutes` and for the same reason:
+      // minutes are the stored truth, and hours is the number a P6 planner types (ADR-0068).
+      hoursPerDay: entity.hoursPerDayMinutes / MINUTES_PER_HOUR,
+      hoursPerDayMinutes: entity.hoursPerDayMinutes,
       scope: entity.scope,
       projectId: entity.projectId,
       archivedAt: entity.archivedAt === null ? null : entity.archivedAt.toISOString(),

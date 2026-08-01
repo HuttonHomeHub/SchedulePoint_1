@@ -6,6 +6,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -76,6 +77,26 @@ export class CreateCalendarDto {
   @AreWindowsOrdered()
   @IsMutuallyExclusiveWith('workingWeekdays')
   shifts?: CalendarShiftDto[];
+
+  @ApiPropertyOptional({
+    minimum: 0.25,
+    maximum: 24,
+    default: 24,
+    description:
+      'The calendar’s STANDARD WORKING DAY in hours (Primavera P6’s `day_hr_cnt`; ADR-0068). ' +
+      'This is the day↔minute factor for every day-denominated field measured on this calendar: ' +
+      'a `durationDays` of 1 is `hoursPerDay × 60` working minutes, not always 1440. May be ' +
+      'fractional (7.5). Omitted ⇒ derived from the weekly pattern being written — the modal ' +
+      'daily working hours among the days that work, or 24 for a calendar with no base week. It ' +
+      'is derived ONCE, here, and stored: a standing derivation would make this factor a ' +
+      'function of the shift rows, so shortening one Friday would silently reinterpret the ' +
+      'stored duration of every activity on this calendar.',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.25)
+  @Max(24)
+  hoursPerDay?: number;
 
   @ApiPropertyOptional({ maxLength: 2000, description: 'Optional free-text description.' })
   @IsOptional()

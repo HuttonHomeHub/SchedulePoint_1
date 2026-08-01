@@ -45,6 +45,12 @@ export interface CalendarPatch {
   /** New explicit weekly shift windows; replaces the week as a set, like the mask above. */
   shifts?: readonly ShiftRow[];
   /**
+   * The calendar's standard working day in minutes (ADR-0068). The SERVICE decides this value —
+   * an explicit client `hoursPerDay`, or a default derived from the pattern being written — so
+   * this field is present on every patch that touches the week, never omitted and left to drift.
+   */
+  hoursPerDayMinutes?: number;
+  /**
    * The calendar tier (ADR-0053 §1). Always written together with {@link CalendarPatch.projectId}
    * so the pair can never disagree — the service sets both or neither, and
    * ck_calendars_scope_parent is the DB backstop.
@@ -76,6 +82,8 @@ export interface CreateCalendarInput {
   name: string;
   workingWeekdays?: number;
   shifts?: readonly ShiftRow[];
+  /** The calendar's standard working day in minutes (ADR-0068); the service always supplies it. */
+  hoursPerDayMinutes: number;
   description: string | null;
   /** The tier to create at (ADR-0053 §1); `PROJECT` requires a `projectId`, `ORG` forbids one. */
   scope: CalendarScope;
@@ -218,6 +226,9 @@ export class CalendarRepository {
         // already validated the project is active and in-org.
         scope: input.scope,
         projectId: input.projectId,
+        // Always written with the week it belongs to (ADR-0068 §1) — a pattern stored without its
+        // day factor is the 2.67x trap the NOT NULL default exists to make impossible.
+        hoursPerDayMinutes: input.hoursPerDayMinutes,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
         shifts: { create: shiftRowsFor(input.shifts, input.workingWeekdays) },

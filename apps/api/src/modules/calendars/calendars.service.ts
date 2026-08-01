@@ -31,6 +31,7 @@ import type { CreateCalendarExceptionDto } from './dto/create-calendar-exception
 import type { CreateCalendarDto } from './dto/create-calendar.dto';
 import type { UpdateCalendarExceptionDto } from './dto/update-calendar-exception.dto';
 import type { UpdateCalendarDto } from './dto/update-calendar.dto';
+import { resolveHoursPerDayMinutes } from './hours-per-day';
 
 /** Machine-readable conflict reasons carried in a {@link ConflictError}'s `details`. */
 export const CALENDAR_CONFLICT = {
@@ -187,6 +188,8 @@ export class CalendarsService {
         // explicit undefined as a present key, which is not what "the caller sent one form" means.
         ...(dto.workingWeekdays === undefined ? {} : { workingWeekdays: dto.workingWeekdays }),
         ...(dto.shifts === undefined ? {} : { shifts: dto.shifts }),
+        // Co-written with the week, never left to a read-time derivation (ADR-0068 §1).
+        hoursPerDayMinutes: resolveHoursPerDayMinutes(dto),
         description: dto.description ?? null,
         scope,
         projectId,
@@ -235,6 +238,18 @@ export class CalendarsService {
     if (dto.description !== undefined) patch.description = dto.description;
     if (dto.workingWeekdays !== undefined) patch.workingWeekdays = dto.workingWeekdays;
     if (dto.shifts !== undefined) patch.shifts = dto.shifts;
+    // The day factor rides with the week (ADR-0068 §1). `current` keeps a rename from moving it,
+    // and keeps a pattern edit from being stored with a factor that describes the OLD week.
+    if (
+      dto.hoursPerDay !== undefined ||
+      dto.workingWeekdays !== undefined ||
+      dto.shifts !== undefined
+    ) {
+      patch.hoursPerDayMinutes = resolveHoursPerDayMinutes({
+        ...dto,
+        current: existing.hoursPerDayMinutes,
+      });
+    }
 
     const target = this.resolveTargetScope(existing, dto);
     if (target !== null) {

@@ -64,6 +64,7 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     capturedAt: new Date('2026-01-05T09:00:00Z'),
     dataDate: new Date('2026-01-05T00:00:00Z'),
     capturedProjectFinish: new Date('2026-03-01T00:00:00Z'),
+    hoursPerDayMinutes: 1440,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
