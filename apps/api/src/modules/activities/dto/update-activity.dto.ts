@@ -23,6 +23,7 @@ import {
 } from 'class-validator';
 
 import { IsCalendarDate } from '../../../common/validation/calendar-date';
+import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
 import { IsConstraintPaired, IsZeroWhenMilestone } from './activity-validators';
@@ -66,13 +67,32 @@ export class UpdateActivityDto {
   @IsEnum(ActivityType)
   type?: ActivityType;
 
-  @ApiPropertyOptional({ minimum: 0 })
+  @ApiPropertyOptional({
+    minimum: 0,
+    description: 'Duration in working days. Mutually exclusive with `durationMinutes`.',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   @IsZeroWhenMilestone()
+  @IsMutuallyExclusiveWith('durationMinutes')
   durationDays?: number;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Duration in working MINUTES (ADR-0036) — the unit storage and the engine use. Editing a ' +
+      'sub-day activity through `durationDays` would round it to whole days; this field is how a ' +
+      'client corrects one without destroying it. Mutually exclusive with `durationDays`.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsZeroWhenMilestone()
+  @IsMutuallyExclusiveWith('durationDays')
+  durationMinutes?: number;
 
   @ApiPropertyOptional({
     enum: DurationType,

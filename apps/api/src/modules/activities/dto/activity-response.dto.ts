@@ -44,8 +44,20 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ enum: ActivityType })
   type!: ActivityType;
 
-  @ApiProperty({ description: 'Working days (milestones are 0).' })
+  @ApiProperty({
+    description:
+      'Working days, ROUNDED from the stored minutes (milestones are 0). A sub-day activity ' +
+      'reads back here as its nearest whole day — read `durationMinutes` for the exact value.',
+  })
   durationDays!: number;
+
+  @ApiProperty({
+    description:
+      'Working MINUTES — what is actually stored and what the engine schedules on (ADR-0036). ' +
+      'Exposed so a sub-day duration can be read back exactly: without it a client could author ' +
+      'a 4-hour activity and only ever see it as `durationDays: 0` (TECH_DEBT #78).',
+  })
+  durationMinutes!: number;
 
   @ApiProperty({
     enum: DurationType,
@@ -367,8 +379,10 @@ export class ActivityResponseDto implements ActivitySummary {
       name: entity.name,
       description: entity.description,
       type: entity.type,
-      // Stored in working-minutes (ADR-0036); the public field stays whole working days.
+      // Stored in working-minutes (ADR-0036). Both are exposed: days for every existing client,
+      // minutes so a sub-day value survives the round trip instead of reading back rounded.
       durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
+      durationMinutes: entity.durationMinutes,
       durationType: entity.durationType,
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),

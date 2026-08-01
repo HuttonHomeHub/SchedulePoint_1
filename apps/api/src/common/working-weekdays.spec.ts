@@ -15,7 +15,9 @@ describe('WorkingWeekdays (shared @repo/types bitmask helper)', () => {
     expect(WorkingWeekdays.isValid(ALL_WEEKDAYS_MASK)).toBe(true);
     expect(WorkingWeekdays.isValid(1)).toBe(true);
     // Empty pattern (0) is invalid — it would make addWorkingDays non-terminating.
-    expect(WorkingWeekdays.isValid(0)).toBe(false);
+    // 0 is VALID: a window-only base week, where all working time arrives from dated exception
+    // windows (ADR-0036 §2 — a plant turnaround). This asserted `false` until TECH_DEBT #79.
+    expect(WorkingWeekdays.isValid(0)).toBe(true);
     expect(WorkingWeekdays.isValid(128)).toBe(false);
     expect(WorkingWeekdays.isValid(-1)).toBe(false);
     expect(WorkingWeekdays.isValid(1.5)).toBe(false);

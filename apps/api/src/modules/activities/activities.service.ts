@@ -237,7 +237,11 @@ export class ActivitiesService {
     // A milestone is a point in time: force its duration to 0 defensively, even
     // if the client sent nothing (the DTO's cross-field validator only rejects a
     // non-zero duration that is explicitly present).
-    const durationDays = MILESTONE_TYPES.includes(type) ? 0 : (dto.durationDays ?? 1);
+    // Minutes are the storage and engine unit (ADR-0036); days are a convenience over them. The DTO
+    // has already refused a payload carrying both, so this is a preference between one and none.
+    const durationMinutes = MILESTONE_TYPES.includes(type)
+      ? 0
+      : (dto.durationMinutes ?? (dto.durationDays ?? 1) * MINUTES_PER_DAY);
     // The activity's own calendar (ADR-0037); null/omitted inherits the plan default.
     const calendarId = dto.calendarId ?? null;
     // The WBS parent (ADR-0038); null/omitted is top-level.
@@ -277,7 +281,7 @@ export class ActivitiesService {
             code: dto.code ?? null,
             description: dto.description ?? null,
             type,
-            durationMinutes: durationDays * MINUTES_PER_DAY,
+            durationMinutes,
             // P6 duration type (ADR-0040); omit to take the Prisma default (FIXED_DURATION_AND_UNITS_TIME).
             // A brand-new activity has no assignments yet, so nothing to recompute at create.
             ...(dto.durationType ? { durationType: dto.durationType } : {}),
@@ -395,7 +399,10 @@ export class ActivitiesService {
     }
     if (dto.type !== undefined) patch.type = dto.type;
     if (dto.durationType !== undefined) patch.durationType = dto.durationType;
+    // Mutually exclusive at the DTO, so at most one of these fires. `durationMinutes` is the way to
+    // edit a sub-day activity without rounding it to whole days (TECH_DEBT #78).
     if (dto.durationDays !== undefined) patch.durationMinutes = dto.durationDays * MINUTES_PER_DAY;
+    if (dto.durationMinutes !== undefined) patch.durationMinutes = dto.durationMinutes;
     if (dto.constraintType !== undefined) patch.constraintType = dto.constraintType;
     if (dto.constraintDate !== undefined) {
       patch.constraintDate =
@@ -528,7 +535,7 @@ export class ActivitiesService {
         await this.recomputeDrivingAssignmentOnDurationEdit(
           tx,
           activityId,
-          dto.durationDays,
+          dto.durationDays !== undefined || dto.durationMinutes !== undefined,
           patch.durationMinutes,
           patch.durationType ?? existing.durationType,
           principal.userId,
@@ -561,13 +568,16 @@ export class ActivitiesService {
   private async recomputeDrivingAssignmentOnDurationEdit(
     tx: Prisma.TransactionClient,
     activityId: string,
-    durationDays: number | undefined,
+    isDurationEdit: boolean,
     effectiveDurationMinutes: number | undefined,
     durationType: DurationType,
     userId: string,
   ): Promise<void> {
     // Only a duration edit drives this; a milestone / zero-duration activity's triad is inert.
-    if (durationDays === undefined) return;
+    // Takes a boolean rather than `durationDays` because a duration can now arrive in EITHER unit
+    // (TECH_DEBT #78) — keying off the day field would have made a minutes-only edit skip the
+    // recompute silently, leaving Units = Duration × Units/Time false with nothing saying so.
+    if (!isDurationEdit) return;
     if (effectiveDurationMinutes === undefined || effectiveDurationMinutes <= 0) return;
 
     const driving = await tx.resourceAssignment.findFirst({

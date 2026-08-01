@@ -34,11 +34,36 @@ export class SeedHttpError extends Error {
   }
 }
 
+/**
+ * How much server-supplied error text is kept.
+ *
+ * Every real case is far below this: the validation messages that motivated `formatDetails` are a
+ * short sentence per field, and the worst observed run carried 79 of them. The cap is not about
+ * those — it is about the case where the seeder is pointed at a broken or hostile endpoint and the
+ * response body is unbounded. `--out` writes the report to disk, so without a cap a bad endpoint
+ * can spend the operator's disk one finding at a time. This is the same concern CodeQL's
+ * `js/http-to-file-access` gestures at (TECH_DEBT #81) and the part of it that is actually real —
+ * the path is an operator argument and the content is JSON-quoted, but the SIZE was unbounded.
+ */
+const MAX_DETAIL_CHARS = 2_000;
+/** A machine-readable code and a human sentence; both are short in every real response. */
+const MAX_CODE_CHARS = 100;
+const MAX_MESSAGE_CHARS = 500;
+
+/** Truncate to a budget, saying so rather than trailing off mid-word as if that were the message. */
+function clamp(text: string, max: number): string {
+  return text.length <= max
+    ? text
+    : `${text.slice(0, max)}… [${String(text.length)} chars, truncated]`;
+}
+
 /** Render the API's `details` (usually a string[] of field messages) onto the error message. */
 function formatDetails(details: unknown): string {
-  if (Array.isArray(details)) return ` — ${details.map(String).join('; ')}`;
-  if (typeof details === 'string') return ` — ${details}`;
-  if (details !== null && typeof details === 'object') return ` — ${JSON.stringify(details)}`;
+  if (Array.isArray(details))
+    return ` — ${clamp(details.map(String).join('; '), MAX_DETAIL_CHARS)}`;
+  if (typeof details === 'string') return ` — ${clamp(details, MAX_DETAIL_CHARS)}`;
+  if (details !== null && typeof details === 'object')
+    return ` — ${clamp(JSON.stringify(details), MAX_DETAIL_CHARS)}`;
   return '';
 }
 
@@ -193,10 +218,12 @@ export class SeedClient {
       }
 
       const envelope = parsed as ApiEnvelope<never> | undefined;
+      // Every field below is server-supplied and every one is bounded — the raw-text fallback was
+      // already clamped, and the parsed branch was not, which is the asymmetry worth removing.
       throw new SeedHttpError(
         response.status,
-        envelope?.error?.code ?? 'UNKNOWN',
-        envelope?.error?.message ?? text.slice(0, 200),
+        clamp(envelope?.error?.code ?? 'UNKNOWN', MAX_CODE_CHARS),
+        clamp(envelope?.error?.message ?? text.slice(0, 200), MAX_MESSAGE_CHARS),
         envelope?.error?.details,
         path,
       );

@@ -12,9 +12,14 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
+  IsArray,
 } from 'class-validator';
 
+import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
+
 import { IsCalendarScopePaired } from './calendar-scope-validators';
+import { AreWindowsOrdered, CalendarShiftDto } from './calendar-shift.dto';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -47,7 +52,22 @@ export class UpdateCalendarDto {
   @IsInt()
   @Min(MIN_WORKING_WEEKDAYS_MASK)
   @Max(MAX_WORKING_WEEKDAYS_MASK)
+  @IsMutuallyExclusiveWith('shifts')
   workingWeekdays?: number;
+
+  @ApiPropertyOptional({
+    type: [CalendarShiftDto],
+    description:
+      'Replace the weekly pattern with explicit intraday shift windows (ADR-0036). Replaces the ' +
+      'week as a SET, exactly as `workingWeekdays` does. Mutually exclusive with it.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CalendarShiftDto)
+  @AreWindowsOrdered()
+  @IsMutuallyExclusiveWith('workingWeekdays')
+  shifts?: CalendarShiftDto[];
 
   @ApiPropertyOptional({ maxLength: 2000, nullable: true })
   @IsOptional()

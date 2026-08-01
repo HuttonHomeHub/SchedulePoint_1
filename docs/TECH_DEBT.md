@@ -619,3 +619,18 @@ The sibling alert from the same scan — `js/polynomial-redos` on `client.ts` �
 fixed (`stripTrailingSlashes`, with a regression test measured against the old implementation
 first). One of two is the ordinary ratio, and it is the reason the pair should be read rather than
 batch-dismissed.
+
+**The CodeQL check going green does not mean this alert closed.** PR #204's check reported "2 new
+alerts including 1 high severity" and turned green once only the **high** one was fixed — the
+`main.ts` line this entry is about was never touched. So the gate fails on high severity and this
+medium alert is still open on the branch. Worth knowing before reading a green CodeQL as "no
+findings": it means "no findings above the threshold".
+
+**One part of it was real, and is now fixed.** Re-reading the flow for this entry found that the
+_size_ of what a server can put in the report was unbounded: the raw-text fallback clamped to 200
+characters, but the parsed-envelope branch passed `code`, `message` and `details` through verbatim,
+and `--out` writes them to disk. A seeder pointed at a broken or hostile endpoint could therefore
+spend the operator's disk one finding at a time. Now clamped (2,000 / 500 / 100 characters, with the
+truncation stated rather than trailing off mid-word). This does **not** clear the alert — the taint
+flow is unchanged — and it was not done to. It is the one genuine defect the rule's neighbourhood
+contained, found by taking the finding seriously rather than by trying to satisfy it.

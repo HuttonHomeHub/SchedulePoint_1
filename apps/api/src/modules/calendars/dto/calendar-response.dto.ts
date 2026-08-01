@@ -14,6 +14,8 @@ import type {
   CalendarWithShifts,
 } from '../calendar.repository';
 
+import { CalendarShiftDto } from './calendar-shift.dto';
+
 /** Public representation of a calendar (list shape — no exceptions embedded). */
 export class CalendarResponseDto implements CalendarSummary {
   @ApiProperty({ format: 'uuid' })
@@ -31,6 +33,16 @@ export class CalendarResponseDto implements CalendarSummary {
     description: '7-bit working-weekday mask (bit 0 = Monday … bit 6 = Sunday).',
   })
   workingWeekdays!: number;
+
+  @ApiProperty({
+    type: [CalendarShiftDto],
+    description:
+      'The weekly pattern as stored: explicit intraday windows (ADR-0036). `workingWeekdays` is ' +
+      'derived from these and can only say whether a day works at all, so a split shift or a ' +
+      'half-day Friday is visible ONLY here — without it an authored shift pattern would be ' +
+      'invisible the moment it was saved (TECH_DEBT #80).',
+  })
+  shifts!: CalendarShiftDto[];
 
   @ApiProperty({
     enum: CALENDAR_SCOPES,
@@ -78,6 +90,11 @@ export class CalendarResponseDto implements CalendarSummary {
       // full-day-per-weekday, so this round-trips exactly (richer shift calendars aren't
       // API-authorable yet — M1 follow-on).
       workingWeekdays: WorkingWeekdays.fromIndices(entity.shifts.map((shift) => shift.weekday)),
+      shifts: entity.shifts.map((shift) => ({
+        weekday: shift.weekday,
+        startMinute: shift.startMinute,
+        endMinute: shift.endMinute,
+      })),
       scope: entity.scope,
       projectId: entity.projectId,
       archivedAt: entity.archivedAt === null ? null : entity.archivedAt.toISOString(),

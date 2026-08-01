@@ -832,8 +832,25 @@ export type Weekday = (typeof WEEKDAYS)[number];
 export const ALL_WEEKDAYS_MASK = 0b1111111; // 127
 /** Monday–Friday — the seeded "Standard" pattern new plans default to. */
 export const STANDARD_WEEKDAYS_MASK = 0b0011111; // 31
-/** Inclusive valid range of a mask: ≥ 1 working weekday, ≤ 7 bits (matches the DB CHECK). */
-export const MIN_WORKING_WEEKDAYS_MASK = 1;
+/**
+ * Inclusive valid range of a mask: 0–127.
+ *
+ * There is **no database constraint behind this** and there is no `calendars.working_weekdays`
+ * column either — ADR-0036's `calendar_shift_model` migration dropped both and moved the weekly
+ * pattern into `calendar_shifts` rows. The mask is an API-layer convenience: materialised into
+ * full-day shift rows on write, derived back from them on read. (The previous version of this
+ * comment said "matches the DB CHECK", which sent the first reader looking for a migration to
+ * write. Verify the claim; do not trust the document — ADR-0058.)
+ *
+ * **Zero is valid**, and that is not a relaxation — ADR-0036 §2 made a *window-only base week* (all
+ * weekdays empty, all working time arriving from dated exception windows) a supported shape, and
+ * said in as many words that the old "mask must be non-zero" guard was replaced by the engine's
+ * `buildWorkingTimeCalendar` check. That check is strictly stronger: it counts the exceptions too,
+ * so it can tell a turnaround calendar apart from a calendar on which nothing can ever happen,
+ * which a mask alone cannot. The bound here stayed at 1 for a year after the rework said otherwise
+ * (TECH_DEBT #79) — a leftover, not a decision.
+ */
+export const MIN_WORKING_WEEKDAYS_MASK = 0;
 export const MAX_WORKING_WEEKDAYS_MASK = 127;
 
 /**
@@ -848,7 +865,7 @@ export const STANDARD_CALENDAR_NAME = 'Standard';
  * between web and api. Indices are 0 = Monday … 6 = Sunday, matching the bit order.
  */
 export const WorkingWeekdays = {
-  /** True when `mask` is a valid pattern: an integer in [1, 127] (≥ 1 day, ≤ 7 bits). */
+  /** True when `mask` is a valid pattern: an integer in [0, 127] (0 = window-only, ≤ 7 bits). */
   isValid(mask: number): boolean {
     return (
       Number.isInteger(mask) &&

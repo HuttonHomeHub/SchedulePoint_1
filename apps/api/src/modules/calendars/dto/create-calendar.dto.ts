@@ -12,9 +12,15 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
+  IsArray,
+  ValidateIf,
 } from 'class-validator';
 
+import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
+
 import { IsCalendarScopePaired } from './calendar-scope-validators';
+import { AreWindowsOrdered, CalendarShiftDto } from './calendar-shift.dto';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -28,19 +34,48 @@ export class CreateCalendarDto {
   @MaxLength(120)
   name!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     minimum: MIN_WORKING_WEEKDAYS_MASK,
     maximum: MAX_WORKING_WEEKDAYS_MASK,
     description:
-      'Weekly working pattern as a 7-bit mask (bit 0 = Monday … bit 6 = Sunday). ' +
-      'Must be 1–127 — at least one working weekday, no bits beyond the week. ' +
-      'This is the WorkingWeekdays bitmask contract in @repo/types.',
+      'Weekly working pattern as a 7-bit mask (bit 0 = Monday … bit 6 = Sunday), 0–127. ' +
+      '**0 is valid** and means a window-only base week: no weekday works by default and all ' +
+      'working time arrives from dated exception windows — the shape a plant turnaround or a ' +
+      'shutdown programme needs (ADR-0036 §2). A calendar with an empty week AND no working ' +
+      'exception is refused when the schedule is calculated, not here, because only the engine ' +
+      'can see both halves. This is the WorkingWeekdays bitmask contract in @repo/types.',
   })
+  // A create must carry a weekly pattern in ONE of the two forms. `@ValidateIf` rather than
+  // `@IsOptional()` is what makes that real: `@IsOptional()` SKIPS every validator after it when
+  // the value is undefined, so a cross-field "required unless the other is present" rule placed
+  // here could never fire — it only runs in the case it exists to catch. This says instead "when
+  // `shifts` is absent, this field is required and fully validated", and when `shifts` is present
+  // the mirror `@IsMutuallyExclusiveWith` on that field still rejects sending both.
+  @ValidateIf((dto: CreateCalendarDto) => dto.shifts === undefined)
   @Type(() => Number)
   @IsInt()
   @Min(MIN_WORKING_WEEKDAYS_MASK)
   @Max(MAX_WORKING_WEEKDAYS_MASK)
-  workingWeekdays!: number;
+  @IsMutuallyExclusiveWith('shifts')
+  workingWeekdays?: number;
+
+  @ApiPropertyOptional({
+    type: [CalendarShiftDto],
+    description:
+      'The weekly pattern as explicit intraday SHIFT WINDOWS (ADR-0036) — the form storage and ' +
+      'the engine actually use. This is how a split shift, a night shift crossing midnight, or an ' +
+      'asymmetric week with a half-day Friday is authored; `workingWeekdays` can only say whether ' +
+      'a whole day works. Mutually exclusive with `workingWeekdays`: a mask is shorthand for ' +
+      'full-day windows on the named days, so sending both would be two answers to one question. ' +
+      'An omitted weekday is non-working.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CalendarShiftDto)
+  @AreWindowsOrdered()
+  @IsMutuallyExclusiveWith('workingWeekdays')
+  shifts?: CalendarShiftDto[];
 
   @ApiPropertyOptional({ maxLength: 2000, description: 'Optional free-text description.' })
   @IsOptional()

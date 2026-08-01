@@ -42,6 +42,8 @@ export interface CalendarPatch {
   description?: string | null;
   /** New weekday mask; the repository replaces the calendar's full-day shift rows to match. */
   workingWeekdays?: number;
+  /** New explicit weekly shift windows; replaces the week as a set, like the mask above. */
+  shifts?: readonly ShiftRow[];
   /**
    * The calendar tier (ADR-0053 §1). Always written together with {@link CalendarPatch.projectId}
    * so the pair can never disagree — the service sets both or neither, and
@@ -51,11 +53,25 @@ export interface CalendarPatch {
   projectId?: string | null;
 }
 
-/** The scalar inputs plus the weekday mask a calendar create needs (shifts derived from the mask). */
+/** One stored weekly shift window (ADR-0036 §2); minutes from local midnight. */
+export interface ShiftRow {
+  weekday: number;
+  startMinute: number;
+  endMinute: number;
+}
+
+/**
+ * The scalar inputs plus the weekly pattern a calendar create needs.
+ *
+ * The pattern arrives EITHER as explicit `shifts` (the storage form — split shifts, night shifts,
+ * a half-day Friday) OR as a `workingWeekdays` mask, which is shorthand for full-day windows on the
+ * named days. The DTO has already refused a body carrying both or neither, so exactly one is set.
+ */
 export interface CreateCalendarInput {
   organizationId: string;
   name: string;
-  workingWeekdays: number;
+  workingWeekdays?: number;
+  shifts?: readonly ShiftRow[];
   description: string | null;
   /** The tier to create at (ADR-0053 §1); `PROJECT` requires a `projectId`, `ORG` forbids one. */
   scope: CalendarScope;
@@ -135,6 +151,23 @@ function fullDayShiftsFromMask(
 }
 
 /**
+ * The weekly pattern as stored rows, from whichever form the caller supplied.
+ *
+ * ONE function rather than a branch at each call site: `create`, `update` and the interchange batch
+ * all have to agree on what "no shifts and no mask" means, and three copies of that rule is how they
+ * stop agreeing. Explicit shifts win; a mask expands to full-day windows; neither yields an empty
+ * week, which is the window-only calendar (TECH_DEBT #79) and is the caller's business to have
+ * validated, not this function's to second-guess.
+ */
+function shiftRowsFor(
+  shifts: readonly ShiftRow[] | undefined,
+  mask: number | undefined,
+): ShiftRow[] {
+  if (shifts !== undefined) return [...shifts];
+  return mask === undefined ? [] : fullDayShiftsFromMask(mask);
+}
+
+/**
  * Data-access for the working-day calendar library (ADR-0008, ADR-0024, ADR-0036).
  * Centralises the soft-delete filter so no read forgets `deletedAt: null`; write
  * methods accept an optional transaction client. Calendars are an org-scoped
@@ -170,7 +203,7 @@ export class CalendarRepository {
         projectId: input.projectId,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
-        shifts: { create: fullDayShiftsFromMask(input.workingWeekdays) },
+        shifts: { create: shiftRowsFor(input.shifts, input.workingWeekdays) },
       },
       include: { shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] } },
     });
@@ -524,15 +557,17 @@ export class CalendarRepository {
     updatedBy: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {
-    const { workingWeekdays, ...scalar } = patch;
+    const { workingWeekdays, shifts, ...scalar } = patch;
     const result = await db.calendar.updateMany({
       where: this.active({ id, version: expectedVersion }),
       data: { ...scalar, updatedBy, version: { increment: 1 } },
     });
-    if (result.count > 0 && workingWeekdays !== undefined) {
+    if (result.count > 0 && (workingWeekdays !== undefined || shifts !== undefined)) {
       // Replace the weekly pattern as a set (the calendar's version bump above is the lock).
+      // Either field replaces the WHOLE week — they are two spellings of one value, so a patch
+      // naming one must not leave rows the other put there.
       await db.calendarShift.deleteMany({ where: { calendarId: id } });
-      const rows = fullDayShiftsFromMask(workingWeekdays).map((row) => ({
+      const rows = shiftRowsFor(shifts, workingWeekdays).map((row) => ({
         ...row,
         calendarId: id,
       }));

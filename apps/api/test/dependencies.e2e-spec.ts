@@ -119,6 +119,44 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
     return { actor, orgId, planId, a, b };
   }
 
+  /** TECH_DEBT #78 — the lag half of the same asymmetry. See activities.e2e-spec.ts. */
+  describe('sub-day lags (TECH_DEBT #78)', () => {
+    it('authors a two-hour lag, reads it back exactly, and edits it without rounding', async () => {
+      const { actor, planId, a, b } = await setup();
+      const created = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: a, successorId: b, lagMinutes: 120 })
+        .expect(201);
+      expect(created.body.data).toMatchObject({ lagMinutes: 120, lagDays: 0 });
+      const id = created.body.data.id as string;
+
+      const edited = await actor.agent
+        .patch(`/api/v1/organizations/acme/dependencies/${id}`)
+        .send({ lagMinutes: -45, version: created.body.data.version })
+        .expect(200);
+      // A lead is negative, and a sub-day lead is exactly the case days could not express.
+      expect(edited.body.data).toMatchObject({ lagMinutes: -45, lagDays: 0 });
+    });
+
+    it('refuses a payload carrying both units', async () => {
+      const { actor, planId, a, b } = await setup();
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: a, successorId: b, lagDays: 1, lagMinutes: 120 })
+        .expect(422);
+      expect(JSON.stringify(res.body)).toContain('send one, not both');
+    });
+
+    it('keeps the day field working unchanged', async () => {
+      const { actor, planId, a, b } = await setup();
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: a, successorId: b, lagDays: 2 })
+        .expect(201);
+      expect(res.body.data).toMatchObject({ lagDays: 2, lagMinutes: 2 * 1440 });
+    });
+  });
+
   it('links two activities, embeds endpoints, and lists by plan and by direction', async () => {
     const { actor, planId, a, b } = await setup();
     const created = await actor.agent

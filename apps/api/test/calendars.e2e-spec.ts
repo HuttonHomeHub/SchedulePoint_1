@@ -113,6 +113,144 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     });
   });
 
+  /**
+   * TECH_DEBT #80. ADR-0036 shipped intraday shift patterns in the engine and in storage, and no
+   * write path could create one: the repository derived every calendar's shifts from a 7-bit
+   * weekday mask, so every calendar in every database was a whole-day calendar and the
+   * minute-granular machinery underneath was exercised only by unit tests.
+   */
+  describe('authorable shift patterns (TECH_DEBT #80)', () => {
+    it('authors a split shift and reads the windows back exactly', async () => {
+      const { actor } = await adminWithOrg();
+      const res = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({
+          name: 'Two shifts',
+          // 08:00–12:00 and 13:00–17:00 on Monday — a lunch break, which a mask cannot express.
+          shifts: [
+            { weekday: 0, startMinute: 480, endMinute: 720 },
+            { weekday: 0, startMinute: 780, endMinute: 1020 },
+          ],
+        })
+        .expect(201);
+      expect(res.body.data.shifts).toEqual([
+        { weekday: 0, startMinute: 480, endMinute: 720 },
+        { weekday: 0, startMinute: 780, endMinute: 1020 },
+      ]);
+      // Derived, and lossy on purpose: the mask can only say Monday works.
+      expect(res.body.data.workingWeekdays).toBe(1);
+    });
+
+    it('authors a night shift as two adjacent-day windows, not a wrap', async () => {
+      const { actor } = await adminWithOrg();
+      const res = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({
+          name: 'Nights',
+          shifts: [
+            { weekday: 0, startMinute: 1200, endMinute: 1440 }, // Mon 20:00–24:00
+            { weekday: 1, startMinute: 0, endMinute: 360 }, // Tue 00:00–06:00
+          ],
+        })
+        .expect(201);
+      expect(res.body.data.shifts).toHaveLength(2);
+    });
+
+    it('replaces the whole week on update, whichever form the patch uses', async () => {
+      const { actor } = await adminWithOrg();
+      const created = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Replaceable', workingWeekdays: STANDARD_WEEKDAYS_MASK })
+        .expect(201);
+      const res = await actor.agent
+        .patch(`/api/v1/organizations/acme/calendars/${created.body.data.id as string}`)
+        .send({
+          shifts: [{ weekday: 4, startMinute: 480, endMinute: 720 }], // half-day Friday only
+          version: created.body.data.version,
+        })
+        .expect(200);
+      // The five full-day rows the mask created must be gone — the two fields are two spellings
+      // of one value, so a patch naming one cannot leave rows the other put there.
+      expect(res.body.data.shifts).toEqual([{ weekday: 4, startMinute: 480, endMinute: 720 }]);
+      expect(res.body.data.workingWeekdays).toBe(0b0010000);
+    });
+
+    it('refuses overlapping, unsorted, or inverted windows at the boundary', async () => {
+      const { actor } = await adminWithOrg();
+      const base = '/api/v1/organizations/acme/calendars';
+      const bad = (shifts: unknown) => actor.agent.post(base).send({ name: 'Bad', shifts });
+      // Overlapping: 08:00–12:00 and 11:00–17:00.
+      await bad([
+        { weekday: 0, startMinute: 480, endMinute: 720 },
+        { weekday: 0, startMinute: 660, endMinute: 1020 },
+      ]).expect(422);
+      // Unsorted — rejected rather than quietly reordered.
+      await bad([
+        { weekday: 0, startMinute: 780, endMinute: 1020 },
+        { weekday: 0, startMinute: 480, endMinute: 720 },
+      ]).expect(422);
+      // Inverted, which is what a wrapped night shift looks like if authored as one window.
+      await bad([{ weekday: 0, startMinute: 1200, endMinute: 360 }]).expect(422);
+    });
+
+    it('refuses both spellings of the week at once, and neither', async () => {
+      const { actor } = await adminWithOrg();
+      const base = '/api/v1/organizations/acme/calendars';
+      await actor.agent
+        .post(base)
+        .send({
+          name: 'Both',
+          workingWeekdays: STANDARD_WEEKDAYS_MASK,
+          shifts: [{ weekday: 0, startMinute: 480, endMinute: 720 }],
+        })
+        .expect(422);
+      await actor.agent.post(base).send({ name: 'Neither' }).expect(422);
+    });
+  });
+
+  /**
+   * TECH_DEBT #79. ADR-0036 §2 made a window-only base week valid — every weekday non-working,
+   * all working time from dated exception windows (a plant turnaround, a shutdown programme) —
+   * and said the old "mask must be non-zero" guard was replaced by the engine's
+   * `buildWorkingTimeCalendar` check. The DTO's `@Min(1)` and the DB CHECK were never relaxed to
+   * match, so for a year the engine supported the shape and the API answered 422.
+   */
+  describe('window-only calendars (TECH_DEBT #79)', () => {
+    it('accepts a zero mask — the turnaround shape the engine already supports', async () => {
+      const { actor } = await adminWithOrg();
+      const res = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Turnaround', workingWeekdays: 0 })
+        .expect(201);
+      expect(res.body.data).toMatchObject({ name: 'Turnaround', workingWeekdays: 0 });
+    });
+
+    it('lets an existing calendar be narrowed to window-only', async () => {
+      const { actor } = await adminWithOrg();
+      const created = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Shutdown', workingWeekdays: STANDARD_WEEKDAYS_MASK })
+        .expect(201);
+      const res = await actor.agent
+        .patch(`/api/v1/organizations/acme/calendars/${created.body.data.id as string}`)
+        .send({ workingWeekdays: 0, version: created.body.data.version })
+        .expect(200);
+      expect(res.body.data.workingWeekdays).toBe(0);
+    });
+
+    it('still refuses a mask outside the week', async () => {
+      const { actor } = await adminWithOrg();
+      await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Impossible', workingWeekdays: 128 })
+        .expect(422);
+      await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Negative', workingWeekdays: -1 })
+        .expect(422);
+    });
+  });
+
   it('creates, gets and lists calendars', async () => {
     const { actor } = await adminWithOrg();
     const id = await createCalendar(actor, 'Project Calendar');
@@ -138,7 +276,9 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
 
   it('rejects an invalid working-weekday mask (422)', async () => {
     const { actor } = await adminWithOrg();
-    await actor.agent.post(base).send({ name: 'Empty', workingWeekdays: 0 }).expect(422);
+    // `workingWeekdays: 0` was asserted here as a 422 and is now a 201 — see the window-only
+    // describe block below. It moved rather than being deleted: the shape is valid (ADR-0036 §2),
+    // so the case is still worth a test, just with the opposite expectation.
     await actor.agent.post(base).send({ name: 'TooWide', workingWeekdays: 128 }).expect(422);
     await actor.agent.post(base).send({ name: 'NoPattern' }).expect(422);
   });
