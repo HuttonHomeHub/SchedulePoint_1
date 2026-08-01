@@ -485,55 +485,36 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
   test here would assert the client's optimism back at itself. It belongs in a flag-off Playwright
   run, which the repo has no configuration for today — that, not the assertion, is the work.
 
-### 77. The demo Unit 300 file is a lossy rendering of the conformance fixture
+### 77. The demo Unit 300 file is a lossy rendering of the conformance fixture — CLOSED 2026-08-01
 
-The product owner asked for "a full logic plan with all constraints and logic types to ensure every
-feature was tested". Investigating the demo file
-(`SchedulePointDemoUnit300AminePackage.xer`) turned up something better than an answer: **the full
-plan already exists.** The XER is a rendering of
-`packages/engine-conformance/fixtures/p6_torture_test_v1.json` — the ADR-0034 benchmark. Same
-activity codes (`A1000` Notice to Proceed), same WBS (`TT.1`), and 188 relationships in both.
+**Closed as superseded, and verified rather than assumed.** The entry's own recommendation was "a
+faithful renderer from `p6_torture_test_v1.json` into an importable plan — XER for what the format
+carries, and a seeding path for groups 2 and 3, which no XER can express", so that "the
+`coverage_index` becomes an executable checklist". That is exactly what the **seed catalogue**
+(ADR-0066) turned out to be. It was built to answer a different question and answered this one on
+the way, and nobody connected the two — so this entry went on describing an open question after it
+had been settled, which is the ADR-0058 failure it now records instead.
 
-That fixture carries a **`coverage_index`: 117 named capabilities mapped to the objects that
-exercise them.** So "does the test plan cover everything?" is a computable question, not a matter of
-opinion — and the answer is that the fixture covers it and the **XER rendering loses part of it.**
+What was checked, on 2026-08-01, rather than reasoned about:
 
-Measured, not estimated. Object presence was checked by id against the file; attribute survival by
-running the real `importXer` over it and inspecting the resulting graph.
+- **The checklist is executable and green.** `seed --coverage` reports **115 of 117 capabilities
+  reached, 2 excepted, 0 missing.** The two exceptions are honest domain gaps, not test gaps:
+  `res_assignment_lag` (an assignment has no lag field — work starts with its activity) and
+  `res_role` (SchedulePoint has no role model; a resource is assigned directly).
+- **Loss 1 — the LOE type — round-trips in both directions.** `xer-adapter.ts` maps
+  `TT_LOE → LEVEL_OF_EFFORT` on import and `xer-emit.ts` maps it back on export, with
+  `export-xer.spec.ts` asserting an LOE survives export→import as an LOE with its duration intact.
+  The exporter half was the later fix: it downgraded every LOE to a task, kept alive by a docblock
+  describing importer behaviour that had already been corrected.
+- **Losses 2 and 3 — what XER has no column or table for** — are reached by seeded plans through the
+  **public REST API** instead, which is the "seeding path" this entry asked for and is strictly
+  better than an XER could be: it exercises the write path a planner uses, not a file format.
+- **The demo file itself is not in this repository** and nothing references it. There is therefore
+  nothing here to regenerate. If a fresh demo file is wanted, the way to make one now is to seed a
+  plan and export it — the exporter is no longer lossy for the type this entry was opened about.
 
-**Present and carried** (verified through the importer): all four relationship types with positive,
-zero and negative lag; 10 primary + 1 secondary constraint + 1 ALAP; 20 progressed activities with
-physical %-complete; 2 suspends; 126 per-activity calendars; 143 WBS parents; 22 resources and 45
-assignments **including `unitsPerHour` and `actualUnits` on every one**; 8 calendars resolving to
-5 ORG + 3 PROJECT (so the ADR-0053 tier decision _is_ exercised — via the resource-reference rule,
-not `clndr_type`, which is absent from every row).
-
-**Lost, in four distinct ways** — the distinction matters because each needs a different fix:
-
-1. **Type lost in transit.** The fixture's 5 `LEVEL_OF_EFFORT` activities (`A1010`, `A1020`,
-   `A1030`, `A1040`, `A3100`) arrived as zero-duration `TASK`s, because the importer had no
-   `TT_LOE` mapping. **Fixed** — the mapping now exists both ways. The demo file still says
-   `TT_Task`, so it needs regenerating for `type_loe`, `loe_span_start`, `loe_span_end`,
-   `loe_spans_project` and `loe_different_calendar_to_span_ends` to actually fire.
-2. **The XER has no column for it.** `duration_type` (→ the three `dt_*` keys), the external
-   inter-project instants (→ `interproject` + four `net_external_*` keys), the per-relationship lag
-   calendar (→ two `lag_calendar_*` keys), resource `max_units_per_hour` (→ `levelling_test`,
-   `res_overallocation`) and `price_per_unit` (→ `cost_actual`), and assignment `curve` /`role` /
-   `assignment_lag_h` (→ four `res_curve_*` plus `res_role`, `res_assignment_lag`). Verified: **0 of
-   22** imported resources carry a cost rate or a capacity ceiling.
-3. **The XER has no table for it.** Expenses (`E001`–`E004` → `cost_expense`, `cost_overrun` and the
-   three `accrual_*` keys) and activity steps (→ `code_steps`). Also the fixture's three
-   `WBS_SUMMARY` _activities_ (`W4000`, `W5000`, `W7000`) are absent — 129 fixture activities render
-   as 126 tasks.
-4. **Column present, data empty.** `reend_date` exists on the TASK table and is blank on every row,
-   so `con_expected_finish` (`A6200`) never fires. A one-cell fix.
-
-**So the recommendation changes.** Hand-editing the XER, or authoring a second synthetic plan, both
-duplicate a fixture that already exists and would immediately drift from it. The work worth doing is
-a **faithful renderer from `p6_torture_test_v1.json` into an importable plan** — XER for what the
-format carries, and a seeding path (API or direct) for groups 2 and 3, which no XER can express. The
-`coverage_index` then becomes an executable checklist: assert every one of the 117 keys is reachable
-in the seeded plan, and the question stops needing a human to re-answer it.
+Kept as a record rather than deleted, because the sequence is worth reading: a question asked of a
+file, answered by building a test bed, and left open in writing for the time in between.
 
 ### 78. The public activity/dependency API is day-denominated, so sub-day durations and lags cannot be authored
 
