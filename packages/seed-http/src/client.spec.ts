@@ -1,6 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
-import { stripTrailingSlashes } from './client.js';
+import { SeedHttpError, stripTrailingSlashes } from './client.js';
+
+/**
+ * The report `--out` writes is JSON built from these messages, so an unbounded response body used
+ * to become an unbounded file (TECH_DEBT #81). The cap is not defensive theatre: nothing about the
+ * seeder's own API produces text near it, so a run that trips it is telling the operator something.
+ */
+describe('SeedHttpError bounds what the server can put in a report', () => {
+  it('truncates a hostile detail payload and says that it did', () => {
+    const error = new SeedHttpError(422, 'X', 'nope', ['y'.repeat(50_000)], '/p');
+    expect(error.message.length).toBeLessThan(3_000);
+    expect(error.message).toContain('truncated');
+  });
+
+  it('leaves an ordinary validation payload untouched', () => {
+    // The case that motivated `details` in the first place must read exactly as before.
+    const error = new SeedHttpError(
+      422,
+      'VALIDATION_FAILED',
+      'Validation failed.',
+      ['durationDays must be an integer', 'code should not be empty'],
+      '/api/v1/…/activities',
+    );
+    expect(error.message).toContain('durationDays must be an integer; code should not be empty');
+    expect(error.message).not.toContain('truncated');
+  });
+});
 
 /**
  * Regression cover for the CodeQL `js/polynomial-redos` finding on PR #204.
