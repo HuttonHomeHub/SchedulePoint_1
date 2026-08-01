@@ -1,3 +1,4 @@
+import { WorkingWeekdays } from '@repo/types';
 import type { CalendarSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -47,6 +48,7 @@ function calendar(id: string, name: string): CalendarSummary {
     name,
     description: null,
     workingWeekdays: 31,
+    shifts: WorkingWeekdays.toFullDayShifts(31),
     scope: 'ORG',
     projectId: null,
     archivedAt: null,

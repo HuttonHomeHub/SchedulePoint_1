@@ -212,8 +212,11 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
    * TECH_DEBT #79. ADR-0036 §2 made a window-only base week valid — every weekday non-working,
    * all working time from dated exception windows (a plant turnaround, a shutdown programme) —
    * and said the old "mask must be non-zero" guard was replaced by the engine's
-   * `buildWorkingTimeCalendar` check. The DTO's `@Min(1)` and the DB CHECK were never relaxed to
-   * match, so for a year the engine supported the shape and the API answered 422.
+   * `buildWorkingTimeCalendar` check. The DTO's `@Min(1)` was never relaxed to match, so for a
+   * year the engine supported the shape and the API answered 422. (There is no DB CHECK behind
+   * the mask, and no `working_weekdays` column either — the same rework moved the weekly pattern
+   * into `calendar_shifts`. An earlier draft of this comment claimed one and sent the first
+   * reader looking for a migration to write.)
    */
   describe('window-only calendars (TECH_DEBT #79)', () => {
     it('accepts a zero mask — the turnaround shape the engine already supports', async () => {
@@ -249,6 +252,173 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
         .send({ name: 'Negative', workingWeekdays: -1 })
         .expect(422);
     });
+  });
+
+  /**
+   * TECH_DEBT #80, the exceptions half. `createException` derived a day's windows from the
+   * `isWorking` boolean — the exact mirror of the mask→full-day-shift derivation the weekly half
+   * replaced — so a worked exception was always a WHOLE worked day. A half-day before a holiday,
+   * a short-crew shutdown day, and the working hours a window-only calendar exists to carry were
+   * all unauthorable, while `calendar_exception_windows` sat in the schema and the engine read it.
+   */
+  describe('authorable exception windows (TECH_DEBT #80)', () => {
+    const exceptionsOf = async (actor: Actor, calendarId: string) =>
+      (await actor.agent.get(`${base}/${calendarId}`).expect(200)).body.data.exceptions as {
+        date: string;
+        endDate: string;
+        isWorking: boolean;
+        windows: { startMinute: number; endMinute: number }[];
+      }[];
+
+    it('stores explicit windows and reads them back', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Half-day Christmas Eve');
+
+      await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({
+          date: '2026-12-24',
+          label: 'Christmas Eve — morning only',
+          windows: [{ startMinute: 480, endMinute: 720 }],
+        })
+        .expect(201);
+
+      const [exception] = await exceptionsOf(actor, id);
+      expect(exception).toMatchObject({
+        date: '2026-12-24',
+        // Derived: the day has a window, so it works — but only `windows` says for how long.
+        isWorking: true,
+        windows: [{ startMinute: 480, endMinute: 720 }],
+      });
+    });
+
+    it('stores a split shift on one exception day', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Split shutdown day');
+
+      await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({
+          date: '2026-07-01',
+          windows: [
+            { startMinute: 360, endMinute: 720 },
+            { startMinute: 780, endMinute: 1200 },
+          ],
+        })
+        .expect(201);
+
+      const [exception] = await exceptionsOf(actor, id);
+      expect(exception?.windows).toEqual([
+        { startMinute: 360, endMinute: 720 },
+        { startMinute: 780, endMinute: 1200 },
+      ]);
+    });
+
+    it('keeps `isWorking` shorthand working — a whole worked day is one full-day window', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Worked Saturday');
+
+      await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({ date: '2026-08-01', isWorking: true })
+        .expect(201);
+
+      const [exception] = await exceptionsOf(actor, id);
+      expect(exception).toMatchObject({
+        isWorking: true,
+        windows: [{ startMinute: 0, endMinute: 1440 }],
+      });
+    });
+
+    it('reads a holiday as no windows at all', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Bank holiday');
+
+      await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({ date: '2026-08-31', label: 'Summer bank holiday' })
+        .expect(201);
+
+      const [exception] = await exceptionsOf(actor, id);
+      expect(exception).toMatchObject({ isWorking: false, windows: [] });
+    });
+
+    it('exposes `endDate` so the stored range is never silently dropped', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Range visible');
+
+      await actor.agent.post(`${base}/${id}/exceptions`).send({ date: '2026-05-04' }).expect(201);
+
+      const [exception] = await exceptionsOf(actor, id);
+      // Only a single day is authorable today, so both ends are the one date — the point of the
+      // assertion is that the field is PRESENT, not that it can differ yet.
+      expect(exception).toMatchObject({ date: '2026-05-04', endDate: '2026-05-04' });
+    });
+
+    it('refuses `windows` and `isWorking` together — two answers to one question', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Contradiction');
+
+      await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({
+          date: '2026-09-01',
+          isWorking: true,
+          windows: [{ startMinute: 480, endMinute: 720 }],
+        })
+        .expect(422);
+
+      // `isWorking: false` beside windows is the contradiction that matters most — it says
+      // "holiday" and "these hours" at once. `null`/absent is not a value, so it stays allowed.
+      await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({
+          date: '2026-09-01',
+          isWorking: false,
+          windows: [{ startMinute: 480, endMinute: 720 }],
+        })
+        .expect(422);
+    });
+
+    it('refuses an empty `windows` array — a holiday has exactly one spelling', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Empty set');
+
+      await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({ date: '2026-09-02', windows: [] })
+        .expect(422);
+    });
+
+    it('refuses overlapping, unsorted or inverted windows at the boundary', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Bad windows');
+      const post = (windows: unknown) =>
+        actor.agent.post(`${base}/${id}/exceptions`).send({ date: '2026-10-01', windows });
+
+      // Overlap — the engine asserts this too, but at RECALCULATION time, which surfaces a
+      // calendar mistake as a failed schedule run pointing at the plan.
+      await post([
+        { startMinute: 480, endMinute: 720 },
+        { startMinute: 600, endMinute: 900 },
+      ]).expect(422);
+      // Unsorted: rejected rather than quietly sorted — storage is order-sensitive, and
+      // reordering the author's input hides which pair they got wrong.
+      await post([
+        { startMinute: 780, endMinute: 1200 },
+        { startMinute: 360, endMinute: 720 },
+      ]).expect(422);
+      // Inverted and empty spans.
+      await post([{ startMinute: 720, endMinute: 480 }]).expect(422);
+      await post([{ startMinute: 480, endMinute: 480 }]).expect(422);
+      // Outside the day.
+      await post([{ startMinute: 0, endMinute: 1441 }]).expect(422);
+      await post([{ startMinute: -1, endMinute: 480 }]).expect(422);
+    });
+
+    // The proof that the ENGINE reads what was authored — rather than the API merely storing
+    // it — lives in `schedule.e2e-spec.ts`, where the plan/activity/recalculate harness already
+    // is. Storing a window nothing schedules on would be exactly the defect this closes.
   });
 
   it('creates, gets and lists calendars', async () => {

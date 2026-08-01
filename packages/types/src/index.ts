@@ -897,7 +897,26 @@ export const WorkingWeekdays = {
     }
     return mask;
   },
+  /**
+   * The full-day `[0, 1440)` windows a mask is shorthand for — the ONE statement of what a
+   * weekday mask means in the storage form the engine actually schedules on.
+   *
+   * Shared rather than restated: the API materialises a mask into shift rows on write and derives
+   * it back on read, and the client needs the same mapping to show a mask-authored calendar beside
+   * a shift-authored one. Two copies of this rule would disagree about a boundary exactly once,
+   * in a calendar nobody looks at twice.
+   */
+  toFullDayShifts(mask: number): CalendarShift[] {
+    return WorkingWeekdays.toIndices(mask).map((weekday) => ({
+      weekday,
+      startMinute: 0,
+      endMinute: MINUTES_PER_CALENDAR_DAY,
+    }));
+  },
 } as const;
+
+/** Minutes in a calendar day; `1440` is 24:00 — the exclusive end of a full-day window. */
+export const MINUTES_PER_CALENDAR_DAY = 1440;
 
 /**
  * The tiers a calendar can belong to (ADR-0053 §1). `ORG` is the shared organisation
@@ -932,6 +951,22 @@ export type ArchivedFilter = (typeof ARCHIVED_FILTERS)[number];
 export const LIBRARY_SEARCH_MAX_LENGTH = 100;
 
 /**
+ * One working window inside a day (ADR-0036 §2) — minutes from local midnight, `[start, end)`.
+ * `1440` is 24:00 (a window running to midnight), never a wrap: a night shift crossing midnight
+ * is **two adjacent-day windows**, so 20:00–06:00 is `1200–1440` on one day plus `0–360` on the
+ * next.
+ */
+export interface CalendarWindow {
+  startMinute: number;
+  endMinute: number;
+}
+
+/** One window of the weekly pattern — a {@link CalendarWindow} on a weekday (0 = Monday). */
+export interface CalendarShift extends CalendarWindow {
+  weekday: number;
+}
+
+/**
  * A working-day calendar (M5, ADR-0024) — a reusable library entry: a weekly working
  * pattern (a {@link WorkingWeekdays} bitmask) plus dated exceptions. Since ADR-0053 a
  * calendar sits in one of two tiers ({@link CalendarScope}): the shared organisation
@@ -942,8 +977,14 @@ export interface CalendarSummary {
   id: string;
   name: string;
   description: string | null;
-  /** 7-bit weekly pattern (bit 0 = Monday … bit 6 = Sunday); see {@link WorkingWeekdays}. */
+  /**
+   * 7-bit weekly pattern (bit 0 = Monday … bit 6 = Sunday); see {@link WorkingWeekdays}.
+   * **Derived** from {@link CalendarSummary.shifts} — it can only say whether a weekday works
+   * at all, so a split shift or a half-day Friday is visible only in `shifts`.
+   */
   workingWeekdays: number;
+  /** The weekly pattern as stored: explicit intraday windows (ADR-0036 §2). */
+  shifts: CalendarShift[];
   /** Which tier this calendar belongs to (ADR-0053 §1). */
   scope: CalendarScope;
   /** The owning project when `scope` is `PROJECT`; `null` for an `ORG` calendar. */
@@ -969,8 +1010,22 @@ export interface CalendarSummary {
  */
 export interface CalendarExceptionSummary {
   id: string;
+  /** First calendar day of the exception (`YYYY-MM-DD`). */
   date: string;
+  /**
+   * Last calendar day, inclusive. Storage holds a range (ADR-0036 §2); only a single day is
+   * authorable today, so this equals {@link CalendarExceptionSummary.date} for every exception
+   * the API creates. Present so the range is never silently dropped on read.
+   */
+  endDate: string;
+  /**
+   * `false` = holiday, `true` = worked. **Derived** from {@link CalendarExceptionSummary.windows}
+   * — a day works iff it has any window — so it can only say whether the day works at all. A
+   * half-day is visible only in `windows`.
+   */
   isWorking: boolean;
+  /** The hours this day actually works, as stored. Empty for a holiday. */
+  windows: CalendarWindow[];
   label: string | null;
   version: number;
   createdAt: string;

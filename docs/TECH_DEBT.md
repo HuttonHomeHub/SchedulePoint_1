@@ -558,10 +558,37 @@ seeded plan schedule differently from the fixture and say nothing about it.
 **Impact — low but sharp.** It affects one calendar shape, but that shape is exactly the one a
 turnaround or a shutdown programme needs, and the failure is a flat refusal with no workaround.
 
-**What would close it:** relax the validator to `@Min(0)` and decide what a zero mask means at the
-seams that consume it — specifically whether a plan default calendar may be window-only (an activity
-inheriting it would have no base working time at all), which is the question the `@Min(1)` was
-probably standing in for. Worth an API e2e that creates one and recalculates over it.
+**Closed at the API in `api-v0.34.0`** (`MIN_WORKING_WEEKDAYS_MASK` 1 → 0), and closing it exposed
+the other half of the same unfinished migration. The DTO bound was lifted **without** the engine
+guard it had been standing in for being mapped: `buildWorkingTimeCalendar` throws when a calendar
+has no working minute at all, nothing caught it, and recalculating a plan on a brand-new
+window-only calendar answered an opaque **500**. A user-caused, user-fixable state reported as a
+server fault, naming neither the calendar nor the fix — and reachable in two clicks, default-on, no
+flag, for the three days between that release and this one. Now a **422
+`CALENDAR_HAS_NO_WORKING_TIME`** carrying the calendar's name and what to add, via a named
+`EmptyWorkingTimeCalendarError` (the engine is the only layer that sees both the week and the
+exceptions, so it is the only layer that can raise it; the service is the only one that can phrase
+it). Two e2e cases pin both sides — the empty calendar is refused, the same calendar recalculates
+once one working exception gives it hours.
+
+The lesson is the shape, not the line: **relaxing a boundary check moves the rejection, it does not
+remove it.** The guard underneath had been unreachable for a year and was never re-read when the
+thing keeping it unreachable was deleted. Worth checking for the same pattern whenever a `@Min`,
+`@Max` or `@IsIn` is widened.
+
+The **seeder still refuses the shape** (`packages/seed-http/src/runner.ts`
+`WINDOW_ONLY_CALENDAR_UNSUPPORTED`) and the coverage report still lists `cal_window_only` /
+`cal_empty_base_week` as unreachable, both quoting the `@Min(1)` that no longer exists. That
+reconciliation is the next slice — it is what turns this from "the API accepts it" into "a seeded
+plan proves it", which is the ADR-0066 loop.
+
+**What it took to close (recorded because the prediction was half right):** relaxing the validator
+was the easy half. The question this entry guessed the `@Min(1)` "was probably standing in for" —
+what a zero mask means at the seams that consume it — had a sharper answer than expected: it stands
+in for **nothing at the seams**, because a window-only calendar is perfectly schedulable the moment
+it has one working exception. What it was standing in for was the engine's _own_ guard, unmapped.
+The API e2e this paragraph asked for is the thing that would have caught it, and it was written
+three days late.
 
 ### 80. Intraday shift patterns exist in the engine and in storage, and no write path can create one
 
@@ -594,6 +621,26 @@ start/end minute, validated non-overlapping and ordered), a matching `windows` a
 exception DTO, the repository taking them instead of deriving, and an editor for the weekly pattern.
 The engine and the storage need no change — that is the whole shape of the problem. Worth doing
 together with #78, since a sub-day duration is meaningless without a sub-day calendar to spend it on.
+
+**The weekly half closed in `api-v0.34.0`** (`shifts` on the calendar create/update/read DTOs).
+**The dated-exception half closes here.** `createException` derived a day's windows from the
+`isWorking` boolean — the exact mirror of the mask→full-day-shift derivation, one table over — so a
+worked exception was always a _whole_ worked day, and a half-day before a holiday or a short-crew
+shutdown day could not be expressed. `windows` now joins `isWorking` on the exception DTO (mutually
+exclusive; an empty array refused, so "no working time" has one spelling), the repository resolves
+them through one `exceptionWindowRowsFor` shared with the interchange batch, and the read DTO
+returns `windows` — without which an authored half-day would be invisible the moment it was saved,
+which is the same defect the weekly half fixed.
+
+`endDate` is exposed on the read too. Storage has always held a **range**; the DTO returned only
+`startDate`, so an end date the client could not see was an end date it could not be told changed.
+Only a single day is authorable, so it always equals `date` today — the point is that the contract
+stops hiding a column. Authoring a multi-day exception stays out of scope.
+
+The **seeder and the coverage report still describe the pre-0.34.0 world** — six `cal_*` capability
+keys are listed as unreachable quoting `fullDayShiftsFromMask`, which no longer derives anything the
+caller supplied. Reconciling them (and making the seeder emit shift patterns) is the next slice, and
+is what turns "the API accepts it" into "a seeded plan proves it".
 
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 

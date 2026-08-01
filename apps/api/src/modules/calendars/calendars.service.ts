@@ -427,6 +427,10 @@ export class CalendarsService {
             calendarId: calendar.id,
             date: parseCalendarDate(dto.date),
             isWorking: dto.isWorking ?? false,
+            // Conditional spread: `exactOptionalPropertyTypes` counts an explicit `undefined` as a
+            // present key, which would make the repository's "explicit windows win" branch fire on
+            // a body that never sent any.
+            ...(dto.windows ? { windows: dto.windows } : {}),
             label: dto.label ?? null,
             createdBy: principal.userId,
             updatedBy: principal.userId,

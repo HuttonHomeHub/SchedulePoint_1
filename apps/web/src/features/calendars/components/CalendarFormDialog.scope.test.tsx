@@ -1,3 +1,4 @@
+import { WorkingWeekdays } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -131,6 +132,7 @@ describe('CalendarFormDialog — scope choice (flag on)', () => {
         name: 'Site shutdown',
         description: null,
         workingWeekdays: 31,
+        shifts: WorkingWeekdays.toFullDayShifts(31),
         scope: 'PROJECT',
         projectId: 'proj-1',
         archivedAt: null,

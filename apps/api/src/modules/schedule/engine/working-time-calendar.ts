@@ -1,5 +1,7 @@
 import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
 
+import { EmptyWorkingTimeCalendarError } from './errors';
+
 /**
  * The engine's **minute-granular** working-time calendar port (ADR-0036, the M1
  * rework of ADR-0023/ADR-0024). The CPM passes work in continuous integer
@@ -152,7 +154,7 @@ export function buildWorkingTimeCalendar(
 
   const hasPositiveException = sorted.some((e) => e.minutes > 0);
   if (minutesPerWeek === 0 && !hasPositiveException) {
-    throw new Error('A working-time calendar must have at least one working minute.');
+    throw new EmptyWorkingTimeCalendarError();
   }
 
   // Per-exception full adjustment (exception minutes − the weekday pattern's minutes, summed over

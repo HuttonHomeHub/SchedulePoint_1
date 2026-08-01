@@ -101,6 +101,11 @@ export interface ScheduleEdgeRow {
  * reads (calendar row, shift rows, exceptions joined to windows) — never per-window.
  */
 export interface ScheduleCalendarRow {
+  /**
+   * Only so a rejection can name the calendar the planner has to go and fix
+   * (`CALENDAR_HAS_NO_WORKING_TIME`). The engine never reads it.
+   */
+  name: string;
   shifts: { weekday: number; startMinute: number; endMinute: number }[];
   exceptions: {
     startDate: Date;
@@ -413,6 +418,7 @@ export class ScheduleRepository {
     const calendar = await db.calendar.findFirst({
       where: { id: calendarId, organizationId, deletedAt: null },
       select: {
+        name: true,
         shifts: {
           orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
           select: { weekday: true, startMinute: true, endMinute: true },

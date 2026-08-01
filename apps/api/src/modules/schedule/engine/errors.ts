@@ -39,3 +39,23 @@ export class UnknownActivityError extends Error {
     this.activityId = activityId;
   }
 }
+
+/**
+ * Thrown when a calendar has no working time at all — an empty base week AND no working
+ * exception. Nothing can ever be scheduled on it, so the engine refuses rather than looping
+ * to its horizon.
+ *
+ * Unlike the two guards above this is **reachable from ordinary user input**, and became so
+ * when ADR-0036 §2's window-only base week was finally accepted at the DTO (TECH_DEBT #79):
+ * `workingWeekdays: 0` is a legitimate turnaround calendar the moment it carries a working
+ * exception, and a plain 500 until it does. Named so the service can map it to a 422 that
+ * says which calendar and what to add — the engine is the only layer that can see both
+ * halves (ADR-0036 §2), so it is the only layer that can raise it, and the service is the
+ * only layer that can phrase it.
+ */
+export class EmptyWorkingTimeCalendarError extends Error {
+  constructor() {
+    super('A working-time calendar must have at least one working minute.');
+    this.name = 'EmptyWorkingTimeCalendarError';
+  }
+}

@@ -1,3 +1,4 @@
+import { WorkingWeekdays } from '@repo/types';
 import type { CalendarDetail, CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -14,6 +15,7 @@ const CALENDAR: CalendarSummary = {
   name: 'Standard',
   description: 'Weekdays only',
   workingWeekdays: 31, // Mon–Fri
+  shifts: WorkingWeekdays.toFullDayShifts(31),
   // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
   scope: 'ORG',
   projectId: null,

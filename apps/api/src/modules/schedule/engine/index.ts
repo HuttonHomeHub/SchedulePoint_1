@@ -43,7 +43,11 @@ export {
 } from './earned-value';
 export type { ProgressMode, ProgressStatus } from './progress';
 export { buildGraph, type ScheduleGraph } from './graph';
-export { ScheduleGraphNotADagError, UnknownActivityError } from './errors';
+export {
+  EmptyWorkingTimeCalendarError,
+  ScheduleGraphNotADagError,
+  UnknownActivityError,
+} from './errors';
 export type {
   EngineActivity,
   EngineAssignment,

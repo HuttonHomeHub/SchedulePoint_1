@@ -53,11 +53,15 @@ export interface CalendarPatch {
   projectId?: string | null;
 }
 
-/** One stored weekly shift window (ADR-0036 §2); minutes from local midnight. */
-export interface ShiftRow {
-  weekday: number;
+/** One stored working window (ADR-0036 §2); minutes from local midnight, `[start, end)`. */
+export interface WindowRow {
   startMinute: number;
   endMinute: number;
+}
+
+/** One stored weekly shift window — a {@link WindowRow} pinned to a weekday (0 = Monday). */
+export interface ShiftRow extends WindowRow {
+  weekday: number;
 }
 
 /**
@@ -87,12 +91,19 @@ export interface CreateCalendarInput {
  */
 export type CalendarScopeFilter = 'org' | 'project' | 'all';
 
-/** The inputs a whole-day calendar exception create needs (windows derived from `isWorking`). */
+/**
+ * The inputs a dated calendar exception create needs.
+ *
+ * The day's working time arrives EITHER as explicit `windows` (the storage form — a half-day
+ * before a holiday, a short-crew shutdown day, a turnaround calendar's only working hours) OR as
+ * the whole-day `isWorking` shorthand. The DTO has already refused a body carrying both.
+ */
 export interface CreateCalendarExceptionInput {
   organizationId: string;
   calendarId: string;
   date: Date;
   isWorking: boolean;
+  windows?: readonly WindowRow[];
   label: string | null;
   createdBy: string;
   updatedBy: string;
@@ -139,17 +150,6 @@ export type CalendarWithExceptions = CalendarWithShifts & {
   exceptions: CalendarExceptionWithWindows[];
 };
 
-/** The full-day `[0, 1440)` shift rows a weekday mask maps to (ADR-0036 §4.2). */
-function fullDayShiftsFromMask(
-  mask: number,
-): { weekday: number; startMinute: number; endMinute: number }[] {
-  return WorkingWeekdays.toIndices(mask).map((weekday) => ({
-    weekday,
-    startMinute: 0,
-    endMinute: MINUTES_PER_DAY,
-  }));
-}
-
 /**
  * The weekly pattern as stored rows, from whichever form the caller supplied.
  *
@@ -164,7 +164,24 @@ function shiftRowsFor(
   mask: number | undefined,
 ): ShiftRow[] {
   if (shifts !== undefined) return [...shifts];
-  return mask === undefined ? [] : fullDayShiftsFromMask(mask);
+  return mask === undefined ? [] : WorkingWeekdays.toFullDayShifts(mask);
+}
+
+/**
+ * A dated exception's replacement windows, from whichever form the caller supplied — the
+ * `shiftRowsFor` rule one table over, and for the same reason: `createException` and the
+ * interchange batch both have to agree what `isWorking` means in window terms.
+ *
+ * Explicit windows win; `isWorking` is shorthand for the whole-day case (`true` ⇒ one full-day
+ * window, `false` ⇒ none, which is a holiday). The DTO rejects sending both, and rejects an
+ * empty `windows` array so "no working time" has exactly one spelling.
+ */
+function exceptionWindowRowsFor(
+  windows: readonly WindowRow[] | undefined,
+  isWorking: boolean,
+): WindowRow[] {
+  if (windows !== undefined) return [...windows];
+  return isWorking ? [{ startMinute: 0, endMinute: MINUTES_PER_DAY }] : [];
 }
 
 /**
@@ -240,7 +257,7 @@ export class CalendarRepository {
         createdBy: calendar.createdBy,
         updatedBy: calendar.updatedBy,
       });
-      for (const shift of fullDayShiftsFromMask(calendar.workingWeekdays)) {
+      for (const shift of WorkingWeekdays.toFullDayShifts(calendar.workingWeekdays)) {
         shiftRows.push({ calendarId: calendar.id, ...shift });
       }
       for (const exception of calendar.exceptions) {
@@ -255,12 +272,10 @@ export class CalendarRepository {
           createdBy: calendar.createdBy,
           updatedBy: calendar.updatedBy,
         });
-        if (exception.isWorking) {
-          windowRows.push({
-            calendarExceptionId: exception.id,
-            startMinute: 0,
-            endMinute: MINUTES_PER_DAY,
-          });
+        // Through the same helper as the single create — an inline `isWorking ? full day : none`
+        // here would be a second statement of the rule, free to drift from the one above.
+        for (const window of exceptionWindowRowsFor(undefined, exception.isWorking)) {
+          windowRows.push({ calendarExceptionId: exception.id, ...window });
         }
       }
     }
@@ -595,7 +610,7 @@ export class CalendarRepository {
     await db.calendar.updateMany({ where: { id, deletedAt: null }, data: stamp });
   }
 
-  /** Create a whole-day exception, materialising `isWorking` as a full-day window (or none). */
+  /** Create a dated exception with its replacement windows (explicit, or derived from `isWorking`). */
   createException(
     input: CreateCalendarExceptionInput,
     db: Prisma.TransactionClient = this.prisma,
@@ -604,15 +619,14 @@ export class CalendarRepository {
       data: {
         organizationId: input.organizationId,
         calendarId: input.calendarId,
-        // The public whole-day exception is a single-day inclusive range (ADR-0036 §2).
+        // The public dated exception is a single-day inclusive range (ADR-0036 §2); a multi-day
+        // range is storable but not yet authorable, so both ends are the one date.
         startDate: input.date,
         endDate: input.date,
         label: input.label,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
-        windows: input.isWorking
-          ? { create: [{ startMinute: 0, endMinute: MINUTES_PER_DAY }] }
-          : { create: [] },
+        windows: { create: exceptionWindowRowsFor(input.windows, input.isWorking) },
       },
       include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
     });

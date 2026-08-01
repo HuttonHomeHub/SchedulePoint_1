@@ -1,3 +1,4 @@
+import { WorkingWeekdays } from '@repo/types';
 import type { ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -77,6 +78,7 @@ function renderTable(
             name: 'Standard',
             description: null,
             workingWeekdays: 31,
+            shifts: WorkingWeekdays.toFullDayShifts(31),
             // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
             scope: 'ORG',
             projectId: null,
