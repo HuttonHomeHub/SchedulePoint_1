@@ -6,9 +6,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CalendarFormDialog } from './CalendarFormDialog';
 
+import type * as Env from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
+// Flag OFF, **pinned** rather than inherited. `VITE_CALENDAR_SHIFT_EDITOR` flipped default-on with
+// ADR-0067 M4; this file is the rollback contract for the weekday-mask surface, so it states the
+// flag it is testing instead of depending on a default that has now moved (the ADR-0053 M6
+// precedent: keep the flag-off suites and pin them, never weaken them).
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<typeof Env>()),
+  CALENDAR_SHIFT_EDITOR_ENABLED: false,
+}));
 
 const CALENDAR: CalendarSummary = {
   id: 'cal-1',

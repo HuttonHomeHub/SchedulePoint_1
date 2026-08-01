@@ -1,6 +1,6 @@
 # ADR-0067: The window-list editor, and storage honesty in calendar authoring
 
-- **Status:** Proposed
+- **Status:** Accepted (M0′–M4 landed; `VITE_CALENDAR_SHIFT_EDITOR` default-on 2026-08-01)
 - **Date:** 2026-08-01
 - **Deciders:** James Ewbank (with Claude Code)
 

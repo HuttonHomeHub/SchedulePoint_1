@@ -1018,6 +1018,40 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   importer behaviour that had already been corrected. **The CPM engine is not modified and the
   ADR-0034 parity gate is untouched.**
 
+- **ADR-0067** _(Accepted; M0′–M4 landed, `VITE_CALENDAR_SHIFT_EDITOR` **default-on** 2026-08-01)_ —
+  The calendar shift editor, and storage honesty. ADR-0036 moved storage and the CPM engine to
+  working-**minutes** with intraday shift patterns a year ago; **nothing in the product could author
+  one**, because the calendar form offered seven weekday checkboxes and a checkbox can say only
+  _whether_ a day works. The editor replaces them with a per-day list of `HH:MM` periods on ONE
+  shared `WindowListEditor` — the same primitive the dated-exception editor uses, because a window is
+  authored in two places and two editors would drift about ordering, overlap and midnight in a way
+  only a planner who authored the same hours both ways would ever see. Times are **text, not
+  `<input type="time">`**: a full day ends at 24:00 and the native control stops at 23:59, and
+  reading `00:00` back as 24:00 was rejected as read-time inference. A night shift **is two windows
+  on two days** and is written that way, with both named aloud. Presets are **verbs** — applying one
+  writes windows and then has no further existence, so nothing persists which preset produced a
+  week. **M4 is the epic's own premise landing on itself**: five specialist gates over the combined
+  diff found ten blocking defects in code that had already passed a human read, the largest a **dead
+  end** for the very shape the epic exists to support — a calendar with no working week could be
+  created by the Window-only preset and then never saved again, refused by a hidden rule with no
+  control on screen to satisfy it. The flag-on journey (`apps/web/e2e-calendar-shifts/`, its own CI
+  step) earned its place on its first run by finding that a menu opened from inside a modal
+  `<dialog>` was unclickable — a modal dialog is in the browser's **top layer** and the menu
+  portalled to `document.body`, which no z-index can reach and no unit test can see, because jsdom
+  has no top layer.
+
+- **ADR-0068** _(Accepted)_ — A calendar carries an **hours-per-day** (P6's `day_hr_cnt`). It is the
+  day↔minute factor for every day-denominated field measured on that calendar, derived **once** at
+  the moment shifts are written and stored — never on read, because a standing derivation would make
+  the factor a function of the shift rows, so shortening one Friday would silently reinterpret every
+  stored duration. `durationDays × hoursPerDay × 60` replaces `× 1440`, so "5 days" on an eight-hour
+  calendar is 2,400 working minutes and not 7,200; baselines **freeze** the factor at capture; the
+  `TWENTY_FOUR_HOUR` lag calendar stays pinned at 1440. **The CPM engine never sees it** — its
+  `WorkingTimeCalendar` port is `addWorkingTime`/`workingTimeBetween` over shift and exception rows
+  only, so the ADR-0034 recalc parity gate is structurally untouched. P6's `day_hr_cnt` now
+  round-trips through interchange in both directions (ADR-0050's mapping table moved in lock-step);
+  MSPDI has no per-calendar equivalent and reports the drop rather than inventing a figure.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

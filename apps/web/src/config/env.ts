@@ -1051,8 +1051,8 @@ export const CANVAS_LINK_ROUTING_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_LINK_ROUTING);
 
 /**
- * **The calendar shift-pattern editor** (`VITE_CALENDAR_SHIFT_EDITOR`, default **off**) — the
- * authoring half of ADR-0036, behind ADR-0067.
+ * **The calendar shift-pattern editor** (`VITE_CALENDAR_SHIFT_EDITOR`, default **ON** since
+ * 2026-08-01) — the authoring half of ADR-0036, behind ADR-0067.
  *
  * ADR-0036 moved storage and the CPM engine to working-**minutes** with intraday shift patterns:
  * split shifts, night shifts crossing midnight, asymmetric weeks with a half-day Friday. The engine
@@ -1074,7 +1074,15 @@ export const CANVAS_LINK_ROUTING_ENABLED =
  * the editor keeps scheduling identically with the flag off — it simply becomes uneditable at
  * minute granularity again, which the form says out loud rather than implying the mask is the whole
  * truth. The flag-off parity suite is kept, not weakened; it is the rollback contract.
+ *
+ * Flipped default-on once the M4 gate pass finished: five specialist reviews over the combined
+ * diff, ten blocking defects folded with regression tests, the `capability-shift-calendars` seed
+ * plan reaching six capability keys no plan had ever reached, and the flag-on journey
+ * (`apps/web/e2e-calendar-shifts/`) green against a real API. That journey earned its place on its
+ * first run: it found that a menu opened from inside a modal `<dialog>` was unclickable, because a
+ * modal dialog is in the browser's top layer and the menu portalled to `document.body`. No unit
+ * test could have seen it — jsdom has no top layer.
  */
-export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOff(
+export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CALENDAR_SHIFT_EDITOR,
 );
