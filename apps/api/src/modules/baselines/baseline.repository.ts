@@ -39,6 +39,8 @@ export interface CaptureInput {
   isActive: boolean;
   dataDate: Date | null;
   capturedProjectFinish: Date | null;
+  /** The plan calendar's hours-per-day at capture, in minutes (ADR-0068 §5). */
+  hoursPerDayMinutes: number;
   actorId: string;
   activities: CaptureActivityRow[];
 }
@@ -76,6 +78,7 @@ export class BaselineRepository {
         isActive: input.isActive,
         dataDate: input.dataDate,
         capturedProjectFinish: input.capturedProjectFinish,
+        hoursPerDayMinutes: input.hoursPerDayMinutes,
         createdBy: input.actorId,
         updatedBy: input.actorId,
       },

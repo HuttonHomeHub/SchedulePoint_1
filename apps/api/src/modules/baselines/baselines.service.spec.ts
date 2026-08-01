@@ -10,6 +10,7 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanRepository } from '../plans/plan.repository';
 
@@ -161,6 +162,8 @@ describe('BaselinesService', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       baselines as unknown as BaselineRepository,
+      // The capture-time day factor (ADR-0068 §5). Empty ⇒ the 24-hour constant.
+      { findHoursPerDayMinutes: () => Promise.resolve(new Map()) } as unknown as CalendarRepository,
       prisma as unknown as PrismaService,
       logger,
     );

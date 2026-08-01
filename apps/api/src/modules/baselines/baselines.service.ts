@@ -13,6 +13,8 @@ import {
 } from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveDayFactorMinutes } from '../activities/day-factor';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { type WorkingTimeCalendar } from '../schedule/engine';
@@ -56,6 +58,7 @@ export class BaselinesService {
     private readonly organizations: OrganizationsService,
     private readonly plans: PlanRepository,
     private readonly baselines: BaselineRepository,
+    private readonly calendars: CalendarRepository,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(BaselinesService.name) private readonly logger: PinoLogger,
   ) {}
@@ -138,6 +141,12 @@ export class BaselinesService {
         const isActive =
           (await this.baselines.countActiveByPlan(organization.id, planId, tx)) === 0;
 
+        // The plan calendar's working day, frozen into the snapshot (ADR-0068 §5).
+        const planDayFactorMinutes = await resolveDayFactorMinutes(
+          this.calendars,
+          { activityCalendarId: null, planCalendarId: plan.calendarId },
+          tx,
+        );
         const baseline = await this.baselines.createWithSnapshot(
           {
             organizationId: organization.id,
@@ -146,6 +155,10 @@ export class BaselinesService {
             isActive,
             dataDate: plan.plannedStart,
             capturedProjectFinish: projectFinish,
+            // Frozen with the rest of the snapshot (ADR-0068 §5 applying ADR-0025's copy-not-
+            // reference rule): a later calendar edit must not rewrite what this baseline reports
+            // as its captured durations and float.
+            hoursPerDayMinutes: planDayFactorMinutes,
             actorId: principal.userId,
             activities,
           },
@@ -293,6 +306,7 @@ export class BaselinesService {
         totalFloat: l.totalFloat,
       })),
       calendar,
+      active.hoursPerDayMinutes,
     );
 
     return {

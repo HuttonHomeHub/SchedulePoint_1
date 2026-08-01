@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlansModule } from '../plans/plans.module';
 
@@ -18,7 +19,8 @@ import { BaselinesService } from './baselines.service';
 @Module({
   imports: [OrganizationsModule, PlansModule],
   controllers: [BaselinesController],
-  providers: [BaselinesService, BaselineRepository],
+  // CalendarRepository: a capture freezes the plan calendar's hours-per-day (ADR-0068 §5).
+  providers: [BaselinesService, BaselineRepository, CalendarRepository],
   exports: [BaselineRepository],
 })
 export class BaselinesModule {}
