@@ -191,6 +191,34 @@ export class ActivityRepository {
    * {@link ScheduleRepository.writeResults}'s single-round-trip shape (avoids a 2,000-row loop
    * exceeding Prisma's interactive-transaction timeout).
    */
+  /**
+   * The plan's activities projected to the four columns a lane layout needs — `id`, its current
+   * `laneIndex`, the `version` the batch write matches on, and the computed span it is packed by.
+   *
+   * Deliberately NOT the full rows, for the reason `findWbsTreeRows` gives one method down: a layout
+   * pass may touch every activity in the plan, and the ~40 columns an `Activity` carries are all
+   * irrelevant to "where should this bar sit". Ordered by id so a caller's input — and therefore the
+   * packer's tie-breaks — never depend on the database's scan order.
+   */
+  async findLayoutRowsForPlan(
+    organizationId: string,
+    planId: string,
+  ): Promise<
+    {
+      id: string;
+      laneIndex: number;
+      version: number;
+      earlyStart: Date | null;
+      earlyFinish: Date | null;
+    }[]
+  > {
+    return this.prisma.activity.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      select: { id: true, laneIndex: true, version: true, earlyStart: true, earlyFinish: true },
+      orderBy: { id: 'asc' },
+    });
+  }
+
   async updateLanePositions(
     organizationId: string,
     planId: string,

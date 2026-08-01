@@ -1,3 +1,4 @@
+import { packLanes } from '@repo/layout';
 import type {
   ActivitySummary,
   ActivityType,
@@ -26,7 +27,6 @@ import {
   lagPhrase,
   summarizeLogic,
 } from '../render/a11y';
-import { packLanes } from '../render/auto-pack';
 import {
   buildBaselineGhosts,
   buildColourInkMap,

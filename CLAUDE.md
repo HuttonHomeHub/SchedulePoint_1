@@ -105,6 +105,7 @@ SchedulePoint/
 ├── packages/
 │   ├── config/               # Shared ESLint + tsconfig presets (@repo/config)
 │   ├── interchange/          # Pure schedule-interchange model/parsers (ADR-0050)
+│   ├── layout/              # Pure lane packer, shared by the canvas + importer (ADR-0069)
 │   ├── engine-conformance/   # Engine-free conformance fixture + loaders (ADR-0034)
 │   ├── seed/                 # Pure SeedSpec model + pairwise/scale/negative builders (ADR-0066)
 │   ├── seed-http/            # The seeder as an ordinary REST client (ADR-0066)
@@ -1051,6 +1052,22 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   only, so the ADR-0034 recalc parity gate is structurally untouched. P6's `day_hr_cnt` now
   round-trips through interchange in both directions (ADR-0050's mapping table moved in lock-step);
   MSPDI has no per-calendar equivalent and reports the drop rather than inventing a figure.
+
+- **ADR-0069** _(Accepted)_ — A shared lane-layout package, and packing an imported programme. An
+  import gave each activity a `laneIndex` equal to its **position in the source file**, so a
+  500-activity programme opened as 500 lanes holding one bar each — the on-ramp from P6, and the
+  first picture a planner sees of a schedule they already know, was noise. `packLanes` (written for
+  the canvas's Auto-arrange, refined by ADR-0064's predecessor hint) moves to **`@repo/layout`** and
+  is called by the interchange commit as a **third phase** — necessarily after the recalc, because
+  the packer packs by time and an imported activity has no dates until then, and inside the same pen
+  window, because writing `lane_index` is an ordinary plan mutation. A second server-side packer was
+  rejected for the ADR-0065 `routeOrthogonal` reason: two implementations would drift, and **the
+  drift would be invisible** — only someone comparing an imported plan against the same plan after
+  pressing Auto-arrange would ever see it. Phase 3 is **best-effort and deliberately asymmetric with
+  phase 2**: a recalc failure means wrong dates and rolls the import back, a layout failure means a
+  correct plan arranged badly, which one press of Auto-arrange fixes. **The CPM engine is not
+  imported and the recalc parity gate is untouched** — `lane_index` is presentation and
+  `computeSchedule` has never seen it.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

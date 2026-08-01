@@ -57,6 +57,26 @@ export interface ExportEdge {
 export class DependencyRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * The plan's dependency edges as bare endpoint pairs — the predecessor hint a lane layout needs
+   * (`packLanes`, `@repo/layout`), and nothing more. Type and lag do not affect which lane a bar
+   * sits in, so they are not selected.
+   *
+   * Ordered by id so the hint a caller builds is a function of the edge SET, never of scan order —
+   * a layout that varied between two runs over the same plan would move a planner's whole diagram
+   * for no reason.
+   */
+  async findEdgesForPlan(
+    organizationId: string,
+    planId: string,
+  ): Promise<{ predecessorId: string; successorId: string }[]> {
+    return this.prisma.activityDependency.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      select: { predecessorId: true, successorId: true },
+      orderBy: { id: 'asc' },
+    });
+  }
+
   private active(
     where: Prisma.ActivityDependencyWhereInput = {},
   ): Prisma.ActivityDependencyWhereInput {

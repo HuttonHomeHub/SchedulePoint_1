@@ -527,8 +527,11 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(
       await prisma.calendar.count({ where: { organizationId: orgId, name: 'Site 6-Day' } }),
     ).toBe(1);
-    // Deterministic lanes: sequential by source order (0, 1).
-    expect(activities.map((a) => a.laneIndex)).toEqual([0, 1]);
+    // Lanes are PACKED, not source order (ADR-0069). These two are an FS chain — one
+    // finishes before the other starts — so they share a lane rather than taking one each. Before
+    // phase 3 this asserted `[0, 1]`, which is the defect stated as a test: every imported activity
+    // got its own lane, so a 500-activity file opened as 500 lanes holding one bar apiece.
+    expect(activities.map((a) => a.laneIndex)).toEqual([0, 0]);
     // Recalculated: the engine wrote early dates onto the activities.
     expect(activities.every((a) => a.earlyStart !== null)).toBe(true);
   });
@@ -570,9 +573,25 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     });
     expect(await prisma.activity.count({ where: { planId } })).toBe(2000);
     expect(await prisma.activityDependency.count({ where: { planId } })).toBe(2599);
-    // The whole request (batched persist + recalc) stays comfortably under a generous CI bound; the
-    // persist transaction alone is a handful of `createMany`s, far under the 5s interactive-txn timeout.
+    // The whole request (batched persist + recalc + layout) stays comfortably under a generous CI
+    // bound; the persist transaction alone is a handful of `createMany`s, far under the 5s
+    // interactive-txn timeout.
     expect(elapsedMs).toBeLessThan(60_000);
+
+    // **The readability claim, at the scale it matters** (ADR-0069). Source order gave every
+    // activity its own lane, so this plan opened as 2,000 lanes with one bar each — the canvas
+    // equivalent of a 2,000-page document with one word per page. Packed, the lane count is a
+    // function of how many activities genuinely overlap in time, which on any real programme is a
+    // small fraction of its size.
+    const lanes = await prisma.activity.findMany({
+      where: { planId },
+      select: { laneIndex: true },
+    });
+    const distinctLanes = new Set(lanes.map((a) => a.laneIndex)).size;
+    expect(distinctLanes).toBeLessThan(2000 / 4);
+    // Lanes are contiguous from 0 — a packer that left gaps would draw empty rows through the
+    // middle of the diagram, which reads as missing work rather than as spare room.
+    expect(Math.max(...lanes.map((a) => a.laneIndex))).toBe(distinctLanes - 1);
   }, 60_000);
 
   it('rolls back the whole transaction when a create fails mid-way (nothing created)', async () => {

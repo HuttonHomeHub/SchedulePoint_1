@@ -2,7 +2,7 @@
   "name": "@repo/web",
   "version": "0.63.1",
   "private": true,
-  "description": "SchedulePoint web client — React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
+  "description": "SchedulePoint web client \u2014 React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -40,6 +40,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",
     "@repo/interchange": "workspace:*",
+    "@repo/layout": "workspace:*",
     "@repo/types": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "^1.170.18",
