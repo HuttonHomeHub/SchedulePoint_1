@@ -2,9 +2,14 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ActivityStatus, ActivityType, type Activity } from '@prisma/client';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
+import { minutesToDays, type WithDayFactor } from '../../activities/day-factor';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
-const MINUTES_PER_DAY = 1440;
+/**
+ * Day-denominated fields use the activity's effective calendar's working day (ADR-0068), attached
+ * by the service — the same factor the member-facing DTO uses, so the two can never report a
+ * different number of days for the same activity.
+ */
 
 /**
  * Guest read DTO for an activity (ADR-0051 §4, F-M3) — a DELIBERATELY field-stripped,
@@ -74,7 +79,7 @@ export class GuestActivityDto {
   actualFinish!: string | null;
 
   /** Map an activity row to the guest shape — copying ONLY the whitelisted scope fields. */
-  static from(entity: Activity): GuestActivityDto {
+  static from(entity: WithDayFactor<Activity>): GuestActivityDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
     return {
       id: entity.id,
@@ -82,7 +87,7 @@ export class GuestActivityDto {
       name: entity.name,
       type: entity.type,
       // Stored in working-minutes (ADR-0036); the public field stays whole working days.
-      durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
+      durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
       laneIndex: entity.laneIndex,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),

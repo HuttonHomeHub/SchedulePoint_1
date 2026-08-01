@@ -11,9 +11,16 @@ import {
 import type { ActivitySummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
+import { minutesToDays, type WithDayFactor } from '../day-factor';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
-const MINUTES_PER_DAY = 1440;
+/**
+ * Every day-denominated field below is `minutesToDays(value, entity.dayFactorMinutes)` — the
+ * activity's effective calendar's standard working day (ADR-0068), not a constant 1440. The service
+ * resolves the factor and attaches it to the row; a mapper has no database access, and a per-field
+ * lookup would be an N+1. `WithDayFactor` makes it a REQUIRED property, so a service that forgets to
+ * decorate is a compile error rather than a response reporting every duration against 24-hour days.
+ */
 
 /**
  * Public representation of an activity (the leaf of Client → Project → Plan →
@@ -370,7 +377,7 @@ export class ActivityResponseDto implements ActivitySummary {
    * expense amounts are included ONLY when it is true, otherwise null (fail-closed, no cross-tenant
    * leak). The %-complete measures stay in every read (they are not commercially sensitive money).
    */
-  static from(entity: Activity, canReadCost: boolean): ActivityResponseDto {
+  static from(entity: WithDayFactor<Activity>, canReadCost: boolean): ActivityResponseDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
     return {
       id: entity.id,
@@ -381,7 +388,7 @@ export class ActivityResponseDto implements ActivitySummary {
       type: entity.type,
       // Stored in working-minutes (ADR-0036). Both are exposed: days for every existing client,
       // minutes so a sub-day value survives the round trip instead of reading back rounded.
-      durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
+      durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
       durationMinutes: entity.durationMinutes,
       durationType: entity.durationType,
       constraintType: entity.constraintType,
@@ -405,7 +412,7 @@ export class ActivityResponseDto implements ActivitySummary {
       remainingDurationDays:
         entity.remainingDurationMinutes === null
           ? null
-          : Math.round(entity.remainingDurationMinutes / MINUTES_PER_DAY),
+          : minutesToDays(entity.remainingDurationMinutes, entity.dayFactorMinutes),
       suspendDate: day(entity.suspendDate),
       resumeDate: day(entity.resumeDate),
       expectedFinish: day(entity.expectedFinish),
@@ -446,7 +453,7 @@ export class ActivityResponseDto implements ActivitySummary {
       levelingDelayDays:
         entity.levelingDelayMinutes === null
           ? null
-          : Math.round(entity.levelingDelayMinutes / MINUTES_PER_DAY),
+          : minutesToDays(entity.levelingDelayMinutes, entity.dayFactorMinutes),
       levelingWindowExceeded: entity.levelingWindowExceeded,
       selfOverAllocated: entity.selfOverAllocated,
       version: entity.version,

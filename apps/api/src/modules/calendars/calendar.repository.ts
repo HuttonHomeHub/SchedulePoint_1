@@ -342,6 +342,29 @@ export class CalendarRepository {
     return db.calendar.findFirst({ where: this.active({ id, organizationId }) });
   }
 
+  /**
+   * The day↔minute factors for a set of calendars (ADR-0068), as `id → hours_per_day_minutes`.
+   *
+   * Deliberately **not** filtered by `deleted_at` or `archived_at`. An activity may legitimately
+   * be bound to an archived calendar (ADR-0053 §4 — archiving retires a calendar from pickers and
+   * changes nothing else), and a soft-deleted one is the case `buildPlanCalendar` already handles
+   * by falling back to all-minutes. Filtering here would drop the row and silently reinterpret
+   * that activity's duration; the caller's absent-id fallback is the same 1440 either way.
+   *
+   * One `id = ANY(...)` for a whole response — never a lookup per row.
+   */
+  async findHoursPerDayMinutes(
+    ids: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    const rows = await db.calendar.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, hoursPerDayMinutes: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.hoursPerDayMinutes]));
+  }
+
   /** An active calendar with its shift rows and active exceptions (each with windows) — the read shape. */
   findActiveDetailByIdInOrg(
     id: string,

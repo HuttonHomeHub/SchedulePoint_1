@@ -1,6 +1,7 @@
 import type { Activity } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
+import type { WithDayFactor } from '../../activities/day-factor';
 import type { CalendarWithExceptions } from '../../calendars/calendar.repository';
 import type { DependencyWithEndpoints } from '../../dependencies/dependency.repository';
 import type { ScheduleAggregate } from '../../schedule/schedule.repository';
@@ -19,7 +20,7 @@ const DAY = new Date(Date.UTC(2026, 6, 1));
  */
 
 /** A fully-populated activity row — every sensitive column set, so a leak would be caught. */
-function activityRow(): Activity {
+function activityRow(): WithDayFactor<Activity> {
   return {
     id: 'act-1',
     organizationId: 'org-1',
@@ -83,6 +84,8 @@ function activityRow(): Activity {
     updatedBy: 'user-secret',
     deletedAt: null,
     deleteBatchId: null,
+    // Attached by the service (ADR-0068). 1440 keeps this fixture's arithmetic exactly as it was.
+    dayFactorMinutes: 1440,
   };
 }
 
