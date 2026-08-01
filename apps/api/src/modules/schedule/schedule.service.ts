@@ -38,7 +38,6 @@ import {
   computeFloatPaths,
   computeResourceHistogram,
   computeSchedule,
-  EmptyWorkingTimeCalendarError,
   HistogramTooManyBucketsError,
   levelSchedule,
   resolveCurveProfile,
@@ -53,7 +52,11 @@ import {
   type HistogramAssignmentInput,
   type WorkingTimeCalendar,
 } from './engine';
-import { buildPlanCalendar } from './plan-calendar';
+import {
+  buildPlanCalendar,
+  buildPlanCalendarOrReject,
+  CALENDAR_HAS_NO_WORKING_TIME,
+} from './plan-calendar';
 import { ProgrammeCycleError, resolveProgrammeOrder } from './programme-order';
 import {
   ScheduleRepository,
@@ -80,7 +83,7 @@ export const SCHEDULE_ERROR = {
    * the hours. Only the engine sees both halves, which is why this is raised there and phrased
    * here rather than guarded at the DTO.
    */
-  CALENDAR_HAS_NO_WORKING_TIME: 'CALENDAR_HAS_NO_WORKING_TIME',
+  CALENDAR_HAS_NO_WORKING_TIME,
   /** The programme's upstream closure exceeds {@link MAX_PROGRAMME_PLANS} — too many plans to solve
    * synchronously in one request (ADR-0045: M2 is a synchronous, bounded solve; a background/queued
    * programme recalc is the deferred next slice). */
@@ -991,23 +994,9 @@ export class ScheduleService {
     const calendar = await this.schedule.loadPlanCalendar(organizationId, calendarId, tx);
     // Build the engine's minute-granular calendar directly from the stored shift/window
     // rows (ADR-0036 §2); a missing/soft-deleted calendar falls back to all-days-work.
-    try {
-      return buildPlanCalendar(calendar);
-    } catch (error) {
-      if (error instanceof EmptyWorkingTimeCalendarError) {
-        // Reachable from ordinary input since the window-only base week was accepted at the DTO
-        // (TECH_DEBT #79): `workingWeekdays: 0` with no working exception yet. It answered an
-        // opaque 500 — a user-caused, user-fixable state reported as a server fault, with
-        // nothing saying which calendar or what to add.
-        throw new ValidationError(
-          `The calendar “${calendar?.name ?? 'assigned to this plan'}” has no working time: its ` +
-            'weekly pattern is empty and it has no working exception, so nothing can be ' +
-            'scheduled on it. Add working days to the week, or a dated exception with hours.',
-          { reason: SCHEDULE_ERROR.CALENDAR_HAS_NO_WORKING_TIME, calendarId },
-        );
-      }
-      throw error;
-    }
+    // Shared with `BaselinesService.resolveCalendar`, which reaches the same state identically —
+    // a second catch here would be free to drift from that one.
+    return buildPlanCalendarOrReject(calendar, calendarId);
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {

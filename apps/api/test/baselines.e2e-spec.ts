@@ -390,6 +390,37 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
 
   const varianceUrl = (planId: string) => `${baselinesUrl(planId)}/variance`;
 
+  /**
+   * The variance read builds a calendar port of its own, so it reaches the "no working time at
+   * all" state by exactly the same route as a recalculation — and answered the same opaque 500.
+   * Both seams now go through one `buildPlanCalendarOrReject`: a mapping written only at the seam
+   * that happened to be found first would have left this one throwing, and nothing would have said
+   * so (TECH_DEBT #79).
+   */
+  it('rejects a variance read on a calendar with no working time with a 422, not a 500', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    // An ACTIVE baseline is required to reach the calendar at all: with none, variance returns an
+    // empty set before resolving one. The first version of this test omitted the capture and got a
+    // 200 — the test was wrong, not the mapping, and a 200 there proves only that the short-circuit
+    // works.
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'Nothing works', workingWeekdays: 0 })
+      .expect(201);
+    const plan = await actor.agent.get(`/api/v1/organizations/acme/plans/${planId}`).expect(200);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: cal.body.data.id as string, version: plan.body.data.version as number })
+      .expect(200);
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(422);
+    expect(res.body.error.details).toMatchObject({ reason: 'CALENDAR_HAS_NO_WORKING_TIME' });
+    expect(res.body.error.message).toContain('Nothing works');
+  });
+
   it('variance is empty with a null baselineId when the plan has no active baseline', async () => {
     const { actor } = await adminWithOrg();
     const { planId } = await calculatedPlan(actor);

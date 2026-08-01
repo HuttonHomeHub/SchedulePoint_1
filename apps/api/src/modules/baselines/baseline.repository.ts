@@ -230,10 +230,13 @@ export class BaselineRepository {
     organizationId: string,
     calendarId: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<PlanCalendarInput | null> {
+  ): Promise<(PlanCalendarInput & { name: string }) | null> {
     return db.calendar.findFirst({
       where: { id: calendarId, organizationId, deletedAt: null },
       select: {
+        // Only so a `CALENDAR_HAS_NO_WORKING_TIME` rejection can name the calendar to fix,
+        // matching `ScheduleRepository.loadPlanCalendar`. The engine never reads it.
+        name: true,
         shifts: {
           orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
           select: { weekday: true, startMinute: true, endMinute: true },

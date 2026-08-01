@@ -1,12 +1,20 @@
+import { ValidationError } from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 
 import {
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
+  EmptyWorkingTimeCalendarError,
   type ShiftWindow,
   type TimeException,
   type WorkingTimeCalendar,
 } from './engine';
+
+/**
+ * The machine-readable reason on the rejection above. Declared here beside the only thing that
+ * raises it — `SCHEDULE_ERROR` re-exports it so callers keep one import for schedule reasons.
+ */
+export const CALENDAR_HAS_NO_WORKING_TIME = 'CALENDAR_HAS_NO_WORKING_TIME';
 
 /** One weekday shift window as loaded from the `calendar_shifts` table (minute-granular). */
 export interface PlanCalendarShift {
@@ -59,4 +67,37 @@ export function buildPlanCalendar(calendar: PlanCalendarInput | null): WorkingTi
   }));
 
   return buildWorkingTimeCalendar(weekly, exceptions);
+}
+
+/**
+ * {@link buildPlanCalendar}, with the engine's "no working time at all" condition mapped to a 422
+ * that names the calendar — the shape every service seam wants, stated once.
+ *
+ * Both seams that build a calendar port reach this state identically (recalculation and baseline
+ * variance), so the mapping lives here rather than being caught twice: a second copy would be free
+ * to drift, and the half that drifted would be the one nobody exercises. That is the same argument
+ * as `shiftRowsFor`/`exceptionWindowRowsFor` in the calendar repository, one layer up.
+ *
+ * Reachable from ordinary input since the window-only base week was accepted at the DTO
+ * (TECH_DEBT #79): an empty week is legitimate the moment a working exception gives it hours, and
+ * nothing but a mistake until then. It answered an opaque 500 — a user-caused, user-fixable state
+ * reported as a server fault.
+ */
+export function buildPlanCalendarOrReject(
+  calendar: (PlanCalendarInput & { name?: string }) | null,
+  calendarId: string | null,
+): WorkingTimeCalendar {
+  try {
+    return buildPlanCalendar(calendar);
+  } catch (error) {
+    if (error instanceof EmptyWorkingTimeCalendarError) {
+      throw new ValidationError(
+        `The calendar “${calendar?.name ?? 'assigned to this plan'}” has no working time: its ` +
+          'weekly pattern is empty and it has no working exception, so nothing can be scheduled ' +
+          'on it. Add working days to the week, or a dated exception with hours.',
+        { reason: CALENDAR_HAS_NO_WORKING_TIME, calendarId },
+      );
+    }
+    throw error;
+  }
 }

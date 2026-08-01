@@ -16,7 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { type WorkingTimeCalendar } from '../schedule/engine';
-import { buildPlanCalendar } from '../schedule/plan-calendar';
+import { buildPlanCalendar, buildPlanCalendarOrReject } from '../schedule/plan-calendar';
 
 import { BaselineRepository, type CaptureActivityRow } from './baseline.repository';
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
@@ -319,8 +319,11 @@ export class BaselinesService {
     if (!calendarId) return buildPlanCalendar(null);
     const calendar = await this.baselines.loadPlanCalendar(organizationId, calendarId);
     // Build the engine's minute-granular calendar directly from the stored shift/window rows
-    // (ADR-0036 §2) — mirrors ScheduleService so variance days match the computed dates they diff.
-    return buildPlanCalendar(calendar);
+    // (ADR-0036 §2) — mirrors ScheduleService so variance days match the computed dates they diff,
+    // including its 422 for a calendar with no working time (a variance read on one answered the
+    // same opaque 500 as a recalculation, and would have kept doing so if the mapping had been
+    // written at the seam that happened to be found first).
+    return buildPlanCalendarOrReject(calendar, calendarId);
   }
 
   /** Assert an active plan exists in this org, so a list/read on a bogus plan is a 404 (not empty). */
