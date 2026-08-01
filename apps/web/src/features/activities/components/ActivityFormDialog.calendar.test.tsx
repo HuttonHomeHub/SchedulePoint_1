@@ -36,6 +36,8 @@ const CALENDARS: CalendarSummary[] = [
     description: null,
     workingWeekdays: 0b0011111, // Mon–Fri
     shifts: WorkingWeekdays.toFullDayShifts(0b0011111),
+    hoursPerDay: 24,
+    hoursPerDayMinutes: 1440,
     // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
     scope: 'ORG',
     projectId: null,
@@ -50,6 +52,8 @@ const CALENDARS: CalendarSummary[] = [
     description: null,
     workingWeekdays: 0b1111111, // every day
     shifts: WorkingWeekdays.toFullDayShifts(0b1111111),
+    hoursPerDay: 24,
+    hoursPerDayMinutes: 1440,
     // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
     scope: 'ORG',
     projectId: null,

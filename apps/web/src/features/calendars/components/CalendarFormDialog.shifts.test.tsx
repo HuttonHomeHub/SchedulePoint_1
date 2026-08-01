@@ -27,6 +27,8 @@ const SPLIT_SHIFT: CalendarSummary = {
     { weekday: 0, startMinute: 480, endMinute: 720 },
     { weekday: 0, startMinute: 780, endMinute: 1020 },
   ],
+  hoursPerDay: 24,
+  hoursPerDayMinutes: 1440,
   scope: 'ORG',
   projectId: null,
   archivedAt: null,
@@ -194,6 +196,31 @@ describe('CalendarFormDialog — shift editor (VITE_CALENDAR_SHIFT_EDITOR)', () 
         ),
       );
     }
+  });
+
+  /** ADR-0068. Without this field nothing in the product can say what "one day" means. */
+  it('sends the calendar’s standard working day', async () => {
+    renderDialog({ calendar: SPLIT_SHIFT });
+    fireEvent.change(screen.getByLabelText('Hours per day'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    const body = await sentBody('PATCH');
+    expect(body.hoursPerDay).toBe(8);
+  });
+
+  it('suggests what the authored week implies without overwriting the field', () => {
+    renderDialog({ calendar: SPLIT_SHIFT });
+    // Monday works 08:00–12:00 + 13:00–17:00 = 8 hours; the stored value is 24.
+    expect(screen.getByText(/works 8 hours on a typical day/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Hours per day')).toHaveValue(24);
+  });
+
+  /** The hazard ADR-0068 §6 names: a planner retyping a remembered number after the factor moves. */
+  it('warns that changing it re-reads every existing duration, and that no dates move', () => {
+    renderDialog({ calendar: SPLIT_SHIFT });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Hours per day'), { target: { value: '8' } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/No dates move/);
   });
 
   it('drops the flag-off advisory, which would now be false', () => {

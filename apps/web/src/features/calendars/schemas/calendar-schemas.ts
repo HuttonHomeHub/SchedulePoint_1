@@ -112,6 +112,17 @@ export const calendarFormSchema = z
         (mask) => mask >= 1 && WorkingWeekdays.isValid(mask),
         'Select at least one working day.',
       ),
+    /**
+     * The calendar's standard working day, in hours (P6 `day_hr_cnt`; ADR-0068) — the day↔minute
+     * factor for every duration and lag measured on it. Optional so the field is simply ABSENT from
+     * the body when the control is not rendered (flag-off), leaving the server to derive it from
+     * the week being written, which is what it does for every calendar authored before this field.
+     */
+    hoursPerDay: z
+      .number()
+      .min(0.25, 'Enter at least 15 minutes.')
+      .max(24, 'A day is at most 24 hours.')
+      .optional(),
     // The tier to create in (ADR-0053 §1). Optional so the field is simply ABSENT from the submitted
     // body unless a scope control was rendered (flag-off), leaving the server's ORG default to apply
     // — the same JSON the form sent before. `projectId` is required with `PROJECT` and forbidden with

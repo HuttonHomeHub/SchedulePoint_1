@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { CalendarScope, CalendarSummary } from '@repo/types';
-import { STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
+import { deriveHoursPerDayMinutes, STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
 import { useEffect, useId, useState, type Ref } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 
@@ -117,6 +117,11 @@ const ORG_TIER_DENIED_MESSAGE =
  * tier read-only: moving a calendar between tiers is a deliberate, separately-confirmed action (it
  * can be refused when the calendar is still in use), never a side effect of renaming it.
  */
+/** `9` and `7.5`, never `9.00` — the field accepts quarter hours, so trailing zeros are noise. */
+function formatHours(hours: number): string {
+  return String(Math.round(hours * 100) / 100);
+}
+
 export function CalendarFormDialog({
   orgSlug,
   open,
@@ -168,6 +173,7 @@ export function CalendarFormDialog({
     register,
     control,
     handleSubmit,
+    setValue,
     reset,
     formState: { errors },
   } = useForm<CalendarFormValues>({
@@ -219,7 +225,27 @@ export function CalendarFormDialog({
       shiftsToWeekRows(calendar?.shifts ?? WorkingWeekdays.toFullDayShifts(STANDARD_WEEKDAYS_MASK)),
     );
     setWeekProblems([]);
+    // The calendar's standard working day (ADR-0068). Seeded from the stored value so an edit that
+    // touches nothing else sends it back unchanged; a NEW calendar starts at 24, which is what the
+    // server would derive from the full-day week seeded above.
+    setValue('hoursPerDay', calendar?.hoursPerDay ?? 24);
   }
+
+  // What the authored week implies, shown beside the field rather than forced into it: the two are
+  // legitimately different (a P6 `day_hr_cnt` of 8 on a calendar with a 10-hour Saturday is
+  // ordinary), so this advises and never overwrites.
+  const parsedWeek = CALENDAR_SHIFT_EDITOR_ENABLED ? weekRowsToShifts(week) : null;
+  const suggestedHoursPerDay =
+    parsedWeek?.ok === true ? deriveHoursPerDayMinutes(parsedWeek.shifts) / 60 : null;
+  // `useWatch`, not `watch()` — the file's existing convention, and the memoization-safe one.
+  const hoursPerDayValue = useWatch({ control, name: 'hoursPerDay' }) ?? 24;
+  // Only on an EDIT, and only once the number actually differs from what is stored — a create has
+  // no existing durations to re-read, and warning about a value nobody changed is noise.
+  const dayFactorChanged =
+    CALENDAR_SHIFT_EDITOR_ENABLED &&
+    isEdit &&
+    Number.isFinite(hoursPerDayValue) &&
+    hoursPerDayValue !== calendar.hoursPerDay;
 
   const onSubmit = handleSubmit((values) => {
     if (CALENDAR_SHIFT_EDITOR_ENABLED) {
@@ -400,12 +426,45 @@ export function CalendarFormDialog({
             </FormSection>
 
             {CALENDAR_SHIFT_EDITOR_ENABLED ? (
-              <WeeklyShiftEditor
-                week={week}
-                onChange={setWeek}
-                problems={weekProblems}
-                readOnly={readOnly}
-              />
+              <>
+                <WeeklyShiftEditor
+                  week={week}
+                  onChange={setWeek}
+                  problems={weekProblems}
+                  readOnly={readOnly}
+                />
+                <FormSection
+                  title="Standard working day"
+                  description="How many hours “one day” means on this calendar. An activity of 1 day is this many hours of work — so on an 08:00–17:00 week, one day is 9 hours and not 24."
+                >
+                  <TextField
+                    label="Hours per day"
+                    type="number"
+                    step="0.25"
+                    min={0.25}
+                    max={24}
+                    readOnly={readOnly}
+                    error={errors.hoursPerDay?.message}
+                    className="sm:w-40"
+                    {...register('hoursPerDay', { valueAsNumber: true })}
+                  />
+                  {suggestedHoursPerDay !== null && suggestedHoursPerDay !== hoursPerDayValue ? (
+                    <p className="text-muted-foreground text-sm" role="note">
+                      The week above works {formatHours(suggestedHoursPerDay)} hours on a typical
+                      day. Leaving this at {formatHours(hoursPerDayValue)} is allowed — P6 calendars
+                      often do — but the two numbers mean different things and only this one
+                      converts durations.
+                    </p>
+                  ) : null}
+                  {dayFactorChanged ? (
+                    <p className="text-destructive-text text-sm" role="alert">
+                      Changing this re-reads every existing duration on this calendar. No dates move
+                      and no work is rescheduled — the stored hours are unchanged — but an activity
+                      showing “10 days” today will show a different number of days after you save.
+                    </p>
+                  ) : null}
+                </FormSection>
+              </>
             ) : (
               <FormSection
                 title="Working week"

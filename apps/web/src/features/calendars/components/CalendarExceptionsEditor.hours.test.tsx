@@ -42,6 +42,8 @@ const DETAIL: CalendarDetail = {
   description: null,
   workingWeekdays: 31,
   shifts: WorkingWeekdays.toFullDayShifts(31),
+  hoursPerDay: 24,
+  hoursPerDayMinutes: 1440,
   scope: 'ORG',
   projectId: null,
   archivedAt: null,

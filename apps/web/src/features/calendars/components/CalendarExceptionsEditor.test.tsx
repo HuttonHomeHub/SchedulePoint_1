@@ -22,6 +22,8 @@ const DETAIL: CalendarDetail = {
   description: null,
   workingWeekdays: 31,
   shifts: WorkingWeekdays.toFullDayShifts(31),
+  hoursPerDay: 24,
+  hoursPerDayMinutes: 1440,
   // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
   scope: 'ORG',
   projectId: null,

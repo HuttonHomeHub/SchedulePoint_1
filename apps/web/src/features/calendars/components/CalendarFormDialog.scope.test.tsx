@@ -133,6 +133,8 @@ describe('CalendarFormDialog — scope choice (flag on)', () => {
         description: null,
         workingWeekdays: 31,
         shifts: WorkingWeekdays.toFullDayShifts(31),
+        hoursPerDay: 24,
+        hoursPerDayMinutes: 1440,
         scope: 'PROJECT',
         projectId: 'proj-1',
         archivedAt: null,

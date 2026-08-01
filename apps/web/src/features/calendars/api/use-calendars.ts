@@ -57,6 +57,7 @@ function createBody(input: CreateCalendarInput) {
     name: input.name,
     ...(input.workingWeekdays === undefined ? {} : { workingWeekdays: input.workingWeekdays }),
     ...(input.shifts === undefined ? {} : { shifts: input.shifts }),
+    ...(input.hoursPerDay === undefined ? {} : { hoursPerDay: input.hoursPerDay }),
     description: optional(input.description),
     ...scopeBody(input),
   };
@@ -80,6 +81,7 @@ function updateBody(input: UpdateCalendarInput) {
     name: input.name,
     ...(input.workingWeekdays === undefined ? {} : { workingWeekdays: input.workingWeekdays }),
     ...(input.shifts === undefined ? {} : { shifts: input.shifts }),
+    ...(input.hoursPerDay === undefined ? {} : { hoursPerDay: input.hoursPerDay }),
     description: optional(input.description) ?? null,
     version: input.version,
     ...scopeBody(input),

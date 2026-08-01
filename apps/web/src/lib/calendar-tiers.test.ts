@@ -11,6 +11,8 @@ function calendar(id: string, scope: CalendarSummary['scope']): CalendarSummary 
     description: null,
     workingWeekdays: 31,
     shifts: WorkingWeekdays.toFullDayShifts(31),
+    hoursPerDay: 24,
+    hoursPerDayMinutes: 1440,
     scope,
     projectId: scope === 'PROJECT' ? 'proj-1' : null,
     archivedAt: null,

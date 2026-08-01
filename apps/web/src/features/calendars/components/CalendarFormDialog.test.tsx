@@ -16,6 +16,8 @@ const CALENDAR: CalendarSummary = {
   description: 'Weekdays only',
   workingWeekdays: 31, // Mon–Fri
   shifts: WorkingWeekdays.toFullDayShifts(31),
+  hoursPerDay: 24,
+  hoursPerDayMinutes: 1440,
   // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
   scope: 'ORG',
   projectId: null,
@@ -96,6 +98,8 @@ describe('CalendarFormDialog', () => {
         { weekday: 0, startMinute: 480, endMinute: 720 },
         { weekday: 0, startMinute: 780, endMinute: 1020 },
       ],
+      hoursPerDay: 24,
+      hoursPerDayMinutes: 1440,
     };
     renderDialog({ calendar: splitShift });
 
