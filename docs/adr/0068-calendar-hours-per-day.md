@@ -90,12 +90,20 @@ Two adjacent things are affected, and both are decided here rather than discover
 the factor. Leaving them at 1440 would print "3 days duration, 1 day float" for the same span, which
 is not a smaller change than converting them — it is an incoherent one.
 
-**(b) The cross-plan derivation moves to minutes.** `ScheduleService` builds `durationDaysByActivity`
-and per-edge `lagDays` by ÷1440 and feeds them to `deriveExternalInstants`, whose output is genuine
-**engine input** (ADR-0045). Routing the new factor through it would compound one approximation
-(working-day-denominated values added as _calendar_ days) with another, in the one place where the
-result moves computed dates. The day round-trip is deleted instead: the derivation works in minutes,
-which is what both ends already hold.
+**(b) The cross-plan derivation keeps a fixed 1440, and says so.** `ScheduleService` builds
+`durationDaysByActivity` and per-edge `lagDays` by ÷1440 and feeds them to `deriveExternalInstants`,
+whose output is genuine **engine input** (ADR-0045). This is the one place a day-denominated value
+moves computed dates, so it needed a decision rather than a default.
+
+_This section originally said the derivation would move to minutes and delete the day round-trip.
+Building it showed that to be wrong, and it is corrected here rather than quietly:_
+`deriveExternalInstants` walks `addDays` over **calendar** days on a date-only value, so minutes
+have nowhere to land — converting to them and back is the same round trip with more steps. What
+matters is the opposite of what was written: the new per-calendar factor **must not** reach it.
+A 540-minute activity would read as one day and then be added as one _calendar_ day, which is a
+different claim from the one its duration makes, and would compound two approximations where the
+result is engine input. The `÷1440` stays, now with a comment saying it is a fixed elapsed-day
+conversion and not a working-day one.
 
 ### 4. Which calendar converts what
 

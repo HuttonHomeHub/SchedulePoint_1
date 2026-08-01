@@ -582,6 +582,12 @@ export class ScheduleRepository {
     organizationId: string,
     planId: string,
     results: readonly EngineResult[],
+    /**
+     * Minutes per authored "day" for each activity (ADR-0068 §4), keyed by activity id — the
+     * calendar it schedules on. Absent ⇒ the 24-hour constant, which is what a plan with no
+     * calendar has always used.
+     */
+    dayFactorByActivity: ReadonlyMap<string, number>,
     db: Prisma.TransactionClient,
   ): Promise<void> {
     if (results.length === 0) return;
@@ -591,12 +597,15 @@ export class ScheduleRepository {
     const earlyFinish = results.map((r) => r.earlyFinish);
     const lateStart = results.map((r) => r.lateStart);
     const lateFinish = results.map((r) => r.lateFinish);
-    // The engine works in minutes (ADR-0036); the day-denominated public columns
-    // `total_float` / `visual_drift_days` are kept unchanged (ADR-0036 §7) by dividing
-    // by the fixed M = 1440 factor. Exact for the full-day compat calendar (M1).
-    const totalFloat = results.map((r) => Math.round(r.totalFloat / MINUTES_PER_DAY));
-    // Free float (M6-F1, ADR-0035 §17–§20) — engine-owned like total_float, day-denominated (ADR-0036 §7).
-    const freeFloat = results.map((r) => Math.round(r.freeFloat / MINUTES_PER_DAY));
+    // The engine works in minutes (ADR-0036); `total_float` / `free_float` / `visual_drift_days`
+    // are day-denominated columns (ADR-0036 §7), so this write converts them — on the activity's
+    // OWN calendar (ADR-0068 §4), which is where ADR-0035 says its float is measured. Same factor
+    // as its duration, so "3 days of work with 1 day of float" is one consistent statement.
+    const factorFor = (activityId: string): number =>
+      dayFactorByActivity.get(activityId) ?? MINUTES_PER_DAY;
+    const totalFloat = results.map((r) => Math.round(r.totalFloat / factorFor(r.activityId)));
+    // Free float (M6-F1, ADR-0035 §17–§20) — engine-owned like total_float, day-denominated.
+    const freeFloat = results.map((r) => Math.round(r.freeFloat / factorFor(r.activityId)));
     const isCritical = results.map((r) => r.isCritical);
     const isNearCritical = results.map((r) => r.isNearCritical);
     const constraintViolated = results.map((r) => r.constraintViolated);
@@ -613,7 +622,9 @@ export class ScheduleRepository {
     const visualEffectiveFinish = results.map((r) => r.visualEffectiveFinish);
     const visualConflict = results.map((r) => r.visualConflict);
     const visualDriftDays = results.map((r) =>
-      r.visualDriftMinutes === null ? null : Math.round(r.visualDriftMinutes / MINUTES_PER_DAY),
+      r.visualDriftMinutes === null
+        ? null
+        : Math.round(r.visualDriftMinutes / factorFor(r.activityId)),
     );
     // Resource-levelling overlay (ADR-0041 §3/§7) — engine-owned, written by this same batch so it
     // stays out of the version/updated_at optimistic-lock path. Null/false on every activity when

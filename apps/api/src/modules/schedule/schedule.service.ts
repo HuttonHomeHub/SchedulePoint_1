@@ -9,6 +9,7 @@ import type {
   ProgrammeScheduleResult,
   ResourceHistogramSeries,
 } from '@repo/types';
+import { DEFAULT_HOURS_PER_DAY_MINUTES } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -20,6 +21,7 @@ import {
 } from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -118,11 +120,37 @@ export class ScheduleService {
     private readonly organizations: OrganizationsService,
     private readonly plans: PlanRepository,
     private readonly schedule: ScheduleRepository,
+    private readonly calendars: CalendarRepository,
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     private readonly crossPlan: CrossPlanDependencyRepository,
     @InjectPinoLogger(ScheduleService.name) private readonly logger: PinoLogger,
   ) {}
+
+  /**
+   * The day↔minute factor for each activity in a recalculation (ADR-0068 §4), keyed by activity id.
+   *
+   * One lookup for every DISTINCT calendar in the plan, not one per activity — a 2,000-activity plan
+   * on three calendars costs three rows. An activity with no calendar takes the 24-hour constant,
+   * which is also what `buildPlanCalendar` falls back to, so the unit and the schedule agree.
+   */
+  private async resolveDayFactors(
+    calIdByActivity: ReadonlyMap<string, string | null>,
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, number>> {
+    const ids = [...new Set([...calIdByActivity.values()])].filter(
+      (id): id is string => id !== null,
+    );
+    const factors = await this.calendars.findHoursPerDayMinutes(ids, tx);
+    return new Map(
+      [...calIdByActivity].map(([activityId, calId]) => [
+        activityId,
+        calId === null
+          ? DEFAULT_HOURS_PER_DAY_MINUTES
+          : (factors.get(calId) ?? DEFAULT_HOURS_PER_DAY_MINUTES),
+      ]),
+    );
+  }
 
   async recalculate(
     principal: Principal,
@@ -202,7 +230,11 @@ export class ScheduleService {
           results = leveled.results;
           summary = { ...output.summary, ...leveled.summary };
         }
-        await this.schedule.writeResults(organization.id, planId, results, tx);
+        // Float and drift are persisted IN DAYS by this write, so they take the same factor the
+        // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
+        // float" for one span — not a smaller change than converting them, an incoherent one.
+        const dayFactorByActivity = await this.resolveDayFactors(graph.calIdByActivity, tx);
+        await this.schedule.writeResults(organization.id, planId, results, dayFactorByActivity, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
         // Stamp this plan's schedule freshness cursor in the SAME engine-owned write path (F6, ADR-0045
         // §5 / ADR-0035 §30.7): a raw UPDATE that touches ONLY `schedule_computed_at`, never
@@ -753,6 +785,9 @@ export class ScheduleService {
     /** The resource-levelling demand model — loaded ONLY when the plan opts in (`levelResources`) and
      * has active assignments; null keeps the byte-identical fast path (ADR-0041 §7). */
     leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null;
+    /** The calendar each activity SCHEDULES on, keyed by activity id — the day↔minute factor's
+     * source for the day-denominated float columns this recalculation persists (ADR-0068 §3a). */
+    calIdByActivity: ReadonlyMap<string, string | null>;
     meta: {
       lagCalendarOverrideCount: number;
       activityCalendarCount: number;
@@ -858,11 +893,18 @@ export class ScheduleService {
           },
         ]),
       );
-      // Durations in whole days (÷1440) for the FF/SF start-/finish-implied arithmetic (ADR-0036 §7).
+      // Durations in whole days for the FF/SF start-/finish-implied arithmetic (ADR-0036 §7).
+      //
+      // **Fixed 1440 here, deliberately — NOT the calendar's hours-per-day** (ADR-0068 §3b). This is
+      // the one place a day-denominated value becomes engine INPUT: `deriveExternalInstants` walks
+      // `addDays` over CALENDAR days, so what it needs is elapsed days, not working ones. Feeding it
+      // a working-hours-scaled value would compound two approximations in the only spot where the
+      // result moves computed dates — a 540-minute activity would read as one day here and be added
+      // as one CALENDAR day, which is a different claim from the one its duration makes.
       const durationDaysByActivity = new Map(
         activityRows.map((r) => [r.id, Math.round(r.durationMinutes / MINUTES_PER_DAY)]),
       );
-      // Lag is stored in signed working-MINUTES; the day-denominated derivation uses whole days (÷1440).
+      // Lag likewise: signed working-MINUTES ÷ a fixed 1440, for the same reason as above.
       const incoming: IncomingCrossPlanEdge[] = incomingRows.map((e) => ({
         successorActivityId: e.successorId,
         type: e.type,
@@ -968,6 +1010,11 @@ export class ScheduleService {
       edges,
       options,
       leveling,
+      // The calendar each activity actually SCHEDULES on (its own, or its driving resource's).
+      // The recalculation's write needs it to persist `total_float`/`free_float`/`visual_drift_days`
+      // in that calendar's days (ADR-0068 §3a) — ADR-0035 already measures an activity's float in
+      // its own calendar, so the unit and the measurement finally agree.
+      calIdByActivity,
       meta: {
         lagCalendarOverrideCount,
         activityCalendarCount: distinctActivityCalIds.length,
