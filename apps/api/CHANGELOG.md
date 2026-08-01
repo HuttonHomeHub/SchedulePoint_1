@@ -1,5 +1,81 @@
 # @repo/api
 
+## 0.34.0
+
+### Minor Changes
+
+- [#205](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/205) [`8e106b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8e106b1f65d0fae50bb98a1a9dffdf4771f8b92d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Author intraday shift patterns through the public API (TECH_DEBT [#80](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/80))
+
+  ADR-0036 shipped split shifts, night shifts crossing midnight and asymmetric weeks in the engine
+  and in storage. Nothing in the product could create one: the repository derived every calendar's
+  shifts from a 7-bit weekday mask, so every calendar in every database was a whole-day calendar and
+  the minute-granular machinery underneath was exercised only by unit tests and the conformance
+  adapter. A planner on a two-shift site could not describe their working week at all, and the
+  schedule they got was silently a whole-day approximation of it.
+
+  The calendar create/update DTOs take a `shifts` array of `{weekday, startMinute, endMinute}` —
+  the storage form — mutually exclusive with `workingWeekdays`, which is shorthand for full-day
+  windows on the named days. Either replaces the whole week as a set. `shifts` is also on the read
+  DTO: `workingWeekdays` is derived from it and can only say whether a day works at all, so without
+  that a saved split shift would be invisible the moment it was stored.
+
+  Windows are validated at the boundary — sorted, non-overlapping within each day, `start < end`.
+  The engine asserts the same thing, but at _recalculation_ time, which surfaces an overlap authored
+  on Monday as a failed schedule run on Wednesday pointing at the plan rather than the calendar.
+  An unsorted array is rejected rather than quietly sorted: storage is order-sensitive, and
+  reordering an author's input hides which pair they got wrong.
+
+- [#205](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/205) [`8e106b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8e106b1f65d0fae50bb98a1a9dffdf4771f8b92d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Author sub-day durations and lags through the public API (TECH_DEBT [#78](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/78))
+
+  ADR-0036 moved storage and the CPM engine to working-**minutes** and shipped intraday shift
+  calendars, but the public DTOs exposed only whole days. The asymmetry was the defect: the
+  interchange commit writes `duration_minutes` directly, so a 4-hour activity **imported and scheduled
+  correctly** — and then no client, including the web app, could create a comparable one, and any edit
+  touching the duration silently rounded it to whole days.
+
+  `durationMinutes` joins `durationDays` on the activity create/update DTOs, and `lagMinutes` joins
+  `lagDays` on the dependency ones. Each pair is mutually exclusive: sending both is a 422 naming the
+  pair, not a silent preference for one — a client sending `durationDays: 2` and `durationMinutes: 240`
+  has a bug, and picking a winner hides it behind a schedule that is quietly not what was asked for.
+
+  Both minute fields are also exposed on the **read** DTOs. Without that, a client could author a
+  4-hour activity and only ever see it as `durationDays: 0` — a write path that is technically present
+  and practically useless.
+
+  Two things the debt entry did not anticipate, both found while wiring it:
+
+  - The milestone-must-be-zero rule keyed off `durationDays` alone, so a milestone could have acquired
+    a duration by being asked for in minutes. It now covers both fields and names whichever it fired on.
+  - The ADR-0040 duration-type recompute used `durationDays !== undefined` as its "is this a duration
+    edit?" test. A minutes-only edit would have skipped it silently, leaving
+    `Units = Duration × Units/Time` false with nothing saying so. It now takes an explicit boolean.
+
+  The day fields are unchanged for every existing client, and the CPM engine is untouched — minutes
+  were always the unit it schedules on.
+
+- [#205](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/205) [`8e106b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8e106b1f65d0fae50bb98a1a9dffdf4771f8b92d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Accept a window-only calendar (TECH_DEBT [#79](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/79))
+
+  ADR-0036 §2 made a window-only base week valid — every weekday non-working, all working time
+  arriving from dated exception windows, the shape a plant turnaround or a shutdown programme needs —
+  and said the old "mask must be non-zero" guard was replaced by the engine's
+  `buildWorkingTimeCalendar` check. That check is strictly stronger: it counts the exception windows
+  as well as the base week, so it can tell a turnaround calendar apart from a calendar on which
+  nothing can ever be scheduled, which a weekday mask alone cannot.
+
+  The DTO's `@Min(1)` was never relaxed to match, so for a year the engine supported the shape and the
+  API answered 422 with no workaround. This is that unfinished migration, not a new capability.
+
+  `MIN_WORKING_WEEKDAYS_MASK` moves 1 → 0 and both calendar DTOs pick it up through the shared
+  constant. The calendar **form** keeps its own "at least one working day" rule, stated locally rather
+  than borrowed from the shared helper: it cannot author the exception windows a window-only calendar
+  needs, so offering the empty week there would build a calendar that fails at the next
+  recalculation. That bound lifts with the shift-pattern editor ([#80](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/80), web slice).
+
+### Patch Changes
+
+- Updated dependencies [[`8e106b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8e106b1f65d0fae50bb98a1a9dffdf4771f8b92d)]:
+  - @repo/types@0.18.0
+
 ## 0.33.0
 
 ### Minor Changes
