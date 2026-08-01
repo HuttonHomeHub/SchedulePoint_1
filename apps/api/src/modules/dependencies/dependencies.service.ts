@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Activity } from '@prisma/client';
+import { Prisma, type LagCalendarSource, type Activity } from '@prisma/client';
 import { DEPENDENCY_CONFLICT_MESSAGES, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -13,6 +13,8 @@ import {
 import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
+import { daysToMinutes } from '../activities/day-factor';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -25,14 +27,11 @@ import {
 } from './dependency.repository';
 import type { CreateDependencyDto } from './dto/create-dependency.dto';
 import type { UpdateDependencyDto } from './dto/update-dependency.dto';
-
-/**
- * Minutes in one full calendar day — the fixed day↔minute factor (ADR-0036 §4.2). The
- * public API stays day-denominated (`lagDays`); storage is signed minutes, so the service
- * converts at the boundary. `lagCalendar` is exposed and passed through unchanged (M3,
- * ADR-0036 §6) — the engine resolves it to a calendar port at recalculation.
- */
-const MINUTES_PER_DAY = 1440;
+import {
+  attachLagDayFactors,
+  resolveLagDayFactorMinutes,
+  type WithLagDayFactor,
+} from './lag-day-factor';
 
 /** Machine-readable reasons carried in a dependency {@link ConflictError}/{@link ValidationError}. */
 export const DEPENDENCY_CONFLICT = {
@@ -63,6 +62,7 @@ export class DependenciesService {
     private readonly organizations: OrganizationsService,
     private readonly plans: PlanRepository,
     private readonly activities: ActivityRepository,
+    private readonly calendars: CalendarRepository,
     private readonly dependencies: DependencyRepository,
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly editLock: PlanEditLockService,
@@ -70,12 +70,46 @@ export class DependenciesService {
     @InjectPinoLogger(DependenciesService.name) private readonly logger: PinoLogger,
   ) {}
 
+  /**
+   * Attach each relationship's lag day↔minute factor (ADR-0068 §4).
+   *
+   * Rows share a plan (every list here is plan- or activity-scoped), so the plan's calendar is one
+   * lookup and the endpoints' calendars ride on the join the read already does.
+   */
+  private async withLagDayFactors<
+    T extends {
+      planId: string;
+      lagCalendar: LagCalendarSource;
+      predecessor: { calendarId: string | null };
+      successor: { calendarId: string | null };
+    },
+  >(rows: readonly T[]): Promise<WithLagDayFactor<T>[]> {
+    if (rows.length === 0) return [];
+    const planCalendars = await this.plans.findCalendarIds(rows.map((row) => row.planId));
+    // Every row in one of these reads belongs to one plan, so a single calendar id covers the page.
+    const planCalendarId = planCalendars[0]?.calendarId ?? null;
+    return attachLagDayFactors(this.calendars, rows, planCalendarId);
+  }
+
+  /** {@link withLagDayFactors} for one relationship. */
+  private async withLagDayFactor<
+    T extends {
+      planId: string;
+      lagCalendar: LagCalendarSource;
+      predecessor: { calendarId: string | null };
+      successor: { calendarId: string | null };
+    },
+  >(row: T): Promise<WithLagDayFactor<T>> {
+    const [decorated] = await this.withLagDayFactors([row]);
+    return decorated!;
+  }
+
   async listByPlan(
     principal: Principal,
     orgSlug: string,
     planId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: DependencyWithEndpoints[]; meta: PageMeta }> {
+  ): Promise<{ items: WithLagDayFactor<DependencyWithEndpoints>[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:read', organization.id);
     await this.loadActivePlan(planId, organization.id);
@@ -86,7 +120,8 @@ export class DependenciesService {
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
-    return this.paginate(rows, query.limit);
+    const { items, meta } = this.paginate(rows, query.limit);
+    return { items: await this.withLagDayFactors(items), meta };
   }
 
   async listPredecessors(
@@ -94,7 +129,7 @@ export class DependenciesService {
     orgSlug: string,
     activityId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: DependencyWithEndpoints[]; meta: PageMeta }> {
+  ): Promise<{ items: WithLagDayFactor<DependencyWithEndpoints>[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:read', organization.id);
     await this.loadActiveActivity(activityId, organization.id);
@@ -105,7 +140,8 @@ export class DependenciesService {
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
-    return this.paginate(rows, query.limit);
+    const { items, meta } = this.paginate(rows, query.limit);
+    return { items: await this.withLagDayFactors(items), meta };
   }
 
   async listSuccessors(
@@ -113,7 +149,7 @@ export class DependenciesService {
     orgSlug: string,
     activityId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: DependencyWithEndpoints[]; meta: PageMeta }> {
+  ): Promise<{ items: WithLagDayFactor<DependencyWithEndpoints>[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:read', organization.id);
     await this.loadActiveActivity(activityId, organization.id);
@@ -124,20 +160,21 @@ export class DependenciesService {
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
-    return this.paginate(rows, query.limit);
+    const { items, meta } = this.paginate(rows, query.limit);
+    return { items: await this.withLagDayFactors(items), meta };
   }
 
   async get(
     principal: Principal,
     orgSlug: string,
     dependencyId: string,
-  ): Promise<DependencyWithEndpoints> {
+  ): Promise<WithLagDayFactor<DependencyWithEndpoints>> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:read', organization.id);
 
     const dependency = await this.dependencies.findActiveByIdInOrg(dependencyId, organization.id);
     if (!dependency) throw new NotFoundError('Dependency not found.');
-    return dependency;
+    return this.withLagDayFactor(dependency);
   }
 
   async create(
@@ -145,7 +182,7 @@ export class DependenciesService {
     orgSlug: string,
     planId: string,
     dto: CreateDependencyDto,
-  ): Promise<DependencyWithEndpoints> {
+  ): Promise<WithLagDayFactor<DependencyWithEndpoints>> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:create', organization.id);
     const plan = await this.loadActivePlan(planId, organization.id);
@@ -192,10 +229,27 @@ export class DependenciesService {
             ...(dto.type ? { type: dto.type } : {}),
             // Mutually exclusive at the DTO; minutes is the storage unit, days a convenience
             // over it (TECH_DEBT #78).
+            // Days convert on the calendar `lagCalendar` names (ADR-0068 §4) — the predecessor's,
+            // the successor's, the plan's, or a hard-pinned 1440 for TWENTY_FOUR_HOUR, which is the
+            // entire meaning of that option. Minutes are stored as sent.
             ...(dto.lagMinutes !== undefined
               ? { lagMinutes: dto.lagMinutes }
               : dto.lagDays !== undefined
-                ? { lagMinutes: dto.lagDays * MINUTES_PER_DAY }
+                ? {
+                    lagMinutes: daysToMinutes(
+                      dto.lagDays,
+                      await resolveLagDayFactorMinutes(
+                        this.calendars,
+                        {
+                          lagCalendar: dto.lagCalendar ?? 'PROJECT_DEFAULT',
+                          predecessorCalendarId: predecessor.calendarId,
+                          successorCalendarId: successor.calendarId,
+                          planCalendarId: plan.calendarId,
+                        },
+                        tx,
+                      ),
+                    ),
+                  }
                 : {}),
             ...(dto.lagCalendar ? { lagCalendar: dto.lagCalendar } : {}),
             createdBy: principal.userId,
@@ -213,7 +267,7 @@ export class DependenciesService {
         },
         'dependency created',
       );
-      return dependency;
+      return this.withLagDayFactor(dependency);
     } catch (error) {
       throw this.mapWriteError(error);
     }
@@ -224,7 +278,7 @@ export class DependenciesService {
     orgSlug: string,
     dependencyId: string,
     dto: UpdateDependencyDto,
-  ): Promise<DependencyWithEndpoints> {
+  ): Promise<WithLagDayFactor<DependencyWithEndpoints>> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:update', organization.id);
 
@@ -236,9 +290,24 @@ export class DependenciesService {
     if (dto.type !== undefined) patch.type = dto.type;
     // Mutually exclusive at the DTO, so at most one fires. `lagMinutes` lets a client edit a
     // sub-day lag without rounding it away (TECH_DEBT #78).
-    if (dto.lagDays !== undefined) patch.lagMinutes = dto.lagDays * MINUTES_PER_DAY;
     if (dto.lagMinutes !== undefined) patch.lagMinutes = dto.lagMinutes;
     if (dto.lagCalendar !== undefined) patch.lagCalendar = dto.lagCalendar;
+    // Converted on the calendar this write LEAVES the relationship measuring against — the patched
+    // `lagCalendar` when the same PATCH changes it, otherwise the stored one. A PATCH that moves a
+    // lag from PROJECT_DEFAULT to TWENTY_FOUR_HOUR and edits the days in one call must convert
+    // against the option it is switching TO (ADR-0068 §4).
+    if (dto.lagDays !== undefined) {
+      const plan = await this.loadActivePlan(existing.planId, organization.id);
+      patch.lagMinutes = daysToMinutes(
+        dto.lagDays,
+        await resolveLagDayFactorMinutes(this.calendars, {
+          lagCalendar: patch.lagCalendar ?? existing.lagCalendar,
+          predecessorCalendarId: existing.predecessor.calendarId,
+          successorCalendarId: existing.successor.calendarId,
+          planCalendarId: plan.calendarId,
+        }),
+      );
+    }
 
     try {
       const changed = await this.dependencies.updateIfVersionMatches(
@@ -256,7 +325,7 @@ export class DependenciesService {
 
     const updated = await this.dependencies.findActiveByIdInOrg(dependencyId, organization.id);
     if (!updated) throw new NotFoundError('Dependency not found.');
-    return updated;
+    return this.withLagDayFactor(updated);
   }
 
   async remove(principal: Principal, orgSlug: string, dependencyId: string): Promise<void> {

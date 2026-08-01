@@ -4,8 +4,14 @@ import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/cli
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 
-/** Endpoint fields embedded in a dependency response (no N+1 — loaded via include). */
-const endpointSelect = { id: true, code: true, name: true } as const;
+/**
+ * Endpoint fields embedded in a dependency response (no N+1 — loaded via include).
+ *
+ * `calendarId` rides along because a lag's day↔minute factor is resolved from the endpoint the
+ * relationship's `lagCalendar` names (ADR-0037 / ADR-0068 §4) — selecting it here costs nothing on
+ * a join that already runs, and is the alternative to a second query per row.
+ */
+const endpointSelect = { id: true, code: true, name: true, calendarId: true } as const;
 
 const withEndpoints = {
   include: {

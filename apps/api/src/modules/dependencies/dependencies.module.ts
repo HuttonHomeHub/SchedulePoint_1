@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { HierarchyModule } from '../../common/hierarchy/hierarchy.module';
 import { ActivitiesModule } from '../activities/activities.module';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
@@ -22,7 +23,7 @@ import { PlanDependenciesController } from './plan-dependencies.controller';
 @Module({
   imports: [OrganizationsModule, HierarchyModule, PlansModule, ActivitiesModule, PlanLockModule],
   controllers: [PlanDependenciesController, ActivityDependenciesController, DependenciesController],
-  providers: [DependenciesService, DependencyRepository],
+  providers: [DependenciesService, DependencyRepository, CalendarRepository],
   exports: [DependencyRepository],
 })
 export class DependenciesModule {}
