@@ -16,10 +16,10 @@ import type { ActivityEditorIntent, ActivityEditorTab } from '../lib/activity-ed
 import {
   DURATION_NEEDS_WHOLE_DAYS,
   durationHelp,
+  durationInputProps,
   durationLabel,
   durationWriteFields,
 } from '../model/duration-field';
-import { effectiveHoursPerDay } from '../model/effective-hours-per-day';
 import { useDurationSeed } from '../model/use-duration-seed';
 import {
   ACCRUAL_TYPE_LABELS,
@@ -85,6 +85,7 @@ import {
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel } from '@/features/wbs';
+import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
@@ -539,13 +540,7 @@ export function ActivityEditorDialog({
                       {!isDurationDerivedType(type) ? (
                         <TextField
                           label={durationLabel(hoursPerDay)}
-                          // Text, not a number input, once the factor is known: "2d 4h" is not a
-                          // number, and a number input refuses the characters before the parser
-                          // ever sees them.
-                          type={hoursPerDay === undefined ? 'number' : 'text'}
-                          {...(hoursPerDay === undefined
-                            ? { min: 0 }
-                            : { inputMode: 'text' as const })}
+                          {...durationInputProps(hoursPerDay)}
                           {...(durationHelp(hoursPerDay) === undefined
                             ? {}
                             : { hint: durationHelp(hoursPerDay) })}
@@ -793,6 +788,8 @@ export function ActivityEditorDialog({
                   orgSlug={orgSlug}
                   planId={planId}
                   planActivities={planActivities}
+                  calendars={calendars}
+                  {...(planCalendarId === undefined ? {} : { planCalendarId })}
                   canManageLogic={gating.logic.writable}
                   enabled={open && current === 'logic'}
                   {...(activity ? { activity } : {})}

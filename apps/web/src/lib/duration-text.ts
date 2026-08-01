@@ -28,6 +28,15 @@
  * days' work, and defaulting to 8 would do the reverse on a 24-hour one. A caller that cannot yet
  * resolve the activity's effective calendar must not call these — it must wait, which the compiler
  * enforces by giving it nothing to pass.
+ *
+ * ## Why this lives in `lib/` rather than in the activities feature
+ *
+ * A **relationship lag** is the same grammar with a sign (ADR-0070 §5) — `2d 4h` before a follow-on
+ * trade, `-4h` as a lead. Two implementations of one grammar would drift, and the drift would be
+ * invisible: each reads correctly on its own screen, and only a planner who typed `2d4h` into both a
+ * duration and a lag would ever see that one of them stopped accepting it. So the grammar is shared,
+ * and its signed half ({@link parseSignedDurationText}) sits beside it rather than in the feature
+ * that happens to need a sign.
  */
 
 /** Minutes in one hour — the only fixed factor here; days are per-calendar (ADR-0068). */
@@ -168,4 +177,52 @@ export function formatDurationText(minutes: number, hoursPerDay: number): string
     remainder > 0 ? `${String(remainder)}m` : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : '0d';
+}
+
+/**
+ * Both minus signs a lag field can meet: the ASCII hyphen a planner types, and the real minus
+ * (U+2212) `formatLag` has always rendered — so a value copied off the screen pastes back in.
+ */
+const MINUS_SIGNS = /^[-−]/;
+
+/**
+ * Read a **signed** duration — a relationship lag (ADR-0070 §5). A lead is negative.
+ *
+ * The sign is stripped and the magnitude read by {@link parseDurationText}, so lag and duration
+ * cannot disagree about what `2d 4h` means. A leading `+` is accepted and ignored; it is what this
+ * module *emits* for a positive lag, and a field must read back what it wrote.
+ *
+ * `'negative'` is therefore unreachable here — a bare `-` with nothing after it is `'empty'` from
+ * the magnitude parser, and that is the more useful sentence anyway.
+ */
+export function parseSignedDurationText(text: string, hoursPerDay: number): DurationParseResult {
+  const trimmed = text.trim();
+  const negative = MINUS_SIGNS.test(trimmed);
+  const magnitude = negative || trimmed.startsWith('+') ? trimmed.slice(1) : trimmed;
+  const parsed = parseDurationText(magnitude, hoursPerDay);
+  if (!parsed.ok) return parsed;
+  return { ok: true, minutes: negative ? -parsed.minutes : parsed.minutes };
+}
+
+/**
+ * Is this text a well-formed **signed** duration, without knowing the calendar? The signed sibling
+ * of {@link checkDurationText}, and factor-independent for the same reason: a form's zod rule must
+ * be able to refuse `1w` before the calendar list has resolved, without inventing a factor.
+ */
+export function checkSignedDurationText(text: string): DurationParseFailure | null {
+  const result = parseSignedDurationText(text, MAX_HOURS_PER_DAY);
+  return result.ok ? null : result.reason;
+}
+
+/**
+ * Render a signed lag as the shortest text that parses back to it: `2d 4h`, `-4h`, `0d`.
+ *
+ * The minus is an **ASCII hyphen**, not the typographic minus `formatLag` uses for read-only
+ * display. This string goes into a text input a planner will edit, and no keyboard produces U+2212 —
+ * a value they cannot retype is a value they cannot correct.
+ */
+export function formatSignedDurationText(minutes: number, hoursPerDay: number): string {
+  if (minutes === 0) return '0d';
+  const magnitude = formatDurationText(Math.abs(minutes), hoursPerDay);
+  return minutes < 0 ? `-${magnitude}` : magnitude;
 }

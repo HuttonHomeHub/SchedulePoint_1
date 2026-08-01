@@ -13,11 +13,11 @@ import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import {
   DURATION_NEEDS_WHOLE_DAYS,
   durationHelp,
+  durationInputProps,
   durationLabel,
   durationWriteFields,
   seedDurationText,
 } from '../model/duration-field';
-import { effectiveHoursPerDay } from '../model/effective-hours-per-day';
 import { useDurationSeed } from '../model/use-duration-seed';
 import {
   ACCRUAL_TYPE_LABELS,
@@ -72,6 +72,7 @@ import {
   toCalendarOptions,
 } from '@/lib/calendar-tiers';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
+import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { minorToMajorInput } from '@/lib/format-money';
 import { matchesLibraryQuery } from '@/lib/library-filters';
 
@@ -437,10 +438,7 @@ export function ActivityFormDialog({
                 ) : (
                   <TextField
                     label={durationLabel(hoursPerDay)}
-                    // Text, not `type="number"`, once the factor is known: "2d 4h" is not a number,
-                    // and a number input would refuse the characters before the parser ever saw them.
-                    type={hoursPerDay === undefined ? 'number' : 'text'}
-                    {...(hoursPerDay === undefined ? { min: 0 } : { inputMode: 'text' as const })}
+                    {...durationInputProps(hoursPerDay)}
                     {...(durationHelp(hoursPerDay) === undefined
                       ? {}
                       : { hint: durationHelp(hoursPerDay) })}

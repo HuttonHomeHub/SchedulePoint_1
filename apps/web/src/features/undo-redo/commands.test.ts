@@ -596,19 +596,29 @@ describe('deleteActivityCommand', () => {
 describe('dependency add / remove commands', () => {
   it('dependencyLinkOf projects endpoints/type/lag from a row', () => {
     expect(
-      dependencyLinkOf(dependency({ type: 'SS', lagDays: 3, lagCalendar: 'TWENTY_FOUR_HOUR' })),
+      dependencyLinkOf(
+        dependency({ type: 'SS', lagDays: 3, lagMinutes: 4320, lagCalendar: 'TWENTY_FOUR_HOUR' }),
+      ),
     ).toEqual({
       planId: 'pl1',
       predecessorId: 'a1',
       successorId: 'a2',
       type: 'SS',
-      lagDays: 3,
+      lagMinutes: 4320,
       lagCalendar: 'TWENTY_FOUR_HOUR',
     });
   });
 
+  it('carries a SUB-DAY lag through the inverse rather than its rounded day (ADR-0070)', () => {
+    // A two-hour cure lag reads back as `lagDays: 0`. Projecting the day would have re-created the
+    // link with no lag at all — silently, and with no error anywhere to notice it by.
+    expect(dependencyLinkOf(dependency({ lagDays: 0, lagMinutes: 120 }))).toMatchObject({
+      lagMinutes: 120,
+    });
+  });
+
   it('add: undo removes the edge, redo re-creates it (a new id) from the captured link', async () => {
-    const created = dependency({ id: 'edge-1', type: 'FS', lagDays: 2 });
+    const created = dependency({ id: 'edge-1', type: 'FS', lagDays: 2, lagMinutes: 2880 });
     const createDependency: CreateDependencyFn = vi.fn(() =>
       Promise.resolve(dependency({ id: 'edge-2' })),
     );
@@ -624,7 +634,12 @@ describe('dependency add / remove commands', () => {
 
     await command.redo();
     expect(createDependency).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ predecessorId: 'a1', successorId: 'a2', type: 'FS', lagDays: 2 }),
+      expect.objectContaining({
+        predecessorId: 'a1',
+        successorId: 'a2',
+        type: 'FS',
+        lagMinutes: 2880,
+      }),
     );
 
     await command.undo();
@@ -633,7 +648,7 @@ describe('dependency add / remove commands', () => {
   });
 
   it('remove: undo re-creates the edge, redo removes it again', async () => {
-    const removed = dependency({ id: 'edge-9', type: 'FF', lagDays: -1 });
+    const removed = dependency({ id: 'edge-9', type: 'FF', lagDays: -1, lagMinutes: -1440 });
     const createDependency: CreateDependencyFn = vi.fn(() =>
       Promise.resolve(dependency({ id: 'edge-10' })),
     );
@@ -646,7 +661,7 @@ describe('dependency add / remove commands', () => {
 
     await command.undo(); // re-create
     expect(createDependency).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ type: 'FF', lagDays: -1 }),
+      expect.objectContaining({ type: 'FF', lagMinutes: -1440 }),
     );
     await command.redo(); // remove again
     expect(deleteDependency).toHaveBeenCalledExactlyOnceWith('edge-10');

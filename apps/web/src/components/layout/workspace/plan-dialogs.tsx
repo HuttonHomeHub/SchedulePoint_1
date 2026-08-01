@@ -53,6 +53,10 @@ export function PlanDialogs({
           orgSlug={model.orgSlug}
           planId={model.planId}
           planActivities={model.activities.data ?? []}
+          calendars={model.calendars.data ?? []}
+          {...(model.plan.data?.calendarId === null || model.plan.data?.calendarId === undefined
+            ? {}
+            : { planCalendarId: model.plan.data.calendarId })}
           canManageLogic={model.canManageLogic}
           open={model.logicActivity !== undefined}
           onClose={() => model.setLogicActivity(undefined)}

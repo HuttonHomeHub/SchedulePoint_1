@@ -1,16 +1,24 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { DependencySummary } from '@repo/types';
+import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useUpdateDependency } from '../api/use-dependencies';
+import { lagHoursPerDay } from '../model/lag-factor';
+import {
+  LAG_NEEDS_WHOLE_DAYS,
+  lagFieldHelp,
+  lagFieldLabel,
+  lagInputProps,
+  lagWriteFields,
+  seedLagText,
+} from '../model/lag-field';
 import {
   DEPENDENCY_TYPES,
   DEPENDENCY_TYPE_LABELS,
   LAG_CALENDAR_DISPLAY_ORDER,
   LAG_CALENDAR_HINT,
   LAG_CALENDAR_LABELS,
-  lagFieldLabel,
   typeAndLagSchema,
   type TypeAndLagValues,
 } from '../schemas/dependency-schemas';
@@ -31,11 +39,27 @@ export function EditDependencyDialog({
   dependency,
   open,
   onClose,
+  calendars = [],
+  planCalendarId,
+  planActivities = [],
 }: {
   orgSlug: string;
   dependency?: DependencySummary;
   open: boolean;
   onClose: () => void;
+  /**
+   * The route-composed calendar library, used only to read the lag field's working-hours factor
+   * (ADR-0070 §5). Absent leaves the field in whole days — the same control the flag-off path draws.
+   */
+  calendars?: CalendarSummary[];
+  /** The plan's own calendar — what `PROJECT_DEFAULT` (and an inheriting endpoint) resolves to. */
+  planCalendarId?: string;
+  /**
+   * The plan's activities, so a `PREDECESSOR`/`SUCCESSOR` lag can resolve **that endpoint's** own
+   * calendar. The embedded `DependencyEndpoint` carries only id/code/name, which is why this comes
+   * from the host rather than from the row.
+   */
+  planActivities?: ActivitySummary[];
 }): React.ReactElement {
   const update = useUpdateDependency(orgSlug);
   const announce = useAnnounce();
@@ -45,21 +69,37 @@ export function EditDependencyDialog({
     handleSubmit,
     reset,
     control,
+    setError,
     formState: { errors },
   } = useForm<TypeAndLagValues>({
     resolver: zodResolver(typeAndLagSchema),
-    defaultValues: { type: 'FS', lagDays: 0, lagCalendar: 'PROJECT_DEFAULT' },
+    defaultValues: { type: 'FS', lag: '0', lagCalendar: 'PROJECT_DEFAULT' },
   });
 
-  // The lag unit tracks the chosen calendar (elapsed vs working days); subscribe to just
-  // that field so the numeric label stays honest as the selection changes.
+  // The lag unit tracks the chosen calendar (elapsed vs working time); subscribe to just that field
+  // so the label, the help line and the day↔minute factor all stay honest as the selection changes.
   const lagCalendar = useWatch({ control, name: 'lagCalendar' });
+  const calendarOf = (activityId: string): string | null | undefined =>
+    planActivities.find((candidate) => candidate.id === activityId)?.calendarId;
+  const hoursPerDay = lagHoursPerDay(lagCalendar, {
+    calendars,
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+    ...(dependency
+      ? {
+          predecessorCalendarId: calendarOf(dependency.predecessor.id),
+          successorCalendarId: calendarOf(dependency.successor.id),
+        }
+      : {}),
+  });
 
   useEffect(() => {
     if (open && dependency) {
       reset({
         type: dependency.type,
-        lagDays: dependency.lagDays,
+        // Seeded on the factor known at open. The lag calendar cannot change before the planner
+        // sees this, and changing it is an explicit act with its own visible field — so unlike the
+        // activity duration there is nothing here to re-seed asynchronously.
+        lag: seedLagText(dependency, hoursPerDay),
         lagCalendar: dependency.lagCalendar,
       });
       update.reset();
@@ -69,11 +109,19 @@ export function EditDependencyDialog({
 
   const onSubmit = handleSubmit((values) => {
     if (!dependency) return;
+    // The factor for the calendar this save LEAVES the link on — the watched field, not the stored
+    // one, because a planner can switch to 24-hour and retype the lag in the same edit. This mirrors
+    // the API, which converts against the `lagCalendar` the same PATCH sets (ADR-0068 §4).
+    const lagFields = lagWriteFields(values.lag, hoursPerDay);
+    if (lagFields === null) {
+      setError('lag', { message: LAG_NEEDS_WHOLE_DAYS }, { shouldFocus: true });
+      return;
+    }
     update.mutate(
       {
         dependencyId: dependency.id,
         type: values.type,
-        lagDays: values.lagDays,
+        ...lagFields,
         lagCalendar: values.lagCalendar,
         version: dependency.version,
       },
@@ -128,10 +176,13 @@ export function EditDependencyDialog({
           ))}
         </SelectField>
         <TextField
-          label={lagFieldLabel(lagCalendar)}
-          type="number"
-          error={errors.lagDays?.message}
-          {...register('lagDays', { valueAsNumber: true })}
+          label={lagFieldLabel(lagCalendar, hoursPerDay)}
+          {...lagInputProps(hoursPerDay)}
+          {...(lagFieldHelp(lagCalendar, hoursPerDay) === undefined
+            ? {}
+            : { hint: lagFieldHelp(lagCalendar, hoursPerDay) })}
+          error={errors.lag?.message}
+          {...register('lag')}
         />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>

@@ -1,13 +1,12 @@
 import { z } from 'zod';
 
+import { SUB_DAY_DURATIONS_ENABLED } from '@/config/env';
 import {
   DURATION_PARSE_MESSAGE,
   checkDurationText,
   formatDurationText,
   parseDurationText,
-} from './duration-text';
-
-import { SUB_DAY_DURATIONS_ENABLED } from '@/config/env';
+} from '@/lib/duration-text';
 
 /**
  * The duration control, in the two shapes it is allowed to take (ADR-0070 §4).
@@ -46,6 +45,25 @@ export function durationHelp(hoursPerDay: number | undefined): string | undefine
   // eight-hour calendar and a 24-hour one, and the planner cannot see which they are on from here.
   const hours = Number.isInteger(hoursPerDay) ? String(hoursPerDay) : hoursPerDay.toFixed(1);
   return `Days, hours or minutes — for example 5d, 4h, 90m or 2d 4h. A day is ${hours} working hours on this activity’s calendar.`;
+}
+
+/**
+ * The input's own props, as one object rather than three parallel ternaries at each call site.
+ *
+ * Text — not `type="number"` — once the factor is known: `2d 4h` is not a number, and a number input
+ * refuses those characters before the parser ever sees them. Degraded (or flag-off) it goes back to
+ * the bounded number spinner it has always been.
+ *
+ * Bundled because it was not: the two dialogs each branched on `hoursPerDay === undefined` while
+ * their label and help branched on {@link canAuthorSubDay}, which also reads the flag — so flag-off
+ * the field rendered as free text under a label promising whole days. One predicate, one shape.
+ */
+export function durationInputProps(
+  hoursPerDay: number | undefined,
+): { type: 'text'; inputMode: 'text' } | { type: 'number'; min: number } {
+  return canAuthorSubDay(hoursPerDay)
+    ? { type: 'text', inputMode: 'text' }
+    : { type: 'number', min: 0 };
 }
 
 /** Seed the field from a saved row (or from the create default of one day). */

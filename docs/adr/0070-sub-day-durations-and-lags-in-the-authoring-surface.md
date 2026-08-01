@@ -1,6 +1,6 @@
 # ADR-0070 — Sub-day durations and lags in the authoring surface
 
-- **Status:** Accepted (M0–M1 landed 2026-08-01; flag `VITE_SUB_DAY_DURATIONS`)
+- **Status:** Accepted (M0–M3 landed 2026-08-01; flag `VITE_SUB_DAY_DURATIONS`)
 - **Deciders:** Product owner, engineering
 - **Supersedes:** nothing. **Amends:** nothing structurally — it is the authoring half of
   ADR-0036, in the way ADR-0067 was the authoring half of ADR-0036's calendars.
@@ -73,6 +73,32 @@ rollback contract and the degraded state are the same control.
 calendar** (ADR-0036 §6): `TWENTY_FOUR_HOUR` is elapsed time and pinned at 1,440 minutes to the day
 regardless of any calendar's `hoursPerDay`, which is exactly the trap this ADR exists to prevent and
 so is stated as a test rather than a comment.
+
+Three consequences of that, settled while building M3:
+
+- **The grammar is shared, not duplicated.** `parseDurationText`/`formatDurationText` move to
+  `@/lib/duration-text` and gain a signed sibling beside them, because two implementations of one
+  grammar would drift and **the drift would be invisible** — each reads correctly on its own screen,
+  and only a planner who typed `2d4h` into both a duration and a lag would ever see that one of them
+  stopped accepting it (the ADR-0065 `routeOrthogonal` argument, one field along). `effectiveHoursPerDay`
+  moves with it, so the lag resolver reads calendars without importing the activities feature sideways.
+- **The client's factor rule mirrors the server's `lagCalendarIdFor` case for case**, and is tested
+  as such. The API converts a submitted `lagDays` on exactly that rule (ADR-0068 §4), so a client
+  that guessed differently would write a value the field then reads back as a different lag. Where a
+  `PREDECESSOR`/`SUCCESSOR` endpoint's calendar cannot be named the field degrades to whole days
+  rather than falling back to the plan's — an endpoint that _inherits_ (`null`) and one we _cannot
+  see_ (`undefined`) are different answers, and only the first may fall back.
+- **The lag's degraded label is the sentence that shipped, character for character.** It is what a
+  rollback restores, so "calendar days"/"working days" survive unchanged on the flag-off path and
+  only the sub-day path says "elapsed time"/"working time". The same reasoning bundled the input's
+  own props into one `durationInputProps`/`lagInputProps` call: the label read the flag and the
+  `type` did not, so flag-off the duration field had already begun rendering as free text under a
+  label promising whole days.
+
+M3 also closed a **live defect** in the same family as M2's canvas-move rounding: undoing the removal
+of a link re-created it from `lagDays`, so a two-hour cure lag came back as no lag at all — silently,
+with no error anywhere, because the read rounded to zero and the re-create faithfully wrote the zero
+back. The undo command now carries `lagMinutes`.
 
 **6. Cross-plan dependency lag is deliberately out of scope.** Its response DTO does not expose
 `lagMinutes` and its service still multiplies by a fixed `MINUTES_PER_DAY` (ADR-0045). Extending the

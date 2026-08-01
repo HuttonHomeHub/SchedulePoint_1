@@ -1,6 +1,8 @@
 import { LAG_CALENDAR_SOURCES, type DependencyType, type LagCalendarSource } from '@repo/types';
 import { z } from 'zod';
 
+import { lagTextField } from '../model/lag-field';
+
 /**
  * Human labels for the four dependency types (CPM/GPM tradition). Exhaustive
  * `Record<DependencyType, …>` so a new type fails to compile until labelled.
@@ -57,16 +59,6 @@ export const LAG_CALENDAR_HINT =
   'project calendar until per-activity calendars arrive.';
 
 /**
- * Label for the signed-lag numeric field. The unit depends on the chosen lag calendar:
- * a 24-hour (elapsed) lag is counted in **calendar** days, everything else in **working**
- * days — so the label tracks the selection rather than always claiming "working days".
- */
-export function lagFieldLabel(lagCalendar: LagCalendarSource): string {
-  const unit = lagCalendar === 'TWENTY_FOUR_HOUR' ? 'calendar days' : 'working days';
-  return `Lag (${unit}, negative for a lead)`;
-}
-
-/**
  * Format a signed working-day lag for display: `0d`, `+3d` (lag), `−2d` (lead,
  * with a real minus sign). Kept tiny and pure so tables and dialogs agree.
  */
@@ -76,17 +68,18 @@ export function formatLag(lagDays: number): string {
 }
 
 /**
- * The mutable fields shared by add and edit — a dependency's type and signed lag
- * (registered with `valueAsNumber`). Single source of truth for the bounds so the
- * two dialogs can't drift.
+ * The mutable fields shared by add and edit — a dependency's type and signed lag. Single source of
+ * truth so the two dialogs can't drift.
+ *
+ * `lag` is **text**, read by the `d`/`h`/`m` grammar (ADR-0070 §5): a bare number still means days,
+ * so every value a planner has learnt to type keeps its meaning, and `-4h` becomes expressible for
+ * the first time. The rule here is deliberately **syntax only** — the one calendar-dependent
+ * question is answered at submit by `lagWriteFields`, where the lag calendar's working-hours factor
+ * is in hand. See `model/lag-field.ts` for why that split exists.
  */
 export const typeAndLagSchema = z.object({
   type: z.enum(DEPENDENCY_TYPES),
-  lagDays: z
-    .number({ message: 'Enter a whole number of days.' })
-    .int('Enter a whole number of days.')
-    .min(-3650, 'Lag is too large.')
-    .max(3650, 'Lag is too large.'),
+  lag: lagTextField(),
   lagCalendar: z.enum(LAG_CALENDAR_OPTIONS),
 });
 
