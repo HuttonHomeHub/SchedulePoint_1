@@ -423,8 +423,17 @@ would not exercise the code being budgeted.
    at about two and a half years and fills the viewport — that is what makes the two scenes
    comparable at all.
 
-3. **Run it on the envelope ADR-0026 names** — a mid-tier laptop and an iPad — with the same script,
-   which takes a checkout and one command.
+3. **Run it on the envelope ADR-0026 names.** The command now exists and is documented:
+   `pnpm --filter @repo/web measure:draw`, with the runbook at
+   [`docs/guides/measure-draw-performance.md`](guides/measure-draw-performance.md) — a checkout, one
+   install, one command, about a minute. It runs **headed** on purpose: headless Chromium can
+   rasterise Canvas 2D in software, so a headless figure measures a path no planner runs, and the
+   script prints a loud warning when it is.
+   **Scope narrowed 2026-08-01 (product-owner decision): laptop only, iPad deliberately not
+   covered.** A planner authors on a laptop; the iPad is a review device, where the printed
+   programme and the Gantt matter more than canvas draw. If the canvas ever becomes a primary iPad
+   surface that gap reopens, and the runbook says so rather than leaving it implied.
+   **Awaiting the product owner's laptop run.**
 4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
    answer is "smooth at 2,000, and 16 ms is fine because it is one frame at 60 Hz", the budget was
    simply wrong and should say so. If it is not smooth, ADR-0026's own reserved escalations —
