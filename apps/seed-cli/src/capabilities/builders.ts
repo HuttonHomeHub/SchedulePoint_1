@@ -77,11 +77,11 @@ export function link(
 
 /**
  * `weekdays` is 0 = Sunday … 6 = Saturday, matching the spec model. The runner converts to the API's
- * Monday-indexed mask; stating it here in the model's own numbering keeps the conversion in exactly
- * one place (see `toWeekdayMask`, and the regression test that pins it).
+ * Monday-indexed `shifts` rows; stating it here in the model's own numbering keeps the conversion in
+ * exactly one place (see `toApiShifts`, and the regression test that pins it).
  *
- * Note what this **cannot** express: an intraday shift pattern. Every window is the full day, because
- * that is all any write path in the product can create — see the `UNREACHABLE` map in `coverage.ts`.
+ * This shorthand writes FULL-DAY windows, which is what a which-days-work plan wants. An intraday
+ * pattern is expressible too — pass `days` through `overrides`, as `shift-calendars.ts` does.
  */
 export function calendar(
   key: string,
@@ -93,6 +93,8 @@ export function calendar(
     key,
     name,
     scope: 'PROJECT',
+    // Derived from the week unless a plan deliberately disagrees with its own hours (ADR-0068).
+    hoursPerDay: null,
     days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
       weekday,
       windows: weekdays.includes(weekday) ? [{ startMinute: 0, endMinute: DAY }] : [],

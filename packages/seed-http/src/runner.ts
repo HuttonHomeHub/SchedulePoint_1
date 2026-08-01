@@ -83,13 +83,17 @@ export async function seedPlan(
     //    honoured rather than flattened.
     const calendarIdByKey = new Map<string, string>();
     for (const calendar of spec.calendars) {
-      // A mask of 0 is a **window-only** calendar: the base week is entirely non-working and all
-      // work comes from dated exception windows (the fixture's turnaround calendar). It is sent as
-      // an ordinary create — `MIN_WORKING_WEEKDAYS_MASK` became 0 when TECH_DEBT #79 closed. This
+      // An EMPTY shift list is a **window-only** calendar: the base week is entirely non-working and
+      // all work comes from dated exception windows (the fixture's turnaround calendar). It is sent
+      // as an ordinary create — `MIN_WORKING_WEEKDAYS_MASK` became 0 when TECH_DEBT #79 closed. This
       // file previously refused it and reported a finding quoting a `@Min(1)` that no longer
       // exists, which is the drift ADR-0058 is about: the comment described a limitation, the
       // limitation was fixed, and the comment kept being believed.
-      const mask = toWeekdayMask(calendar.days);
+      //
+      // The windows themselves are sent VERBATIM (`shifts`, not `workingWeekdays`). The mask form
+      // could only say which days work, so a `SeedSpec` two-shift calendar was seeded as a 24-hour
+      // one and the plan built to prove ADR-0036 proved nothing — TECH_DEBT #80's other half.
+      const shifts = toApiShifts(calendar.days);
       const reusable =
         calendar.scope === 'ORG' ? existingOrgCalendarIdByName.get(calendar.name) : undefined;
       if (reusable !== undefined) {
@@ -101,7 +105,10 @@ export async function seedPlan(
           name: calendar.name,
           scope: calendar.scope,
           ...(calendar.scope === 'PROJECT' ? { projectId: target.projectId } : {}),
-          workingWeekdays: mask,
+          shifts,
+          // The standard working day (ADR-0068). Omitted ⇒ the API derives it from the shifts just
+          // sent, which is the right answer for every calendar that does not deliberately disagree.
+          ...(calendar.hoursPerDay === null ? {} : { hoursPerDay: calendar.hoursPerDay }),
         });
         calendarIdByKey.set(calendar.key, created.id);
         counts.calendars += 1;
@@ -114,7 +121,9 @@ export async function seedPlan(
           seenDates.add(exception.date);
           await client.post(`${org}/calendars/${created.id}/exceptions`, {
             date: exception.date,
-            isWorking: exception.windows.length > 0,
+            // Verbatim, like the weekly shifts: `isWorking` could only say worked-or-not, so a
+            // half-day before a shutdown seeded as a whole worked day.
+            windows: exception.windows,
             ...(exception.label === null ? {} : { label: exception.label }),
           });
         }
@@ -523,13 +532,29 @@ export async function seedPlan(
  * working week by a day and nothing fails — the calendar is still valid, just describing a different
  * week — so the conversion is named rather than inlined.
  */
-function toWeekdayMask(days: SeedSpec['calendars'][number]['days']): number {
-  let mask = 0;
+/**
+ * A spec's weekly pattern as the API's `shifts` rows, windows and all.
+ *
+ * The **weekday base changes here and nowhere else**: a `SeedSpec` day is `0 = Sunday` (P6/XER's
+ * convention, which the fixture speaks), storage is `0 = Monday` (ADR-0036). Getting this wrong
+ * shifts a whole calendar by a day and every date it produces still looks plausible, which is why
+ * the seeded plan asserts the read-back indices explicitly rather than only the dates.
+ */
+function toApiShifts(
+  days: SeedSpec['calendars'][number]['days'],
+): { weekday: number; startMinute: number; endMinute: number }[] {
+  const shifts: { weekday: number; startMinute: number; endMinute: number }[] = [];
   for (const day of days) {
-    if (day.windows.length === 0) continue;
-    mask |= 1 << ((day.weekday + 6) % 7);
+    for (const window of day.windows) {
+      shifts.push({
+        weekday: (day.weekday + 6) % 7,
+        startMinute: window.startMinute,
+        endMinute: window.endMinute,
+      });
+    }
   }
-  return mask;
+  // The API requires each weekday's windows in ascending, non-overlapping order.
+  return shifts.sort((a, b) => a.weekday - b.weekday || a.startMinute - b.startMinute);
 }
 
 /**

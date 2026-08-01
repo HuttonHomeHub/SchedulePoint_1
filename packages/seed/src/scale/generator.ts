@@ -307,6 +307,7 @@ export function scaleSpec(options: ScaleOptions): SeedSpec {
         key: 'SCALE_CAL',
         name: `Scale ${String(leafCount)} week`,
         scope: 'PROJECT',
+        hoursPerDay: null,
         days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
           weekday,
           windows: weekday >= 1 && weekday <= 5 ? [{ startMinute: 0, endMinute: DAY }] : [],

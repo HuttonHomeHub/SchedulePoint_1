@@ -7,6 +7,7 @@ import { logicFfSfPlan, logicFsSsPlan } from './logic.js';
 import { floatPlan, networkShapePlan } from './network.js';
 import { progressOverridePlan, progressPlan, retainedLogicPlan } from './progress.js';
 import { levellingPlan, resourcesPlan } from './resources.js';
+import { shiftCalendarsPlan } from './shift-calendars.js';
 import { typesAndWbsPlan } from './types-wbs.js';
 
 /**
@@ -44,6 +45,7 @@ export const CAPABILITY_FAMILIES: readonly CapabilityFamily[] = [
   { key: 'constraints', label: 'Constraints', build: constraintsPlan },
   { key: 'constraints', label: 'Expected finish', build: expectedFinishPlan },
   { key: 'calendars', label: 'Calendars', build: calendarsPlan },
+  { key: 'calendars', label: 'Shift calendars', build: shiftCalendarsPlan },
   { key: 'progress', label: 'Progress', build: progressPlan },
   { key: 'progress', label: 'Retained Logic', build: retainedLogicPlan },
   { key: 'progress', label: 'Progress Override', build: progressOverridePlan },

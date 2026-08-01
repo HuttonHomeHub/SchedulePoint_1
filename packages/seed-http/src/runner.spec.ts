@@ -275,22 +275,52 @@ describe('the payload contracts the real API enforces', () => {
     expect(body.physicalPercentComplete).toBe(25);
   });
 
-  it('sends the working week as a Monday-indexed 7-bit mask', async () => {
+  it('sends the working week as Monday-indexed shift rows, windows and all', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;
     await seedPlan(
       new SeedClient({ baseUrl: 'http://x' }),
       target,
-      // Monday–Friday. The spec model numbers 0 = Sunday; the API's mask is Monday-indexed, so this
-      // is `0b0011111` = 31. Off by one bit and the calendar is still valid — it just describes a
-      // different week, and nothing anywhere fails.
+      // Monday–Friday. The spec model numbers 0 = Sunday; storage is Monday-indexed, so these are
+      // weekdays 0–4. Off by one and the calendar is still valid — it just describes a different
+      // week, and nothing anywhere fails, which is why this is asserted rather than assumed.
       minimalSpec({ calendars: [calendar({ workingWeekdays: [1, 2, 3, 4, 5] })] }),
     );
     const create = callsOf(fetchMock).find(
       (c) => c.method === 'POST' && c.url.endsWith('/calendars'),
     );
     const body = JSON.parse(create?.body ?? '{}') as Record<string, unknown>;
-    expect(body.workingWeekdays).toBe(0b0011111);
+    expect(body.shifts).toEqual(
+      [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
+    );
+    // The mask form could only say WHICH days work, never their hours — the whole point of ADR-0067.
+    expect(body).not.toHaveProperty('workingWeekdays');
+  });
+
+  /** Two windows on one day is the shape the mask could not express at all. */
+  it('sends both windows of a two-shift day, in ascending order', async () => {
+    const fetchMock = acceptEverything();
+    globalThis.fetch = fetchMock;
+    const twoShift = {
+      ...calendar({ workingWeekdays: [1] }),
+      days: [
+        { weekday: 1, windows: [{ startMinute: 840, endMinute: 1320 }] },
+        { weekday: 2, windows: [{ startMinute: 360, endMinute: 840 }] },
+      ],
+    };
+    await seedPlan(
+      new SeedClient({ baseUrl: 'http://x' }),
+      target,
+      minimalSpec({ calendars: [twoShift] }),
+    );
+    const create = callsOf(fetchMock).find(
+      (c) => c.method === 'POST' && c.url.endsWith('/calendars'),
+    );
+    const body = JSON.parse(create?.body ?? '{}') as Record<string, unknown>;
+    expect(body.shifts).toEqual([
+      { weekday: 0, startMinute: 840, endMinute: 1320 },
+      { weekday: 1, startMinute: 360, endMinute: 840 },
+    ]);
   });
 
   /**
@@ -309,7 +339,7 @@ describe('the payload contracts the real API enforces', () => {
     );
     expect(result.findings.map((f) => f.code)).not.toContain('WINDOW_ONLY_CALENDAR_UNSUPPORTED');
     const created = calls.find((c) => c.url.endsWith('/calendars'));
-    expect(created?.body.workingWeekdays).toBe(0);
+    expect(created?.body.shifts).toEqual([]);
   });
 
   it('writes one exception row per date, first-wins on a duplicate', async () => {
@@ -370,6 +400,7 @@ function calendar(
     key: 'CAL-1',
     name: 'Test calendar',
     scope: 'PROJECT',
+    hoursPerDay: null,
     days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
       weekday,
       windows: overrides.workingWeekdays.includes(weekday)

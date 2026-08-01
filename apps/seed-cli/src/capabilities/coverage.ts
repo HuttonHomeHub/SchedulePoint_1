@@ -30,42 +30,13 @@ export interface CoverageException {
  * and no client can create it. That asymmetry is precisely what ADR-0066 was written to surface.
  */
 export const UNREACHABLE: Readonly<Record<string, CoverageException>> = {
-  // ── The SEEDER still sends a weekday mask, not shift windows (TECH_DEBT #80, narrowed) ─────
-  // This block used to say "no write path accepts shift windows", which was true when it was
-  // written and stopped being true in api-v0.34.0: `CreateCalendarDto.shifts` takes them, and the
-  // flagged web editor authors them. What remains is narrower and belongs here rather than to the
-  // API — a `SeedSpec` calendar carries working DAYS, so the seeder has nothing to send. Reaching
-  // these four needs the SeedSpec model to carry windows, not another API change.
-  cal_split_shift: {
-    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
-    debt: 80,
-  },
-  cal_night_crosses_midnight: {
-    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
-    debt: 80,
-  },
-  cal_asymmetric_week: {
-    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
-    debt: 80,
-  },
-  cal_forces_split: {
-    reason: 'the SeedSpec sends a weekday mask, not shift windows — the API now takes either',
-    debt: 80,
-  },
-  // ── Expressible now, but no catalogue plan seeds one (TECH_DEBT #79, narrowed) ─────────────
-  // These two were excepted as "a mask of 0 is a 422". That stopped being true in api-v0.34.0, and
-  // the seeder now sends 0 rather than refusing, so the *cause* recorded here was wrong. What is
-  // still true is smaller and is stated instead of inherited: no plan in the catalogue has a
-  // window-only calendar, so nothing demonstrates the capability end to end. The remedy is a seed
-  // plan, not another API change — which is a different piece of work from the one #79 tracked.
-  cal_window_only: {
-    reason: 'creatable since api-v0.34.0 and the seeder sends it; no catalogue plan has one yet',
-    debt: 79,
-  },
-  cal_empty_base_week: {
-    reason: 'creatable since api-v0.34.0 and the seeder sends it; no catalogue plan has one yet',
-    debt: 79,
-  },
+  // ── The four intraday keys and the two window-only ones are now REACHED ────────────────────
+  // They were excepted here twice, each time for a cause that had already been fixed: first "no
+  // write path accepts shift windows" (untrue from api-v0.34.0), then "the SeedSpec sends a weekday
+  // mask" (untrue once `SeedCalendar.days` carried windows and the seeder sent them). Both entries
+  // outlived their reason, which is the exact failure ADR-0058 names. `capability-shift-calendars`
+  // now seeds all six through the public REST API, so there is nothing left to except: an entry
+  // here for a key a plan reaches would make the report claim a gap that does not exist.
 
   // ── No concept in the application at all (ADR-0039; reported as unplaceable by the fixture) ──
   res_role: {
