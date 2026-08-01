@@ -101,7 +101,17 @@ export const calendarFormSchema = z
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
     workingWeekdays: z
       .number()
-      .refine((mask) => WorkingWeekdays.isValid(mask), 'Select at least one working day.'),
+      // Deliberately NOT `WorkingWeekdays.isValid`, which now accepts 0 — a window-only base week,
+      // valid at the domain and at the API since TECH_DEBT #79 (ADR-0036 §2). This form has no way
+      // to author the dated exception windows such a calendar needs, so offering the empty week
+      // here would produce a calendar on which nothing can ever be scheduled and report the failure
+      // only at the next recalculation. The bound belongs to THIS FORM's current capability, not to
+      // the domain, so it is stated here rather than borrowed from the shared helper. It lifts with
+      // the shift-pattern editor (TECH_DEBT #80, web slice).
+      .refine(
+        (mask) => mask >= 1 && WorkingWeekdays.isValid(mask),
+        'Select at least one working day.',
+      ),
     // The tier to create in (ADR-0053 §1). Optional so the field is simply ABSENT from the submitted
     // body unless a scope control was rendered (flag-off), leaving the server's ORG default to apply
     // — the same JSON the form sent before. `projectId` is required with `PROJECT` and forbidden with

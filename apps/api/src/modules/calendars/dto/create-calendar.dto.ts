@@ -32,9 +32,12 @@ export class CreateCalendarDto {
     minimum: MIN_WORKING_WEEKDAYS_MASK,
     maximum: MAX_WORKING_WEEKDAYS_MASK,
     description:
-      'Weekly working pattern as a 7-bit mask (bit 0 = Monday … bit 6 = Sunday). ' +
-      'Must be 1–127 — at least one working weekday, no bits beyond the week. ' +
-      'This is the WorkingWeekdays bitmask contract in @repo/types.',
+      'Weekly working pattern as a 7-bit mask (bit 0 = Monday … bit 6 = Sunday), 0–127. ' +
+      '**0 is valid** and means a window-only base week: no weekday works by default and all ' +
+      'working time arrives from dated exception windows — the shape a plant turnaround or a ' +
+      'shutdown programme needs (ADR-0036 §2). A calendar with an empty week AND no working ' +
+      'exception is refused when the schedule is calculated, not here, because only the engine ' +
+      'can see both halves. This is the WorkingWeekdays bitmask contract in @repo/types.',
   })
   @Type(() => Number)
   @IsInt()

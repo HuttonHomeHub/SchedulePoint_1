@@ -113,6 +113,49 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     });
   });
 
+  /**
+   * TECH_DEBT #79. ADR-0036 §2 made a window-only base week valid — every weekday non-working,
+   * all working time from dated exception windows (a plant turnaround, a shutdown programme) —
+   * and said the old "mask must be non-zero" guard was replaced by the engine's
+   * `buildWorkingTimeCalendar` check. The DTO's `@Min(1)` and the DB CHECK were never relaxed to
+   * match, so for a year the engine supported the shape and the API answered 422.
+   */
+  describe('window-only calendars (TECH_DEBT #79)', () => {
+    it('accepts a zero mask — the turnaround shape the engine already supports', async () => {
+      const { actor } = await adminWithOrg();
+      const res = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Turnaround', workingWeekdays: 0 })
+        .expect(201);
+      expect(res.body.data).toMatchObject({ name: 'Turnaround', workingWeekdays: 0 });
+    });
+
+    it('lets an existing calendar be narrowed to window-only', async () => {
+      const { actor } = await adminWithOrg();
+      const created = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Shutdown', workingWeekdays: STANDARD_WEEKDAYS_MASK })
+        .expect(201);
+      const res = await actor.agent
+        .patch(`/api/v1/organizations/acme/calendars/${created.body.data.id as string}`)
+        .send({ workingWeekdays: 0, version: created.body.data.version })
+        .expect(200);
+      expect(res.body.data.workingWeekdays).toBe(0);
+    });
+
+    it('still refuses a mask outside the week', async () => {
+      const { actor } = await adminWithOrg();
+      await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Impossible', workingWeekdays: 128 })
+        .expect(422);
+      await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Negative', workingWeekdays: -1 })
+        .expect(422);
+    });
+  });
+
   it('creates, gets and lists calendars', async () => {
     const { actor } = await adminWithOrg();
     const id = await createCalendar(actor, 'Project Calendar');
@@ -138,7 +181,9 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
 
   it('rejects an invalid working-weekday mask (422)', async () => {
     const { actor } = await adminWithOrg();
-    await actor.agent.post(base).send({ name: 'Empty', workingWeekdays: 0 }).expect(422);
+    // `workingWeekdays: 0` was asserted here as a 422 and is now a 201 — see the window-only
+    // describe block below. It moved rather than being deleted: the shape is valid (ADR-0036 §2),
+    // so the case is still worth a test, just with the opposite expectation.
     await actor.agent.post(base).send({ name: 'TooWide', workingWeekdays: 128 }).expect(422);
     await actor.agent.post(base).send({ name: 'NoPattern' }).expect(422);
   });
