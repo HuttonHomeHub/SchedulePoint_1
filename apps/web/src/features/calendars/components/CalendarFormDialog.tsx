@@ -266,6 +266,23 @@ export function CalendarFormDialog({
     Number.isFinite(hoursPerDayValue) &&
     hoursPerDayValue !== calendar.hoursPerDay;
 
+  /**
+   * Edit the week, and — **only once problems are already on screen** — re-check as it changes.
+   *
+   * Validating from the first keystroke would flag `8:` while a planner is still typing `8:30`,
+   * which is why the check originally ran on Save alone. But the mirror of that is worse: after a
+   * failed Save, a row corrected to something valid kept its red message until the planner pressed
+   * Save again to find out, so the form could not tell them they had finished. This is React Hook
+   * Form's own `reValidateMode: 'onChange'` rule, applied to the one piece of state RHF does not
+   * hold: quiet until you submit, live afterwards.
+   */
+  const reviseWeek = (next: WeekRows): void => {
+    setWeek(next);
+    if (weekProblems.length === 0) return;
+    const parsed = weekRowsToShifts(next);
+    setWeekProblems(parsed.ok ? [] : parsed.problems);
+  };
+
   const onSubmit = handleSubmit((values) => {
     if (CALENDAR_SHIFT_EDITOR_ENABLED) {
       const parsed = weekRowsToShifts(week);
@@ -451,7 +468,7 @@ export function CalendarFormDialog({
               <>
                 <WeeklyShiftEditor
                   week={week}
-                  onChange={setWeek}
+                  onChange={reviseWeek}
                   problems={weekProblems}
                   readOnly={readOnly}
                 />

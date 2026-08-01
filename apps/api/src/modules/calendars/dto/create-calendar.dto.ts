@@ -3,6 +3,7 @@ import type { CalendarScope } from '@prisma/client';
 import { CALENDAR_SCOPES, MAX_WORKING_WEEKDAYS_MASK, MIN_WORKING_WEEKDAYS_MASK } from '@repo/types';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -21,7 +22,7 @@ import {
 import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
 
 import { IsCalendarScopePaired } from './calendar-scope-validators';
-import { AreWindowsOrdered, CalendarShiftDto } from './calendar-shift.dto';
+import { AreWindowsOrdered, CalendarShiftDto, MAX_CALENDAR_SHIFTS } from './calendar-shift.dto';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -72,6 +73,7 @@ export class CreateCalendarDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_CALENDAR_SHIFTS)
   @ValidateNested({ each: true })
   @Type(() => CalendarShiftDto)
   @AreWindowsOrdered()

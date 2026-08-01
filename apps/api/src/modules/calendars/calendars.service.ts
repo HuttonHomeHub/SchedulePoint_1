@@ -434,6 +434,7 @@ export class CalendarsService {
 
     const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
     if (!calendar) throw new NotFoundError('Calendar not found.');
+    this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
 
     try {
       const exception = await this.prisma.$transaction(async (tx) => {
@@ -497,11 +498,7 @@ export class CalendarsService {
 
     const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
     if (!calendar) throw new NotFoundError('Calendar not found.');
-    if (calendar.scope === 'ORG') {
-      // Editing shared-library state needs the extra capability, as an ordinary calendar edit does
-      // (ADR-0053 §2) — a holiday on the org calendar is shared tenant state too.
-      this.assertCan(principal, 'calendar:manage_org', organization.id);
-    }
+    this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
 
     const existing = await this.calendars.findActiveExceptionByIdInCalendar(
       exceptionId,
@@ -560,6 +557,7 @@ export class CalendarsService {
 
     const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
     if (!calendar) throw new NotFoundError('Calendar not found.');
+    this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
 
     const exception = await this.calendars.findActiveExceptionByIdInCalendar(
       exceptionId,
@@ -607,6 +605,28 @@ export class CalendarsService {
     }
     if (scope === existing.scope && projectId === existing.projectId) return null;
     return { scope, projectId };
+  }
+
+  /**
+   * Who may write a calendar's dated exceptions (ADR-0053 §2).
+   *
+   * A holiday, a shutdown day or a half-day on an **ORG** calendar is shared tenant state in exactly
+   * the way an edit to its weekly pattern is — it moves every plan in the organisation that inherits
+   * that calendar — so it takes the same `calendar:manage_org` capability. Only `updateException`
+   * asserted this; adding and removing an exception did not, which made the rule a property of one
+   * of the three verbs rather than of the object.
+   *
+   * That gap is **behaviourally inert today**: every role holding `calendar:update` also holds
+   * `calendar:manage_org` (Planner and Org Admin). It is fixed anyway, and as one shared helper, so
+   * that the day those two permissions are split apart the answer is in one place rather than
+   * spread across three call sites that had already disagreed once.
+   */
+  private assertMayWriteExceptions(
+    principal: Principal,
+    scope: CalendarScope,
+    organizationId: string,
+  ): void {
+    if (scope === 'ORG') this.assertCan(principal, 'calendar:manage_org', organizationId);
   }
 
   /**

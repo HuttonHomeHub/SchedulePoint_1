@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
@@ -14,7 +15,11 @@ import {
 import { IsCalendarDate } from '../../../common/validation/calendar-date';
 import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
 
-import { AreWindowsOrdered, CalendarExceptionWindowDto } from './calendar-shift.dto';
+import {
+  AreWindowsOrdered,
+  CalendarExceptionWindowDto,
+  MAX_EXCEPTION_WINDOWS,
+} from './calendar-shift.dto';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -54,6 +59,7 @@ export class CreateCalendarExceptionDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_EXCEPTION_WINDOWS)
   // An empty array is a second spelling of "holiday", and two spellings of one state is how the
   // two halves of a read (`isWorking` derived from `windows.length`) start disagreeing with what
   // the author thought they sent. Omit `windows` (or send `isWorking: false`) for a non-working day.

@@ -22,6 +22,7 @@ export interface WindowProblem {
 export const WINDOW_PROBLEM = {
   INVERTED: 'The end time must be after the start time.',
   OVERLAP: 'These hours overlap the row above.',
+  OVERLAPPED: 'These hours overlap the row below.',
   UNSORTED: 'Put the day’s hours in order, earliest first.',
 } as const;
 
@@ -31,6 +32,11 @@ export const WINDOW_PROBLEM = {
  * Returns ALL of them rather than the first: a planner correcting a three-row day should not have
  * to press Save three times to discover three problems, which is the same reason the form has an
  * error summary rather than a single message.
+ *
+ * An overlap is a property of a **pair**, so both rows carry it. Flagging only the later one made
+ * the fix look like it had to be there — but 09:00–17:00 followed by 12:00–14:00 is at least as
+ * likely to be a wrong first row, and a planner reading one lit control and one clean one is being
+ * told which end to change. Two directional messages say the same fact from each side.
  */
 export function findWindowProblems(windows: readonly CalendarWindow[]): WindowProblem[] {
   const problems: WindowProblem[] = [];
@@ -48,9 +54,13 @@ export function findWindowProblems(windows: readonly CalendarWindow[]): WindowPr
     if (window.startMinute < previous.startMinute) {
       problems.push({ index, message: WINDOW_PROBLEM.UNSORTED });
     } else if (window.startMinute < previous.endMinute) {
+      // The row above cannot itself be inverted here — reaching this branch means
+      // `previous.startMinute <= window.startMinute < previous.endMinute`, so it has real span —
+      // which is why there is no "unless it is already broken" guard to write.
+      problems.push({ index: index - 1, message: WINDOW_PROBLEM.OVERLAPPED });
       problems.push({ index, message: WINDOW_PROBLEM.OVERLAP });
     }
   });
 
-  return problems;
+  return problems.sort((a, b) => a.index - b.index);
 }

@@ -29,9 +29,25 @@ describe('findWindowProblems', () => {
     ]);
   });
 
-  it('reports an overlap on the later row', () => {
+  /**
+   * An overlap is a property of a PAIR, so both rows carry it. Flagging only the later one told
+   * the planner which end to change, and 09:00–17:00 followed by 12:00–14:00 is at least as
+   * likely to be a wrong first row.
+   */
+  it('reports an overlap on BOTH rows of the pair, each from its own side', () => {
     expect(findWindowProblems([w(480, 720), w(600, 900)])).toEqual([
+      { index: 0, message: WINDOW_PROBLEM.OVERLAPPED },
       { index: 1, message: WINDOW_PROBLEM.OVERLAP },
+    ]);
+  });
+
+  it('cannot reach the overlap branch from an inverted row above', () => {
+    // Row 0 claims no time, so nothing can overlap it: a row starting later is UNSORTED against
+    // its start, and one starting earlier is unsorted too. This pins why the overlap branch needs
+    // no "unless the row above is already broken" guard.
+    expect(findWindowProblems([w(720, 480), w(600, 900)])).toEqual([
+      { index: 0, message: WINDOW_PROBLEM.INVERTED },
+      { index: 1, message: WINDOW_PROBLEM.UNSORTED },
     ]);
   });
 
@@ -49,6 +65,7 @@ describe('findWindowProblems', () => {
     // A three-row day with two faults should not take two rounds of Save to discover.
     const problems = findWindowProblems([w(480, 720), w(600, 900), w(1000, 800)]);
     expect(problems).toEqual([
+      { index: 0, message: WINDOW_PROBLEM.OVERLAPPED },
       { index: 1, message: WINDOW_PROBLEM.OVERLAP },
       { index: 2, message: WINDOW_PROBLEM.INVERTED },
     ]);
