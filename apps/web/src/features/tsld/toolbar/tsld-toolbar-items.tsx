@@ -62,11 +62,9 @@ import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import type { ToolbarItemRenderApi, ToolbarRow } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
-import {
-  toolbarControlVariants,
-  toolbarSplitCaretVariants,
-} from '@/components/ui/toolbar/toolbar-styles';
+import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
+import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
@@ -315,56 +313,28 @@ function AddActivityControl({
   const toggleArmed = ctx.isLoeSpanning ? ctx.toggleLoeSpanMode : ctx.toggleAddActivity;
   return (
     <>
-      <span
-        className={cn(toolbarControlVariants({ active: armed || open, disabled }), 'gap-0 p-0')}
-      >
-        <button
-          {...api.itemProps}
-          ref={mainButtonRef}
-          type="button"
-          aria-pressed={armed}
-          aria-disabled={disabled || undefined}
-          title={
-            disabled
-              ? ADD_DISABLED_REASON
-              : ctx.isLoeSpanning
-                ? 'Stop the level-of-effort pick'
-                : ctx.isAddingActivity
-                  ? 'Stop adding'
-                  : `Add ${activeLabel.toLowerCase()}`
-          }
-          onClick={() => {
-            if (!disabled) toggleArmed();
-          }}
-          onKeyDown={(e) => {
-            // ArrowDown from the primary opens the type menu and moves into it, so the caret needs
-            // no tab stop of its own (APG split button) — mirroring `LinkControl`.
-            if (e.key === 'ArrowDown' && !disabled) {
-              e.preventDefault();
-              toggle();
-            }
-          }}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
-        >
-          <Plus aria-hidden="true" className="size-4" />
-          <span className="truncate">{triggerLabel}</span>
-        </button>
-        <button
-          ref={triggerRef}
-          type="button"
-          tabIndex={-1}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-disabled={disabled || undefined}
-          aria-label={`Activity type: ${activeLabel}`}
-          onClick={() => {
-            if (!disabled) toggle();
-          }}
-          className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
-        >
-          <ChevronDown aria-hidden="true" className="size-3.5" />
-        </button>
-      </span>
+      <ToolbarSplitButton
+        itemProps={api.itemProps}
+        primaryRef={mainButtonRef}
+        caretRef={triggerRef}
+        pressed={armed}
+        open={open}
+        disabled={disabled}
+        title={
+          disabled
+            ? ADD_DISABLED_REASON
+            : ctx.isLoeSpanning
+              ? 'Stop the level-of-effort pick'
+              : ctx.isAddingActivity
+                ? 'Stop adding'
+                : `Add ${activeLabel.toLowerCase()}`
+        }
+        icon={<Plus aria-hidden="true" className="size-4" />}
+        label={triggerLabel}
+        caretLabel={`Activity type: ${activeLabel}`}
+        onPrimary={toggleArmed}
+        onOpenMenu={toggle}
+      />
       <Menu
         open={open}
         onClose={close}
@@ -493,57 +463,26 @@ function LinkControl({
        * caret is `tabIndex={-1}`, reached with ArrowDown — the APG split-button arrangement. The
        * pair sits in a `div` that carries the control chrome so the two regions read as one control.
        */}
-      <span
-        className={cn(
-          toolbarControlVariants({ active: ctx.isLinking || open, disabled }),
-          'gap-0 p-0',
-        )}
-      >
-        <button
-          {...api.itemProps}
-          ref={mainButtonRef}
-          type="button"
-          aria-pressed={ctx.isLinking}
-          aria-disabled={disabled || undefined}
-          title={
-            disabled
-              ? LINK_DISABLED_REASON
-              : ctx.isLinking
-                ? 'Stop linking'
-                : `Link with ${LINK_TYPE_LABELS[ctx.linkType]}`
-          }
-          onClick={() => {
-            if (!disabled) ctx.toggleLinkMode();
-          }}
-          onKeyDown={(e) => {
-            // ArrowDown from the primary opens the type menu and moves into it, so the caret needs
-            // no tab stop of its own (APG split button).
-            if (e.key === 'ArrowDown' && !disabled) {
-              e.preventDefault();
-              toggle();
-            }
-          }}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
-        >
-          <Spline aria-hidden="true" className="size-4" />
-          <span className="truncate">{ctx.isLinking ? `Linking · ${ctx.linkType}` : 'Link'}</span>
-        </button>
-        <button
-          ref={triggerRef}
-          type="button"
-          tabIndex={-1}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-disabled={disabled || undefined}
-          aria-label={`Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
-          onClick={() => {
-            if (!disabled) toggle();
-          }}
-          className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
-        >
-          <ChevronDown aria-hidden="true" className="size-3.5" />
-        </button>
-      </span>
+      <ToolbarSplitButton
+        itemProps={api.itemProps}
+        primaryRef={mainButtonRef}
+        caretRef={triggerRef}
+        pressed={ctx.isLinking}
+        open={open}
+        disabled={disabled}
+        title={
+          disabled
+            ? LINK_DISABLED_REASON
+            : ctx.isLinking
+              ? 'Stop linking'
+              : `Link with ${LINK_TYPE_LABELS[ctx.linkType]}`
+        }
+        icon={<Spline aria-hidden="true" className="size-4" />}
+        label={ctx.isLinking ? `Linking · ${ctx.linkType}` : 'Link'}
+        caretLabel={`Link type: ${LINK_TYPE_LABELS[ctx.linkType]}`}
+        onPrimary={ctx.toggleLinkMode}
+        onOpenMenu={toggle}
+      />
       <Menu
         open={open}
         onClose={close}

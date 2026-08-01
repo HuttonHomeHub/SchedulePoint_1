@@ -255,3 +255,34 @@ describe('Add / Link split buttons — focus restore (a11y)', () => {
     },
   );
 });
+
+/**
+ * **Either arrow opens the type menu** (TECH_DEBT #76, now closed).
+ *
+ * The APG split-button pattern names `ArrowDown` *or* `ArrowUp`, and `IsolateControl` in this same
+ * file had always honoured both; these two accepted only `ArrowDown`. Not a 2.1.1 failure —
+ * `ArrowDown` gave full reachability — but an inconsistency between siblings, which is the shape the
+ * ADR-0064 enablement review found five of. Both now go through the shared `ToolbarSplitButton`, so
+ * this is one contract rather than two that agree today.
+ */
+describe('Add / Link split buttons — arrow keys open the type menu', () => {
+  it.each([
+    ['Add', 'ArrowDown'],
+    ['Add', 'ArrowUp'],
+    ['Link', 'ArrowUp'],
+  ])('%s opens its menu on %s from the primary', (label, key) => {
+    render(doRow(ctx({ hasDiagram: true })));
+    const primary = screen.getByRole('button', { name: new RegExp(`^${label}$`) });
+    fireEvent.keyDown(primary, { key });
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('does not open the menu from a disabled primary', () => {
+    // Without the pen the control is shaded with a reason (never hidden), and inert. Asserted on the
+    // caret's own `aria-expanded` rather than "no menu anywhere": the Do row carries other menus.
+    render(doRow(ctx({ hasDiagram: true }), false));
+    const caret = screen.getByRole('button', { name: /^Activity type:/ });
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Add$/ }), { key: 'ArrowUp' });
+    expect(caret).toHaveAttribute('aria-expanded', 'false');
+  });
+});

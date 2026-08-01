@@ -70,6 +70,7 @@ import { TsldViewControls } from './TsldViewControls';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { deriveWbsBandSource } from '@/features/wbs';
@@ -1708,11 +1709,11 @@ export function TsldPanel({
         right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
       */}
       {CANVAS_AUTHORING_FLOW_ENABLED && showDiagram && activities.length === 0 ? (
-        <div
+        <NoticeStrip
           data-testid="canvas-empty-state"
-          className="border-border text-muted-foreground flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2 text-sm"
+          emphasis="dashed"
+          message="This plan has no activities yet."
         >
-          <p>This plan has no activities yet.</p>
           <Button
             type="button"
             variant="secondary"
@@ -1735,7 +1736,7 @@ export function TsldPanel({
               Start editing this plan to draw activities.
             </span>
           )}
-        </div>
+        </NoticeStrip>
       ) : null}
 
       <div

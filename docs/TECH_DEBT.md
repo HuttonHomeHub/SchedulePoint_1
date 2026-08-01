@@ -449,24 +449,32 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
   with an obvious fix (build `rects` before the edge block; carry the crossed-lane list on the
   per-edge descriptor). They are inside an overhead already measured and accepted, so they belong
   with **#75** rather than blocking a release.
-- **A fourth hand-rolled "message + optional action" strip.** `EditConflictBanner`,
-  `CanvasModeBand` and the new canvas empty state are three near-identical rounded-bordered strips,
-  none reusing the others and only one going through `cn()`/CVA. Extract a shared primitive before a
-  fifth lands.
-- **The split-button composite is duplicated** between `AddActivityControl` and `LinkControl` —
-  identical wrapper, primary classes, caret classes and ArrowDown handler. Two real consumers is the
-  threshold `docs/COMPONENT_LIBRARY.md` sets for extraction, and the focus-restore defect above is
-  exactly what duplication of this shape produces.
-- **`ArrowUp` does not open either type menu** (only `ArrowDown`). `IsolateControl` handles both.
-  Not a 2.1.1 failure — `ArrowDown` gives full reachability — but inconsistent.
-- **No flag-off regression for the _pointer_ two-click link pick.** The echo plumbing
+- ~~**A fourth hand-rolled "message + optional action" strip.**~~ **Done 2026-08-01** —
+  `components/ui/notice-strip.tsx`. `EditConflictBanner`, both faces of `CanvasModeBand` and the
+  canvas empty state now compose it. Three of the four had already drifted on radius, padding or
+  alignment with no reason behind any difference. `tone` and `emphasis` are separate axes so a fifth
+  caller cannot need a `neutralDashed`, and the **role stays the caller's** — a tone→role mapping
+  would get the mode band wrong by construction, since it must have no live region at all.
+- ~~**The split-button composite is duplicated**~~ **Done 2026-08-01** —
+  `components/ui/toolbar/ToolbarSplitButton.tsx`. It now _guarantees_ the two facts each caller had
+  been asked to remember: the pair is one roving stop, and `primaryRef` is the only ref a menu can
+  restore focus to (the defect that shipped on both).
+- ~~**`ArrowUp` does not open either type menu**~~ **Done 2026-08-01** — the shared primitive
+  accepts either arrow, with a regression per control.
+- ~~**The pen-loss-mid-pick case is untested at every layer**~~ **Done 2026-08-01** —
+  `e2e-authoring-flow/authoring-flow.spec.ts`. It releases the pen with a pick open and asserts the
+  outcome that matters: **no dependency**. Then it takes the pen back and links properly, so the
+  refused attempt is shown to have left no wedged state. Writing it turned up a harness fact worth
+  keeping: `mapBars` probes by clicking in `select` mode, so measuring while a tool is armed returns
+  an empty map — the test disarms first.
+- **Still open — no flag-off regression for the _pointer_ two-click link pick.** The echo plumbing
   (`onLinkPickStep`/`linkPickPredecessorId`/`dropLinkPickSignal`) is wired unconditionally on top of
   the pre-existing ADR-0032 M5 gesture, and nothing proves it is inert with the epic's flag off; the
-  only tests touching pointer-driven dependency creation exercise the old edge-drag.
-- **The pen-loss-mid-pick case is untested at every layer** — no test takes the pen away, or lets it
-  expire, while a link pick is open, and asserts the 409/423 surfaces and the pick is abandoned
-  safely. `docs/TESTING.md` says that trap is only testable against a real API, so it belongs in
-  `e2e-authoring-flow`.
+  only tests touching pointer-driven dependency creation exercise the old edge-drag. Deliberately
+  **not** faked in jsdom: a pointer pick needs a hit test against a canvas with real layout, which
+  jsdom does not provide (`TsldCanvas.test.tsx` defers the same half for the same reason), so a unit
+  test here would assert the client's optimism back at itself. It belongs in a flag-off Playwright
+  run, which the repo has no configuration for today — that, not the assertion, is the work.
 
 ### 77. The demo Unit 300 file is a lossy rendering of the conformance fixture
 

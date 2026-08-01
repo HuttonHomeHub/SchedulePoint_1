@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 
 /** Banner severity: a rejected/failed action (`warning`, default) vs. an informational succeeded-but-note
  * surface (`info`, e.g. a lossy-but-successful export). Only the colour + the ARIA role differ. */
@@ -34,16 +34,13 @@ export function EditConflictBanner({
   action,
 }: EditConflictBannerProps): React.ReactElement {
   return (
-    <div
+    <NoticeStrip
       role={severity === 'info' ? 'status' : 'alert'}
-      className={cn(
-        'flex items-start gap-3 rounded-lg border px-3 py-2 text-sm',
-        severity === 'info'
-          ? 'border-info/40 bg-info/10 text-info-text'
-          : 'border-warning/40 bg-warning/10 text-warning-text',
-      )}
+      tone={severity === 'info' ? 'info' : 'warning'}
+      density="comfortable"
+      messageFit="grow"
+      message={message}
     >
-      <p className="flex-1">{message}</p>
       {onRefresh ? (
         <Button variant="outline" size="sm" onClick={onRefresh}>
           Refresh
@@ -62,6 +59,6 @@ export function EditConflictBanner({
       >
         <X aria-hidden="true" className="size-4" />
       </button>
-    </div>
+    </NoticeStrip>
   );
 }

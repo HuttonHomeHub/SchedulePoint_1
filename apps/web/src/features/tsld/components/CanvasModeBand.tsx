@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 
 /** What the band has to say, or `null` for "say nothing and take no height". */
 export type CanvasModeStatement =
@@ -59,26 +60,21 @@ export function CanvasModeBand({
   onUndo?: (() => void) | undefined;
 }): React.ReactElement | null {
   if (!statement) return null;
-  const text = modeStatementText(statement);
   const confirmation = statement.kind === 'linked';
   return (
-    <div
-      // Not a live region. `TsldPanel` already announces every one of these transitions through the
-      // app's single polite region; a second one here would say the same sentence twice, which is
-      // the double-speak the plan named as this task's risk.
+    // No `role` is passed, so this is NOT a live region. `TsldPanel` already announces every one of
+    // these transitions through the app's single polite region; a second one here would say the
+    // same sentence twice, which is the double-speak the plan named as this task's risk.
+    <NoticeStrip
       data-testid="canvas-mode-band"
-      className={
-        confirmation
-          ? 'border-border bg-muted/60 flex items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-sm'
-          : 'border-primary/40 bg-primary/10 text-foreground flex items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-sm'
-      }
+      message={modeStatementText(statement)}
+      tone={confirmation ? 'muted' : 'accent'}
     >
-      <p className="min-w-0 truncate">{text}</p>
       {confirmation && onUndo ? (
         <Button type="button" variant="ghost" size="sm" onClick={onUndo}>
           Undo
         </Button>
       ) : null}
-    </div>
+    </NoticeStrip>
   );
 }
