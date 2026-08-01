@@ -1,15 +1,21 @@
 import type { CalendarShift } from '@repo/types';
-import { ChevronDown, Copy } from 'lucide-react';
+import { ChevronDown, Copy, Moon } from 'lucide-react';
 
 import { WEEKDAY_LONG_LABELS } from '../schemas/calendar-schemas';
 
 import { useAnnounce } from '@/components/ui/announcer';
+import { Button } from '@/components/ui/button';
 import { FormSection } from '@/components/ui/form-layout';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import { WindowListEditor } from '@/components/ui/window-list-editor';
 import { COPY_TARGET_GROUPS, copyDay } from '@/features/calendars/model/copy-day';
 import { presetWeek, WEEK_PRESETS } from '@/features/calendars/model/presets';
-import { rowsToWindows, windowsToRows, type TimeRow } from '@/features/calendars/model/window-rows';
+import {
+  rowsToWindows,
+  splitAcrossMidnight,
+  windowsToRows,
+  type TimeRow,
+} from '@/features/calendars/model/window-rows';
 import type { WindowProblem } from '@/features/calendars/model/window-rules';
 
 /** The week as editable text rows — index 0 = Monday … 6 = Sunday, matching storage. */
@@ -79,22 +85,29 @@ function describeRows(rows: readonly TimeRow[]): string {
 /**
  * The preset menu for the whole week. A preset is a verb: it replaces every day and then has no
  * further existence (`model/presets.ts`), so there is no selected state to show here.
+ *
+ * The trigger is the shared `Button`, not a hand-rolled one. The first cut re-declared the outline
+ * recipe by hand and silently dropped `text-foreground` from it — the exact omission that made a
+ * variant's ink vanish on a dark surface once already (ADR-0055 D3), reintroduced by copying the
+ * classes rather than the component.
  */
 function PresetMenu({ onApply }: { onApply: (id: (typeof WEEK_PRESETS)[number]['id']) => void }) {
   const { triggerRef, open, anchor, toggle, close } = useMenuTrigger();
   return (
     <>
-      <button
+      <Button
         ref={triggerRef}
         type="button"
+        variant="outline"
+        size="sm"
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="border-input hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+        className="gap-1.5"
       >
         Start from a preset
         <ChevronDown aria-hidden className="size-4" />
-      </button>
+      </Button>
       <Menu
         open={open}
         onClose={close}
@@ -112,6 +125,27 @@ function PresetMenu({ onApply }: { onApply: (id: (typeof WEEK_PRESETS)[number]['
   );
 }
 
+/**
+ * "Add a night shift" — the assisted entry for a period running past midnight.
+ *
+ * Storage measures minutes from local midnight and 1440 is 24:00, never a wrap (ADR-0036 §3), so
+ * 20:00–06:00 **is** two windows on two adjacent days. The editor writes both and shows both,
+ * rather than inferring the pair on read: a genuine 24-hour day and a night shift would look
+ * identical to any such inference, and the planner would have no way to tell which they had.
+ *
+ * The instruction sentence in the section description is not a substitute — it told a planner how
+ * to do this arithmetic themselves, which is what `splitAcrossMidnight` exists to avoid, and it
+ * left that helper with no callers at all.
+ */
+function AddNightShift({ dayLabel, onAdd }: { dayLabel: string; onAdd: () => void }) {
+  return (
+    <Button type="button" variant="ghost" size="sm" className="gap-1.5" onClick={onAdd}>
+      <Moon aria-hidden className="size-4" />
+      Night shift from {dayLabel}
+    </Button>
+  );
+}
+
 /** One day's "Copy hours to…" menu. Each target replaces those days and is announced. */
 function CopyDayMenu({
   dayLabel,
@@ -123,17 +157,19 @@ function CopyDayMenu({
   const { triggerRef, open, anchor, toggle, close } = useMenuTrigger();
   return (
     <>
-      <button
+      <Button
         ref={triggerRef}
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
+        className="gap-1.5"
       >
-        <Copy aria-hidden className="size-3.5" />
+        <Copy aria-hidden className="size-4" />
         Copy {dayLabel} to…
-      </button>
+      </Button>
       <Menu
         open={open}
         onClose={close}
@@ -196,6 +232,24 @@ export function WeeklyShiftEditor({
     );
   };
 
+  /** Write both halves of a night shift — this day's evening and the next day's morning. */
+  const addNightShift = (source: number): void => {
+    const { today, nextDay } = splitAcrossMidnight('20:00', '06:00');
+    const next = (source + 1) % 7;
+    onChange(
+      week.map((day, index) => {
+        if (index === source) return [...day, today];
+        if (index === next) return [...day, nextDay];
+        return day;
+      }),
+    );
+    // BOTH rows named. This is the one place a planner could believe something else was stored.
+    announce(
+      `Night shift added: ${WEEKDAY_LONG_LABELS[source]} ${today.start}–${today.end}, and ` +
+        `${WEEKDAY_LONG_LABELS[next]} ${nextDay.start}–${nextDay.end}. Adjust either period to suit.`,
+    );
+  };
+
   return (
     <FormSection
       title="Working week"
@@ -212,13 +266,24 @@ export function WeeklyShiftEditor({
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-medium">{label}</h4>
               {readOnly ? null : (
-                <CopyDayMenu dayLabel={label} onCopy={(targetId) => applyCopy(weekday, targetId)} />
+                <div className="flex items-center gap-1">
+                  <AddNightShift dayLabel={label} onAdd={() => addNightShift(weekday)} />
+                  <CopyDayMenu
+                    dayLabel={label}
+                    onCopy={(targetId) => applyCopy(weekday, targetId)}
+                  />
+                </div>
               )}
             </div>
             <WindowListEditor
               legend={`${label} hours`}
               rows={week[weekday] ?? []}
               readOnly={readOnly}
+              // Stated, not just implied by absent buttons: a reader otherwise sees a list of
+              // times where an editor was, with nothing saying whether it is shut or broken.
+              {...(readOnly
+                ? { readOnlyReason: 'You don’t have permission to change this calendar’s hours.' }
+                : {})}
               problems={problems.filter((problem) => problem.weekday === weekday)}
               onChange={(rows) =>
                 onChange(week.map((day, index) => (index === weekday ? rows : day)))

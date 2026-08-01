@@ -1,7 +1,14 @@
 import { Plus, X } from 'lucide-react';
 import { useId, useRef } from 'react';
 
+import { useAnnounce } from './announcer';
 import { Button } from './button';
+
+/** "Now works 2 periods." — the settled state after an add or a remove, not the transition. */
+function describeCount(count: number): string {
+  if (count === 0) return 'Now works no hours.';
+  return `Now works ${String(count)} period${count === 1 ? '' : 's'}.`;
+}
 
 /** One row of the editor, as text — see `features/calendars/model/window-rows`. */
 export interface WindowRowValue {
@@ -37,7 +44,10 @@ export interface WindowRowProblem {
  *   them, and marked `aria-invalid`;
  * - removing a row moves focus deliberately — to the next row's start, or to Add when the list
  *   empties — rather than letting it fall to `<body>`;
- * - read-only renders the values as text with no controls at all, rather than disabled inputs.
+ * - read-only renders the values as text with no controls at all, rather than disabled inputs,
+ *   and — given a `readOnlyReason` — states WHY, linked to the group rather than merely beside it;
+ * - adding and removing a period announces the settled result, because both change the group's
+ *   content with nothing on screen that draws the eye to what changed (WCAG 4.1.3).
  */
 export function WindowListEditor({
   rows,
@@ -46,6 +56,7 @@ export function WindowListEditor({
   description,
   problems = [],
   readOnly = false,
+  readOnlyReason,
   addLabel = 'Add hours',
   emptyLabel = 'Not worked.',
 }: {
@@ -57,12 +68,22 @@ export function WindowListEditor({
   description?: string;
   problems?: readonly WindowRowProblem[];
   readOnly?: boolean;
+  /**
+   * Why the controls are absent. Rendered and `aria-describedby`-linked to the group.
+   *
+   * Without it a reader sees a list of times where an editor was, with nothing saying whether the
+   * hours cannot be changed or the page failed — the "controls silently vanish" defect this
+   * repository has shipped more than once.
+   */
+  readOnlyReason?: string;
   addLabel?: string;
   emptyLabel?: string;
 }): React.ReactElement {
   const baseId = useId();
   const listRef = useRef<HTMLUListElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
+  const announce = useAnnounce();
+  const reasonId = `${baseId}-readonly-reason`;
 
   const problemFor = (index: number): string | undefined =>
     problems.find((problem) => problem.index === index)?.message;
@@ -72,7 +93,13 @@ export function WindowListEditor({
   };
 
   const remove = (index: number): void => {
+    const removed = rows[index];
     onChange(rows.filter((_, i) => i !== index));
+    announce(
+      removed === undefined
+        ? `Period removed from ${legend}.`
+        : `${removed.start}–${removed.end} removed from ${legend}. ${describeCount(rows.length - 1)}`,
+    );
     // Focus after the DOM settles. Falling to `<body>` here is the classic "where am I now?" —
     // a screen-reader user loses the group entirely and a keyboard user restarts from the top.
     queueMicrotask(() => {
@@ -83,8 +110,18 @@ export function WindowListEditor({
 
   if (readOnly) {
     return (
-      <div role="group" aria-label={legend} className="flex flex-col gap-1.5">
+      <div
+        role="group"
+        aria-label={legend}
+        {...(readOnlyReason ? { 'aria-describedby': reasonId } : {})}
+        className="flex flex-col gap-1.5"
+      >
         {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
+        {readOnlyReason ? (
+          <p id={reasonId} className="text-muted-foreground text-sm">
+            {readOnlyReason}
+          </p>
+        ) : null}
         {rows.length === 0 ? (
           <p className="text-muted-foreground text-sm">{emptyLabel}</p>
         ) : (
@@ -169,7 +206,10 @@ export function WindowListEditor({
           variant="outline"
           size="sm"
           aria-label={`${addLabel} — ${legend}`}
-          onClick={() => onChange([...rows, { start: '08:00', end: '17:00' }])}
+          onClick={() => {
+            onChange([...rows, { start: '08:00', end: '17:00' }]);
+            announce(`Period added to ${legend}. ${describeCount(rows.length + 1)}`);
+          }}
         >
           <Plus aria-hidden="true" className="size-4" />
           {addLabel}

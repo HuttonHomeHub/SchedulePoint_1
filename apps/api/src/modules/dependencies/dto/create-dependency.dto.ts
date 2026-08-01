@@ -31,7 +31,9 @@ export class CreateDependencyDto {
     maximum: 3650,
     default: 0,
     description:
-      'Signed lag in working days (a lead is negative). Mutually exclusive with `lagMinutes`.',
+      'Signed lag in working days (a lead is negative). A day is the standard working day of ' +
+      'this relationship’s lag calendar (ADR-0068); `TWENTY_FOUR_HOUR` is pinned at 1440. ' +
+      'Mutually exclusive with `lagMinutes`, which is exact.',
   })
   @IsOptional()
   @Type(() => Number)

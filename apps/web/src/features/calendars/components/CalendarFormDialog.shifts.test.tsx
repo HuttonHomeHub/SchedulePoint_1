@@ -220,11 +220,16 @@ describe('CalendarFormDialog — shift editor (VITE_CALENDAR_SHIFT_EDITOR)', () 
   });
 
   /** The hazard ADR-0068 §6 names: a planner retyping a remembered number after the factor moves. */
-  it('warns that changing it re-reads every existing duration, and that no dates move', () => {
+  /** Linked to the field, not merely beside it — and NOT a live region: it is derived from a value
+      the planner is still typing, so an alert would interrupt on every keystroke, announcing a
+      transition rather than a settled result. */
+  it('warns that changing it re-reads every existing duration, linked to the field itself', () => {
     renderDialog({ calendar: SPLIT_SHIFT });
+    const field = screen.getByLabelText('Hours per day');
+    expect(field).not.toHaveAccessibleDescription(/No dates move/);
+    fireEvent.change(field, { target: { value: '8' } });
+    expect(field).toHaveAccessibleDescription(/No dates move/);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Hours per day'), { target: { value: '8' } });
-    expect(screen.getByRole('alert')).toHaveTextContent(/No dates move/);
   });
 
   it('drops the flag-off advisory, which would now be false', () => {
@@ -239,5 +244,28 @@ describe('CalendarFormDialog — shift editor (VITE_CALENDAR_SHIFT_EDITOR)', () 
     const monday = screen.getByRole('group', { name: 'Monday hours' });
     expect(within(monday).queryByRole('textbox')).not.toBeInTheDocument();
     expect(within(monday).getByText('08:00–12:00')).toBeInTheDocument();
+  });
+});
+
+describe('CalendarFormDialog — the window-only calendar is savable (VITE_CALENDAR_SHIFT_EDITOR)', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch)
+      .mockReset()
+      .mockResolvedValue({ ...SPLIT_SHIFT, exceptions: [] });
+  });
+
+  /**
+   * A calendar with no working week is valid at the domain and at the API — it is the shutdown /
+   * turnaround shape — but the form kept a hidden `workingWeekdays >= 1` rule that the shift editor
+   * does not render. Applying the Window-only preset and saving produced "Select at least one
+   * working day" with **no control anywhere on screen** able to satisfy it: a dead end.
+   */
+  it('saves an empty week instead of refusing it through a control that is not rendered', async () => {
+    renderDialog({ calendar: { ...SPLIT_SHIFT, workingWeekdays: 0, shifts: [] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    const body = await sentBody('PATCH');
+    expect(body.shifts).toEqual([]);
+    expect(screen.queryByText(/Select at least one working day/)).not.toBeInTheDocument();
   });
 });

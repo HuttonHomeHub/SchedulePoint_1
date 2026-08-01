@@ -47,7 +47,10 @@ export class ScheduleController {
   @ApiOkResponse({ type: PlanScheduleSummaryDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
-    description: 'The plan has no start date (PLAN_START_REQUIRED).',
+    description:
+      'The plan has no start date (PLAN_START_REQUIRED), or a calendar the plan schedules on has ' +
+      'no working time at all — an empty week with no working exceptions ' +
+      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar’s id and name).',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async recalculate(
@@ -74,7 +77,9 @@ export class ScheduleController {
   @ApiOkResponse({ type: ProgrammeScheduleResultDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
-    description: 'A plan in the closure has no start date (PLAN_START_REQUIRED).',
+    description:
+      'A plan in the closure has no start date (PLAN_START_REQUIRED), or a calendar ANY plan in ' +
+      'the closure schedules on has no working time (CALENDAR_HAS_NO_WORKING_TIME).',
   })
   @ApiLockedResponse(
     'One or more plans in the closure are held by another editor (PROGRAMME_PLANS_LOCKED) — nothing written.',
@@ -109,7 +114,10 @@ export class ScheduleController {
     description: 'Plan not found, or the target activity is not in the plan.',
   })
   @ApiUnprocessableEntityResponse({
-    description: 'The plan has no start date (PLAN_START_REQUIRED).',
+    description:
+      'The plan has no start date (PLAN_START_REQUIRED), or a calendar the plan schedules on has ' +
+      'no working time at all — an empty week with no working exceptions ' +
+      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar’s id and name).',
   })
   async floatPaths(
     @CurrentUser() principal: Principal,

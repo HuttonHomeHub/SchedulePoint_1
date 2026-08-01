@@ -8,6 +8,8 @@ import {
 } from '@repo/types';
 import { z } from 'zod';
 
+import { CALENDAR_SHIFT_EDITOR_ENABLED } from '@/config/env';
+
 /**
  * The tier filter the organisation calendar list accepts (`?scope=`, ADR-0053 §1) — mirrors the
  * API's `CalendarListQueryDto`. `org` is the default and returns exactly the pre-ADR-0053 result
@@ -93,7 +95,8 @@ export function formatWorkingWeekdays(mask: number): string {
 /**
  * Calendar create/edit form schema — mirrors the API DTO. `workingWeekdays` is
  * the 7-bit pattern (bit 0 = Monday … bit 6 = Sunday) bound to the toggle group;
- * it must be a valid mask (≥ 1 working day). Name ≤ 120, description ≤ 2000.
+ * it must be a valid mask, and — only while the shift editor is off — at least one working day.
+ * Name ≤ 120, description ≤ 2000.
  */
 export const calendarFormSchema = z
   .object({
@@ -101,15 +104,18 @@ export const calendarFormSchema = z
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
     workingWeekdays: z
       .number()
-      // Deliberately NOT `WorkingWeekdays.isValid`, which now accepts 0 — a window-only base week,
-      // valid at the domain and at the API since TECH_DEBT #79 (ADR-0036 §2). This form has no way
-      // to author the dated exception windows such a calendar needs, so offering the empty week
-      // here would produce a calendar on which nothing can ever be scheduled and report the failure
-      // only at the next recalculation. The bound belongs to THIS FORM's current capability, not to
-      // the domain, so it is stated here rather than borrowed from the shared helper. It lifts with
-      // the shift-pattern editor (TECH_DEBT #80, web slice).
+      // The empty week (mask 0) is a WINDOW-ONLY calendar — valid at the domain and at the API since
+      // TECH_DEBT #79 (ADR-0036 §2), and the shape a shutdown or a turnaround needs.
+      //
+      // The bound is therefore the FORM's capability, not the domain's, and it moves with the flag.
+      // Flag-off, the weekday toggles are the only week control and there is no way to author the
+      // dated windows an empty week needs, so an empty mask would produce a calendar on which
+      // nothing can ever be scheduled and report it only at the next recalculation. Flag-on, this
+      // field is not rendered at all — the shift editor owns the week — and keeping the bound made
+      // a **dead end**: applying the Window-only preset, saving, and reopening left Save refused
+      // by a hidden field with no control anywhere on screen to satisfy it.
       .refine(
-        (mask) => mask >= 1 && WorkingWeekdays.isValid(mask),
+        (mask) => WorkingWeekdays.isValid(mask) && (CALENDAR_SHIFT_EDITOR_ENABLED || mask >= 1),
         'Select at least one working day.',
       ),
     /**

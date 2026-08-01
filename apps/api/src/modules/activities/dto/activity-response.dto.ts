@@ -53,7 +53,8 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({
     description:
-      'Working days, ROUNDED from the stored minutes (milestones are 0). A sub-day activity ' +
+      'Working days on THIS ACTIVITY’S CALENDAR (ADR-0068) — an eight-hour calendar counts 480 ' +
+      'working minutes to the day, not 1440 — rounded from the stored minutes (milestones are 0). A sub-day activity ' +
       'reads back here as its nearest whole day — read `durationMinutes` for the exact value.',
   })
   durationDays!: number;
@@ -199,7 +200,9 @@ export class ActivityResponseDto implements ActivitySummary {
     nullable: true,
     type: Number,
     description:
-      'Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035); null derives it from percent complete.',
+      'Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035); null ' +
+      'derives it from percent complete. A day is the ACTIVITY’S CALENDAR’S standard working day ' +
+      '(ADR-0068), not always 24 hours.',
   })
   remainingDurationDays!: number | null;
 
@@ -346,7 +349,8 @@ export class ActivityResponseDto implements ActivitySummary {
     nullable: true,
     type: Number,
     description:
-      'Resource-levelling applied delay in whole working days (engine-owned, ADR-0041 §3), or null.',
+      'Resource-levelling applied delay in whole working days (engine-owned, ADR-0041 §3), or ' +
+      'null. A day is the ACTIVITY’S CALENDAR’S standard working day (ADR-0068).',
   })
   levelingDelayDays!: number | null;
 

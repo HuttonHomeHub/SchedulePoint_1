@@ -457,6 +457,46 @@ rather than quietly sorted: storage is order-sensitive, and reordering the autho
 pair they got wrong. An **empty** `windows` array is refused too, so "no working time" has exactly one
 spelling (`isWorking: false`, or simply omitting both).
 
+### The standard working day, and what `…Days` fields mean (ADR-0068)
+
+A calendar carries a **standard working day** — P6's `day_hr_cnt`:
+
+| Field                | Where                                         | Meaning                                                              |
+| -------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+| `hoursPerDay`        | calendar create/update **request**, and reads | The standard working day in hours, 0.25–24. May be fractional (7.5). |
+| `hoursPerDayMinutes` | calendar reads only                           | The stored truth behind it. `1440` is a 24-hour day.                 |
+
+Omitting `hoursPerDay` on a write **derives** it from the weekly pattern being written — the modal
+daily working hours among the days that work, or 24 for a calendar with no base week. It is derived
+**once, at that write, and stored**: a standing derivation would make the factor a function of the
+shift rows, so shortening one Friday would silently reinterpret every stored duration.
+
+**This is the day↔minute factor for every day-denominated field measured on that calendar**, and it
+changes what those fields have always meant:
+
+| Field                                          | Measured on                                                                |
+| ---------------------------------------------- | -------------------------------------------------------------------------- |
+| `durationDays`, `remainingDurationDays`        | the **activity's own** calendar, else the plan's                           |
+| `levelingDelayDays`, `totalFloat`, `freeFloat` | the same                                                                   |
+| `lagDays`                                      | the **relationship's lag calendar** (`TWENTY_FOUR_HOUR` is pinned at 1440) |
+| a baseline's `durationDays`                    | the factor **frozen at capture**, not the live calendar                    |
+
+So `durationDays: 5` on an eight-hour calendar is 2,400 working minutes, not 7,200; and the same
+2,400 minutes reads back as `5` there, `2.5` on a sixteen-hour two-shift calendar and `2` (from
+1.67) at twenty-four hours. Clients that assumed a day was always 1440 minutes should send
+`durationMinutes` / `lagMinutes`, which are exact and unaffected.
+
+Changing a calendar's `hoursPerDay` does **not** rewrite stored durations and moves no dates. It
+changes what the same stored minutes are reported as.
+
+### `CALENDAR_HAS_NO_WORKING_TIME` (422)
+
+A calendar with an empty week and no working exceptions has no working time at all. It is a valid
+thing to store — it is a turnaround calendar mid-authoring — but nothing can be scheduled on it, so
+**recalculate** (`POST …/schedule/recalculate`, `…/recalculate-programme`) and **baseline variance**
+(`GET …/baselines/variance`) reject with 422 `CALENDAR_HAS_NO_WORKING_TIME`, carrying the calendar's
+id and name. Previously these 500ed.
+
 | Method | Path                                              | Notes                                                                                                                                                                                |
 | ------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | POST   | `…/calendars/:calendarId/exceptions`              | Add a dated exception. `windows` or `isWorking`; neither ⇒ a holiday.                                                                                                                |

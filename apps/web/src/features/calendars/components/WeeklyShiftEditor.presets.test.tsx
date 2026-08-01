@@ -200,3 +200,58 @@ describe('WeeklyShiftEditor — copy day', () => {
     expect(screen.queryByRole('button', { name: /^Copy / })).not.toBeInTheDocument();
   });
 });
+
+describe('WeeklyShiftEditor — night shifts and read-only', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch)
+      .mockReset()
+      .mockResolvedValue({ ...CALENDAR, exceptions: [] });
+  });
+
+  /** 1440 is 24:00, never a wrap — so a night shift IS two windows on two days (ADR-0036 §3).
+      The helper that computes them had no callers at all: the editor told the planner how to do
+      the arithmetic instead of doing it. */
+  it('writes both halves of a night shift, on two adjacent days', () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Night shift from Monday' }));
+    expect(hoursOf('Monday')).toContain('20:00–24:00');
+    expect(hoursOf('Tuesday')).toContain('00:00–06:00');
+  });
+
+  it('wraps Sunday night onto Monday morning', () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Night shift from Sunday' }));
+    expect(hoursOf('Sunday')).toContain('20:00–24:00');
+    expect(hoursOf('Monday')).toContain('00:00–06:00');
+  });
+
+  /** Both rows named: this is the one place a planner could believe something else was stored. */
+  it('announces both periods it created', async () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Night shift from Monday' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(
+        'Night shift added: Monday 20:00–24:00, and Tuesday 00:00–06:00',
+      ),
+    );
+  });
+
+  it('sends both windows to the server unchanged', async () => {
+    renderDialog({ calendar: { ...CALENDAR, shifts: [] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Night shift from Monday' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await sentShifts()).toEqual([
+      { weekday: 0, startMinute: 1200, endMinute: 1440 },
+      { weekday: 1, startMinute: 0, endMinute: 360 },
+    ]);
+  });
+
+  /** Controls vanishing with no reason is the defect class this epic's own contract calls out. */
+  it('tells a reader WHY the hours cannot be changed, linked to the group', () => {
+    renderDialog({ readOnly: true });
+    expect(screen.getByRole('group', { name: 'Monday hours' })).toHaveAccessibleDescription(
+      /don’t have permission to change this calendar’s hours/,
+    );
+  });
+});

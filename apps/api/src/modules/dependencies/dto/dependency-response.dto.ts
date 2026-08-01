@@ -40,8 +40,10 @@ export class DependencyResponseDto implements DependencySummary {
 
   @ApiProperty({
     description:
-      'Signed lag in working days (a lead is negative), ROUNDED from the stored minutes. Read ' +
-      '`lagMinutes` for the exact value of a sub-day lag.',
+      'Signed lag in working days (a lead is negative), ROUNDED from the stored minutes. A day ' +
+      'is the standard working day of THIS RELATIONSHIP’S LAG CALENDAR (ADR-0068) — an ' +
+      'eight-hour calendar counts 480 minutes to the day; `TWENTY_FOUR_HOUR` is pinned at 1440. ' +
+      'Read `lagMinutes` for the exact value of a sub-day lag.',
   })
   lagDays!: number;
 

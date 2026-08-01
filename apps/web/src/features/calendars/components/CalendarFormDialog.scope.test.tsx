@@ -94,7 +94,12 @@ describe('CalendarFormDialog — scope choice (flag on)', () => {
       screen.getByText(/don’t have permission to add to the shared organisation library/),
     ).toBeInTheDocument();
     // The submit is blocked too, so the planner can't fill the form and lose the work to a 403.
-    expect(screen.getByRole('button', { name: 'Create calendar' })).toBeDisabled();
+    // `aria-disabled`, not the native attribute — a natively disabled submit blurs to `<body>`
+    // the instant it flips (ADR-0060 M6). It is genuinely inert: `pointer-events-none` + a guard.
+    expect(screen.getByRole('button', { name: 'Create calendar' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('disables — but keeps — the organisation option beside a usable project option, and says why', () => {

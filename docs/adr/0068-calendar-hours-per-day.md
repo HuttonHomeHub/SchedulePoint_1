@@ -132,8 +132,15 @@ So: stored minutes unchanged, **dates unchanged, displayed `durationDays` change
 activity reads "10 days" at 24h and "30 days" at 8h. That is correct, and it is also the hazard: a
 planner who remembers it as 12 days and retypes `12` has just cut it to 5 760 minutes — a real,
 dates-moving edit that looks like a correction. The calendar editor therefore states the consequence
-and names **how many activities' displayed durations will change** before saving it, the ADR-0053 §2
-per-class-count pattern applied to a non-blocking case.
+before saving it, linked to the field rather than merely printed beside it.
+
+_Amended on implementation._ This paragraph originally required the editor to name **how many
+activities' displayed durations will change** — the ADR-0053 §2 per-class-count pattern applied to a
+non-blocking case. What shipped states the consequence without the count, because no endpoint
+returns one: it needs a per-calendar usage read across every activity and plan that resolves to the
+calendar, which is a read this epic did not build. Recorded as `docs/TECH_DEBT.md` #83 rather than
+left here describing a feature that does not exist — the whole point of ADR-0058. The warning is
+accurate; it is less specific than this section asked for.
 
 ## Consequences
 

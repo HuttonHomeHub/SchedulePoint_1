@@ -250,10 +250,14 @@ export function CalendarFormDialog({
   // legitimately different (a P6 `day_hr_cnt` of 8 on a calendar with a 10-hour Saturday is
   // ordinary), so this advises and never overwrites.
   const parsedWeek = CALENDAR_SHIFT_EDITOR_ENABLED ? weekRowsToShifts(week) : null;
+  const suggestedHoursId = useId();
+  const dayFactorWarningId = useId();
   const suggestedHoursPerDay =
     parsedWeek?.ok === true ? deriveHoursPerDayMinutes(parsedWeek.shifts) / 60 : null;
   // `useWatch`, not `watch()` — the file's existing convention, and the memoization-safe one.
   const hoursPerDayValue = useWatch({ control, name: 'hoursPerDay' }) ?? 24;
+  const showSuggestedHours =
+    suggestedHoursPerDay !== null && suggestedHoursPerDay !== hoursPerDayValue;
   // Only on an EDIT, and only once the number actually differs from what is stored — a create has
   // no existing durations to re-read, and warning about a value nobody changed is noise.
   const dayFactorChanged =
@@ -334,7 +338,10 @@ export function CalendarFormDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      size={isEdit ? 'lg' : 'md'}
+      // Both paths take `lg` while the shift editor is on: create now renders the full seven-day
+      // week plus the standard-working-day section, which `md` (448px) was sized for a name, a
+      // description and seven checkboxes.
+      size={isEdit || CALENDAR_SHIFT_EDITOR_ENABLED ? 'lg' : 'md'}
       title={title}
       {...(isEdit ? {} : { description: 'Define a reusable working-day pattern.' })}
     >
@@ -461,10 +468,22 @@ export function CalendarFormDialog({
                     readOnly={readOnly}
                     error={errors.hoursPerDay?.message}
                     className="sm:w-40"
+                    // BOTH notes are linked, not merely adjacent. Proximity is a sighted-reader
+                    // convention: a screen-reader user who tabs here would otherwise hear the
+                    // label and the validation error and nothing about the fact that this number
+                    // re-reads every duration on the calendar.
+                    aria-describedby={
+                      [
+                        showSuggestedHours ? suggestedHoursId : null,
+                        dayFactorChanged ? dayFactorWarningId : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined
+                    }
                     {...register('hoursPerDay', { valueAsNumber: true })}
                   />
-                  {suggestedHoursPerDay !== null && suggestedHoursPerDay !== hoursPerDayValue ? (
-                    <p className="text-muted-foreground text-sm" role="note">
+                  {showSuggestedHours ? (
+                    <p id={suggestedHoursId} className="text-muted-foreground text-sm">
                       The week above works {formatHours(suggestedHoursPerDay)} hours on a typical
                       day. Leaving this at {formatHours(hoursPerDayValue)} is allowed — P6 calendars
                       often do — but the two numbers mean different things and only this one
@@ -472,7 +491,12 @@ export function CalendarFormDialog({
                     </p>
                   ) : null}
                   {dayFactorChanged ? (
-                    <p className="text-destructive-text text-sm" role="alert">
+                    // A DESCRIPTION, not a live region. It is derived from a value the planner is
+                    // still typing, so `role="alert"` interrupted on every keystroke — announcing a
+                    // transition rather than a settled result, the opposite of the rule this
+                    // project states for status messages. Linked above, it is read when the field
+                    // is reached and when it is re-read, which is when it matters.
+                    <p id={dayFactorWarningId} className="text-destructive-text text-sm">
                       Changing this re-reads every existing duration on this calendar. No dates move
                       and no work is rescheduled — the stored hours are unchanged — but an activity
                       showing “10 days” today will show a different number of days after you save.
@@ -516,7 +540,11 @@ export function CalendarFormDialog({
             {readOnly ? null : (
               <Button
                 type="submit"
-                disabled={mutation.isPending || blockedByOrgPermission}
+                // `aria-disabled` + the class pair, never the native attribute: a natively disabled
+                // submit is blurred to `<body>` the instant it flips, and it flips twice per save
+                // (ADR-0060 M6). The `pointer-events-none` is what makes it genuinely inert.
+                className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                aria-disabled={mutation.isPending || blockedByOrgPermission}
                 aria-busy={mutation.isPending}
               >
                 {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create calendar'}

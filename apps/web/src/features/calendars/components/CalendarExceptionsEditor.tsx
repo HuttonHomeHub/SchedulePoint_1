@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { CalendarExceptionSummary } from '@repo/types';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -57,16 +57,20 @@ function ExceptionKindSelect({
   kind,
   onKindChange,
   selectId,
+  selectRef,
 }: {
   kind: ExceptionKind;
   onKindChange: (kind: ExceptionKind) => void;
   selectId: string;
+  /** Lets a host claim focus for this control — the edit form does, on open. */
+  selectRef?: React.Ref<HTMLSelectElement>;
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={selectId}>Type</Label>
       <Select
         id={selectId}
+        {...(selectRef ? { ref: selectRef } : {})}
         value={kind}
         onChange={(event) => onKindChange(event.target.value as ExceptionKind)}
       >
@@ -144,6 +148,14 @@ function ExceptionEditForm({
   const updateException = useUpdateException(orgSlug, calendarId);
   const announce = useAnnounce();
   const selectId = useId();
+  // The Edit trigger that opened this form has just been unmounted, so focus is on `<body>` unless
+  // something claims it. Claimed here, on the first control, the way `WindowListEditor` claims it
+  // after removing a row — a keyboard user must not have to find their way back to a form they
+  // just opened. `onDone` restores focus to the row's own trigger (see the row below).
+  const firstControlRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    firstControlRef.current?.focus();
+  }, []);
   const [kind, setKind] = useState<ExceptionKind>(() => exceptionKindOf(exception));
   const [rows, setRows] = useState<TimeRow[]>(() => exceptionRowsOf(exception));
   const [label, setLabel] = useState(exception.label ?? '');
@@ -184,7 +196,12 @@ function ExceptionEditForm({
           {updateException.error.message}
         </p>
       ) : null}
-      <ExceptionKindSelect kind={kind} onKindChange={setKind} selectId={selectId} />
+      <ExceptionKindSelect
+        kind={kind}
+        onKindChange={setKind}
+        selectId={selectId}
+        selectRef={firstControlRef}
+      />
       <ExceptionWindowFields
         kind={kind}
         rows={rows}
@@ -203,7 +220,16 @@ function ExceptionEditForm({
         <Button
           type="button"
           size="sm"
-          onClick={onSave}
+          // `aria-disabled` + the class pair, never the native attribute: a natively disabled
+          // button is blurred to `<body>` the instant it flips, and it flips twice per save. The
+          // class is not decoration — without it the control announces as unavailable to assistive
+          // tech while remaining fully clickable, which is a Name/Role/Value mismatch AND a
+          // double-submit. (Shipped without it; caught by the a11y and component gates together.)
+          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          onClick={() => {
+            if (updateException.isPending) return;
+            onSave();
+          }}
           aria-disabled={updateException.isPending}
           aria-busy={updateException.isPending}
         >
@@ -249,6 +275,9 @@ export function CalendarExceptionsEditor({
   const [problems, setProblems] = useState<readonly WindowProblem[]>([]);
   const [message, setMessage] = useState<string | undefined>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // `useId`, not a hard-coded string: two editors on one screen would otherwise share a `<label>`
+  // target and the second one's Type field would be unlabelled. The edit form already did this.
+  const addKindId = useId();
 
   const {
     register,
@@ -281,6 +310,24 @@ export function CalendarExceptionsEditor({
       },
     );
   });
+
+  /**
+   * Leave edit mode and put focus back on the row's own Edit button.
+   *
+   * Closing unmounts the form, so without this focus falls to `<body>` — the same defect
+   * `onRemove` below already guards against, and the reason a keyboard user who cancels an edit
+   * would otherwise be returned to the top of the document.
+   */
+  const closeEditor = (exceptionId: string): void => {
+    setEditingId(null);
+    // After the row re-renders. The trigger does not exist yet in this tick.
+    requestAnimationFrame(() => {
+      const trigger = listRegionRef.current?.querySelector<HTMLElement>(
+        `[data-edit-exception="${exceptionId}"]`,
+      );
+      (trigger ?? listRegionRef.current)?.focus();
+    });
+  };
 
   const onRemove = (exception: CalendarExceptionSummary): void => {
     removeException.mutate(exception.id, {
@@ -334,7 +381,7 @@ export function CalendarExceptionsEditor({
                     exception={exception}
                     orgSlug={orgSlug}
                     calendarId={calendarId}
-                    onDone={() => setEditingId(null)}
+                    onDone={() => closeEditor(exception.id)}
                   />
                 ) : (
                   <>
@@ -361,6 +408,9 @@ export function CalendarExceptionsEditor({
                             variant="ghost"
                             size="sm"
                             onClick={() => setEditingId(exception.id)}
+                            // Queried by `closeEditor` to hand focus back to the control that
+                            // opened the form — a per-row ref map for one lookup would be worse.
+                            data-edit-exception={exception.id}
                             aria-label={`Edit exception on ${formatCalendarDate(exception.date)}`}
                           >
                             Edit
@@ -406,7 +456,7 @@ export function CalendarExceptionsEditor({
               className="sm:w-auto"
               {...register('date')}
             />
-            <ExceptionKindSelect kind={kind} onKindChange={setKind} selectId="exception-kind" />
+            <ExceptionKindSelect kind={kind} onKindChange={setKind} selectId={addKindId} />
             <TextField
               label="Label (optional)"
               autoComplete="off"
@@ -416,9 +466,12 @@ export function CalendarExceptionsEditor({
             />
             <Button
               type="submit"
-              disabled={addException.isPending}
+              // `aria-disabled`, never the native attribute — see the Save button above. The
+              // accessible name tracks the visible text so it stays contained in it (SC 2.5.3).
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+              aria-disabled={addException.isPending}
               aria-busy={addException.isPending}
-              aria-label="Add exception"
+              aria-label={addException.isPending ? 'Adding exception' : 'Add exception'}
             >
               {addException.isPending ? 'Adding…' : 'Add'}
             </Button>
