@@ -195,7 +195,6 @@ describe('onTsldLag (ADR-0052 M3)', () => {
       dependencyId: 'd1',
       type: 'SS',
       lagDays: 2,
-      lagMinutes: 960,
       lagCalendar: 'TWENTY_FOUR_HOUR',
       version: 7,
     });
