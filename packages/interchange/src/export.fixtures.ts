@@ -33,6 +33,8 @@ export function buildExportGraph(overrides: ExportGraphOverrides = {}): ExportGr
         key: 'CAL1',
         name: 'Standard',
         scope: 'PROJECT',
+        // Eight worked hours a day — matching the shifts below, and what P6 writes as `day_hr_cnt`.
+        hoursPerDay: 8,
         // Mon–Fri 08:00–16:00 (weekday 0 = Monday … 4 = Friday; minutes from midnight).
         shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
         exceptions: [
@@ -117,6 +119,7 @@ export function buildRichExportGraph(overrides: ExportGraphOverrides = {}): Expo
         key: 'CAL1',
         name: 'Standard',
         scope: 'PROJECT',
+        hoursPerDay: 8,
         shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
         exceptions: [{ startDate: '2026-01-01', endDate: '2026-01-01', label: null, windows: [] }],
       },
@@ -374,6 +377,10 @@ export function toComparable(
         // XER carries the tier as `clndr_type`, so it round-trips exactly; MSPDI has no equivalent and
         // every re-imported calendar lands project-local → normalise both sides for an MSPDI trip.
         scope: mspdiLossy ? 'PROJECT' : calendar.scope,
+        // XER carries the standard working day as `day_hr_cnt` (ADR-0068), so it round-trips
+        // exactly; MSPDI has no per-calendar equivalent (its HoursPerDay is a project-wide default),
+        // so a re-imported MSPDI calendar carries none → normalise both sides for an MSPDI trip.
+        hoursPerDay: mspdiLossy ? undefined : calendar.hoursPerDay,
         shifts: calendar.shifts.map((shift) => `${shift.weekday}:${windowKey(shift)}`).sort(),
         exceptions: [...calendar.exceptions]
           .flatMap((exception) => {

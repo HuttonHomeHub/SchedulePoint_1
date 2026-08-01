@@ -929,6 +929,35 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(plan.calendarId).toBe(imported.id);
   });
 
+  it('stores the file’s own shift windows and standard working day, not a flattened 24-hour week', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .expect(201);
+
+    const imported = await prisma.calendar.findFirstOrThrow({
+      where: { organizationId: orgId, name: 'Site 6-Day', deletedAt: null },
+      include: { shifts: { orderBy: { weekday: 'asc' } } },
+    });
+
+    // The fixture works P6 days 2–6 — Monday–Friday — 08:00–16:00. Every window used to be
+    // flattened to a whole day, so an imported eight-hour calendar scheduled as a 24-hour one
+    // (ADR-0036/0067).
+    expect(imported.shifts.map((s) => [s.weekday, s.startMinute, s.endMinute])).toEqual([
+      [0, 480, 960],
+      [1, 480, 960],
+      [2, 480, 960],
+      [3, 480, 960],
+      [4, 480, 960],
+    ]);
+    // And P6's `day_hr_cnt` of 8 is the stored day↔minute factor (ADR-0068) — with the old default
+    // of 1440 the file's own 40-hour task read back as 0.6 days.
+    expect(imported.hoursPerDayMinutes).toBe(480);
+  });
+
   it('maps each clndr_type to its tier: CA_Project/CA_Base → project, a resource’s CA_Rsrc → org', async () => {
     const { actor, orgId } = await adminWithOrg();
     const projectId = await makeProject(actor);

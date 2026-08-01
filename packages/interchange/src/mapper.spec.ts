@@ -227,3 +227,49 @@ describe('importXer — CALENDAR.clndr_type drives the tier (ADR-0053 §5)', () 
     expect(calendarDrop?.detail).toMatch(/base-calendar inheritance/);
   });
 });
+
+describe('importXer — CALENDAR.day_hr_cnt is the calendar’s standard working day (ADR-0068)', () => {
+  /** A calendar's hours-per-day is the day↔minute factor for every duration measured on it, so
+      losing it re-reads the file's own durations at 24 h/day — a 5-day task arriving as 2. */
+  it('carries the source figure into the import graph', () => {
+    expect(importOk(xerWithClndrType(null)).graph.calendars[0]?.hoursPerDay).toBe(8);
+  });
+
+  it('carries a fractional figure exactly, without rounding to a whole hour', () => {
+    const xer = buildXer([
+      PROJECT_TABLE,
+      {
+        name: 'CALENDAR',
+        fields: ['clndr_id', 'clndr_name', 'default_flag', 'day_hr_cnt', 'clndr_data'],
+        rows: [['C1', 'Site', 'Y', '7.5', standardClndrData()]],
+      },
+    ]);
+    expect(importOk(xer).graph.calendars[0]?.hoursPerDay).toBe(7.5);
+  });
+
+  /** Absent = "let the target derive it", NOT "assume eight" — inventing a figure here would be a
+      silent retiming dressed up as a default. */
+  it('omits it entirely when the source has no day_hr_cnt column', () => {
+    const xer = buildXer([
+      PROJECT_TABLE,
+      {
+        name: 'CALENDAR',
+        fields: ['clndr_id', 'clndr_name', 'default_flag', 'clndr_data'],
+        rows: [['C1', 'Standard', 'Y', standardClndrData()]],
+      },
+    ]);
+    expect(importOk(xer).graph.calendars[0]).not.toHaveProperty('hoursPerDay');
+  });
+
+  it('rejects an out-of-range figure rather than storing an impossible day', () => {
+    const xer = buildXer([
+      PROJECT_TABLE,
+      {
+        name: 'CALENDAR',
+        fields: ['clndr_id', 'clndr_name', 'default_flag', 'day_hr_cnt', 'clndr_data'],
+        rows: [['C1', 'Broken', 'Y', '0', standardClndrData()]],
+      },
+    ]);
+    expect(importOk(xer).graph.calendars[0]).not.toHaveProperty('hoursPerDay');
+  });
+});

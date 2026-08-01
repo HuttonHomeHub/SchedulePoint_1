@@ -148,6 +148,21 @@ function minutesToHours(minutes: number): string {
 }
 
 /**
+ * Emit P6's `day_hr_cnt` — the calendar's standard working day in hours (ADR-0068), the round-trip
+ * partner of the adapter's read. It was hard-coded `'8'` here while the importer read the real value,
+ * so every export claimed an 8-hour day whatever the calendar said: a 24-hour calendar's 5-day task
+ * re-imported as 15 days.
+ *
+ * Trailing zeros are trimmed (`7.5` not `7.50`, `8` not `8.0`) — P6 writes the short form, and a
+ * round trip through our own parser must not depend on the long one. Absent ⇒ `8`, P6's own default,
+ * for a canonical model built without the field (a hand-written fixture, never the API export path,
+ * where the column is NOT NULL).
+ */
+function emitDayHrCnt(hoursPerDay: number | undefined): string {
+  return String(Number((hoursPerDay ?? 8).toFixed(2)));
+}
+
+/**
  * Emit a P6 `clndr_data` blob from a canonical calendar — the inverse of {@link parseClndrData}. Emits a
  * `DaysOfWeek` region (one `(0||N()( … ))` entry per weekday 1–7, each carrying its `s|HH:MM|f|HH:MM`
  * windows) and an `Exceptions` region (one `(0||d|SERIAL( … ))` entry per dated exception). A non-working
@@ -329,7 +344,7 @@ export function emitXerFromCanonical(model: CanonicalModel): XerEmitResult {
     clndr_name: calendar.name,
     clndr_type: SOURCE_TYPE_TO_CLNDR_TYPE[calendar.sourceType],
     default_flag: calendar.id === model.project.defaultCalendarId ? 'Y' : 'N',
-    day_hr_cnt: '8',
+    day_hr_cnt: emitDayHrCnt(calendar.hoursPerDay),
     clndr_data: emitClndrData(calendar),
   }));
 

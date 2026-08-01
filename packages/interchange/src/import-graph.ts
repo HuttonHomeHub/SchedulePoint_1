@@ -129,6 +129,16 @@ export const importCalendarSchema = z
      * calendar — plus the explicit `globalCalendarScope: 'ORG'` opt-in for source *global* calendars.
      */
     scope: importCalendarScopeSchema,
+    /**
+     * The calendar's standard working day in hours — the target's `hoursPerDay` (ADR-0068), carried
+     * straight from P6's `day_hr_cnt`. It is the day↔minute factor for every day-denominated field
+     * measured on this calendar, so an import that drops it re-reads the file's own durations at
+     * 24 h/day: a 5-day task on an 8 h calendar arrives as 40 working hours and reads back as 2 days.
+     *
+     * Absent = let the target derive it (MSPDI has no equivalent field), which is what an import has
+     * always got.
+     */
+    hoursPerDay: z.number().positive().max(24).optional(),
     shifts: z.array(importCalendarShiftSchema),
     exceptions: z.array(importCalendarExceptionSchema),
   })

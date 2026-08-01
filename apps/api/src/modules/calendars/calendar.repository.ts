@@ -118,16 +118,30 @@ export interface CreateCalendarExceptionInput {
 }
 
 /**
- * One imported calendar (+ its whole-day exceptions) for the batched import write. Ids are
- * CLIENT-ASSIGNED (the `@default(uuid(7))` is bypassed) so the caller can resolve key→id references
- * before any DB write (interchange commit, ADR-0050 B3). Shifts derive from the mask and windows from
- * `isWorking`, exactly as the single `create`/`createException`.
+ * One imported calendar (+ its exceptions) for the batched import write. Ids are CLIENT-ASSIGNED (the
+ * `@default(uuid(7))` is bypassed) so the caller can resolve key→id references before any DB write
+ * (interchange commit, ADR-0050 B3).
+ *
+ * Shifts and exception windows are the source file's OWN intraday periods, written verbatim. They
+ * used to be flattened — a weekday mask materialised as full-day shifts, an exception reduced to
+ * worked/not-worked — because nothing could store or author a partial day. ADR-0036's shift rows and
+ * ADR-0067's window editor removed that constraint, but the flattening outlived it: importing a P6
+ * 07:00–15:30 calendar produced a 24-hour one, and every duration on it then scheduled roughly three
+ * times too fast.
  */
 export interface ImportCalendarBatchInput {
   id: string;
   organizationId: string;
   name: string;
-  workingWeekdays: number;
+  /** The weekly pattern, verbatim: one row per worked period per weekday (0 = Monday). */
+  shifts: readonly { weekday: number; startMinute: number; endMinute: number }[];
+  /**
+   * The standard working day in MINUTES (ADR-0068) — the day↔minute factor for every day-denominated
+   * field measured on this calendar. Resolved by the caller from the source file's own figure (P6's
+   * `day_hr_cnt`), falling back to the derivation from `shifts`; never defaulted here, because a
+   * silent 1440 re-reads an 8-hour file's durations at three times their length.
+   */
+  hoursPerDayMinutes: number;
   /**
    * The tier to create the imported calendar at (ADR-0053 §5). An import defaults to `PROJECT` —
    * pinned to the import's target project, so a foreign file stops permanently polluting the shared
@@ -142,7 +156,8 @@ export interface ImportCalendarBatchInput {
   exceptions: readonly {
     id: string;
     date: Date;
-    isWorking: boolean;
+    /** The day's worked periods, verbatim. Empty = a non-working day (a holiday). */
+    windows: readonly WindowRow[];
     label: string | null;
   }[];
 }
@@ -265,10 +280,11 @@ export class CalendarRepository {
         // The tier + its owning project, always written together (ADR-0053 §1/§5).
         scope: calendar.scope,
         projectId: calendar.projectId,
+        hoursPerDayMinutes: calendar.hoursPerDayMinutes,
         createdBy: calendar.createdBy,
         updatedBy: calendar.updatedBy,
       });
-      for (const shift of WorkingWeekdays.toFullDayShifts(calendar.workingWeekdays)) {
+      for (const shift of calendar.shifts) {
         shiftRows.push({ calendarId: calendar.id, ...shift });
       }
       for (const exception of calendar.exceptions) {
@@ -285,7 +301,7 @@ export class CalendarRepository {
         });
         // Through the same helper as the single create — an inline `isWorking ? full day : none`
         // here would be a second statement of the rule, free to drift from the one above.
-        for (const window of exceptionWindowRowsFor(undefined, exception.isWorking)) {
+        for (const window of exceptionWindowRowsFor(exception.windows, false)) {
           windowRows.push({ calendarExceptionId: exception.id, ...window });
         }
       }

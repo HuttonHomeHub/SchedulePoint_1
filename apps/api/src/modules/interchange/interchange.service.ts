@@ -12,7 +12,6 @@ import {
   type ResourceCollision,
   type ResourceCollisionResolution,
 } from '@repo/interchange';
-import { WorkingWeekdays } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -29,6 +28,7 @@ import {
   CalendarRepository,
   type ImportCalendarBatchInput,
 } from '../calendars/calendar.repository';
+import { resolveHoursPerDayMinutes } from '../calendars/hours-per-day';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -386,13 +386,20 @@ export class InterchangeService {
         // The CHECK partner of `scope`: a PROJECT calendar belongs to the import's target project, an
         // ORG one to no project at all (ck_calendars_scope_parent, ADR-0053 §1).
         projectId: calendar.scope === 'PROJECT' ? project.id : null,
-        workingWeekdays: this.maskFromShifts(calendar.shifts),
+        // The file's own weekly periods, verbatim — no longer flattened to a weekday mask.
+        shifts: calendar.shifts,
+        // The file's own standard working day (P6 `day_hr_cnt`, ADR-0068), falling back to the
+        // derivation from the pattern just written. Resolved through the SAME helper the calendars
+        // API uses, so an imported calendar and a hand-authored one cannot disagree about the factor.
+        hoursPerDayMinutes: resolveHoursPerDayMinutes({
+          ...(calendar.hoursPerDay === undefined ? {} : { hoursPerDay: calendar.hoursPerDay }),
+          shifts: calendar.shifts,
+        }),
         exceptions: calendar.exceptions.map((exception) => ({
           id: randomUUID(),
-          // The mapper emits single-day exceptions (startDate == endDate); the calendar module stores a
-          // whole-day working/non-working exception (a window present ⇒ a worked day).
+          // The mapper emits single-day exceptions (startDate == endDate).
           date: parseCalendarDate(exception.startDate),
-          isWorking: exception.windows.length > 0,
+          windows: exception.windows,
           label: exception.label,
         })),
         ...stamp,
@@ -1105,17 +1112,6 @@ export class InterchangeService {
       });
     }
     return id;
-  }
-
-  /**
-   * Derive the calendar module's weekday-mask contract from the graph's intraday shift rows (ADR-0036):
-   * a weekday is "worked" iff it carries at least one shift window. This approximates a richer shift
-   * calendar to the whole-day weekday pattern the calendar module models in M1 (the loss, if any, is
-   * already named in the interchange report's calendar findings).
-   */
-  private maskFromShifts(shifts: readonly { weekday: number }[]): number {
-    const workedWeekdays = [...new Set(shifts.map((s) => s.weekday))];
-    return WorkingWeekdays.fromIndices(workedWeekdays);
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {

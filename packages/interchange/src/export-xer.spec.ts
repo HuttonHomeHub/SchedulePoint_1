@@ -423,6 +423,43 @@ describe('exportXer', () => {
     expect(calendarRow(result.bytes, 'CAL3').get('clndr_type')).toBe('CA_Rsrc');
   });
 
+  // --- The standard working day round-trips through `day_hr_cnt` (ADR-0068) ------------------------
+
+  it('emits day_hr_cnt from the calendar’s own standard working day, not a hard-coded eight', () => {
+    const template = buildExportGraph().calendars[0];
+    if (template === undefined) throw new Error('fixture must carry a calendar');
+    const result = exportXer({
+      graph: buildExportGraph({
+        calendars: [
+          { ...template, key: 'CAL1', hoursPerDay: 24 },
+          { ...template, key: 'CAL2', name: 'Site', hoursPerDay: 7.5 },
+        ],
+      }),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // This field was hard-coded '8' while the importer read the real value, so a 24-hour calendar's
+    // 5-day task re-imported as 15 days — the exact retiming ADR-0068 exists to stop.
+    expect(calendarRow(result.bytes, 'CAL1').get('day_hr_cnt')).toBe('24');
+    // Short form, as P6 writes it: our own parser must not need '7.50' to read 7.5 back.
+    expect(calendarRow(result.bytes, 'CAL2').get('day_hr_cnt')).toBe('7.5');
+  });
+
+  it('round-trips a fractional standard working day exactly', () => {
+    const template = buildExportGraph().calendars[0];
+    if (template === undefined) throw new Error('fixture must carry a calendar');
+    const original = buildExportGraph({ calendars: [{ ...template, hoursPerDay: 7.5 }] });
+    const exported = exportXer({ graph: original });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+
+    const reimported = importSchedule({ content: exported.bytes });
+    expect(reimported.ok).toBe(true);
+    if (!reimported.ok) return;
+    expect(reimported.graph.calendars[0]?.hoursPerDay).toBe(7.5);
+  });
+
   it('round-trips every tier when the importer opts global calendars back into the org library', () => {
     const original = tieredGraph();
     const exported = exportXer({ graph: original });

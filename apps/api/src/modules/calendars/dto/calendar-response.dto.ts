@@ -13,11 +13,9 @@ import type {
   CalendarWithExceptions,
   CalendarWithShifts,
 } from '../calendar.repository';
+import { MINUTES_PER_HOUR } from '../hours-per-day';
 
 import { CalendarExceptionWindowDto, CalendarShiftDto } from './calendar-shift.dto';
-
-/** Hours↔minutes for the public `hoursPerDay` pair (ADR-0068). */
-const MINUTES_PER_HOUR = 60;
 
 /** Public representation of a calendar (list shape — no exceptions embedded). */
 export class CalendarResponseDto implements CalendarSummary {

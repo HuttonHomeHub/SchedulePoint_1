@@ -417,6 +417,22 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
       reason: 'MSPDI carries no calendar tier (no P6 clndr_type equivalent, ADR-0053 §5)',
     });
   }
+  // The standard working day (ADR-0068) is likewise unwritable. MS Project's `<HoursPerDay>` is a
+  // PROJECT-wide display default, not a per-calendar property, so writing it would claim one figure
+  // for every calendar in the file — including the ones it is wrong for. Reported only for the
+  // calendars that actually carry a value, since the finding names what a re-import will get wrong:
+  // day-denominated durations re-read at the receiving tool's own default.
+  const hourCalendars = model.calendars.filter((c) => c.hoursPerDay !== undefined);
+  if (hourCalendars.length > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'calendar',
+      sourceRef: null,
+      detail: `the standard working day (hours per day) was not written for ${hourCalendars.length} calendar(s); re-importing this file re-reads every duration in days at the receiving tool's default`,
+      reason:
+        'MSPDI has no per-calendar hours-per-day (its HoursPerDay is a project-wide default, ADR-0068)',
+    });
+  }
 
   // --- Predecessor links grouped by successor (MSP nests them inside the successor <Task>) -----------
   const linksBySuccessor = new Map<string, CanonicalRelationship[]>();

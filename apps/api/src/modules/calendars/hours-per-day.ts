@@ -5,7 +5,8 @@ import {
   type CalendarShift,
 } from '@repo/types';
 
-const MINUTES_PER_HOUR = 60;
+/** Hours↔minutes for the public `hoursPerDay` pair (ADR-0068). One definition, three readers. */
+export const MINUTES_PER_HOUR = 60;
 
 /**
  * The calendar's standard working day, in minutes, for a create or an update (ADR-0068 §1).
