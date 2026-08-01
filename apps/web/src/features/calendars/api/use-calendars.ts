@@ -5,6 +5,7 @@ import type {
   CalendarScope,
   CalendarShift,
   CalendarSummary,
+  CalendarWindow,
 } from '@repo/types';
 import {
   keepPreviousData,
@@ -363,21 +364,77 @@ export function useDeleteCalendar(orgSlug: string) {
   });
 }
 
+/**
+ * An exception's hours, in the one spelling the API accepts at a time. `windows` and `isWorking` are
+ * **mutually exclusive** there (the second is shorthand for a single full-day window), so sending
+ * both is a 422 naming the pair — which is why this is a union and not two optional fields.
+ */
+export type ExceptionHours = { windows: CalendarWindow[] } | { isWorking: boolean };
+
+/** The hours half of a create/update body, in whichever spelling the caller chose. */
+function hoursBody(hours: ExceptionHours) {
+  return 'windows' in hours ? { windows: hours.windows } : { isWorking: hours.isWorking };
+}
+
+/** A create: the date and label from the form, plus the day's hours. */
+export type AddExceptionInput = ExceptionFormValues & { hours?: ExceptionHours };
+
 export function useAddException(orgSlug: string, calendarId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ExceptionFormValues) =>
+    mutationFn: (input: AddExceptionInput) =>
       apiFetch<CalendarExceptionSummary>(
         `/organizations/${orgSlug}/calendars/${calendarId}/exceptions`,
         {
           method: 'POST',
           body: JSON.stringify({
             date: input.date,
-            isWorking: input.isWorking,
+            // Flag off, no caller supplies `hours` and the body is byte-for-byte what it always was.
+            ...hoursBody(input.hours ?? { isWorking: input.isWorking }),
             label: optional(input.label),
           }),
         },
       ),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: calendarKeys.detail(orgSlug, calendarId) }),
+        queryClient.invalidateQueries({ queryKey: calendarKeys.list(orgSlug) }),
+      ]),
+  });
+}
+
+/**
+ * Edit a dated exception's hours and label in place (ADR-0067 §3).
+ *
+ * The date is deliberately not editable: moving an exception is indistinguishable from removing one
+ * and adding another, which the two neighbouring actions already do visibly. Before this endpoint
+ * existed, correcting a holiday's hours meant delete-then-recreate — two writes with a window in
+ * between during which the day had become an ordinary working one.
+ *
+ * `version` is the **exception's**, not the calendar's; a stale value is a 409.
+ */
+export function useUpdateException(orgSlug: string, calendarId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      exceptionId: string;
+      version: number;
+      hours?: ExceptionHours;
+      label?: string | null;
+    }) =>
+      apiFetch<CalendarExceptionSummary>(
+        `/organizations/${orgSlug}/calendars/${calendarId}/exceptions/${input.exceptionId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            version: input.version,
+            ...(input.hours === undefined ? {} : hoursBody(input.hours)),
+            ...(input.label === undefined ? {} : { label: input.label }),
+          }),
+        },
+      ),
+    // Settle, not success: a 409 must still refresh the cached row so a retry carries the current
+    // version — the same rule every other version-gated mutation here follows.
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: calendarKeys.detail(orgSlug, calendarId) }),
