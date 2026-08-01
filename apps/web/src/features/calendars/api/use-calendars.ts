@@ -3,6 +3,7 @@ import type {
   CalendarDetail,
   CalendarExceptionSummary,
   CalendarScope,
+  CalendarShift,
   CalendarSummary,
 } from '@repo/types';
 import {
@@ -45,14 +46,26 @@ function scopeBody(input: { scope?: CalendarScope | undefined; projectId?: strin
     : { scope: input.scope };
 }
 
-function createBody(input: CalendarFormValues) {
+/**
+ * The POST body. Like {@link updateBody}, `workingWeekdays` is omitted when absent and `shifts` sent
+ * when present — the two are mutually exclusive at the API (they are two spellings of one value), so
+ * a body carrying both is a 422 naming the pair.
+ */
+function createBody(input: CreateCalendarInput) {
   return {
     name: input.name,
-    workingWeekdays: input.workingWeekdays,
+    ...(input.workingWeekdays === undefined ? {} : { workingWeekdays: input.workingWeekdays }),
+    ...(input.shifts === undefined ? {} : { shifts: input.shifts }),
     description: optional(input.description),
     ...scopeBody(input),
   };
 }
+
+/** A create: the form's values, with the week expressed EITHER as a mask or as explicit shifts. */
+export type CreateCalendarInput = Omit<CalendarFormValues, 'workingWeekdays'> & {
+  workingWeekdays?: number;
+  shifts?: CalendarShift[];
+};
 
 /**
  * The PATCH body. `workingWeekdays` is **omitted entirely when the caller did not supply one** —
@@ -65,6 +78,7 @@ function updateBody(input: UpdateCalendarInput) {
   return {
     name: input.name,
     ...(input.workingWeekdays === undefined ? {} : { workingWeekdays: input.workingWeekdays }),
+    ...(input.shifts === undefined ? {} : { shifts: input.shifts }),
     description: optional(input.description) ?? null,
     version: input.version,
     ...scopeBody(input),
@@ -74,6 +88,7 @@ function updateBody(input: UpdateCalendarInput) {
 /** An edit: the form's values with the week optional, plus the row's optimistic-locking version. */
 export type UpdateCalendarInput = Omit<CalendarFormValues, 'workingWeekdays'> & {
   workingWeekdays?: number;
+  shifts?: CalendarShift[];
   version: number;
 };
 
@@ -231,7 +246,7 @@ export function useCalendar(orgSlug: string, calendarId: string): UseQueryResult
 export function useCreateCalendar(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CalendarFormValues) =>
+    mutationFn: (input: CreateCalendarInput) =>
       apiFetch<CalendarDetail>(`/organizations/${orgSlug}/calendars`, {
         method: 'POST',
         body: JSON.stringify(createBody(input)),

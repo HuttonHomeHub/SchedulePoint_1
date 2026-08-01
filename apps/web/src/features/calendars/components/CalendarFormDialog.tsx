@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { CalendarScope, CalendarSummary } from '@repo/types';
 import { STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
-import { useEffect, useId, type Ref } from 'react';
+import { useEffect, useId, useState, type Ref } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 
 import { useCreateCalendar, useUpdateCalendar } from '../api/use-calendars';
@@ -16,6 +16,14 @@ import {
 
 import { CalendarExceptionsEditor } from './CalendarExceptionsEditor';
 import { CalendarScopeBadge } from './CalendarScopeBadge';
+import {
+  emptyWeek,
+  shiftsToWeekRows,
+  WeeklyShiftEditor,
+  weekRowsToShifts,
+  type WeekProblem,
+  type WeekRows,
+} from './WeeklyShiftEditor';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -25,7 +33,7 @@ import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ToggleChip } from '@/components/ui/toggle-chip';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
+import { CALENDAR_SHIFT_EDITOR_ENABLED, LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { calendarErrorMessage } from '@/lib/api/calendar-scope-errors';
 
 /**
@@ -189,11 +197,64 @@ export function CalendarFormDialog({
   const blockedByOrgPermission =
     noTierAvailable || (showScopeChoice && orgTierUnavailable && chosenScope !== 'PROJECT');
 
-  // The week is shown as seven checkboxes, which cannot express a split shift or a half-day
-  // (ADR-0036 §2). Say so rather than letting the form imply the mask is the whole truth.
-  const weekIsSimplified = isEdit && hasIntradayDetail(calendar.shifts);
+  // Flag OFF the week is seven checkboxes, which cannot express a split shift or a half-day
+  // (ADR-0036 §2) — so say so rather than letting the form imply the mask is the whole truth.
+  // Flag ON the editor expresses it, and the advisory would be false.
+  const weekIsSimplified =
+    !CALENDAR_SHIFT_EDITOR_ENABLED && isEdit && hasIntradayDetail(calendar.shifts);
+
+  // The shift editor's rows live outside React Hook Form: they are TEXT the planner is mid-way
+  // through typing, across seven days, and RHF's value/validation model would have to be told that
+  // `8:` is a legitimate intermediate state. Seeded on open, parsed once at submit.
+  const [week, setWeek] = useState<WeekRows>(emptyWeek);
+  const [weekProblems, setWeekProblems] = useState<WeekProblem[]>([]);
+  // Seeded by ADJUSTING STATE DURING RENDER rather than in an effect (React's documented pattern
+  // for "reset state when a prop changes"). An effect would set state after paint — one frame of
+  // last calendar's hours on screen — and a cascading re-render the lint rule correctly objects to.
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  const seedKey = `${String(open)}:${calendar?.id ?? 'new'}`;
+  if (CALENDAR_SHIFT_EDITOR_ENABLED && open && seededFor !== seedKey) {
+    setSeededFor(seedKey);
+    setWeek(
+      shiftsToWeekRows(calendar?.shifts ?? WorkingWeekdays.toFullDayShifts(STANDARD_WEEKDAYS_MASK)),
+    );
+    setWeekProblems([]);
+  }
 
   const onSubmit = handleSubmit((values) => {
+    if (CALENDAR_SHIFT_EDITOR_ENABLED) {
+      const parsed = weekRowsToShifts(week);
+      if (!parsed.ok) {
+        // Stop here rather than sending a body the API will reject: the planner is looking at the
+        // rows, and the server's message would name a pair rather than a row.
+        setWeekProblems(parsed.problems);
+        announce(`This calendar’s hours need attention: ${String(parsed.problems.length)} to fix.`);
+        return;
+      }
+      setWeekProblems([]);
+      const { workingWeekdays: _mask, ...rest } = values;
+      const body = { ...rest, shifts: parsed.shifts };
+      if (isEdit) {
+        update.mutate(
+          { calendarId: calendar.id, version: calendar.version, ...body },
+          {
+            onSuccess: () => {
+              announce(`Calendar “${values.name}” saved.`);
+              onClose();
+            },
+          },
+        );
+      } else {
+        create.mutate(body, {
+          onSuccess: () => {
+            announce(`Calendar “${values.name}” created.`);
+            onClose();
+          },
+        });
+      }
+      return;
+    }
+
     if (isEdit) {
       // Send `workingWeekdays` ONLY when the planner actually changed it. The repository replaces
       // every shift row whenever this field is present, so a rename-only save used to silently
@@ -338,31 +399,40 @@ export function CalendarFormDialog({
               />
             </FormSection>
 
-            <FormSection
-              title="Working week"
-              description="The days work happens on. Everything scheduled on this calendar counts its duration in these days."
-            >
-              {weekIsSimplified ? (
-                <p className="text-muted-foreground text-sm" role="note">
-                  This calendar works specific hours — a split shift or a part day. The days below
-                  show <em>which</em> days work, not their hours. Changing them replaces those hours
-                  with whole days; leave them alone and the hours are kept.
-                </p>
-              ) : null}
-              <Controller
-                control={control}
-                name="workingWeekdays"
-                render={({ field }) => (
-                  <WeekdayToggleGroup
-                    value={field.value}
-                    onChange={field.onChange}
-                    disabled={readOnly}
-                    groupRef={field.ref}
-                    error={errors.workingWeekdays?.message}
-                  />
-                )}
+            {CALENDAR_SHIFT_EDITOR_ENABLED ? (
+              <WeeklyShiftEditor
+                week={week}
+                onChange={setWeek}
+                problems={weekProblems}
+                readOnly={readOnly}
               />
-            </FormSection>
+            ) : (
+              <FormSection
+                title="Working week"
+                description="The days work happens on. Everything scheduled on this calendar counts its duration in these days."
+              >
+                {weekIsSimplified ? (
+                  <p className="text-muted-foreground text-sm" role="note">
+                    This calendar works specific hours — a split shift or a part day. The days below
+                    show <em>which</em> days work, not their hours. Changing them replaces those
+                    hours with whole days; leave them alone and the hours are kept.
+                  </p>
+                ) : null}
+                <Controller
+                  control={control}
+                  name="workingWeekdays"
+                  render={({ field }) => (
+                    <WeekdayToggleGroup
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={readOnly}
+                      groupRef={field.ref}
+                      error={errors.workingWeekdays?.message}
+                    />
+                  )}
+                />
+              </FormSection>
+            )}
           </div>
 
           <div className="border-border flex justify-end gap-2 border-t pt-4">
