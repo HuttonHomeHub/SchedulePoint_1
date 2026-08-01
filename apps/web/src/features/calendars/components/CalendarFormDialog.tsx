@@ -5,6 +5,7 @@ import { useEffect, useId, useState, type Ref } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 
 import { useCreateCalendar, useUpdateCalendar } from '../api/use-calendars';
+import { presetWeek } from '../model/presets';
 import { hasIntradayDetail } from '../model/shift-summary';
 import {
   calendarFormSchema,
@@ -117,6 +118,15 @@ const ORG_TIER_DENIED_MESSAGE =
  * tier read-only: moving a calendar between tiers is a deliberate, separately-confirmed action (it
  * can be refused when the calendar is still in use), never a side effect of renaming it.
  */
+/**
+ * The hours-per-day a seeded week implies — the same derivation the server applies when the field
+ * is omitted, so a newly-opened create dialog shows the figure it would get by saying nothing.
+ */
+function hoursPerDayOf(week: WeekRows): number {
+  const parsed = weekRowsToShifts(week);
+  return parsed.ok ? deriveHoursPerDayMinutes(parsed.shifts) / 60 : 24;
+}
+
 /** `9` and `7.5`, never `9.00` — the field accepts quarter hours, so trailing zeros are noise. */
 function formatHours(hours: number): string {
   return String(Math.round(hours * 100) / 100);
@@ -221,14 +231,19 @@ export function CalendarFormDialog({
   const seedKey = `${String(open)}:${calendar?.id ?? 'new'}`;
   if (CALENDAR_SHIFT_EDITOR_ENABLED && open && seededFor !== seedKey) {
     setSeededFor(seedKey);
-    setWeek(
-      shiftsToWeekRows(calendar?.shifts ?? WorkingWeekdays.toFullDayShifts(STANDARD_WEEKDAYS_MASK)),
-    );
+    // A NEW calendar starts from the Standard week preset — Mon–Fri 08:00–17:00 — not from a
+    // full-day Mon–Fri. The old seed made every hand-made calendar a 24-hour one whose activities
+    // then scheduled three times too fast, which is the defect the hours-per-day field exists to
+    // stop; a construction calendar that works round the clock is the rare case, and it is now one
+    // click away (the 24/7 preset).
+    const seededWeek =
+      calendar === undefined ? presetWeek('standard') : shiftsToWeekRows(calendar.shifts);
+    setWeek(seededWeek);
     setWeekProblems([]);
     // The calendar's standard working day (ADR-0068). Seeded from the stored value so an edit that
-    // touches nothing else sends it back unchanged; a NEW calendar starts at 24, which is what the
-    // server would derive from the full-day week seeded above.
-    setValue('hoursPerDay', calendar?.hoursPerDay ?? 24);
+    // touches nothing else sends it back unchanged; a NEW calendar takes the figure the server
+    // would derive from the week seeded above, so the two can never open disagreeing.
+    setValue('hoursPerDay', calendar?.hoursPerDay ?? hoursPerDayOf(seededWeek));
   }
 
   // What the authored week implies, shown beside the field rather than forced into it: the two are

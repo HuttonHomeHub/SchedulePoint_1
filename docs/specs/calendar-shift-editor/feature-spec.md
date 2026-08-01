@@ -216,7 +216,7 @@ permission is introduced.**
 2. **Author a night shift that crosses midnight** — 20:00–06:00 Mon→Tue … Fri→Sat, stored as the two
    adjacent-day windows the model requires, with both visible before saving.
 3. **Author an asymmetric week** — full days Monday–Thursday, a half-day Friday.
-4. **Start from a preset** — Standard week / Two shift / Continental / 24-7 / Window-only — and then
+4. **Start from a preset** — Standard week / Two shift / Continental days / 24-7 / Window-only — and then
    override one day.
 5. **Author a dated exception with hours** — Christmas Eve works 08:00–12:00, not the full day.
 6. **Author a window-only calendar** — an empty base week plus a shutdown exception carrying all the
@@ -319,11 +319,20 @@ label, version }`, replacing the window set atomically, activating the `version`
 > **Default: M0′ lands first as its own PR** — the 500 (F3) is live and default-on, and the doc/seeder
 > drift (F5) should not sit behind a flagged web epic.
 
-> **Q4 (non-blocking) — preset names.** — **ANSWERED: the five below.** Continental's exact hours still to confirm during M2; the mechanism does not depend on them. "Standard week (Mon–Fri, 08:00–17:00)", "Two shift
-> (06:00–14:00, 14:00–22:00)", "Continental (rotating 12-hour, Mon–Sun)", "24/7", "Window-only".
-> **Default: those five, with their hours in the label**, because a preset whose hours are invisible
-> is a guess. Exact Continental hours to be confirmed by the product owner during M2; the mechanism
-> does not depend on them.
+> **Q4 (non-blocking) — preset names.** — **ANSWERED, and the "Continental" one changed on building
+> it (M2).** The five are "Standard week — Mon–Fri, 08:00–17:00", "Two shift — Mon–Fri, 06:00–14:00
+> and 14:00–22:00", **"Continental days — every day, 06:00–18:00"**, "24/7 — every day, all day" and
+> "Window-only — no working week", **each with its hours in the label**, because a preset whose
+> hours are invisible is a guess.
+>
+> The question asked for Continental's exact hours. Building it showed the question had a wrong
+> premise: a **continental rota is a multi-week cycle** (which crew is on nights this week), and a
+> weekly shift table cannot express a cycle longer than seven days — so a preset called plainly
+> "Continental" would promise a shape the storage model has no way to hold. What a planner
+> scheduling **work** on a continental site actually needs is the site's **hours**, which are the
+> same every day; the rota decides who, not when the site is open. The preset is therefore named
+> for what it writes. **06:00–18:00 remains the one value to confirm with the product owner** — it
+> is a plain constant in `model/presets.ts` and changing it changes nothing else.
 
 > **Q5 (non-blocking) — does the calendar library table summarise shifts?** — **ANSWERED: yes, minimally.**
 > `formatWorkingWeekdays` currently renders "Mon–Fri" and cannot say "Two shift".
@@ -698,7 +707,7 @@ flowchart TD
   C --> E[Working week: 7 day rows]
   D --> E
   E --> F{How to change it}
-  F -->|Preset| G[Menu: Standard / Two shift /<br/>Continental / 24-7 / Window-only]
+  F -->|Preset| G[Menu: Standard / Two shift /<br/>Continental days / 24-7 / Window-only]
   F -->|Per day| H[Add window / edit From-To / Remove]
   F -->|Night shift| I[Add window - Crosses midnight]
   F -->|Reuse a day| J[Row menu: Copy to...]

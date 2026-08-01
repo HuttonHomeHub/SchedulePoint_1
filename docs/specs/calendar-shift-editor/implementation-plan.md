@@ -319,8 +319,8 @@ works, including a night shift that crosses midnight, and save them as `shifts`.
 #### Feature: M2-F1 — Presets
 
 > **Description:** `model/presets.ts` returning a full `ShiftWindow[]` per preset, and an APG `Menu`
-> in the Working-week section offering Standard week / Two shift / Continental / 24-7 / Window-only,
-> each labelled with its hours (Q4).
+> in the Working-week section offering Standard week / Two shift / Continental days / 24-7 /
+> Window-only, each labelled with its hours (Q4).
 > **Complexity:** M
 > **Dependencies:** M1
 > **Risks:** a preset id leaking into storage. It must not: a calendar **is** its windows, and a
@@ -334,14 +334,18 @@ works, including a night shift that crosses midnight, and save them as `shifts`.
 
 - **Complexity:** M · **Dependencies:** M1-T2
 - **Risks:** Continental's exact hours are unconfirmed (Q4) → the mechanism is preset-agnostic; only
-  the constant changes.
+  the constant changes. **Landed** as `Continental days — every day, 06:00–18:00`; see Q4 for why
+  the name changed while building it (a rota is a multi-week cycle a weekly table cannot hold).
 - **Testing:** as above.
 - **Development steps:** 1. constants + tests; 2. `Menu` (never hover-only); 3. announcement; 4. seed a create dialog from `Standard week`.
 
 ##### Task M2-T2 — Copy-day row action
 
-- **Description:** a row-level `Menu` on each day: "Copy to…" → weekday multi-choice → replaces those
-  days' windows, announced.
+- **Description:** a row-level `Menu` on each day: "Copy <day> to…" → **three target groups** (the
+  other weekdays / every other day / the weekend) → replaces those days' windows, announced.
+  **Landed as groups rather than a multi-select:** a checkbox list inside a menu inside a dialog is
+  three nested choice surfaces for what is in practice always one of these three answers, and each
+  group is repeatable — so two announcements and two things to undo, not one opaque batch.
 - **Complexity:** M · **Dependencies:** M2-T1
 - **Risks:** a destructive action with no confirmation. Copy **replaces** a target day's windows →
   announce what was overwritten, and rely on the dialog's existing unsaved-changes discard

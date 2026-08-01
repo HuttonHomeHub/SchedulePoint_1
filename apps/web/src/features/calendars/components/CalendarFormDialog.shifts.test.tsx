@@ -66,11 +66,15 @@ describe('CalendarFormDialog — shift editor (VITE_CALENDAR_SHIFT_EDITOR)', () 
     }
   });
 
-  it('seeds a new calendar with an ordinary Mon–Fri week', () => {
+  /** A new calendar starts from the Standard week preset, NOT a full-day Mon–Fri: the old seed made
+      every hand-made calendar a 24-hour one, whose activities then scheduled three times too fast. */
+  it('seeds a new calendar with an ordinary Mon–Fri working day', () => {
     renderDialog();
     const monday = screen.getByRole('group', { name: 'Monday hours' });
-    expect(within(monday).getByRole('textbox', { name: /^Start time/ })).toHaveValue('00:00');
-    expect(within(monday).getByRole('textbox', { name: /^End time/ })).toHaveValue('24:00');
+    expect(within(monday).getByRole('textbox', { name: /^Start time/ })).toHaveValue('08:00');
+    expect(within(monday).getByRole('textbox', { name: /^End time/ })).toHaveValue('17:00');
+    // And the standard working day agrees with it, rather than opening at a contradictory 24.
+    expect(screen.getByLabelText(/Hours per day/)).toHaveValue(9);
     // Saturday is not worked, and says so rather than showing an empty area.
     const saturday = screen.getByRole('group', { name: 'Saturday hours' });
     expect(within(saturday).getByText('Not worked.')).toBeInTheDocument();
