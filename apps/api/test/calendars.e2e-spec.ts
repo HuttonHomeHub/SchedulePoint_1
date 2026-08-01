@@ -421,6 +421,178 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     // is. Storing a window nothing schedules on would be exactly the defect this closes.
   });
 
+  /**
+   * Before this endpoint an exception could be created and deleted, never edited. Correcting a
+   * day's hours meant delete-then-recreate: two writes, a new id, and a window in which a holiday
+   * had become an ordinary working day — one a recalculation landing between them would have
+   * scheduled work on. `CalendarException.version` existed, was returned on read, and was never
+   * used for a write.
+   */
+  describe('editing an exception (spec Q1)', () => {
+    const addException = async (actor: Actor, calendarId: string, body: object) =>
+      (await actor.agent.post(`${base}/${calendarId}/exceptions`).send(body).expect(201)).body
+        .data as { id: string; version: number };
+
+    const exceptionsOf = async (actor: Actor, calendarId: string) =>
+      (await actor.agent.get(`${base}/${calendarId}`).expect(200)).body.data.exceptions as {
+        id: string;
+        isWorking: boolean;
+        label: string | null;
+        windows: { startMinute: number; endMinute: number }[];
+      }[];
+
+    it('replaces the day’s windows as a set', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Editable');
+      const exception = await addException(actor, id, {
+        date: '2026-04-01',
+        windows: [
+          { startMinute: 480, endMinute: 720 },
+          { startMinute: 780, endMinute: 1020 },
+        ],
+      });
+
+      const res = await actor.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ windows: [{ startMinute: 540, endMinute: 660 }], version: exception.version })
+        .expect(200);
+
+      // A set, not a merge: the two windows it replaces are gone, not kept alongside.
+      expect(res.body.data.windows).toEqual([{ startMinute: 540, endMinute: 660 }]);
+      const [stored] = await exceptionsOf(actor, id);
+      expect(stored?.windows).toEqual([{ startMinute: 540, endMinute: 660 }]);
+    });
+
+    it('turns a holiday into a worked day and back, keeping the same row', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Flip');
+      const exception = await addException(actor, id, { date: '2026-04-02' });
+
+      const worked = await actor.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ isWorking: true, version: exception.version })
+        .expect(200);
+      expect(worked.body.data).toMatchObject({
+        id: exception.id,
+        isWorking: true,
+        windows: [{ startMinute: 0, endMinute: 1440 }],
+      });
+
+      const holiday = await actor.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ isWorking: false, version: worked.body.data.version as number })
+        .expect(200);
+      // The id is stable across both edits — the whole reason this endpoint exists rather than
+      // delete-and-recreate.
+      expect(holiday.body.data).toMatchObject({ id: exception.id, isWorking: false, windows: [] });
+    });
+
+    it('edits only the label when neither `windows` nor `isWorking` is sent', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Label only');
+      const exception = await addException(actor, id, {
+        date: '2026-04-03',
+        windows: [{ startMinute: 480, endMinute: 720 }],
+        label: 'Half day',
+      });
+
+      const res = await actor.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ label: 'Half day (revised)', version: exception.version })
+        .expect(200);
+
+      // The hours survive an edit that never mentioned them — the label-only case is the one most
+      // likely to quietly clear them, since "absent" and "empty" are easy to conflate.
+      expect(res.body.data).toMatchObject({
+        label: 'Half day (revised)',
+        windows: [{ startMinute: 480, endMinute: 720 }],
+      });
+    });
+
+    it('rejects a stale version with a 409', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Stale');
+      const exception = await addException(actor, id, { date: '2026-04-04' });
+
+      await actor.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ isWorking: true, version: exception.version })
+        .expect(200);
+      // The same version again — the row has moved on.
+      await actor.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ isWorking: false, version: exception.version })
+        .expect(409);
+    });
+
+    it('bumps the parent calendar’s version, as create and delete do', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Parent bump');
+      const exception = await addException(actor, id, { date: '2026-04-05' });
+      const before = (await actor.agent.get(`${base}/${id}`).expect(200)).body.data
+        .version as number;
+
+      await actor.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ isWorking: true, version: exception.version })
+        .expect(200);
+
+      const after = (await actor.agent.get(`${base}/${id}`).expect(200)).body.data
+        .version as number;
+      expect(after).toBe(before + 1);
+    });
+
+    it('refuses the same contradictions the create refuses', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Bad edits');
+      const exception = await addException(actor, id, { date: '2026-04-06' });
+      const patch = (body: object) =>
+        actor.agent.patch(`${base}/${id}/exceptions/${exception.id}`).send(body);
+
+      await patch({ isWorking: true, windows: [{ startMinute: 0, endMinute: 60 }], version: 1 })
+        // Two answers to one question, exactly as on create.
+        .expect(422);
+      await patch({ windows: [], version: 1 }).expect(422);
+      await patch({
+        windows: [
+          { startMinute: 480, endMinute: 720 },
+          { startMinute: 600, endMinute: 900 },
+        ],
+        version: 1,
+      }).expect(422);
+      await patch({ windows: [{ startMinute: 720, endMinute: 480 }], version: 1 }).expect(422);
+      // `version` is required — an edit that cannot conflict is an edit that can clobber.
+      await patch({ isWorking: true }).expect(422);
+    });
+
+    it('is 404 for an exception belonging to another calendar (anti-IDOR)', async () => {
+      const { actor } = await adminWithOrg();
+      const mine = await createCalendar(actor, 'Mine');
+      const other = await createCalendar(actor, 'Other');
+      const exception = await addException(actor, other, { date: '2026-04-07' });
+
+      // A real exception id, a real calendar id the caller may write to — but they are not related.
+      // The lookup requires BOTH, so the calendar in the path can never be decoration.
+      await actor.agent
+        .patch(`${base}/${mine}/exceptions/${exception.id}`)
+        .send({ isWorking: true, version: exception.version })
+        .expect(404);
+    });
+
+    it('is 404 across organisations, not 403', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Theirs');
+      const exception = await addException(actor, id, { date: '2026-04-08' });
+
+      const outsider = await signUp('outsider@example.com');
+      await outsider.agent.post('/api/v1/organizations').send({ name: 'Other Co' }).expect(201);
+      await outsider.agent
+        .patch(`${base}/${id}/exceptions/${exception.id}`)
+        .send({ isWorking: true, version: exception.version })
+        .expect(404);
+    });
+  });
+
   it('creates, gets and lists calendars', async () => {
     const { actor } = await adminWithOrg();
     const id = await createCalendar(actor, 'Project Calendar');

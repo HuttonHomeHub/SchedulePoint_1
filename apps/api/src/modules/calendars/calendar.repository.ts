@@ -176,7 +176,7 @@ function shiftRowsFor(
  * window, `false` ⇒ none, which is a holiday). The DTO rejects sending both, and rejects an
  * empty `windows` array so "no working time" has exactly one spelling.
  */
-function exceptionWindowRowsFor(
+export function exceptionWindowRowsFor(
   windows: readonly WindowRow[] | undefined,
   isWorking: boolean,
 ): WindowRow[] {
@@ -628,6 +628,50 @@ export class CalendarRepository {
         updatedBy: input.updatedBy,
         windows: { create: exceptionWindowRowsFor(input.windows, input.isWorking) },
       },
+      include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
+    });
+  }
+
+  /**
+   * Version-gated edit of one exception, replacing its windows as a set inside the caller's
+   * transaction. Returns rows changed — `0` is a version conflict or a row that is gone, which the
+   * service maps to 409, exactly as {@link updateIfVersionMatches} does for the calendar.
+   *
+   * `windows` absent means "leave the day's hours alone" (a label-only edit); present means replace
+   * them wholesale. Delete-then-create rather than a diff: the set is at most a handful of rows,
+   * and a diff would have to decide what "the same window, moved" means — a distinction with no
+   * consequence, since nothing references a window row.
+   */
+  async updateExceptionIfVersionMatches(
+    id: string,
+    expectedVersion: number,
+    patch: { label?: string | null; windows?: readonly WindowRow[] },
+    updatedBy: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const { windows, ...scalar } = patch;
+    const result = await db.calendarException.updateMany({
+      where: { id, version: expectedVersion, deletedAt: null },
+      data: { ...scalar, updatedBy, version: { increment: 1 } },
+    });
+    if (result.count > 0 && windows !== undefined) {
+      await db.calendarExceptionWindow.deleteMany({ where: { calendarExceptionId: id } });
+      if (windows.length > 0) {
+        await db.calendarExceptionWindow.createMany({
+          data: windows.map((window) => ({ ...window, calendarExceptionId: id })),
+        });
+      }
+    }
+    return result.count;
+  }
+
+  /** One active exception with its windows — the read the update returns. */
+  findExceptionWithWindows(
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<CalendarExceptionWithWindows | null> {
+    return db.calendarException.findFirst({
+      where: { id, deletedAt: null },
       include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
     });
   }

@@ -20,6 +20,7 @@ import { ResourceRepository } from '../resources/resource.repository';
 
 import {
   CalendarRepository,
+  exceptionWindowRowsFor,
   type CalendarExceptionWithWindows,
   type CalendarPatch,
   type CalendarScopeFilter,
@@ -28,6 +29,7 @@ import {
 } from './calendar.repository';
 import type { CreateCalendarExceptionDto } from './dto/create-calendar-exception.dto';
 import type { CreateCalendarDto } from './dto/create-calendar.dto';
+import type { UpdateCalendarExceptionDto } from './dto/update-calendar-exception.dto';
 import type { UpdateCalendarDto } from './dto/update-calendar.dto';
 
 /** Machine-readable conflict reasons carried in a {@link ConflictError}'s `details`. */
@@ -454,6 +456,82 @@ export class CalendarsService {
       if (this.isExceptionOverlapViolation(error)) throw this.duplicateExceptionError();
       throw error;
     }
+  }
+
+  /**
+   * Edit one dated exception's hours and/or label, version-gated.
+   *
+   * Anti-IDOR by shape: the exception is reached only via `findActiveExceptionByIdInCalendar`,
+   * which requires the calendar id too, and that calendar has already been resolved inside the
+   * caller's organisation. An exception-id-first lookup would make the calendar a decoration.
+   *
+   * TWO versions are in play and both matter. The write is gated on the **exception's** version —
+   * a stale one is a 409, because someone else changed those hours since they were read. It then
+   * bumps the **calendar's**, exactly as create and delete already do, so a client holding a stale
+   * calendar is told as well.
+   */
+  async updateException(
+    principal: Principal,
+    orgSlug: string,
+    calendarId: string,
+    exceptionId: string,
+    dto: UpdateCalendarExceptionDto,
+  ): Promise<CalendarExceptionWithWindows> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'calendar:update', organization.id);
+
+    const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
+    if (!calendar) throw new NotFoundError('Calendar not found.');
+    if (calendar.scope === 'ORG') {
+      // Editing shared-library state needs the extra capability, as an ordinary calendar edit does
+      // (ADR-0053 §2) — a holiday on the org calendar is shared tenant state too.
+      this.assertCan(principal, 'calendar:manage_org', organization.id);
+    }
+
+    const existing = await this.calendars.findActiveExceptionByIdInCalendar(
+      exceptionId,
+      calendar.id,
+    );
+    if (!existing) throw new NotFoundError('Calendar exception not found.');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await this.calendars.updateExceptionIfVersionMatches(
+        exceptionId,
+        dto.version,
+        {
+          ...(dto.label === undefined ? {} : { label: dto.label }),
+          // `isWorking` and `windows` are mutually exclusive at the DTO, and BOTH absent means the
+          // hours are untouched — a label-only edit. `exceptionWindowRowsFor` would answer "no
+          // windows" for that case, which is a holiday, so the decision has to be made here.
+          ...(dto.windows !== undefined
+            ? { windows: dto.windows }
+            : dto.isWorking !== undefined
+              ? { windows: exceptionWindowRowsFor(undefined, dto.isWorking) }
+              : {}),
+        },
+        principal.userId,
+        tx,
+      );
+      if (changed === 0) {
+        throw new ConflictError('This exception has changed since you loaded it.', {
+          reason: 'STALE_VERSION',
+        });
+      }
+      await this.calendars.touchVersion(calendar.id, principal.userId, tx);
+      return this.calendars.findExceptionWithWindows(exceptionId, tx);
+    });
+    if (!updated) throw new NotFoundError('Calendar exception not found.');
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        calendarId: calendar.id,
+        exceptionId,
+        userId: principal.userId,
+      },
+      'calendar exception updated',
+    );
+    return updated;
   }
 
   async removeException(

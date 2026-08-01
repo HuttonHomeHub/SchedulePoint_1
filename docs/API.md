@@ -436,6 +436,42 @@ filter, not an authorisation boundary: the security control is the server-side w
 Deleting a project soft-deletes its PROJECT-scoped calendars (and their exceptions) in the **same batch**,
 so restoring the project restores them; ORG-scoped calendars are never touched.
 
+### Calendar hours: shifts and exception windows (ADR-0036 §2, ADR-0067)
+
+Storage is **intraday windows**, not whole days. Both the weekly pattern and a dated exception can be
+authored either way, and the two spellings of each pair are **mutually exclusive** — sending both is a
+422 naming the pair, because they are two answers to one question.
+
+| Surface         | Shorthand         | Storage form                                  | On read                                    |
+| --------------- | ----------------- | --------------------------------------------- | ------------------------------------------ |
+| Weekly pattern  | `workingWeekdays` | `shifts: [{weekday, startMinute, endMinute}]` | both — the mask is derived from the shifts |
+| Dated exception | `isWorking`       | `windows: [{startMinute, endMinute}]`         | both — `isWorking` is `windows.length > 0` |
+
+The shorthand is lossy on purpose: a mask can say only _whether_ a weekday works, and `isWorking` only
+whether a day works at all. A split shift, a half-day Friday and a short-crew shutdown day are visible
+only in `shifts`/`windows`. Minutes run from local midnight; **1440 is 24:00**, never a wrap — a night
+shift crossing midnight is **two adjacent-day windows**, and nothing pairs them back together on read.
+
+Windows must be sorted, non-overlapping within a day, and `start < end`. An unsorted array is rejected
+rather than quietly sorted: storage is order-sensitive, and reordering the author's input hides which
+pair they got wrong. An **empty** `windows` array is refused too, so "no working time" has exactly one
+spelling (`isWorking: false`, or simply omitting both).
+
+| Method | Path                                              | Notes                                                                                                                                                                                |
+| ------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `…/calendars/:calendarId/exceptions`              | Add a dated exception. `windows` or `isWorking`; neither ⇒ a holiday.                                                                                                                |
+| PATCH  | `…/calendars/:calendarId/exceptions/:exceptionId` | Edit its hours and/or label, gated on the **exception's** `version` (409 when stale) and bumping the **calendar's**. Sending neither `windows` nor `isWorking` edits only the label. |
+| DELETE | `…/calendars/:calendarId/exceptions/:exceptionId` | Soft delete.                                                                                                                                                                         |
+
+The exception's **date is not editable**: moving one is deleting it and adding another, which the two
+surrounding endpoints already do visibly. `endDate` is returned on every read — storage holds a range,
+only a single day is authorable, and a field the client cannot see is a field it cannot be told changed.
+
+A calendar with **no working time at all** — an empty weekly pattern and no working exception — is a
+valid thing to be part-way through building, and an impossible thing to schedule on. It is refused at
+**recalculation and baseline variance** with a 422 `CALENDAR_HAS_NO_WORKING_TIME` naming the calendar,
+not at create: only the engine sees the weekly pattern and the exceptions together.
+
 ### Resource hierarchy (ADR-0053 §3)
 
 The org resource pool stays **one flat pool** for scheduling and gains a **navigation tree**: every
