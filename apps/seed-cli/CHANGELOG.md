@@ -1,5 +1,13 @@
 # @repo/seed-cli
 
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581)]:
+  - @repo/seed@0.1.0
+  - @repo/seed-http@0.1.0
+
 ## 0.0.2
 
 ### Patch Changes
