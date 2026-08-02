@@ -588,3 +588,142 @@ describe('computeEarnedValue — per-component PV phasing for a late-joining res
     expect(lagged.total.pv).not.toBe(unlagged.total.pv);
   });
 });
+
+describe('computeEarnedValue — the frozen per-assignment cost baseline (ADR-0071 M3 / CQ-1)', () => {
+  const DAY = 1440;
+  /**
+   * The scenario the exact split exists for: a baseline committed £1,000 to a crane that joined on
+   * day 4, and **since capture** the live mix has changed — the crane's live budget has been re-rated
+   * to £3,000. PV is spending the FROZEN £1,000, so the only honest question is which frozen window
+   * it phases through.
+   */
+  const baselined = (overrides: Partial<EvActivityInput> = {}): EvActivityInput =>
+    activity({
+      activityId: 'A',
+      accrualType: 'UNIFORM',
+      baselineStart: '2026-01-01',
+      baselineFinish: '2026-01-11',
+      baselineBudgetedCost: 1000,
+      assignments: [assignment({ budgetedCost: 3000, lagMinutes: 4 * DAY })],
+      ...overrides,
+    });
+
+  it('phases the FROZEN component through the FROZEN lag, not the live one', () => {
+    // Frozen: £1,000 joining on day 4 ⇒ at day 5, 1/6 of the remaining six days ⇒ 1000/6.
+    // The live row says £3,000 — and the lag it now carries is irrelevant to committed money.
+    const result = run(
+      [
+        baselined({
+          assignments: [assignment({ budgetedCost: 3000, lagMinutes: 9 * DAY })],
+          baselineCostComponents: {
+            budgetedExpense: 0,
+            assignments: [{ budgetedCost: 1000, lagMinutes: 4 * DAY }],
+          },
+        }),
+      ],
+      '2026-01-06',
+    );
+    expect(result.total.pv).toBe(Math.round(1000 / 6));
+    expect(result.costPhasingLaggedCount).toBe(1);
+    // Exact — nothing was reallocated by a live share, so nothing is reported as approximate.
+    expect(result.costPhasingApproximatedCount).toBe(0);
+  });
+
+  it('without the frozen breakdown the same baseline is approximated, and says so', () => {
+    // The identical committed £1,000, split by the LIVE mix because the snapshot never held a
+    // breakdown. Here the single live component absorbs all of it, so the ARITHMETIC coincides —
+    // which is exactly why the count, and not the number, is what tells the reader which path ran.
+    const result = run(
+      [baselined({ assignments: [assignment({ budgetedCost: 3000, lagMinutes: 4 * DAY })] })],
+      '2026-01-06',
+    );
+    expect(result.total.pv).toBe(Math.round(1000 / 6));
+    expect(result.costPhasingLaggedCount).toBe(1);
+    expect(result.costPhasingApproximatedCount).toBe(1);
+  });
+
+  it('splits committed money between two frozen components in their own proportions', () => {
+    // £1,500 committed: £500 joining with the activity (5/10 elapsed) and £1,000 joining on day 4
+    // (1/6 elapsed). Weighted by the FROZEN shares, which sum to the frozen total by construction.
+    const result = run(
+      [
+        baselined({
+          baselineBudgetedCost: 1500,
+          assignments: [assignment({ budgetedCost: 99999, lagMinutes: 4 * DAY })],
+          baselineCostComponents: {
+            budgetedExpense: 0,
+            assignments: [
+              { budgetedCost: 500, lagMinutes: 0 },
+              { budgetedCost: 1000, lagMinutes: 4 * DAY },
+            ],
+          },
+        }),
+      ],
+      '2026-01-06',
+    );
+    expect(result.total.pv).toBe(Math.round(500 * 0.5 + 1000 / 6));
+    expect(result.costPhasingApproximatedCount).toBe(0);
+  });
+
+  it('an all-zero-lag frozen breakdown still takes the single-window path verbatim', () => {
+    // The parity claim, one level in: capturing per-assignment cost must not by itself move any PV.
+    // A baseline whose components all joined with their activity has nothing to phase separately.
+    const frozen = run(
+      [
+        baselined({
+          assignments: [assignment({ budgetedCost: 3000 })],
+          baselineCostComponents: {
+            budgetedExpense: 0,
+            assignments: [{ budgetedCost: 1000, lagMinutes: 0 }],
+          },
+        }),
+      ],
+      '2026-01-06',
+    );
+    const withoutBreakdown = run(
+      [baselined({ assignments: [assignment({ budgetedCost: 3000 })] })],
+      '2026-01-06',
+    );
+    expect(frozen.total.pv).toBe(withoutBreakdown.total.pv);
+    expect(frozen.costPhasingLaggedCount).toBe(0);
+    expect(frozen.costPhasingApproximatedCount).toBe(0);
+  });
+
+  it('an activity that had NO assignments at capture is exact, not fallen back to the live mix', () => {
+    // The ambiguity the `cost_snapshot_level` discriminator exists to remove, seen from the engine's
+    // side: this activity's frozen breakdown is legitimately EMPTY. It must phase its frozen expense
+    // over the activity window and must NOT reach for the assignments it has acquired since.
+    const result = run(
+      [
+        baselined({
+          baselineBudgetedCost: 1000,
+          assignments: [assignment({ budgetedCost: 3000, lagMinutes: 4 * DAY })],
+          baselineCostComponents: { budgetedExpense: 1000, assignments: [] },
+        }),
+      ],
+      '2026-01-06',
+    );
+    // No frozen component carries a lag, so the single-window path stands: 1000 × 50%.
+    expect(result.total.pv).toBe(500);
+    expect(result.costPhasingLaggedCount).toBe(0);
+  });
+
+  it('a live-budget PV with no cost baseline is never reported as approximated', () => {
+    // There is nothing to approximate: the components ARE the live budget, so the split is exact by
+    // construction. Counting it would tell a planner with no baseline to go and re-capture one.
+    const result = run(
+      [
+        activity({
+          activityId: 'A',
+          accrualType: 'UNIFORM',
+          earlyStart: '2026-01-01',
+          earlyFinish: '2026-01-11',
+          assignments: [assignment({ budgetedCost: 1000, lagMinutes: 4 * DAY })],
+        }),
+      ],
+      '2026-01-06',
+    );
+    expect(result.costPhasingLaggedCount).toBe(1);
+    expect(result.costPhasingApproximatedCount).toBe(0);
+  });
+});

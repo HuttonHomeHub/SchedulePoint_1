@@ -48,6 +48,7 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
   // their snapshot rows reference plans (RESTRICT), so they go before plans; snapshot
   // rows reference their baseline (RESTRICT), so they go first of all.
   async function resetDatabase(): Promise<void> {
+    await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.activityDependency.deleteMany();

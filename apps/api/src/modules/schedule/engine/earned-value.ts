@@ -44,6 +44,26 @@ export interface EvAssignmentInput {
 }
 
 /**
+ * The **frozen** cost decomposition an ADR-0025 cost baseline captured for one activity — the
+ * `ASSIGNMENT`-level snapshot (`baseline_assignments`) that CQ-1 option B added. Its parts sum to the
+ * activity's frozen `baselineBudgetedCost` **by construction** (capture evaluates one expression once
+ * and writes both spellings), so PV built from them is an exact split of the committed money rather
+ * than a reallocation of it by today's budget shares.
+ *
+ * **Optional on purpose, and the absent case is not an error.** A baseline captured before this
+ * existed froze one number per activity and no breakdown can be recovered from it — those keep the
+ * live-share approximation permanently, and the read model counts them
+ * ({@link PlanEarnedValueResult.costPhasingApproximatedCount}) rather than staying quiet about which
+ * path a given baseline is on.
+ */
+export interface EvBaselineCostComponents {
+  /** Frozen activity-level lump-sum expense (minor units) — belongs to no resource. */
+  budgetedExpense: number;
+  /** Frozen per-assignment cost and the join lag **at capture**, in capture order. */
+  assignments: { budgetedCost: number; lagMinutes: number }[];
+}
+
+/**
  * One weighted progress step (ADR-0044 §33). `weight` is a relative importance (≥ 0); `percentComplete`
  * is the step's own progress (0–100). The activity's physical %-complete is the weight-weighted mean of
  * its steps' `percentComplete`.
@@ -118,6 +138,13 @@ export interface EvActivityInput {
   baselineFinish: string | null;
   /** Cost-baseline budgeted cost (minor units); null = missing → PV falls back to live BAC + a plan flag. */
   baselineBudgetedCost: number | null;
+  /**
+   * The cost baseline's **frozen per-component breakdown** (ADR-0071 M3 / the ADR-0025 second
+   * amendment), when the active baseline captured one. Used only where a lag makes PV a component
+   * sum; **absent ⇒ the live budget shares**, which is what every caller passed before, so the
+   * approximate path is unchanged rather than re-derived.
+   */
+  baselineCostComponents?: EvBaselineCostComponents;
   /** Live early start (`YYYY-MM-DD`) — the PV time-phasing anchor when no cost baseline exists. */
   earlyStart: string | null;
   /** Live early finish (`YYYY-MM-DD`) — the PV time-phasing anchor when no cost baseline exists. */
@@ -189,6 +216,17 @@ export interface PlanEarnedValueResult {
    * the previous single-window expression verbatim.
    */
   costPhasingLaggedCount: number;
+  /**
+   * Of those, the leaf activities whose component split was **approximated from the live budget mix**
+   * because the plan's cost baseline is an `ACTIVITY`-level snapshot — captured before ADR-0025's
+   * second amendment froze per-assignment cost, and unbackfillable, since a breakdown that was never
+   * recorded cannot be recovered from a total (ADR-0071 CQ-1). Always `≤ costPhasingLaggedCount`, and
+   * `0` both when no baseline exists (a live-budget PV has nothing to approximate) and when every
+   * baseline in play carries its own components. **The read model saying which path a given baseline
+   * is on is part of the accepted decision, not a nicety** — an approximation nobody wrote down is how
+   * an invisible defect starts.
+   */
+  costPhasingApproximatedCount: number;
   /**
    * The count of leaf activities whose progress steps are present but **all zero-weight** (ADR-0044 §33,
    * N27) — so {@link rollupPhysicalPercent} fell back to the manual `physicalPercentComplete`. A
@@ -391,26 +429,28 @@ function leafPlannedPercent(
  *
  * ## Whose money is being split
  *
- * `pvCost` is the committed baseline cost when one exists and the live `bac` otherwise. The components
- * are weighted by their **live** budget shares, so on the live-budget path the split is exact by
- * construction. Against a captured baseline it is exact only where the baseline carries per-assignment
- * cost; for a baseline captured before that existed it approximates a decomposition the snapshot never
- * held, and `liveBac === 0` falls back to the single window rather than dividing by zero.
+ * `pvCost` is the committed baseline cost when one exists and the live `bac` otherwise; the components
+ * are the **frozen** breakdown when the active baseline captured one and the **live** budget mix
+ * otherwise ({@link pvDecomposition}). On the live-budget path the split is exact by construction —
+ * `bac` IS the component sum, the same arithmetic in {@link leafBudgetAndActual}. Against an
+ * `ASSIGNMENT`-level baseline it is exact for the same reason, one capture earlier. Against a baseline
+ * captured before that existed it **approximates** a decomposition the snapshot never held, which the
+ * returned `approximated` flag carries out to a plan-level count rather than leaving unsaid. A zero
+ * component total falls back to the single window rather than dividing by zero.
  */
 function laggedPlannedValue(
   activity: EvActivityInput,
-  liveBac: number,
   pvCost: number,
   start: string | null,
   finish: string | null,
   dataDate: string | null,
   calendar: WorkingTimeCalendar,
-): number | null {
-  const lagged = activity.assignments.some((a) => (a.lagMinutes ?? 0) > 0);
-  if (!lagged) return null;
-  // No live budget to weight the split by — there is no honest decomposition, so use the whole-window
-  // answer rather than inventing shares. Not an error: an activity may carry dates and no cost at all.
-  if (liveBac <= 0) return null;
+): { pv: number; approximated: boolean } | null {
+  const { expense, components, total, approximated } = pvDecomposition(activity);
+  if (!components.some((c) => c.lagMinutes > 0)) return null;
+  // Nothing to take shares against — there is no honest decomposition, so use the whole-window answer
+  // rather than inventing one. Not an error: an activity may carry dates and no cost at all.
+  if (total <= 0) return null;
   // A milestone has no span for a lag to sit inside, and START/END recognise at a single endpoint that
   // no lag moves. Deferring to the single-window path keeps those three answers bit-for-bit as they are.
   const isMilestone = activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE';
@@ -418,29 +458,65 @@ function laggedPlannedValue(
   if (dataDate === null || start === null || finish === null) return null;
 
   let pv = 0;
-  const share = (cost: number): number => (pvCost * cost) / liveBac;
+  const share = (cost: number): number => (pvCost * cost) / total;
   // The activity expense keeps the activity's own window — it belongs to no resource, so nothing about
   // it joins late.
-  if (activity.budgetedExpense !== 0) {
+  if (expense !== 0) {
     const percent = leafPlannedPercent(activity, start, finish, dataDate, calendar);
-    pv += (share(activity.budgetedExpense) * percent) / 100;
+    pv += (share(expense) * percent) / 100;
   }
-  for (const a of activity.assignments) {
-    const cost = a.budgetedCost ?? Math.round(a.budgetedUnits * (a.costPerUnit ?? 0));
-    if (cost === 0) continue;
-    const lag = a.lagMinutes ?? 0;
+  for (const c of components) {
+    if (c.cost === 0) continue;
     // A lag at or past the finish leaves a window with no working time in it. `leafPlannedPercent`
     // already answers 100 past a zero-length span, which is the spec's degenerate case: the cost is
     // recognised at the effective start rather than smeared over a window that does not exist.
-    const from = lag > 0 ? calendar.addWorkingTime(start, lag) : start;
+    const from = c.lagMinutes > 0 ? calendar.addWorkingTime(start, c.lagMinutes) : start;
     const effFrom = from > finish ? finish : from;
     const percent = leafPlannedPercent(activity, effFrom, finish, dataDate, calendar);
-    pv += (share(cost) * percent) / 100;
+    pv += (share(c.cost) * percent) / 100;
   }
   // Round ONCE at the end. Rounding each component would let a many-assignment activity drift several
   // minor units from `pvCost` at completion, which is visible as a plan that never quite reaches its
   // own budget.
-  return Math.round(pv);
+  return { pv: Math.round(pv), approximated };
+}
+
+/** One priced piece of a leaf's budget, with the lag that phases it. */
+interface PvComponent {
+  cost: number;
+  lagMinutes: number;
+}
+
+/**
+ * The pieces a leaf's PV is built from, and **which mix they came from** (ADR-0071 M3 / CQ-1).
+ *
+ * The frozen breakdown wins when the active baseline captured one, because that is the money PV is
+ * actually spending: reading the LIVE lag or the LIVE cost while spending a FROZEN total would
+ * time-phase committed money through a window somebody edited after the commitment — the drift the
+ * `baseline_assignments` table exists to remove. With no frozen breakdown the live mix stands, and
+ * `total` is then `bac` by construction (the same sum as {@link leafBudgetAndActual}), so the
+ * pre-ADR-0071 arithmetic is preserved rather than re-derived.
+ *
+ * `approximated` says which — it is `true` for the live mix, and only becomes a *reported*
+ * approximation where a baseline is also present (a live-budget PV has nothing to approximate).
+ */
+function pvDecomposition(activity: EvActivityInput): {
+  expense: number;
+  components: PvComponent[];
+  total: number;
+  approximated: boolean;
+} {
+  const frozen = activity.baselineCostComponents;
+  const expense = frozen ? frozen.budgetedExpense : activity.budgetedExpense;
+  const components: PvComponent[] = frozen
+    ? frozen.assignments.map((a) => ({ cost: a.budgetedCost, lagMinutes: a.lagMinutes }))
+    : activity.assignments.map((a) => ({
+        cost: a.budgetedCost ?? Math.round(a.budgetedUnits * (a.costPerUnit ?? 0)),
+        lagMinutes: a.lagMinutes ?? 0,
+      }));
+  let total = expense;
+  for (const c of components) total += c.cost;
+  return { expense, components, total, approximated: frozen === undefined };
 }
 
 /**
@@ -485,6 +561,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
   let costBaselineMissing = false;
   let costWarningCount = 0;
   let costPhasingLaggedCount = 0;
+  let costPhasingApproximatedCount = 0;
   let stepWeightZeroCount = 0;
 
   // Leaves first — they do not depend on the rollup.
@@ -507,9 +584,16 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
     // rather than an optimisation: summing rounded per-component values can differ from rounding one
     // total by a minor unit, and a silent ±1 on every existing plan's PV is exactly the kind of defect
     // that survives review. A plan reaches the component sum only when a lag actually asks it to.
-    const laggedPv = laggedPlannedValue(activity, bac, pvCost, start, finish, dataDate, calendar);
-    const pv = laggedPv === null ? Math.round((pvCost * plannedPercent) / 100) : laggedPv;
-    if (laggedPv !== null) costPhasingLaggedCount += 1;
+    const lagged = laggedPlannedValue(activity, pvCost, start, finish, dataDate, calendar);
+    const pv = lagged === null ? Math.round((pvCost * plannedPercent) / 100) : lagged.pv;
+    if (lagged !== null) {
+      costPhasingLaggedCount += 1;
+      // Only an approximation the reader can act on is counted: with no cost baseline there is no
+      // frozen decomposition to be missing, so a live-budget PV is exact and is not flagged.
+      if (lagged.approximated && activity.baselineBudgetedCost !== null) {
+        costPhasingApproximatedCount += 1;
+      }
+    }
 
     rolled.set(activity.activityId, { bac, pv, ev, ac });
     resultById.set(activity.activityId, {
@@ -559,6 +643,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
     costBaselineMissing,
     costWarningCount,
     costPhasingLaggedCount,
+    costPhasingApproximatedCount,
     stepWeightZeroCount,
     activities: activities.map((a) => resultById.get(a.activityId)!),
     total,

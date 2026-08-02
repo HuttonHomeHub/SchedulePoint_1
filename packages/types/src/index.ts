@@ -1568,6 +1568,15 @@ export interface PlanEarnedValue {
    */
   costPhasingLaggedCount: number;
   /**
+   * Of those, the leaf activities whose component split was **approximated from the live budget mix**
+   * because the plan's active cost baseline was captured before ADR-0025's second amendment froze
+   * per-assignment cost — and cannot be back-filled, since a breakdown that was never recorded is not
+   * recoverable from a total (ADR-0071 CQ-1). Always `≤ costPhasingLaggedCount`; `0` when there is no
+   * cost baseline (a live-budget PV has nothing to approximate) and when every baseline in play
+   * carries its own components. Re-capturing the baseline is what clears it.
+   */
+  costPhasingApproximatedCount: number;
+  /**
    * The count of leaf activities whose progress steps are all zero-weight (M7 rung 5, ADR-0044 §33,
    * N27) — so the weighted-mean rollup fell back to the manual `physicalPercentComplete`. A read-time
    * data-quality WARNING, never a reject (the resolver never divides by zero); mirrors

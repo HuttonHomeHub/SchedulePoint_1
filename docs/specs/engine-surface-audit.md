@@ -3,9 +3,12 @@
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
 > building F7's control, and blocked it. **Resolved: F1, F2, F3, F5, F7+F8.**
-> **Open: F4 (a product call); F6 in progress** — ADR-0071 **M0 landed** (the `lag_minutes` column,
-> both DTOs, the response field and the N34 rejects). The surface-contract gate reports **two known
-> gaps**, both of them F6's write DTOs, which flip to `surface` when M4 ships the control.
+> **Open: F4 (a product call); F6 in progress** — ADR-0071 **M0–M3 landed**: the `lag_minutes`
+> column, both DTOs and the N34 rejects (M0); the histogram read (M1); the levelling pass's
+> per-resource demand windows (M2); and Earned Value's per-component PV phasing with the ADR-0025
+> per-assignment cost baseline behind it (M3). **M4 — the planner's control — is next**, and until it
+> ships the surface-contract gate reports **three known gaps**: F6's two write DTOs and the engine's
+> own `EngineAssignment.lagMinutes`, all three flipping to `surface` together.
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -216,6 +219,36 @@ cases do not belong in the seed negative tier, which `negative.spec.ts` pins to 
 fixture's own case list; they live at the DTO boundary and in the API e2e instead. Both are recorded
 in [`docs/specs/assignment-lag/implementation-plan.md`](assignment-lag/implementation-plan.md) beside
 the tasks that asked for them. A plan is a document too: ADR-0058's rule reaches it as well.
+
+**M2 landed (2026-08-02).** The levelling pass reserves capacity from the moment each resource
+arrives rather than from the activity's start — so a crane joining on day four stops blocking the
+front of a fortnight it is not on. The cost is that ADR-0041's parity argument had to **split in
+two**: Gate A (levelling off ⇒ `computeSchedule` byte-identical) stays structural, but Gate B (all
+lags zero ⇒ identical levelled output) is now **data-conditional**, because both the occupancy model
+and the placement search were rewritten. It is held by a corpus of eight scenarios snapshotted
+**before** the refactor — a snapshot written afterwards asserts a refactor against itself — and
+recorded as an amendment on ADR-0041 rather than left for a reader to re-derive. The placement
+search's per-resource candidate starts are bounded by a calendar-port **call-count** gate, because a
+candidate list that grows with the span would pass every behavioural test while silently
+reintroducing the per-minute scan ADR-0041 §F forbids.
+
+**M3 landed (2026-08-02), and answered CQ-1 the expensive way.** Earned Value now phases planned
+value **per cost component** — the activity's own expense over its window, each assignment over
+`[start ⊕ lag, finish)` — so the PV curve stops claiming cost accrues before the resource incurring
+it exists. The zero-lag path takes the previous single-window expression **verbatim**, which is a
+requirement rather than an optimisation: summing rounded components can differ from rounding one
+total by a minor unit, and a silent ±1 on every existing plan's PV is precisely the defect class this
+register keeps finding after the fact.
+
+Splitting a **baselined** total was the open question. The product owner overturned both the spec's
+default and my recommendation: ADR-0025 takes a **second amendment** and a capture now freezes
+per-assignment cost **and its lag** (`baseline_assignments`), making the split exact for every
+baseline captured after it. Baselines captured before it **cannot be back-filled**, so the read
+carries both paths and says which one a plan is on — `costPhasingApproximatedCount`. The level is
+read from a stored discriminator through an exhaustive `switch`, never inferred from a row count:
+an assignment-free plan's baseline has zero component rows and is **exact**, a pre-amendment baseline
+has zero rows and can only be **approximated**. Same observation, opposite answers — which is the
+whole reason the column exists.
 
 ### F7 — the critical float threshold has no control (outward; found by the gate, not by me) — **RESOLVED**
 

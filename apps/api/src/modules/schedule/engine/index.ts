@@ -36,6 +36,7 @@ export {
   type EvInput,
   type EvActivityInput,
   type EvAssignmentInput,
+  type EvBaselineCostComponents,
   type ActivityStepInput,
   type EvMetrics,
   type EvActivityResult,

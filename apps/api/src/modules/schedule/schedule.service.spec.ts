@@ -836,7 +836,9 @@ describe('ScheduleService.getEarnedValue', () => {
           assignments: [],
         },
       ]),
-      loadActiveBaselineCostSnapshot: vi.fn().mockResolvedValue([]),
+      // `null` = the plan has no active baseline. Deliberately not an empty snapshot: zero rows would
+      // be ambiguous, which is the invariant the discriminator exists to hold (ADR-0071 M3).
+      loadActiveBaselineCostSnapshot: vi.fn().mockResolvedValue(null),
       loadPlanCalendar: vi.fn().mockResolvedValue(null),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
@@ -887,17 +889,113 @@ describe('ScheduleService.getEarnedValue', () => {
   });
 
   it('joins the active baseline cost snapshot for PV (not flagged as missing)', async () => {
-    schedule.loadActiveBaselineCostSnapshot.mockResolvedValue([
-      {
-        sourceActivityId: 'act-1',
-        budgetedCost: 100000n,
-        baselineStart: new Date('2026-01-01T00:00:00Z'),
-        baselineFinish: new Date('2026-01-05T00:00:00Z'),
-      },
-    ]);
+    schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
+      costSnapshotLevel: 'ACTIVITY',
+      activities: [
+        {
+          sourceActivityId: 'act-1',
+          budgetedCost: 100000n,
+          budgetedExpense: 100000n,
+          baselineStart: new Date('2026-01-01T00:00:00Z'),
+          baselineFinish: new Date('2026-01-05T00:00:00Z'),
+        },
+      ],
+      assignments: [],
+    });
     const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
     // A snapshot cost is present for every leaf → the live-budget fallback flag is off.
     expect(result.costBaselineMissing).toBe(false);
+  });
+
+  describe('the cost-snapshot level decides the PV split, and a row count never does', () => {
+    const DAY = 1440;
+    /** One task, a £1,000 assignment joining on day 4, over a ten-day baseline window. */
+    const laggedPlan = () => {
+      schedule.loadEarnedValueActivities.mockResolvedValue([
+        {
+          id: 'act-1',
+          type: 'TASK',
+          parentId: null,
+          percentCompleteType: 'DURATION',
+          percentComplete: 50,
+          physicalPercentComplete: null,
+          steps: [],
+          budgetedExpense: 0n,
+          actualExpense: null,
+          earlyStart: null,
+          earlyFinish: null,
+          assignments: [
+            {
+              budgetedCost: 100000n,
+              actualCost: 0n,
+              budgetedUnits: new Prisma.Decimal(0),
+              actualUnits: new Prisma.Decimal(0),
+              lagMinutes: 4 * DAY,
+              resource: { costPerUnit: null },
+            },
+          ],
+        },
+      ]);
+    };
+    const snapshot = (
+      costSnapshotLevel: 'ACTIVITY' | 'ASSIGNMENT',
+      assignments: unknown[] = [],
+    ) => ({
+      costSnapshotLevel,
+      activities: [
+        {
+          sourceActivityId: 'act-1',
+          budgetedCost: 100000n,
+          budgetedExpense: 0n,
+          baselineStart: new Date('2026-01-01T00:00:00Z'),
+          baselineFinish: new Date('2026-01-11T00:00:00Z'),
+        },
+      ],
+      assignments,
+    });
+
+    it('reports an ACTIVITY-level baseline’s lagged split as approximated', async () => {
+      // Captured before per-assignment cost was frozen. The breakdown was never recorded, so PV
+      // reallocates the committed total by live shares — and the read says so rather than staying
+      // quiet, which is the half of CQ-1 option B that is not the schema.
+      laggedPlan();
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('ACTIVITY'));
+      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+      expect(result.costPhasingLaggedCount).toBe(1);
+      expect(result.costPhasingApproximatedCount).toBe(1);
+    });
+
+    it('reads an ASSIGNMENT-level baseline’s frozen components as exact', async () => {
+      // Same live plan, same committed £1,000 — but the snapshot holds its own breakdown, so nothing
+      // is reallocated and nothing is reported approximate.
+      laggedPlan();
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(
+        snapshot('ASSIGNMENT', [
+          {
+            sourceActivityId: 'act-1',
+            sourceAssignmentId: 'asg-1',
+            budgetedCost: 100000n,
+            lagMinutes: 4 * DAY,
+          },
+        ]),
+      );
+      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+      expect(result.costPhasingLaggedCount).toBe(1);
+      expect(result.costPhasingApproximatedCount).toBe(0);
+    });
+
+    it('an ASSIGNMENT-level baseline with NO component rows is exact, not approximated', async () => {
+      // The ambiguity in one test. Zero `baseline_assignments` rows is the SAME observation as the
+      // ACTIVITY case above and must produce the opposite answer: this activity is exactly known to
+      // have carried no assignments at capture, so it phases its frozen expense over the activity
+      // window and never reaches for the live assignment it has acquired since. Inferring the level
+      // from the row count would silently make this the approximate branch.
+      laggedPlan();
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('ASSIGNMENT'));
+      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+      expect(result.costPhasingLaggedCount).toBe(0);
+      expect(result.costPhasingApproximatedCount).toBe(0);
+    });
   });
 });
 

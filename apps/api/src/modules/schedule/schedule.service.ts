@@ -51,6 +51,7 @@ import {
   type EngineResource,
   type EngineSummary,
   type EvActivityInput,
+  type EvBaselineCostComponents,
   type HistogramAssignmentInput,
   type WorkingTimeCalendar,
 } from './engine';
@@ -62,6 +63,7 @@ import {
 import { ProgrammeCycleError, resolveProgrammeOrder } from './programme-order';
 import {
   ScheduleRepository,
+  type EarnedValueCostSnapshot,
   type ScheduleActivityRow,
   type ScheduleEdgeRow,
 } from './schedule.repository';
@@ -70,6 +72,52 @@ import { computeStaleness } from './staleness';
 /** A calendar-day (or null) as a `YYYY-MM-DD` string, for the pure EV read (the baselines `day` helper). */
 function day(value: Date | null): string | null {
   return value ? formatCalendarDate(value) : null;
+}
+
+/**
+ * Group an active cost baseline's **frozen per-assignment** cost components by source activity, or
+ * `null` when this baseline has none to give (ADR-0071 M3 / CQ-1 option B).
+ *
+ * The level is read from the discriminator the capture wrote and from nothing else. A row count
+ * cannot answer it: an `ASSIGNMENT`-level baseline of a plan with no resource assignments has zero
+ * `baseline_assignments` rows and is nonetheless **exact**, while a pre-amendment baseline has zero
+ * rows and can only ever be **approximated** — the same observation, two opposite answers. The
+ * migration header states this as an invariant; the `switch` is where the code obeys it.
+ *
+ * The switch is deliberately **exhaustive with no `default`**: `BaselineCostSnapshotLevel` is a
+ * database enum whose members the schema cannot pin to the rows, so a third level added later must
+ * come back here and say which side it falls on. A `default` would silently choose one — and it would
+ * choose it for money.
+ */
+function frozenCostComponents(
+  snapshot: EarnedValueCostSnapshot | null,
+): Map<string, EvBaselineCostComponents> | null {
+  if (!snapshot) return null;
+  switch (snapshot.costSnapshotLevel) {
+    case 'ACTIVITY':
+      // Captured before per-assignment cost was snapshotted. The breakdown was never recorded and
+      // cannot be recovered from a frozen total, so PV keeps the live-share approximation for the
+      // life of this baseline — counted out to the reader as `costPhasingApproximatedCount`.
+      return null;
+    case 'ASSIGNMENT': {
+      // Seed EVERY snapshotted activity, not only the ones with components: an activity that had no
+      // assignments at capture is exactly known to have had none, and must not fall through to the
+      // live mix it may have acquired since.
+      const byActivity = new Map<string, EvBaselineCostComponents>(
+        snapshot.activities.map((a) => [
+          a.sourceActivityId,
+          { budgetedExpense: Number(a.budgetedExpense ?? 0n), assignments: [] },
+        ]),
+      );
+      for (const a of snapshot.assignments) {
+        byActivity.get(a.sourceActivityId)?.assignments.push({
+          budgetedCost: Number(a.budgetedCost),
+          lagMinutes: a.lagMinutes,
+        });
+      }
+      return byActivity;
+    }
+  }
 }
 
 /** Machine-readable reasons carried in a schedule {@link ValidationError}. */
@@ -599,7 +647,7 @@ export class ScheduleService {
     const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
     if (!plan) throw new NotFoundError('Plan not found.');
 
-    const [activityRows, snapshotRows, calendar] = await Promise.all([
+    const [activityRows, snapshot, calendar] = await Promise.all([
       this.schedule.loadEarnedValueActivities(organization.id, planId),
       this.schedule.loadActiveBaselineCostSnapshot(organization.id, planId),
       this.resolveCalendar(organization.id, plan.calendarId),
@@ -607,9 +655,11 @@ export class ScheduleService {
 
     // Join the active baseline's cost snapshot by source activity id; a missing row (or no active
     // baseline at all) leaves the baseline fields null → the module's live-budget PV fallback.
-    const baselineById = new Map(snapshotRows.map((s) => [s.sourceActivityId, s]));
+    const baselineById = new Map((snapshot?.activities ?? []).map((s) => [s.sourceActivityId, s]));
+    const componentsById = frozenCostComponents(snapshot);
     const activities: EvActivityInput[] = activityRows.map((r) => {
       const base = baselineById.get(r.id) ?? null;
+      const frozen = componentsById?.get(r.id);
       return {
         activityId: r.id,
         type: r.type,
@@ -651,6 +701,10 @@ export class ScheduleService {
             ? null
             : Number(base.budgetedCost)
           : null,
+        // The baseline's own frozen breakdown, when it captured one (ADR-0071 M3). Spread only when
+        // present, so an activity outside an ASSIGNMENT-level snapshot builds the identical object the
+        // EV read received before, and the live-share path is preserved rather than re-derived.
+        ...(frozen ? { baselineCostComponents: frozen } : {}),
         earlyStart: day(r.earlyStart),
         earlyFinish: day(r.earlyFinish),
       };
@@ -671,6 +725,7 @@ export class ScheduleService {
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
       costPhasingLaggedCount: result.costPhasingLaggedCount,
+      costPhasingApproximatedCount: result.costPhasingApproximatedCount,
       // N27 (ADR-0044 §33): leaf activities whose steps are all zero-weight, so the manual physical %
       // fallback was used — a read-time data-quality warning, mirroring costWarningCount.
       stepWeightZeroCount: result.stepWeightZeroCount,

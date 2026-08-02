@@ -3,6 +3,7 @@ import {
   Prisma,
   type AccrualType,
   type ActivityType,
+  type BaselineCostSnapshotLevel,
   type ConstraintType,
   type DependencyType,
   type LagCalendarSource,
@@ -178,8 +179,33 @@ export interface ResourceHistogramAssignmentRow {
 export interface EarnedValueBaselineRow {
   sourceActivityId: string;
   budgetedCost: bigint | null;
+  /** The frozen activity-level lump-sum expense; null on a pre-ADR-0071 snapshot. */
+  budgetedExpense: bigint | null;
   baselineStart: Date | null;
   baselineFinish: Date | null;
+}
+
+/**
+ * One frozen per-assignment cost component of an `ASSIGNMENT`-level cost baseline (ADR-0071 M3 / the
+ * ADR-0025 second amendment) — the money AND the join lag as they stood at capture.
+ */
+export interface EarnedValueBaselineAssignmentRow {
+  sourceActivityId: string;
+  sourceAssignmentId: string;
+  budgetedCost: bigint;
+  lagMinutes: number;
+}
+
+/**
+ * A plan's ACTIVE cost baseline as the EV read consumes it. Returned whole — with its
+ * `costSnapshotLevel` discriminator — rather than as two loose arrays, because **zero
+ * `assignments` rows is ambiguous** (a pre-amendment capture, or a genuinely assignment-free plan) and
+ * must therefore never be the signal. `null` from the loader is the unambiguous "no active baseline".
+ */
+export interface EarnedValueCostSnapshot {
+  costSnapshotLevel: BaselineCostSnapshotLevel;
+  activities: EarnedValueBaselineRow[];
+  assignments: EarnedValueBaselineAssignmentRow[];
 }
 
 /** The read-side aggregate over a plan's persisted engine columns (C1). */
@@ -561,30 +587,51 @@ export class ScheduleRepository {
   }
 
   /**
-   * The plan's ACTIVE baseline cost-snapshot rows (EV2b, ADR-0042 — the ADR-0025 amendment): the
-   * `sourceActivityId → budgetedCost / baselineStart / baselineFinish` the EV read time-phases PV
-   * against. Returns `[]` when the plan has no active baseline (the module then falls back to the live
-   * budget and flags `costBaselineMissing`). Org + plan scoped (anti-IDOR), soft-deletes excluded.
+   * The plan's ACTIVE baseline cost snapshot (EV2b, ADR-0042 — the ADR-0025 amendments): the frozen
+   * `budgetedCost / budgetedExpense / baselineStart / baselineFinish` per activity that the EV read
+   * time-phases PV against, plus — on an `ASSIGNMENT`-level snapshot — the frozen **per-assignment**
+   * cost and join lag that make a lagged PV split exact (ADR-0071 M3 / CQ-1).
+   *
+   * Returns **`null`** when the plan has no active baseline (the module then falls back to the live
+   * budget and flags `costBaselineMissing`). That is deliberately not an empty array: **zero
+   * `assignments` rows is ambiguous** — a pre-amendment capture and a genuinely assignment-free plan
+   * look identical — so the level is read from the discriminator the capture wrote and never inferred
+   * from a row count. Org + plan scoped (anti-IDOR), soft-deletes excluded; the assignment read rides
+   * `uq_baseline_assignments_baseline_source_assignment`'s leftmost prefix.
    */
   async loadActiveBaselineCostSnapshot(
     organizationId: string,
     planId: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<EarnedValueBaselineRow[]> {
+  ): Promise<EarnedValueCostSnapshot | null> {
     const active = await db.baseline.findFirst({
       where: { organizationId, planId, isActive: true, deletedAt: null },
-      select: { id: true },
+      select: { id: true, costSnapshotLevel: true },
     });
-    if (!active) return [];
-    return db.baselineActivity.findMany({
-      where: { baselineId: active.id, deletedAt: null },
-      select: {
-        sourceActivityId: true,
-        budgetedCost: true,
-        baselineStart: true,
-        baselineFinish: true,
-      },
-    });
+    if (!active) return null;
+    const [activities, assignments] = await Promise.all([
+      db.baselineActivity.findMany({
+        where: { baselineId: active.id, deletedAt: null },
+        select: {
+          sourceActivityId: true,
+          budgetedCost: true,
+          budgetedExpense: true,
+          baselineStart: true,
+          baselineFinish: true,
+        },
+      }),
+      db.baselineAssignment.findMany({
+        where: { baselineId: active.id, deletedAt: null },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: {
+          sourceActivityId: true,
+          sourceAssignmentId: true,
+          budgetedCost: true,
+          lagMinutes: true,
+        },
+      }),
+    ]);
+    return { costSnapshotLevel: active.costSnapshotLevel, activities, assignments };
   }
 
   /**

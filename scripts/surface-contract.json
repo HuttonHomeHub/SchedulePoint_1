@@ -105,7 +105,7 @@
     "surface": "features/share/guest-api.ts"
   },
   "activities/update-activity-progress.suspendDate": {
-    "surface": "features/activities/components/ActivityProgressPanels.tsx \u2014 a record, and the field says so (F1 resolved: ADR-0035 \u00a74 withdrew the unimplemented clause)"
+    "surface": "features/activities/components/ActivityProgressPanels.tsx — a record, and the field says so (F1 resolved: ADR-0035 §4 withdrew the unimplemented clause)"
   },
   "activities/update-activity.accrualType": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
@@ -351,7 +351,7 @@
     "surface": "features/share/guest-api.ts"
   },
   "engine/EngineActivity.calendar": {
-    "surface": "features/activities/ \u2014 the per-activity calendar picker (ADR-0037)"
+    "surface": "features/activities/ — the per-activity calendar picker (ADR-0037)"
   },
   "engine/EngineActivity.constraintDate": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
@@ -378,7 +378,7 @@
     "surface": "config/env.ts"
   },
   "engine/EngineActivity.parentId": {
-    "surface": "features/wbs/ \u2014 the WBS band and Members panel"
+    "surface": "features/wbs/ — the WBS band and Members panel"
   },
   "engine/EngineActivity.remainingMinutes": {
     "surface": "features/activities/components/ActivityProgressPanels.tsx (Remaining duration)"
@@ -407,17 +407,20 @@
   "engine/EngineAssignment.activityId": {
     "exempt": "a join key, not a value a planner types"
   },
+  "engine/EngineAssignment.lagMinutes": {
+    "gap": "F6 (ADR-0071): the levelling pass's view of the per-assignment join lag. Same finding as `resources/create-assignment.lagMinutes` — M0 lands storage + API, the flagged web control is M4, and both flip to `surface` then."
+  },
   "engine/EngineAssignment.resourceId": {
     "exempt": "a join key, not a value a planner types"
   },
   "engine/EngineAssignment.unitsPerHour": {
-    "surface": "features/resources/ \u2014 assignment units/time"
+    "surface": "features/resources/ — assignment units/time"
   },
   "engine/EngineEdge.id": {
     "exempt": "identity, carried through so the engine can key its driving output"
   },
   "engine/EngineEdge.lagCalendar": {
-    "surface": "features/dependencies/ \u2014 the lag-calendar selector"
+    "surface": "features/dependencies/ — the lag-calendar selector"
   },
   "engine/EngineEdge.lagMinutes": {
     "surface": "config/env.ts"
@@ -432,7 +435,7 @@
     "surface": "components/ui/button.tsx"
   },
   "engine/EngineResource.calendar": {
-    "surface": "features/resources/ \u2014 the resource calendar picker"
+    "surface": "features/resources/ — the resource calendar picker"
   },
   "engine/EngineResource.capacity": {
     "surface": "config/env.ts"
@@ -441,7 +444,7 @@
     "exempt": "identity"
   },
   "engine/LevelingOptions.dataDate": {
-    "surface": "the plan data date (features/plans/) \u2014 not a levelling control"
+    "surface": "the plan data date (features/plans/) — not a levelling control"
   },
   "engine/LevelingOptions.levelWithinFloatOnly": {
     "surface": "config/env.ts"
@@ -534,7 +537,7 @@
     "surface": "config/env.ts"
   },
   "resources/create-assignment.lagMinutes": {
-    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 \u2014 this flips to `surface` then."
+    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 — this flips to `surface` then."
   },
   "resources/create-assignment.resourceId": {
     "surface": "components/layout/workspace/resource-strip-panel.tsx"
@@ -585,7 +588,7 @@
     "surface": "config/env.ts"
   },
   "resources/update-assignment.lagMinutes": {
-    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 \u2014 this flips to `surface` then."
+    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 — this flips to `surface` then."
   },
   "resources/update-assignment.unitsPerHour": {
     "surface": "config/env.ts"
