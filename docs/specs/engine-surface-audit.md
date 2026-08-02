@@ -110,6 +110,35 @@ call, not a defect call — but it should be a decision rather than an omission.
 The matrix's own summary says "0 ⚪". One row disagrees with the count printed above it. Cheap to fix,
 and worth fixing because the matrix is the document people trust to say what is proven.
 
+### F6 — assignment lag: the engine implements it, nothing can store it (outward, inverted)
+
+The two capabilities the coverage report **excepts** are not equivalent, and the report's one-line
+summary hides that.
+
+`engine/resource-histogram.ts` takes a per-assignment **`lagMinutes`**, shifts the effective span
+(`effStart = a.calendar.addWorkingTime(a.start, a.lagMinutes)`, line 222) and is scored against the
+fixture's own 24-hour lag case (**AS0027**). The behaviour is built and tested.
+
+There is **no `lag` column on `ResourceAssignment`** — only a comment in the schema mentioning one.
+So there is nothing to store, nothing on the DTO, nothing on screen, and the coverage exception reads
+"an assignment has no lag field: work starts with its activity". That is true of the data model and
+badly undersells the position: the expensive half is done.
+
+This is the register's other findings **inverted**. Normally storage and the read model support what
+no write path can produce (F2, F3); here the **engine** supports what no storage can hold. Same
+failure mode, opposite end — a capability finished in one layer and never carried through the others,
+with a document recording the omission as if it were a design decision.
+
+Cost is a column, a DTO field, a control and the wiring — comparable to F3, not to a new feature.
+
+**`res_role` is genuinely absent**, and genuinely large: a role library, role-or-resource assignment,
+and a swap step, touching resources, levelling, cost and interchange. That one is an epic and needs
+its own spec, plan and ADR.
+
+**Decision (2026-08-02, product owner):** take assignment lag now, alongside the other fixes; scope
+roles separately, later. Recorded here because "2 excepted" reads as one item and is two very
+different ones.
+
 ## Verified clean
 
 Checked and found to have a real surface, recorded so the next pass does not re-derive it.
