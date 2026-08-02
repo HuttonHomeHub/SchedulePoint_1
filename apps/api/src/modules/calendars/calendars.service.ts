@@ -436,6 +436,19 @@ export class CalendarsService {
     if (!calendar) throw new NotFoundError('Calendar not found.');
     this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
 
+    // An inclusive range must not run backwards (surface audit F2). Checked here rather than by a
+    // DTO cross-field validator for the same reason the resume/suspend order is (§progress): the
+    // message names both dates, which a decorator on one of them cannot. The DB's exclusion
+    // constraint is the backstop for OVERLAP; this is the one shape it cannot express, because an
+    // empty range is not an overlap with anything.
+    if (dto.endDate !== undefined && dto.endDate < dto.date) {
+      throw new ValidationError('The exception’s last day cannot precede its first day.', {
+        reason: 'EXCEPTION_RANGE_INVERTED',
+        date: dto.date,
+        endDate: dto.endDate,
+      });
+    }
+
     try {
       const exception = await this.prisma.$transaction(async (tx) => {
         const created = await this.calendars.createException(
@@ -444,6 +457,7 @@ export class CalendarsService {
             organizationId: calendar.organizationId,
             calendarId: calendar.id,
             date: parseCalendarDate(dto.date),
+            ...(dto.endDate === undefined ? {} : { endDate: parseCalendarDate(dto.endDate) }),
             isWorking: dto.isWorking ?? false,
             // Conditional spread: `exactOptionalPropertyTypes` counts an explicit `undefined` as a
             // present key, which would make the repository's "explicit windows win" branch fire on
