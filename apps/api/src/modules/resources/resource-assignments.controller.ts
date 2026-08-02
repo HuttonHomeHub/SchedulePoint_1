@@ -89,7 +89,10 @@ export class ResourceAssignmentsController {
       'Negative budgetedUnits / unitsPerHour (N14/N19), a zero unitsPerHour on a units-driven ' +
       'duration recompute (N20, UNITS_PER_HOUR_ZERO), a MATERIAL resource set as the driver, a ' +
       'GROUP (GROUP_NOT_ASSIGNABLE), or an ARCHIVED resource (RESOURCE_ARCHIVED, ADR-0053 §4 — ' +
-      'only a NEW assignment is refused; editing an existing one still succeeds).',
+      'only a NEW assignment is refused; editing an existing one still succeeds). Also a negative, ' +
+      'fractional or over-ceiling `lagMinutes` (N34, ADR-0071 §1): the join lag is unsigned working ' +
+      'minutes, because the histogram read-model applies it only when > 0 and a negative would be ' +
+      'silently discarded rather than honoured.',
   })
   @ApiConflictResponse({
     description:
@@ -127,8 +130,9 @@ export class ResourceAssignmentsController {
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
     description:
-      'Negative budgetedUnits / unitsPerHour (N14/N19), or a zero unitsPerHour on a units-driven ' +
-      'duration recompute (N20, UNITS_PER_HOUR_ZERO).',
+      'Negative budgetedUnits / unitsPerHour (N14/N19), a zero unitsPerHour on a units-driven ' +
+      'duration recompute (N20, UNITS_PER_HOUR_ZERO), or a negative / fractional / over-ceiling ' +
+      '`lagMinutes` (N34, ADR-0071 §1 — the join lag is unsigned working minutes).',
   })
   @ApiConflictResponse({
     description:

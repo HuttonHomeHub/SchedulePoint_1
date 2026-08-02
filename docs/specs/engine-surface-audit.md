@@ -3,7 +3,9 @@
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
 > building F7's control, and blocked it. **Resolved: F1, F2, F3, F5, F7+F8.**
-> **Open: F4 (a product call), F6.** The surface-contract gate now reports **zero gaps**.
+> **Open: F4 (a product call); F6 in progress** — ADR-0071 **M0 landed** (the `lag_minutes` column,
+> both DTOs, the response field and the N34 rejects). The surface-contract gate reports **two known
+> gaps**, both of them F6's write DTOs, which flip to `surface` when M4 ships the control.
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -169,6 +171,30 @@ its own spec, plan and ADR.
 **Decision (2026-08-02, product owner):** take assignment lag now, alongside the other fixes; scope
 roles separately, later. Recorded here because "2 excepted" reads as one item and is two very
 different ones.
+
+**M0 landed (2026-08-02).** `resource_assignments.lag_minutes` exists — working minutes, unsigned,
+constant `DEFAULT 0` so the ADD COLUMN is metadata-only and every existing row keeps today's
+behaviour. `lagMinutes` is on both write DTOs (`@Min(0)`/`@Max(ASSIGNMENT_LAG_MINUTES_MAX)`, **N34**),
+on the response DTO and on `ResourceAssignmentSummary`.
+
+Two decisions inside M0 are worth the sentence, because both are the kind of thing that looks like a
+detail and is not:
+
+- **The column is unsigned, deliberately unlike `dependencies.lag_minutes`.** A negative dependency
+  lag is a lead and means something; a resource joining before the work starts does not. And a signed
+  column here would be a _trap_ rather than harmless symmetry — the shipped read-model applies the lag
+  only when `> 0` (a parity fast path for the overwhelmingly common zero case), so a stored negative
+  would be **silently discarded** and the assignment would behave as unlagged with the API having said
+  yes. The DTO is the primary reject; the DB CHECK is defence in depth; the guard line now says in
+  the code which of the three it is.
+- **The field is never cost-gated.** `budgetedCost`/`actualCost` are withheld from a caller without
+  `cost:read` (EV4a); a lag is a scheduling fact, so gating it would make a Viewer's picture of when
+  the resource arrives disagree with a Planner's. That is pinned by an e2e case rather than asserted.
+
+M1 (histogram) is next, and it has a visible seam waiting for it: `schedule.service.ts` currently
+passes `lagMinutes: 0` into the histogram input under a comment saying SchedulePoint does not model
+the column. As of M0 that comment is false — which is exactly the drift this register exists to
+catch, so it is named here rather than left for the next reader.
 
 ### F7 — the critical float threshold has no control (outward; found by the gate, not by me) — **RESOLVED**
 

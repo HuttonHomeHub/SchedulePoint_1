@@ -16,6 +16,8 @@ export interface CreateAssignmentInput {
   isDriving: boolean;
   /** Named P6 loading curve (M7 rung 5, ADR-0044 §3); UNIFORM = flat. Histogram read-model only. */
   curveType: ResourceCurveType;
+  /** Join delay in working minutes on the activity's own calendar (ADR-0071 §1); 0 = joins with it. */
+  lagMinutes: number;
   /** Optional budgeted-cost override in minor units (EV1, ADR-0042); null = derive at read time. BIGINT. */
   budgetedCost: number | null;
   /** Actual cost spent in minor units (EV1, ADR-0042); defaults to 0. Stored as BIGINT. */
@@ -34,6 +36,8 @@ export interface AssignmentPatch {
   isDriving?: boolean;
   /** Named P6 loading curve (M7 rung 5, ADR-0044 §3); histogram read-model only, no CPM effect. */
   curveType?: ResourceCurveType;
+  /** Join delay in working minutes on the activity's own calendar (ADR-0071 §1); 0 clears the lag. */
+  lagMinutes?: number;
   /** Optional budgeted-cost override in minor units (EV1, ADR-0042); null clears to derive-at-read. */
   budgetedCost?: number | null;
   /** Actual cost spent in minor units (EV1, ADR-0042). Stored as BIGINT. */
@@ -73,6 +77,7 @@ export class ResourceAssignmentRepository {
         unitsPerHour: input.unitsPerHour,
         isDriving: input.isDriving,
         curveType: input.curveType,
+        lagMinutes: input.lagMinutes,
         budgetedCost: input.budgetedCost,
         actualCost: input.actualCost,
         actualUnits: input.actualUnits,

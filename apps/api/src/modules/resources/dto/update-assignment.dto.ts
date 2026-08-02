@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceCurveType } from '@prisma/client';
-import { DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
+import { ASSIGNMENT_LAG_MINUTES_MAX, DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -134,6 +134,21 @@ export class UpdateAssignmentDto {
   @IsOptional()
   @IsEnum(ResourceCurveType)
   curveType?: ResourceCurveType;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: ASSIGNMENT_LAG_MINUTES_MAX,
+    description:
+      'Delay in working MINUTES between the activity starting and this resource joining it (ADR-0071 §1 / ' +
+      'ADR-0035 §34), measured on the activity’s own calendar. Send 0 to clear the lag — the field has no ' +
+      'null, because "no lag" and "joins with the activity" are the same fact. Unsigned (N34).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(ASSIGNMENT_LAG_MINUTES_MAX)
+  lagMinutes?: number;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

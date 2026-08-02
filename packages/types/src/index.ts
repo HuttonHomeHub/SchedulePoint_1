@@ -1532,6 +1532,14 @@ export const MONEY_MINOR_UNITS_MAX = Number.MAX_SAFE_INTEGER;
 export const DECIMAL_18_4_MAX = 99_999_999_999_999;
 
 /**
+ * Upper bound for the **per-assignment lag** in working minutes (`ResourceAssignmentSummary.lagMinutes`,
+ * ADR-0071 §1). ≈ 10 years — deliberately the same magnitude as the dependency-lag and critical-float
+ * ceilings, so the contract gives ONE answer to "how large may a working-minute quantity be" rather
+ * than three. The DTO's `@Min(0)`/`@Max` is the primary reject (N34); the DB CHECK is defence in depth.
+ */
+export const ASSIGNMENT_LAG_MINUTES_MAX = 5_256_000;
+
+/**
  * The plan's Earned-Value analysis read-model (EV2, ADR-0042 §2) — the wire shape the
  * `GET …/schedule/earned-value` endpoint returns (a later rung wires it). A pure read over the live
  * schedule + cost/%-complete inputs as of `dataDate`; it schedules nothing and persists nothing.
@@ -1688,6 +1696,16 @@ export interface ResourceAssignmentSummary {
    * (default) is a flat load; it shapes only the histogram — no CPM date, no levelling. Always present.
    */
   curveType: ResourceCurveType;
+  /**
+   * The delay in working **minutes** between the activity starting and THIS resource joining it
+   * (ADR-0071 §1, ADR-0035 §34). Measured on the **activity's own** calendar (ADR-0037) — the lag eats
+   * INTO the activity: the activity's dates do not move, the resource joins late and works a shorter
+   * window. Unsigned (a resource cannot join before the work starts, so a lead has no meaning here —
+   * deliberately unlike a dependency's signed lag). `0` (the default) means the resource joins with the
+   * activity, which is every existing assignment. **Always present, never cost-gated** — a lag is a
+   * scheduling fact, not money, so a Viewer reads a real value while `budgetedCost`/`actualCost` are null.
+   */
+  lagMinutes: number;
   /**
    * Quantity of work actually done (EV1, ADR-0042), feeding the UNITS performance %. An exact quantity
    * carried as a `number` (`DECIMAL(18,4)`; `>= 0`, N14). Defaults to 0. Dark until the EV2 read reads it.

@@ -533,6 +533,9 @@
   "resources/create-assignment.isDriving": {
     "surface": "config/env.ts"
   },
+  "resources/create-assignment.lagMinutes": {
+    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 \u2014 this flips to `surface` then."
+  },
   "resources/create-assignment.resourceId": {
     "surface": "components/layout/workspace/resource-strip-panel.tsx"
   },
@@ -580,6 +583,9 @@
   },
   "resources/update-assignment.isDriving": {
     "surface": "config/env.ts"
+  },
+  "resources/update-assignment.lagMinutes": {
+    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 \u2014 this flips to `surface` then."
   },
   "resources/update-assignment.unitsPerHour": {
     "surface": "config/env.ts"

@@ -219,6 +219,10 @@ export function computeResourceHistogram(input: HistogramInput): ResourceHistogr
   const prepared: Prepared[] = [];
   for (const a of input.assignments) {
     if (a.start === null || a.finish === null) continue; // unschedulable ⇒ off the axis
+    // `> 0` is a PARITY FAST PATH, not a validation: it skips a working-time walk that would return
+    // `a.start` unchanged for the overwhelmingly common zero-lag assignment. A negative therefore
+    // falls through it and is SILENTLY IGNORED rather than rejected — which is exactly why the column
+    // and both DTOs are unsigned (ADR-0071 §1, N34). Do not read this line as the boundary check.
     const effStart = a.lagMinutes > 0 ? a.calendar.addWorkingTime(a.start, a.lagMinutes) : a.start;
     const effFinish = a.finish;
     const span = a.calendar.workingTimeBetween(effStart, effFinish);

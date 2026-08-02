@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceCurveType } from '@prisma/client';
-import { DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
+import { ASSIGNMENT_LAG_MINUTES_MAX, DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -149,4 +149,23 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsEnum(ResourceCurveType)
   curveType?: ResourceCurveType;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: ASSIGNMENT_LAG_MINUTES_MAX,
+    default: 0,
+    description:
+      'Delay in working MINUTES between the activity starting and this resource joining it (ADR-0071 §1 / ' +
+      'ADR-0035 §34), measured on the activity’s own calendar. The lag eats INTO the activity — its dates ' +
+      'do not move; the resource joins late and works a shorter window. Omit for 0 (joins with the ' +
+      'activity — the byte-identical default). Unsigned (N34): a resource cannot join before the work ' +
+      'starts, and the read-model applies the lag only when > 0, so a negative would be silently ' +
+      'discarded rather than honoured — hence a clean 422 here, not a permissive store.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(ASSIGNMENT_LAG_MINUTES_MAX)
+  lagMinutes?: number;
 }

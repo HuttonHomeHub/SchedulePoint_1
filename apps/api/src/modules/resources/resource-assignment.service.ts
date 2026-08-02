@@ -193,6 +193,9 @@ export class ResourceAssignmentService {
             // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain settable enum feeding the
             // histogram read-model; UNIFORM (the DB default) when omitted = a flat load (parity).
             curveType: dto.curveType ?? 'UNIFORM',
+            // The join delay (ADR-0071 §1): 0 when omitted = the resource joins with the activity,
+            // which is every assignment that existed before the column did (the M0 parity bar).
+            lagMinutes: dto.lagMinutes ?? 0,
             // Earned-Value cost inputs (EV1, ADR-0042): passthrough only, no derivation (that is EV2b).
             // budgetedCost null/omitted = derive at read time; actualCost/actualUnits default 0.
             budgetedCost: dto.budgetedCost ?? null,
@@ -250,6 +253,9 @@ export class ResourceAssignmentService {
     if (dto.isDriving !== undefined) patch.isDriving = dto.isDriving;
     // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain settable enum, histogram read-model only.
     if (dto.curveType !== undefined) patch.curveType = dto.curveType;
+    // The join delay (ADR-0071 §1). No null branch: the field is NOT NULL, and "no lag" is 0 — the
+    // same fact as "joins with the activity", so there is nothing a null could mean that 0 does not.
+    if (dto.lagMinutes !== undefined) patch.lagMinutes = dto.lagMinutes;
     // Earned-Value cost inputs (EV1, ADR-0042): passthrough only. budgetedCost null clears to
     // derive-at-read; actualCost/actualUnits are NOT NULL, so no clearing. No derivation here (EV2b).
     if (dto.budgetedCost !== undefined) patch.budgetedCost = dto.budgetedCost;

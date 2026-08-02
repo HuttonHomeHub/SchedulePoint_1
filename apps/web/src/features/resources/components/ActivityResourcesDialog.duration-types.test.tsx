@@ -52,6 +52,7 @@ function assignment(overrides: Partial<ResourceAssignmentSummary> = {}): Resourc
     unitsPerHour: null,
     isDriving: true,
     curveType: 'UNIFORM',
+    lagMinutes: 0,
     actualUnits: 0,
     budgetedCost: null,
     actualCost: null,

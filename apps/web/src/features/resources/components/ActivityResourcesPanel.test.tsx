@@ -45,6 +45,7 @@ const ASSIGNMENT: ResourceAssignmentSummary = {
   unitsPerHour: null,
   isDriving: false,
   curveType: 'UNIFORM',
+  lagMinutes: 0,
   actualUnits: 0,
   budgetedCost: null,
   actualCost: null,
