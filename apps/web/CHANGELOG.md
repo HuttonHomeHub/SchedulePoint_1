@@ -1,5 +1,275 @@
 # @repo/web
 
+## 0.64.0
+
+### Minor Changes
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Say how many hours "one day" means on a calendar (behind `VITE_CALENDAR_SHIFT_EDITOR`)
+
+  The calendar form can now author intraday hours, but nothing in the product could say what a _day_
+  was worth on the resulting calendar — so an activity entered as "1 day" on an 08:00–17:00 week was
+  1440 working minutes, which is 2.67 of that calendar's working days.
+
+  The form gains a **Standard working day** field (Primavera P6's `day_hr_cnt`, ADR-0068). Beside it,
+  the week you have actually authored is reported — "the week above works 8 hours on a typical day" —
+  as advice rather than an override, because the two are legitimately allowed to differ: a
+  `day_hr_cnt` of 8 on a calendar with a 10-hour Saturday is ordinary P6.
+
+  Changing it on an existing calendar shows what that means, in the terms a planner cares about:
+  **every existing duration re-reads, no dates move, and no work is rescheduled**. An activity showing
+  "10 days" today will show a different number after saving, because the stored hours never changed —
+  only the size of the day they are divided by. That is the hazard worth stating: a planner who
+  remembers "12 days" and retypes it after the change has just made a real, dates-moving edit that
+  looks like a correction.
+
+  Leave the field alone on a new calendar and the server derives it from the week being written, which
+  is what it has always done for every calendar authored before this field existed.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Author a calendar's working hours, not just its working days (behind `VITE_CALENDAR_SHIFT_EDITOR`)
+
+  ADR-0036 gave calendars intraday shift patterns a year ago — split shifts, night shifts crossing
+  midnight, asymmetric weeks with a half-day Friday. The engine has scheduled all of it since. The
+  calendar form offered seven weekday checkboxes, which can say only _whether_ a day works.
+
+  Behind `VITE_CALENDAR_SHIFT_EDITOR` (default off) the week becomes seven lists of `HH:MM` periods.
+  A day with no periods doesn't work; a day with two is a split shift. A night shift is two periods on
+  two days — 20:00–24:00, then 00:00–06:00 — which the editor states and writes literally rather than
+  inferring on read, because that inference is indistinguishable from a genuine 24-hour calendar.
+
+  Times are text, not `<input type="time">`: storage ends a full day at **24:00** and the native
+  control stops at 23:59. Reading `00:00` back as 24:00 was rejected — 00:00 is a legitimate start.
+
+  The rows are built on a new shared `WindowListEditor`, which the dated-exception editor will use
+  too. One primitive because a window is authored in two places, and two editors would have to
+  independently agree about ordering, overlap and midnight — a disagreement only a planner who
+  authored the same hours both ways would ever see.
+
+  Ordering and overlap are checked before the request goes out, so the message names the row you
+  typed in rather than a pair of minutes; the API stays the enforcing boundary. Every day's problems
+  are reported at once rather than one save at a time.
+
+  Flag off, the seven checkboxes are unchanged and the existing suites pin them — they are the
+  rollback contract, kept rather than weakened. A new calendar's default week is still full days, so
+  the meaning of a "1 day" duration is exactly what it is today.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The calendar shift editor is on by default (`VITE_CALENDAR_SHIFT_EDITOR`, ADR-0067 Accepted).
+
+  A planner can now author what storage and the CPM engine have held for a year: split shifts, a
+  four-hour Friday, a night shift across midnight, a calendar with no working week at all, and the
+  standard working day that decides what "5 days" means on it. Rollback is `=false` and a rebuild;
+  the flag-off surface stays pinned by its own suites rather than weakened.
+
+  Its flag-on journey (`apps/web/e2e-calendar-shifts/`, its own CI step) earned its place on the
+  first run by finding a defect no unit test could: a menu opened from inside a modal `<dialog>` was
+  unclickable, because a modal dialog lives in the browser's top layer and the shared `Menu` portalled
+  to `document.body`, which no z-index can reach. jsdom has no top layer, so 3,200 passing unit tests
+  had nothing to say about it. `Menu` now portals into the topmost open dialog — a fix every future
+  menu-in-a-dialog inherits.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Give a dated exception its actual hours, and let one be corrected in place (behind
+  `VITE_CALENDAR_SHIFT_EDITOR`)
+
+  A calendar exception could say only that a day works or doesn't. A half-day before a shutdown, or a
+  turnaround day with a short crew, had to be entered as a whole worked day — the schedule then
+  planned eight hours of work into four, and the screen showing the exception said "Working day", so
+  nothing on it was visibly wrong.
+
+  The Type control gains a third option, **Working — specific hours**, which opens the same
+  `WindowListEditor` the weekly pattern uses. A row now shows the hours it works beside its badge, so
+  a half-day reads as a half-day in the list rather than only inside the form.
+
+  Each row also gains **Edit**. Before this, correcting an exception's hours meant removing it and
+  adding it back: two writes, a new id, and a window in between during which the holiday had become an
+  ordinary working day — a recalculation landing in that window would have scheduled work on it. The
+  edit is gated on the exception's own `version`, so two tabs is a conflict rather than a silent
+  overwrite. The date stays fixed, because moving an exception is remove-then-add and both of those
+  actions are already there.
+
+  A whole worked day still reads back as **Working day**, not as `00:00`–`24:00` in two text fields —
+  that is the round trip of the shorthand the API writes, and re-authoring a value nobody chose is how
+  a Save that touched nothing would change something.
+
+  Flag off, this surface is exactly what it was, and the existing suite pins it.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Extract two shared primitives from the canvas authoring surface, and honour either arrow key on the
+  Add and Link split buttons (TECH_DEBT [#76](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/76)).
+
+  Four hand-rolled "message + optional action" strips become one `NoticeStrip`; the duplicated
+  split-button composite becomes one `ToolbarSplitButton` that guarantees the two facts each copy had
+  been asked to remember — the pair is a single keyboard stop, and focus returns to the half that is
+  in the tab order. Both `ArrowDown` and `ArrowUp` now open the type menus, matching the toolbar's
+  other menu control. A new end-to-end case releases the plan's edit lock with a link pick open and
+  proves the link is refused rather than silently recorded.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Close the shift editor's seven deferred findings (TECH_DEBT [#82](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/82)).
+
+  An import's calendar windows are now sorted, de-duplicated of empty spans and merged where they
+  overlap — each one a reported repair rather than an opaque 500 from a recalculation days later —
+  and a standard working day below the domain's floor is raised instead of rounding to zero stored
+  minutes. The calendar library table stops showing a two-shift calendar and a plain Mon–Fri one as
+  the same row. Window problems clear as you correct them once they are on screen, an overlapping
+  pair flags both of its rows, and adding or removing a dated exception on an organisation calendar
+  takes the same `calendar:manage_org` capability that editing one already did.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fold the ten blocking findings from the shift-editor epic's five specialist gates (ADR-0067 M4).
+
+  The largest was a **dead end**: a calendar with no working week — the shutdown/turnaround shape the
+  epic exists to make authorable — could be created by the Window-only preset and then never saved
+  again, because the form kept a hidden `workingWeekdays >= 1` rule that the shift editor does not
+  render. Save was refused by a control that was not on screen.
+
+  Also folded: the night-shift affordance the ADR describes now exists (it wrote instructions for
+  doing the arithmetic by hand, and left the helper that does it with no callers); focus is claimed on
+  opening a per-row exception edit and handed back on closing it; three Save/Add buttons move off the
+  native `disabled` attribute onto the `aria-disabled` + inert-class pair, including one that
+  announced as unavailable while staying fully clickable; the hours-per-day advisory and warning are
+  `aria-describedby`-linked to the field and the warning stops interrupting on every keystroke;
+  adding and removing a period announces the settled result; a read-only week says why it is
+  read-only; the two menu triggers use the shared `Button` instead of re-declaring its recipe by hand;
+  the create dialog widens to fit the week editor it now carries; and one duplicate element id.
+
+  On the API side this is documentation accuracy, not behaviour: `docs/API.md` gains the
+  standard-working-day section and the `CALENDAR_HAS_NO_WORKING_TIME` 422, which is now declared on
+  the three routes that can return it, and every `…Days` field's OpenAPI description says which
+  calendar's day it is measured in.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Read activity durations in days, hours and minutes (ADR-0070, behind `VITE_SUB_DAY_DURATIONS`)
+
+  The engine has scheduled sub-day work for a year and the API has accepted `durationMinutes` since
+  `api-v0.34.0`, but the activity editor offered a whole-number **days** box — so a four-hour lift or a
+  90-minute commissioning step could be imported, scheduled and exported, and never typed.
+
+  Behind the new flag the duration field reads text with a `d`/`h`/`m` grammar (`2d 4h`, `90m`,
+  `1.5d`); a bare number still means days, so every value already in use keeps its meaning. The
+  day↔minute factor comes from the calendar the form currently selects (ADR-0068), and where it is not
+  known the field stays in whole working days rather than guessing.
+
+  Also fixed, unflagged: a canvas move resent the activity's **rounded** duration, silently flattening
+  a sub-day activity to zero days; it now round-trips the exact stored minutes. `durationMinutes` and
+  `lagMinutes` join the shared `@repo/types` shapes and the guest share DTOs, so a shared programme no
+  longer shows a four-hour activity as `0 d` with no way to tell it from a milestone.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Turn sub-day durations and lags on by default (ADR-0070, `VITE_SUB_DAY_DURATIONS`).
+
+  Durations and relationship lags are typed in days, hours or minutes — `2d 4h`, `90m`, `-4h` for a
+  lead — and read back exactly in the activities table and the Logic panel. A bare number still means
+  days, so nothing already learnt changes meaning. Set `VITE_SUB_DAY_DURATIONS=false` to roll back;
+  the flag-off path is pinned by its own suites.
+
+  The flip also fixes two defects the flag-on journey found: the plan's calendar never reached the
+  create-activity dialog, so the duration field there silently refused hours; and a duration typed
+  while the calendar list was still loading could be overwritten when it arrived.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Type a relationship lag in days, hours or minutes (ADR-0070 §5, behind `VITE_SUB_DAY_DURATIONS`).
+
+  The lag field on both the add-a-link form and the edit dialog now reads the same `d`/`h`/`m` grammar
+  as the activity duration, signed: `2d 4h`, `-4h` for a lead, `90m`. A bare number still means days, so
+  every value already learnt keeps its meaning. The day↔minute factor comes from the link's own **lag
+  calendar** — `24-hour (elapsed)` is pinned at 24 hours to the day regardless of any calendar's working
+  week, which is the entire reason a planner picks it. Where the factor cannot be resolved the field
+  degrades to whole working days, which is also what a rollback restores.
+
+  Also fixes a lag being rounded away by Undo: undoing the removal of a link re-created it from its
+  day-granular lag, so a two-hour cure lag came back as no lag at all.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Read a sub-day duration or lag back exactly (ADR-0070 M4, behind `VITE_SUB_DAY_DURATIONS`).
+
+  The activities table's Duration column and the logic panel's Lag column now show the exact stored
+  value when it is not a whole number of days — `4h`, `2d 4h`, `+90m` — instead of rounding it to
+  `0 d`, which is also what the table prints for a milestone. A whole-day value keeps the shape it has
+  always had, so nothing changes on a plan with no sub-day work in it. Each lag row resolves its own
+  lag calendar, because `lagCalendar` is per-link and one page of logic can need several factors.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Working-week presets and copy-day in the calendar shift editor (ADR-0067 M2, behind
+  `VITE_CALENDAR_SHIFT_EDITOR`).
+
+  Five presets — Standard week, Two shift, Continental days, 24/7 and Window-only — each labelled
+  with its hours, because a preset whose hours are invisible is a guess. A preset is a verb: it
+  writes windows and then has no further existence, so nothing persists which one produced them.
+
+  Each day gains a "Copy … to…" menu with three targets (the other weekdays, every other day, the
+  weekend). Copy replaces the target days rather than merging into them, and announces which days it
+  overwrote — the half a planner cannot see afterwards.
+
+  A NEW calendar now starts from the Standard week (Mon–Fri 08:00–17:00) with a matching 9-hour
+  standard working day, instead of a full-day Mon–Fri whose activities scheduled nearly three times
+  too fast. A round-the-clock calendar is one click away — the 24/7 preset.
+
+### Patch Changes
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Point the journeys at the duration label the shipped default actually renders
+
+  ADR-0070's flag flip renames the activity form's control from `Duration (working days)` to
+  `Duration` once the field can resolve how many hours the activity's day is worth — deliberate, since
+  it no longer promises whole days. Three Playwright journeys were still asking for the old label: the
+  base `e2e/activities.spec.ts` and the `e2e-activity-editor` / `e2e-programme` fixtures.
+
+  The pre-push gate did not catch it, and the rule is why. `docs/TESTING.md` says to run a flag-on
+  suite when you add or change one — which was done, and passed, because that suite pins the flag on.
+  What a default flip moves is every suite that does **not** pin it, starting with the base suite,
+  which serves the app on the shipped defaults. No file in `e2e/` was touched, so nothing pointed at
+  it.
+
+  The base journey now asserts `Duration`, the shipped default, so it fails loudly if that moves
+  again. The two fixture helpers accept either spelling with an anchored regex — they are setup, not
+  the assertion, and pinning one there only buys the same failure at the next flip. `docs/TESTING.md`
+  gains the rule as a numbered step and a worked example.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Build `@repo/layout` in the images and in CI, and gate the build contract
+
+  ADR-0069 added a third shared workspace package and its own Consequences section named the
+  obligation that comes with one (ADR-0019: a shared package ships compiled output, so every consumer
+  must build it first). The three lines that discharge it — the `COPY` and the `pnpm --filter … build`
+  in each app's Dockerfile, plus the CI e2e job's direct "Build shared packages" step — were never
+  added, so both images and the Playwright web server failed with
+  `Cannot find module '@repo/layout'`: an error naming a module that plainly exists.
+
+  Nothing local could see it. A developer's checkout already has `packages/layout/dist` from an
+  earlier build, so the whole pre-push gate passes — lint, typecheck, 3,323 unit tests, the API e2e
+  against a real Postgres, and both flag-on journeys — and the failure appears only on a clean
+  machine, minutes into CI, inside `nest build`.
+
+  `pnpm check:build-contract` now asserts it: every `@repo/*` an app lists in `dependencies` is
+  COPYd and built in that app's Dockerfile and built in the CI step. It runs in the quality job
+  beside the doc-link and playbook checks, needs no database, and was verified to fail against the
+  exact defect before being wired in.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Stop losing a calendar's working hours when someone renames it
+
+  A calendar that works specific hours — a split shift, a part day — lost them the moment anyone
+  opened it in the calendar form and saved, even a rename. The form seeded `workingWeekdays` from the
+  calendar it loaded and always submitted it, and the API replaces every stored shift row whenever
+  that field is present. Silent: no error, and the response looked right, because the weekday mask
+  really is Mon–Fri either way. Only the request body showed it.
+
+  The form now sends `workingWeekdays` **only when the planner actually changed the week**. Renaming a
+  calendar means renaming a calendar. The regression test asserts the request body of a rename-only
+  save and was verified to fail against the old code first — the assertion it replaces had pinned the
+  defect, asserting the mask was present.
+
+  Where the mask genuinely cannot describe the calendar, the form now says so instead of implying the
+  seven checkboxes are the whole truth: "This calendar works specific hours … the days below show
+  which days work, not their hours." Editing them still replaces those hours with whole days, which is
+  honest — it is the only week control that exists until the shift editor ships — but it is no longer
+  a surprise.
+
+  Exposure was narrow: only a calendar authored through the API directly could carry such hours, since
+  the importer does not create one. It widens the moment the editor lands, which is why this goes
+  first and unflagged.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Imported programmes now open laid out, instead of one activity per lane (ADR-0069).
+
+  An import gave each activity a lane matching its position in the source file, so a 500-activity XER
+  opened as 500 lanes holding one bar each — nothing wrong with the data, but the first diagram a
+  planner sees of a schedule they have just brought over from P6 was unreadable. The commit now packs
+  lanes after recalculating, using the same packer the canvas's Auto-arrange has always used, which is
+  extracted to a shared package so the two cannot drift apart. A layout failure leaves the imported
+  plan in place rather than discarding it.
+
+- Updated dependencies [[`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581)]:
+  - @repo/types@0.19.0
+  - @repo/interchange@0.7.0
+
 ## 0.63.1
 
 ### Patch Changes

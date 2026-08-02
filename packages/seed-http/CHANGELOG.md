@@ -1,5 +1,36 @@
 # @repo/seed-http
 
+## 0.1.0
+
+### Minor Changes
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The seeder sends minutes, and stops refusing what the API now accepts
+
+  Two pieces of drift, both of the shape ADR-0058 is about — a comment described a limitation, the
+  limitation was fixed, and the comment kept being believed.
+
+  **Durations and lags are seeded in minutes.** The seeder rounded each to whole days and reported the
+  loss as an approximation, citing TECH_DEBT [#78](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/78) — which closed when `durationMinutes` and `lagMinutes`
+  reached the public DTOs. Sending minutes removes the rounding entirely, so a seeded plan is a
+  faithful copy rather than a near one; it also sidesteps ADR-0068, since a "day" now means the
+  calendar's working day and a day-denominated seed would mean different things on different
+  calendars.
+
+  **A window-only calendar is created rather than refused.** The seeder skipped it and reported
+  `WINDOW_ONLY_CALENDAR_UNSUPPORTED`, quoting a `@Min(1)` on the weekday mask that no longer exists
+  (TECH_DEBT [#79](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/79) closed; the minimum is 0). It now seeds like any other calendar.
+
+  The capability-coverage exceptions are corrected with it. Four `cal_*` shift keys were excused as
+  "no write path accepts shift windows" — the API accepts them now, and what remains is that a
+  `SeedSpec` calendar carries working _days_, so the seeder has nothing to send. The two window-only
+  keys keep an exception but with the true reason: expressible now, but no catalogue plan has one, so
+  nothing demonstrates it end to end. That is a seed plan to write, not an API change.
+
+### Patch Changes
+
+- Updated dependencies [[`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581)]:
+  - @repo/seed@0.1.0
+
 ## 0.0.2
 
 ### Patch Changes

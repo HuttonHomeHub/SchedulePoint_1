@@ -1,5 +1,306 @@
 # @repo/api
 
+## 0.35.0
+
+### Minor Changes
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A baseline freezes the calendar's hours-per-day, so a snapshot stays a snapshot
+
+  ADR-0025's central call is that a baseline is a frozen **copy**, not a reference. With the day↔minute
+  factor living only on `calendars`, editing a calendar's hours-per-day would have retroactively
+  changed what a two-year-old baseline reported as its captured durations and its variance — a
+  snapshot that moves is not a snapshot.
+
+  `baselines.hours_per_day_minutes` is captured at freeze alongside the data date and the project
+  finish, and both the snapshot DTO and the variance calculation read **it**, never the live
+  calendar's. So a baseline taken on a 24-hour calendar keeps reporting 24-hour days even after the
+  calendar moves to an 8-hour week, which is the only reading under which "we planned 10 days and took
+  12" means anything a year later.
+
+  Every existing baseline carries the 24-hour default, so nothing any of them reports changes.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A calendar carries an hours-per-day (ADR-0068, schema + write seam)
+
+  `durationDays` has always been converted to stored minutes by multiplying by 1440. That was correct
+  for every calendar in the system, because until `api-v0.34.0` nothing could author a weekly pattern
+  that was not full days. Now that an 08:00–17:00 week is authorable, an activity entered as "1 day"
+  on one is 1440 working minutes — **2.67 working days**, because the calendar only supplies 540 a day.
+
+  `calendars.hours_per_day_minutes` is Primavera P6's `day_hr_cnt`, and it becomes the day↔minute
+  factor for every day-denominated field measured on that calendar. `POST`/`PATCH` accept an explicit
+  `hoursPerDay` in hours (fractional allowed — 7.5 is 450 minutes exactly); the read exposes
+  `hoursPerDay` beside `hoursPerDayMinutes`, the pair an activity already exposes for its duration.
+
+  Omit it and the service derives a default **from the pattern being written, once, and stores it** —
+  the modal working day among the days that work. It is deliberately not derived on read: that would
+  make the factor a function of the shift rows, so shortening one Friday would silently reinterpret
+  the stored duration of every activity on the calendar, with no pen held and no recalculation asked
+  for. It also has no answer for a window-only calendar, where every candidate rule derives zero and
+  `durationDays × 0` zeroes the activity.
+
+  `baselines.hours_per_day_minutes` captures the factor at freeze, applying ADR-0025's snapshot-copy
+  rule — otherwise a later calendar edit would rewrite what a two-year-old baseline reports.
+
+  **Nothing changes yet.** The default is 1440, the constant the services already multiply by, so every
+  existing calendar, plan, activity and baseline reads exactly as before; and the CPM engine cannot see
+  the column at all — its calendar port is built from shift and exception rows — so the recalculation
+  parity gate is structurally untouched. Wiring the factor through the duration, lag, float and
+  interchange seams is the next slice.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Durations are measured on the calendar's working day, not on a 24-hour one
+
+  An activity entered as "1 day" was stored as 1440 working minutes on every calendar. On an
+  08:00–17:00 week — 540 working minutes a day — the engine correctly scheduled that across **2.67
+  working days**, so a five-day activity drawn as five columns on the canvas snapped to thirteen after
+  the next recalculation.
+
+  `durationDays` and `remainingDurationDays` now convert on the activity's **effective calendar**
+  (its own if it names one, otherwise the plan's) using that calendar's `hoursPerDay` — ADR-0068,
+  Primavera P6's `day_hr_cnt`. The write resolves the factor **inside the transaction**, after the
+  calendar guard, so a PATCH that changes the calendar and the duration together cannot convert
+  against the old week.
+
+  Reads use the same factor, because they have to: with only the write converted, saving "2 days"
+  would store the right minutes and read back as "1". The service attaches the factor to each row and
+  the response mappers use it — a required property, so a service that forgets to decorate is a
+  compile error rather than a response quietly reporting every duration against 24-hour days. The
+  guest share view resolves it the same way, so a guest and a member can never see a different number
+  of days for the same activity.
+
+  Every existing calendar carries the 24-hour default, so **nothing changes for any existing plan**;
+  and the CPM engine still cannot see the column, so the recalculation parity gate is untouched.
+  Dependency lag, the persisted float columns and baseline durations still use the old constant and
+  are the next slice.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Edit a calendar exception instead of deleting and recreating it
+
+  An exception could be created and deleted, never edited. Correcting a day's hours meant
+  delete-then-recreate: two writes, a new id, and a window in which a holiday had become an ordinary
+  working day — one a recalculation landing between them would have scheduled work on.
+  `CalendarException.version` existed in the schema, was returned on every read, and was never used for
+  a write.
+
+  `PATCH …/calendars/:calendarId/exceptions/:exceptionId` replaces the day's windows as a set, or edits
+  only the label when neither `windows` nor `isWorking` is sent. It refuses the same contradictions the
+  create refuses — both spellings at once, an empty array, unsorted or overlapping windows — through the
+  same shared validator, so an edit can never reach a state a create could not.
+
+  Two versions are in play and both matter. The write is gated on the **exception's** version: a stale
+  one is a 409, because someone else changed those hours since they were read. It then bumps the
+  **calendar's**, exactly as create and delete already do, so a client holding a stale calendar is told
+  as well.
+
+  The date is deliberately not editable — moving an exception is deleting one and adding another, which
+  the two surrounding endpoints already do visibly.
+
+  Anti-IDOR by shape rather than by check: the exception is reached only through a lookup that requires
+  its calendar id too, and that calendar has already been resolved inside the caller's organisation. An
+  exception belonging to a different calendar is a 404 even when the caller may write to both, and the
+  e2e suite asserts exactly that case.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Author a dated exception's hours, and stop answering 500 for an empty calendar (TECH_DEBT [#79](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/79)/[#80](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/80))
+
+  `api-v0.34.0` made the weekly pattern authorable as intraday shift windows. The dated-exception half
+  was the same defect one table over: `createException` derived a day's windows from the `isWorking`
+  boolean, so a worked exception was always a **whole** worked day. A half-day before a holiday, a
+  short-crew shutdown day, and the hours a window-only calendar exists to carry were all unauthorable,
+  while `calendar_exception_windows` sat in the schema and the engine read it every recalculation.
+
+  `windows` now joins `isWorking` on the exception DTO — mutually exclusive, since `isWorking` is
+  shorthand for the whole-day case and sending both would be two answers to one question. An empty
+  `windows` array is refused so "no working time" has exactly one spelling. Both forms resolve through
+  one `exceptionWindowRowsFor` shared with the interchange batch, which previously carried its own
+  inline copy of the rule. `windows` is on the read DTO too: without it an authored half-day would be
+  invisible the moment it was saved.
+
+  `endDate` is exposed on the exception read. Storage has always held a range and the DTO returned
+  only `startDate` — an end date the client could not see is one it could not be told changed. Only a
+  single day is authorable, so it equals `date` for every exception this API creates; the point is
+  that the contract stops hiding a column.
+
+  **A live 500 is fixed with it.** Accepting `workingWeekdays: 0` in `api-v0.34.0` (TECH_DEBT [#79](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/79))
+  lifted the DTO bound without mapping the engine guard it had been standing in for. A brand-new
+  window-only calendar has no working time until it carries an exception, and recalculating a plan on
+  one threw out of `buildWorkingTimeCalendar` into an opaque `INTERNAL_ERROR` — a user-caused,
+  user-fixable state reported as a server fault, naming neither the calendar nor the fix, reachable in
+  two clicks with no flag. It is now a 422 `CALENDAR_HAS_NO_WORKING_TIME` carrying the calendar's name
+  and what to add, raised as a named `EmptyWorkingTimeCalendarError` (the engine is the only layer that
+  sees both the weekly pattern and the exceptions; the service is the only one that can phrase the
+  rejection). The window-only shape stays valid — the second regression test recalculates the same
+  calendar successfully once one working exception gives it hours.
+
+  `@repo/types` gains `CalendarWindow`/`CalendarShift`, `shifts` on `CalendarSummary`, and
+  `windows`/`endDate` on `CalendarExceptionSummary`, plus `WorkingWeekdays.toFullDayShifts` — the one
+  statement of what a weekday mask means in the storage form the engine schedules on, now shared by
+  the API's write path and the client instead of restated on each side.
+
+  The CPM engine's scheduling is unchanged: it has read shift and window rows since ADR-0036, so the
+  recalculation parity gate is untouched. Every field is additive and existing clients keep today's
+  behaviour.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Float is persisted in the activity's own calendar days
+
+  `total_float`, `free_float` and `visual_drift_days` are stored **in days**, converted from engine
+  minutes by the recalculation's own batched write. They divided by a flat 1440 while durations had
+  just moved to the calendar's working day — so one span would have read as "3 days of work with 1 day
+  of float", which is not a smaller change than converting them but an incoherent one.
+
+  They now take the factor of the calendar each activity actually schedules on, which is where
+  ADR-0035 already says its total float is measured — so the unit and the measurement finally agree.
+  The factor is resolved once per distinct calendar in the plan, so a 2,000-activity plan on three
+  calendars costs three rows.
+
+  The **cross-plan derivation deliberately keeps a fixed 1440**, and now says so in a comment. It is
+  the one place a day-denominated value becomes engine input, and its arithmetic walks _calendar_ days
+  over a date-only value — feeding it a working-hours-scaled number would compound two approximations
+  exactly where the result moves dates. ADR-0068 §3b originally said the opposite; building it showed
+  that to be wrong and the ADR is corrected rather than quietly followed.
+
+  Every existing calendar carries the 24-hour default, so no existing plan's float changes.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Round-trip a P6 calendar's standard working day, and store its shift windows verbatim.
+
+  `day_hr_cnt` was read on import and thrown away, and hard-coded as `8` on export. It is the
+  day↔minute factor for every duration measured on that calendar (ADR-0068), so importing an 8-hour
+  P6 calendar re-read the file's own durations at 24 h/day — a 5-day task arriving as 2 — and
+  exporting a 24-hour calendar claimed an 8-hour day, so the same plan came back three times longer.
+  It now maps both ways in XER (absent ⇒ the target derives it); MSPDI has no per-calendar
+  equivalent, so an MSPDI export reports the drop rather than inventing a figure.
+
+  The import also stops flattening calendars. It wrote a weekday mask as full-day shifts and reduced
+  each exception to worked/not-worked, because nothing could store or author a partial day; ADR-0036's
+  shift rows and ADR-0067's window editor removed that constraint. A P6 07:00–15:30 calendar now
+  imports as a 07:00–15:30 calendar.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Relationship lag is measured on its lag calendar's working day
+
+  `lagDays` converted at a flat 1440 minutes, so a "1 day lag" on an 08:00–17:00 calendar was three
+  working days of delay — the same defect durations had, on the other half of the network.
+
+  It now converts on the calendar the relationship's `lagCalendar` names (ADR-0068 §4): the
+  predecessor's, the successor's, the plan's, or — for `TWENTY_FOUR_HOUR` — a **hard-pinned 1440**,
+  because escaping working-time arithmetic is the entire meaning of that option.
+
+  The factor therefore varies **per dependency row**, not per plan, so one page of a plan's logic can
+  need several. The endpoint calendars ride on the join the read already does, and a page costs one
+  extra lookup. A PATCH that switches `lagCalendar` and edits `lagDays` in the same call converts
+  against the option it is switching **to**.
+
+  Every existing calendar carries the 24-hour default, so no existing plan changes.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Imported programmes now open laid out, instead of one activity per lane (ADR-0069).
+
+  An import gave each activity a lane matching its position in the source file, so a 500-activity XER
+  opened as 500 lanes holding one bar each — nothing wrong with the data, but the first diagram a
+  planner sees of a schedule they have just brought over from P6 was unreadable. The commit now packs
+  lanes after recalculating, using the same packer the canvas's Auto-arrange has always used, which is
+  extracted to a shared package so the two cannot drift apart. A layout failure leaves the imported
+  plan in place rather than discarding it.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Close the shift editor's seven deferred findings (TECH_DEBT [#82](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/82)).
+
+  An import's calendar windows are now sorted, de-duplicated of empty spans and merged where they
+  overlap — each one a reported repair rather than an opaque 500 from a recalculation days later —
+  and a standard working day below the domain's floor is raised instead of rounding to zero stored
+  minutes. The calendar library table stops showing a two-shift calendar and a plain Mon–Fri one as
+  the same row. Window problems clear as you correct them once they are on screen, an overlapping
+  pair flags both of its rows, and adding or removing a dated exception on an organisation calendar
+  takes the same `calendar:manage_org` capability that editing one already did.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Read activity durations in days, hours and minutes (ADR-0070, behind `VITE_SUB_DAY_DURATIONS`)
+
+  The engine has scheduled sub-day work for a year and the API has accepted `durationMinutes` since
+  `api-v0.34.0`, but the activity editor offered a whole-number **days** box — so a four-hour lift or a
+  90-minute commissioning step could be imported, scheduled and exported, and never typed.
+
+  Behind the new flag the duration field reads text with a `d`/`h`/`m` grammar (`2d 4h`, `90m`,
+  `1.5d`); a bare number still means days, so every value already in use keeps its meaning. The
+  day↔minute factor comes from the calendar the form currently selects (ADR-0068), and where it is not
+  known the field stays in whole working days rather than guessing.
+
+  Also fixed, unflagged: a canvas move resent the activity's **rounded** duration, silently flattening
+  a sub-day activity to zero days; it now round-trips the exact stored minutes. `durationMinutes` and
+  `lagMinutes` join the shared `@repo/types` shapes and the guest share DTOs, so a shared programme no
+  longer shows a four-hour activity as `0 d` with no way to tell it from a milestone.
+
+### Patch Changes
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Build `@repo/layout` in the images and in CI, and gate the build contract
+
+  ADR-0069 added a third shared workspace package and its own Consequences section named the
+  obligation that comes with one (ADR-0019: a shared package ships compiled output, so every consumer
+  must build it first). The three lines that discharge it — the `COPY` and the `pnpm --filter … build`
+  in each app's Dockerfile, plus the CI e2e job's direct "Build shared packages" step — were never
+  added, so both images and the Playwright web server failed with
+  `Cannot find module '@repo/layout'`: an error naming a module that plainly exists.
+
+  Nothing local could see it. A developer's checkout already has `packages/layout/dist` from an
+  earlier build, so the whole pre-push gate passes — lint, typecheck, 3,323 unit tests, the API e2e
+  against a real Postgres, and both flag-on journeys — and the failure appears only on a clean
+  machine, minutes into CI, inside `nest build`.
+
+  `pnpm check:build-contract` now asserts it: every `@repo/*` an app lists in `dependencies` is
+  COPYd and built in that app's Dockerfile and built in the CI step. It runs in the quality job
+  beside the doc-link and playbook checks, needs no database, and was verified to fail against the
+  exact defect before being wired in.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Reject an empty calendar at the baseline-variance seam too, not just at recalculation
+
+  The `CALENDAR_HAS_NO_WORKING_TIME` mapping shipped a moment ago at
+  `ScheduleService.resolveCalendar`. `BaselinesService.resolveCalendar` builds a calendar port the same
+  way, from the same rows, and still threw — so a variance read on a calendar with no working time
+  answered the same opaque 500 the recalculation had just stopped answering.
+
+  Both now go through one `buildPlanCalendarOrReject` in `plan-calendar.ts` rather than a catch at each
+  seam. Two copies of the rule would be free to drift, and the half that drifted would be the one
+  nobody exercises — which is precisely what the first version of this fix did, silently, until the
+  second seam got a test of its own.
+
+  Worth recording how that test behaved: its first version passed with a 200, because variance
+  short-circuits to an empty result before resolving a calendar when the plan has no active baseline.
+  A green test that never reaches the code it names is worse than no test, and the fix was to the test,
+  not the product.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Seed calendars with their real shift windows, and add the `capability-shift-calendars` plan.
+
+  The seeder sent a weekday mask and an `isWorking` flag, so a `SeedSpec` two-shift calendar was
+  created as a 24-hour one: the intraday half of ADR-0036 was demonstrated by nothing, and the
+  coverage report excepted six capability keys for a cause (`no write path accepts shift windows`)
+  that stopped being true in api-v0.34.0. It now sends `shifts` and exception `windows` verbatim,
+  plus the calendar's `hoursPerDay` (ADR-0068).
+
+  `capability-shift-calendars` is the plan that could not previously exist: nine calendars whose
+  working **days** are identical and whose **hours** are not — eight-hour, two-shift, twelve-hour,
+  round-the-clock, split-day, short-Friday, nights across midnight, window-only, and one whose stated
+  standard day deliberately disagrees with its week. Two of them agreeing means the hours are not
+  being read. Its `docs/TEST_PLAYBOOK.md` row says so, and the six excepted keys are now reached.
+
+- [#207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/207) [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fold the ten blocking findings from the shift-editor epic's five specialist gates (ADR-0067 M4).
+
+  The largest was a **dead end**: a calendar with no working week — the shutdown/turnaround shape the
+  epic exists to make authorable — could be created by the Window-only preset and then never saved
+  again, because the form kept a hidden `workingWeekdays >= 1` rule that the shift editor does not
+  render. Save was refused by a control that was not on screen.
+
+  Also folded: the night-shift affordance the ADR describes now exists (it wrote instructions for
+  doing the arithmetic by hand, and left the helper that does it with no callers); focus is claimed on
+  opening a per-row exception edit and handed back on closing it; three Save/Add buttons move off the
+  native `disabled` attribute onto the `aria-disabled` + inert-class pair, including one that
+  announced as unavailable while staying fully clickable; the hours-per-day advisory and warning are
+  `aria-describedby`-linked to the field and the warning stops interrupting on every keystroke;
+  adding and removing a period announces the settled result; a read-only week says why it is
+  read-only; the two menu triggers use the shared `Button` instead of re-declaring its recipe by hand;
+  the create dialog widens to fit the week editor it now carries; and one duplicate element id.
+
+  On the API side this is documentation accuracy, not behaviour: `docs/API.md` gains the
+  standard-working-day section and the `CALENDAR_HAS_NO_WORKING_TIME` 422, which is now declared on
+  the three routes that can return it, and every `…Days` field's OpenAPI description says which
+  calendar's day it is measured in.
+
+- Updated dependencies [[`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581), [`90151d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/90151d3516d60706ef2881b395b423898d24e581)]:
+  - @repo/types@0.19.0
+  - @repo/interchange@0.7.0
+
 ## 0.34.0
 
 ### Minor Changes
