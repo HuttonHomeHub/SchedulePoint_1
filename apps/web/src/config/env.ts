@@ -39,8 +39,8 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * Its consumer today is {@link SUB_DAY_DURATIONS_ENABLED} (ADR-0070), which is mid-flight. When
- * that flips, this helper goes back to having none — which is the healthy state, and why it is kept
+ * It currently has **no consumer** — {@link SUB_DAY_DURATIONS_ENABLED} moved to
+ * {@link flagDefaultOn} on 2026-08-02 — and that is the healthy state, which is why it is kept
  * rather than deleted: the next flag needs it on day one. Covered by `env.test.ts`, including the
  * case-sensitivity that makes `"TRUE"` read as off.
  *
@@ -1113,4 +1113,4 @@ export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
  * changes **which field of the write DTO carries the value**. A wrong day↔minute factor is a wrong
  * date, silently, so the rollback has to be a switch rather than a revert.
  */
-export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOff(import.meta.env.VITE_SUB_DAY_DURATIONS);
+export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_DAY_DURATIONS);

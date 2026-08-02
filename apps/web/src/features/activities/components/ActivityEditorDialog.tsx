@@ -246,15 +246,18 @@ export function ActivityEditorDialog({
   // Hoisted rather than inlined, for the same reason as in `ActivityFormDialog`: an arrow rebuilt
   // per render defeats the React Compiler's memoization downstream of it.
   const generalSetValue = general.form.setValue;
+  const generalGetValues = general.form.getValues;
   const setDuration = useCallback(
     (text: string) => generalSetValue('duration', text),
     [generalSetValue],
   );
+  const readDuration = useCallback(() => generalGetValues('duration'), [generalGetValues]);
   useDurationSeed({
     open,
     hoursPerDay,
     activity,
-    isDirty: Boolean(general.form.formState.dirtyFields.duration),
+    // The field's LIVE value, not a dirty flag captured by this render — see TECH_DEBT #83.
+    readDuration,
     setDuration,
   });
 

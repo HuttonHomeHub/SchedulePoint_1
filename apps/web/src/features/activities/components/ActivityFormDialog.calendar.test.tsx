@@ -135,6 +135,10 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDia
         open
         onClose={vi.fn()}
         calendars={CALENDARS}
+        // The plan's calendar, which every real host supplies (ADR-0070). Without it, selecting
+        // "inherit" leaves the duration field with no working-hours factor and its submit guard
+        // correctly refuses the save — a true behaviour, but not the one this suite is about.
+        planCalendarId="cal-247"
         {...props}
       />
     </QueryClientProvider>,

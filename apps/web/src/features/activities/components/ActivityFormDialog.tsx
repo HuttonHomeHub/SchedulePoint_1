@@ -158,8 +158,9 @@ export function ActivityFormDialog({
     reset,
     control,
     setValue,
+    getValues,
     setError,
-    formState: { errors, dirtyFields },
+    formState: { errors },
   } = useForm<ActivityFormValues>({
     resolver: zodResolver(activityFormSchema),
     defaultValues: {
@@ -292,11 +293,15 @@ export function ActivityFormDialog({
   // Hoisted rather than inlined: an arrow rebuilt per render defeats the React Compiler's
   // memoization of everything downstream of it (`Existing memoization could not be preserved`).
   const setDuration = useCallback((text: string) => setValue('duration', text), [setValue]);
+  const readDuration = useCallback(() => getValues('duration'), [getValues]);
   useDurationSeed({
     open,
     hoursPerDay,
     activity,
-    isDirty: Boolean(dirtyFields.duration),
+    // The field's LIVE value, read inside the effect — not a dirty flag captured by this render.
+    // A keystroke and the calendar query are independent events, and trusting the flag lost the
+    // race between them (TECH_DEBT #83). `getValues` is stable, so this needs no memoisation.
+    readDuration,
     setDuration,
   });
   // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off

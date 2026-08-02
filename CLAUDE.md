@@ -1069,7 +1069,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   imported and the recalc parity gate is untouched** — `lane_index` is presentation and
   `computeSchedule` has never seen it.
 
-- **ADR-0070** _(Accepted; M0–M2 landed, behind `VITE_SUB_DAY_DURATIONS`)_ — Sub-day durations and
+- **ADR-0070** _(Accepted; M0–M6 landed, `VITE_SUB_DAY_DURATIONS` **default-on** 2026-08-02)_ — Sub-day durations and
   lags in the authoring surface. ADR-0036 moved storage and the engine to working **minutes** a year
   ago, ADR-0068 made a _day_ a per-calendar quantity, and `api-v0.34.0` put `durationMinutes` /
   `lagMinutes` on the public DTOs — and **nothing in the product could type one**: a four-hour lift
@@ -1091,6 +1091,24 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   deliberately out of scope (its DTO carries no minutes). **The CPM engine is not imported and the
   ADR-0034 parity gate is untouched** — this changes only which of two already-supported write
   fields the client sends.
+
+  **M4–M6 finish it.** The table read-outs show a sub-day value exactly instead of `0 d` — which is
+  also what the Duration column prints for a **milestone**, so the one screen listing a plan's work
+  was showing real activities as having none; the whole-day branch prints the row's **own**
+  `durationDays`/`lagDays` rather than re-deriving from minutes, after the epic's flag-off parity
+  test caught the first version rounding a four-hour lag up to `+1d`. The flag flipped only once
+  `apps/web/e2e-sub-day/` (its own CI step) drove both fields against a **real API with the pen
+  enforced** on an eight-hour calendar, asserting the stored minutes read back from the API rather
+  than the DOM under test. That journey earned its place on its first run, twice: the plan's calendar
+  never reached `CreateActivityButton`, so on the surface where every activity is first created the
+  duration field rendered, looked right and quietly refused `4h`; and a duration typed before the
+  calendar list resolved could be **overwritten** by the re-seed, because `useDurationSeed` asked a
+  `dirtyFields` flag captured by the render its effect belonged to — a keystroke and a network
+  response are independent events, so the effect read a stale `false`. The fix stops asking a flag
+  and asks the field: a `readDuration()` getter called inside the effect, re-seeding only if the
+  value is still what it saw at open (`docs/TECH_DEBT.md` #83, closed). Both are the ADR-0067/ADR-0064
+  shape — a correct pattern applied to one control and not its neighbour, invisible to every gate
+  that does not run the real thing.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

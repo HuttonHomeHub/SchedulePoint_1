@@ -698,25 +698,23 @@ truncation stated rather than trailing off mid-word). This does **not** clear th
 flow is unchanged — and it was not done to. It is the one genuine defect the rule's neighbourhood
 contained, found by taking the finding seriously rather than by trying to satisfy it.
 
-## 83. A typed duration can be overwritten by the calendar factor landing (ADR-0070 M5)
+## 83. ~~A typed duration can be overwritten by the calendar factor landing~~ — RESOLVED 2026-08-02
 
-**Found by** `apps/web/e2e-sub-day/` on its first run against a real API — the journey the epic
-added, doing the job it was added for.
+**Found by** `apps/web/e2e-sub-day/` on its first run against a real API — the journey ADR-0070 added,
+doing the job it was added for. In the flag-on create dialog, typing `4h` and submitting immediately
+stored **one whole day** (the seeded default): the field accepted the text, the label was correct,
+and nothing on screen said the value had been discarded.
 
-**Symptom.** In the flag-on create dialog, typing `4h` and submitting immediately stores **one whole
-day** (the seeded default), not 240 minutes. The field accepts the text and the label is correct, so
-nothing on screen says the value was discarded.
+**Cause.** `useDurationSeed` re-seeds the field once the working-hours factor resolves, and asked
+React Hook Form's `dirtyFields.duration` — a value _captured by the render the effect belongs to_.
+A keystroke and a network response are independent events, so when the calendar list landed before
+RHF had re-rendered with the field marked dirty, the effect read a stale `false` and overwrote what
+had just been typed. An automated journey types and submits far faster than a person, which is why
+it reproduced there and never in hand testing.
 
-**Suspected cause, not yet confirmed.** `useDurationSeed` (ADR-0070 M1) re-seeds the field once the
-working-hours factor resolves, guarded on `dirtyFields.duration`. If the calendar list lands in the
-same tick as the first keystroke — or before React Hook Form has marked the field dirty — the re-seed
-wins and silently replaces what was typed. That is a race between an async query and a human, so it
-will reproduce far more often in a fast automated run than in hand testing, which is why no unit test
-and no manual pass caught it.
-
-**Why it is recorded rather than rushed.** The fix is a change to when the field may re-seed, and the
-wrong fix (dropping the re-seed) reintroduces the defect M1 added it for: a sub-day duration shown as
-its rounded day because the factor was not known at open. It needs the two cases separated properly
-and a regression test that fails first.
-
-**Blocking the flag flip.** `VITE_SUB_DAY_DURATIONS` stays **default-off** until this is closed.
+**Fix.** Stop asking a flag; ask the field. The hook now takes a `readDuration()` getter called
+**inside** the effect, and re-seeds only if the value is still character-for-character the text it
+saw at open. The race is gone by construction rather than by narrowing a window, and a planner who
+happens to type exactly the seed loses nothing either. Pinned by
+`src/features/activities/model/use-duration-seed.test.ts`, whose central case sets the value with no
+accompanying re-render — verified to fail against the old implementation first.

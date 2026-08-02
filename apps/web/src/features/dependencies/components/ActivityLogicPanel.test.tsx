@@ -182,8 +182,12 @@ describe('ActivityLogicPanel', () => {
       target: { value: 'TWENTY_FOUR_HOUR' },
     });
     // An elapsed lag is counted in calendar days, so the label must track the choice.
-    expect(screen.getByLabelText(/Lag \(calendar days/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Lag \(working days/)).not.toBeInTheDocument();
+    // "elapsed time", not "calendar days": `VITE_SUB_DAY_DURATIONS` is default-on since 2026-08-02,
+    // and the 24-hour lag calendar resolves its factor without any calendar list — so this is the
+    // one option whose label never degrades. The whole-days wording lives on in the flag-off
+    // rollback suites, which pin the flag rather than inheriting it.
+    expect(screen.getByLabelText(/Lag \(elapsed time/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Lag \(working/)).not.toBeInTheDocument();
   });
 
   it('relabels the activity picker with the direction', () => {

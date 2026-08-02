@@ -1,6 +1,6 @@
 # ADR-0070 — Sub-day durations and lags in the authoring surface
 
-- **Status:** Accepted (M0–M4 landed 2026-08-01/02; flag `VITE_SUB_DAY_DURATIONS`)
+- **Status:** Accepted (M0–M6 landed; `VITE_SUB_DAY_DURATIONS` **default-on** 2026-08-02)
 - **Deciders:** Product owner, engineering
 - **Supersedes:** nothing. **Amends:** nothing structurally — it is the authoring half of
   ADR-0036, in the way ADR-0067 was the authoring half of ADR-0036's calendars.
@@ -129,6 +129,37 @@ adding a per-bar calendar lookup there needs the TECH_DEBT #75 measurement first
 `lagMinutes` and its service still multiplies by a fixed `MINUTES_PER_DAY` (ADR-0045). Extending the
 grammar to a field whose API cannot carry the value would be a control that silently rounds — the
 defect this ADR is closing. It is recorded as debt instead.
+
+**7. The enablement milestone is part of the decision, not a formality (M5/M6).**
+
+The flag flipped only after a flag-on Playwright journey (`apps/web/e2e-sub-day/`, its own CI step)
+drove the two fields against a real API with the pen enforced — a plan on an **eight-hour** calendar,
+`4h` / `90m` / `2` typed and read back, the stored minutes asserted from the API rather than the DOM,
+an unrelated rename proving the value is not flattened, and a lag moved to the 24-hour calendar
+proving it is re-measured as elapsed time. None of that is testable against a mocked fetch, which
+echoes whatever it is handed and honours any `version`.
+
+It earned its place on its first run, twice:
+
+- **The plan calendar never reached the create dialog.** `CreateActivityButton` was handed the
+  calendar library but not the plan's own calendar, so on the surface where every activity is _first
+  created_ the duration field could not resolve its factor. It rendered, looked correct, and quietly
+  refused `4h`. No unit test could see it — they all mount the dialog directly with the prop
+  supplied.
+- **A typed duration could be overwritten by the factor arriving** (`TECH_DEBT` #83, now closed).
+  `useDurationSeed` asked React Hook Form's `dirtyFields.duration`, a value captured by the render
+  the effect belonged to. A keystroke and a network response are independent, so when the calendar
+  list landed before RHF had re-rendered, the effect read a stale `false` and replaced what had just
+  been typed. The fix is to stop asking a flag and ask the field: a `readDuration()` getter called
+  **inside** the effect, re-seeding only if the value is still what the hook saw at open. The race is
+  gone by construction rather than by narrowing a window.
+
+Both are the same shape as the defects ADR-0067 §M4 and ADR-0064 §7 record: correct patterns applied
+to one control and not its neighbour, invisible to every gate that does not run the real thing.
+
+The **flag-off parity suites are kept and pinned** (`vi.mock` of `@/config/env` with
+`SUB_DAY_DURATIONS_ENABLED: false`) rather than left to inherit the ambient default — the day the
+default flips is exactly the day an un-pinned rollback assertion stops meaning anything.
 
 ## Consequences
 

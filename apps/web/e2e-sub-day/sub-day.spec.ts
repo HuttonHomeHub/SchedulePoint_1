@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   addActivity,
@@ -46,8 +46,11 @@ test('a sub-day duration and lag round-trip through the real API', async ({ page
   // 2. A bare number is still days — 480 minutes here, which is what it has always meant.
   await addActivity(page, 'Snagging', '2');
 
-  // Reload, so nothing below can be served from the client's own cache.
+  // Reload, so nothing below can be served from the client's own cache. The pen is a server-side
+  // lease that survives the reload, but the client re-derives its write gate from scratch — so
+  // re-assert it before touching a writer surface. `ensurePen` returns immediately if it is held.
   await page.reload();
+  await ensurePen(page);
 
   // The table reads back what was typed (M4). `0 d` here would be the pre-epic defect, and is also
   // what the same column prints for a milestone.
@@ -103,12 +106,14 @@ test('a sub-day lag round-trips, and the 24-hour calendar measures elapsed time'
   // ------------------------------------------------------------------ 4. A four-hour cure lag
   await openLogic(page, 'Strike formwork');
   const logic = page.getByRole('dialog');
-  await logic.getByLabel('Predecessor activity').selectOption({ label: /Pour slab/ });
+  await logic.getByLabel('Predecessor activity').selectOption({ label: 'Pour slab' });
   await logic.getByLabel(/^Lag \(/).fill('4h');
   await logic.getByRole('button', { name: 'Add link' }).click();
-  // The new row IS the feedback, and it carries the lag rather than "0d".
-  await expect(logic.getByRole('cell', { name: /Pour slab/ })).toBeVisible();
-  await expect(logic.getByText('+4h')).toBeVisible();
+  // The new row IS the feedback, and it carries the lag rather than "0d". Scoped to the
+  // Predecessors table: the row's own action buttons ("Edit link to Pour slab") name it too.
+  const predecessors = logic.getByRole('region', { name: 'Predecessors' });
+  await expect(predecessors.getByRole('cell', { name: 'Pour slab', exact: true })).toBeVisible();
+  await expect(predecessors.getByText('+4h')).toBeVisible();
 
   const lagOf = async (): Promise<number[]> =>
     page.evaluate(
@@ -136,13 +141,21 @@ test('a sub-day lag round-trips, and the 24-hour calendar measures elapsed time'
   await expect.poll(lagOf).toEqual([1440]);
 });
 
-/** The Duration cell of a named activity's row. */
-function rowCell(page: import('@playwright/test').Page, name: string) {
-  return page.getByRole('row').filter({ hasText: name });
+/**
+ * A named activity's row **in the activities table**.
+ *
+ * Scoped by the table's own caption, because the earned-value table below repeats every activity
+ * name — an unscoped `getByRole('row')` matches both and fails strict mode.
+ */
+function rowCell(page: Page, name: string) {
+  return page
+    .getByRole('table', { name: /Activities/ })
+    .getByRole('row')
+    .filter({ hasText: name });
 }
 
 /** Open the Logic surface for an activity from its row actions menu. */
-async function openLogic(page: import('@playwright/test').Page, name: string): Promise<void> {
+async function openLogic(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: `Actions for ${name}` }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();

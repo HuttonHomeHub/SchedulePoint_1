@@ -1,5 +1,15 @@
 import type { CalendarSummary } from '@repo/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+/**
+ * The flag pinned **OFF**. It became the default on 2026-08-02, so relying on the ambient value
+ * would silently turn this file's rollback assertions into flag-on ones — which is precisely the
+ * day they stop meaning anything. A rollback contract has to name the state it is contracting for.
+ */
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  SUB_DAY_DURATIONS_ENABLED: false,
+}));
 
 import { effectiveHoursPerDay } from './effective-hours-per-day';
 
