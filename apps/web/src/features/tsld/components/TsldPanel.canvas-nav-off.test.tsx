@@ -43,6 +43,7 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     actualStart: null,
     actualFinish: null,
     remainingDurationDays: null,
+    remainingDurationMinutes: null,
     suspendDate: null,
     resumeDate: null,
     earlyStart: '2026-01-01',

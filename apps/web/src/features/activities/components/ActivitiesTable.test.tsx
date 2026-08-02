@@ -38,6 +38,7 @@ const ACTIVITY: ActivitySummary = {
   actualStart: '2026-05-01',
   actualFinish: null,
   remainingDurationDays: null,
+  remainingDurationMinutes: null,
   suspendDate: null,
   resumeDate: null,
   earlyStart: null,

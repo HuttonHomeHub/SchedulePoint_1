@@ -17,9 +17,6 @@ import type { SeedApproximation, SeedFinding, SeedPlanResult } from './report.js
  * anything it could not finish, naming it in the report.
  */
 
-/** The API is day-denominated (TECH_DEBT #78); this is where minutes meet that ceiling. */
-const MINUTES_PER_DAY = 1440;
-
 export interface SeedTarget {
   orgSlug: string;
   projectId: string;
@@ -438,11 +435,10 @@ export async function seedPlan(
                     'actualFinish',
                     approximations,
                   ),
-                  remainingDurationDays: toRemainingDays(
-                    progress.remainingDurationMinutes,
-                    activity.code,
-                    approximations,
-                  ),
+                  // Minutes, exactly as the spec holds them (surface audit F3). This used to
+                  // round to whole days and report the loss as an approximation, which meant a
+                  // sub-day remainder in a seeded plan could never be what the spec asked for.
+                  remainingDurationMinutes: progress.remainingDurationMinutes,
                   suspendDate: dateOrNull(
                     progress.suspendDate,
                     activity.code,
@@ -589,26 +585,6 @@ function dateOrNull(
   approximations: SeedApproximation[],
 ): string | null {
   return instant === null ? null : toApiDate(instant, sourceRef, field, approximations);
-}
-
-/** Remaining duration: minutes in the spec, whole days at the API (TECH_DEBT #78 again). */
-function toRemainingDays(
-  minutes: number | null,
-  sourceRef: string,
-  approximations: SeedApproximation[],
-): number | null {
-  if (minutes === null) return null;
-  const days = minutes / MINUTES_PER_DAY;
-  const rounded = Math.round(days);
-  if (rounded !== days) {
-    approximations.push({
-      entity: 'activity',
-      sourceRef,
-      detail: `remaining duration ${minutes} min \u2192 ${rounded} day(s)`,
-      reason: 'the progress API accepts only whole working days (TECH_DEBT #78)',
-    });
-  }
-  return rounded;
 }
 
 /**

@@ -2,8 +2,8 @@
 
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
-> building F7's control, and blocked it. **Resolved: F1, F2, F5, F7+F8.**
-> **Open: F3, F4, F6.**
+> building F7's control, and blocked it. **Resolved: F1, F2, F3, F5, F7+F8.**
+> **Open: F4 (a product call), F6.** The surface-contract gate now reports **zero gaps**.
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -86,7 +86,7 @@ exception** at build time; its own comment justified that with "the single-day A
 O(E)", a premise this finding removes. A 10,000-day span ceiling replaces it explicitly — a typo
 guard, and the bound the engine's cost now rests on.
 
-### F3 — remaining duration is day-only, immediately after ADR-0070 made durations sub-day
+### F3 — remaining duration is day-only, immediately after ADR-0070 made durations sub-day — **RESOLVED**
 
 `activities.remaining_duration_minutes` is stored in **minutes** and the engine consumes minutes
 (`EngineActivity.remainingMinutes`). The public API does not carry them:
@@ -107,6 +107,20 @@ minute-exact, so stating the remaining explicitly is _less_ precise than not sta
 
 **Recommend fixing.** Smallest well-understood change here — the API half mirrors `api-v0.34.0`'s, the
 web half reuses `@/lib/duration-text`, already built and tested.
+
+**Resolved**, and it was the smallest of the three: `remainingDurationMinutes` joins the progress DTO
+as the mutually-exclusive sibling of the day field, the activity response and `ActivitySummary` carry
+it, and the progress editor's field takes the same `d`/`h`/`m` grammar as a duration — reusing that
+field's predicate, degrade rule and flag rather than a second reading of `2d 4h`. Blank still means
+"derive it from percent complete", which is the one thing this field has that a duration does not,
+and the only part `model/remaining-field.ts` owns rather than shares.
+
+Two things the finding did not anticipate. The **seeder** was rounding the minutes its spec already
+held and recording the loss as an approximation, so a sub-day remainder in a seeded plan was never
+what the spec asked for — it now sends them. And building it produced the epics' own recurring
+defect one more time: `seedRemainingText` read an **absent** field differently from a `null` one,
+producing the literal text `"undefined"`, which the schema refused — blocking a save on a field the
+planner had not touched. Caught by an existing suite, fixed with `?? null` and a regression test.
 
 ### F4 — multiple float paths: engine + endpoint, no surface (outward)
 
@@ -241,7 +255,9 @@ classified in `scripts/surface-contract.json` as `surface` (a planner can author
 an **unclassified** field, not on an honestly-marked gap, because a gate that fails on day one gets
 deleted rather than fixed (ADR-0058).
 
-Current state: **192 surfaced, 8 exempt, 2 gaps** — both F3.
+Current state: **195 surfaced, 8 exempt, 0 gaps**. Every writable field on a scheduling DTO and
+every CPM engine input has a surface a planner can reach — which is the register's whole question,
+for the half of it a script can answer.
 
 **What it cannot catch, so nobody trusts it further than it goes.** It enumerates fields that exist.
 It is blind to a field that _should_ exist and does not — F2's missing `endDate` on the exception

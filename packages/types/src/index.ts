@@ -403,6 +403,13 @@ export interface ActivitySummary {
    */
   remainingDurationDays: number | null;
   /**
+   * The stored truth behind {@link ActivitySummary.remainingDurationDays}: explicit remaining work
+   * in working **minutes** (ADR-0036), the unit the engine consumes. Read this rather than the day
+   * field for a sub-day remainder — four hours reads back as `remainingDurationDays: 0`, which on an
+   * incomplete activity is also the value meaning "no work left" (surface audit F3).
+   */
+  remainingDurationMinutes: number | null;
+  /**
    * Suspend / resume calendar days (`YYYY-MM-DD`) for a paused in-progress activity (M2, ADR-0035 §4),
    * or null. A resume after the data date floors the remaining work at the resume day; a resume on or
    * before the data date is a no-op (the data-date floor governs).

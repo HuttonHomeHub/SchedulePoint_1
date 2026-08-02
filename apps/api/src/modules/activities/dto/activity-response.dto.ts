@@ -207,6 +207,17 @@ export class ActivityResponseDto implements ActivitySummary {
   remainingDurationDays!: number | null;
 
   @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Explicit remaining work in working MINUTES — what is stored and what the engine consumes ' +
+      '(ADR-0036). Exposed for the same reason `durationMinutes` is: without it a four-hour ' +
+      'remainder reads back as `remainingDurationDays: 0`, which on an incomplete activity is ' +
+      'also the value meaning "no work left" (surface audit F3). Null when unset.',
+  })
+  remainingDurationMinutes!: number | null;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -417,6 +428,7 @@ export class ActivityResponseDto implements ActivitySummary {
         entity.remainingDurationMinutes === null
           ? null
           : minutesToDays(entity.remainingDurationMinutes, entity.dayFactorMinutes),
+      remainingDurationMinutes: entity.remainingDurationMinutes,
       suspendDate: day(entity.suspendDate),
       resumeDate: day(entity.resumeDate),
       expectedFinish: day(entity.expectedFinish),

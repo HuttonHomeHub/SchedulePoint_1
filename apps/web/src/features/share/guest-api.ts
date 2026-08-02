@@ -198,6 +198,7 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     actualStart: activity.actualStart,
     actualFinish: activity.actualFinish,
     remainingDurationDays: null,
+    remainingDurationMinutes: null,
     suspendDate: null,
     resumeDate: null,
     expectedFinish: null,

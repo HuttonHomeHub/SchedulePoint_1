@@ -857,6 +857,7 @@ export function ActivityEditorDialog({
                     orgSlug={orgSlug}
                     planId={planId}
                     activity={activity}
+                    hoursPerDay={hoursPerDay}
                     gate={gating.progress}
                     open={open}
                     announce={announce}

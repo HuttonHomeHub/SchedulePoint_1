@@ -41,6 +41,7 @@ const ACTIVITY: ActivitySummary = {
   actualStart: null,
   actualFinish: null,
   remainingDurationDays: null,
+  remainingDurationMinutes: null,
   suspendDate: null,
   resumeDate: null,
   earlyStart: null,

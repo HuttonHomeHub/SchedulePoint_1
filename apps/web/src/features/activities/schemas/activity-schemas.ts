@@ -14,6 +14,7 @@ import {
 import { z } from 'zod';
 
 import { durationTextField } from '../model/duration-field';
+import { remainingTextField } from '../model/remaining-field';
 
 import { moneyMajorAmount } from '@/lib/money-schema';
 
@@ -309,7 +310,7 @@ export type ActivityFormValues = z.infer<typeof activityFormSchema>;
  * Activity PROGRESS form schema — for the Contributor-capable progress editor.
  * `percentComplete` is a number (registered with `valueAsNumber`); the actual
  * dates are raw `<input type="date">` values (`''` = unset). The M2 progress-ingestion
- * fields (ADR-0035) — an explicit `remainingDurationDays` (blank derives it from
+ * fields (ADR-0035) — an explicit `remaining` (blank derives it from
  * percent) plus `suspendDate` / `resumeDate` for a paused activity — are optional and
  * only editable behind the `VITE_PROGRESS_INGESTION` flag; the dialog seeds them from
  * the row either way so a stored value round-trips unchanged. Cross-field rules mirror
@@ -325,14 +326,11 @@ export const progressFormSchema = z
       .max(100, 'Percentage cannot exceed 100.'),
     actualStart: z.string().optional(),
     actualFinish: z.string().optional(),
-    // A blank field registers as `undefined` (via the input's `setValueAs`), which means "absent →
-    // the API derives remaining from percent complete"; a value is a whole number of days.
-    remainingDurationDays: z
-      .number({ message: 'Enter a whole number of days.' })
-      .int('Enter a whole number of days.')
-      .min(0, 'Remaining cannot be negative.')
-      .max(10000, 'Remaining is too large.')
-      .optional(),
+    // Text, in the ADR-0070 `d`/`h`/`m` grammar, so a four-hour remainder can be stated at all
+    // (surface audit F3) — blank still means "derive remaining from percent complete". The rule is
+    // syntax-only and factor-independent; the conversion happens at submit, where the calendar's
+    // working hours are in hand (see `model/remaining-field.ts`).
+    remaining: remainingTextField(),
     suspendDate: z.string().optional(),
     resumeDate: z.string().optional(),
   })
@@ -361,7 +359,11 @@ export type ProgressFormValues = z.infer<typeof progressFormSchema>;
  * In progress, else Not started. Used to show the resulting status live in the
  * editor; the server remains the source of truth.
  */
-export function deriveStatusLabel(values: ProgressFormValues): string {
+export function deriveStatusLabel(values: {
+  percentComplete: number;
+  actualStart?: string | undefined;
+  actualFinish?: string | undefined;
+}): string {
   if (values.actualFinish || values.percentComplete >= 100) return ACTIVITY_STATUS_LABELS.COMPLETE;
   if (values.actualStart || values.percentComplete > 0) return ACTIVITY_STATUS_LABELS.IN_PROGRESS;
   return ACTIVITY_STATUS_LABELS.NOT_STARTED;

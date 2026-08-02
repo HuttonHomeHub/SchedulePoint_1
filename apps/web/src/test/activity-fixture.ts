@@ -32,6 +32,7 @@ export function anActivity(overrides: Partial<ActivitySummary> = {}): ActivitySu
     actualStart: null,
     actualFinish: null,
     remainingDurationDays: null,
+    remainingDurationMinutes: null,
     suspendDate: null,
     resumeDate: null,
     earlyStart: '2026-02-02',

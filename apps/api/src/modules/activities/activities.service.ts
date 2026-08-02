@@ -908,23 +908,29 @@ export class ActivitiesService {
     const percentComplete = dto.percentComplete ?? existing.percentComplete;
     const actualStart = this.resolveDate(dto.actualStart, existing.actualStart);
     let actualFinish = this.resolveDate(dto.actualFinish, existing.actualFinish);
-    // Explicit remaining in minutes (day-denominated at the boundary): provided overrides stored,
-    // null clears (derive), omitted keeps.
-    // Converted on the activity's effective calendar (ADR-0068 §4), the same factor its duration
-    // was authored with — a remaining that scaled differently from the duration it is a remainder
-    // of would make "3 of 5 days done" arithmetic that does not close.
+    // Explicit remaining in minutes: provided overrides stored, null clears (derive), omitted keeps.
+    //
+    // Two spellings, mutually exclusive at the DTO. `remainingDurationMinutes` is stored as sent —
+    // it is already the unit storage and the engine use, and it is the only way to state a
+    // four-hour remainder, which the day field rounds to 0 (and 0 on an incomplete activity also
+    // means "no work left"; surface audit F3). `remainingDurationDays` converts on the activity's
+    // effective calendar (ADR-0068 §4), the same factor its duration was authored with — a
+    // remaining that scaled differently from the duration it is a remainder of would make
+    // "3 of 5 days done" arithmetic that does not close.
     let remainingDurationMinutes =
-      dto.remainingDurationDays === undefined
-        ? existing.remainingDurationMinutes
-        : dto.remainingDurationDays === null
-          ? null
-          : daysToMinutes(
-              dto.remainingDurationDays,
-              await resolveDayFactorMinutes(this.calendars, {
-                activityCalendarId: existing.calendarId,
-                planCalendarId: plan.calendarId,
-              }),
-            );
+      dto.remainingDurationMinutes !== undefined
+        ? dto.remainingDurationMinutes
+        : dto.remainingDurationDays === undefined
+          ? existing.remainingDurationMinutes
+          : dto.remainingDurationDays === null
+            ? null
+            : daysToMinutes(
+                dto.remainingDurationDays,
+                await resolveDayFactorMinutes(this.calendars, {
+                  activityCalendarId: existing.calendarId,
+                  planCalendarId: plan.calendarId,
+                }),
+              );
 
     // You cannot finish what you never started, and a finish cannot precede a start (N06).
     if (actualFinish !== null && actualStart === null) {
