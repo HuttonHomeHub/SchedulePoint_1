@@ -39,10 +39,10 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * Its one current consumer is {@link FLOAT_PATHS_ENABLED}, which is exactly the state this helper
- * is kept for: it went a day with none after {@link SUB_DAY_DURATIONS_ENABLED} moved to
- * {@link flagDefaultOn} on 2026-08-02, and the next epic needed it on day one. Covered by
- * `env.test.ts`, including the case-sensitivity that makes `"TRUE"` read as off.
+ * It currently has **no consumer** — {@link FLOAT_PATHS_ENABLED}, the last one, moved to
+ * {@link flagDefaultOn} on 2026-08-02 — and that is the healthy state, which is why it is kept
+ * rather than deleted: every flag in this file started here, and the next one needs it on day one.
+ * Covered by `env.test.ts`, including the case-sensitivity that makes `"TRUE"` read as off.
  *
  * (The sentence this replaces had been corrupted by an earlier edit into two spliced halves
  * naming five long-closed debt items — noticed only when the last consumer went away.)
@@ -1149,8 +1149,8 @@ export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_
 export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNMENT_LAG);
 
 /**
- * **The Float paths panel** (`VITE_FLOAT_PATHS`, default **off**) — the engine↔planner surface
- * audit's F4, and its last open finding.
+ * **The Float paths panel** (`VITE_FLOAT_PATHS`, default **ON** since 2026-08-02) — the
+ * engine↔planner surface audit's F4, and its last open finding.
  *
  * The engine has computed the ranked contiguous driving chains into an activity since M6-F6
  * (ADR-0035 §19, conformance scenario S11), and `GET …/schedule/float-paths` has exposed them
@@ -1173,9 +1173,36 @@ export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNM
  * 540-activity plan. Cheaper than the write a planner already presses a button for; and because the
  * analysis is derived from the live schedule, a stale float path is a *wrong* float path.
  *
+ * **Flipped default-ON by M4**, once the five specialist gates ran over the whole M0–M3 diff and
+ * every blocking finding was folded. That milestone earned its place again — twelve blocking
+ * defects in code that had already passed a human read, and most of them the house's own recurring
+ * shape, a correct pattern applied to one control and not its neighbour:
+ *
+ * - The **Gantt never fed the workspace selection**, so the toolbar's selection-aware items
+ *   answered with a stale *canvas* selection while the Gantt showed something else — and were
+ *   shaded forever in a session that started there. Found by the design review, before a line of
+ *   the panel existed.
+ * - **Isolate logic path** was lit and inert in the Gantt, driving canvas state nothing there reads.
+ * - The **bucket row** faded with the rest and carried no text marker, while the activity rows it
+ *   sits among all did (WCAG 1.4.1).
+ * - Closing the panel by its own **X or Escape** stranded focus on `<body>`; only re-pressing the
+ *   toolbar item restored it (WCAG 2.4.3).
+ * - Every **non-success state was silent** — busy, never-calculated, target-gone, failed — while
+ *   the success path announced carefully (WCAG 4.1.3). The two announcement effects could also
+ *   clobber each other in one commit, on a live region that holds one message and has no queue.
+ * - A **negative** relative float rendered bare, and announced as "−1d above the driving path".
+ * - The **never-calculated** state invented a second sentence for a 422 that already had shared
+ *   copy, and offered no way to act on it.
+ * - The Gantt's **bring-into-view re-centred the grid on every unrelated recalculation**, yanking
+ *   the planner's scroll back after they had deliberately moved away.
+ *
+ * The flag-on journey (`apps/web/e2e-float-paths/`, its own CI step) proves the unit against a real
+ * API on a real eight-hour calendar: a branch carrying one working day of float reads `+1d`, which
+ * is the defect the whole epic descends from.
+ *
  * Rollback: set `VITE_FLOAT_PATHS=false` and rebuild. There is no schema, no write path, no
- * permission and no pen here — flag-off is byte-for-byte today's product: no toolbar item, no
+ * permission and no pen here — flag-off is byte-for-byte the prior product: no toolbar item, no
  * panel, no query, no scene contribution. The flag-off parity suite is the rollback contract and is
  * kept rather than weakened (the ADR-0053 M6 rule).
  */
-export const FLOAT_PATHS_ENABLED = flagDefaultOff(import.meta.env.VITE_FLOAT_PATHS);
+export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATHS);

@@ -152,10 +152,21 @@ export function ToolbarPlanWorkspace({
   const openFloatPathsWith = floatPaths.openWith;
   const closeFloatPaths = floatPaths.close;
   const floatPathsSelectedId = model.selectedActivityId;
+  // Close the dock AND return focus to the toolbar item — the notes dock's `closeNotes` rule,
+  // copied deliberately. The panel's own Close button and its Escape handler both go through this,
+  // not through the raw `close`: unmounting the focused Close button with nothing to catch focus
+  // strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
+  //
+  // Searched from `document`, not `rootRef`: with `VITE_DESIGNED_CHROME` on the toolbar lives in
+  // the chrome band and is no longer a DOM descendant of the workspace root.
+  const closeFloatPathsAndFocus = useCallback(() => {
+    closeFloatPaths();
+    document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]')?.focus();
+  }, [closeFloatPaths]);
+
   const toggleFloatPaths = useCallback(() => {
     if (floatPaths.open) {
-      closeFloatPaths();
-      document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]')?.focus();
+      closeFloatPathsAndFocus();
       return;
     }
     // The ladder already refuses the no-selection case, so this is a guard rather than a branch a
@@ -163,7 +174,13 @@ export function ToolbarPlanWorkspace({
     if (floatPathsSelectedId === null) return;
     setNotesOpen(false);
     openFloatPathsWith(floatPathsSelectedId);
-  }, [floatPaths.open, closeFloatPaths, openFloatPathsWith, floatPathsSelectedId, setNotesOpen]);
+  }, [
+    floatPaths.open,
+    closeFloatPathsAndFocus,
+    openFloatPathsWith,
+    floatPathsSelectedId,
+    setNotesOpen,
+  ]);
 
   // The view switch is router-backed, so the workspace (which is inside the router) owns it and
   // passes it down — exactly like `legend` and `revealComments`. Keeping `useNavigate` out of the
@@ -546,13 +563,28 @@ export function ToolbarPlanWorkspace({
   // silently skipped in half the product (the ADR-0059 M6 shape).
   const floatPathsDockContent = floatPathsDockActive ? (
     <FloatPathsPanel
-      panel={floatPaths}
+      model={floatPaths.model}
+      selectedPathIndex={floatPaths.selectedPathIndex}
+      isPending={floatPaths.isPending}
+      isError={floatPaths.isError}
+      planNotScheduled={floatPaths.planNotScheduled}
+      targetMissing={floatPaths.targetMissing}
+      canShowMore={floatPaths.canShowMore}
+      suggestedTargetId={floatPaths.suggestedTargetId}
       suggestedTargetName={
         floatPaths.suggestedTargetId === null
           ? null
           : ((model.activities.data ?? []).find((a) => a.id === floatPaths.suggestedTargetId)
               ?.name ?? null)
       }
+      onSelectPath={floatPaths.selectPath}
+      onSetTarget={floatPaths.setTarget}
+      onShowMore={floatPaths.showMore}
+      onRetry={floatPaths.retry}
+      onClose={closeFloatPathsAndFocus}
+      // Offered only to someone who may actually run it — a Viewer gets the explanation without a
+      // button that would refuse them.
+      {...(model.canRecalc ? { onRecalculate: () => ctx.recalculate() } : {})}
       onActivateActivity={(activityId) => {
         canvasUi.requestSelectActivity(activityId);
         model.onSelectionChange(activityId);

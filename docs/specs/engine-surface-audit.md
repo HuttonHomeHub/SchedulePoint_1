@@ -3,7 +3,9 @@
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
 > building F7's control, and blocked it. **Resolved: F1, F2, F3, F5, F7+F8.**
-> **Open: F4 (a product call); F6 M0–M4 landed** — ADR-0071: the `lag_minutes` column, both DTOs and
+> **Resolved 2026-08-02: F4** — the Float paths panel shipped default-on (`VITE_FLOAT_PATHS`); see
+> the finding below for what building it revealed.
+> **Also: F6 M0–M4 landed** — ADR-0071: the `lag_minutes` column, both DTOs and
 > the N34 rejects (M0); the histogram read (M1); the levelling pass's per-resource demand windows
 > (M2); Earned Value's per-component PV phasing with the ADR-0025 per-assignment cost baseline behind
 > it (M3); and **the planner's control** behind `VITE_ASSIGNMENT_LAG` (M4). The surface-contract gate
@@ -138,14 +140,42 @@ A capability construction planners actively want ("show me the second and third 
 critical one"), fully built and reachable only with `curl`. Whether it earns a surface is a product
 call, not a defect call — but it should be a decision rather than an omission.
 
-> **Decided, and in build (2026-08-02).** It earns a surface: the planner's job is **compression
-> planning** — "if I shorten the critical path, what binds next, and by how much?" — and nothing
-> shipped answers it (Isolate gives path 0 with no figure; colour-by-float is per-activity and
-> non-contiguous; the near-critical threshold gives a set, not a ranked partition). The spec and plan
-> are [`docs/specs/float-paths-surface/`](float-paths-surface/); the product-owner answers to its
-> three critical questions are recorded in that spec's §7. Designing it immediately turned up the
-> **unit defect** recorded under F8 above, which is the argument for surfacing built-but-unreachable
-> capability rather than leaving it: an endpoint nobody renders is an endpoint nobody checks.
+> **RESOLVED 2026-08-02 — the Float paths panel shipped, `VITE_FLOAT_PATHS` default-on.** It earns a
+> surface: the planner's job is **compression planning** — "if I shorten the critical path, what binds
+> next, and by how much?" — and nothing shipped answers it (Isolate gives path 0 with no figure;
+> colour-by-float is per-activity and non-contiguous; the near-critical threshold gives a set, not a
+> ranked partition). The spec and plan are [`docs/specs/float-paths-surface/`](float-paths-surface/);
+> the product-owner answers to its three critical questions are recorded in that spec's §7. What
+> shipped is a docked panel listing the ranked chains target-first, with one selected path emphasised
+> in **both** views — the analysis is not a canvas feature, so shading it in the Gantt (the ADR-0059 M6
+> rule) would have been the wrong reading of that rule.
+>
+> **What building it revealed** — recorded here rather than only in the changelog, because the whole
+> argument for surfacing built-but-unreachable capability is that nobody checks what nobody renders:
+>
+> - The **unit defect** under F8 above, found on the first attempt to render a figure: the endpoint's
+>   `relativeFloat` divides by a flat 1440 while total float is measured on the activity's **own**
+>   calendar (ADR-0037 §4, ADR-0068). On an eight-hour calendar it under-reports threefold and prints
+>   the first working day as `0`. The panel reads `relativeFloatMinutes` and formats with a
+>   **required, never-defaulted** `hoursPerDay` (ADR-0070's rule); the day field is left in place and
+>   documented as not-to-be-read rather than silently changed, since it is a published DTO field.
+> - The Gantt **never fed the workspace selection** — a pre-existing defect, not one this epic
+>   introduced. Selecting a bar in the chart set the logic activity but not `selectedActivityId`, so
+>   every surface deriving from the workspace selection (this panel's suggested target among them) was
+>   blind to a Gantt click. Fixed in `plan-workspace-toolbar.tsx`.
+> - The **five specialist gates** found **twelve** blocking defects in code that had already passed a
+>   human read — the ADR-0064 §7 shape again, a correct pattern applied to a control and not its
+>   neighbour: a missing chain member styled as unactivatable with `pointer-events-none` (which a
+>   keyboard Enter walks straight past), the Gantt's de-emphasis carried by opacity alone (WCAG 1.4.1)
+>   and announced on the activity rows but not the bucket rows, a target-suggestion button that could
+>   push the panel wider than its dock, and a toolbar item laddered on the wrong precondition. All
+>   folded with regression tests; the security gate passed with one hardening suggestion (a per-IP
+>   throttle on the endpoint, since it runs a full `computeSchedule` per request), which was taken.
+> - **The parity argument is structural.** The epic imports nothing from the engine, adds no scene
+>   field and no paint branch; a paint-spy test asserts the painter is handed `undefined` when no path
+>   is selected, and `float-paths-view-agnostic.structural.test.ts` pins that the emphasis set is
+>   derived **once** and handed to both views (the ADR-0063 `wbs-band-source` rule as a test rather
+>   than a convention).
 
 ### F5 — capability matrix row N14 is stale (documentation)
 

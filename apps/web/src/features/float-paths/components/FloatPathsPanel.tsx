@@ -1,25 +1,56 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 
-import { floatPathAnnouncement, type FloatPathRow } from '../model/float-path-rows';
-import type { UseFloatPathsPanelResult } from '../model/use-float-paths-panel';
+import {
+  floatPathAnnouncement,
+  type FloatPathRow,
+  type FloatPathsViewModel,
+} from '../model/float-path-rows';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { SheetHeader } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
+// Deep import, deliberately: the shared 422 sentence is a pure constant, and the schedule barrel
+// pulls the whole data layer with it — which several workspace suites replace wholesale.
+import { NO_START_HINT } from '@/features/schedule/api/use-schedule';
 import { cn } from '@/lib/utils';
 
 export interface FloatPathsPanelProps {
-  panel: UseFloatPathsPanelResult;
-  /** The name of the currently-selected activity, for the "Use selected activity" affordance. */
+  /** The analysis, or `null` until a response arrives. */
+  model: FloatPathsViewModel | null;
+  selectedPathIndex: number | null;
+  isPending: boolean;
+  isError: boolean;
+  /** The plan has never been scheduled (422) — a state to explain, not an error to report. */
+  planNotScheduled: boolean;
+  /** The sticky target is no longer in the plan (404). */
+  targetMissing: boolean;
+  canShowMore: boolean;
+  /** The workspace selection, when it is not already the target — the "Use …" affordance. */
+  suggestedTargetId: string | null;
+  /** That activity's name, for the affordance's label. */
   suggestedTargetName: string | null;
+  onSelectPath: (index: number | null) => void;
+  onSetTarget: (activityId: string) => void;
+  onShowMore: () => void;
+  onRetry: () => void;
   /**
-   * Select an activity in the workspace and bring it into view — the canvas centres it, the Gantt
-   * scrolls its row. One prop for both views: the host branches on which is mounted, because
-   * `centerOnDate` is null whenever the Gantt is showing and a panel that called it directly would
-   * be silently inert in half the product (the ADR-0059 M6 shape).
+   * Close the panel **and put focus somewhere** — the host restores it to the toolbar item.
+   * `close` alone would unmount the focused Close button and strand focus on `<body>` (WCAG 2.4.3);
+   * the notes dock's `closeNotes` is the precedent this deliberately copies.
+   */
+  onClose: () => void;
+  /**
+   * Recalculate the plan, when the caller may. Absent for a Viewer, who cannot — the panel then
+   * explains the state without offering an action it would refuse.
+   */
+  onRecalculate?: (() => void) | undefined;
+  /**
+   * Select an activity in the workspace and bring it into view. One prop for both views: the host
+   * lifts the selection and each view reveals it its own way, because the canvas handle is null
+   * whenever the Gantt is showing (the ADR-0059 M6 shape).
    */
   onActivateActivity: (activityId: string) => void;
 }
@@ -39,58 +70,48 @@ export interface FloatPathsPanelProps {
  * have to work out.
  */
 export function FloatPathsPanel({
-  panel,
+  model,
+  selectedPathIndex,
+  isPending,
+  isError,
+  planNotScheduled,
+  targetMissing,
+  canShowMore,
+  suggestedTargetId,
   suggestedTargetName,
+  onSelectPath,
+  onSetTarget,
+  onShowMore,
+  onRetry,
+  onClose,
+  onRecalculate,
   onActivateActivity,
 }: FloatPathsPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const headingId = useId();
-  const { model, isPending, isError, planNotScheduled, targetMissing } = panel;
 
-  // One announcement site, shared by the pointer and keyboard paths because both go through
-  // `selectPath` (the ADR-0064 finding: a pointer path silent while the keyboard path speaks).
+  /**
+   * **One announcement site, one message per settling.**
+   *
+   * The app has a single live region with one slot and no queue, so two writes in the same commit
+   * lose the first (the a11y gate's finding). The two things worth saying — how many paths were
+   * found, and which one is now showing — are therefore chosen between rather than both spoken:
+   * a selected path's sentence already carries `of n`, so it says everything the count would.
+   */
   const spokenRef = useRef<string | null>(null);
   useEffect(() => {
-    const index = panel.selectedPathIndex;
-    if (model === null || index === null) {
-      spokenRef.current = null;
-      return;
-    }
-    const row = model.rows.find((candidate) => candidate.index === index);
-    if (row === undefined) return;
-    const message = floatPathAnnouncement(row, model.rows.length);
-    if (spokenRef.current === message) return;
+    const message = panelAnnouncement({
+      model,
+      selectedPathIndex,
+      isPending,
+      planNotScheduled,
+      targetMissing,
+      isError,
+    });
+    if (message === null || spokenRef.current === message) return;
     spokenRef.current = message;
     announce(message);
-  }, [panel.selectedPathIndex, model, announce]);
-
-  // The settled result count (WCAG 4.1.3): the panel's whole content is a list whose length is the
-  // answer, and a sighted user sees it arrive while an AT user would not.
-  const settledRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (model === null) return;
-    const count = model.rows.length;
-    const message =
-      count === 0
-        ? 'No float paths run into this activity.'
-        : `${String(count)} float ${count === 1 ? 'path' : 'paths'} found.`;
-    if (settledRef.current === message) return;
-    settledRef.current = message;
-    announce(message);
-  }, [model, announce]);
-
-  const useSelected =
-    panel.suggestedTargetId === null ? null : (
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => {
-          panel.setTarget(panel.suggestedTargetId!);
-        }}
-      >
-        Use {suggestedTargetName ?? 'selected activity'}
-      </Button>
-    );
+  }, [model, selectedPathIndex, isPending, planNotScheduled, targetMissing, isError, announce]);
 
   return (
     // Escape closes the dock (a non-modal column has no native cancel), scoped and stopped so it
@@ -103,14 +124,14 @@ export function FloatPathsPanel({
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.stopPropagation();
-          panel.close();
+          onClose();
         }
       }}
     >
       <SheetHeader
         title="Float paths"
         titleClassName="text-sm font-medium"
-        onClose={panel.close}
+        onClose={onClose}
         closeLabel="Close float paths"
       />
       <h2 id={headingId} className="sr-only">
@@ -128,7 +149,22 @@ export function FloatPathsPanel({
               </>
             )}
           </p>
-          {useSelected}
+          {suggestedTargetId === null ? null : (
+            <Button
+              variant="secondary"
+              size="sm"
+              // `max-w` + `truncate`: a real construction activity name ("Excavate and backfill
+              // retaining wall footings, north perimeter") would otherwise push the button past the
+              // 300 px the dock can shrink to, and `Button` is `whitespace-nowrap`.
+              className="max-w-[60%]"
+              title={suggestedTargetName === null ? undefined : `Use ${suggestedTargetName}`}
+              onClick={() => {
+                onSetTarget(suggestedTargetId);
+              }}
+            >
+              <span className="truncate">Use {suggestedTargetName ?? 'selected activity'}</span>
+            </Button>
+          )}
         </div>
 
         {/* CQ-3: the figure is real and is rendered on the target's calendar; the mix is disclosed
@@ -150,18 +186,31 @@ export function FloatPathsPanel({
           </p>
         ) : null}
 
+        {/* `role="status"`, not `alert`: these two explain the plan, they do not report a failure.
+            Without a role they were silent transitions — the panel's whole content changed and a
+            screen-reader user heard nothing (WCAG 4.1.3). */}
         {planNotScheduled ? (
           <NoticeStrip
+            role="status"
             tone="neutral"
             emphasis="dashed"
             density="comfortable"
             messageFit="grow"
-            message="This plan has not been calculated yet, so there are no float paths to rank. Recalculate the schedule and try again."
-          />
+            // The SHARED sentence, not a second one invented here: the same 422 already has copy,
+            // and two wordings for one state is how a product stops sounding like itself.
+            message={`There are no float paths to rank yet. ${NO_START_HINT}`}
+          >
+            {onRecalculate === undefined ? null : (
+              <Button variant="secondary" size="sm" onClick={onRecalculate}>
+                Recalculate
+              </Button>
+            )}
+          </NoticeStrip>
         ) : null}
 
         {targetMissing ? (
           <NoticeStrip
+            role="status"
             tone="warning"
             density="comfortable"
             messageFit="grow"
@@ -179,7 +228,7 @@ export function FloatPathsPanel({
             messageFit="grow"
             message="The float-path analysis could not be run."
           >
-            <Button variant="secondary" size="sm" onClick={panel.retry}>
+            <Button variant="secondary" size="sm" onClick={onRetry}>
               Retry
             </Button>
           </NoticeStrip>
@@ -201,9 +250,9 @@ export function FloatPathsPanel({
               <FloatPathDisclosure
                 key={row.index}
                 row={row}
-                expanded={panel.selectedPathIndex === row.index}
+                expanded={selectedPathIndex === row.index}
                 onToggle={() => {
-                  panel.selectPath(panel.selectedPathIndex === row.index ? null : row.index);
+                  onSelectPath(selectedPathIndex === row.index ? null : row.index);
                 }}
                 onActivateActivity={onActivateActivity}
               />
@@ -218,8 +267,8 @@ export function FloatPathsPanel({
             <p className="text-muted-foreground text-sm">
               Showing the first {String(model.rows.length)} paths — there are more.
             </p>
-            {panel.canShowMore ? (
-              <Button variant="secondary" size="sm" onClick={panel.showMore}>
+            {canShowMore ? (
+              <Button variant="secondary" size="sm" onClick={onShowMore}>
                 Show more
               </Button>
             ) : null}
@@ -228,6 +277,45 @@ export function FloatPathsPanel({
       </div>
     </section>
   );
+}
+
+/**
+ * The one sentence worth speaking for the panel's current state, or `null` for nothing new.
+ *
+ * Exported for its own test rather than left inline: every branch here is a state a planner reaches
+ * and an assistive-technology user would otherwise meet in silence — the loading state above all,
+ * because this request runs a full CPM computation and can take visible time.
+ */
+export function panelAnnouncement({
+  model,
+  selectedPathIndex,
+  isPending,
+  planNotScheduled,
+  targetMissing,
+  isError,
+}: {
+  model: FloatPathsViewModel | null;
+  selectedPathIndex: number | null;
+  isPending: boolean;
+  planNotScheduled: boolean;
+  targetMissing: boolean;
+  isError: boolean;
+}): string | null {
+  if (isPending) return 'Calculating float paths…';
+  if (planNotScheduled) return `There are no float paths to rank yet. ${NO_START_HINT}`;
+  if (targetMissing) return 'The activity this analysis was run for is no longer in the plan.';
+  if (isError) return 'The float-path analysis could not be run.';
+  if (model === null) return null;
+
+  if (selectedPathIndex !== null) {
+    const row = model.rows.find((candidate) => candidate.index === selectedPathIndex);
+    // The selected-path sentence carries "of n", so it already says what the count would — and the
+    // live region holds one message, not two.
+    if (row !== undefined) return floatPathAnnouncement(row, model.rows.length);
+  }
+  const count = model.rows.length;
+  if (count === 0) return 'No float paths run into this activity.';
+  return `${String(count)} float ${count === 1 ? 'path' : 'paths'} found.`;
 }
 
 function FloatPathDisclosure({
@@ -260,6 +348,12 @@ function FloatPathDisclosure({
         {/* "Driving" for path 0 — never "+0d", which reads as a measurement of nothing rather than
             the name of the chain everything else is measured against. */}
         <span className="font-medium">{row.label}</span>
+        {/* A NEGATIVE relative float is a real signal — this chain is more critical than the target
+            — and shown bare it reads as breakage. The words are part of the button's name, so the
+            qualifier is announced with the number rather than sitting silently beside it. */}
+        {row.moreCriticalNote === null ? null : (
+          <span className="text-warning-text shrink-0 text-xs">({row.moreCriticalNote})</span>
+        )}
         <span className="text-muted-foreground min-w-0 flex-1 truncate">
           {row.entryName ?? 'Unnamed activity'}
         </span>

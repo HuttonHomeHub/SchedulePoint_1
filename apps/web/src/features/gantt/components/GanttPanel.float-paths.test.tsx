@@ -18,18 +18,26 @@ import { anActivity } from '@/test/activity-fixture';
 
 const scrollToIndex = vi.fn();
 
+// A STABLE stub instance, like the real `useVirtualizer` returns: a fresh object per render would
+// re-identify the effect dependency every time and hide the very churn this file asserts about.
+const virtualizerStub = {
+  count: 0,
+  getTotalSize: () => virtualizerStub.count * GANTT_ROW_HEIGHT,
+  getVirtualItems: () =>
+    Array.from({ length: virtualizerStub.count }, (_, index) => ({
+      index,
+      key: index,
+      start: index * GANTT_ROW_HEIGHT,
+      size: GANTT_ROW_HEIGHT,
+    })),
+  scrollToIndex,
+};
+
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: ({ count }: { count: number }) => ({
-    getTotalSize: () => count * GANTT_ROW_HEIGHT,
-    getVirtualItems: () =>
-      Array.from({ length: count }, (_, index) => ({
-        index,
-        key: index,
-        start: index * GANTT_ROW_HEIGHT,
-        size: GANTT_ROW_HEIGHT,
-      })),
-    scrollToIndex,
-  }),
+  useVirtualizer: ({ count }: { count: number }) => {
+    virtualizerStub.count = count;
+    return virtualizerStub;
+  },
 }));
 
 const THREE = [
@@ -64,10 +72,14 @@ function rowFor(name: string): HTMLElement {
 
 describe('GanttPanel — float-path emphasis', () => {
   it('de-emphasises rows that are not on the selected path', () => {
+    // Asserted through the accessible MARKER, not a class name — this file's own premise is that
+    // the meaning is carried in words, and a test that pins the class would pass on a build where
+    // the words had gone. The visual treatment is a design-system token by design (see
+    // `OFF_FLOAT_PATH_ROW_CLASS`), so there is no magic number left to assert anyway.
     render(<GanttPanel activities={THREE} emphasisIds={new Set(['a', 'b'])} />);
-    expect(rowFor('Excavate').className).not.toContain('opacity-45');
-    expect(rowFor('Piling').className).not.toContain('opacity-45');
-    expect(rowFor('Handover').className).toContain('opacity-45');
+    expect(within(rowFor('Excavate')).queryByText('(off the float path)')).not.toBeInTheDocument();
+    expect(within(rowFor('Piling')).queryByText('(off the float path)')).not.toBeInTheDocument();
+    expect(within(rowFor('Handover')).getByText('(off the float path)')).toBeInTheDocument();
   });
 
   it('names the de-emphasis in words, not by opacity alone', () => {
@@ -96,14 +108,24 @@ describe('GanttPanel — float-path emphasis', () => {
   it('changes nothing at all when no path is selected', () => {
     render(<GanttPanel activities={THREE} />);
     for (const name of ['Excavate', 'Piling', 'Handover']) {
-      expect(rowFor(name).className).not.toContain('opacity-45');
       expect(within(rowFor(name)).queryByText('(off the float path)')).not.toBeInTheDocument();
     }
   });
 
   it('changes nothing for an EMPTY emphasis set — the everyday flag-on state', () => {
     render(<GanttPanel activities={THREE} emphasisIds={new Set()} />);
-    expect(rowFor('Handover').className).not.toContain('opacity-45');
+    expect(within(rowFor('Handover')).queryByText('(off the float path)')).not.toBeInTheDocument();
+  });
+
+  it('does not re-scroll when the activity list merely gets a fresh reference', () => {
+    // react-query replaces `activities` after every recalculation. Listed as an effect dependency,
+    // the bring-into-view would re-centre the grid on every unrelated recalc — yanking the scroll
+    // position back after the planner had deliberately scrolled away. Found by the perf gate.
+    scrollToIndex.mockClear();
+    const { rerender } = render(<GanttPanel activities={THREE} bringIntoViewActivityId="c" />);
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
+    rerender(<GanttPanel activities={[...THREE]} bringIntoViewActivityId="c" />);
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
   });
 
   it('scrolls a chosen activity into view without taking focus', () => {

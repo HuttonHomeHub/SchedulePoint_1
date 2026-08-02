@@ -26,6 +26,7 @@ import {
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { cn } from '@/lib/utils';
@@ -63,6 +64,17 @@ const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0);
 
 /** Width of the variance column, shown only when a baseline is active. */
 const VARIANCE_COLUMN_WIDTH = 72;
+
+/**
+ * How a row not on the selected float path recedes (audit F4).
+ *
+ * A **token**, not an opacity number. The canvas dims a painted bar to `DIMMED_ALPHA = 0.3`, and
+ * copying that figure onto DOM text would drop a row's contrast below 4.5:1 — the row's dates and
+ * name are still content, not decoration. `text-muted-foreground` is a value already validated
+ * against every surface (ADR-0055), so the row reads as receded and stays readable. The meaning
+ * itself is carried by {@link OFF_FLOAT_PATH_LABEL} in words, never by this.
+ */
+const OFF_FLOAT_PATH_ROW_CLASS = 'text-muted-foreground';
 
 export interface GanttPanelProps {
   activities: readonly ActivitySummary[];
@@ -219,6 +231,17 @@ export function GanttPanel({
         : rows.findIndex((row) => rowId(row) === bringIntoViewActivityId),
     [rows, bringIntoViewActivityId],
   );
+  // `activities` is read through a LIVE REF, not a dependency.
+  //
+  // react-query hands a fresh array reference after every recalculation (the same trap
+  // `use-plan-workspace-model.ts` records costing a re-render of ~46 toolbar buttons). Listed as a
+  // dep, this effect would re-run on every unrelated recalc and re-centre the grid — yanking the
+  // planner's scroll position back to the emphasised row after they had deliberately scrolled
+  // away, and rebuilding an O(n) map of the whole plan each time. `bringIntoViewActivityId` is not
+  // a one-shot token: it is passed for as long as a path is selected, so "re-runs" means "every
+  // time anything in the plan changes". Found by the performance gate.
+  const activitiesRef = useRef(activities);
+  activitiesRef.current = activities;
   useEffect(() => {
     if (bringIntoViewActivityId === undefined) return;
     if (emphasisRowIndex >= 0) {
@@ -228,7 +251,7 @@ export function GanttPanel({
     // Not in `rows` — its WBS parent is collapsed. Expand every collapsed ancestor rather than
     // doing nothing; the next render resolves the index and this effect scrolls to it.
     const ancestors = new Set<string>();
-    const byId = new Map(activities.map((a) => [a.id, a]));
+    const byId = new Map(activitiesRef.current.map((a) => [a.id, a]));
     let cursor = byId.get(bringIntoViewActivityId)?.parentId ?? null;
     while (cursor !== null) {
       ancestors.add(cursor);
@@ -241,7 +264,7 @@ export function GanttPanel({
       for (const id of ancestors) next.delete(id);
       return next;
     });
-  }, [bringIntoViewActivityId, emphasisRowIndex, virtualizer, activities]);
+  }, [bringIntoViewActivityId, emphasisRowIndex, virtualizer]);
 
   const toggleCollapsed = useCallback((id: string, collapse: boolean): void => {
     setCollapsed((prev) => {
@@ -552,7 +575,7 @@ function GanttBucketRowView({
         'absolute left-0 flex items-center outline-none',
         'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset',
         'hover:bg-muted/50',
-        offFloatPath && 'opacity-45',
+        offFloatPath && OFF_FLOAT_PATH_ROW_CLASS,
       )}
       style={{ top, height: GANTT_ROW_HEIGHT, width: gridWidth + chartPx }}
     >
@@ -581,6 +604,12 @@ function GanttBucketRowView({
           style={{ width: gridWidth - columnWidth(COLUMNS[0]!) }}
         >
           {label}
+          {/* The bucket fades with everything else off the path, so it needs the same marker the
+              activity rows carry. Without it a screen-reader user gets no sign that this row
+              receded while every sighted user watches it dim (WCAG 1.4.1) — the a11y gate's
+              finding, and exactly the half of a pattern that gets applied to one control and not
+              its neighbour. */}
+          {offFloatPath ? <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span> : null}
         </div>
       </div>
 
@@ -695,7 +724,7 @@ function GanttRowView({
         // `visibility: hidden` or a native `disabled` would take it out of the tab order, which is
         // the ADR-0063 M6 defect exactly. The word in the first cell is what carries the meaning
         // for anyone who cannot see the fade (WCAG 1.4.1); opacity alone would not.
-        offFloatPath && 'opacity-45',
+        offFloatPath && OFF_FLOAT_PATH_ROW_CLASS,
       )}
       style={{ top, height: GANTT_ROW_HEIGHT, width: gridWidth + chartPx }}
     >
@@ -751,7 +780,7 @@ function GanttRowView({
                 `sr-only` because the sighted cue is the fade and a visible tag on every off-path
                 row would drown the on-path ones it exists to pick out. */}
             {offFloatPath && i === 1 ? (
-              <span className="sr-only"> (off the float path)</span>
+              <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
             ) : null}
           </div>
         ))}

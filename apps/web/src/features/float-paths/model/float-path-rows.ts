@@ -8,6 +8,22 @@ import { formatDurationText } from '@/lib/duration-text';
 
 const MINUTES_PER_HOUR = 60;
 
+/**
+ * The de-emphasis marker, in words. Single-sourced because BOTH views render it — the canvas's
+ * parallel listbox and the Gantt's name cell — and a marker that says one thing in one view and
+ * something else in the other is a difference only a reader comparing the two would ever notice.
+ */
+export const OFF_FLOAT_PATH_LABEL = 'off the float path';
+
+/**
+ * What a **negative** relative float means, in plain language.
+ *
+ * The number is real and not an error: a branch can be MORE critical than a floating target — a
+ * constraint-broken predecessor with lower total float. Shown bare, `−1d` reads as breakage, and
+ * "−1d above the driving path" read aloud is worse than useless. So the sign gets a sentence.
+ */
+export const MORE_CRITICAL_NOTE = 'more critical than the target';
+
 /** What the panel needs to know about one activity to draw a chain row. */
 export interface FloatPathActivityInput {
   id: string;
@@ -59,6 +75,11 @@ export interface FloatPathRow {
   entryName: string | null;
   /** How many activities the chain holds. Counts missing members. */
   activityCount: number;
+  /**
+   * Set when the relative float is **negative** — this chain is more critical than the target.
+   * A real engine output, not a fault, and it needs saying: a bare `−1d` reads as breakage.
+   */
+  moreCriticalNote: string | null;
 }
 
 export interface FloatPathsViewModel {
@@ -187,6 +208,7 @@ export function buildFloatPathRows({
       activityIds: [...path.activityIds],
       entryName: activityRows[0]?.name ?? null,
       activityCount: activityRows.length,
+      moreCriticalNote: path.relativeFloatMinutes < 0 ? MORE_CRITICAL_NOTE : null,
     };
   });
 
@@ -240,5 +262,11 @@ const EMPTY_EMPHASIS: ReadonlySet<string> = new Set<string>();
 export function floatPathAnnouncement(row: FloatPathRow, totalPaths: number): string {
   const activities = `${String(row.activityCount)} ${row.activityCount === 1 ? 'activity' : 'activities'}`;
   if (row.index === 0) return `Showing the driving path — ${activities}.`;
-  return `Showing path ${String(row.index + 1)} of ${String(totalPaths)} — ${activities}, ${row.relativeFloatText ?? ''} above the driving path.`;
+  const head = `Showing path ${String(row.index + 1)} of ${String(totalPaths)} — ${activities}`;
+  // "−1d above the driving path" is nonsense read aloud. A negative relative float means the chain
+  // is more critical than the target, and the sentence has to say that rather than negate a word.
+  if (row.moreCriticalNote !== null) {
+    return `${head}, ${row.relativeFloatText ?? ''} — ${row.moreCriticalNote}.`;
+  }
+  return `${head}, ${row.relativeFloatText ?? ''} above the driving path.`;
 }

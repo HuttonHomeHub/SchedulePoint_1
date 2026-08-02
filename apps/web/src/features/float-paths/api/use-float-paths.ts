@@ -4,8 +4,6 @@ import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-que
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import { scheduleKeys } from '@/lib/query/hierarchy-keys';
 
-export { scheduleKeys };
-
 /** The endpoint's declared ceiling (`FloatPathsQueryDto`, `@Max(50)`). */
 export const MAX_FLOAT_PATHS = 50;
 
