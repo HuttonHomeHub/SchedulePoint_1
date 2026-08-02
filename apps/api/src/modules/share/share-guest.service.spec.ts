@@ -79,8 +79,14 @@ function activityRow(id: string): Activity {
 }
 
 describe('ShareGuestService', () => {
-  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
-  let calendars: { findActiveDetailByIdInOrg: ReturnType<typeof vi.fn> };
+  let plans: {
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findCalendarIds: ReturnType<typeof vi.fn>;
+  };
+  let calendars: {
+    findActiveDetailByIdInOrg: ReturnType<typeof vi.fn>;
+    findHoursPerDayMinutes: ReturnType<typeof vi.fn>;
+  };
   let activities: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
   let dependencies: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
   let schedule: { summarise: ReturnType<typeof vi.fn> };
@@ -89,8 +95,16 @@ describe('ShareGuestService', () => {
   let service: ShareGuestService;
 
   beforeEach(() => {
-    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(planRow()) };
-    calendars = { findActiveDetailByIdInOrg: vi.fn().mockResolvedValue(null) };
+    plans = {
+      findActiveByIdInOrg: vi.fn().mockResolvedValue(planRow()),
+      // The day-factor lookups (ADR-0068). Defaults resolve to nothing, so every activity falls
+      // back to the 24-hour constant and these assertions read the arithmetic they always did.
+      findCalendarIds: vi.fn().mockResolvedValue([]),
+    };
+    calendars = {
+      findActiveDetailByIdInOrg: vi.fn().mockResolvedValue(null),
+      findHoursPerDayMinutes: vi.fn().mockResolvedValue(new Map()),
+    };
     activities = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     dependencies = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     schedule = { summarise: vi.fn().mockResolvedValue(aggregate()) };
@@ -219,6 +233,9 @@ describe('ShareGuestService', () => {
         successorId: 'a2',
         type: 'FS',
         lagDays: 0,
+        // The exact stored lag joined the guest scope with ADR-0070: a rounded day cannot tell a
+        // two-hour cure from no lag at all.
+        lagMinutes: 0,
       });
     });
   });

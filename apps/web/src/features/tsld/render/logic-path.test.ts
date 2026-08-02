@@ -11,6 +11,7 @@ function edge(predId: string, succId: string, isDriving = true): DependencySumma
     planId: 'p1',
     type: 'FS',
     lagDays: 0,
+    lagMinutes: 0,
     lagCalendar: 'PROJECT_DEFAULT',
     isDriving,
     version: 1,

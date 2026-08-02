@@ -1,5 +1,5 @@
 /**
- * Same-lane time-overlap detection (TECH_DEBT #24c). Auto-arrange (`auto-pack.ts`) guarantees a lane
+ * Same-lane time-overlap detection (TECH_DEBT #24c). Auto-arrange (`packLanes`, `@repo/layout`) guarantees a lane
  * never holds two bars whose spans overlap in time, but a **manual** lane drop (canvas drag or the
  * `Alt+↑/↓` nudge) has no such guarantee — a planner can drop a bar into a lane where it visually
  * overlaps another. This pure pass finds every activity that shares a lane with a time-overlapping

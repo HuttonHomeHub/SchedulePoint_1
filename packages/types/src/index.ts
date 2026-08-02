@@ -322,8 +322,20 @@ export interface ActivitySummary {
   name: string;
   description: string | null;
   type: ActivityType;
-  /** Working days (milestones are 0). */
+  /**
+   * Working days **on this activity's own calendar** (ADR-0068) — an eight-hour calendar counts 480
+   * working minutes to the day, not 1440 — rounded from the stored minutes. Milestones are 0, and so
+   * is anything shorter than half a day: read {@link ActivitySummary.durationMinutes} for the exact
+   * value.
+   */
   durationDays: number;
+  /**
+   * Working **minutes** — what is stored and what the CPM engine schedules on (ADR-0036). Exposed so
+   * a sub-day duration can be read back exactly; without it a four-hour activity is only ever
+   * visible as `durationDays: 0` (TECH_DEBT #78). The unit the authoring surface writes in
+   * (ADR-0070).
+   */
+  durationMinutes: number;
   constraintType: ConstraintType | null;
   constraintDate: string | null;
   /**
@@ -613,7 +625,18 @@ export interface DependencySummary {
   id: string;
   planId: string;
   type: DependencyType;
+  /**
+   * Signed working days on this edge's **lag calendar** (a lead is negative), rounded from the
+   * stored minutes. A sub-day lag reads back as 0 here — read {@link DependencySummary.lagMinutes}
+   * for the exact value.
+   */
   lagDays: number;
+  /**
+   * Signed working **minutes** — what is stored and what the engine applies (ADR-0036). Exposed so a
+   * sub-day lag (a two-hour cure before a follow-on trade) can be read back exactly, and the unit
+   * the authoring surface writes in (ADR-0070).
+   */
+  lagMinutes: number;
   /**
    * The calendar the lag is measured on (ADR-0036 §6, M3). `PROJECT_DEFAULT` (the default)
    * and `PREDECESSOR`/`SUCCESSOR` all schedule the lag on the plan calendar today — the last
@@ -897,7 +920,72 @@ export const WorkingWeekdays = {
     }
     return mask;
   },
+  /**
+   * The full-day `[0, 1440)` windows a mask is shorthand for — the ONE statement of what a
+   * weekday mask means in the storage form the engine actually schedules on.
+   *
+   * Shared rather than restated: the API materialises a mask into shift rows on write and derives
+   * it back on read, and the client needs the same mapping to show a mask-authored calendar beside
+   * a shift-authored one. Two copies of this rule would disagree about a boundary exactly once,
+   * in a calendar nobody looks at twice.
+   */
+  toFullDayShifts(mask: number): CalendarShift[] {
+    return WorkingWeekdays.toIndices(mask).map((weekday) => ({
+      weekday,
+      startMinute: 0,
+      endMinute: MINUTES_PER_CALENDAR_DAY,
+    }));
+  },
 } as const;
+
+/** Minutes in a calendar day; `1440` is 24:00 — the exclusive end of a full-day window. */
+export const MINUTES_PER_CALENDAR_DAY = 1440;
+
+/**
+ * The day↔minute factor a calendar carries when nobody has said otherwise (ADR-0068).
+ *
+ * `1440` is not a placeholder: it is the constant every service multiplied `durationDays` by
+ * before the column existed, so a calendar left at this value behaves exactly as it always has.
+ */
+export const DEFAULT_HOURS_PER_DAY_MINUTES = MINUTES_PER_CALENDAR_DAY;
+
+/**
+ * A sensible standard working day for a weekly pattern — the **default** a calendar takes when its
+ * shifts are written and no explicit hours-per-day is supplied (ADR-0068 §1).
+ *
+ * The rule is the **modal** daily working-minutes among days that work at all, ties broken toward
+ * the **longest**. A 9h Mon–Thu with a 5h Friday derives 9h, which is what a P6 user would type.
+ *
+ * It is deliberately a default applied **once, at the write**, not a standing derivation: were it
+ * evaluated on read, shortening one Friday would silently reinterpret the stored duration of every
+ * activity on the calendar. And it has no answer for a **window-only** calendar (no shifts at all,
+ * work coming only from positive exceptions) — every candidate rule yields 0, and `durationDays × 0`
+ * zeroes the activity — so that case returns {@link DEFAULT_HOURS_PER_DAY_MINUTES} rather than a
+ * number the data cannot support.
+ */
+export function deriveHoursPerDayMinutes(shifts: readonly CalendarShift[]): number {
+  const perWeekday = new Map<number, number>();
+  for (const shift of shifts) {
+    const worked = shift.endMinute - shift.startMinute;
+    if (worked <= 0) continue;
+    perWeekday.set(shift.weekday, (perWeekday.get(shift.weekday) ?? 0) + worked);
+  }
+  if (perWeekday.size === 0) return DEFAULT_HOURS_PER_DAY_MINUTES;
+
+  const counts = new Map<number, number>();
+  for (const minutes of perWeekday.values()) {
+    counts.set(minutes, (counts.get(minutes) ?? 0) + 1);
+  }
+  let best = 0;
+  let bestCount = 0;
+  for (const [minutes, count] of counts) {
+    if (count > bestCount || (count === bestCount && minutes > best)) {
+      best = minutes;
+      bestCount = count;
+    }
+  }
+  return best;
+}
 
 /**
  * The tiers a calendar can belong to (ADR-0053 §1). `ORG` is the shared organisation
@@ -932,6 +1020,22 @@ export type ArchivedFilter = (typeof ARCHIVED_FILTERS)[number];
 export const LIBRARY_SEARCH_MAX_LENGTH = 100;
 
 /**
+ * One working window inside a day (ADR-0036 §2) — minutes from local midnight, `[start, end)`.
+ * `1440` is 24:00 (a window running to midnight), never a wrap: a night shift crossing midnight
+ * is **two adjacent-day windows**, so 20:00–06:00 is `1200–1440` on one day plus `0–360` on the
+ * next.
+ */
+export interface CalendarWindow {
+  startMinute: number;
+  endMinute: number;
+}
+
+/** One window of the weekly pattern — a {@link CalendarWindow} on a weekday (0 = Monday). */
+export interface CalendarShift extends CalendarWindow {
+  weekday: number;
+}
+
+/**
  * A working-day calendar (M5, ADR-0024) — a reusable library entry: a weekly working
  * pattern (a {@link WorkingWeekdays} bitmask) plus dated exceptions. Since ADR-0053 a
  * calendar sits in one of two tiers ({@link CalendarScope}): the shared organisation
@@ -942,8 +1046,26 @@ export interface CalendarSummary {
   id: string;
   name: string;
   description: string | null;
-  /** 7-bit weekly pattern (bit 0 = Monday … bit 6 = Sunday); see {@link WorkingWeekdays}. */
+  /**
+   * 7-bit weekly pattern (bit 0 = Monday … bit 6 = Sunday); see {@link WorkingWeekdays}.
+   * **Derived** from {@link CalendarSummary.shifts} — it can only say whether a weekday works
+   * at all, so a split shift or a half-day Friday is visible only in `shifts`.
+   */
   workingWeekdays: number;
+  /** The weekly pattern as stored: explicit intraday windows (ADR-0036 §2). */
+  shifts: CalendarShift[];
+  /**
+   * This calendar's **standard working day**, in hours (P6 `day_hr_cnt`; ADR-0068). It is the
+   * day↔minute factor for every day-denominated field measured on this calendar — a
+   * `durationDays` of 1 is `hoursPerDay × 60` working minutes, not always 1440.
+   *
+   * May be fractional (7.5). Read {@link CalendarSummary.hoursPerDayMinutes} for the stored value:
+   * this one is derived from it and can round, exactly as `durationDays` does beside
+   * `durationMinutes`.
+   */
+  hoursPerDay: number;
+  /** The stored truth behind {@link CalendarSummary.hoursPerDay}. `1440` is a 24-hour day. */
+  hoursPerDayMinutes: number;
   /** Which tier this calendar belongs to (ADR-0053 §1). */
   scope: CalendarScope;
   /** The owning project when `scope` is `PROJECT`; `null` for an `ORG` calendar. */
@@ -969,8 +1091,22 @@ export interface CalendarSummary {
  */
 export interface CalendarExceptionSummary {
   id: string;
+  /** First calendar day of the exception (`YYYY-MM-DD`). */
   date: string;
+  /**
+   * Last calendar day, inclusive. Storage holds a range (ADR-0036 §2); only a single day is
+   * authorable today, so this equals {@link CalendarExceptionSummary.date} for every exception
+   * the API creates. Present so the range is never silently dropped on read.
+   */
+  endDate: string;
+  /**
+   * `false` = holiday, `true` = worked. **Derived** from {@link CalendarExceptionSummary.windows}
+   * — a day works iff it has any window — so it can only say whether the day works at all. A
+   * half-day is visible only in `windows`.
+   */
   isWorking: boolean;
+  /** The hours this day actually works, as stored. Empty for a holiday. */
+  windows: CalendarWindow[];
   label: string | null;
   version: number;
   createdAt: string;

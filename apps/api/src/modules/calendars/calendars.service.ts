@@ -20,6 +20,7 @@ import { ResourceRepository } from '../resources/resource.repository';
 
 import {
   CalendarRepository,
+  exceptionWindowRowsFor,
   type CalendarExceptionWithWindows,
   type CalendarPatch,
   type CalendarScopeFilter,
@@ -28,7 +29,9 @@ import {
 } from './calendar.repository';
 import type { CreateCalendarExceptionDto } from './dto/create-calendar-exception.dto';
 import type { CreateCalendarDto } from './dto/create-calendar.dto';
+import type { UpdateCalendarExceptionDto } from './dto/update-calendar-exception.dto';
 import type { UpdateCalendarDto } from './dto/update-calendar.dto';
+import { resolveHoursPerDayMinutes } from './hours-per-day';
 
 /** Machine-readable conflict reasons carried in a {@link ConflictError}'s `details`. */
 export const CALENDAR_CONFLICT = {
@@ -185,6 +188,8 @@ export class CalendarsService {
         // explicit undefined as a present key, which is not what "the caller sent one form" means.
         ...(dto.workingWeekdays === undefined ? {} : { workingWeekdays: dto.workingWeekdays }),
         ...(dto.shifts === undefined ? {} : { shifts: dto.shifts }),
+        // Co-written with the week, never left to a read-time derivation (ADR-0068 §1).
+        hoursPerDayMinutes: resolveHoursPerDayMinutes(dto),
         description: dto.description ?? null,
         scope,
         projectId,
@@ -233,6 +238,18 @@ export class CalendarsService {
     if (dto.description !== undefined) patch.description = dto.description;
     if (dto.workingWeekdays !== undefined) patch.workingWeekdays = dto.workingWeekdays;
     if (dto.shifts !== undefined) patch.shifts = dto.shifts;
+    // The day factor rides with the week (ADR-0068 §1). `current` keeps a rename from moving it,
+    // and keeps a pattern edit from being stored with a factor that describes the OLD week.
+    if (
+      dto.hoursPerDay !== undefined ||
+      dto.workingWeekdays !== undefined ||
+      dto.shifts !== undefined
+    ) {
+      patch.hoursPerDayMinutes = resolveHoursPerDayMinutes({
+        ...dto,
+        current: existing.hoursPerDayMinutes,
+      });
+    }
 
     const target = this.resolveTargetScope(existing, dto);
     if (target !== null) {
@@ -417,6 +434,7 @@ export class CalendarsService {
 
     const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
     if (!calendar) throw new NotFoundError('Calendar not found.');
+    this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
 
     try {
       const exception = await this.prisma.$transaction(async (tx) => {
@@ -427,6 +445,10 @@ export class CalendarsService {
             calendarId: calendar.id,
             date: parseCalendarDate(dto.date),
             isWorking: dto.isWorking ?? false,
+            // Conditional spread: `exactOptionalPropertyTypes` counts an explicit `undefined` as a
+            // present key, which would make the repository's "explicit windows win" branch fire on
+            // a body that never sent any.
+            ...(dto.windows ? { windows: dto.windows } : {}),
             label: dto.label ?? null,
             createdBy: principal.userId,
             updatedBy: principal.userId,
@@ -452,6 +474,78 @@ export class CalendarsService {
     }
   }
 
+  /**
+   * Edit one dated exception's hours and/or label, version-gated.
+   *
+   * Anti-IDOR by shape: the exception is reached only via `findActiveExceptionByIdInCalendar`,
+   * which requires the calendar id too, and that calendar has already been resolved inside the
+   * caller's organisation. An exception-id-first lookup would make the calendar a decoration.
+   *
+   * TWO versions are in play and both matter. The write is gated on the **exception's** version —
+   * a stale one is a 409, because someone else changed those hours since they were read. It then
+   * bumps the **calendar's**, exactly as create and delete already do, so a client holding a stale
+   * calendar is told as well.
+   */
+  async updateException(
+    principal: Principal,
+    orgSlug: string,
+    calendarId: string,
+    exceptionId: string,
+    dto: UpdateCalendarExceptionDto,
+  ): Promise<CalendarExceptionWithWindows> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'calendar:update', organization.id);
+
+    const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
+    if (!calendar) throw new NotFoundError('Calendar not found.');
+    this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
+
+    const existing = await this.calendars.findActiveExceptionByIdInCalendar(
+      exceptionId,
+      calendar.id,
+    );
+    if (!existing) throw new NotFoundError('Calendar exception not found.');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await this.calendars.updateExceptionIfVersionMatches(
+        exceptionId,
+        dto.version,
+        {
+          ...(dto.label === undefined ? {} : { label: dto.label }),
+          // `isWorking` and `windows` are mutually exclusive at the DTO, and BOTH absent means the
+          // hours are untouched — a label-only edit. `exceptionWindowRowsFor` would answer "no
+          // windows" for that case, which is a holiday, so the decision has to be made here.
+          ...(dto.windows !== undefined
+            ? { windows: dto.windows }
+            : dto.isWorking !== undefined
+              ? { windows: exceptionWindowRowsFor(undefined, dto.isWorking) }
+              : {}),
+        },
+        principal.userId,
+        tx,
+      );
+      if (changed === 0) {
+        throw new ConflictError('This exception has changed since you loaded it.', {
+          reason: 'STALE_VERSION',
+        });
+      }
+      await this.calendars.touchVersion(calendar.id, principal.userId, tx);
+      return this.calendars.findExceptionWithWindows(exceptionId, tx);
+    });
+    if (!updated) throw new NotFoundError('Calendar exception not found.');
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        calendarId: calendar.id,
+        exceptionId,
+        userId: principal.userId,
+      },
+      'calendar exception updated',
+    );
+    return updated;
+  }
+
   async removeException(
     principal: Principal,
     orgSlug: string,
@@ -463,6 +557,7 @@ export class CalendarsService {
 
     const calendar = await this.calendars.findActiveByIdInOrg(calendarId, organization.id);
     if (!calendar) throw new NotFoundError('Calendar not found.');
+    this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
 
     const exception = await this.calendars.findActiveExceptionByIdInCalendar(
       exceptionId,
@@ -510,6 +605,28 @@ export class CalendarsService {
     }
     if (scope === existing.scope && projectId === existing.projectId) return null;
     return { scope, projectId };
+  }
+
+  /**
+   * Who may write a calendar's dated exceptions (ADR-0053 §2).
+   *
+   * A holiday, a shutdown day or a half-day on an **ORG** calendar is shared tenant state in exactly
+   * the way an edit to its weekly pattern is — it moves every plan in the organisation that inherits
+   * that calendar — so it takes the same `calendar:manage_org` capability. Only `updateException`
+   * asserted this; adding and removing an exception did not, which made the rule a property of one
+   * of the three verbs rather than of the object.
+   *
+   * That gap is **behaviourally inert today**: every role holding `calendar:update` also holds
+   * `calendar:manage_org` (Planner and Org Admin). It is fixed anyway, and as one shared helper, so
+   * that the day those two permissions are split apart the answer is in one place rather than
+   * spread across three call sites that had already disagreed once.
+   */
+  private assertMayWriteExceptions(
+    principal: Principal,
+    scope: CalendarScope,
+    organizationId: string,
+  ): void {
+    if (scope === 'ORG') this.assertCan(principal, 'calendar:manage_org', organizationId);
   }
 
   /**

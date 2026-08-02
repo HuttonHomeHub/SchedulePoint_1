@@ -73,6 +73,7 @@ function fiveDayWeek(key: string, name: string): SeedSpec['calendars'][number] {
     key,
     name,
     scope: 'PROJECT',
+    hoursPerDay: null,
     days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
       weekday,
       windows: weekday >= 1 && weekday <= 5 ? [{ startMinute: 0, endMinute: DAY }] : [],

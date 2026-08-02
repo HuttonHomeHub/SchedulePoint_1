@@ -316,6 +316,17 @@ function mapProgress(
 // The adapter.
 // ---------------------------------------------------------------------------------------------------------
 
+/**
+ * `day_hr_cnt` as the canonical `hoursPerDay`, or nothing when the source omits it or gives a value
+ * outside a day. Absent lets the target apply its own default rather than importing a zero — the
+ * factor divides durations, so a nonsense value would be worse than none.
+ */
+function hoursPerDayField(row: ReadonlyMap<string, string>): { hoursPerDay?: number } {
+  const hours = numField(row, 'day_hr_cnt');
+  if (hours === undefined || !Number.isFinite(hours) || hours <= 0 || hours > 24) return {};
+  return { hoursPerDay: hours };
+}
+
 export function adaptXerToCanonical(
   document: XerDocument,
   filename: string | null,
@@ -391,6 +402,10 @@ export function adaptXerToCanonical(
         id: clndrId,
         name,
         sourceType: resolvedSourceType,
+        // P6's standard working day (ADR-0068). Read on EVERY calendar, not just the fallback
+        // path below — it is the factor the target measures every duration and lag against, so
+        // dropping it retimes the whole imported plan by the ratio between it and 24.
+        ...hoursPerDayField(row),
         workWeek: parsed.workWeek,
         exceptions: parsed.exceptions,
       });
@@ -400,6 +415,7 @@ export function adaptXerToCanonical(
         id: clndrId,
         name,
         sourceType: resolvedSourceType,
+        ...hoursPerDayField(row),
         workWeek: fallbackWorkWeek(hoursPerDay),
         exceptions: parsed.exceptions,
       });

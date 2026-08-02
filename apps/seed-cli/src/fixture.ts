@@ -130,6 +130,10 @@ export function fixtureSpec(): SeedSpec {
     // the shared organisation library as a side effect (ADR-0053 §5, the same default the importer
     // uses). A resource-held calendar is forced to ORG below, because a resource can hold no other.
     scope: fixture.resources.some((r) => r.calendar === calendar.id) ? 'ORG' : 'PROJECT',
+    // Derived by the API from the week below (ADR-0068). The fixture DOES state its own
+    // `hours_per_day`, but this loader reads a narrower local type that does not carry it; deriving
+    // is right for every fixture calendar whose week matches its stated day, which is all of them.
+    hoursPerDay: null,
     days: WEEKDAY_KEYS.map((key, weekday) => ({
       weekday,
       windows: (calendar.workweek?.[key] ?? []).map(toWindow),

@@ -1,0 +1,109 @@
+# Measuring the TSLD canvas draw performance
+
+**Who this is for:** whoever has the hardware. This measurement cannot be automated, and that is the
+whole reason the document exists.
+
+ADR-0026 §16 set a draw budget of **≤ 4 ms p95 on a mid-tier laptop and iPad-class Safari**. That
+number has never been measured on either device — `docs/TECH_DEBT.md` #59 said so for months and
+nobody ran it, because there was no command to run. There is now.
+
+CI runners cannot stand in. A shared runner's absolute timings vary by more than the thing being
+measured, which is exactly why the repo's other canvas gates (`paint.dates-budget.test.ts` and its
+siblings) assert the **shape** of the per-frame cost — how many times a thing is called — rather than
+a millisecond count. This benchmark answers the other half of the question, and it answers it about
+**one named machine**.
+
+---
+
+## What to run
+
+```bash
+git clone <this repo> && cd SchedulePoint
+pnpm install
+pnpm --filter @repo/web exec playwright install chromium   # once
+pnpm --filter @repo/web measure:draw
+```
+
+That's it. It takes about a minute and prints a block per zoom level. Paste the whole block back,
+**with the machine it came from** — model, year, RAM, and whether it was on mains or battery. A
+number without its machine is not a measurement.
+
+## What it does
+
+It paints the real painter against a real Canvas 2D context in Chromium, over a generated programme
+of **2,000 activities / 160 WBS summaries / 3,200 links across 50 lanes** — the ADR-0066 scale
+generator's realistic shape, laid out so a phase's bands run concurrently rather than nose-to-tail.
+
+That layout detail is load-bearing. An earlier version generated the plan nose-to-tail, which spanned
+**28 years**, so "whole plan" zoom culled roughly nine bars in ten and reported a very pretty 4.6 ms
+p95. It looked like the budget being met. It was measuring an empty screen.
+
+Two zoom levels are reported because they answer different questions:
+
+- **`whole`** (2 px/day) — the whole programme on screen. The dearest case, and the one a planner
+  hits when they open a file or press Fit.
+- **`week`** (12 px/day) — the working zoom, where a planner actually spends their day.
+
+Each is measured with link routing **off** and **on** (ADR-0065), so the routing feature's own cost
+is visible rather than baked into a single figure.
+
+## Why `--headed` matters
+
+`measure:draw` runs **headed** deliberately. Headless Chromium can rasterise Canvas 2D in software,
+which measures a code path no planner ever runs — and it will happily report numbers that look
+authoritative. The script prints a loud warning when it is headless for exactly this reason.
+
+If you want the headless number anyway (for comparison with a CI-adjacent figure), drop the flag:
+
+```bash
+node apps/web/scripts/measure-link-routing.mjs 120 scale
+```
+
+## Options
+
+```bash
+node scripts/measure-link-routing.mjs [frames] [scale|grid] [--headed] [--viewport WxH]
+```
+
+- **`frames`** (default 120) — panning frames per case. More frames, tighter percentiles, longer run.
+- **`scale`** (default) is the realistic programme; **`grid`** is the original synthetic lattice, kept
+  only because ADR-0065's published numbers were measured on it. Every edge in the lattice spans
+  seven lanes, which defeats the cull by construction — it is not a plan, and it should not be quoted
+  as one.
+- **`--viewport`** (default `1920x1080`) — every number published so far was measured at this size, so
+  the default is deliberate: changing it silently would make your run incomparable with them. Run it
+  again at your **real** viewport if you want to know what you personally see; the two answer
+  different questions and both are worth having.
+
+## What the numbers mean
+
+For reference, measured here in headless Chromium at 1920×1080 on the `scale` scene:
+
+| zoom            | routing off (p95) | routing on (p95) |
+| --------------- | ----------------- | ---------------- |
+| `whole` 2px/day | ~24 ms            | ~22 ms           |
+| `week` 12px/day | ~18 ms            | ~7 ms            |
+
+One frame at 60 Hz is **16.7 ms**. So the working zoom sits inside a frame and the whole-plan zoom
+does not — and both miss ADR-0026's 4 ms by a wide margin. That is the finding, not a failure of the
+run: the budget was set before the canvas carried bands, float tails, hatching, dates, arrowheads and
+routing, and it has never once been met.
+
+## What happens with your numbers
+
+They go into `docs/TECH_DEBT.md` #75, and then ADR-0026 §16 gets **amended** — its figure replaced by
+one that was measured, on hardware that was named, with the scene and viewport stated.
+
+Two outcomes are both fine, and the point of measuring is to find out which:
+
+- **Smooth at 2,000 activities.** Then 16.7 ms — one frame — is the honest budget, the old 4 ms was
+  simply wrong, and the amendment says so.
+- **Not smooth.** Then ADR-0026's own reserved escalations are the route — dirty-region repainting
+  first, WebGL second — and they now have a number to aim at instead of a target nobody believes.
+
+## Not covered
+
+**iPad-class Safari**, the other half of ADR-0026's stated envelope. Deliberately: this script drives
+Chromium, and a planner authors on a laptop — the iPad is a review device, where the printed programme
+(ADR-0059 §6) and the Gantt matter more than canvas draw. If the canvas ever becomes a primary iPad
+surface, that gap needs closing and this document needs a second section.

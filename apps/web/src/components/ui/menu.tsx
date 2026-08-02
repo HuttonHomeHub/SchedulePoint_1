@@ -188,8 +188,28 @@ export function Menu({
     >
       <MenuCloseContext.Provider value={closeRestoring}>{children}</MenuCloseContext.Provider>
     </div>,
-    document.body,
+    portalTarget(),
   );
+}
+
+/**
+ * Where the menu mounts: the **topmost open modal `<dialog>`** if there is one, else `document.body`.
+ *
+ * A modal `<dialog>` (opened with `showModal()`) lives in the browser's **top layer**, which sits
+ * above the whole normal stacking context — `z-50` on a sibling of `<body>` is not merely lower, it
+ * is in a different layer and no z-index can reach it. So a menu portalled to `document.body` from
+ * inside a dialog renders *underneath* the dialog: visible in the DOM, entirely unclickable, and
+ * silently so. Every consumer until now opened its menu from a page, which is why this went unseen
+ * until a Playwright journey drove one from inside the calendar dialog and the click retried for
+ * thirty seconds against "subtree intercepts pointer events".
+ *
+ * `position: fixed` stays viewport-relative inside a dialog (a dialog establishes no containing
+ * block of its own), so the anchor maths above is unaffected. The **last** open dialog is chosen
+ * because a nested one is the topmost.
+ */
+function portalTarget(): HTMLElement {
+  const dialogs = document.querySelectorAll<HTMLDialogElement>('dialog[open]');
+  return dialogs[dialogs.length - 1] ?? document.body;
 }
 
 /**

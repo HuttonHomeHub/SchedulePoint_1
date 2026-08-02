@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 19 API modules
-> (`apps/api/src/modules/`), 25 Prisma models across 41 migrations, ~670 web
-> source files with 18 flag-scoped Playwright suites beside the base journey, and
-> 66 ADRs (counted 2026-07-31 — every number here is `ls | wc -l`, not memory).
+> (`apps/api/src/modules/`), 25 Prisma models across 42 migrations, ~700 web
+> source files with 19 flag-scoped Playwright suites beside the base journey, and
+> 70 ADRs (recounted 2026-08-01 — every number here is `ls | wc -l`, not memory).
 > The CPM/GPM engine is real and its conformance matrix is closed (ADR-0034).
 > Read the code before assuming anything is missing — this banner said the
 > opposite for months after it stopped being true, which is exactly the failure
@@ -105,6 +105,7 @@ SchedulePoint/
 ├── packages/
 │   ├── config/               # Shared ESLint + tsconfig presets (@repo/config)
 │   ├── interchange/          # Pure schedule-interchange model/parsers (ADR-0050)
+│   ├── layout/              # Pure lane packer, shared by the canvas + importer (ADR-0069)
 │   ├── engine-conformance/   # Engine-free conformance fixture + loaders (ADR-0034)
 │   ├── seed/                 # Pure SeedSpec model + pairwise/scale/negative builders (ADR-0066)
 │   ├── seed-http/            # The seeder as an ordinary REST client (ADR-0066)
@@ -1018,6 +1019,97 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   importer behaviour that had already been corrected. **The CPM engine is not modified and the
   ADR-0034 parity gate is untouched.**
 
+- **ADR-0067** _(Accepted; M0′–M4 landed, `VITE_CALENDAR_SHIFT_EDITOR` **default-on** 2026-08-01)_ —
+  The calendar shift editor, and storage honesty. ADR-0036 moved storage and the CPM engine to
+  working-**minutes** with intraday shift patterns a year ago; **nothing in the product could author
+  one**, because the calendar form offered seven weekday checkboxes and a checkbox can say only
+  _whether_ a day works. The editor replaces them with a per-day list of `HH:MM` periods on ONE
+  shared `WindowListEditor` — the same primitive the dated-exception editor uses, because a window is
+  authored in two places and two editors would drift about ordering, overlap and midnight in a way
+  only a planner who authored the same hours both ways would ever see. Times are **text, not
+  `<input type="time">`**: a full day ends at 24:00 and the native control stops at 23:59, and
+  reading `00:00` back as 24:00 was rejected as read-time inference. A night shift **is two windows
+  on two days** and is written that way, with both named aloud. Presets are **verbs** — applying one
+  writes windows and then has no further existence, so nothing persists which preset produced a
+  week. **M4 is the epic's own premise landing on itself**: five specialist gates over the combined
+  diff found ten blocking defects in code that had already passed a human read, the largest a **dead
+  end** for the very shape the epic exists to support — a calendar with no working week could be
+  created by the Window-only preset and then never saved again, refused by a hidden rule with no
+  control on screen to satisfy it. The flag-on journey (`apps/web/e2e-calendar-shifts/`, its own CI
+  step) earned its place on its first run by finding that a menu opened from inside a modal
+  `<dialog>` was unclickable — a modal dialog is in the browser's **top layer** and the menu
+  portalled to `document.body`, which no z-index can reach and no unit test can see, because jsdom
+  has no top layer.
+
+- **ADR-0068** _(Accepted)_ — A calendar carries an **hours-per-day** (P6's `day_hr_cnt`). It is the
+  day↔minute factor for every day-denominated field measured on that calendar, derived **once** at
+  the moment shifts are written and stored — never on read, because a standing derivation would make
+  the factor a function of the shift rows, so shortening one Friday would silently reinterpret every
+  stored duration. `durationDays × hoursPerDay × 60` replaces `× 1440`, so "5 days" on an eight-hour
+  calendar is 2,400 working minutes and not 7,200; baselines **freeze** the factor at capture; the
+  `TWENTY_FOUR_HOUR` lag calendar stays pinned at 1440. **The CPM engine never sees it** — its
+  `WorkingTimeCalendar` port is `addWorkingTime`/`workingTimeBetween` over shift and exception rows
+  only, so the ADR-0034 recalc parity gate is structurally untouched. P6's `day_hr_cnt` now
+  round-trips through interchange in both directions (ADR-0050's mapping table moved in lock-step);
+  MSPDI has no per-calendar equivalent and reports the drop rather than inventing a figure.
+
+- **ADR-0069** _(Accepted)_ — A shared lane-layout package, and packing an imported programme. An
+  import gave each activity a `laneIndex` equal to its **position in the source file**, so a
+  500-activity programme opened as 500 lanes holding one bar each — the on-ramp from P6, and the
+  first picture a planner sees of a schedule they already know, was noise. `packLanes` (written for
+  the canvas's Auto-arrange, refined by ADR-0064's predecessor hint) moves to **`@repo/layout`** and
+  is called by the interchange commit as a **third phase** — necessarily after the recalc, because
+  the packer packs by time and an imported activity has no dates until then, and inside the same pen
+  window, because writing `lane_index` is an ordinary plan mutation. A second server-side packer was
+  rejected for the ADR-0065 `routeOrthogonal` reason: two implementations would drift, and **the
+  drift would be invisible** — only someone comparing an imported plan against the same plan after
+  pressing Auto-arrange would ever see it. Phase 3 is **best-effort and deliberately asymmetric with
+  phase 2**: a recalc failure means wrong dates and rolls the import back, a layout failure means a
+  correct plan arranged badly, which one press of Auto-arrange fixes. **The CPM engine is not
+  imported and the recalc parity gate is untouched** — `lane_index` is presentation and
+  `computeSchedule` has never seen it.
+
+- **ADR-0070** _(Accepted; M0–M6 landed, `VITE_SUB_DAY_DURATIONS` **default-on** 2026-08-02)_ — Sub-day durations and
+  lags in the authoring surface. ADR-0036 moved storage and the engine to working **minutes** a year
+  ago, ADR-0068 made a _day_ a per-calendar quantity, and `api-v0.34.0` put `durationMinutes` /
+  `lagMinutes` on the public DTOs — and **nothing in the product could type one**: a four-hour lift
+  or a 30-minute cure lag could be imported, scheduled, levelled and exported, and never entered.
+  The same shape as ADR-0067, one field along, found the same way (ADR-0058's _verify the claim_,
+  applied to the 25 activity-update DTO fields against the web editor). The field becomes **text**
+  with a `d`/`h`/`m` grammar (`2d 4h`, `90m`, `1.5d`); a **bare number still means days**, which is
+  what makes it not a migration. Weeks are **refused, not guessed** — a construction week is five
+  days to one planner and seven to another and SchedulePoint has no setting to disambiguate. The
+  load-bearing decision is that `hoursPerDay` is a **required parameter** of the parser and the
+  formatter, never defaulted: after ADR-0068 defaulting to 24 reads a planner's `1d` on an
+  eight-hour calendar as three days' work and defaulting to 8 does the reverse, both silently and
+  both changing dates — so the compiler enforces the ordering. The factor is read from the calendar
+  the **form** currently selects (a planner can change calendar and duration in one edit, and only
+  the client knows the pending choice); where it cannot be resolved the field degrades to whole
+  working days, which is the same code path as flag-off, so the rollback contract and the
+  not-yet-loaded state cannot rot separately. It also closed a live defect: a canvas move resent the
+  **rounded** duration, flattening a sub-day activity to zero on every drag. Cross-plan lag is
+  deliberately out of scope (its DTO carries no minutes). **The CPM engine is not imported and the
+  ADR-0034 parity gate is untouched** — this changes only which of two already-supported write
+  fields the client sends.
+
+  **M4–M6 finish it.** The table read-outs show a sub-day value exactly instead of `0 d` — which is
+  also what the Duration column prints for a **milestone**, so the one screen listing a plan's work
+  was showing real activities as having none; the whole-day branch prints the row's **own**
+  `durationDays`/`lagDays` rather than re-deriving from minutes, after the epic's flag-off parity
+  test caught the first version rounding a four-hour lag up to `+1d`. The flag flipped only once
+  `apps/web/e2e-sub-day/` (its own CI step) drove both fields against a **real API with the pen
+  enforced** on an eight-hour calendar, asserting the stored minutes read back from the API rather
+  than the DOM under test. That journey earned its place on its first run, twice: the plan's calendar
+  never reached `CreateActivityButton`, so on the surface where every activity is first created the
+  duration field rendered, looked right and quietly refused `4h`; and a duration typed before the
+  calendar list resolved could be **overwritten** by the re-seed, because `useDurationSeed` asked a
+  `dirtyFields` flag captured by the render its effect belonged to — a keystroke and a network
+  response are independent events, so the effect read a stale `false`. The fix stops asking a flag
+  and asks the field: a `readDuration()` getter called inside the effect, re-seeding only if the
+  value is still what it saw at open (`docs/TECH_DEBT.md` #83, closed). Both are the ADR-0067/ADR-0064
+  shape — a correct pattern applied to one control and not its neighbour, invisible to every gate
+  that does not run the real thing.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -1093,7 +1185,9 @@ When operating in this repo, Claude Code should:
    gates to make CI pass.
 7. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
    push" — `pnpm lint && pnpm typecheck && pnpm test` (plus `pnpm check:playbook`
-   when you add or rename a seed plan), **plus
+   when you add or rename a seed plan, and `pnpm check:build-contract` when you
+   add a shared `packages/*` workspace package — a local checkout has its
+   `dist/` already and cannot see a missing build line), **plus
    `scripts/e2e-local.sh api` when you touched `apps/api`, plus
    `scripts/e2e-local.sh web:<suite>` when you added or changed a flag-on
    Playwright suite** — before declaring work done, and report failures

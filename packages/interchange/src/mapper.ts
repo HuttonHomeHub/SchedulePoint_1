@@ -136,7 +136,16 @@ function mapCalendar(calendar: CanonicalCalendar, scope: ImportCalendarScope): I
     windows: exception.shifts.map(shiftToWindow),
   }));
 
-  return { key: calendar.id, name: calendar.name, scope, shifts, exceptions };
+  return {
+    key: calendar.id,
+    name: calendar.name,
+    scope,
+    // Spread rather than passed as `undefined`: `exactOptionalPropertyTypes` treats an explicit
+    // `undefined` as a present key, and the graph schema is `.strict()`.
+    ...(calendar.hoursPerDay === undefined ? {} : { hoursPerDay: calendar.hoursPerDay }),
+    shifts,
+    exceptions,
+  };
 }
 
 export interface MapResult {

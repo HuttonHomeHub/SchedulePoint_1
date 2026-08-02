@@ -1,6 +1,11 @@
 import { LAG_CALENDAR_SOURCES, type DependencyType, type LagCalendarSource } from '@repo/types';
 import { z } from 'zod';
 
+import { lagTextField } from '../model/lag-field';
+
+import { SUB_DAY_DURATIONS_ENABLED } from '@/config/env';
+import { formatDurationText } from '@/lib/duration-text';
+
 /**
  * Human labels for the four dependency types (CPM/GPM tradition). Exhaustive
  * `Record<DependencyType, …>` so a new type fails to compile until labelled.
@@ -57,36 +62,54 @@ export const LAG_CALENDAR_HINT =
   'project calendar until per-activity calendars arrive.';
 
 /**
- * Label for the signed-lag numeric field. The unit depends on the chosen lag calendar:
- * a 24-hour (elapsed) lag is counted in **calendar** days, everything else in **working**
- * days — so the label tracks the selection rather than always claiming "working days".
+ * Format a signed lag for display: `0d`, `+3d` (lag), `−2d` (lead, with a real minus sign).
+ *
+ * With the lag calendar's working-hours factor in hand it renders the **exact** stored value —
+ * `+4h`, `−1d 30m` — and falls back to the day count without one (ADR-0070 M4). A whole-day lag
+ * keeps the shape it has always had, so nothing churns on a plan with no sub-day logic in it; the
+ * finer text appears only when the lag actually is finer, which is the case that previously read
+ * back as `0d` and was indistinguishable from no lag at all.
+ *
+ * The minus is the typographic U+2212, not an ASCII hyphen: this is read-only display. The *field*
+ * writes a hyphen, because a planner has to be able to retype what it shows.
  */
-export function lagFieldLabel(lagCalendar: LagCalendarSource): string {
-  const unit = lagCalendar === 'TWENTY_FOUR_HOUR' ? 'calendar days' : 'working days';
-  return `Lag (${unit}, negative for a lead)`;
-}
-
-/**
- * Format a signed working-day lag for display: `0d`, `+3d` (lag), `−2d` (lead,
- * with a real minus sign). Kept tiny and pure so tables and dialogs agree.
- */
-export function formatLag(lagDays: number): string {
+export function formatLag(
+  dependency: { lagDays: number; lagMinutes: number },
+  hoursPerDay?: number,
+): string {
+  const minutesPerDay = hoursPerDay === undefined ? 0 : Math.round(hoursPerDay * 60);
+  if (
+    SUB_DAY_DURATIONS_ENABLED &&
+    hoursPerDay !== undefined &&
+    minutesPerDay > 0 &&
+    dependency.lagMinutes % minutesPerDay !== 0
+  ) {
+    const magnitude = formatDurationText(Math.abs(dependency.lagMinutes), hoursPerDay);
+    return dependency.lagMinutes > 0 ? `+${magnitude}` : `−${magnitude}`;
+  }
+  // The whole-day branch prints the row's OWN `lagDays` rather than re-deriving it from minutes.
+  // The server computed that on the relationship's lag calendar (ADR-0068 §4); re-dividing here
+  // would round a sub-day lag UP whenever the exact branch is not taken — which is exactly what
+  // happens flag-off, where a four-hour lag would have started reading as "+1d" on a path whose
+  // whole job is to be byte-identical to what shipped. (Found by this epic's own parity test.)
+  const { lagDays } = dependency;
   if (lagDays === 0) return '0d';
-  return lagDays > 0 ? `+${lagDays}d` : `−${Math.abs(lagDays)}d`;
+  return lagDays > 0 ? `+${String(lagDays)}d` : `−${String(Math.abs(lagDays))}d`;
 }
 
 /**
- * The mutable fields shared by add and edit — a dependency's type and signed lag
- * (registered with `valueAsNumber`). Single source of truth for the bounds so the
- * two dialogs can't drift.
+ * The mutable fields shared by add and edit — a dependency's type and signed lag. Single source of
+ * truth so the two dialogs can't drift.
+ *
+ * `lag` is **text**, read by the `d`/`h`/`m` grammar (ADR-0070 §5): a bare number still means days,
+ * so every value a planner has learnt to type keeps its meaning, and `-4h` becomes expressible for
+ * the first time. The rule here is deliberately **syntax only** — the one calendar-dependent
+ * question is answered at submit by `lagWriteFields`, where the lag calendar's working-hours factor
+ * is in hand. See `model/lag-field.ts` for why that split exists.
  */
 export const typeAndLagSchema = z.object({
   type: z.enum(DEPENDENCY_TYPES),
-  lagDays: z
-    .number({ message: 'Enter a whole number of days.' })
-    .int('Enter a whole number of days.')
-    .min(-3650, 'Lag is too large.')
-    .max(3650, 'Lag is too large.'),
+  lag: lagTextField(),
   lagCalendar: z.enum(LAG_CALENDAR_OPTIONS),
 });
 

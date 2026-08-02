@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, LockedError, NotFoundError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -74,6 +75,7 @@ describe('ScheduleService.recalculateProgramme', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       {} as unknown as ScheduleRepository,
+      {} as unknown as CalendarRepository,
       editLock as unknown as PlanEditLockService,
       {} as unknown as PrismaService,
       crossPlan as unknown as CrossPlanDependencyRepository,

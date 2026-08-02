@@ -267,6 +267,13 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
       expect(reimport.graph.dependencies).toHaveLength(1);
       expect(reimport.graph.dependencies[0]?.type).toBe('FS');
       expect(reimport.graph.calendars).toHaveLength(1);
+      // The import→store→export→re-import loop preserves the source file's own working day and its
+      // shift windows (ADR-0068 / ADR-0036) — the export used to hard-code `day_hr_cnt` as 8 and the
+      // import used to flatten every window to a whole day, so the two errors hid each other here.
+      expect(reimport.graph.calendars[0]?.hoursPerDay).toBe(8);
+      expect(reimport.graph.calendars[0]?.shifts).toEqual(
+        [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
+      );
     }
   });
 
@@ -350,11 +357,15 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
       expect(report.mapped).toMatchObject({ activities: 2, wbsSummaries: 2, constraints: 1 });
       expect(report.mapped.resources).toBe(1);
       expect(report.mapped.assignments).toBe(1);
-      // Nothing is silently dropped. The one genuine drop is MSPDI-only: MS Project has no calendar
-      // tier to write (ADR-0053 §5), which the XER path does carry as `clndr_type`.
+      // Nothing is silently dropped. Both genuine drops are MSPDI-only: MS Project has no calendar
+      // tier (ADR-0053 §5) and no per-calendar standard working day (ADR-0068), both of which the
+      // XER path carries — as `clndr_type` and `day_hr_cnt`.
       expect(report.drops).toEqual(
         format === 'mspdi'
-          ? [expect.objectContaining({ kind: 'drop', entity: 'calendar', sourceRef: null })]
+          ? [
+              expect.objectContaining({ kind: 'drop', entity: 'calendar', sourceRef: null }),
+              expect.objectContaining({ kind: 'drop', entity: 'calendar', sourceRef: null }),
+            ]
           : [],
       );
 

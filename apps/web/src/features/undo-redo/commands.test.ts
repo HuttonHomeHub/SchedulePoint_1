@@ -35,6 +35,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     description: null,
     type: 'TASK',
     durationDays: 5,
+    durationMinutes: 2400,
     constraintType: null,
     constraintDate: null,
     secondaryConstraintType: null,
@@ -127,7 +128,7 @@ describe('activityDefinitionInput', () => {
       name: 'Excavate',
       code: 'A10',
       type: 'TASK',
-      durationDays: 5,
+      durationMinutes: 2400,
       constraintType: 'SNET',
       constraintDate: '2026-02-01',
       calendarId: 'cal-9',
@@ -203,12 +204,14 @@ describe('durationResizeCommand (ADR-0052 M2)', () => {
   it('undo restores the pre-resize duration (full definition), redo re-applies the new one', async () => {
     const before = activity({
       durationDays: 5,
+      durationMinutes: 2400,
       constraintType: 'SNET',
       constraintDate: '2026-02-01',
       version: 4,
     });
     const after = activity({
       durationDays: 9,
+      durationMinutes: 4320,
       constraintType: 'SNET',
       constraintDate: '2026-02-01',
       version: 5,
@@ -223,7 +226,7 @@ describe('durationResizeCommand (ADR-0052 M2)', () => {
       expect.objectContaining({
         activityId: 'a1',
         version: 5, // starts from the post-edit version
-        durationDays: 5,
+        durationMinutes: 2400,
         constraintType: 'SNET',
         constraintDate: '2026-02-01',
       }),
@@ -234,7 +237,7 @@ describe('durationResizeCommand (ADR-0052 M2)', () => {
       expect.objectContaining({
         activityId: 'a1',
         version: 101, // threaded from the undo response (100 + 1)
-        durationDays: 9,
+        durationMinutes: 4320,
       }),
     );
     expect(command.label).toBe('Resize “Excavate”');
@@ -244,13 +247,13 @@ describe('durationResizeCommand (ADR-0052 M2)', () => {
     const update = fakeUpdate();
     const first = durationResizeCommand({
       update,
-      before: activity({ durationDays: 5, version: 4 }),
-      after: activity({ durationDays: 6, version: 5 }),
+      before: activity({ durationDays: 5, durationMinutes: 2400, version: 4 }),
+      after: activity({ durationDays: 6, durationMinutes: 2880, version: 5 }),
     });
     const second = durationResizeCommand({
       update,
-      before: activity({ durationDays: 6, version: 5 }),
-      after: activity({ durationDays: 8, version: 6 }),
+      before: activity({ durationDays: 6, durationMinutes: 2880, version: 5 }),
+      after: activity({ durationDays: 8, durationMinutes: 3840, version: 6 }),
     });
     expect(first.coalescing?.key).toBe('resize:a1');
     expect(second.coalescing?.key).toBe('resize:a1');
@@ -258,10 +261,12 @@ describe('durationResizeCommand (ADR-0052 M2)', () => {
     // The history store merges same-key neighbours: merged.undo restores the OLDEST before…
     const merged = second.coalescing!.merge(first);
     await merged.undo();
-    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ durationDays: 5 }));
+    // Asserted in MINUTES: the round-trip resends the exact stored duration (ADR-0070), because
+    // resending the rounded day silently flattened a sub-day activity to zero.
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ durationMinutes: 2400 }));
     // …and merged.redo re-applies the NEWEST after.
     await merged.redo();
-    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ durationDays: 8 }));
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ durationMinutes: 3840 }));
   });
 });
 
@@ -420,14 +425,29 @@ describe('relaneCommand', () => {
 
 describe('updateCommand', () => {
   it('round-trips a definition edit: undo restores the before values, redo the after values', async () => {
-    const before = activity({ name: 'Excavate', durationDays: 5, version: 9 });
-    const after = activity({ name: 'Dig footings', durationDays: 8, version: 10 });
+    const before = activity({
+      name: 'Excavate',
+      durationDays: 5,
+      durationMinutes: 2400,
+      version: 9,
+    });
+    const after = activity({
+      name: 'Dig footings',
+      durationDays: 8,
+      durationMinutes: 3840,
+      version: 10,
+    });
     const update = fakeUpdate();
     const command = updateCommand({ update, before, after });
 
     await command.undo();
     expect(update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ activityId: 'a1', version: 10, name: 'Excavate', durationDays: 5 }),
+      expect.objectContaining({
+        activityId: 'a1',
+        version: 10,
+        name: 'Excavate',
+        durationMinutes: 2400,
+      }),
     );
 
     await command.redo();
@@ -436,14 +456,14 @@ describe('updateCommand', () => {
         activityId: 'a1',
         version: 101, // threaded from the undo response
         name: 'Dig footings',
-        durationDays: 8,
+        durationMinutes: 3840,
       }),
     );
 
     // do → undo → redo restores the post-edit state again, proving the inverse is a true round-trip.
     await command.undo();
     expect(update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ name: 'Excavate', durationDays: 5 }),
+      expect.objectContaining({ name: 'Excavate', durationMinutes: 2400 }),
     );
     expect(command.label).toBe('Edit “Excavate”');
   });
@@ -460,6 +480,7 @@ function dependency(overrides: Partial<DependencySummary> = {}): DependencySumma
     planId: 'pl1',
     type: 'FS',
     lagDays: 0,
+    lagMinutes: 0,
     lagCalendar: 'PROJECT_DEFAULT',
     predecessor: { id: 'a1', code: 'A10', name: 'Excavate' },
     successor: { id: 'a2', code: 'A20', name: 'Pour' },
@@ -575,19 +596,29 @@ describe('deleteActivityCommand', () => {
 describe('dependency add / remove commands', () => {
   it('dependencyLinkOf projects endpoints/type/lag from a row', () => {
     expect(
-      dependencyLinkOf(dependency({ type: 'SS', lagDays: 3, lagCalendar: 'TWENTY_FOUR_HOUR' })),
+      dependencyLinkOf(
+        dependency({ type: 'SS', lagDays: 3, lagMinutes: 4320, lagCalendar: 'TWENTY_FOUR_HOUR' }),
+      ),
     ).toEqual({
       planId: 'pl1',
       predecessorId: 'a1',
       successorId: 'a2',
       type: 'SS',
-      lagDays: 3,
+      lagMinutes: 4320,
       lagCalendar: 'TWENTY_FOUR_HOUR',
     });
   });
 
+  it('carries a SUB-DAY lag through the inverse rather than its rounded day (ADR-0070)', () => {
+    // A two-hour cure lag reads back as `lagDays: 0`. Projecting the day would have re-created the
+    // link with no lag at all — silently, and with no error anywhere to notice it by.
+    expect(dependencyLinkOf(dependency({ lagDays: 0, lagMinutes: 120 }))).toMatchObject({
+      lagMinutes: 120,
+    });
+  });
+
   it('add: undo removes the edge, redo re-creates it (a new id) from the captured link', async () => {
-    const created = dependency({ id: 'edge-1', type: 'FS', lagDays: 2 });
+    const created = dependency({ id: 'edge-1', type: 'FS', lagDays: 2, lagMinutes: 2880 });
     const createDependency: CreateDependencyFn = vi.fn(() =>
       Promise.resolve(dependency({ id: 'edge-2' })),
     );
@@ -603,7 +634,12 @@ describe('dependency add / remove commands', () => {
 
     await command.redo();
     expect(createDependency).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ predecessorId: 'a1', successorId: 'a2', type: 'FS', lagDays: 2 }),
+      expect.objectContaining({
+        predecessorId: 'a1',
+        successorId: 'a2',
+        type: 'FS',
+        lagMinutes: 2880,
+      }),
     );
 
     await command.undo();
@@ -612,7 +648,7 @@ describe('dependency add / remove commands', () => {
   });
 
   it('remove: undo re-creates the edge, redo removes it again', async () => {
-    const removed = dependency({ id: 'edge-9', type: 'FF', lagDays: -1 });
+    const removed = dependency({ id: 'edge-9', type: 'FF', lagDays: -1, lagMinutes: -1440 });
     const createDependency: CreateDependencyFn = vi.fn(() =>
       Promise.resolve(dependency({ id: 'edge-10' })),
     );
@@ -625,7 +661,7 @@ describe('dependency add / remove commands', () => {
 
     await command.undo(); // re-create
     expect(createDependency).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ type: 'FF', lagDays: -1 }),
+      expect.objectContaining({ type: 'FF', lagMinutes: -1440 }),
     );
     await command.redo(); // remove again
     expect(deleteDependency).toHaveBeenCalledExactlyOnceWith('edge-10');
@@ -638,6 +674,7 @@ describe('createLoeSpanCommand', () => {
     name: 'Level of effort',
     type: 'LEVEL_OF_EFFORT' as const,
     durationDays: 0,
+    durationMinutes: 0,
     laneIndex: 2,
   };
 

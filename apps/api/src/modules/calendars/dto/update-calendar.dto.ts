@@ -3,9 +3,11 @@ import type { CalendarScope } from '@prisma/client';
 import { CALENDAR_SCOPES, MAX_WORKING_WEEKDAYS_MASK, MIN_WORKING_WEEKDAYS_MASK } from '@repo/types';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -19,7 +21,7 @@ import {
 import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
 
 import { IsCalendarScopePaired } from './calendar-scope-validators';
-import { AreWindowsOrdered, CalendarShiftDto } from './calendar-shift.dto';
+import { AreWindowsOrdered, CalendarShiftDto, MAX_CALENDAR_SHIFTS } from './calendar-shift.dto';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -63,11 +65,32 @@ export class UpdateCalendarDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_CALENDAR_SHIFTS)
   @ValidateNested({ each: true })
   @Type(() => CalendarShiftDto)
   @AreWindowsOrdered()
   @IsMutuallyExclusiveWith('workingWeekdays')
   shifts?: CalendarShiftDto[];
+
+  @ApiPropertyOptional({
+    minimum: 0.25,
+    maximum: 24,
+    default: 24,
+    description:
+      'The calendar’s STANDARD WORKING DAY in hours (Primavera P6’s `day_hr_cnt`; ADR-0068). ' +
+      'This is the day↔minute factor for every day-denominated field measured on this calendar: ' +
+      'a `durationDays` of 1 is `hoursPerDay × 60` working minutes, not always 1440. May be ' +
+      'fractional (7.5). Omitted ⇒ derived from the weekly pattern being written — the modal ' +
+      'daily working hours among the days that work, or 24 for a calendar with no base week. It ' +
+      'is derived ONCE, here, and stored: a standing derivation would make this factor a ' +
+      'function of the shift rows, so shortening one Friday would silently reinterpret the ' +
+      'stored duration of every activity on this calendar.',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.25)
+  @Max(24)
+  hoursPerDay?: number;
 
   @ApiPropertyOptional({ maxLength: 2000, nullable: true })
   @IsOptional()

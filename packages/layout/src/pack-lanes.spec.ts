@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { packLanes, type LaneChange, type PackItem } from './auto-pack';
+import { packLanes, type LaneChange, type PackItem } from './pack-lanes.js';
 
 /** Apply the returned changes over the originals and assert no two items in a lane overlap in time. */
 function laneAssignment(

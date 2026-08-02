@@ -27,6 +27,7 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     scope: 'ORG',
     projectId: null,
     archivedAt: null,
+    hoursPerDayMinutes: 1440,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -569,6 +570,47 @@ describe('CalendarsService', () => {
         service.remove(principalWith(['calendar:read', 'calendar:delete']), 'acme', 'cal-1'),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect(calendars.softDeleteWithExceptions).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * A holiday on an ORG calendar is shared tenant state exactly as its weekly pattern is, so all
+   * three exception verbs take `calendar:manage_org`. Only `updateException` did, which made the
+   * rule a property of one verb rather than of the object — inert today (every role holding
+   * `calendar:update` holds `calendar:manage_org`), and these pin it against the day they split.
+   */
+  describe('scope: exception writes on an ORG calendar', () => {
+    const writer = () => principalWith(['calendar:read', 'calendar:update']);
+
+    it('forbids ADDING an exception without calendar:manage_org', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
+      await expect(
+        service.addException(writer(), 'acme', 'cal-1', { date: '2026-12-25' }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(calendars.createException).not.toHaveBeenCalled();
+    });
+
+    it('forbids REMOVING an exception without calendar:manage_org', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
+      await expect(
+        service.removeException(writer(), 'acme', 'cal-1', 'exc-1'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(calendars.softDeleteException).not.toHaveBeenCalled();
+    });
+
+    it('forbids UPDATING an exception without calendar:manage_org', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
+      await expect(
+        service.updateException(writer(), 'acme', 'cal-1', 'exc-1', { version: 1, label: 'X' }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it('refuses BEFORE looking the exception up, so the tier is not an existence oracle', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
+      await expect(
+        service.removeException(writer(), 'acme', 'cal-1', 'no-such-exception'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(calendars.findActiveExceptionByIdInCalendar).not.toHaveBeenCalled();
     });
   });
 

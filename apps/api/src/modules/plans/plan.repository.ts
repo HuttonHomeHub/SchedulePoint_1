@@ -79,6 +79,25 @@ export class PlanRepository {
     return db.plan.findFirst({ where: this.active({ id, organizationId }) });
   }
 
+  /**
+   * The default calendar of each named plan — the fallback half of an activity's effective calendar
+   * (ADR-0037), and so of its day↔minute factor (ADR-0068).
+   *
+   * One `id = ANY(...)` for a whole response rather than a lookup per activity. Deliberately **not**
+   * org-scoped: every caller has already resolved the activities through an org-scoped read, so the
+   * plan ids are derived from rows the caller is entitled to, and adding a scope here would imply a
+   * trust boundary that does not exist at this call site.
+   */
+  findCalendarIds(
+    ids: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ id: string; calendarId: string | null }[]> {
+    return db.plan.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, calendarId: true },
+    });
+  }
+
   /** A plan in an organisation in ANY state (active or soft-deleted) — used to
    * scope a restore to the caller's org before reactivating it. */
   findByIdInOrg(

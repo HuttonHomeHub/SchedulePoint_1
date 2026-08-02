@@ -39,6 +39,8 @@ export interface CaptureInput {
   isActive: boolean;
   dataDate: Date | null;
   capturedProjectFinish: Date | null;
+  /** The plan calendar's hours-per-day at capture, in minutes (ADR-0068 §5). */
+  hoursPerDayMinutes: number;
   actorId: string;
   activities: CaptureActivityRow[];
 }
@@ -76,6 +78,7 @@ export class BaselineRepository {
         isActive: input.isActive,
         dataDate: input.dataDate,
         capturedProjectFinish: input.capturedProjectFinish,
+        hoursPerDayMinutes: input.hoursPerDayMinutes,
         createdBy: input.actorId,
         updatedBy: input.actorId,
       },
@@ -230,10 +233,13 @@ export class BaselineRepository {
     organizationId: string,
     calendarId: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<PlanCalendarInput | null> {
+  ): Promise<(PlanCalendarInput & { name: string }) | null> {
     return db.calendar.findFirst({
       where: { id: calendarId, organizationId, deletedAt: null },
       select: {
+        // Only so a `CALENDAR_HAS_NO_WORKING_TIME` rejection can name the calendar to fix,
+        // matching `ScheduleRepository.loadPlanCalendar`. The engine never reads it.
+        name: true,
         shifts: {
           orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
           select: { weekday: true, startMinute: true, endMinute: true },

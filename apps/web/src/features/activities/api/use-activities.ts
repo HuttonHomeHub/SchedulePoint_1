@@ -8,6 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
+import { durationWriteFields } from '../model/duration-field';
 import {
   isDurationDerivedType,
   type ActivityFormValues,
@@ -58,15 +59,51 @@ function optional(value?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function createBody(input: ActivityFormValues) {
+/**
+ * The whole-form write input: the form's values plus the activity's effective working-hours factor
+ * (ADR-0070), which decides which of the two mutually-exclusive duration fields the body carries.
+ * Optional — absent means "the factor is not known", the degraded whole-days path.
+ */
+export type ActivityDefinitionInput = ActivityFormValues & {
+  hoursPerDay?: number;
+  /**
+   * An exact stored minute count that **overrides** `duration`. Used by round-trip callers — a
+   * canvas move, an undo restore — which hold the activity's stored value and must resend it
+   * byte-exactly, and which have no calendar list to resolve a factor from.
+   *
+   * This closes a live defect rather than avoiding a new one: those callers previously resent
+   * `durationDays`, so dragging a four-hour activity across the canvas silently rounded it to zero.
+   */
+  durationMinutes?: number;
+  /**
+   * A day-denominated override, for the canvas resize: dragging a bar edge is a **day** decision on
+   * a day-scaled diagram, so it sets days directly rather than routing through the text field.
+   * Takes precedence over `durationMinutes` for exactly that reason — a caller sending both is
+   * a round-trip spread plus a deliberate day edit, and the day edit is the one the user made.
+   */
+  durationDays?: number;
+};
+
+/** Exactly one of the two mutually-exclusive duration fields, or none when the text is unreadable. */
+function durationFields(
+  input: ActivityDefinitionInput,
+): { durationDays: number } | { durationMinutes: number } | Record<string, never> {
+  if (isDurationDerivedType(input.type)) return { durationDays: 0 };
+  if (input.durationDays !== undefined) return { durationDays: input.durationDays };
+  if (input.durationMinutes !== undefined) return { durationMinutes: input.durationMinutes };
+  return durationWriteFields(input.duration, input.hoursPerDay) ?? {};
+}
+
+function createBody(input: ActivityDefinitionInput) {
   const hasConstraint = Boolean(input.constraintType);
   const hasSecondary = Boolean(input.secondaryConstraintType);
   return {
     name: input.name,
     code: optional(input.code),
     type: input.type,
-    // A milestone has no duration — the API rejects a non-zero one.
-    durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
+    // A milestone has no duration — the API rejects a non-zero one. Otherwise exactly one of
+    // `durationDays` / `durationMinutes` (ADR-0070); sending both is a 422 by design.
+    ...durationFields(input),
     // The P6 duration type (ADR-0040). A plain activity attribute like `type`; always sent (the form
     // seeds it from the row) — the API default equals the form default, so this stays inert until a
     // driving assignment carries a rate.
@@ -115,14 +152,16 @@ function createBody(input: ActivityFormValues) {
   };
 }
 
-function updateBody(input: ActivityFormValues & { version: number; laneIndex?: number }) {
+function updateBody(input: ActivityDefinitionInput & { version: number; laneIndex?: number }) {
   const hasConstraint = Boolean(input.constraintType);
   const hasSecondary = Boolean(input.secondaryConstraintType);
   return {
     name: input.name,
     code: optional(input.code) ?? null,
     type: input.type,
-    durationDays: isDurationDerivedType(input.type) ? 0 : input.durationDays,
+    // Exactly one of `durationDays` / `durationMinutes` (ADR-0070). Text the parser cannot read
+    // emits neither, so the PATCH leaves the stored duration alone rather than zeroing it.
+    ...durationFields(input),
     // The P6 duration type (ADR-0040), always sent (seeded from the row so a hidden picker round-trips).
     // Editing the duration on an activity with a driving assignment carrying a rate recomputes that
     // assignment's units/rate server-side per this type — see the assignment refetch in onSettled.
@@ -187,7 +226,7 @@ export function useActivities(orgSlug: string, planId: string): UseQueryResult<A
 export function useCreateActivity(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ActivityFormValues) =>
+    mutationFn: (input: ActivityDefinitionInput) =>
       apiFetch<ActivitySummary>(`/organizations/${orgSlug}/plans/${planId}/activities`, {
         method: 'POST',
         body: JSON.stringify(createBody(input)),
@@ -230,7 +269,7 @@ export function useUpdateActivity(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (
-      input: { activityId: string; version: number; laneIndex?: number } & ActivityFormValues,
+      input: { activityId: string; version: number; laneIndex?: number } & ActivityDefinitionInput,
     ) =>
       apiFetch<ActivitySummary>(`/organizations/${orgSlug}/activities/${input.activityId}`, {
         method: 'PATCH',

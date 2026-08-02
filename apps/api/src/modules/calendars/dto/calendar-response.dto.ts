@@ -13,8 +13,9 @@ import type {
   CalendarWithExceptions,
   CalendarWithShifts,
 } from '../calendar.repository';
+import { MINUTES_PER_HOUR } from '../hours-per-day';
 
-import { CalendarShiftDto } from './calendar-shift.dto';
+import { CalendarExceptionWindowDto, CalendarShiftDto } from './calendar-shift.dto';
 
 /** Public representation of a calendar (list shape — no exceptions embedded). */
 export class CalendarResponseDto implements CalendarSummary {
@@ -74,6 +75,21 @@ export class CalendarResponseDto implements CalendarSummary {
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
+  @ApiProperty({
+    description:
+      'The calendar’s standard working day in hours (P6 `day_hr_cnt`; ADR-0068) — the day↔minute ' +
+      'factor for every day-denominated field measured on this calendar. May be fractional; read ' +
+      '`hoursPerDayMinutes` for the exact stored value.',
+  })
+  hoursPerDay!: number;
+
+  @ApiProperty({
+    minimum: 1,
+    maximum: 1440,
+    description: 'The stored truth behind `hoursPerDay`. `1440` is a 24-hour day.',
+  })
+  hoursPerDayMinutes!: number;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -86,15 +102,19 @@ export class CalendarResponseDto implements CalendarSummary {
       name: entity.name,
       description: entity.description,
       // Storage is intraday shift rows (ADR-0036); the public field stays a weekday mask —
-      // a weekday is "working" if it carries any shift. Every API-created calendar is
-      // full-day-per-weekday, so this round-trips exactly (richer shift calendars aren't
-      // API-authorable yet — M1 follow-on).
+      // a weekday is "working" if it carries any shift. It is a LOSSY summary and has been since
+      // `shifts` became authorable (create/update both accept them): a split shift or a half-day
+      // Friday is visible only in `shifts` below. Read that field, not this one, to know the hours.
       workingWeekdays: WorkingWeekdays.fromIndices(entity.shifts.map((shift) => shift.weekday)),
       shifts: entity.shifts.map((shift) => ({
         weekday: shift.weekday,
         startMinute: shift.startMinute,
         endMinute: shift.endMinute,
       })),
+      // Both spellings, like `durationDays` beside `durationMinutes` and for the same reason:
+      // minutes are the stored truth, and hours is the number a P6 planner types (ADR-0068).
+      hoursPerDay: entity.hoursPerDayMinutes / MINUTES_PER_HOUR,
+      hoursPerDayMinutes: entity.hoursPerDayMinutes,
       scope: entity.scope,
       projectId: entity.projectId,
       archivedAt: entity.archivedAt === null ? null : entity.archivedAt.toISOString(),
@@ -110,11 +130,38 @@ export class CalendarExceptionResponseDto implements CalendarExceptionSummary {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
-  @ApiProperty({ format: 'date', description: 'Calendar day (YYYY-MM-DD).' })
+  @ApiProperty({
+    format: 'date',
+    description: 'First calendar day of the exception (YYYY-MM-DD).',
+  })
   date!: string;
 
-  @ApiProperty({ description: 'false = holiday; true = worked exception.' })
+  @ApiProperty({
+    format: 'date',
+    description:
+      'Last calendar day of the exception, inclusive (YYYY-MM-DD). Storage holds a range ' +
+      '(ADR-0036 §2) but only a single day is authorable today, so this equals `date` for ' +
+      'every exception this API creates. Exposed because a field the client cannot see is a ' +
+      'field the client cannot be told changed.',
+  })
+  endDate!: string;
+
+  @ApiProperty({
+    description:
+      'false = holiday; true = worked exception. DERIVED from `windows` (worked ⇔ the day has ' +
+      'any window), so it can only say whether the day works at all — a half-day is visible ' +
+      'only in `windows`.',
+  })
   isWorking!: boolean;
+
+  @ApiProperty({
+    type: [CalendarExceptionWindowDto],
+    description:
+      'The hours this day actually works, as stored (ADR-0036 §2). Empty for a holiday. Without ' +
+      'this an authored half-day would be invisible the moment it was saved — the same defect ' +
+      '`shifts` fixes for the weekly pattern (TECH_DEBT #80).',
+  })
+  windows!: CalendarExceptionWindowDto[];
 
   @ApiProperty({ nullable: true, type: String })
   label!: string | null;
@@ -131,10 +178,16 @@ export class CalendarExceptionResponseDto implements CalendarExceptionSummary {
   static from(entity: CalendarExceptionWithWindows): CalendarExceptionResponseDto {
     return {
       id: entity.id,
-      // A whole-day exception is a single-day range with (worked) or without (holiday)
-      // a full-day window (ADR-0036 §2); the public shape stays `{ date, isWorking }`.
       date: formatCalendarDate(entity.startDate),
+      endDate: formatCalendarDate(entity.endDate),
+      // `isWorking` is a lossy read of the same data `windows` carries in full: a day works if it
+      // has any window at all. Kept beside `windows` rather than replaced by it — every existing
+      // client reads it, and for the whole-day case it is still the honest answer.
       isWorking: entity.windows.length > 0,
+      windows: entity.windows.map((w) => ({
+        startMinute: w.startMinute,
+        endMinute: w.endMinute,
+      })),
       label: entity.label,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),

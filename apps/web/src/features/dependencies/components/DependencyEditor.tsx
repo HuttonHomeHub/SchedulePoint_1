@@ -1,4 +1,4 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
 import type { RefObject } from 'react';
 
 import { ActivityLogicPanel } from './ActivityLogicPanel';
@@ -25,6 +25,10 @@ export function DependencyEditor({
   activity?: ActivitySummary;
   /** The plan's activities, for the add picker (self is excluded here). */
   planActivities?: ActivitySummary[];
+  /** See {@link ActivityLogicPanel} — forwarded unchanged. */
+  calendars?: CalendarSummary[];
+  /** See {@link ActivityLogicPanel} — forwarded unchanged. */
+  planCalendarId?: string;
   canManageLogic?: boolean;
   open: boolean;
   onClose: () => void;

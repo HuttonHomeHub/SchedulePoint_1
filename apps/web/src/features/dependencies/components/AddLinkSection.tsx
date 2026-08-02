@@ -1,9 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateDependency } from '../api/use-dependencies';
+import { lagHoursPerDay } from '../model/lag-factor';
+import {
+  LAG_NEEDS_WHOLE_DAYS,
+  lagFieldHelp,
+  lagFieldLabel,
+  lagInputProps,
+  lagWriteFields,
+} from '../model/lag-field';
 import {
   DEPENDENCY_TYPES,
   DEPENDENCY_TYPE_LABELS,
@@ -13,7 +21,6 @@ import {
   LINK_DIRECTIONS,
   LINK_DIRECTION_LABELS,
   dependencyFormSchema,
-  lagFieldLabel,
   type DependencyFormValues,
 } from '../schemas/dependency-schemas';
 
@@ -26,7 +33,7 @@ const DEFAULTS: DependencyFormValues = {
   direction: 'predecessor',
   otherActivityId: '',
   type: 'FS',
-  lagDays: 0,
+  lag: '0',
   lagCalendar: 'PROJECT_DEFAULT',
 };
 
@@ -52,9 +59,18 @@ export function AddLinkSection({
   options,
   gate,
   onAdded,
+  calendars = [],
+  planCalendarId,
 }: {
   orgSlug: string;
   planId: string;
+  /**
+   * The route-composed calendar library, used only to read the lag field's working-hours factor
+   * (ADR-0070 §5). Absent leaves the field in whole days — the same control the flag-off path draws.
+   */
+  calendars?: CalendarSummary[];
+  /** The plan's own calendar — what `PROJECT_DEFAULT` (and an inheriting endpoint) resolves to. */
+  planCalendarId?: string;
   /** The activity being linked. Absent ⇒ nothing to submit, so the form does not render. */
   anchor?: ActivitySummary;
   /** The plan's other activities (self already excluded). */
@@ -76,16 +92,30 @@ export function AddLinkSection({
     handleSubmit,
     reset,
     control,
+    setError,
     formState: { errors },
   } = useForm<DependencyFormValues>({
     resolver: zodResolver(dependencyFormSchema),
     defaultValues: DEFAULTS,
   });
 
-  // The lag unit tracks the chosen calendar (elapsed vs working days); subscribe to just
-  // that field so the numeric label stays honest as the selection changes.
+  // The lag unit tracks the chosen calendar (elapsed vs working time); subscribe to just that field
+  // so the label, the help line and the day↔minute factor all stay honest as the selection changes.
   const lagCalendar = useWatch({ control, name: 'lagCalendar' });
   const direction = useWatch({ control, name: 'direction' });
+  const otherActivityId = useWatch({ control, name: 'otherActivityId' });
+
+  // Which end is which depends on the **direction** field, so a PREDECESSOR lag resolves the
+  // calendar of whichever activity the form currently makes the predecessor — flipping the direction
+  // selector flips which calendar the field is measured on, which is exactly what the save will do.
+  const other = options.find((candidate) => candidate.id === otherActivityId);
+  const linkingToPredecessor = direction === 'predecessor';
+  const hoursPerDay = lagHoursPerDay(lagCalendar, {
+    calendars,
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+    predecessorCalendarId: linkingToPredecessor ? other?.calendarId : anchor?.calendarId,
+    successorCalendarId: linkingToPredecessor ? anchor?.calendarId : other?.calendarId,
+  });
 
   // The dialog reset on open; the inline form resets when the subject changes, which is the same
   // guarantee — a half-typed link never carries over to a different activity.
@@ -97,6 +127,11 @@ export function AddLinkSection({
 
   const onSubmit = handleSubmit((values) => {
     if (!anchor) return;
+    const lagFields = lagWriteFields(values.lag, hoursPerDay);
+    if (lagFields === null) {
+      setError('lag', { message: LAG_NEEDS_WHOLE_DAYS }, { shouldFocus: true });
+      return;
+    }
     // The anchor is the successor when adding a predecessor, else the predecessor.
     const predecessorId = values.direction === 'predecessor' ? values.otherActivityId : anchor.id;
     const successorId = values.direction === 'predecessor' ? anchor.id : values.otherActivityId;
@@ -106,7 +141,7 @@ export function AddLinkSection({
         predecessorId,
         successorId,
         type: values.type,
-        lagDays: values.lagDays,
+        ...lagFields,
         lagCalendar: values.lagCalendar,
       },
       {
@@ -189,10 +224,13 @@ export function AddLinkSection({
               ))}
             </SelectField>
             <TextField
-              label={lagFieldLabel(lagCalendar)}
-              type="number"
-              error={errors.lagDays?.message}
-              {...register('lagDays', { valueAsNumber: true })}
+              label={lagFieldLabel(lagCalendar, hoursPerDay)}
+              {...lagInputProps(hoursPerDay)}
+              {...(lagFieldHelp(lagCalendar, hoursPerDay) === undefined
+                ? {}
+                : { hint: lagFieldHelp(lagCalendar, hoursPerDay) })}
+              error={errors.lag?.message}
+              {...register('lag')}
             />
           </FieldGrid>
           <ScopeSaveBar

@@ -39,7 +39,10 @@ describe('exportSchedule', () => {
       const reimported = importSchedule({ content: exported.bytes });
       expect(reimported.ok).toBe(true);
       if (!reimported.ok) return;
-      expect(toComparable(reimported.graph)).toEqual(toComparable(original));
+      // Compared in the exported format's own modulo: MSPDI cannot carry the calendar tier or the
+      // standard working day, so both sides normalise those away for the MSPDI leg.
+      const modulo = format === 'mspdi' ? 'MSPDI' : 'XER';
+      expect(toComparable(reimported.graph, modulo)).toEqual(toComparable(original, modulo));
     }
   });
 });

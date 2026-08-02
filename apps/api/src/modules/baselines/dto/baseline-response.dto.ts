@@ -3,9 +3,14 @@ import type { ActivityType, Baseline, BaselineActivity } from '@prisma/client';
 import type { BaselineActivitySnapshot, BaselineDetail, BaselineSummary } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
+import { minutesToDays } from '../../activities/day-factor';
 
 /** Day↔minute factor (ADR-0036 §4.2): the frozen duration is minutes, exposed as whole days. */
-const MINUTES_PER_DAY = 1440;
+/**
+ * Day-denominated fields use the factor CAPTURED AT FREEZE (ADR-0068 §5), carried on the parent
+ * baseline row — never the live calendar's, or a calendar edit would rewrite what a two-year-old
+ * baseline reports as its captured durations.
+ */
 
 /** A baseline plus a count of its frozen activity rows — the list/summary source shape. */
 export type BaselineWithCount = Baseline & { activityCount: number };
@@ -111,14 +116,22 @@ export class BaselineActivitySnapshotResponseDto implements BaselineActivitySnap
   @ApiProperty()
   isCritical!: boolean;
 
-  static from(entity: BaselineActivity): BaselineActivitySnapshotResponseDto {
+  /**
+   * `hoursPerDayMinutes` is the PARENT baseline's frozen factor (ADR-0068 §5), passed in rather
+   * than read from the live calendar — a snapshot whose reported durations move when someone edits
+   * a calendar is not a snapshot.
+   */
+  static from(
+    entity: BaselineActivity,
+    hoursPerDayMinutes: number,
+  ): BaselineActivitySnapshotResponseDto {
     return {
       sourceActivityId: entity.sourceActivityId,
       code: entity.code,
       name: entity.name,
       type: entity.type,
       // Frozen in working-minutes (ADR-0036); the public field stays whole working days.
-      durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
+      durationDays: minutesToDays(entity.durationMinutes, hoursPerDayMinutes),
       baselineStart: entity.baselineStart ? formatCalendarDate(entity.baselineStart) : null,
       baselineFinish: entity.baselineFinish ? formatCalendarDate(entity.baselineFinish) : null,
       lateStart: entity.lateStart ? formatCalendarDate(entity.lateStart) : null,
@@ -137,7 +150,9 @@ export class BaselineDetailResponseDto extends BaselineResponseDto implements Ba
   static fromDetail(entity: BaselineWithActivities): BaselineDetailResponseDto {
     return {
       ...BaselineResponseDto.from(entity, entity.activities.length),
-      activities: entity.activities.map((a) => BaselineActivitySnapshotResponseDto.from(a)),
+      activities: entity.activities.map((a) =>
+        BaselineActivitySnapshotResponseDto.from(a, entity.hoursPerDayMinutes),
+      ),
     };
   }
 }

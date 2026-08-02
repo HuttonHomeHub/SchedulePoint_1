@@ -53,7 +53,9 @@ export async function addActivity(page: Page, name: string, durationDays?: numbe
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name').fill(name);
   if (durationDays !== undefined) {
-    await dialog.getByLabel('Duration (working days)', { exact: true }).fill(String(durationDays));
+    // Either label — see the note in `e2e-activity-editor/support.ts`. A bare number still means
+    // days on both paths (ADR-0070), so the value written is the same either way.
+    await dialog.getByLabel(/^Duration( \(working days\))?$/).fill(String(durationDays));
   }
   await dialog.getByRole('button', { name: 'Create activity' }).click();
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();

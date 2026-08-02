@@ -1,3 +1,4 @@
+import { WorkingWeekdays } from '@repo/types';
 import type { CalendarSummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +10,9 @@ function calendar(id: string, scope: CalendarSummary['scope']): CalendarSummary 
     name: id,
     description: null,
     workingWeekdays: 31,
+    shifts: WorkingWeekdays.toFullDayShifts(31),
+    hoursPerDay: 24,
+    hoursPerDayMinutes: 1440,
     scope,
     projectId: scope === 'PROJECT' ? 'proj-1' : null,
     archivedAt: null,

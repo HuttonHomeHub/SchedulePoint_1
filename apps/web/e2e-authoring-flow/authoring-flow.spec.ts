@@ -134,3 +134,82 @@ test.describe('the canvas says what it is doing', () => {
     await expect(doToolbar(page).getByRole('button', { name: 'Add', exact: true })).toBeVisible();
   });
 });
+
+/**
+ * **Losing the pen with a link pick open** (TECH_DEBT #76, the last of the two deferred test gaps).
+ *
+ * Nothing at any layer took the pen away mid-pick and asserted what happens next. It is only
+ * testable here: `assertHoldsPen` is a **server** check (ADR-0028), so a mocked fetch cannot refuse
+ * the write, and a unit test would be asserting the client's own optimism back at itself.
+ *
+ * What must hold is modest and specific. The planner has told the surface two things — "I am
+ * linking" and "the predecessor is this one" — and losing the pen invalidates neither. So the tool
+ * stays armed, the pick survives, and the 423 arrives on the **commit**, as a message rather than
+ * as a silently dropped gesture. The one thing that must NOT happen is the link appearing anyway.
+ */
+test.describe('a link pick survives losing the pen, and the write does not', () => {
+  let orgSlug: string;
+  let context: BrowserContext;
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    page = await context.newPage();
+    orgSlug = await onboard(page, Date.now() + 1);
+    await createHierarchy(page);
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  test('releasing the pen mid-pick refuses the link rather than dropping the gesture', async () => {
+    await newPlan(page, 'Pen loss');
+    await ensurePen(page);
+    const [a, b] = await seedActivities(page, orgSlug, [
+      { name: 'Excavate', laneIndex: 0 },
+      { name: 'Blind', laneIndex: 1 },
+    ]);
+    if (!a || !b) throw new Error('seeding returned fewer than two activities');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    const map = await mapBars(page);
+    const first = requireBarPoint(map, a.id, a.name);
+    const second = requireBarPoint(map, b.id, b.name);
+
+    await clearSelection(page);
+    await armLink(page);
+    await canvas(page).click({ position: first });
+    await expect(page.getByTestId('canvas-mode-band')).toContainText('from “Excavate”');
+
+    // Hand the pen back while the pick is open — the same button a planner would press.
+    await page.getByRole('button', { name: 'Stop editing' }).click();
+    await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
+
+    // The second click. Whether the client refuses locally or the API returns 423, the outcome the
+    // planner must be able to rely on is the same: no dependency.
+    await canvas(page).click({ position: second });
+    await expect(page.getByTestId('canvas-mode-band')).not.toContainText('Linked');
+    expect(await dependencies(page, orgSlug)).toHaveLength(0);
+
+    // And the plan is still usable: taking the pen back and linking properly still works, so the
+    // refused attempt left no wedged state behind. The bars are re-measured rather than reused —
+    // the mode band takes height above the scene, so a coordinate from before it appeared points
+    // at the wrong row (the `sceneTopOffset` lesson of ADR-0063, from the test's side).
+    await ensurePen(page);
+    // The refused attempt left the tool armed and the pick open — which is the point — so disarm
+    // before measuring: `mapBars` probes by clicking in `select` mode, and with Link still armed
+    // every probe would be another pick and the map would come back empty.
+    await clearSelection(page);
+    const after = await mapBars(page);
+    await clearSelection(page);
+    await armLink(page);
+    await canvas(page).click({ position: requireBarPoint(after, a.id, a.name) });
+    await expect(page.getByTestId('canvas-mode-band')).toContainText('from “Excavate”');
+    await canvas(page).click({ position: requireBarPoint(after, b.id, b.name) });
+    await expect(page.getByTestId('canvas-mode-band')).toContainText('Linked “Excavate” → “Blind”');
+    const rows = await dependencies(page, orgSlug);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ predecessorId: a.id, successorId: b.id });
+  });
+});

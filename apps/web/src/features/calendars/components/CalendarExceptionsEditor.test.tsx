@@ -1,3 +1,4 @@
+import { WorkingWeekdays } from '@repo/types';
 import type { CalendarDetail } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -20,6 +21,9 @@ const DETAIL: CalendarDetail = {
   name: 'Standard',
   description: null,
   workingWeekdays: 31,
+  shifts: WorkingWeekdays.toFullDayShifts(31),
+  hoursPerDay: 24,
+  hoursPerDayMinutes: 1440,
   // Every fixture is a shared organisation calendar — the only tier before ADR-0053.
   scope: 'ORG',
   projectId: null,
@@ -31,7 +35,10 @@ const DETAIL: CalendarDetail = {
     {
       id: 'ex-1',
       date: '2026-12-25',
+      endDate: '2026-12-25',
       isWorking: false,
+      // A holiday is the empty window set; `isWorking` is the derived read of exactly that.
+      windows: [],
       label: 'Christmas Day',
       version: 1,
       createdAt: '2026-01-01T00:00:00Z',

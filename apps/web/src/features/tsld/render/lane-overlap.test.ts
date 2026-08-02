@@ -1,9 +1,9 @@
+import { packLanes } from '@repo/layout';
 import { describe, expect, it } from 'vitest';
 
-import { packLanes } from './auto-pack';
 import { laneOverlapIds, type LaneSpan } from './lane-overlap';
 
-/** A whole-day offset from 2026-01-01 as a `YYYY-MM-DD` string, to bridge auto-pack's day-number
+/** A whole-day offset from 2026-01-01 as a `YYYY-MM-DD` string, to bridge the packer's day-number
  * spans to this module's date-string spans in the cross-consistency test below. */
 function dayToIso(n: number): string {
   return new Date(Date.UTC(2026, 0, 1 + n)).toISOString().slice(0, 10);
@@ -31,7 +31,7 @@ describe('laneOverlapIds', () => {
   });
 
   it('does not flag bars that abut but do not overlap (finish strictly before next start)', () => {
-    // a finishes 01-10, b starts 01-11 — share a lane legally (mirrors auto-pack's strict rule).
+    // a finishes 01-10, b starts 01-11 — share a lane legally (mirrors the packer's strict rule).
     const result = laneOverlapIds([
       span('a', 0, '2026-01-01', '2026-01-10'),
       span('b', 0, '2026-01-11', '2026-01-20'),
@@ -84,7 +84,7 @@ describe('laneOverlapIds', () => {
     expect(laneOverlapIds([span('a', 0, '2026-01-01', '2026-01-10')]).size).toBe(0);
   });
 
-  it('agrees with auto-pack: applying its packing clears every overlap the detector would flag', () => {
+  it('agrees with the shared packer: applying its packing clears every overlap the detector would flag', () => {
     // The two share the inclusive-span rule ("neither finishes strictly before the other starts").
     // This guards the invariant that auto-arrange never leaves an overlap the cue would then show —
     // if either implementation drifts, the packed arrangement would report a residual overlap here.

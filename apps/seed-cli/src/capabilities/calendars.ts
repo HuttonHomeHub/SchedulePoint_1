@@ -12,12 +12,11 @@ const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
  * so the only reason the bars differ is the calendar. Per-activity calendars are ADR-0037's whole
  * point and this is the smallest picture that shows them working.
  *
- * What this plan **cannot** demonstrate is stated plainly rather than skipped: every calendar here
- * has full-day `[0, 1440)` windows, because `fullDayShiftsFromMask` in `calendar.repository.ts`
- * derives shifts from the weekday mask on **every** write path — the API, the importer and the web
- * app alike. ADR-0036's split shifts, night shifts crossing midnight and asymmetric week patterns
- * exist in the engine and in storage and can be authored by nothing. See `coverage.ts` and
- * TECH_DEBT #80.
+ * Every calendar here has full-day `[0, 1440)` windows **by choice**, so the only variable is which
+ * days work. The intraday half of ADR-0036 — split shifts, nights crossing midnight, asymmetric
+ * weeks — is `capability-shift-calendars`, a sibling plan whose calendars work identical DAYS and
+ * different HOURS. (This docblock previously said those shapes "can be authored by nothing", which
+ * was true when it was written and stopped being true in api-v0.34.0.)
  */
 export function calendarsPlan(): SeedSpec {
   return capabilityPlan({

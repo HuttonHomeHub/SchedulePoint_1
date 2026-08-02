@@ -163,6 +163,15 @@ export const canonicalCalendarSchema = z
      * unchanged and lands project-local rather than in the shared organisation library.
      */
     sourceType: canonicalCalendarSourceTypeSchema.default('PROJECT'),
+    /**
+     * The calendar's standard working day in hours — P6's `day_hr_cnt` (ADR-0068). It is the
+     * day↔minute factor for every duration and lag measured on the calendar, so dropping it on
+     * import silently retimes the whole imported plan by the ratio between it and 24.
+     *
+     * Optional because MSPDI has no equivalent field: absent means "the target's default", which
+     * is what an import into SchedulePoint has always got.
+     */
+    hoursPerDay: z.number().positive().max(24).optional(),
     workWeek: canonicalWorkWeekSchema,
     exceptions: z.array(canonicalCalendarExceptionSchema),
   })

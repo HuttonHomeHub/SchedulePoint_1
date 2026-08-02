@@ -1,0 +1,35 @@
+{
+  "name": "@repo/layout",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure lane-layout substrate: the greedy first-fit lane packer shared by the TSLD canvas's Auto-arrange and the interchange importer. Knows how to ARRANGE bars; never how to draw or persist one.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist .turbo coverage *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@types/node": "^22.10.7",
+    "eslint": "^9.39.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

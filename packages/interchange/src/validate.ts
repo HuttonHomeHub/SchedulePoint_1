@@ -2,9 +2,11 @@ import type { CanonicalActivityStatus } from './canonical.js';
 import type {
   ImportActivity,
   ImportAssignment,
+  ImportCalendar,
   ImportDependency,
   ImportGraph,
   ImportResource,
+  ImportWorkWindow,
 } from './import-graph.js';
 import type { ReportFinding } from './report.js';
 
@@ -27,6 +29,8 @@ import type { ReportFinding } from './report.js';
  *   8. **Cycle** → break the deterministically-chosen edge until the graph is acyclic (ADR-0021).
  *   9. **Resources / assignments** (ADR-0039/0040) → null an unresolved resource calendar; drop dangling /
  *      duplicate assignments; demote a `MATERIAL` driver and any second driver on an activity.
+ *  10. **Calendar windows** (ADR-0036 §2 / ADR-0068) → sort, drop empty and merge overlapping working
+ *      windows within each day; raise a below-floor `hoursPerDay` to the domain's minimum.
  */
 
 export interface ValidateResult {
@@ -631,6 +635,147 @@ function repairResourcesAndAssignments(
   return { resources: resolvedResources, assignments: result };
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// Calendar windows (ADR-0036 §2) + the standard working day (ADR-0068).
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * The smallest standard working day the domain accepts, in hours — the `@Min(0.25)` on the public
+ * calendar DTOs. Stated here because the importer **bypasses those DTOs**: it persists in bulk, so a
+ * bound only the DTO knows about is a bound the import path does not have.
+ *
+ * The failure it closes is quiet. `hours_per_day_minutes` is stored as `Math.round(hours × 60)`, so a
+ * source file carrying a `day_hr_cnt` of, say, `0.004` rounds to **zero** minutes and hits the column's
+ * own CHECK — a 500 during commit, naming a constraint rather than a calendar.
+ */
+const MIN_HOURS_PER_DAY = 0.25;
+
+/**
+ * Sort, drop-empty and merge one day's working windows, reporting each change.
+ *
+ * The engine's `buildWorkingTimeCalendar` asserts that windows are in-bounds, ordered and
+ * non-overlapping, and the public DTO's `AreWindowsOrdered` **rejects** a violation at the boundary so
+ * a planner is told which pair they got wrong. An import has neither of those: it writes the rows the
+ * mapper produced straight to storage, so a source file whose windows overlap surfaces as an opaque
+ * 500 from a recalculation days later, pointing at the plan rather than at the file.
+ *
+ * So this repairs rather than rejects — the choice every other import approximation already makes, and
+ * the right one here because the shape is almost always a source-side artefact (P6 emits per-shift rows
+ * with no cross-row ordering guarantee) rather than something the importing organisation could fix.
+ * Merging is deliberate over clipping: two overlapping windows describe working time, and taking their
+ * union preserves every minute either of them claimed. A window with `start >= end` claims none, so it
+ * goes.
+ */
+function repairDayWindows(
+  windows: readonly ImportWorkWindow[],
+  report: (detail: string, reason: string) => void,
+  where: string,
+): ImportWorkWindow[] {
+  const usable = windows.filter((w) => {
+    if (w.startMinute < w.endMinute) return true;
+    report(
+      `${where}: empty window ${w.startMinute}–${w.endMinute} dropped`,
+      'a working window must start before it ends (ADR-0036 §2)',
+    );
+    return false;
+  });
+
+  const sorted = [...usable].sort((a, b) =>
+    a.startMinute !== b.startMinute ? a.startMinute - b.startMinute : a.endMinute - b.endMinute,
+  );
+  const reordered = sorted.some((w, i) => w !== usable[i]);
+  if (reordered) {
+    report(
+      `${where}: windows re-ordered by start time`,
+      'working windows are stored in start order within a day (ADR-0036 §2)',
+    );
+  }
+
+  const merged: ImportWorkWindow[] = [];
+  for (const window of sorted) {
+    const previous = merged[merged.length - 1];
+    if (previous !== undefined && window.startMinute < previous.endMinute) {
+      const endMinute = Math.max(previous.endMinute, window.endMinute);
+      report(
+        `${where}: overlapping windows ${previous.startMinute}–${previous.endMinute} and ` +
+          `${window.startMinute}–${window.endMinute} merged into ${previous.startMinute}–${endMinute}`,
+        'working windows within a day may not overlap (ADR-0036 §2)',
+      );
+      merged[merged.length - 1] = { startMinute: previous.startMinute, endMinute };
+      continue;
+    }
+    merged.push(window);
+  }
+  return merged;
+}
+
+/** Weekday names for a finding a planner has to act on — `weekday 3` names nothing they can see. */
+const WEEKDAY_NAMES = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+] as const;
+
+/**
+ * Repair each calendar's weekly pattern and dated exception windows, and its standard working day.
+ * Shifts are repaired **per weekday** — the array covers the whole week, and ordering is only defined
+ * within a day (a Tuesday window is not "after" a Monday one).
+ */
+function repairCalendars(calendars: ImportCalendar[], findings: ReportFinding[]): ImportCalendar[] {
+  return calendars.map((calendar) => {
+    const report = (detail: string, reason: string): void => {
+      findings.push({
+        kind: 'repair',
+        entity: 'calendar',
+        sourceRef: calendar.key,
+        detail: `calendar "${calendar.name}" ${detail}`,
+        reason,
+      });
+    };
+
+    const byWeekday = new Map<number, ImportWorkWindow[]>();
+    for (const shift of calendar.shifts) {
+      const day = byWeekday.get(shift.weekday);
+      if (day === undefined) byWeekday.set(shift.weekday, [shift]);
+      else day.push(shift);
+    }
+    const shifts = [...byWeekday.keys()]
+      .sort((a, b) => a - b)
+      .flatMap((weekday) =>
+        repairDayWindows(
+          byWeekday.get(weekday) ?? [],
+          report,
+          WEEKDAY_NAMES[weekday] ?? `weekday ${String(weekday)}`,
+        ).map((window) => ({ ...window, weekday })),
+      );
+
+    const exceptions = calendar.exceptions.map((exception) => ({
+      ...exception,
+      windows: repairDayWindows(exception.windows, report, `exception ${exception.startDate}`),
+    }));
+
+    let { hoursPerDay } = calendar;
+    if (hoursPerDay !== undefined && hoursPerDay < MIN_HOURS_PER_DAY) {
+      report(
+        `standard working day of ${hoursPerDay} h raised to ${MIN_HOURS_PER_DAY} h`,
+        `a standard working day below ${MIN_HOURS_PER_DAY} h rounds to zero stored minutes (ADR-0068)`,
+      );
+      hoursPerDay = MIN_HOURS_PER_DAY;
+    }
+
+    return {
+      ...calendar,
+      shifts,
+      exceptions,
+      ...(hoursPerDay === undefined ? {} : { hoursPerDay }),
+    };
+  });
+}
+
 /** Validate + repair the import graph, producing a domain-valid, acyclic graph and its findings. */
 export function validateAndRepair(graph: ImportGraph): ValidateResult {
   const findings: ReportFinding[] = [];
@@ -649,7 +794,8 @@ export function validateAndRepair(graph: ImportGraph): ValidateResult {
   dependencies = repairDuplicateEdges(dependencies, findings);
   dependencies = repairCycles(dependencies, codeByKey, findings);
 
-  const calendarKeys = new Set(graph.calendars.map((c) => c.key));
+  const calendars = repairCalendars(graph.calendars, findings);
+  const calendarKeys = new Set(calendars.map((c) => c.key));
   const { resources, assignments } = repairResourcesAndAssignments(
     graph.resources,
     graph.assignments,
@@ -658,5 +804,8 @@ export function validateAndRepair(graph: ImportGraph): ValidateResult {
     findings,
   );
 
-  return { graph: { ...graph, activities, dependencies, resources, assignments }, findings };
+  return {
+    graph: { ...graph, calendars, activities, dependencies, resources, assignments },
+    findings,
+  };
 }

@@ -27,8 +27,19 @@ export class GuestDependencyDto {
   @ApiProperty({ enum: DependencyType })
   type!: DependencyType;
 
-  @ApiProperty({ description: 'Signed lag in working days (a lead is negative).' })
+  @ApiProperty({
+    description:
+      'Signed lag in working days (a lead is negative), rounded from the stored minutes. A ' +
+      'sub-day lag reads back here as 0 — read `lagMinutes` for the exact value.',
+  })
   lagDays!: number;
+
+  @ApiProperty({
+    description:
+      'Signed lag in working MINUTES — what is stored and what the engine applied (ADR-0036). ' +
+      'The exact form of a field already exposed, for the same reason as `durationMinutes`.',
+  })
+  lagMinutes!: number;
 
   static from(entity: DependencyWithEndpoints): GuestDependencyDto {
     return {
@@ -36,8 +47,9 @@ export class GuestDependencyDto {
       predecessorId: entity.predecessorId,
       successorId: entity.successorId,
       type: entity.type,
-      // Stored as signed working-minutes (ADR-0036); the public field stays signed days.
+      // Stored as signed working-minutes (ADR-0036); both forms are exposed.
       lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY),
+      lagMinutes: entity.lagMinutes,
     };
   }
 }

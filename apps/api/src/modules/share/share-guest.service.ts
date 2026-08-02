@@ -5,6 +5,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { GuestPrincipal } from '../../common/auth/guest-principal';
 import { NotFoundError } from '../../common/errors/domain-errors';
 import { ActivityRepository } from '../activities/activity.repository';
+import { attachDayFactors } from '../activities/day-factor';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { PlanRepository } from '../plans/plan.repository';
@@ -88,8 +89,15 @@ export class ShareGuestService {
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
     const { items, meta } = this.paginate(rows, query.limit);
+    // Day-denominated fields are measured on each activity's effective calendar (ADR-0068), so a
+    // guest reads the same durations a member does. The plan's calendar is one lookup for the page;
+    // a per-activity calendar resolves itself.
+    const planCalendarIds = new Map<string, string | null>(
+      (await this.plans.findCalendarIds([guest.planId])).map((p) => [p.id, p.calendarId]),
+    );
+    const decorated = await attachDayFactors(this.calendars, items, planCalendarIds);
     this.touchAccess(guest.shareId);
-    return { items: items.map((row) => GuestActivityDto.from(row)), meta };
+    return { items: decorated.map((row) => GuestActivityDto.from(row)), meta };
   }
 
   /** A cursor-paginated page of the plan's dependency edges, stripped to the guest scope. */

@@ -182,6 +182,13 @@ export const seedCalendarSchema = z
     name: z.string().min(1).max(120),
     /** ADR-0053 §1. A `PROJECT` calendar is pinned to the seed's target project. */
     scope: seedCalendarScopeSchema,
+    /**
+     * The standard working day in HOURS (ADR-0068) — P6's `day_hr_cnt`, the day↔minute factor for
+     * every day-denominated field measured on this calendar. `null` means "let the API derive it
+     * from the week below", which is right for every calendar that does not deliberately disagree
+     * with its own hours; a plan proving the factor sets it explicitly.
+     */
+    hoursPerDay: z.number().positive().max(24).nullable(),
     days: z.array(seedCalendarDaySchema),
     exceptions: z.array(seedCalendarExceptionSchema),
   })

@@ -73,14 +73,37 @@ export function useSuccessors(
   return useQuery({ ...successorsQueryOptions(orgSlug, activityId), enabled });
 }
 
+/**
+ * The signed lag, in exactly one of the two units the API accepts. Sending both is a 422 by design
+ * (`@IsMutuallyExclusiveWith`), so this is a union rather than two optional fields — the compiler
+ * refuses the call that would have been rejected at the boundary.
+ *
+ * `lagMinutes` is the exact unit (ADR-0036); `lagDays` is a convenience the server converts on the
+ * relationship's lag calendar (ADR-0068 §4). A caller that knows the working-hours factor sends
+ * minutes; one that does not sends days, which needs no factor.
+ */
+export type LagInput = { lagDays: number } | { lagMinutes: number };
+
 /** A dependency create — predecessor → successor within a plan, with type + lag + lag calendar. */
-export interface CreateDependencyInput {
+export type CreateDependencyInput = {
   planId: string;
   predecessorId: string;
   successorId: string;
   type: DependencyType;
-  lagDays: number;
   lagCalendar: LagCalendarSource;
+} & LagInput;
+
+/** A dependency update — the mutable fields plus the row's optimistic `version`. */
+export type UpdateDependencyInput = {
+  dependencyId: string;
+  type: DependencyType;
+  lagCalendar: LagCalendarSource;
+  version: number;
+} & LagInput;
+
+/** Whichever of the two lag units this input carries — spread into the request body verbatim. */
+function lagBody(input: LagInput): LagInput {
+  return 'lagMinutes' in input ? { lagMinutes: input.lagMinutes } : { lagDays: input.lagDays };
 }
 
 // Editing any link changes what an activity's predecessors/successors lists show
@@ -103,7 +126,7 @@ export function useCreateDependency(orgSlug: string) {
           predecessorId: input.predecessorId,
           successorId: input.successorId,
           type: input.type,
-          lagDays: input.lagDays,
+          ...lagBody(input),
           lagCalendar: input.lagCalendar,
         }),
       }),
@@ -114,18 +137,12 @@ export function useCreateDependency(orgSlug: string) {
 export function useUpdateDependency(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
-      dependencyId: string;
-      type: DependencyType;
-      lagDays: number;
-      lagCalendar: LagCalendarSource;
-      version: number;
-    }) =>
+    mutationFn: (input: UpdateDependencyInput) =>
       apiFetch<DependencySummary>(`/organizations/${orgSlug}/dependencies/${input.dependencyId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           type: input.type,
-          lagDays: input.lagDays,
+          ...lagBody(input),
           lagCalendar: input.lagCalendar,
           version: input.version,
         }),

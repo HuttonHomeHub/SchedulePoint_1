@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { CalendarScope, CalendarSummary } from '@repo/types';
-import { STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
-import { useEffect, useId, type Ref } from 'react';
+import { deriveHoursPerDayMinutes, STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from '@repo/types';
+import { useEffect, useId, useState, type Ref } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 
 import { useCreateCalendar, useUpdateCalendar } from '../api/use-calendars';
+import { presetWeek } from '../model/presets';
+import { hasIntradayDetail } from '../model/shift-summary';
 import {
   calendarFormSchema,
   CALENDAR_SCOPE_LABELS,
@@ -15,6 +17,14 @@ import {
 
 import { CalendarExceptionsEditor } from './CalendarExceptionsEditor';
 import { CalendarScopeBadge } from './CalendarScopeBadge';
+import {
+  emptyWeek,
+  shiftsToWeekRows,
+  WeeklyShiftEditor,
+  weekRowsToShifts,
+  type WeekProblem,
+  type WeekRows,
+} from './WeeklyShiftEditor';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -24,7 +34,7 @@ import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ToggleChip } from '@/components/ui/toggle-chip';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
+import { CALENDAR_SHIFT_EDITOR_ENABLED, LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { calendarErrorMessage } from '@/lib/api/calendar-scope-errors';
 
 /**
@@ -108,6 +118,20 @@ const ORG_TIER_DENIED_MESSAGE =
  * tier read-only: moving a calendar between tiers is a deliberate, separately-confirmed action (it
  * can be refused when the calendar is still in use), never a side effect of renaming it.
  */
+/**
+ * The hours-per-day a seeded week implies — the same derivation the server applies when the field
+ * is omitted, so a newly-opened create dialog shows the figure it would get by saying nothing.
+ */
+function hoursPerDayOf(week: WeekRows): number {
+  const parsed = weekRowsToShifts(week);
+  return parsed.ok ? deriveHoursPerDayMinutes(parsed.shifts) / 60 : 24;
+}
+
+/** `9` and `7.5`, never `9.00` — the field accepts quarter hours, so trailing zeros are noise. */
+function formatHours(hours: number): string {
+  return String(Math.round(hours * 100) / 100);
+}
+
 export function CalendarFormDialog({
   orgSlug,
   open,
@@ -159,6 +183,7 @@ export function CalendarFormDialog({
     register,
     control,
     handleSubmit,
+    setValue,
     reset,
     formState: { errors },
   } = useForm<CalendarFormValues>({
@@ -188,10 +213,125 @@ export function CalendarFormDialog({
   const blockedByOrgPermission =
     noTierAvailable || (showScopeChoice && orgTierUnavailable && chosenScope !== 'PROJECT');
 
+  // Flag OFF the week is seven checkboxes, which cannot express a split shift or a half-day
+  // (ADR-0036 §2) — so say so rather than letting the form imply the mask is the whole truth.
+  // Flag ON the editor expresses it, and the advisory would be false.
+  const weekIsSimplified =
+    !CALENDAR_SHIFT_EDITOR_ENABLED && isEdit && hasIntradayDetail(calendar.shifts);
+
+  // The shift editor's rows live outside React Hook Form: they are TEXT the planner is mid-way
+  // through typing, across seven days, and RHF's value/validation model would have to be told that
+  // `8:` is a legitimate intermediate state. Seeded on open, parsed once at submit.
+  const [week, setWeek] = useState<WeekRows>(emptyWeek);
+  const [weekProblems, setWeekProblems] = useState<WeekProblem[]>([]);
+  // Seeded by ADJUSTING STATE DURING RENDER rather than in an effect (React's documented pattern
+  // for "reset state when a prop changes"). An effect would set state after paint — one frame of
+  // last calendar's hours on screen — and a cascading re-render the lint rule correctly objects to.
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  const seedKey = `${String(open)}:${calendar?.id ?? 'new'}`;
+  if (CALENDAR_SHIFT_EDITOR_ENABLED && open && seededFor !== seedKey) {
+    setSeededFor(seedKey);
+    // A NEW calendar starts from the Standard week preset — Mon–Fri 08:00–17:00 — not from a
+    // full-day Mon–Fri. The old seed made every hand-made calendar a 24-hour one whose activities
+    // then scheduled three times too fast, which is the defect the hours-per-day field exists to
+    // stop; a construction calendar that works round the clock is the rare case, and it is now one
+    // click away (the 24/7 preset).
+    const seededWeek =
+      calendar === undefined ? presetWeek('standard') : shiftsToWeekRows(calendar.shifts);
+    setWeek(seededWeek);
+    setWeekProblems([]);
+    // The calendar's standard working day (ADR-0068). Seeded from the stored value so an edit that
+    // touches nothing else sends it back unchanged; a NEW calendar takes the figure the server
+    // would derive from the week seeded above, so the two can never open disagreeing.
+    setValue('hoursPerDay', calendar?.hoursPerDay ?? hoursPerDayOf(seededWeek));
+  }
+
+  // What the authored week implies, shown beside the field rather than forced into it: the two are
+  // legitimately different (a P6 `day_hr_cnt` of 8 on a calendar with a 10-hour Saturday is
+  // ordinary), so this advises and never overwrites.
+  const parsedWeek = CALENDAR_SHIFT_EDITOR_ENABLED ? weekRowsToShifts(week) : null;
+  const suggestedHoursId = useId();
+  const dayFactorWarningId = useId();
+  const suggestedHoursPerDay =
+    parsedWeek?.ok === true ? deriveHoursPerDayMinutes(parsedWeek.shifts) / 60 : null;
+  // `useWatch`, not `watch()` — the file's existing convention, and the memoization-safe one.
+  const hoursPerDayValue = useWatch({ control, name: 'hoursPerDay' }) ?? 24;
+  const showSuggestedHours =
+    suggestedHoursPerDay !== null && suggestedHoursPerDay !== hoursPerDayValue;
+  // Only on an EDIT, and only once the number actually differs from what is stored — a create has
+  // no existing durations to re-read, and warning about a value nobody changed is noise.
+  const dayFactorChanged =
+    CALENDAR_SHIFT_EDITOR_ENABLED &&
+    isEdit &&
+    Number.isFinite(hoursPerDayValue) &&
+    hoursPerDayValue !== calendar.hoursPerDay;
+
+  /**
+   * Edit the week, and — **only once problems are already on screen** — re-check as it changes.
+   *
+   * Validating from the first keystroke would flag `8:` while a planner is still typing `8:30`,
+   * which is why the check originally ran on Save alone. But the mirror of that is worse: after a
+   * failed Save, a row corrected to something valid kept its red message until the planner pressed
+   * Save again to find out, so the form could not tell them they had finished. This is React Hook
+   * Form's own `reValidateMode: 'onChange'` rule, applied to the one piece of state RHF does not
+   * hold: quiet until you submit, live afterwards.
+   */
+  const reviseWeek = (next: WeekRows): void => {
+    setWeek(next);
+    if (weekProblems.length === 0) return;
+    const parsed = weekRowsToShifts(next);
+    setWeekProblems(parsed.ok ? [] : parsed.problems);
+  };
+
   const onSubmit = handleSubmit((values) => {
+    if (CALENDAR_SHIFT_EDITOR_ENABLED) {
+      const parsed = weekRowsToShifts(week);
+      if (!parsed.ok) {
+        // Stop here rather than sending a body the API will reject: the planner is looking at the
+        // rows, and the server's message would name a pair rather than a row.
+        setWeekProblems(parsed.problems);
+        announce(`This calendar’s hours need attention: ${String(parsed.problems.length)} to fix.`);
+        return;
+      }
+      setWeekProblems([]);
+      const { workingWeekdays: _mask, ...rest } = values;
+      const body = { ...rest, shifts: parsed.shifts };
+      if (isEdit) {
+        update.mutate(
+          { calendarId: calendar.id, version: calendar.version, ...body },
+          {
+            onSuccess: () => {
+              announce(`Calendar “${values.name}” saved.`);
+              onClose();
+            },
+          },
+        );
+      } else {
+        create.mutate(body, {
+          onSuccess: () => {
+            announce(`Calendar “${values.name}” created.`);
+            onClose();
+          },
+        });
+      }
+      return;
+    }
+
     if (isEdit) {
+      // Send `workingWeekdays` ONLY when the planner actually changed it. The repository replaces
+      // every shift row whenever this field is present, so a rename-only save used to silently
+      // flatten a split shift to whole days — no error, no cue, and visible only in the request
+      // body (spec Q0). Omitting it leaves the stored week untouched, which is what "I renamed a
+      // calendar" should mean.
+      const weekChanged = values.workingWeekdays !== calendar.workingWeekdays;
+      const { workingWeekdays, ...rest } = values;
       update.mutate(
-        { calendarId: calendar.id, version: calendar.version, ...values },
+        {
+          calendarId: calendar.id,
+          version: calendar.version,
+          ...rest,
+          ...(weekChanged ? { workingWeekdays } : {}),
+        },
         {
           onSuccess: () => {
             announce(`Calendar “${values.name}” saved.`);
@@ -215,7 +355,10 @@ export function CalendarFormDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      size={isEdit ? 'lg' : 'md'}
+      // Both paths take `lg` while the shift editor is on: create now renders the full seven-day
+      // week plus the standard-working-day section, which `md` (448px) was sized for a name, a
+      // description and seven checkboxes.
+      size={isEdit || CALENDAR_SHIFT_EDITOR_ENABLED ? 'lg' : 'md'}
       title={title}
       {...(isEdit ? {} : { description: 'Define a reusable working-day pattern.' })}
     >
@@ -321,24 +464,90 @@ export function CalendarFormDialog({
               />
             </FormSection>
 
-            <FormSection
-              title="Working week"
-              description="The days work happens on. Everything scheduled on this calendar counts its duration in these days."
-            >
-              <Controller
-                control={control}
-                name="workingWeekdays"
-                render={({ field }) => (
-                  <WeekdayToggleGroup
-                    value={field.value}
-                    onChange={field.onChange}
-                    disabled={readOnly}
-                    groupRef={field.ref}
-                    error={errors.workingWeekdays?.message}
+            {CALENDAR_SHIFT_EDITOR_ENABLED ? (
+              <>
+                <WeeklyShiftEditor
+                  week={week}
+                  onChange={reviseWeek}
+                  problems={weekProblems}
+                  readOnly={readOnly}
+                />
+                <FormSection
+                  title="Standard working day"
+                  description="How many hours “one day” means on this calendar. An activity of 1 day is this many hours of work — so on an 08:00–17:00 week, one day is 9 hours and not 24."
+                >
+                  <TextField
+                    label="Hours per day"
+                    type="number"
+                    step="0.25"
+                    min={0.25}
+                    max={24}
+                    readOnly={readOnly}
+                    error={errors.hoursPerDay?.message}
+                    className="sm:w-40"
+                    // BOTH notes are linked, not merely adjacent. Proximity is a sighted-reader
+                    // convention: a screen-reader user who tabs here would otherwise hear the
+                    // label and the validation error and nothing about the fact that this number
+                    // re-reads every duration on the calendar.
+                    aria-describedby={
+                      [
+                        showSuggestedHours ? suggestedHoursId : null,
+                        dayFactorChanged ? dayFactorWarningId : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined
+                    }
+                    {...register('hoursPerDay', { valueAsNumber: true })}
                   />
-                )}
-              />
-            </FormSection>
+                  {showSuggestedHours ? (
+                    <p id={suggestedHoursId} className="text-muted-foreground text-sm">
+                      The week above works {formatHours(suggestedHoursPerDay)} hours on a typical
+                      day. Leaving this at {formatHours(hoursPerDayValue)} is allowed — P6 calendars
+                      often do — but the two numbers mean different things and only this one
+                      converts durations.
+                    </p>
+                  ) : null}
+                  {dayFactorChanged ? (
+                    // A DESCRIPTION, not a live region. It is derived from a value the planner is
+                    // still typing, so `role="alert"` interrupted on every keystroke — announcing a
+                    // transition rather than a settled result, the opposite of the rule this
+                    // project states for status messages. Linked above, it is read when the field
+                    // is reached and when it is re-read, which is when it matters.
+                    <p id={dayFactorWarningId} className="text-destructive-text text-sm">
+                      Changing this re-reads every existing duration on this calendar. No dates move
+                      and no work is rescheduled — the stored hours are unchanged — but an activity
+                      showing “10 days” today will show a different number of days after you save.
+                    </p>
+                  ) : null}
+                </FormSection>
+              </>
+            ) : (
+              <FormSection
+                title="Working week"
+                description="The days work happens on. Everything scheduled on this calendar counts its duration in these days."
+              >
+                {weekIsSimplified ? (
+                  <p className="text-muted-foreground text-sm" role="note">
+                    This calendar works specific hours — a split shift or a part day. The days below
+                    show <em>which</em> days work, not their hours. Changing them replaces those
+                    hours with whole days; leave them alone and the hours are kept.
+                  </p>
+                ) : null}
+                <Controller
+                  control={control}
+                  name="workingWeekdays"
+                  render={({ field }) => (
+                    <WeekdayToggleGroup
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={readOnly}
+                      groupRef={field.ref}
+                      error={errors.workingWeekdays?.message}
+                    />
+                  )}
+                />
+              </FormSection>
+            )}
           </div>
 
           <div className="border-border flex justify-end gap-2 border-t pt-4">
@@ -348,7 +557,11 @@ export function CalendarFormDialog({
             {readOnly ? null : (
               <Button
                 type="submit"
-                disabled={mutation.isPending || blockedByOrgPermission}
+                // `aria-disabled` + the class pair, never the native attribute: a natively disabled
+                // submit is blurred to `<body>` the instant it flips, and it flips twice per save
+                // (ADR-0060 M6). The `pointer-events-none` is what makes it genuinely inert.
+                className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                aria-disabled={mutation.isPending || blockedByOrgPermission}
                 aria-busy={mutation.isPending}
               >
                 {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create calendar'}

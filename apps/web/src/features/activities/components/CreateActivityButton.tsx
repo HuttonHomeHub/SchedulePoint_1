@@ -18,6 +18,7 @@ export function CreateActivityButton({
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
+  planCalendarId,
   planActivities = [],
   planActivitiesLoading = false,
   planActivitiesError = false,
@@ -27,6 +28,13 @@ export function CreateActivityButton({
   calendars?: CalendarSummary[];
   calendarsLoading?: boolean;
   calendarsError?: boolean;
+  /**
+   * The plan's own calendar — what a new activity's empty `calendarId` ("inherit") resolves to, and
+   * so the working-hours factor its duration field reads (ADR-0070 §3). Absent leaves that field in
+   * whole working days, which is why it was missing here for a milestone: the field rendered, looked
+   * right, and quietly refused `4h` on the one surface where every activity is first created.
+   */
+  planCalendarId?: string;
   /** The plan's activities (the dialog derives WBS summaries from these), for the parent picker. */
   planActivities?: ActivitySummary[];
   planActivitiesLoading?: boolean;
@@ -42,6 +50,7 @@ export function CreateActivityButton({
         open={open}
         onClose={() => setOpen(false)}
         calendars={calendars}
+        {...(planCalendarId === undefined ? {} : { planCalendarId })}
         calendarsLoading={calendarsLoading}
         calendarsError={calendarsError}
         planActivities={planActivities}

@@ -2,10 +2,14 @@ import { ApiProperty } from '@nestjs/swagger';
 import { DependencyType, LagCalendarSource } from '@prisma/client';
 import type { DependencyEndpoint, DependencySummary } from '@repo/types';
 
+import { minutesToDays } from '../../activities/day-factor';
 import type { DependencyWithEndpoints } from '../dependency.repository';
+import type { WithLagDayFactor } from '../lag-day-factor';
 
-/** Day↔minute factor (ADR-0036 §4.2): lag is stored in signed minutes, exposed as signed days. */
-const MINUTES_PER_DAY = 1440;
+/**
+ * `lagDays` is measured on the calendar this relationship's `lagCalendar` names (ADR-0068 §4), so
+ * the factor is attached PER ROW — one page of a plan's logic can legitimately need several.
+ */
 
 /** The public shape of a dependency's endpoint activity. */
 class DependencyEndpointDto implements DependencyEndpoint {
@@ -36,8 +40,10 @@ export class DependencyResponseDto implements DependencySummary {
 
   @ApiProperty({
     description:
-      'Signed lag in working days (a lead is negative), ROUNDED from the stored minutes. Read ' +
-      '`lagMinutes` for the exact value of a sub-day lag.',
+      'Signed lag in working days (a lead is negative), ROUNDED from the stored minutes. A day ' +
+      'is the standard working day of THIS RELATIONSHIP’S LAG CALENDAR (ADR-0068) — an ' +
+      'eight-hour calendar counts 480 minutes to the day; `TWENTY_FOUR_HOUR` is pinned at 1440. ' +
+      'Read `lagMinutes` for the exact value of a sub-day lag.',
   })
   lagDays!: number;
 
@@ -77,14 +83,14 @@ export class DependencyResponseDto implements DependencySummary {
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: DependencyWithEndpoints): DependencyResponseDto {
+  static from(entity: WithLagDayFactor<DependencyWithEndpoints>): DependencyResponseDto {
     return {
       id: entity.id,
       planId: entity.planId,
       type: entity.type,
       // Stored as signed working-minutes (ADR-0036). Both exposed: days for existing clients,
       // minutes so a sub-day lag survives the round trip.
-      lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY),
+      lagDays: minutesToDays(entity.lagMinutes, entity.lagDayFactorMinutes),
       lagMinutes: entity.lagMinutes,
       lagCalendar: entity.lagCalendar,
       predecessor: {

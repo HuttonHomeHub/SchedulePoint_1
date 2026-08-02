@@ -72,7 +72,9 @@ export class CreateActivityDto {
     minimum: 0,
     default: 1,
     description:
-      'Duration in working days (0 for milestones). Mutually exclusive with `durationMinutes`.',
+      'Duration in working days (0 for milestones). A day is the standard working day of the ' +
+      'calendar this activity will schedule on (ADR-0068), so 5 days on an eight-hour calendar ' +
+      'stores 2400 minutes, not 7200. Mutually exclusive with `durationMinutes`, which is exact.',
   })
   @IsOptional()
   @Type(() => Number)

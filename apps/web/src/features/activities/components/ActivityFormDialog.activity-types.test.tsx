@@ -30,6 +30,7 @@ const BASE_LOE: ActivitySummary = {
   description: null,
   type: 'LEVEL_OF_EFFORT',
   durationDays: 0,
+  durationMinutes: 0,
   constraintType: null,
   constraintDate: null,
   secondaryConstraintType: null,

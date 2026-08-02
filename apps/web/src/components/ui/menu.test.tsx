@@ -184,3 +184,39 @@ describe('Menu', () => {
     expect((await axe(screen.getByRole('menu'))).violations).toEqual([]);
   });
 });
+
+/**
+ * A modal `<dialog>` lives in the browser's TOP LAYER, above the entire normal stacking context —
+ * `z-50` on a sibling of `<body>` is not lower, it is in a different layer, and no z-index reaches
+ * it. A menu portalled to `document.body` from inside a dialog therefore rendered *underneath* it:
+ * present in the DOM, announced to assistive tech, and completely unclickable. Every consumer until
+ * the calendar shift editor opened its menu from a page, so this shipped unseen until a Playwright
+ * journey drove one from inside a dialog and the click retried for thirty seconds.
+ */
+describe('Menu — portal target', () => {
+  it('mounts inside the topmost open modal dialog, not on document.body', () => {
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('open', '');
+    document.body.append(dialog);
+
+    render(
+      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="In a dialog">
+        <MenuItem onSelect={vi.fn()}>Only item</MenuItem>
+      </Menu>,
+    );
+
+    const menu = screen.getByRole('menu', { name: 'In a dialog' });
+    expect(dialog.contains(menu)).toBe(true);
+    dialog.remove();
+  });
+
+  it('falls back to document.body when no dialog is open', () => {
+    render(
+      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="On a page">
+        <MenuItem onSelect={vi.fn()}>Only item</MenuItem>
+      </Menu>,
+    );
+    const menu = screen.getByRole('menu', { name: 'On a page' });
+    expect(menu.parentElement).toBe(document.body);
+  });
+});

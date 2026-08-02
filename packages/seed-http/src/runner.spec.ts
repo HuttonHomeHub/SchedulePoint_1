@@ -48,6 +48,19 @@ function acceptEverything(): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
+/** {@link acceptEverything}, but recording each write so a test can assert the body it sent. */
+function recordingFetch(calls: { url: string; body: Record<string, unknown> }[]): typeof fetch {
+  let n = 0;
+  return vi.fn((url: string, init?: RequestInit) => {
+    n += 1;
+    const method = init?.method ?? 'GET';
+    if (method === 'GET') return Promise.resolve(json(200, { data: [] }));
+    const raw = typeof init?.body === 'string' ? init.body : '{}';
+    calls.push({ url, body: JSON.parse(raw) as Record<string, unknown> });
+    return Promise.resolve(json(method === 'POST' ? 201 : 200, { data: { id: `id-${n}` } }));
+  }) as unknown as typeof fetch;
+}
+
 function minimalSpec(overrides: Partial<SeedSpec> = {}): SeedSpec {
   return {
     seedName: 'unit-test',
@@ -120,29 +133,24 @@ describe('seedPlan', () => {
     expect(result.planId).not.toBeNull();
   });
 
-  it('records a rounding when a duration is not a whole number of days', async () => {
-    globalThis.fetch = acceptEverything();
+  /**
+   * ADR-0068. The seeder used to round a sub-day duration to whole days and report the loss, because
+   * `durationDays` was the only spelling the API took. `durationMinutes` closed that (TECH_DEBT #78),
+   * and sending minutes now also sidesteps the day factor entirely: a "day" means the calendar's
+   * working day, so a day-denominated seed would mean different things on different calendars.
+   */
+  it('seeds a sub-day duration faithfully, with nothing to approximate', async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    globalThis.fetch = recordingFetch(calls);
     const result = await seedPlan(
       new SeedClient({ baseUrl: 'http://x' }),
       target,
-      // 4 hours = 240 minutes. The public API takes only an integer `durationDays` (TECH_DEBT #78),
-      // so this cannot be created faithfully by ANY client — and the report has to say so, or the
-      // seeded plan quietly claims to be the fixture when it is a rounded copy.
       minimalSpec({ activities: [activity('A1', 240)] }),
     );
-    expect(result.approximations).toHaveLength(1);
-    expect(result.approximations[0]?.detail).toContain('240 min');
-    expect(result.approximations[0]?.reason).toContain('whole working days');
-  });
-
-  it('does not record a rounding when the duration is already whole days', async () => {
-    globalThis.fetch = acceptEverything();
-    const result = await seedPlan(
-      new SeedClient({ baseUrl: 'http://x' }),
-      target,
-      minimalSpec({ activities: [activity('A1', 2880)] }),
-    );
     expect(result.approximations).toHaveLength(0);
+    const created = calls.find((c) => c.url.endsWith('/activities'));
+    expect(created?.body.durationMinutes).toBe(240);
+    expect(created?.body).not.toHaveProperty('durationDays');
   });
 
   it('sets WBS parentage in one batched write, not one PATCH per child', async () => {
@@ -267,39 +275,71 @@ describe('the payload contracts the real API enforces', () => {
     expect(body.physicalPercentComplete).toBe(25);
   });
 
-  it('sends the working week as a Monday-indexed 7-bit mask', async () => {
+  it('sends the working week as Monday-indexed shift rows, windows and all', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;
     await seedPlan(
       new SeedClient({ baseUrl: 'http://x' }),
       target,
-      // Monday–Friday. The spec model numbers 0 = Sunday; the API's mask is Monday-indexed, so this
-      // is `0b0011111` = 31. Off by one bit and the calendar is still valid — it just describes a
-      // different week, and nothing anywhere fails.
+      // Monday–Friday. The spec model numbers 0 = Sunday; storage is Monday-indexed, so these are
+      // weekdays 0–4. Off by one and the calendar is still valid — it just describes a different
+      // week, and nothing anywhere fails, which is why this is asserted rather than assumed.
       minimalSpec({ calendars: [calendar({ workingWeekdays: [1, 2, 3, 4, 5] })] }),
     );
     const create = callsOf(fetchMock).find(
       (c) => c.method === 'POST' && c.url.endsWith('/calendars'),
     );
     const body = JSON.parse(create?.body ?? '{}') as Record<string, unknown>;
-    expect(body.workingWeekdays).toBe(0b0011111);
+    expect(body.shifts).toEqual(
+      [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
+    );
+    // The mask form could only say WHICH days work, never their hours — the whole point of ADR-0067.
+    expect(body).not.toHaveProperty('workingWeekdays');
   });
 
-  it('reports a window-only calendar rather than inventing a working week for it', async () => {
+  /** Two windows on one day is the shape the mask could not express at all. */
+  it('sends both windows of a two-shift day, in ascending order', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;
+    const twoShift = {
+      ...calendar({ workingWeekdays: [1] }),
+      days: [
+        { weekday: 1, windows: [{ startMinute: 840, endMinute: 1320 }] },
+        { weekday: 2, windows: [{ startMinute: 360, endMinute: 840 }] },
+      ],
+    };
+    await seedPlan(
+      new SeedClient({ baseUrl: 'http://x' }),
+      target,
+      minimalSpec({ calendars: [twoShift] }),
+    );
+    const create = callsOf(fetchMock).find(
+      (c) => c.method === 'POST' && c.url.endsWith('/calendars'),
+    );
+    const body = JSON.parse(create?.body ?? '{}') as Record<string, unknown>;
+    expect(body.shifts).toEqual([
+      { weekday: 0, startMinute: 840, endMinute: 1320 },
+      { weekday: 1, startMinute: 360, endMinute: 840 },
+    ]);
+  });
+
+  /**
+   * ADR-0036 has always supported a non-working base week whose work comes entirely from dated
+   * windows. The API refused it until TECH_DEBT #79 closed, and this file went on reporting a
+   * finding that quoted a `@Min(1)` no longer in the code — the exact drift ADR-0058 names. It is
+   * now seeded like any other calendar, so the catalogue's turnaround plan is a faithful copy.
+   */
+  it('creates a window-only calendar rather than refusing it', async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    globalThis.fetch = recordingFetch(calls);
     const result = await seedPlan(
       new SeedClient({ baseUrl: 'http://x' }),
       target,
       minimalSpec({ calendars: [calendar({ workingWeekdays: [] })] }),
     );
-    // ADR-0036 supports a non-working base week whose work comes entirely from dated windows; the
-    // API's `@Min(1)` forbids it (TECH_DEBT #79). Fudging in a Monday would make the plan schedule
-    // differently from the catalogue and say nothing about it, so it is a finding and no POST.
-    expect(result.findings.map((f) => f.code)).toContain('WINDOW_ONLY_CALENDAR_UNSUPPORTED');
-    expect(
-      callsOf(fetchMock).some((c) => c.method === 'POST' && c.url.endsWith('/calendars')),
-    ).toBe(false);
+    expect(result.findings.map((f) => f.code)).not.toContain('WINDOW_ONLY_CALENDAR_UNSUPPORTED');
+    const created = calls.find((c) => c.url.endsWith('/calendars'));
+    expect(created?.body.shifts).toEqual([]);
   });
 
   it('writes one exception row per date, first-wins on a duplicate', async () => {
@@ -360,6 +400,7 @@ function calendar(
     key: 'CAL-1',
     name: 'Test calendar',
     scope: 'PROJECT',
+    hoursPerDay: null,
     days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
       weekday,
       windows: overrides.workingWeekdays.includes(weekday)

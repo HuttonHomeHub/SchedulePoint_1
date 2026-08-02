@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -160,6 +161,9 @@ describe('ScheduleService.recalculate', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       schedule as unknown as ScheduleRepository,
+      // The day-factor lookup (ADR-0068). Empty ⇒ the 24-hour constant, so every float assertion
+      // below reads exactly the arithmetic it always did.
+      { findHoursPerDayMinutes: () => Promise.resolve(new Map()) } as unknown as CalendarRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       crossPlan as unknown as CrossPlanDependencyRepository,
@@ -211,7 +215,9 @@ describe('ScheduleService.recalculate', () => {
 
   it('is a no-op write for an empty plan and returns a zeroed summary', async () => {
     const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
-    expect(schedule.writeResults).toHaveBeenCalledWith(ORG_ID, PLAN_ID, [], {});
+    // The fourth argument is the per-activity day↔minute factor map (ADR-0068 §3a) — empty
+    // for an empty plan, like the results array beside it.
+    expect(schedule.writeResults).toHaveBeenCalledWith(ORG_ID, PLAN_ID, [], new Map(), {});
     expect(summary).toMatchObject({
       dataDate: '2026-01-01',
       projectFinish: null,
@@ -692,6 +698,9 @@ describe('ScheduleService.summary', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       schedule as unknown as ScheduleRepository,
+      // The day-factor lookup (ADR-0068). Empty ⇒ the 24-hour constant, so every float assertion
+      // below reads exactly the arithmetic it always did.
+      { findHoursPerDayMinutes: () => Promise.resolve(new Map()) } as unknown as CalendarRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       crossPlan as unknown as CrossPlanDependencyRepository,
@@ -835,6 +844,9 @@ describe('ScheduleService.getEarnedValue', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       schedule as unknown as ScheduleRepository,
+      // The day-factor lookup (ADR-0068). Empty ⇒ the 24-hour constant, so every float assertion
+      // below reads exactly the arithmetic it always did.
+      { findHoursPerDayMinutes: () => Promise.resolve(new Map()) } as unknown as CalendarRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
@@ -924,6 +936,9 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       schedule as unknown as ScheduleRepository,
+      // The day-factor lookup (ADR-0068). Empty ⇒ the 24-hour constant, so every float assertion
+      // below reads exactly the arithmetic it always did.
+      { findHoursPerDayMinutes: () => Promise.resolve(new Map()) } as unknown as CalendarRepository,
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,

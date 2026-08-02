@@ -1,4 +1,4 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -32,6 +32,8 @@ export function ActivityLogicPanel({
   planId,
   activity,
   planActivities,
+  calendars = [],
+  planCalendarId,
   canManageLogic = false,
   manageLogicReason,
   enabled = true,
@@ -48,6 +50,14 @@ export function ActivityLogicPanel({
   activity?: ActivitySummary;
   /** The plan's activities, for the add picker (self is excluded here). */
   planActivities?: ActivitySummary[];
+  /**
+   * The route-composed calendar library, forwarded to the two lag fields so they can read their
+   * working-hours factor (ADR-0070 §5). Absent leaves both in whole days — the degraded control,
+   * which is the same one the flag-off path draws.
+   */
+  calendars?: CalendarSummary[];
+  /** The plan's own calendar — what `PROJECT_DEFAULT` (and an inheriting endpoint) resolves to. */
+  planCalendarId?: string;
   canManageLogic?: boolean;
   /**
    * Why this member cannot add or change links, when {@link canManageLogic} is false. Supplying it
@@ -137,6 +147,14 @@ export function ActivityLogicPanel({
     ? (planActivities ?? []).filter((candidate) => candidate.id !== activity.id)
     : [];
 
+  // What both tables need to read a lag on its own lag calendar (ADR-0070 M4) — grouped so the two
+  // cannot be given different answers about the same link.
+  const lagReadout = {
+    calendars,
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+    planActivities: planActivities ?? [],
+  };
+
   // Shown to anyone who may add links, and to a member the host can explain the refusal to.
   // Without a reason it stays hidden — a shaded form with no explanation is the dead end the
   // house rule forbids, and a Viewer should not see one at all.
@@ -206,6 +224,7 @@ export function ActivityLogicPanel({
               endpoint="predecessor"
               caption="Predecessors"
               emptyLabel="No predecessors — nothing has to finish before this activity."
+              {...lagReadout}
               {...editHandlers}
             />
           </section>
@@ -216,6 +235,7 @@ export function ActivityLogicPanel({
               endpoint="successor"
               caption="Successors"
               emptyLabel="No successors — this activity doesn’t drive anything yet."
+              {...lagReadout}
               {...editHandlers}
             />
           </section>
@@ -226,6 +246,8 @@ export function ActivityLogicPanel({
               orgSlug={orgSlug}
               planId={planId}
               options={others}
+              calendars={calendars}
+              {...(planCalendarId === undefined ? {} : { planCalendarId })}
               gate={{ writable: canManageLogic, reason: manageLogicReason ?? null }}
               {...(activity ? { anchor: activity } : {})}
               {...(onAdded ? { onAdded } : {})}
@@ -246,6 +268,9 @@ export function ActivityLogicPanel({
             orgSlug={orgSlug}
             open={editing !== undefined}
             onClose={() => setEditingId(null)}
+            calendars={calendars}
+            {...(planCalendarId === undefined ? {} : { planCalendarId })}
+            planActivities={planActivities ?? []}
             {...(editing ? { dependency: editing } : {})}
           />
           <ConfirmDialog

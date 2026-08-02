@@ -31,6 +31,7 @@ function activity(): ActivitySummary {
     description: null,
     type: 'TASK',
     durationDays: 3,
+    durationMinutes: 1440,
     constraintType: null,
     constraintDate: null,
     secondaryConstraintType: null,

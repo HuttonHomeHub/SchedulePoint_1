@@ -527,8 +527,11 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(
       await prisma.calendar.count({ where: { organizationId: orgId, name: 'Site 6-Day' } }),
     ).toBe(1);
-    // Deterministic lanes: sequential by source order (0, 1).
-    expect(activities.map((a) => a.laneIndex)).toEqual([0, 1]);
+    // Lanes are PACKED, not source order (ADR-0069). These two are an FS chain — one
+    // finishes before the other starts — so they share a lane rather than taking one each. Before
+    // phase 3 this asserted `[0, 1]`, which is the defect stated as a test: every imported activity
+    // got its own lane, so a 500-activity file opened as 500 lanes holding one bar apiece.
+    expect(activities.map((a) => a.laneIndex)).toEqual([0, 0]);
     // Recalculated: the engine wrote early dates onto the activities.
     expect(activities.every((a) => a.earlyStart !== null)).toBe(true);
   });
@@ -570,9 +573,25 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     });
     expect(await prisma.activity.count({ where: { planId } })).toBe(2000);
     expect(await prisma.activityDependency.count({ where: { planId } })).toBe(2599);
-    // The whole request (batched persist + recalc) stays comfortably under a generous CI bound; the
-    // persist transaction alone is a handful of `createMany`s, far under the 5s interactive-txn timeout.
+    // The whole request (batched persist + recalc + layout) stays comfortably under a generous CI
+    // bound; the persist transaction alone is a handful of `createMany`s, far under the 5s
+    // interactive-txn timeout.
     expect(elapsedMs).toBeLessThan(60_000);
+
+    // **The readability claim, at the scale it matters** (ADR-0069). Source order gave every
+    // activity its own lane, so this plan opened as 2,000 lanes with one bar each — the canvas
+    // equivalent of a 2,000-page document with one word per page. Packed, the lane count is a
+    // function of how many activities genuinely overlap in time, which on any real programme is a
+    // small fraction of its size.
+    const lanes = await prisma.activity.findMany({
+      where: { planId },
+      select: { laneIndex: true },
+    });
+    const distinctLanes = new Set(lanes.map((a) => a.laneIndex)).size;
+    expect(distinctLanes).toBeLessThan(2000 / 4);
+    // Lanes are contiguous from 0 — a packer that left gaps would draw empty rows through the
+    // middle of the diagram, which reads as missing work rather than as spare room.
+    expect(Math.max(...lanes.map((a) => a.laneIndex))).toBe(distinctLanes - 1);
   }, 60_000);
 
   it('rolls back the whole transaction when a create fails mid-way (nothing created)', async () => {
@@ -927,6 +946,35 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     // The plan really uses it (the tier did not break the binding).
     const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.calendarId).toBe(imported.id);
+  });
+
+  it('stores the file’s own shift windows and standard working day, not a flattened 24-hour week', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .expect(201);
+
+    const imported = await prisma.calendar.findFirstOrThrow({
+      where: { organizationId: orgId, name: 'Site 6-Day', deletedAt: null },
+      include: { shifts: { orderBy: { weekday: 'asc' } } },
+    });
+
+    // The fixture works P6 days 2–6 — Monday–Friday — 08:00–16:00. Every window used to be
+    // flattened to a whole day, so an imported eight-hour calendar scheduled as a 24-hour one
+    // (ADR-0036/0067).
+    expect(imported.shifts.map((s) => [s.weekday, s.startMinute, s.endMinute])).toEqual([
+      [0, 480, 960],
+      [1, 480, 960],
+      [2, 480, 960],
+      [3, 480, 960],
+      [4, 480, 960],
+    ]);
+    // And P6's `day_hr_cnt` of 8 is the stored day↔minute factor (ADR-0068) — with the old default
+    // of 1440 the file's own 40-hour task read back as 0.6 days.
+    expect(imported.hoursPerDayMinutes).toBe(480);
   });
 
   it('maps each clndr_type to its tier: CA_Project/CA_Base → project, a resource’s CA_Rsrc → org', async () => {

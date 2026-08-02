@@ -13,6 +13,8 @@ import {
 } from '@repo/types';
 import { z } from 'zod';
 
+import { durationTextField } from '../model/duration-field';
+
 import { moneyMajorAmount } from '@/lib/money-schema';
 
 // The constraint labels live in the shared lib so the form, the table, and the TSLD
@@ -191,7 +193,10 @@ export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
  * fields live in a separate editor). `constraintType` is `''` for "none";
  * `constraintDate` / `code` are raw `<input>` values. Cross-field rules: a
  * constraint needs a type and a date together (the API enforces this too).
- * `durationDays` is a number; the dialog forces it to 0 for milestone types.
+ *
+ * `duration` is raw text validated for **syntax only** (ADR-0070) — the day↔minute conversion needs
+ * the activity's calendar, which the form resolves at submit rather than here. See
+ * `durationTextField`.
  */
 export const activityFormSchema = z
   .object({
@@ -203,13 +208,10 @@ export const activityFormSchema = z
     // values; only editable behind `VITE_DURATION_TYPES`, but always seeded from the row so a stored
     // value round-trips even with the picker hidden. Defaults to the API default.
     durationType: z.enum(DURATION_TYPES),
-    // Registered with `valueAsNumber`, so this is a number (NaN for an empty
-    // field, which `.int()` rejects with the message below).
-    durationDays: z
-      .number({ message: 'Enter a whole number of days.' })
-      .int('Enter a whole number of days.')
-      .min(0, 'Duration cannot be negative.')
-      .max(100000, 'Duration is too large.'),
+    // Raw text (ADR-0070). `duration`, not `durationDays`, because what it holds depends on the
+    // calendar: `2d 4h` when the factor is known, a whole number of days when it is not. The
+    // day↔minute conversion happens once, at submit, in `durationWriteFields`.
+    duration: durationTextField(),
     constraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
     constraintDate: z.string().optional(),
     // Optional SECONDARY constraint (ADR-0035 §10, M4): the primary drives the forward pass, this the

@@ -59,6 +59,9 @@ export function ActivityBottomPanel({
               calendars={model.calendars.data ?? []}
               calendarsLoading={model.calendars.isPending}
               calendarsError={model.calendars.isError}
+              {...(model.plan.data?.calendarId == null
+                ? {}
+                : { planCalendarId: model.plan.data.calendarId })}
               planActivities={model.activities.data ?? []}
               planActivitiesLoading={model.activities.isPending}
               planActivitiesError={model.activities.isError}
@@ -89,6 +92,9 @@ export function ActivityBottomPanel({
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
           calendarsError={model.calendars.isError}
+          {...(model.plan.data?.calendarId == null
+            ? {}
+            : { planCalendarId: model.plan.data.calendarId })}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
             : {})}

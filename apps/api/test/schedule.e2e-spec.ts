@@ -709,6 +709,102 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     }
   });
 
+  it('schedules on an exception day’s authored hours, not the whole day (TECH_DEBT #80)', async () => {
+    const { actor } = await adminWithOrg();
+    // Mon 2 Mar 2026. A window-only base week (TECH_DEBT #79) plus one dated window (#80) — the
+    // turnaround shape, and the case where the two halves are only useful together: the calendar
+    // has NO working time at all except the hours authored on this one day.
+    const planId = await makePlan(actor, 'TurnaroundCal', '2026-03-02');
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'Turnaround window', workingWeekdays: 0 })
+      .expect(201);
+    const calId = cal.body.data.id as string;
+    // Four working hours on each of two consecutive days — 08:00–12:00, and the only working
+    // time the calendar has at all.
+    for (const date of ['2026-03-02', '2026-03-03']) {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/calendars/${calId}/exceptions`)
+        .send({ date, windows: [{ startMinute: 480, endMinute: 720 }] })
+        .expect(201);
+    }
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: calId, version: 2 })
+      .expect(200);
+
+    // Eight working hours (TECH_DEBT #78's `durationMinutes`, which this needs to be expressible
+    // at all) against two four-hour days.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Shutdown', durationMinutes: 480 })
+      .expect(201);
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    // THE DISCRIMINATING ASSERTION. Reading the authored windows, 8 hours needs both days →
+    // finishes Tue 3 Mar. Reading the exception as a WHOLE worked day — which is all the API
+    // could store before this milestone — 8 hours fits inside Mon alone → Mon 2 Mar. The two
+    // readings give different answers, which is the point: a test that passed either way would
+    // prove only that the row was written.
+    expect(res.body.data.projectFinish).toBe('2026-03-03');
+    const t = (await activitiesByName(actor, planId)).get('Shutdown')!;
+    expect(t).toMatchObject({ earlyStart: '2026-03-02', earlyFinish: '2026-03-03' });
+  });
+
+  /**
+   * A calendar with an empty week and no working exception is a state a planner can reach in two
+   * clicks, and it answered an opaque 500 — a user-caused, user-fixable mistake reported as a
+   * server fault, naming neither the calendar nor the fix. It became reachable when TECH_DEBT #79
+   * accepted `workingWeekdays: 0` at the DTO (`api-v0.34.0`) WITHOUT mapping the engine guard
+   * that had always backed it; the window-only shape and its rejection shipped one release apart.
+   */
+  it('refuses a calendar with no working time with a 422 that names it, not a 500', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'EmptyCal', '2026-03-02');
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'Nothing works', workingWeekdays: 0 })
+      .expect(201);
+    const calId = cal.body.data.id as string;
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: calId, version: 2 })
+      .expect(200);
+    await makeActivity(actor, planId, 'X', 1);
+
+    const res = await actor.agent.post(recalcUrl(planId)).expect(422);
+    expect(res.body.error).toMatchObject({
+      details: { reason: 'CALENDAR_HAS_NO_WORKING_TIME', calendarId: calId },
+    });
+    // The message names the offending calendar and what to add — the two things the 500 withheld.
+    expect(res.body.error.message).toContain('Nothing works');
+    expect(res.body.error.message).toContain('exception');
+  });
+
+  it('accepts the same calendar once a working exception gives it hours', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'TurnaroundOk', '2026-03-02');
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'Turnaround', workingWeekdays: 0 })
+      .expect(201);
+    const calId = cal.body.data.id as string;
+    // The window-only shape is VALID — that is the whole point of TECH_DEBT #79, and the reason
+    // the empty case above is a 422 with a fix rather than a rejection of the shape itself.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/calendars/${calId}/exceptions`)
+      .send({ date: '2026-03-02', isWorking: true })
+      .expect(201);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: calId, version: 2 })
+      .expect(200);
+    await makeActivity(actor, planId, 'X', 1);
+
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+    expect(res.body.data.projectFinish).toBe('2026-03-02');
+  });
+
   it('null-calendar recalc is byte-identical to M6 (all-days regression)', async () => {
     // makePlan clears the calendar, so this is the M6 golden baseline: A(3)→B(4)→D(5)→E(1)
     // finishes 2026-01-13 all-days (proven in the first case above), unaffected by M5.

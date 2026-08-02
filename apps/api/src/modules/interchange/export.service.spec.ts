@@ -72,6 +72,8 @@ function calendarRow(scope: 'ORG' | 'PROJECT' = 'PROJECT'): Record<string, unkno
     name: 'Site 5-Day',
     // The ADR-0053 tier, emitted to the file as `clndr_type` so an export→import round trip keeps it.
     scope,
+    // Eight worked hours a day (ADR-0068), emitted to the file as `day_hr_cnt`.
+    hoursPerDayMinutes: 480,
     shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
     exceptions: [
       {

@@ -12,6 +12,7 @@ import {
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ActivityRepository } from '../activities/activity.repository';
+import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
@@ -146,8 +147,10 @@ function dependency(): DependencyWithEndpoints {
     updatedBy: USER_ID,
     deletedAt: null,
     deleteBatchId: null,
-    predecessor: { id: PRED_ID, code: null, name: 'Pred' },
-    successor: { id: SUCC_ID, code: null, name: 'Succ' },
+    // `calendarId` rides on the endpoint join because a lag's day factor is resolved from the
+    // end its `lagCalendar` names (ADR-0068 §4). null = inherits the plan's.
+    predecessor: { id: PRED_ID, code: null, name: 'Pred', calendarId: null },
+    successor: { id: SUCC_ID, code: null, name: 'Succ', calendarId: null },
   };
 }
 
@@ -168,7 +171,10 @@ const ALL: Permission[] = [
 
 describe('DependenciesService', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
-  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let plans: {
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findCalendarIds: ReturnType<typeof vi.fn>;
+  };
   let activities: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let deps: {
     create: ReturnType<typeof vi.fn>;
@@ -180,6 +186,7 @@ describe('DependenciesService', () => {
     lockPlanForWrite: ReturnType<typeof vi.fn>;
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
   };
+  let calendars: { findHoursPerDayMinutes: ReturnType<typeof vi.fn> };
   let lifecycle: { cascadeSoftDelete: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: DependenciesService;
@@ -188,7 +195,10 @@ describe('DependenciesService', () => {
     organizations = {
       resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
     };
-    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    plans = {
+      findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()),
+      findCalendarIds: vi.fn().mockResolvedValue([]),
+    };
     activities = {
       findActiveByIdInOrg: vi.fn((id: string) => Promise.resolve(activity(id))),
     };
@@ -202,6 +212,9 @@ describe('DependenciesService', () => {
       lockPlanForWrite: vi.fn().mockResolvedValue(undefined),
       updateIfVersionMatches: vi.fn(),
     };
+    // The day-factor lookup (ADR-0068). Empty: every lag falls back to the 24-hour constant, so
+    // every assertion below reads the arithmetic it always did.
+    calendars = { findHoursPerDayMinutes: vi.fn().mockResolvedValue(new Map()) };
     lifecycle = { cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }) };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
     const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
@@ -210,6 +223,7 @@ describe('DependenciesService', () => {
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       activities as unknown as ActivityRepository,
+      calendars as unknown as CalendarRepository,
       deps as unknown as DependencyRepository,
       lifecycle as unknown as HierarchyLifecycleService,
       editLock as unknown as PlanEditLockService,

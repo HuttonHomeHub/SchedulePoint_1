@@ -100,6 +100,7 @@ const ACTIVITY: ActivitySummary = {
   description: null,
   type: 'TASK',
   durationDays: 5,
+  durationMinutes: 2400,
   constraintType: null,
   constraintDate: null,
   secondaryConstraintType: null,
@@ -158,12 +159,14 @@ const LOE: ActivitySummary = {
   name: 'Level of effort',
   type: 'LEVEL_OF_EFFORT',
   durationDays: 0,
+  durationMinutes: 0,
 };
 const DEPENDENCY = {
   id: 'dep-1',
   planId: 'p1',
   type: 'SS',
   lagDays: 0,
+  lagMinutes: 0,
   lagCalendar: 'PROJECT_DEFAULT',
   predecessor: { id: 'start', code: null, name: 'Excavate' },
   successor: { id: 'loe-1', code: null, name: 'Level of effort' },

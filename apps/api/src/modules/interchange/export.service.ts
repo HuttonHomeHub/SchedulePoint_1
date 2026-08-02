@@ -13,6 +13,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../common/err
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { ActivityRepository } from '../activities/activity.repository';
 import { CalendarRepository, type CalendarWithExceptions } from '../calendars/calendar.repository';
+import { MINUTES_PER_HOUR } from '../calendars/hours-per-day';
 import { DependencyRepository, type ExportEdge } from '../dependencies/dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -262,6 +263,9 @@ export class ExportService {
       // calendar — into the file's own type field (P6 `clndr_type`), so an export→import round trip
       // preserves the tier instead of flattening every calendar into the receiving org's library.
       scope: calendar.scope,
+      // The standard working day (ADR-0068) — the exporter writes it as P6's `day_hr_cnt`, so a
+      // round trip re-reads durations in days at the length this calendar actually means by a day.
+      hoursPerDay: calendar.hoursPerDayMinutes / MINUTES_PER_HOUR,
       shifts: calendar.shifts.map((s) => ({
         weekday: s.weekday,
         startMinute: s.startMinute,

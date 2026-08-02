@@ -11,6 +11,7 @@ function dependency(over: Partial<DependencySummary> = {}): DependencySummary {
     planId: 'p1',
     type: 'SS',
     lagDays: 2,
+    lagMinutes: 960,
     lagCalendar: 'PROJECT_DEFAULT',
     predecessor: { id: 'a1', code: 'A10', name: 'Excavate' },
     successor: { id: 'a2', code: 'A20', name: 'Pour' },

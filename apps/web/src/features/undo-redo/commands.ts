@@ -6,7 +6,7 @@ import type {
 } from '@repo/types';
 
 import type { PlacedActivityInput } from '@/features/activities/api/use-activities';
-import type { ActivityFormValues } from '@/features/activities/schemas/activity-schemas';
+import type { ActivityDefinitionInput } from '@/features/activities/api/use-activities';
 import { minorToMajorInput } from '@/lib/format-money';
 
 /**
@@ -87,7 +87,7 @@ export type UpdateActivityInput = {
   activityId: string;
   version: number;
   laneIndex?: number;
-} & ActivityFormValues;
+} & ActivityDefinitionInput;
 
 /** `useUpdateActivity().mutateAsync` — resolves to the saved activity, carrying the new `version`. */
 export type UpdateActivityFn = (input: UpdateActivityInput) => Promise<ActivitySummary>;
@@ -109,13 +109,18 @@ export type RepositionLaneFn = (input: {
  * canvas reposition rewrites the primary constraint AND resends every other definition field, so only
  * a full-snapshot restore reliably reverses whatever the edit changed.
  */
-export function activityDefinitionInput(activity: ActivitySummary): ActivityFormValues {
+export function activityDefinitionInput(activity: ActivitySummary): ActivityDefinitionInput {
   return {
     name: activity.name,
     code: activity.code ?? '',
     type: activity.type,
     durationType: activity.durationType,
-    durationDays: activity.durationDays,
+    // The exact stored minutes, not the rounded day (ADR-0070): a round-trip must preserve a
+    // sub-day duration, and `durationMinutes` overrides the text field for exactly this case. The
+    // text is still filled in so the shape stays one type, and it is what the day-denominated
+    // reading of the same value would be.
+    duration: String(activity.durationDays),
+    durationMinutes: activity.durationMinutes,
     constraintType: activity.constraintType ?? '',
     constraintDate: activity.constraintDate ?? '',
     secondaryConstraintType: activity.secondaryConstraintType ?? '',
@@ -293,7 +298,7 @@ export function updateCommand(params: {
 /** `useCreatePlacedActivity().mutateAsync` — a canvas-placed create; resolves to the created row. */
 export type CreatePlacedActivityFn = (input: PlacedActivityInput) => Promise<ActivitySummary>;
 /** `useCreateActivity().mutateAsync` — a full-definition create; resolves to the created row. */
-export type CreateActivityFn = (input: ActivityFormValues) => Promise<ActivitySummary>;
+export type CreateActivityFn = (input: ActivityDefinitionInput) => Promise<ActivitySummary>;
 /** `useDeleteActivity().mutateAsync` — soft-deletes an activity by id. */
 export type DeleteActivityFn = (activityId: string) => Promise<void>;
 
@@ -389,13 +394,18 @@ export function deleteActivityCommand(params: {
   };
 }
 
-/** The dependency-create input `useCreateDependency` takes (endpoints + type + lag). */
+/**
+ * The dependency-create input `useCreateDependency` takes (endpoints + type + lag).
+ *
+ * The lag is **minutes** rather than the union the hook accepts: this input is only ever built from
+ * a persisted row, which knows its exact minutes, so there is no case here that lacks them.
+ */
 export interface DependencyLinkInput {
   planId: string;
   predecessorId: string;
   successorId: string;
   type: DependencyType;
-  lagDays: number;
+  lagMinutes: number;
   lagCalendar: LagCalendarSource;
 }
 /** `useCreateDependency().mutateAsync` — resolves to the created edge (carrying its new id). */
@@ -403,14 +413,22 @@ export type CreateDependencyFn = (input: DependencyLinkInput) => Promise<Depende
 /** `useDeleteDependency().mutateAsync` — removes an edge by id. */
 export type DeleteDependencyFn = (dependencyId: string) => Promise<void>;
 
-/** Project a dependency row into the create input that re-issues it (endpoints/type/lag/lag-calendar). */
+/**
+ * Project a dependency row into the create input that re-issues it (endpoints/type/lag/lag-calendar).
+ *
+ * The lag is carried in **minutes**, which is what the row stores and the engine applies (ADR-0036).
+ * It used to be `lagDays` — a rounded read of the same value — so undoing the removal of a two-hour
+ * cure lag restored the link with **no lag at all**, silently and with no error anywhere: the read
+ * rounded to zero and the re-create faithfully wrote the zero back. Undo must restore what was
+ * there, not what the day-granular view of it happened to look like (ADR-0070 §5).
+ */
 export function dependencyLinkOf(dependency: DependencySummary): DependencyLinkInput {
   return {
     planId: dependency.planId,
     predecessorId: dependency.predecessor.id,
     successorId: dependency.successor.id,
     type: dependency.type,
-    lagDays: dependency.lagDays,
+    lagMinutes: dependency.lagMinutes,
     lagCalendar: dependency.lagCalendar,
   };
 }
@@ -509,7 +527,7 @@ export function createLoeSpanCommand(params: {
         predecessorId: startDriverId,
         successorId: loe.id,
         type: 'SS',
-        lagDays: 0,
+        lagMinutes: 0,
         lagCalendar: 'PROJECT_DEFAULT',
       });
       await createDependency({
@@ -517,7 +535,7 @@ export function createLoeSpanCommand(params: {
         predecessorId: loe.id,
         successorId: finishDriverId,
         type: 'FF',
-        lagDays: 0,
+        lagMinutes: 0,
         lagCalendar: 'PROJECT_DEFAULT',
       });
       return loe.id;

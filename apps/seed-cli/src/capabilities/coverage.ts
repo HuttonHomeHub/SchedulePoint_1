@@ -30,37 +30,13 @@ export interface CoverageException {
  * and no client can create it. That asymmetry is precisely what ADR-0066 was written to surface.
  */
 export const UNREACHABLE: Readonly<Record<string, CoverageException>> = {
-  // ── No intraday shift patterns on any write path (TECH_DEBT #80) ───────────────────────────
-  // `fullDayShiftsFromMask` in `calendar.repository.ts` derives every calendar's shifts from the
-  // weekday mask, on the single create, the update AND the interchange batch. So a calendar day is
-  // always the whole day, and ADR-0036's intraday shift patterns — its headline capability — have
-  // no author anywhere in the product.
-  cal_split_shift: {
-    reason: 'a working day is always the full day: no write path accepts shift windows',
-    debt: 80,
-  },
-  cal_night_crosses_midnight: {
-    reason: 'needs two adjacent-day windows; no write path accepts shift windows',
-    debt: 80,
-  },
-  cal_asymmetric_week: {
-    reason: 'needs different hours per weekday; the mask carries working/not, never hours',
-    debt: 80,
-  },
-  cal_forces_split: {
-    reason: 'needs an intraday gap for the work to split across; no write path accepts one',
-    debt: 80,
-  },
-
-  // ── The weekday mask must name at least one working day (TECH_DEBT #79) ────────────────────
-  cal_window_only: {
-    reason: 'a non-working base week with dated working windows is a 422: workingWeekdays >= 1',
-    debt: 79,
-  },
-  cal_empty_base_week: {
-    reason: 'same @Min(1) on the mask — the engine supports it, the API refuses it',
-    debt: 79,
-  },
+  // ── The four intraday keys and the two window-only ones are now REACHED ────────────────────
+  // They were excepted here twice, each time for a cause that had already been fixed: first "no
+  // write path accepts shift windows" (untrue from api-v0.34.0), then "the SeedSpec sends a weekday
+  // mask" (untrue once `SeedCalendar.days` carried windows and the seeder sent them). Both entries
+  // outlived their reason, which is the exact failure ADR-0058 names. `capability-shift-calendars`
+  // now seeds all six through the public REST API, so there is nothing left to except: an entry
+  // here for a key a plan reaches would make the report claim a gap that does not exist.
 
   // ── No concept in the application at all (ADR-0039; reported as unplaceable by the fixture) ──
   res_role: {

@@ -2,7 +2,7 @@
   "name": "@repo/web",
   "version": "0.63.1",
   "private": true,
-  "description": "SchedulePoint web client — React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
+  "description": "SchedulePoint web client \u2014 React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -28,6 +28,9 @@
     "test:e2e:interchange": "playwright test --config playwright.interchange.config.ts --pass-with-no-tests",
     "test:e2e:share": "playwright test --config playwright.share.config.ts --pass-with-no-tests",
     "test:e2e:library": "playwright test --config playwright.library.config.ts --pass-with-no-tests",
+    "test:e2e:calendar-shifts": "playwright test --config playwright.calendar-shifts.config.ts --pass-with-no-tests",
+    "test:e2e:sub-day": "playwright test --config playwright.sub-day.config.ts --pass-with-no-tests",
+    "measure:draw": "node scripts/measure-link-routing.mjs 120 scale --headed",
     "test:e2e:designed-ui": "playwright test --config playwright.designed-ui.config.ts --pass-with-no-tests",
     "test:e2e:designed-chrome": "playwright test --config playwright.designed-chrome.config.ts --pass-with-no-tests",
     "test:e2e:gantt": "playwright test --config playwright.gantt.config.ts --pass-with-no-tests",
@@ -38,6 +41,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",
     "@repo/interchange": "workspace:*",
+    "@repo/layout": "workspace:*",
     "@repo/types": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "^1.170.18",

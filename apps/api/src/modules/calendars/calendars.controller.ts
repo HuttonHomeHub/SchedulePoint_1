@@ -39,6 +39,7 @@ import {
 } from './dto/calendar-response.dto';
 import { CreateCalendarExceptionDto } from './dto/create-calendar-exception.dto';
 import { CreateCalendarDto } from './dto/create-calendar.dto';
+import { UpdateCalendarExceptionDto } from './dto/update-calendar-exception.dto';
 import { UpdateCalendarDto } from './dto/update-calendar.dto';
 
 /**
@@ -243,6 +244,36 @@ export class CalendarsController {
   ): Promise<CalendarExceptionResponseDto> {
     return CalendarExceptionResponseDto.from(
       await this.service.addException(principal, orgSlug, calendarId, dto),
+    );
+  }
+
+  @Patch(':calendarId/exceptions/:exceptionId')
+  @ApiOperation({
+    summary: 'Edit a calendar exception’s hours and/or label (optimistic locking).',
+    description:
+      'Replaces the day’s working windows as a set, or edits only the label when neither ' +
+      '`windows` nor `isWorking` is sent. The date is not editable — moving an exception is ' +
+      'deleting one and adding another, which the existing endpoints already do visibly.',
+  })
+  @ApiOkResponse({ type: CalendarExceptionResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({ description: 'Calendar or exception not found in this organisation.' })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'Windows overlap, are unsorted, are empty, or were sent together with `isWorking`.',
+  })
+  @ApiConflictResponse({
+    description: 'Stale `version` — the exception changed since it was read.',
+  })
+  async updateException(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Param('exceptionId', ParseUuidPipe) exceptionId: string,
+    @Body() dto: UpdateCalendarExceptionDto,
+  ): Promise<CalendarExceptionResponseDto> {
+    return CalendarExceptionResponseDto.from(
+      await this.service.updateException(principal, orgSlug, calendarId, exceptionId, dto),
     );
   }
 

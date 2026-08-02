@@ -45,11 +45,13 @@ function workingDiff(
   calendar: WorkingTimeCalendar,
   baseline: string | null,
   current: string | null,
+  dayFactorMinutes: number,
 ): number | null {
   if (baseline === null || current === null) return null;
-  // The engine calendar is minute-granular (ADR-0036); variance stays day-denominated
-  // (ADR-0036 §7) via the fixed M = 1440 factor — exact for the full-day compat calendar.
-  return Math.round(calendar.workingTimeBetween(baseline, current) / MINUTES_PER_DAY);
+  // The engine calendar is minute-granular (ADR-0036); variance stays day-denominated (ADR-0036 §7)
+  // via the factor CAPTURED AT FREEZE (ADR-0068 §5) — never the live calendar's. Editing a
+  // calendar's hours-per-day must not retroactively change what a frozen baseline reports.
+  return Math.round(calendar.workingTimeBetween(baseline, current) / dayFactorMinutes);
 }
 
 /**
@@ -66,6 +68,8 @@ export function computeVariance(
   baselineRows: readonly VarianceBaselineRow[],
   liveRows: readonly VarianceLiveRow[],
   calendar: WorkingTimeCalendar,
+  /** The plan calendar's hours-per-day AT CAPTURE, in minutes (ADR-0068 §5). */
+  dayFactorMinutes: number = MINUTES_PER_DAY,
 ): VarianceResult {
   const baselineById = new Map(baselineRows.map((b) => [b.sourceActivityId, b]));
   const liveIds = new Set(liveRows.map((l) => l.id));
@@ -78,10 +82,10 @@ export function computeVariance(
   for (const live of liveRows) {
     const base = baselineById.get(live.id) ?? null;
     const startVarianceDays = base
-      ? workingDiff(calendar, base.baselineStart, live.earlyStart)
+      ? workingDiff(calendar, base.baselineStart, live.earlyStart, dayFactorMinutes)
       : null;
     const finishVarianceDays = base
-      ? workingDiff(calendar, base.baselineFinish, live.earlyFinish)
+      ? workingDiff(calendar, base.baselineFinish, live.earlyFinish, dayFactorMinutes)
       : null;
     const floatVarianceDays =
       base && live.totalFloat !== null && base.totalFloat !== null

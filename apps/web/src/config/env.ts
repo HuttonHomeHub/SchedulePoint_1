@@ -39,9 +39,10 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * **It currently has no consumer, and that is the healthy state** — it means no feature is
- * mid-flight. Kept rather than deleted because the next flag needs it on day one, and it is
- * covered by `env.test.ts` including the case-sensitivity that makes `"TRUE"` read as off.
+ * It currently has **no consumer** — {@link SUB_DAY_DURATIONS_ENABLED} moved to
+ * {@link flagDefaultOn} on 2026-08-02 — and that is the healthy state, which is why it is kept
+ * rather than deleted: the next flag needs it on day one. Covered by `env.test.ts`, including the
+ * case-sensitivity that makes `"TRUE"` read as off.
  *
  * (The sentence this replaces had been corrupted by an earlier edit into two spliced halves
  * naming five long-closed debt items — noticed only when the last consumer went away.)
@@ -1049,3 +1050,67 @@ export const CANVAS_AUTHORING_FLOW_ENABLED =
  */
 export const CANVAS_LINK_ROUTING_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_LINK_ROUTING);
+
+/**
+ * **The calendar shift-pattern editor** (`VITE_CALENDAR_SHIFT_EDITOR`, default **ON** since
+ * 2026-08-01) — the authoring half of ADR-0036, behind ADR-0067.
+ *
+ * ADR-0036 moved storage and the CPM engine to working-**minutes** with intraday shift patterns:
+ * split shifts, night shifts crossing midnight, asymmetric weeks with a half-day Friday. The engine
+ * has scheduled all of it for a year. `api-v0.34.0` and the commits after it made every shape
+ * authorable through the REST API. **Nothing in the product could still author one** — the calendar
+ * form offered seven weekday checkboxes, which can say only *whether* a day works.
+ *
+ * Flag ON replaces those checkboxes with a per-day list of `HH:MM` periods, built on the shared
+ * `WindowListEditor` — the same primitive the dated-exception editor uses, because a window is
+ * authored in two places and two editors would drift about ordering, overlap and midnight
+ * (ADR-0067 §2).
+ *
+ * Times are **text, not `<input type="time">`**: storage ends a full day at 24:00 and the native
+ * control stops at 23:59 (spec Q2). Reading `00:00` back as 24:00 was rejected outright — it is
+ * read-time inference, and 00:00 is a legitimate start.
+ *
+ * Rollback: set `VITE_CALENDAR_SHIFT_EDITOR=false` and rebuild the web image. Nothing persisted
+ * depends on it: the API accepts both the mask and explicit shifts, and a calendar authored with
+ * the editor keeps scheduling identically with the flag off — it simply becomes uneditable at
+ * minute granularity again, which the form says out loud rather than implying the mask is the whole
+ * truth. The flag-off parity suite is kept, not weakened; it is the rollback contract.
+ *
+ * Flipped default-on once the M4 gate pass finished: five specialist reviews over the combined
+ * diff, ten blocking defects folded with regression tests, the `capability-shift-calendars` seed
+ * plan reaching six capability keys no plan had ever reached, and the flag-on journey
+ * (`apps/web/e2e-calendar-shifts/`) green against a real API. That journey earned its place on its
+ * first run: it found that a menu opened from inside a modal `<dialog>` was unclickable, because a
+ * modal dialog is in the browser's top layer and the menu portalled to `document.body`. No unit
+ * test could have seen it — jsdom has no top layer.
+ */
+export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
+  import.meta.env.VITE_CALENDAR_SHIFT_EDITOR,
+);
+
+/**
+ * **Sub-day durations and lags** (`VITE_SUB_DAY_DURATIONS`, default **OFF**) — ADR-0070, the
+ * authoring half of ADR-0036's minutes.
+ *
+ * ADR-0036 moved storage and the CPM engine to working minutes; ADR-0068 made a *day* a
+ * per-calendar quantity; `api-v0.34.0` put `durationMinutes` and `lagMinutes` on the public DTOs so
+ * a sub-day value could be authored and read back exactly. **Nothing in the product could type
+ * one** — the activity editor offered a whole-number *days* box and the dependency editor a
+ * whole-number *days* lag, so a four-hour lift or a 30-minute cure lag could be imported,
+ * scheduled, levelled and exported, and never entered.
+ *
+ * Flag ON reads both fields as text with a `d`/`h`/`m` grammar (`2d 4h`, `90m`, `1.5d`) and sends
+ * the minute-denominated field; a **bare number still means days**, so every value a planner has
+ * already learnt to type keeps its meaning.
+ *
+ * Rollback: set `VITE_SUB_DAY_DURATIONS=false` and rebuild the web image. Nothing persisted depends
+ * on it — the API has accepted both `durationDays` and `durationMinutes` since `api-v0.34.0`, and a
+ * sub-day duration authored with the flag on keeps scheduling identically with it off; it simply
+ * reads back rounded to whole days again, which the field's label says out loud. The flag-off parity
+ * suite is kept, not weakened: it is the rollback contract.
+ *
+ * The flag exists at all — unlike ADR-0061's deliberately unflagged layout work — because this
+ * changes **which field of the write DTO carries the value**. A wrong day↔minute factor is a wrong
+ * date, silently, so the rollback has to be a switch rather than a revert.
+ */
+export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_DAY_DURATIONS);

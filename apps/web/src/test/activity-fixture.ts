@@ -18,6 +18,7 @@ export function anActivity(overrides: Partial<ActivitySummary> = {}): ActivitySu
     description: null,
     type: 'TASK',
     durationDays: 5,
+    durationMinutes: 2400,
     constraintType: null,
     constraintDate: null,
     secondaryConstraintType: null,

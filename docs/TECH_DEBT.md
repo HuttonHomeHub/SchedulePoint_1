@@ -22,19 +22,19 @@ it had nineteen modules, one understating a duplication by 5×, and one whose
 against memory — most rows here name a file or a flag, so checking is cheap.
 Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
-| #   | Item                                  | Why it exists                                                                                                                                                                                                                                                                                             | Risk                                                                                 | Remediation intent                                                                                                                                                  |
-| --- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Web e2e is Chromium-first**         | The web entry point has landed (M1, A2): CI now runs `pnpm build` (api + web) and a Playwright journey (sign-up → shell → sign-out, with an axe check) against a real API + Postgres. The Playwright config defines chromium/firefox/webkit projects but coverage so far is exercised mainly on Chromium. | Firefox/WebKit-specific regressions may slip until those projects are routinely run. | Keep the cross-browser projects green as the UI grows; expand journeys per feature.                                                                                 |
-| 2   | **Swagger CLI plugin disabled**       | The `@nestjs/swagger` CLI plugin generated a `metadata.ts` that tripped `noUnusedLocals`. OpenAPI is currently produced via explicit `@Api*` decorators (which works), so the plugin is optional.                                                                                                         | Without the plugin, DTO schemas must be annotated by hand.                           | Optionally re-enable `plugins: ["@nestjs/swagger"]` in `nest-cli.json` to auto-enrich schemas; verify the build stays green.                                        |
-| 3   | **Observability wiring is partial**   | Structured logging + correlation IDs are implemented; OpenTelemetry metrics/traces (ADR-0013) and a backend are not yet wired.                                                                                                                                                                            | Limited metrics/traces until wired.                                                  | Add the OTel SDK + exporter and a collector per environment.                                                                                                        |
-| 4   | **Async/cache/storage not wired**     | BullMQ (ADR-0009), Redis cache (ADR-0010), and object storage (ADR-0011) are designed but not yet added to the stack (no jobs/hot paths/files exist yet).                                                                                                                                                 | Patterns exist on paper only.                                                        | Add Redis/MinIO to compose and the modules when the first job/cached read/file lands.                                                                               |
-| 5   | **Hosting platform undecided**        | Not enough information at foundation stage.                                                                                                                                                                                                                                                               | Deployment specifics (scaling, networking, secrets) unresolved.                      | Evaluate managed-container vs. Kubernetes options; record an ADR.                                                                                                   |
-| 7   | **Performance targets are estimates** | Set before real workloads exist.                                                                                                                                                                                                                                                                          | Targets may be wrong.                                                                | Re-baseline against real metrics once deployed.                                                                                                                     |
-| 8   | **CSP not finalised for web**         | App origins/assets unknown until features land.                                                                                                                                                                                                                                                           | Weaker XSS mitigation than achievable.                                               | Tighten the nginx/`helmet` CSP once origins are known.                                                                                                              |
-| 9   | **Auth library relatively young**     | Better Auth is now wired into the `AuthContextService` seam (email + password, cookie sessions; ADR-0003, A1). Ecosystem maturity remains a watch item.                                                                                                                                                   | Ecosystem maturity risk.                                                             | Monitor releases/advisories; keep the boundary swappable behind the seam.                                                                                           |
-| 10  | **ESLint pinned to v9**               | ESLint 10 is available, but `eslint-plugin-import`, `eslint-plugin-jsx-a11y`, and `eslint-plugin-react` still cap their peer range at ESLint 9. Dependabot's major bump is ignored (see `.github/dependabot.yml`).                                                                                        | Missing ESLint 10 features/fixes until the plugins catch up.                         | Remove the `eslint` major-ignore and bump the ESLint group once the plugins publish v10-compatible releases.                                                        |
-| 11  | **Prisma pinned to v6**               | Prisma 7 removes `url` from the datasource block and requires a driver adapter + `prisma.config.ts` — a deliberate migration, not a routine bump. The major is ignored in Dependabot.                                                                                                                     | Missing Prisma 7 improvements until migrated.                                        | Do the Prisma 7 migration deliberately (driver adapter, `prisma.config.ts`, `PrismaService` wiring) — worth an ADR — then un-ignore.                                |
-| 12  | **CodeQL off on private repos**       | Code scanning uploads are free on public repos but need GitHub Advanced Security (paid) on private ones. The CodeQL workflow is gated to public repos (`.github/workflows/codeql.yml`) so apps generated from this template stay green instead of failing on every push.                                  | No static-analysis (CodeQL) scanning on private repos.                               | Enable GitHub Advanced Security, or make the repo public, to activate CodeQL; Dependabot, secret scanning, and the security-reviewer agent remain active meanwhile. |
+| #   | Item                                                                | Why it exists                                                                                                                                                                                                                                                                                                                                     | Risk                                                                                                                                                                                                                                                                                                                                                            | Remediation intent                                                                                                                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **Web e2e is Chromium-first**                                       | The web entry point has landed (M1, A2): CI now runs `pnpm build` (api + web) and a Playwright journey (sign-up → shell → sign-out, with an axe check) against a real API + Postgres. The Playwright config defines chromium/firefox/webkit projects but coverage so far is exercised mainly on Chromium.                                         | Firefox/WebKit-specific regressions may slip until those projects are routinely run.                                                                                                                                                                                                                                                                            | Keep the cross-browser projects green as the UI grows; expand journeys per feature.                                                                                                                                                                                                                    |
+| 2   | **Swagger CLI plugin disabled**                                     | The `@nestjs/swagger` CLI plugin generated a `metadata.ts` that tripped `noUnusedLocals`. OpenAPI is currently produced via explicit `@Api*` decorators (which works), so the plugin is optional.                                                                                                                                                 | Without the plugin, DTO schemas must be annotated by hand.                                                                                                                                                                                                                                                                                                      | Optionally re-enable `plugins: ["@nestjs/swagger"]` in `nest-cli.json` to auto-enrich schemas; verify the build stays green.                                                                                                                                                                           |
+| 3   | **Observability wiring is partial**                                 | Structured logging + correlation IDs are implemented; OpenTelemetry metrics/traces (ADR-0013) and a backend are not yet wired.                                                                                                                                                                                                                    | Limited metrics/traces until wired.                                                                                                                                                                                                                                                                                                                             | Add the OTel SDK + exporter and a collector per environment.                                                                                                                                                                                                                                           |
+| 4   | **Async/cache/storage not wired**                                   | BullMQ (ADR-0009), Redis cache (ADR-0010), and object storage (ADR-0011) are designed but not yet added to the stack (no jobs/hot paths/files exist yet).                                                                                                                                                                                         | Patterns exist on paper only.                                                                                                                                                                                                                                                                                                                                   | Add Redis/MinIO to compose and the modules when the first job/cached read/file lands.                                                                                                                                                                                                                  |
+| 5   | **Hosting: the current setup IS the decision (settled 2026-08-01)** | Recorded as "undecided" since the foundation stage, which read as work owed. It is not. The product owner runs the Docker Compose stack with the ADR-0047 Watchtower profile **enabled**, so a merged release is pulled and recreated on that host and every release is reviewed by a person. That is a deployment model, not the absence of one. | None today. The cost of the deferral is bounded because the container/registry foundation is deliberately platform-neutral (ADR-0018 self-migrating image, ADR-0027 per-package tags, GHCR), so moving is a decision rather than a rewrite. Costing managed-host against Kubernetes now would mean costing them against a load profile that does not exist yet. | **Revisit when one of these becomes true**, and write the ADR then: a second operator needs to run their own instance; a tenant needs an availability guarantee a single host cannot make; or the release cadence outgrows one person reviewing each one. Until then this row is a record, not a task. |
+| 7   | **Performance targets are estimates**                               | Set before real workloads exist.                                                                                                                                                                                                                                                                                                                  | Targets may be wrong.                                                                                                                                                                                                                                                                                                                                           | Re-baseline against real metrics once deployed.                                                                                                                                                                                                                                                        |
+| 8   | **CSP not finalised for web**                                       | App origins/assets unknown until features land.                                                                                                                                                                                                                                                                                                   | Weaker XSS mitigation than achievable.                                                                                                                                                                                                                                                                                                                          | Tighten the nginx/`helmet` CSP once origins are known.                                                                                                                                                                                                                                                 |
+| 9   | **Auth library relatively young**                                   | Better Auth is now wired into the `AuthContextService` seam (email + password, cookie sessions; ADR-0003, A1). Ecosystem maturity remains a watch item.                                                                                                                                                                                           | Ecosystem maturity risk.                                                                                                                                                                                                                                                                                                                                        | Monitor releases/advisories; keep the boundary swappable behind the seam.                                                                                                                                                                                                                              |
+| 10  | **ESLint pinned to v9**                                             | ESLint 10 is available, but `eslint-plugin-import`, `eslint-plugin-jsx-a11y`, and `eslint-plugin-react` still cap their peer range at ESLint 9. Dependabot's major bump is ignored (see `.github/dependabot.yml`).                                                                                                                                | Missing ESLint 10 features/fixes until the plugins catch up.                                                                                                                                                                                                                                                                                                    | Remove the `eslint` major-ignore and bump the ESLint group once the plugins publish v10-compatible releases.                                                                                                                                                                                           |
+| 11  | **Prisma pinned to v6**                                             | Prisma 7 removes `url` from the datasource block and requires a driver adapter + `prisma.config.ts` — a deliberate migration, not a routine bump. The major is ignored in Dependabot.                                                                                                                                                             | Missing Prisma 7 improvements until migrated.                                                                                                                                                                                                                                                                                                                   | Do the Prisma 7 migration deliberately (driver adapter, `prisma.config.ts`, `PrismaService` wiring) — worth an ADR — then un-ignore.                                                                                                                                                                   |
+| 12  | **CodeQL off on private repos**                                     | Code scanning uploads are free on public repos but need GitHub Advanced Security (paid) on private ones. The CodeQL workflow is gated to public repos (`.github/workflows/codeql.yml`) so apps generated from this template stay green instead of failing on every push.                                                                          | No static-analysis (CodeQL) scanning on private repos.                                                                                                                                                                                                                                                                                                          | Enable GitHub Advanced Security, or make the repo public, to activate CodeQL; Dependabot, secret scanning, and the security-reviewer agent remain active meanwhile.                                                                                                                                    |
 
 | 13 | **TypeScript pinned to v5** | TypeScript 7 (the native compiler) removed `baseUrl` and `moduleResolution: node10` from tsconfig, which the shared presets rely on for the `@/` and `@repo/*` path aliases. The major is ignored in Dependabot. | Missing TypeScript 7 speed/features until migrated. | Migrate the tsconfig presets (drop `baseUrl`, move to `paths`/`bundler` resolution), verify nest/vite resolution, then un-ignore. |
 
@@ -79,6 +79,8 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 | 53 | **Library `q` search is an unindexed (bounded) ILIKE — `pg_trgm` GIN deferred (ADR-0053 §4 / M4)** | The M4 search on `calendars`/`resources` uses Prisma `contains` + `mode: 'insensitive'`, i.e. `name ILIKE '%q%'` (OR'd with `code` on resources). A **leading-wildcard, case-insensitive** match is not a btree range, so no existing or addable btree index can serve it — not the `(organization_id, created_at, id)` composites, not `text_pattern_ops` (left-anchored only), not an expression index on `lower(name)` (prefix only). The chosen plan is deliberate: the leading equality on `organization_id` bounds the candidate set to **one tenant** in cursor order and the ILIKE is a recheck over it — a bounded filter, not a table-wide seq scan, at the ADR-0053 sizing of ≲1,000 calendars / ≲5,000 resources per tenant. For the same measure-first reason the archive filter added **no** index: `archived_at` is tri-state (`exclude`/`include`/`only`), so a partial `WHERE archived_at IS NULL` twin would serve only the default and would today be a byte-for-byte duplicate of the existing composite (no row is archived yet). | Low today and bounded by tenant size; it degrades linearly if a tenant's library grows well past the assumed ceiling (import-heavy tenants are the likely first case), or if archived rows come to dominate a library so the default list scans mostly-filtered entries. Both show up as list/search p95 creep, never as incorrect results. **Measured at the ADR-0053 ceiling during the M6 backend-performance review** (Postgres 16, every migration applied, one org seeded with 1,000 calendars / 5,000 resources): worst-case resource search (no match, full candidate scan) **3.8 ms**; a match at the tail of cursor order **3.2 ms**; the 1,000-calendar case **0.56 ms** — all two orders of magnitude inside the 200 ms p95 budget, confirming the deferral is correct at the stated scale. A committed seeded-benchmark test (so the claim is pinned in CI rather than living in a migration comment and this row) is still outstanding. Escalate only on further measurement (`docs/PERFORMANCE.md`): (a) a `pg_trgm` GIN index on `lower(name)` (`gin_trgm_ops`) — note it needs `CREATE EXTENSION pg_trgm`, a privileged one-off DDL step the app's DB role may not hold, which is part of why it is deferred; (b) a partial `(organization_id, created_at, id) WHERE deleted_at IS NULL AND archived_at IS NULL` composite if archived rows dominate; (c) a partial ORG-tier calendar composite if PROJECT rows dominate the org list (ADR-0053 "Follow-ups"). |
 | 56 | **Pure gesture→overlay helpers live in `TsldCanvas.tsx` rather than a pure module** | Raised by the ADR-0054 M6 component review against `gestureSourceId` / `gestureGhostDetail`, but the finding is older and wider than this epic: `ghostRect`, `liveResize`, `lagChip` and their siblings — all pure `GestureState → overlay geometry` functions with no React, DOM or canvas dependency — already sit at the top of `apps/web/src/features/tsld/components/TsldCanvas.tsx` and are exported solely for unit tests. The ADR-0026 architecture puts pure render logic in `features/tsld/render/*`, so the whole cluster is on the wrong side of that seam. Moving only the two new ones was rejected as making the file _less_ consistent, not more. | Maintainability only — the functions are pure and fully unit-tested where they are. Cost is that a reviewer must read a 1,500-line component file to review pure geometry, and that the component file is the de-facto home for logic the architecture says lives elsewhere. | Move the whole cluster to a `render/gesture-overlay.ts` module in one pass (mechanical: re-export, update the two test files' imports), rather than migrating helpers piecemeal as each epic touches them. |
 | 57 | **Recycle-bin list has no index for its filter or its sort, and the screen pages it to exhaustion** | The `deleted_at IS NOT NULL` filter and the `ORDER BY deleted_at DESC, id ASC` on all three `UNION ALL` branches are unindexed: `clients`/`projects`/`plans` each index `(organization_id, created_at, id)`, none carry `deleted_at`. So Postgres filters and top-N sorts over **every** row for the org in that table, live rows included. That predates TECH_DEBT #22 and was deliberately deferred there as measure-first. What #22 did not weigh: the screen fetches via `apiFetchAllPages` (`use-deleted-items.ts`), which walks `?limit=100` to exhaustion — so the scan is re-run **per page**, making one screen-open cost `O(pages x org rows)` rather than `O(org rows)`. #22's own commit used that same pagination-amplification argument to justify fixing the row over-fetch immediately; it applies with more force here, and I did not apply it consistently. | Grows with an org's total row count, not its deleted-row count, and multiplies by page count. Harmless on a small org; an org that has ever created and deleted a lot of plans pays it on every visit to Recently deleted. | **Measure first — this is still unmeasured** (the reviewing agent had no database either). Get an `EXPLAIN ANALYZE` at realistic row counts; if it confirms the scan, add the partial index already named in `recycle-bin.repository.ts` — `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` per table. Also worth asking whether the screen should page to exhaustion at all. Raised by the backend-performance-reviewer agent, 2026-07-27. |
+| 82 | **Shift-editor epic (ADR-0067/0068) — the non-blocking half of five specialist gates (CLOSED 2026-08-01)** | The five M4 gates found ten blocking defects, all folded with regression tests. These were the rest, deferred by decision rather than missed, and all seven are now done: **(a)** the interchange importer wrote calendar shift/exception windows verbatim without the ordering/overlap check the API’s own DTO enforces, so a hostile or broken file reached the engine’s `validateWindows` and surfaced as an opaque 500 rather than a dry-run finding; the same path let a near-zero `day_hr_cnt` round to 0 minutes and hit the DB CHECK. **(b)** No `@ArrayMaxSize` on the new `shifts`/`windows` DTO arrays. **(c)** `addException`/`removeException` did not take the `calendar:manage_org` check `updateException` took. **(d)** The calendar library table did not summarise a shift calendar (`maxWindowsPerDay` existed with no consumer). **(e)** Window validation fired on Save, not on change. **(f)** An overlapping pair flagged only the second row. **(g)** No unit-test files for `exception-hours.ts`, `shift-summary.ts` and `window-rows.ts`. | Was low each; (a) was the only one with a user-visible failure mode. | **Closed.** (a) is now `repairCalendars` in `packages/interchange/src/validate.ts` — a **repair**, reported per finding, which is where every other import approximation goes; windows are sorted, empty ones dropped and overlapping ones **merged** (their union preserves every minute either claimed), and a `hoursPerDay` below the domain’s 0.25 h floor is raised. (b) `MAX_CALENDAR_SHIFTS` (168) / `MAX_EXCEPTION_WINDOWS` (24), one definition across four DTOs. (c) one shared `assertMayWriteExceptions` on all three verbs, asserted **before** the exception lookup so the tier is not an existence oracle. (d) a `· 2 shifts` suffix on the Working days column. (e) React Hook Form’s own `reValidateMode` rule applied to the week: quiet until you submit, live afterwards — the mirror defect was that a corrected row kept its message until the next Save. (f) both rows of the pair carry a directional message; writing the “unless the row above is already inverted” guard showed that branch to be **unreachable**, which is now a test rather than a guard. (g) three test files, 32 new cases. |
+| 83 | **ADR-0068 §6 promises a count the calendar editor does not show** | §6 states the editor "names how many activities' displayed durations will change" when hours-per-day is edited, following the ADR-0053 §2 per-class-count pattern. What shipped is the consequence without the count ("an activity showing 10 days today will show a different number"), because no endpoint returns that count — it needs a per-calendar usage read across activities and plans. The ADR is corrected to record this as deferred rather than left describing a feature that does not exist (ADR-0058's rule). | Low: the warning is accurate, just less specific than promised. | A `GET …/calendars/:id/usage` returning the affected-activity count, or an amendment dropping the requirement if the count proves not worth the read. |
 
 ## Principles for managing debt
 
@@ -421,8 +423,17 @@ would not exercise the code being budgeted.
    at about two and a half years and fills the viewport — that is what makes the two scenes
    comparable at all.
 
-3. **Run it on the envelope ADR-0026 names** — a mid-tier laptop and an iPad — with the same script,
-   which takes a checkout and one command.
+3. **Run it on the envelope ADR-0026 names.** The command now exists and is documented:
+   `pnpm --filter @repo/web measure:draw`, with the runbook at
+   [`docs/guides/measure-draw-performance.md`](guides/measure-draw-performance.md) — a checkout, one
+   install, one command, about a minute. It runs **headed** on purpose: headless Chromium can
+   rasterise Canvas 2D in software, so a headless figure measures a path no planner runs, and the
+   script prints a loud warning when it is.
+   **Scope narrowed 2026-08-01 (product-owner decision): laptop only, iPad deliberately not
+   covered.** A planner authors on a laptop; the iPad is a review device, where the printed
+   programme and the Gantt matter more than canvas draw. If the canvas ever becomes a primary iPad
+   surface that gap reopens, and the runbook says so rather than leaving it implied.
+   **Awaiting the product owner's laptop run.**
 4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
    answer is "smooth at 2,000, and 16 ms is fine because it is one frame at 60 Hz", the budget was
    simply wrong and should say so. If it is not smooth, ADR-0026's own reserved escalations —
@@ -447,74 +458,63 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
   with an obvious fix (build `rects` before the edge block; carry the crossed-lane list on the
   per-edge descriptor). They are inside an overhead already measured and accepted, so they belong
   with **#75** rather than blocking a release.
-- **A fourth hand-rolled "message + optional action" strip.** `EditConflictBanner`,
-  `CanvasModeBand` and the new canvas empty state are three near-identical rounded-bordered strips,
-  none reusing the others and only one going through `cn()`/CVA. Extract a shared primitive before a
-  fifth lands.
-- **The split-button composite is duplicated** between `AddActivityControl` and `LinkControl` —
-  identical wrapper, primary classes, caret classes and ArrowDown handler. Two real consumers is the
-  threshold `docs/COMPONENT_LIBRARY.md` sets for extraction, and the focus-restore defect above is
-  exactly what duplication of this shape produces.
-- **`ArrowUp` does not open either type menu** (only `ArrowDown`). `IsolateControl` handles both.
-  Not a 2.1.1 failure — `ArrowDown` gives full reachability — but inconsistent.
-- **No flag-off regression for the _pointer_ two-click link pick.** The echo plumbing
+- ~~**A fourth hand-rolled "message + optional action" strip.**~~ **Done 2026-08-01** —
+  `components/ui/notice-strip.tsx`. `EditConflictBanner`, both faces of `CanvasModeBand` and the
+  canvas empty state now compose it. Three of the four had already drifted on radius, padding or
+  alignment with no reason behind any difference. `tone` and `emphasis` are separate axes so a fifth
+  caller cannot need a `neutralDashed`, and the **role stays the caller's** — a tone→role mapping
+  would get the mode band wrong by construction, since it must have no live region at all.
+- ~~**The split-button composite is duplicated**~~ **Done 2026-08-01** —
+  `components/ui/toolbar/ToolbarSplitButton.tsx`. It now _guarantees_ the two facts each caller had
+  been asked to remember: the pair is one roving stop, and `primaryRef` is the only ref a menu can
+  restore focus to (the defect that shipped on both).
+- ~~**`ArrowUp` does not open either type menu**~~ **Done 2026-08-01** — the shared primitive
+  accepts either arrow, with a regression per control.
+- ~~**The pen-loss-mid-pick case is untested at every layer**~~ **Done 2026-08-01** —
+  `e2e-authoring-flow/authoring-flow.spec.ts`. It releases the pen with a pick open and asserts the
+  outcome that matters: **no dependency**. Then it takes the pen back and links properly, so the
+  refused attempt is shown to have left no wedged state. Writing it turned up a harness fact worth
+  keeping: `mapBars` probes by clicking in `select` mode, so measuring while a tool is armed returns
+  an empty map — the test disarms first.
+- **Still open — no flag-off regression for the _pointer_ two-click link pick.** The echo plumbing
   (`onLinkPickStep`/`linkPickPredecessorId`/`dropLinkPickSignal`) is wired unconditionally on top of
   the pre-existing ADR-0032 M5 gesture, and nothing proves it is inert with the epic's flag off; the
-  only tests touching pointer-driven dependency creation exercise the old edge-drag.
-- **The pen-loss-mid-pick case is untested at every layer** — no test takes the pen away, or lets it
-  expire, while a link pick is open, and asserts the 409/423 surfaces and the pick is abandoned
-  safely. `docs/TESTING.md` says that trap is only testable against a real API, so it belongs in
-  `e2e-authoring-flow`.
+  only tests touching pointer-driven dependency creation exercise the old edge-drag. Deliberately
+  **not** faked in jsdom: a pointer pick needs a hit test against a canvas with real layout, which
+  jsdom does not provide (`TsldCanvas.test.tsx` defers the same half for the same reason), so a unit
+  test here would assert the client's optimism back at itself. It belongs in a flag-off Playwright
+  run, which the repo has no configuration for today — that, not the assertion, is the work.
 
-### 77. The demo Unit 300 file is a lossy rendering of the conformance fixture
+### 77. The demo Unit 300 file is a lossy rendering of the conformance fixture — CLOSED 2026-08-01
 
-The product owner asked for "a full logic plan with all constraints and logic types to ensure every
-feature was tested". Investigating the demo file
-(`SchedulePointDemoUnit300AminePackage.xer`) turned up something better than an answer: **the full
-plan already exists.** The XER is a rendering of
-`packages/engine-conformance/fixtures/p6_torture_test_v1.json` — the ADR-0034 benchmark. Same
-activity codes (`A1000` Notice to Proceed), same WBS (`TT.1`), and 188 relationships in both.
+**Closed as superseded, and verified rather than assumed.** The entry's own recommendation was "a
+faithful renderer from `p6_torture_test_v1.json` into an importable plan — XER for what the format
+carries, and a seeding path for groups 2 and 3, which no XER can express", so that "the
+`coverage_index` becomes an executable checklist". That is exactly what the **seed catalogue**
+(ADR-0066) turned out to be. It was built to answer a different question and answered this one on
+the way, and nobody connected the two — so this entry went on describing an open question after it
+had been settled, which is the ADR-0058 failure it now records instead.
 
-That fixture carries a **`coverage_index`: 117 named capabilities mapped to the objects that
-exercise them.** So "does the test plan cover everything?" is a computable question, not a matter of
-opinion — and the answer is that the fixture covers it and the **XER rendering loses part of it.**
+What was checked, on 2026-08-01, rather than reasoned about:
 
-Measured, not estimated. Object presence was checked by id against the file; attribute survival by
-running the real `importXer` over it and inspecting the resulting graph.
+- **The checklist is executable and green.** `seed --coverage` reports **115 of 117 capabilities
+  reached, 2 excepted, 0 missing.** The two exceptions are honest domain gaps, not test gaps:
+  `res_assignment_lag` (an assignment has no lag field — work starts with its activity) and
+  `res_role` (SchedulePoint has no role model; a resource is assigned directly).
+- **Loss 1 — the LOE type — round-trips in both directions.** `xer-adapter.ts` maps
+  `TT_LOE → LEVEL_OF_EFFORT` on import and `xer-emit.ts` maps it back on export, with
+  `export-xer.spec.ts` asserting an LOE survives export→import as an LOE with its duration intact.
+  The exporter half was the later fix: it downgraded every LOE to a task, kept alive by a docblock
+  describing importer behaviour that had already been corrected.
+- **Losses 2 and 3 — what XER has no column or table for** — are reached by seeded plans through the
+  **public REST API** instead, which is the "seeding path" this entry asked for and is strictly
+  better than an XER could be: it exercises the write path a planner uses, not a file format.
+- **The demo file itself is not in this repository** and nothing references it. There is therefore
+  nothing here to regenerate. If a fresh demo file is wanted, the way to make one now is to seed a
+  plan and export it — the exporter is no longer lossy for the type this entry was opened about.
 
-**Present and carried** (verified through the importer): all four relationship types with positive,
-zero and negative lag; 10 primary + 1 secondary constraint + 1 ALAP; 20 progressed activities with
-physical %-complete; 2 suspends; 126 per-activity calendars; 143 WBS parents; 22 resources and 45
-assignments **including `unitsPerHour` and `actualUnits` on every one**; 8 calendars resolving to
-5 ORG + 3 PROJECT (so the ADR-0053 tier decision _is_ exercised — via the resource-reference rule,
-not `clndr_type`, which is absent from every row).
-
-**Lost, in four distinct ways** — the distinction matters because each needs a different fix:
-
-1. **Type lost in transit.** The fixture's 5 `LEVEL_OF_EFFORT` activities (`A1010`, `A1020`,
-   `A1030`, `A1040`, `A3100`) arrived as zero-duration `TASK`s, because the importer had no
-   `TT_LOE` mapping. **Fixed** — the mapping now exists both ways. The demo file still says
-   `TT_Task`, so it needs regenerating for `type_loe`, `loe_span_start`, `loe_span_end`,
-   `loe_spans_project` and `loe_different_calendar_to_span_ends` to actually fire.
-2. **The XER has no column for it.** `duration_type` (→ the three `dt_*` keys), the external
-   inter-project instants (→ `interproject` + four `net_external_*` keys), the per-relationship lag
-   calendar (→ two `lag_calendar_*` keys), resource `max_units_per_hour` (→ `levelling_test`,
-   `res_overallocation`) and `price_per_unit` (→ `cost_actual`), and assignment `curve` /`role` /
-   `assignment_lag_h` (→ four `res_curve_*` plus `res_role`, `res_assignment_lag`). Verified: **0 of
-   22** imported resources carry a cost rate or a capacity ceiling.
-3. **The XER has no table for it.** Expenses (`E001`–`E004` → `cost_expense`, `cost_overrun` and the
-   three `accrual_*` keys) and activity steps (→ `code_steps`). Also the fixture's three
-   `WBS_SUMMARY` _activities_ (`W4000`, `W5000`, `W7000`) are absent — 129 fixture activities render
-   as 126 tasks.
-4. **Column present, data empty.** `reend_date` exists on the TASK table and is blank on every row,
-   so `con_expected_finish` (`A6200`) never fires. A one-cell fix.
-
-**So the recommendation changes.** Hand-editing the XER, or authoring a second synthetic plan, both
-duplicate a fixture that already exists and would immediately drift from it. The work worth doing is
-a **faithful renderer from `p6_torture_test_v1.json` into an importable plan** — XER for what the
-format carries, and a seeding path (API or direct) for groups 2 and 3, which no XER can express. The
-`coverage_index` then becomes an executable checklist: assert every one of the 117 keys is reachable
-in the seeded plan, and the question stops needing a human to re-answer it.
+Kept as a record rather than deleted, because the sequence is worth reading: a question asked of a
+file, answered by building a test bed, and left open in writing for the time in between.
 
 ### 78. The public activity/dependency API is day-denominated, so sub-day durations and lags cannot be authored
 
@@ -558,10 +558,37 @@ seeded plan schedule differently from the fixture and say nothing about it.
 **Impact — low but sharp.** It affects one calendar shape, but that shape is exactly the one a
 turnaround or a shutdown programme needs, and the failure is a flat refusal with no workaround.
 
-**What would close it:** relax the validator to `@Min(0)` and decide what a zero mask means at the
-seams that consume it — specifically whether a plan default calendar may be window-only (an activity
-inheriting it would have no base working time at all), which is the question the `@Min(1)` was
-probably standing in for. Worth an API e2e that creates one and recalculates over it.
+**Closed at the API in `api-v0.34.0`** (`MIN_WORKING_WEEKDAYS_MASK` 1 → 0), and closing it exposed
+the other half of the same unfinished migration. The DTO bound was lifted **without** the engine
+guard it had been standing in for being mapped: `buildWorkingTimeCalendar` throws when a calendar
+has no working minute at all, nothing caught it, and recalculating a plan on a brand-new
+window-only calendar answered an opaque **500**. A user-caused, user-fixable state reported as a
+server fault, naming neither the calendar nor the fix — and reachable in two clicks, default-on, no
+flag, for the three days between that release and this one. Now a **422
+`CALENDAR_HAS_NO_WORKING_TIME`** carrying the calendar's name and what to add, via a named
+`EmptyWorkingTimeCalendarError` (the engine is the only layer that sees both the week and the
+exceptions, so it is the only layer that can raise it; the service is the only one that can phrase
+it). Two e2e cases pin both sides — the empty calendar is refused, the same calendar recalculates
+once one working exception gives it hours.
+
+The lesson is the shape, not the line: **relaxing a boundary check moves the rejection, it does not
+remove it.** The guard underneath had been unreachable for a year and was never re-read when the
+thing keeping it unreachable was deleted. Worth checking for the same pattern whenever a `@Min`,
+`@Max` or `@IsIn` is widened.
+
+The **seeder still refuses the shape** (`packages/seed-http/src/runner.ts`
+`WINDOW_ONLY_CALENDAR_UNSUPPORTED`) and the coverage report still lists `cal_window_only` /
+`cal_empty_base_week` as unreachable, both quoting the `@Min(1)` that no longer exists. That
+reconciliation is the next slice — it is what turns this from "the API accepts it" into "a seeded
+plan proves it", which is the ADR-0066 loop.
+
+**What it took to close (recorded because the prediction was half right):** relaxing the validator
+was the easy half. The question this entry guessed the `@Min(1)` "was probably standing in for" —
+what a zero mask means at the seams that consume it — had a sharper answer than expected: it stands
+in for **nothing at the seams**, because a window-only calendar is perfectly schedulable the moment
+it has one working exception. What it was standing in for was the engine's _own_ guard, unmapped.
+The API e2e this paragraph asked for is the thing that would have caught it, and it was written
+three days late.
 
 ### 80. Intraday shift patterns exist in the engine and in storage, and no write path can create one
 
@@ -585,15 +612,51 @@ capability keys (`cal_split_shift`, `cal_night_crosses_midnight`, `cal_asymmetri
 
 **Impact — the largest of the three write-path gaps** (#78 durations, #79 the window-only mask, this
 one). A planner working a two-shift site or a night-shift possession cannot describe their working
-week at all, and the schedule they get is silently a whole-day approximation of it. It also caps the
-fidelity of every import: an XER or MSPDI carrying real shift patterns is flattened on the way in
-with nothing said, because the mapper has nowhere to put them.
+week at all, and the schedule they get is silently a whole-day approximation of it. It also capped the
+fidelity of every import: an XER or MSPDI carrying real shift patterns was flattened on the way in
+with nothing said, because the mapper had nowhere to put them — **that half is now closed too**
+(see the closing note below).
 
 **What would close it:** a `shifts` array on the calendar create/update DTOs (weekday +
 start/end minute, validated non-overlapping and ordered), a matching `windows` array on the
 exception DTO, the repository taking them instead of deriving, and an editor for the weekly pattern.
 The engine and the storage need no change — that is the whole shape of the problem. Worth doing
 together with #78, since a sub-day duration is meaningless without a sub-day calendar to spend it on.
+
+**The weekly half closed in `api-v0.34.0`** (`shifts` on the calendar create/update/read DTOs).
+**The dated-exception half closes here.** `createException` derived a day's windows from the
+`isWorking` boolean — the exact mirror of the mask→full-day-shift derivation, one table over — so a
+worked exception was always a _whole_ worked day, and a half-day before a holiday or a short-crew
+shutdown day could not be expressed. `windows` now joins `isWorking` on the exception DTO (mutually
+exclusive; an empty array refused, so "no working time" has one spelling), the repository resolves
+them through one `exceptionWindowRowsFor` shared with the interchange batch, and the read DTO
+returns `windows` — without which an authored half-day would be invisible the moment it was saved,
+which is the same defect the weekly half fixed.
+
+`endDate` is exposed on the read too. Storage has always held a **range**; the DTO returned only
+`startDate`, so an end date the client could not see was an end date it could not be told changed.
+Only a single day is authorable, so it always equals `date` today — the point is that the contract
+stops hiding a column. Authoring a multi-day exception stays out of scope.
+
+**CLOSED 2026-08-01.** The three remaining halves all landed with the ADR-0067 editor and the
+ADR-0068 factor:
+
+- **The editor.** `WeeklyShiftEditor` replaces seven weekday checkboxes with a per-day window list,
+  so the shape the API had accepted since `api-v0.34.0` is now authorable by a person. Behind
+  `VITE_CALENDAR_SHIFT_EDITOR`, default-on.
+- **The seeder and the coverage report.** The six `cal_*` exceptions quoting `fullDayShiftsFromMask`
+  are gone — that derivation no longer touches anything the caller supplied — and
+  `capability-shift-calendars` seeds nine calendars whose working **days** are identical and whose
+  **hours** are not, so every one of those keys is proven by a plan rather than excepted. That is
+  what turns "the API accepts it" into "a seeded plan proves it".
+- **Import.** `ImportCalendarBatchInput` now carries `shifts` verbatim plus `hoursPerDayMinutes`, and
+  the pure mapper emits per-weekday windows rather than a mask, so an imported two-shift calendar
+  arrives as a two-shift calendar. Windows are validated and repaired on the way in (see #82) rather
+  than reaching the engine unchecked.
+
+What deliberately did **not** close: multi-day exception **authoring** (`endDate` is exposed on the
+read, so nothing is hidden by the deferral), and the flag-off path, which keeps the flattening
+behaviour as the stated rollback contract.
 
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
@@ -634,3 +697,24 @@ spend the operator's disk one finding at a time. Now clamped (2,000 / 500 / 100 
 truncation stated rather than trailing off mid-word). This does **not** clear the alert — the taint
 flow is unchanged — and it was not done to. It is the one genuine defect the rule's neighbourhood
 contained, found by taking the finding seriously rather than by trying to satisfy it.
+
+## 83. ~~A typed duration can be overwritten by the calendar factor landing~~ — RESOLVED 2026-08-02
+
+**Found by** `apps/web/e2e-sub-day/` on its first run against a real API — the journey ADR-0070 added,
+doing the job it was added for. In the flag-on create dialog, typing `4h` and submitting immediately
+stored **one whole day** (the seeded default): the field accepted the text, the label was correct,
+and nothing on screen said the value had been discarded.
+
+**Cause.** `useDurationSeed` re-seeds the field once the working-hours factor resolves, and asked
+React Hook Form's `dirtyFields.duration` — a value _captured by the render the effect belongs to_.
+A keystroke and a network response are independent events, so when the calendar list landed before
+RHF had re-rendered with the field marked dirty, the effect read a stale `false` and overwrote what
+had just been typed. An automated journey types and submits far faster than a person, which is why
+it reproduced there and never in hand testing.
+
+**Fix.** Stop asking a flag; ask the field. The hook now takes a `readDuration()` getter called
+**inside** the effect, and re-seeds only if the value is still character-for-character the text it
+saw at open. The race is gone by construction rather than by narrowing a window, and a planner who
+happens to type exactly the seed loses nothing either. Pinned by
+`src/features/activities/model/use-duration-seed.test.ts`, whose central case sets the value with no
+accompanying re-render — verified to fail against the old implementation first.

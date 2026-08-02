@@ -31,6 +31,12 @@ import { PlanRepository } from '../plans/plan.repository';
 import { resolveTriad } from '../schedule/duration-type/resolve-triad';
 
 import { ActivityRepository, type ActivityPatch } from './activity.repository';
+import {
+  attachDayFactors,
+  daysToMinutes,
+  resolveDayFactorMinutes,
+  type WithDayFactor,
+} from './day-factor';
 import type { CreateActivityDto } from './dto/create-activity.dto';
 import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import type { UpdateActivityDto } from './dto/update-activity.dto';
@@ -51,13 +57,6 @@ const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MIL
 export interface DissolveSummaryResult {
   promoted: { id: string; parentId: string | null; version: number }[];
 }
-
-/**
- * Minutes in one full calendar day — the fixed day↔minute factor (ADR-0036 §4.2).
- * The public API stays day-denominated (`durationDays`); storage is minutes, so the
- * service converts at the boundary (a whole day of work = 1440 working-minutes).
- */
-const MINUTES_PER_DAY = 1440;
 
 /**
  * Derive an activity's status from its measurable progress so the two can never
@@ -99,6 +98,36 @@ export class ActivitiesService {
     private readonly prisma: PrismaService,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
+
+  /**
+   * Attach the day↔minute factor to activities being returned (ADR-0068).
+   *
+   * The factor is the activity's effective calendar's standard working day, so `durationDays` reads
+   * back in the same unit it was written in — without it, authoring "2 days" on an 08:00-17:00
+   * calendar would store the right minutes and then read back as "1". One plan lookup (skipped when
+   * every row already names its own calendar) plus one calendar lookup for the whole response.
+   */
+  private async withDayFactors<T extends { calendarId: string | null; planId: string }>(
+    rows: readonly T[],
+  ): Promise<WithDayFactor<T>[]> {
+    const planIds = [
+      ...new Set(rows.filter((row) => row.calendarId === null).map((r) => r.planId)),
+    ];
+    const planCalendarIds = new Map<string, string | null>(
+      planIds.length === 0
+        ? []
+        : (await this.plans.findCalendarIds(planIds)).map((p) => [p.id, p.calendarId]),
+    );
+    return attachDayFactors(this.calendars, rows, planCalendarIds);
+  }
+
+  /** {@link withDayFactors} for a single activity. */
+  private async withDayFactor<T extends { calendarId: string | null; planId: string }>(
+    row: T,
+  ): Promise<WithDayFactor<T>> {
+    const [decorated] = await this.withDayFactors([row]);
+    return decorated!;
+  }
 
   /**
    * Validate a non-null WBS `parentId` (ADR-0038, M5-epic §24): the parent must be an ACTIVE
@@ -180,7 +209,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: Activity[]; meta: PageMeta; canReadCost: boolean }> {
+  ): Promise<{ items: WithDayFactor<Activity>[]; meta: PageMeta; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
     // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere` (cross-tenant
@@ -198,21 +227,21 @@ export class ActivitiesService {
     const hasMore = rows.length > query.limit;
     const items = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
-    return { items, meta: { nextCursor, hasMore }, canReadCost };
+    return { items: await this.withDayFactors(items), meta: { nextCursor, hasMore }, canReadCost };
   }
 
   async get(
     principal: Principal,
     orgSlug: string,
     activityId: string,
-  ): Promise<{ activity: Activity; canReadCost: boolean }> {
+  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
 
     const activity = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!activity) throw new NotFoundError('Activity not found.');
-    return { activity, canReadCost };
+    return { activity: await this.withDayFactor(activity), canReadCost };
   }
 
   async create(
@@ -220,7 +249,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: CreateActivityDto,
-  ): Promise<{ activity: Activity; canReadCost: boolean }> {
+  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:create', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -237,11 +266,6 @@ export class ActivitiesService {
     // A milestone is a point in time: force its duration to 0 defensively, even
     // if the client sent nothing (the DTO's cross-field validator only rejects a
     // non-zero duration that is explicitly present).
-    // Minutes are the storage and engine unit (ADR-0036); days are a convenience over them. The DTO
-    // has already refused a payload carrying both, so this is a preference between one and none.
-    const durationMinutes = MILESTONE_TYPES.includes(type)
-      ? 0
-      : (dto.durationMinutes ?? (dto.durationDays ?? 1) * MINUTES_PER_DAY);
     // The activity's own calendar (ADR-0037); null/omitted inherits the plan default.
     const calendarId = dto.calendarId ?? null;
     // The WBS parent (ADR-0038); null/omitted is top-level.
@@ -272,6 +296,23 @@ export class ActivitiesService {
         // Validate the WBS parent is a same-plan summary (no cycle possible on a brand-new activity).
         if (parentId !== null)
           await this.assertValidParent(tx, parentId, organization.id, plan.id, null);
+        // Minutes are the storage and engine unit (ADR-0036); days are a convenience over them, and
+        // the conversion is the effective calendar's standard working day (ADR-0068) — NOT a
+        // constant 1440, which on an 08:00–17:00 calendar would make "1 day" span 2.67 working
+        // days. Resolved HERE, after the calendar guard, because the guard is what proves this
+        // calendar is usable and takes the lock that serialises it against a delete. The DTO has
+        // already refused a payload carrying both spellings, so this is one or none.
+        const durationMinutes = MILESTONE_TYPES.includes(type)
+          ? 0
+          : (dto.durationMinutes ??
+            daysToMinutes(
+              dto.durationDays ?? 1,
+              await resolveDayFactorMinutes(
+                this.calendars,
+                { activityCalendarId: calendarId, planCalendarId: plan.calendarId },
+                tx,
+              ),
+            ));
         return this.activities.create(
           {
             // Copy the organisation id from the parent plan, never from input.
@@ -350,7 +391,7 @@ export class ActivitiesService {
         },
         'activity created',
       );
-      return { activity, canReadCost };
+      return { activity: await this.withDayFactor(activity), canReadCost };
     } catch (error) {
       throw this.mapWriteError(error);
     }
@@ -361,7 +402,7 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityDto,
-  ): Promise<{ activity: Activity; canReadCost: boolean }> {
+  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -400,8 +441,9 @@ export class ActivitiesService {
     if (dto.type !== undefined) patch.type = dto.type;
     if (dto.durationType !== undefined) patch.durationType = dto.durationType;
     // Mutually exclusive at the DTO, so at most one of these fires. `durationMinutes` is the way to
-    // edit a sub-day activity without rounding it to whole days (TECH_DEBT #78).
-    if (dto.durationDays !== undefined) patch.durationMinutes = dto.durationDays * MINUTES_PER_DAY;
+    // edit a sub-day activity without rounding it to whole days (TECH_DEBT #78). The day-denominated
+    // spelling needs the effective calendar's working day (ADR-0068) and so is converted INSIDE the
+    // transaction below, once the calendar this write leaves the activity on is settled.
     if (dto.durationMinutes !== undefined) patch.durationMinutes = dto.durationMinutes;
     if (dto.constraintType !== undefined) patch.constraintType = dto.constraintType;
     if (dto.constraintDate !== undefined) {
@@ -518,6 +560,28 @@ export class ActivitiesService {
           await this.assertValidParent(tx, parentId, organization.id, existing.planId, activityId);
           patch.parentId = parentId;
         }
+        // A day-denominated duration converts on the calendar this write LEAVES the activity on
+        // (ADR-0068 §4) — `patch.calendarId` when the same PATCH rebinds it, otherwise the stored
+        // one, otherwise the plan's. Resolved here rather than above so a PATCH that changes the
+        // calendar and the duration together cannot convert against the old week. The plan is read
+        // only when the activity inherits and the duration is actually being edited.
+        // Never for a milestone: `patch.durationMinutes` was forced to 0 above, and a milestone is a
+        // point in time whatever the payload said. Converting here would undo that.
+        if (dto.durationDays !== undefined && !MILESTONE_TYPES.includes(effectiveType)) {
+          const activityCalendarId = patch.calendarId ?? existing.calendarId;
+          const planCalendarId =
+            activityCalendarId !== null
+              ? null
+              : (await this.loadActivePlan(existing.planId, organization.id)).calendarId;
+          patch.durationMinutes = daysToMinutes(
+            dto.durationDays,
+            await resolveDayFactorMinutes(
+              this.calendars,
+              { activityCalendarId, planCalendarId },
+              tx,
+            ),
+          );
+        }
         const changed = await this.activities.updateIfVersionMatches(
           activityId,
           dto.version,
@@ -547,7 +611,7 @@ export class ActivitiesService {
 
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
-    return { activity: updated, canReadCost };
+    return { activity: await this.withDayFactor(updated), canReadCost };
   }
 
   /**
@@ -625,7 +689,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: UpdatePositionsDto,
-  ): Promise<{ items: Activity[]; canReadCost: boolean }> {
+  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -679,7 +743,7 @@ export class ActivitiesService {
     const items = await this.prisma.activity.findMany({
       where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
     });
-    return { items, canReadCost };
+    return { items: await this.withDayFactors(items), canReadCost };
   }
 
   /**
@@ -706,7 +770,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: UpdateParentsDto,
-  ): Promise<{ items: Activity[]; canReadCost: boolean }> {
+  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -783,7 +847,7 @@ export class ActivitiesService {
     const items = await this.prisma.activity.findMany({
       where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
     });
-    return { items, canReadCost };
+    return { items: await this.withDayFactors(items), canReadCost };
   }
 
   /**
@@ -820,7 +884,11 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityProgressDto,
-  ): Promise<{ activity: Activity; warnings: ProgressWarning[]; canReadCost: boolean }> {
+  ): Promise<{
+    activity: WithDayFactor<Activity>;
+    warnings: ProgressWarning[];
+    canReadCost: boolean;
+  }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update_progress', organization.id);
     // A Contributor can report progress but does NOT hold cost:read — so this fails closed and the
@@ -842,12 +910,21 @@ export class ActivitiesService {
     let actualFinish = this.resolveDate(dto.actualFinish, existing.actualFinish);
     // Explicit remaining in minutes (day-denominated at the boundary): provided overrides stored,
     // null clears (derive), omitted keeps.
+    // Converted on the activity's effective calendar (ADR-0068 §4), the same factor its duration
+    // was authored with — a remaining that scaled differently from the duration it is a remainder
+    // of would make "3 of 5 days done" arithmetic that does not close.
     let remainingDurationMinutes =
       dto.remainingDurationDays === undefined
         ? existing.remainingDurationMinutes
         : dto.remainingDurationDays === null
           ? null
-          : dto.remainingDurationDays * MINUTES_PER_DAY;
+          : daysToMinutes(
+              dto.remainingDurationDays,
+              await resolveDayFactorMinutes(this.calendars, {
+                activityCalendarId: existing.calendarId,
+                planCalendarId: plan.calendarId,
+              }),
+            );
 
     // You cannot finish what you never started, and a finish cannot precede a start (N06).
     if (actualFinish !== null && actualStart === null) {
@@ -932,7 +1009,7 @@ export class ActivitiesService {
 
     const updated = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!updated) throw new NotFoundError('Activity not found.');
-    return { activity: updated, warnings, canReadCost };
+    return { activity: await this.withDayFactor(updated), warnings, canReadCost };
   }
 
   /** A provided date field (parsed, or null to clear) overrides the stored one;
@@ -1064,7 +1141,7 @@ export class ActivitiesService {
     principal: Principal,
     orgSlug: string,
     activityId: string,
-  ): Promise<{ activity: Activity; canReadCost: boolean }> {
+  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:restore', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -1072,7 +1149,7 @@ export class ActivitiesService {
     const existing = await this.activities.findByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
     await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
-    if (!existing.deletedAt) return { activity: existing, canReadCost }; // already active — no-op
+    if (!existing.deletedAt) return { activity: await this.withDayFactor(existing), canReadCost }; // already active — no-op
 
     // The lifecycle enforces the top-down invariant: restoring an activity whose
     // parent plan is still soft-deleted raises PARENT_DELETED (→ 409).
@@ -1086,7 +1163,7 @@ export class ActivitiesService {
 
     const restored = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!restored) throw new NotFoundError('Activity not found.');
-    return { activity: restored, canReadCost };
+    return { activity: await this.withDayFactor(restored), canReadCost };
   }
 
   /** Load the parent plan active and in the caller's org, or 404. */

@@ -10,6 +10,7 @@ import {
   useUnarchiveCalendar,
 } from '../api/use-calendars';
 import { useCalendarScopeMove } from '../hooks/use-calendar-scope-move';
+import { hasIntradayDetail, maxWindowsPerDay } from '../model/shift-summary';
 import {
   CALENDAR_IN_USE,
   CALENDAR_SCOPE_FILTERS,
@@ -31,7 +32,7 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Label } from '@/components/ui/label';
 import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
+import { CALENDAR_SHIFT_EDITOR_ENABLED, LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { ApiFetchError } from '@/lib/api/client';
@@ -197,7 +198,18 @@ export function CalendarsTable({
     },
     {
       header: 'Working days',
-      cell: (calendar) => formatWorkingWeekdays(calendar.workingWeekdays),
+      // The mask alone made a two-shift calendar and a plain Mon–Fri one read identically in this
+      // list — the exact loss ADR-0067 exists to stop, left in the one screen a planner uses to
+      // tell their calendars apart. `maxWindowsPerDay` had been written for this and had no
+      // caller. The suffix names the busiest day, because a week is asymmetric more often than not.
+      cell: (calendar) => (
+        <span>
+          {formatWorkingWeekdays(calendar.workingWeekdays)}
+          {CALENDAR_SHIFT_EDITOR_ENABLED && hasIntradayDetail(calendar.shifts) ? (
+            <span className="text-muted-foreground"> · {shiftCountLabel(calendar.shifts)}</span>
+          ) : null}
+        </span>
+      ),
     },
     {
       header: 'Description',
@@ -417,4 +429,14 @@ export function CalendarsTable({
       ) : null}
     </div>
   );
+}
+
+/**
+ * `2 shifts` / `1 shift` — a count, deliberately not the hours themselves. The hours belong to a
+ * day, and a row has one cell: printing `08:00–12:00, 13:00–17:00` here would be either one day's
+ * hours labelled as if they were the week's, or five of them in a table cell.
+ */
+function shiftCountLabel(shifts: Parameters<typeof maxWindowsPerDay>[0]): string {
+  const most = maxWindowsPerDay(shifts);
+  return most > 1 ? `${String(most)} shifts` : 'part days';
 }

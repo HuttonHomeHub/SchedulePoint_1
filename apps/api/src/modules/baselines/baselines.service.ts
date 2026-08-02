@@ -13,10 +13,12 @@ import {
 } from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveDayFactorMinutes } from '../activities/day-factor';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { type WorkingTimeCalendar } from '../schedule/engine';
-import { buildPlanCalendar } from '../schedule/plan-calendar';
+import { buildPlanCalendar, buildPlanCalendarOrReject } from '../schedule/plan-calendar';
 
 import { BaselineRepository, type CaptureActivityRow } from './baseline.repository';
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
@@ -56,6 +58,7 @@ export class BaselinesService {
     private readonly organizations: OrganizationsService,
     private readonly plans: PlanRepository,
     private readonly baselines: BaselineRepository,
+    private readonly calendars: CalendarRepository,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(BaselinesService.name) private readonly logger: PinoLogger,
   ) {}
@@ -138,6 +141,12 @@ export class BaselinesService {
         const isActive =
           (await this.baselines.countActiveByPlan(organization.id, planId, tx)) === 0;
 
+        // The plan calendar's working day, frozen into the snapshot (ADR-0068 §5).
+        const planDayFactorMinutes = await resolveDayFactorMinutes(
+          this.calendars,
+          { activityCalendarId: null, planCalendarId: plan.calendarId },
+          tx,
+        );
         const baseline = await this.baselines.createWithSnapshot(
           {
             organizationId: organization.id,
@@ -146,6 +155,10 @@ export class BaselinesService {
             isActive,
             dataDate: plan.plannedStart,
             capturedProjectFinish: projectFinish,
+            // Frozen with the rest of the snapshot (ADR-0068 §5 applying ADR-0025's copy-not-
+            // reference rule): a later calendar edit must not rewrite what this baseline reports
+            // as its captured durations and float.
+            hoursPerDayMinutes: planDayFactorMinutes,
             actorId: principal.userId,
             activities,
           },
@@ -293,6 +306,7 @@ export class BaselinesService {
         totalFloat: l.totalFloat,
       })),
       calendar,
+      active.hoursPerDayMinutes,
     );
 
     return {
@@ -319,8 +333,11 @@ export class BaselinesService {
     if (!calendarId) return buildPlanCalendar(null);
     const calendar = await this.baselines.loadPlanCalendar(organizationId, calendarId);
     // Build the engine's minute-granular calendar directly from the stored shift/window rows
-    // (ADR-0036 §2) — mirrors ScheduleService so variance days match the computed dates they diff.
-    return buildPlanCalendar(calendar);
+    // (ADR-0036 §2) — mirrors ScheduleService so variance days match the computed dates they diff,
+    // including its 422 for a calendar with no working time (a variance read on one answered the
+    // same opaque 500 as a recalculation, and would have kept doing so if the mapping had been
+    // written at the seam that happened to be found first).
+    return buildPlanCalendarOrReject(calendar, calendarId);
   }
 
   /** Assert an active plan exists in this org, so a list/read on a bogus plan is a 404 (not empty). */

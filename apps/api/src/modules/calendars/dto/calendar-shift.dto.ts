@@ -13,6 +13,20 @@ import {
 const MINUTES_PER_DAY = 1440;
 
 /**
+ * Upper bounds on the two window arrays, in one place because four DTOs have to agree on them.
+ *
+ * They are **generous rather than realistic** — a shift table with twenty-four windows on a single
+ * day describes nothing a site works, but a bound that argued about what is plausible would be a
+ * bound that eventually refused a real calendar. What they exist to stop is unbounded nesting: every
+ * window is a `@ValidateNested` object, so the array's length is a validation-cost multiplier, and
+ * `shifts` additionally becomes one row per entry. The 100 kB body limit bounds this in practice
+ * already; stating it here is the codebase's own convention (`@ArrayMaxSize` on every other batch
+ * array) and makes the ceiling a declared contract instead of a side effect of a proxy setting.
+ */
+export const MAX_CALENDAR_SHIFTS = 168;
+export const MAX_EXCEPTION_WINDOWS = 24;
+
+/**
  * One working window inside a day, as minutes from local midnight (ADR-0036 §2).
  *
  * A midnight-crossing night shift is **two adjacent-day windows**, not a wrap: 20:00–06:00 is

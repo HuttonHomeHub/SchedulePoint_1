@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependenciesModule } from '../cross-plan-dependencies/cross-plan-dependencies.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
@@ -19,7 +20,9 @@ import { ScheduleService } from './schedule.service';
 @Module({
   imports: [OrganizationsModule, PlansModule, PlanLockModule, CrossPlanDependenciesModule],
   controllers: [ScheduleController],
-  providers: [ScheduleService, ScheduleRepository],
+  // CalendarRepository: the recalculation persists float in DAYS, and the factor comes from
+  // each activity's own calendar (ADR-0068 §3a).
+  providers: [ScheduleService, ScheduleRepository, CalendarRepository],
   // ScheduleRepository is exported so the External-Guest read path (ADR-0051 F-M3) can read a
   // plan's persisted schedule summary (`summarise`) without a Principal — a pure persisted-column
   // read, no engine invocation.

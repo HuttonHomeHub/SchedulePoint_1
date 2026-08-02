@@ -1644,3 +1644,20 @@ measured and printed. What **is** gated is `pnpm check:playbook`, which compares
 `docs/TEST_PLAYBOOK.md` against `seed --list-plans` in both directions — the second direction being
 the one worth the effort, since a plan nobody documented gets seeded, looks plausible, and
 demonstrates nothing, which is the exact state the catalogue was built to end.
+
+## 2026-08-01 — The Continental preset keeps 06:00–18:00, every day
+
+The ADR-0067 spec reserved "Continental's exact hours" as a product-owner decision. Building the
+preset list showed the question had a wrong premise — a continental rota is a **multi-week cycle**
+that a 7-day repeating shift table cannot hold — so the preset was renamed for what it actually
+writes rather than for the rota it half-resembles: `Continental days — every day, 06:00–18:00`.
+
+Confirmed as-is. The reason is the shape of the set rather than the hours themselves: the five
+presets are Standard week (Mon–Fri 08:00–17:00), Two shift (Mon–Fri 06:00–14:00 + 14:00–22:00),
+Continental days, 24/7, and Window-only. Continental is the **only** one covering seven days without
+being round-the-clock, which is a real gap the other four leave. Making it two-shift — the obvious
+alternative — would have produced two presets differing only by weekend coverage.
+
+Every label carries its hours, so a planner reads what a preset writes before committing to it; a
+preset is a **verb** (ADR-0067 §5), so nothing records which one produced a week, and changing this
+constant later reinterprets no stored calendar.

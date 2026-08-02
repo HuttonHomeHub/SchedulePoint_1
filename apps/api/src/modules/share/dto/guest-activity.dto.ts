@@ -2,9 +2,14 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ActivityStatus, ActivityType, type Activity } from '@prisma/client';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
+import { minutesToDays, type WithDayFactor } from '../../activities/day-factor';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
-const MINUTES_PER_DAY = 1440;
+/**
+ * Day-denominated fields use the activity's effective calendar's working day (ADR-0068), attached
+ * by the service — the same factor the member-facing DTO uses, so the two can never report a
+ * different number of days for the same activity.
+ */
 
 /**
  * Guest read DTO for an activity (ADR-0051 §4, F-M3) — a DELIBERATELY field-stripped,
@@ -37,8 +42,20 @@ export class GuestActivityDto {
   @ApiProperty({ enum: ActivityType })
   type!: ActivityType;
 
-  @ApiProperty({ description: 'Working days (milestones are 0).' })
+  @ApiProperty({
+    description:
+      'Working days on this activity’s calendar (ADR-0068), rounded from the stored minutes ' +
+      '(milestones are 0). A sub-day activity reads back here as 0 — read `durationMinutes`.',
+  })
   durationDays!: number;
+
+  @ApiProperty({
+    description:
+      'Working MINUTES — what is stored and what the engine scheduled on (ADR-0036). In scope ' +
+      'because it is the exact form of a field already exposed: without it a guest sees a ' +
+      'four-hour activity as `durationDays: 0` and cannot tell it apart from a milestone.',
+  })
+  durationMinutes!: number;
 
   @ApiProperty({ description: 'Graphical y-lane / vertical position on the TSLD canvas.' })
   laneIndex!: number;
@@ -74,15 +91,17 @@ export class GuestActivityDto {
   actualFinish!: string | null;
 
   /** Map an activity row to the guest shape — copying ONLY the whitelisted scope fields. */
-  static from(entity: Activity): GuestActivityDto {
+  static from(entity: WithDayFactor<Activity>): GuestActivityDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
     return {
       id: entity.id,
       code: entity.code,
       name: entity.name,
       type: entity.type,
-      // Stored in working-minutes (ADR-0036); the public field stays whole working days.
-      durationDays: Math.round(entity.durationMinutes / MINUTES_PER_DAY),
+      // Stored in working-minutes (ADR-0036); both forms are exposed, the exact one and the
+      // day-rounded one a reader expects to see on a bar.
+      durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
+      durationMinutes: entity.durationMinutes,
       laneIndex: entity.laneIndex,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),

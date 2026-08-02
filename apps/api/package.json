@@ -2,7 +2,7 @@
   "name": "@repo/api",
   "version": "0.34.0",
   "private": true,
-  "description": "SchedulePoint REST API — NestJS + Prisma + PostgreSQL, documented with OpenAPI.",
+  "description": "SchedulePoint REST API \u2014 NestJS + Prisma + PostgreSQL, documented with OpenAPI.",
   "license": "MIT",
   "scripts": {
     "dev": "nest start --watch",
@@ -33,6 +33,7 @@
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.2.1",
     "@repo/interchange": "workspace:*",
+    "@repo/layout": "workspace:*",
     "@repo/types": "workspace:*",
     "better-auth": "^1.6.25",
     "class-transformer": "^0.5.1",

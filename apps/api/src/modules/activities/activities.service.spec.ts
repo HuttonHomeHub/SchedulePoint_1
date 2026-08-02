@@ -148,7 +148,10 @@ const ALL: Permission[] = [
 
 describe('ActivitiesService', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
-  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let plans: {
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findCalendarIds: ReturnType<typeof vi.fn>;
+  };
   let activities: {
     create: ReturnType<typeof vi.fn>;
     findActiveByIdInOrg: ReturnType<typeof vi.fn>;
@@ -162,7 +165,10 @@ describe('ActivitiesService', () => {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
     restoreBatch: ReturnType<typeof vi.fn>;
   };
-  let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let calendars: {
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findHoursPerDayMinutes: ReturnType<typeof vi.fn>;
+  };
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
     activity: { findMany: ReturnType<typeof vi.fn> };
@@ -187,7 +193,13 @@ describe('ActivitiesService', () => {
     organizations = {
       resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
     };
-    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    plans = {
+      findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()),
+      // The plan-calendar half of an activity's effective calendar (ADR-0037/0068). Default: none,
+      // so an activity that inherits falls back to the 24-hour constant and every existing
+      // assertion here reads exactly the arithmetic it always did.
+      findCalendarIds: vi.fn().mockResolvedValue([]),
+    };
     activities = {
       create: vi.fn(),
       findActiveByIdInOrg: vi.fn(),
@@ -228,6 +240,9 @@ describe('ActivitiesService', () => {
       findActiveByIdInOrg: vi
         .fn()
         .mockResolvedValue({ id: 'cal-1', scope: 'ORG', projectId: null, archivedAt: null }),
+      // The day↔minute factor (ADR-0068). Default: an empty map, so every lookup falls back to the
+      // 24-hour constant and these specs assert exactly the arithmetic they always did.
+      findHoursPerDayMinutes: vi.fn().mockResolvedValue(new Map()),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new ActivitiesService(
@@ -372,6 +387,56 @@ describe('ActivitiesService', () => {
       expect(arg.type).toBe('TASK');
       // Public default of 1 working day is stored as 1440 working-minutes (ADR-0036).
       expect(arg.durationMinutes).toBe(1440);
+    });
+
+    /**
+     * ADR-0068. Before the calendar carried an hours-per-day, "1 day" was 1440 working minutes on
+     * every calendar — so on an 08:00-17:00 week (540 a day) it spanned 2.67 working days. The
+     * factor comes from the activity's EFFECTIVE calendar, resolved inside the write transaction.
+     */
+    it('converts durationDays on the activity calendar’s working day, not a constant', async () => {
+      calendars.findHoursPerDayMinutes.mockResolvedValue(new Map([['cal-1', 540]]));
+      activities.create.mockResolvedValue(activity());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'A',
+        durationDays: 2,
+        calendarId: 'cal-1',
+      });
+      const arg = activities.create.mock.calls[0]?.[0] as { durationMinutes: number };
+      expect(arg.durationMinutes).toBe(1080);
+    });
+
+    /**
+     * The write and the read must use the SAME factor. With only the write converted, authoring
+     * "2 days" on an 08:00-17:00 calendar would store the right minutes and read back as "1" — a
+     * form that shows a different number from the one just saved.
+     */
+    it('reads a duration back in the unit it was written in', async () => {
+      calendars.findHoursPerDayMinutes.mockResolvedValue(new Map([['cal-1', 540]]));
+      activities.create.mockResolvedValue({
+        ...activity(),
+        durationMinutes: 1080,
+        calendarId: 'cal-1',
+      });
+      const { activity: created } = await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'A',
+        durationDays: 2,
+        calendarId: 'cal-1',
+      });
+      expect(created.dayFactorMinutes).toBe(540);
+      expect(ActivityResponseDto.from(created, true).durationDays).toBe(2);
+    });
+
+    it('takes durationMinutes literally — the factor is a days-only convenience', async () => {
+      calendars.findHoursPerDayMinutes.mockResolvedValue(new Map([['cal-1', 540]]));
+      activities.create.mockResolvedValue(activity());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+        name: 'A',
+        durationMinutes: 240,
+        calendarId: 'cal-1',
+      });
+      const arg = activities.create.mock.calls[0]?.[0] as { durationMinutes: number };
+      expect(arg.durationMinutes).toBe(240);
     });
 
     it('forces a milestone duration to 0 even if a non-zero value slips through', async () => {

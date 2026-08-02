@@ -1,6 +1,8 @@
 import { ACCRUAL_TYPES, DURATION_TYPES, PERCENT_COMPLETE_TYPES } from '@repo/types';
 import { z } from 'zod';
 
+import { durationTextField } from '../model/duration-field';
+
 import { ACTIVITY_TYPES, CONSTRAINT_TYPES } from './activity-schemas';
 
 import { moneyMajorAmount } from '@/lib/money-schema';
@@ -25,17 +27,18 @@ import { moneyMajorAmount } from '@/lib/money-schema';
  * `activityFormSchema` stays in place and unmodified: the flag-off path still uses it.
  */
 
-/** Identity, duration, hierarchy and free text — the "what is this activity" scope. */
+/**
+ * Identity, duration, hierarchy and free text — the "what is this activity" scope.
+ *
+ * `duration` is raw text validated for syntax only (ADR-0070); the day↔minute conversion happens at
+ * submit, where the activity's calendar is known.
+ */
 export const activityGeneralShape = {
   name: z.string().trim().min(1, 'Name is required.').max(200, 'Name is too long.'),
   code: z.string().trim().max(32, 'Code is too long.').optional(),
   type: z.enum(ACTIVITY_TYPES),
   durationType: z.enum(DURATION_TYPES),
-  durationDays: z
-    .number({ message: 'Enter a whole number of days.' })
-    .int('Enter a whole number of days.')
-    .min(0, 'Duration cannot be negative.')
-    .max(100000, 'Duration is too large.'),
+  duration: durationTextField(),
   parentId: z.string().optional(),
   description: z.string().trim().max(2000, 'Description is too long.').optional(),
 };

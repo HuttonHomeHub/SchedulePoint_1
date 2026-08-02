@@ -4,8 +4,14 @@ import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/cli
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 
-/** Endpoint fields embedded in a dependency response (no N+1 — loaded via include). */
-const endpointSelect = { id: true, code: true, name: true } as const;
+/**
+ * Endpoint fields embedded in a dependency response (no N+1 — loaded via include).
+ *
+ * `calendarId` rides along because a lag's day↔minute factor is resolved from the endpoint the
+ * relationship's `lagCalendar` names (ADR-0037 / ADR-0068 §4) — selecting it here costs nothing on
+ * a join that already runs, and is the alternative to a second query per row.
+ */
+const endpointSelect = { id: true, code: true, name: true, calendarId: true } as const;
 
 const withEndpoints = {
   include: {
@@ -50,6 +56,26 @@ export interface ExportEdge {
 @Injectable()
 export class DependencyRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * The plan's dependency edges as bare endpoint pairs — the predecessor hint a lane layout needs
+   * (`packLanes`, `@repo/layout`), and nothing more. Type and lag do not affect which lane a bar
+   * sits in, so they are not selected.
+   *
+   * Ordered by id so the hint a caller builds is a function of the edge SET, never of scan order —
+   * a layout that varied between two runs over the same plan would move a planner's whole diagram
+   * for no reason.
+   */
+  async findEdgesForPlan(
+    organizationId: string,
+    planId: string,
+  ): Promise<{ predecessorId: string; successorId: string }[]> {
+    return this.prisma.activityDependency.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      select: { predecessorId: true, successorId: true },
+      orderBy: { id: 'asc' },
+    });
+  }
 
   private active(
     where: Prisma.ActivityDependencyWhereInput = {},

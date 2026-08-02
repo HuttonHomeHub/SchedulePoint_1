@@ -12,7 +12,7 @@ import {
   type ResourceCollision,
   type ResourceCollisionResolution,
 } from '@repo/interchange';
-import { WorkingWeekdays } from '@repo/types';
+import { packLanes } from '@repo/layout';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -29,6 +29,7 @@ import {
   CalendarRepository,
   type ImportCalendarBatchInput,
 } from '../calendars/calendar.repository';
+import { resolveHoursPerDayMinutes } from '../calendars/hours-per-day';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -288,6 +289,25 @@ export class InterchangeService {
       throw error;
     }
 
+    // Phase 3 — lay the imported programme out in lanes (ADR-0069).
+    //
+    // Deliberately AFTER the recalc, because the packer needs computed dates: it packs by time, and
+    // before phase 2 an imported activity has none. Deliberately INSIDE the pen window, because
+    // writing `lane_index` is an ordinary plan mutation and takes the same gate every other one does.
+    //
+    // Best-effort by design, and the asymmetry with phase 2 is the point. A recalc failure means the
+    // plan's dates are wrong, so the import is rolled back; a layout failure means the plan is
+    // correct but arranged badly, which a planner fixes with one press of Auto-arrange. Rolling back
+    // a valid import over cosmetics would be the worse trade.
+    try {
+      await this.packImportedLanes(principal, organization.id, planId);
+    } catch (error) {
+      this.logger.warn(
+        { organizationId: organization.id, planId, err: error },
+        'interchange commit could not lay out lanes — plan kept, lanes left in source order',
+      );
+    }
+
     // Release the pen so the imported plan opens unlocked for whoever navigates to it.
     await this.editLock.release(principal, orgSlug, planId).catch(() => undefined);
 
@@ -386,13 +406,20 @@ export class InterchangeService {
         // The CHECK partner of `scope`: a PROJECT calendar belongs to the import's target project, an
         // ORG one to no project at all (ck_calendars_scope_parent, ADR-0053 §1).
         projectId: calendar.scope === 'PROJECT' ? project.id : null,
-        workingWeekdays: this.maskFromShifts(calendar.shifts),
+        // The file's own weekly periods, verbatim — no longer flattened to a weekday mask.
+        shifts: calendar.shifts,
+        // The file's own standard working day (P6 `day_hr_cnt`, ADR-0068), falling back to the
+        // derivation from the pattern just written. Resolved through the SAME helper the calendars
+        // API uses, so an imported calendar and a hand-authored one cannot disagree about the factor.
+        hoursPerDayMinutes: resolveHoursPerDayMinutes({
+          ...(calendar.hoursPerDay === undefined ? {} : { hoursPerDay: calendar.hoursPerDay }),
+          shifts: calendar.shifts,
+        }),
         exceptions: calendar.exceptions.map((exception) => ({
           id: randomUUID(),
-          // The mapper emits single-day exceptions (startDate == endDate); the calendar module stores a
-          // whole-day working/non-working exception (a window present ⇒ a worked day).
+          // The mapper emits single-day exceptions (startDate == endDate).
           date: parseCalendarDate(exception.startDate),
-          isWorking: exception.windows.length > 0,
+          windows: exception.windows,
           label: exception.label,
         })),
         ...stamp,
@@ -957,6 +984,90 @@ export class InterchangeService {
    * returned on success) — in FK-safe order so the "nothing is created on failure" contract holds. This
    * is cleanup of our own brand-new, not-yet-surfaced data, never a user-facing delete.
    */
+  /**
+   * Lay the freshly-imported plan out in lanes, using the SAME packer the canvas's Auto-arrange uses
+   * (`packLanes`, `@repo/layout`).
+   *
+   * **The defect this closes.** An import assigned `laneIndex` = the activity's position in the
+   * source file, so a 500-activity programme opened as 500 lanes holding one bar each. Nothing was
+   * wrong with the data; the picture was simply unreadable, on the one screen that forms a planner's
+   * first impression of a schedule they have just brought over from P6.
+   *
+   * **Why the shared packer rather than a server-side one.** A second implementation would agree
+   * with the canvas on the day it was written and drift afterwards, and the drift would be invisible
+   * — each diagram looks plausible alone, and only someone comparing an imported plan against the
+   * same plan after pressing Auto-arrange would ever see them disagree. Sharing it also means the
+   * predecessor hint (which keeps a logic line from running twelve lanes up the screen and back
+   * down) applies to imports for free, which is the shape a programme most needs it in.
+   *
+   * Activities with no computed dates are **skipped, not packed into lane 0**: an uncalculated
+   * activity is not drawn, so it has no span to pack, and collapsing them all into one lane would
+   * invent an overlap the moment they gained dates.
+   */
+  private async packImportedLanes(
+    principal: Principal,
+    organizationId: string,
+    planId: string,
+  ): Promise<void> {
+    const [activities, dependencies] = await Promise.all([
+      this.activities.findLayoutRowsForPlan(organizationId, planId),
+      this.dependencies.findEdgesForPlan(organizationId, planId),
+    ]);
+
+    // Day offsets about an arbitrary but FIXED origin. The packer only ever compares offsets to each
+    // other, so the origin cancels — what matters is that both ends of every span use the same one.
+    const DAY_MS = 86_400_000;
+    const items = activities.flatMap((activity) =>
+      activity.earlyStart === null || activity.earlyFinish === null
+        ? []
+        : [
+            {
+              id: activity.id,
+              startDay: Math.round(activity.earlyStart.getTime() / DAY_MS),
+              endDay: Math.round(activity.earlyFinish.getTime() / DAY_MS),
+              laneIndex: activity.laneIndex,
+            },
+          ],
+    );
+    if (items.length === 0) return;
+
+    const predecessorsOf = new Map<string, string[]>();
+    for (const edge of dependencies) {
+      const existing = predecessorsOf.get(edge.successorId);
+      if (existing === undefined) predecessorsOf.set(edge.successorId, [edge.predecessorId]);
+      else existing.push(edge.predecessorId);
+    }
+
+    const versionOf = new Map(activities.map((a) => [a.id, a.version] as const));
+    const positions = packLanes(items, predecessorsOf).flatMap((change) => {
+      const version = versionOf.get(change.id);
+      return version === undefined ? [] : [{ ...change, version }];
+    });
+    if (positions.length === 0) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      const moved = await this.activities.updateLanePositions(
+        organizationId,
+        planId,
+        positions,
+        principal.userId,
+        tx,
+      );
+      // Same all-or-nothing rule the positions endpoint uses: a partial move is a half-laid-out
+      // diagram, which is harder to read than the source order it replaced.
+      if (moved !== positions.length) {
+        throw new Error(
+          `lane layout wrote ${String(moved)} of ${String(positions.length)} rows — rolled back`,
+        );
+      }
+    });
+
+    this.logger.info(
+      { organizationId, planId, activities: items.length, moved: positions.length },
+      'interchange commit laid out lanes',
+    );
+  }
+
   private async compensate(
     planId: string,
     calendarIds: string[],
@@ -1105,17 +1216,6 @@ export class InterchangeService {
       });
     }
     return id;
-  }
-
-  /**
-   * Derive the calendar module's weekday-mask contract from the graph's intraday shift rows (ADR-0036):
-   * a weekday is "worked" iff it carries at least one shift window. This approximates a richer shift
-   * calendar to the whole-day weekday pattern the calendar module models in M1 (the loss, if any, is
-   * already named in the interchange report's calendar findings).
-   */
-  private maskFromShifts(shifts: readonly { weekday: number }[]): number {
-    const workedWeekdays = [...new Set(shifts.map((s) => s.weekday))];
-    return WorkingWeekdays.fromIndices(workedWeekdays);
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {

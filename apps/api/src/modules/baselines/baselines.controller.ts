@@ -106,6 +106,12 @@ export class BaselinesController {
       'positive = current later than baseline (behind).',
   })
   @ApiOkResponse({ type: BaselineVarianceRowResponseDto, isArray: true })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The plan calendar has no working time at all — an empty week with no working exceptions ' +
+      '(CALENDAR_HAS_NO_WORKING_TIME). Variance is measured in working days, so it has no ' +
+      'answer on such a calendar; the read says so rather than 500ing.',
+  })
   async variance(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

@@ -29,6 +29,7 @@ const ACTIVITY: ActivitySummary = {
   description: null,
   type: 'TASK',
   durationDays: 5,
+  durationMinutes: 2400,
   constraintType: 'SNET',
   constraintDate: '2026-05-01',
   secondaryConstraintType: 'FNLT',

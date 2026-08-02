@@ -5,6 +5,7 @@ import {
   importGraphSchema,
   type ImportActivity,
   type ImportAssignment,
+  type ImportCalendar,
   type ImportDependency,
   type ImportGraph,
   type ImportProgress,
@@ -599,5 +600,148 @@ describe('validateAndRepair — resources + assignments (ADR-0039/0040)', () => 
     );
     expect(graph.assignments.map((x) => x.isDriving)).toEqual([true, false]);
     expect(repaired(findings, 'assignment', 'already has a driver')).toBe(true);
+  });
+});
+
+describe('validateAndRepair — calendar windows (ADR-0036 §2 / ADR-0068)', () => {
+  /** A calendar carrying the given weekly shifts and dated exceptions. */
+  function cal(parts: Partial<ImportCalendar> = {}): ImportCalendar {
+    return {
+      key: 'CAL',
+      name: 'Site',
+      scope: 'PROJECT',
+      shifts: [],
+      exceptions: [],
+      ...parts,
+    };
+  }
+
+  const repairedCalendar = (findings: ReportFinding[], needle: string): boolean =>
+    findings.some(
+      (f) => f.kind === 'repair' && f.entity === 'calendar' && f.detail.includes(needle),
+    );
+
+  it('sorts a day’s windows by start time', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [
+          cal({
+            shifts: [
+              { weekday: 0, startMinute: 840, endMinute: 1020 },
+              { weekday: 0, startMinute: 420, endMinute: 660 },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(graph.calendars[0]?.shifts).toEqual([
+      { weekday: 0, startMinute: 420, endMinute: 660 },
+      { weekday: 0, startMinute: 840, endMinute: 1020 },
+    ]);
+    expect(repairedCalendar(findings, 'Monday: windows re-ordered')).toBe(true);
+  });
+
+  it('merges an overlapping pair rather than dropping either window’s minutes', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [
+          cal({
+            shifts: [
+              { weekday: 1, startMinute: 480, endMinute: 780 },
+              { weekday: 1, startMinute: 720, endMinute: 1020 },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(graph.calendars[0]?.shifts).toEqual([{ weekday: 1, startMinute: 480, endMinute: 1020 }]);
+    expect(repairedCalendar(findings, 'Tuesday: overlapping windows')).toBe(true);
+  });
+
+  it('drops a window that claims no time', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [
+          cal({
+            shifts: [
+              { weekday: 2, startMinute: 600, endMinute: 600 },
+              { weekday: 2, startMinute: 480, endMinute: 960 },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(graph.calendars[0]?.shifts).toEqual([{ weekday: 2, startMinute: 480, endMinute: 960 }]);
+    expect(repairedCalendar(findings, 'empty window 600–600 dropped')).toBe(true);
+  });
+
+  it('repairs each weekday independently, so a Tuesday window is never "before" a Monday one', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [
+          cal({
+            shifts: [
+              { weekday: 1, startMinute: 480, endMinute: 960 },
+              { weekday: 0, startMinute: 480, endMinute: 960 },
+            ],
+          }),
+        ],
+      }),
+    );
+    // Grouped by weekday for storage, but neither day was itself out of order.
+    expect(graph.calendars[0]?.shifts.map((s) => s.weekday)).toEqual([0, 1]);
+    expect(findings.filter((f) => f.entity === 'calendar')).toHaveLength(0);
+  });
+
+  it('repairs a dated exception’s windows too', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [
+          cal({
+            exceptions: [
+              {
+                startDate: '2026-12-24',
+                endDate: '2026-12-24',
+                label: 'Christmas Eve',
+                windows: [
+                  { startMinute: 480, endMinute: 780 },
+                  { startMinute: 600, endMinute: 720 },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(graph.calendars[0]?.exceptions[0]?.windows).toEqual([
+      { startMinute: 480, endMinute: 780 },
+    ]);
+    expect(repairedCalendar(findings, 'exception 2026-12-24: overlapping windows')).toBe(true);
+  });
+
+  it('raises a standard working day that would round to zero stored minutes', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({ calendars: [cal({ hoursPerDay: 0.004 })] }),
+    );
+    expect(graph.calendars[0]?.hoursPerDay).toBe(0.25);
+    expect(repairedCalendar(findings, 'raised to 0.25 h')).toBe(true);
+  });
+
+  it('leaves an ordinary calendar and its omitted hours-per-day untouched', () => {
+    const { graph, findings } = validateAndRepair(
+      fullGraph({
+        calendars: [
+          cal({
+            shifts: [
+              { weekday: 0, startMinute: 480, endMinute: 720 },
+              { weekday: 0, startMinute: 780, endMinute: 990 },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(graph.calendars[0]?.shifts).toHaveLength(2);
+    expect(graph.calendars[0]).not.toHaveProperty('hoursPerDay');
+    expect(findings.filter((f) => f.entity === 'calendar')).toHaveLength(0);
   });
 });

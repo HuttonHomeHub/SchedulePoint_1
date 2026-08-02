@@ -45,6 +45,12 @@ export interface CalendarPatch {
   /** New explicit weekly shift windows; replaces the week as a set, like the mask above. */
   shifts?: readonly ShiftRow[];
   /**
+   * The calendar's standard working day in minutes (ADR-0068). The SERVICE decides this value —
+   * an explicit client `hoursPerDay`, or a default derived from the pattern being written — so
+   * this field is present on every patch that touches the week, never omitted and left to drift.
+   */
+  hoursPerDayMinutes?: number;
+  /**
    * The calendar tier (ADR-0053 §1). Always written together with {@link CalendarPatch.projectId}
    * so the pair can never disagree — the service sets both or neither, and
    * ck_calendars_scope_parent is the DB backstop.
@@ -53,11 +59,15 @@ export interface CalendarPatch {
   projectId?: string | null;
 }
 
-/** One stored weekly shift window (ADR-0036 §2); minutes from local midnight. */
-export interface ShiftRow {
-  weekday: number;
+/** One stored working window (ADR-0036 §2); minutes from local midnight, `[start, end)`. */
+export interface WindowRow {
   startMinute: number;
   endMinute: number;
+}
+
+/** One stored weekly shift window — a {@link WindowRow} pinned to a weekday (0 = Monday). */
+export interface ShiftRow extends WindowRow {
+  weekday: number;
 }
 
 /**
@@ -72,6 +82,8 @@ export interface CreateCalendarInput {
   name: string;
   workingWeekdays?: number;
   shifts?: readonly ShiftRow[];
+  /** The calendar's standard working day in minutes (ADR-0068); the service always supplies it. */
+  hoursPerDayMinutes: number;
   description: string | null;
   /** The tier to create at (ADR-0053 §1); `PROJECT` requires a `projectId`, `ORG` forbids one. */
   scope: CalendarScope;
@@ -87,28 +99,49 @@ export interface CreateCalendarInput {
  */
 export type CalendarScopeFilter = 'org' | 'project' | 'all';
 
-/** The inputs a whole-day calendar exception create needs (windows derived from `isWorking`). */
+/**
+ * The inputs a dated calendar exception create needs.
+ *
+ * The day's working time arrives EITHER as explicit `windows` (the storage form — a half-day
+ * before a holiday, a short-crew shutdown day, a turnaround calendar's only working hours) OR as
+ * the whole-day `isWorking` shorthand. The DTO has already refused a body carrying both.
+ */
 export interface CreateCalendarExceptionInput {
   organizationId: string;
   calendarId: string;
   date: Date;
   isWorking: boolean;
+  windows?: readonly WindowRow[];
   label: string | null;
   createdBy: string;
   updatedBy: string;
 }
 
 /**
- * One imported calendar (+ its whole-day exceptions) for the batched import write. Ids are
- * CLIENT-ASSIGNED (the `@default(uuid(7))` is bypassed) so the caller can resolve key→id references
- * before any DB write (interchange commit, ADR-0050 B3). Shifts derive from the mask and windows from
- * `isWorking`, exactly as the single `create`/`createException`.
+ * One imported calendar (+ its exceptions) for the batched import write. Ids are CLIENT-ASSIGNED (the
+ * `@default(uuid(7))` is bypassed) so the caller can resolve key→id references before any DB write
+ * (interchange commit, ADR-0050 B3).
+ *
+ * Shifts and exception windows are the source file's OWN intraday periods, written verbatim. They
+ * used to be flattened — a weekday mask materialised as full-day shifts, an exception reduced to
+ * worked/not-worked — because nothing could store or author a partial day. ADR-0036's shift rows and
+ * ADR-0067's window editor removed that constraint, but the flattening outlived it: importing a P6
+ * 07:00–15:30 calendar produced a 24-hour one, and every duration on it then scheduled roughly three
+ * times too fast.
  */
 export interface ImportCalendarBatchInput {
   id: string;
   organizationId: string;
   name: string;
-  workingWeekdays: number;
+  /** The weekly pattern, verbatim: one row per worked period per weekday (0 = Monday). */
+  shifts: readonly { weekday: number; startMinute: number; endMinute: number }[];
+  /**
+   * The standard working day in MINUTES (ADR-0068) — the day↔minute factor for every day-denominated
+   * field measured on this calendar. Resolved by the caller from the source file's own figure (P6's
+   * `day_hr_cnt`), falling back to the derivation from `shifts`; never defaulted here, because a
+   * silent 1440 re-reads an 8-hour file's durations at three times their length.
+   */
+  hoursPerDayMinutes: number;
   /**
    * The tier to create the imported calendar at (ADR-0053 §5). An import defaults to `PROJECT` —
    * pinned to the import's target project, so a foreign file stops permanently polluting the shared
@@ -123,7 +156,8 @@ export interface ImportCalendarBatchInput {
   exceptions: readonly {
     id: string;
     date: Date;
-    isWorking: boolean;
+    /** The day's worked periods, verbatim. Empty = a non-working day (a holiday). */
+    windows: readonly WindowRow[];
     label: string | null;
   }[];
 }
@@ -139,17 +173,6 @@ export type CalendarWithExceptions = CalendarWithShifts & {
   exceptions: CalendarExceptionWithWindows[];
 };
 
-/** The full-day `[0, 1440)` shift rows a weekday mask maps to (ADR-0036 §4.2). */
-function fullDayShiftsFromMask(
-  mask: number,
-): { weekday: number; startMinute: number; endMinute: number }[] {
-  return WorkingWeekdays.toIndices(mask).map((weekday) => ({
-    weekday,
-    startMinute: 0,
-    endMinute: MINUTES_PER_DAY,
-  }));
-}
-
 /**
  * The weekly pattern as stored rows, from whichever form the caller supplied.
  *
@@ -164,7 +187,24 @@ function shiftRowsFor(
   mask: number | undefined,
 ): ShiftRow[] {
   if (shifts !== undefined) return [...shifts];
-  return mask === undefined ? [] : fullDayShiftsFromMask(mask);
+  return mask === undefined ? [] : WorkingWeekdays.toFullDayShifts(mask);
+}
+
+/**
+ * A dated exception's replacement windows, from whichever form the caller supplied — the
+ * `shiftRowsFor` rule one table over, and for the same reason: `createException` and the
+ * interchange batch both have to agree what `isWorking` means in window terms.
+ *
+ * Explicit windows win; `isWorking` is shorthand for the whole-day case (`true` ⇒ one full-day
+ * window, `false` ⇒ none, which is a holiday). The DTO rejects sending both, and rejects an
+ * empty `windows` array so "no working time" has exactly one spelling.
+ */
+export function exceptionWindowRowsFor(
+  windows: readonly WindowRow[] | undefined,
+  isWorking: boolean,
+): WindowRow[] {
+  if (windows !== undefined) return [...windows];
+  return isWorking ? [{ startMinute: 0, endMinute: MINUTES_PER_DAY }] : [];
 }
 
 /**
@@ -201,6 +241,9 @@ export class CalendarRepository {
         // already validated the project is active and in-org.
         scope: input.scope,
         projectId: input.projectId,
+        // Always written with the week it belongs to (ADR-0068 §1) — a pattern stored without its
+        // day factor is the 2.67x trap the NOT NULL default exists to make impossible.
+        hoursPerDayMinutes: input.hoursPerDayMinutes,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
         shifts: { create: shiftRowsFor(input.shifts, input.workingWeekdays) },
@@ -237,10 +280,11 @@ export class CalendarRepository {
         // The tier + its owning project, always written together (ADR-0053 §1/§5).
         scope: calendar.scope,
         projectId: calendar.projectId,
+        hoursPerDayMinutes: calendar.hoursPerDayMinutes,
         createdBy: calendar.createdBy,
         updatedBy: calendar.updatedBy,
       });
-      for (const shift of fullDayShiftsFromMask(calendar.workingWeekdays)) {
+      for (const shift of calendar.shifts) {
         shiftRows.push({ calendarId: calendar.id, ...shift });
       }
       for (const exception of calendar.exceptions) {
@@ -255,12 +299,10 @@ export class CalendarRepository {
           createdBy: calendar.createdBy,
           updatedBy: calendar.updatedBy,
         });
-        if (exception.isWorking) {
-          windowRows.push({
-            calendarExceptionId: exception.id,
-            startMinute: 0,
-            endMinute: MINUTES_PER_DAY,
-          });
+        // Through the same helper as the single create — an inline `isWorking ? full day : none`
+        // here would be a second statement of the rule, free to drift from the one above.
+        for (const window of exceptionWindowRowsFor(exception.windows, false)) {
+          windowRows.push({ calendarExceptionId: exception.id, ...window });
         }
       }
     }
@@ -314,6 +356,29 @@ export class CalendarRepository {
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<Calendar | null> {
     return db.calendar.findFirst({ where: this.active({ id, organizationId }) });
+  }
+
+  /**
+   * The day↔minute factors for a set of calendars (ADR-0068), as `id → hours_per_day_minutes`.
+   *
+   * Deliberately **not** filtered by `deleted_at` or `archived_at`. An activity may legitimately
+   * be bound to an archived calendar (ADR-0053 §4 — archiving retires a calendar from pickers and
+   * changes nothing else), and a soft-deleted one is the case `buildPlanCalendar` already handles
+   * by falling back to all-minutes. Filtering here would drop the row and silently reinterpret
+   * that activity's duration; the caller's absent-id fallback is the same 1440 either way.
+   *
+   * One `id = ANY(...)` for a whole response — never a lookup per row.
+   */
+  async findHoursPerDayMinutes(
+    ids: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    const rows = await db.calendar.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, hoursPerDayMinutes: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.hoursPerDayMinutes]));
   }
 
   /** An active calendar with its shift rows and active exceptions (each with windows) — the read shape. */
@@ -595,7 +660,7 @@ export class CalendarRepository {
     await db.calendar.updateMany({ where: { id, deletedAt: null }, data: stamp });
   }
 
-  /** Create a whole-day exception, materialising `isWorking` as a full-day window (or none). */
+  /** Create a dated exception with its replacement windows (explicit, or derived from `isWorking`). */
   createException(
     input: CreateCalendarExceptionInput,
     db: Prisma.TransactionClient = this.prisma,
@@ -604,16 +669,59 @@ export class CalendarRepository {
       data: {
         organizationId: input.organizationId,
         calendarId: input.calendarId,
-        // The public whole-day exception is a single-day inclusive range (ADR-0036 §2).
+        // The public dated exception is a single-day inclusive range (ADR-0036 §2); a multi-day
+        // range is storable but not yet authorable, so both ends are the one date.
         startDate: input.date,
         endDate: input.date,
         label: input.label,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
-        windows: input.isWorking
-          ? { create: [{ startMinute: 0, endMinute: MINUTES_PER_DAY }] }
-          : { create: [] },
+        windows: { create: exceptionWindowRowsFor(input.windows, input.isWorking) },
       },
+      include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
+    });
+  }
+
+  /**
+   * Version-gated edit of one exception, replacing its windows as a set inside the caller's
+   * transaction. Returns rows changed — `0` is a version conflict or a row that is gone, which the
+   * service maps to 409, exactly as {@link updateIfVersionMatches} does for the calendar.
+   *
+   * `windows` absent means "leave the day's hours alone" (a label-only edit); present means replace
+   * them wholesale. Delete-then-create rather than a diff: the set is at most a handful of rows,
+   * and a diff would have to decide what "the same window, moved" means — a distinction with no
+   * consequence, since nothing references a window row.
+   */
+  async updateExceptionIfVersionMatches(
+    id: string,
+    expectedVersion: number,
+    patch: { label?: string | null; windows?: readonly WindowRow[] },
+    updatedBy: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const { windows, ...scalar } = patch;
+    const result = await db.calendarException.updateMany({
+      where: { id, version: expectedVersion, deletedAt: null },
+      data: { ...scalar, updatedBy, version: { increment: 1 } },
+    });
+    if (result.count > 0 && windows !== undefined) {
+      await db.calendarExceptionWindow.deleteMany({ where: { calendarExceptionId: id } });
+      if (windows.length > 0) {
+        await db.calendarExceptionWindow.createMany({
+          data: windows.map((window) => ({ ...window, calendarExceptionId: id })),
+        });
+      }
+    }
+    return result.count;
+  }
+
+  /** One active exception with its windows — the read the update returns. */
+  findExceptionWithWindows(
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<CalendarExceptionWithWindows | null> {
+    return db.calendarException.findFirst({
+      where: { id, deletedAt: null },
       include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
     });
   }

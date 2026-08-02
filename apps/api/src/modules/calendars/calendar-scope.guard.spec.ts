@@ -19,6 +19,7 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     scope: 'ORG',
     projectId: null,
     archivedAt: null,
+    hoursPerDayMinutes: 1440,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),

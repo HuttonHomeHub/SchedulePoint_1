@@ -132,7 +132,16 @@ function mapCalendar(
     });
   }
 
-  return { id: calendar.key, name: calendar.name, sourceType, workWeek, exceptions };
+  return {
+    id: calendar.key,
+    name: calendar.name,
+    sourceType,
+    // Spread, never `undefined`: `exactOptionalPropertyTypes` counts an explicit `undefined` as a
+    // present key, and the canonical schema is `.strict()`.
+    ...(calendar.hoursPerDay === undefined ? {} : { hoursPerDay: calendar.hoursPerDay }),
+    workWeek,
+    exceptions,
+  };
 }
 
 function mapPlan(plan: ExportPlan): CanonicalModel['project'] {
