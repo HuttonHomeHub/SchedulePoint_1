@@ -647,4 +647,38 @@ describe('levelSchedule — placement-search cost is bounded by placements, not 
     // Measured: 634 — the same order as the unlagged 477, not 720× it.
     expect(spent).toBeLessThan(1000);
   });
+
+  it('mixed demand against spare capacity still costs per interval', () => {
+    // The two cases above both take the WHOLE resource (need === capacity), so every committed
+    // interval is a full blackout and they merge into one contiguous run — the shape a placement
+    // search finds easiest. This one gives the resource capacity 6 and varies the demand 1/2/3 units
+    // per activity, so partial occupancy leaves genuine gaps: the remaining capacity rises and falls,
+    // some candidates fit into a hole between two commitments, and the blackout regions do NOT
+    // collapse into a single block.
+    //
+    // That is the case where a search tempted to walk the timeline would show it, and where the two
+    // tests above would stay green: with everything merged, "scan the one blackout" and "scan the
+    // span" cost the same. Raised by the ADR-0071 backend-performance review for exactly that reason.
+    const N = 40;
+    const { calendar, counts } = counting(allMinutesWorkCalendar);
+    const activities: EngineActivity[] = [];
+    const assignments: EngineAssignment[] = [];
+    for (let i = 0; i < N; i += 1) {
+      activities.push(task(`M${i}`, 1 + (i % 3), { levelingPriority: i }));
+      // 1, 2 or 3 units against a capacity of 6 — never a clean divisor of the whole, so the
+      // occupancy profile is genuinely fragmented rather than all-or-nothing.
+      assignments.push(assign(`M${i}`, 'R', 1 + (i % 3)));
+    }
+    const output = computeSchedule(activities, [], { dataDate: DATA_DATE, calendar });
+    const before = counts.addWorkingTime + counts.workingTimeBetween;
+    levelSchedule(activities, output, assignments, [{ id: 'R', capacity: 6 }], {
+      levelWithinFloatOnly: false,
+      dataDate: DATA_DATE,
+      planCalendar: calendar,
+    });
+    const spent = counts.addWorkingTime + counts.workingTimeBetween - before;
+    // Measured: 471. The span here reaches ~80 days ≈ 115,200 minutes, so a per-minute scan would be
+    // that order — the bound sits between the measurement and the failure mode, as above.
+    expect(spent).toBeLessThan(1200);
+  });
 });

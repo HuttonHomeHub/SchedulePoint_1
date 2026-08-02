@@ -293,6 +293,16 @@ jobs:
       - name: Web end-to-end tests (sub-day durations flag on)
         run: pnpm --filter @repo/web test:e2e:sub-day
 
+      # The per-assignment join lag (ADR-0071 M4) against a real API with the pen enforced. What a
+      # mocked fetch structurally cannot prove: that `1d` on an EIGHT-hour calendar stores 480
+      # minutes and not 1,440 (a wrong factor errors nowhere, it just schedules three times the
+      # work); that the write is pen-gated; that the row's optimistic `version` is refreshed between
+      # two consecutive saves (a mock accepts any version); and — the failure ADR-0070's journey
+      # caught twice — that the plan's calendar actually reaches the control, rather than the field
+      # rendering, looking right, and quietly refusing the unit a planner reaches for.
+      - name: Web end-to-end tests (assignment lag flag on)
+        run: pnpm --filter @repo/web test:e2e:assignment-lag
+
       # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
       # theme, which is how the Corporate theme shipped with six contrast defects past a green
       # axe run. This one boots the shell once per picker option — light, dark, corporate, and
