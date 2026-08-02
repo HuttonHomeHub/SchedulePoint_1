@@ -1,7 +1,8 @@
 # Engine ↔ planner surface audit — findings register
 
-> **Status:** complete for the scope stated in _Limits_ below. Five findings, none of them yet
-> fixed — this is the register the delivery process (§21) wants before any code.
+> **Status:** audit complete for the scope stated in _Limits_ below. **Seven findings.** F7 was
+> found by the surface-contract gate on its first run, not by the manual sweep. None fixed yet
+> beyond the gate itself.
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -138,6 +139,40 @@ its own spec, plan and ADR.
 **Decision (2026-08-02, product owner):** take assignment lag now, alongside the other fixes; scope
 roles separately, later. Recorded here because "2 excepted" reads as one item and is two very
 different ones.
+
+### F7 — the critical float threshold has no control (outward; found by the gate, not by me)
+
+`plans.critical_float_threshold` is writable on `update-plan.dto.ts` (line 101), exposed on the shared
+type, and consumed by the engine as `ComputeOptions.criticalFloatThresholdMinutes`. Under the default
+`TOTAL_FLOAT` critical-path definition it is the whole definition: an activity is critical when its
+total float is **≤ this number**.
+
+There is no control. Every reference in `apps/web/src` is a seed value inside a `.test.tsx` fixture;
+`PlanScheduleSettings.tsx` renders "Critical-path definition", "Total-float measure" and "Open-ends
+criticality" and stops. So the threshold is pinned at 0 for every plan, and a planner cannot ask the
+question P6 users ask constantly — _show me what is within five days of critical_ — even though the
+engine has always been able to answer it.
+
+**This one was found by the surface-contract gate, not by the manual audit above**, on the gate's
+first run. The audit missed it because I grepped the plan settings as a combined list and saw hits,
+which is precisely the shortcut a script does not take. Cheapest fix on the register: one number field
+in a dialog that already exists, beside the setting it governs.
+
+## The gate
+
+`pnpm check:surface-contract` (`scripts/check-surface-contract.mjs`) now enumerates every writable
+field on a scheduling DTO and every CPM engine input — 200 of them — and requires each to be
+classified in `scripts/surface-contract.json` as `surface` (a planner can author it, and where),
+`exempt` (deliberately not, and why) or `gap` (a known hole, and which finding owns it). It fails on
+an **unclassified** field, not on an honestly-marked gap, because a gate that fails on day one gets
+deleted rather than fixed (ADR-0058).
+
+Current state: 187 surfaced, 8 exempt, 5 gaps — F1, F3 (two entries) and F7 (two entries).
+
+**What it cannot catch, so nobody trusts it further than it goes.** It enumerates fields that exist.
+It is blind to a field that _should_ exist and does not — F2's missing `endDate` on the exception
+create DTO and F6's missing `lag` column are absences with nothing to enumerate. Half this register's
+findings are of that kind and still need a human holding a storage model against a write path.
 
 ## Verified clean
 
