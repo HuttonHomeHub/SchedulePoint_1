@@ -94,6 +94,10 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     totalFloat: 0,
     isCritical: true,
     budgetedCost: 0,
+    // ADR-0071 M3: the decomposition of that total. Empty is the common shape —
+    // an activity with no assignments — and is a COMPLETE snapshot, not a missing one.
+    budgetedExpense: 0,
+    assignments: [],
     ...overrides,
   };
 }

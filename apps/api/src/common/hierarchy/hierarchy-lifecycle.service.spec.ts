@@ -28,6 +28,7 @@ function makeTx() {
     activityStep: model(),
     baseline: model(),
     baselineActivity: model(),
+    baselineAssignment: model(),
     note: model(),
     planShare: model(),
     calendar: model(),
