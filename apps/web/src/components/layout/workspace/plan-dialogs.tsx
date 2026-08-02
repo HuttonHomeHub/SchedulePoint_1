@@ -23,6 +23,7 @@ import { DependencyEditor } from '@/features/dependencies';
 import { ActivityNotesSection } from '@/features/notes';
 import { PlanFormDialog } from '@/features/plans';
 import { ActivityResourcesDialog } from '@/features/resources';
+import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
  * The two modal surfaces a plan needs regardless of layout: the per-activity
@@ -31,6 +32,15 @@ import { ActivityResourcesDialog } from '@/features/resources';
  * layout is active (legacy stacked page or the canvas-first workspace), driven off the
  * shared {@link PlanWorkspaceModel} so both open/close them identically.
  */
+/**
+ * `exactOptionalPropertyTypes` distinguishes "absent" from "present and `undefined`", and an
+ * unresolved factor must be the former — the dialog's own default is what makes the field degrade
+ * honestly rather than take a `undefined` it would have to re-check.
+ */
+function hoursPerDayProp(hours: number | undefined): { activityHoursPerDay?: number } {
+  return hours === undefined ? {} : { activityHoursPerDay: hours };
+}
+
 export function PlanDialogs({
   model,
   plan,
@@ -126,6 +136,19 @@ export function PlanDialogs({
                 activityName: model.resourcesActivity.name,
                 activityDurationType: model.resourcesActivity.durationType,
                 isMilestone: isMilestoneType(model.resourcesActivity.type),
+                // The join lag's day↔minute factor (ADR-0071 M4), resolved exactly as
+                // `ActivitiesTable` resolves it for the same dialog. Omitting it here left this
+                // entry route permanently in the degraded state — the field rendered, looked
+                // right, and refused `2d` on a plan whose calendar was perfectly resolvable, which
+                // is the "renders, looks right, quietly refuses" failure the epic exists to stop.
+                ...hoursPerDayProp(
+                  effectiveHoursPerDay(model.calendars.data ?? [], {
+                    activityCalendarId: model.resourcesActivity.calendarId ?? '',
+                    ...(model.plan.data?.calendarId == null
+                      ? {}
+                      : { planCalendarId: model.plan.data.calendarId }),
+                  }),
+                ),
               }
             : {})}
         />

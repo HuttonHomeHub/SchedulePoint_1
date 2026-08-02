@@ -66,6 +66,9 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     dataDate: new Date('2026-01-05T00:00:00Z'),
     capturedProjectFinish: new Date('2026-03-01T00:00:00Z'),
     hoursPerDayMinutes: 1440,
+    // ADR-0071 M3: what this baseline's cost snapshot decomposes to. ACTIVITY is the column's
+    // constant default and what every capture writes until the M3 service slice lands.
+    costSnapshotLevel: 'ACTIVITY',
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -91,6 +94,10 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     totalFloat: 0,
     isCritical: true,
     budgetedCost: 0,
+    // ADR-0071 M3: the decomposition of that total. Empty is the common shape —
+    // an activity with no assignments — and is a COMPLETE snapshot, not a missing one.
+    budgetedExpense: 0,
+    assignments: [],
     ...overrides,
   };
 }

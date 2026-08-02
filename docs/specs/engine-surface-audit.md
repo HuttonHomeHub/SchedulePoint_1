@@ -3,7 +3,13 @@
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
 > building F7's control, and blocked it. **Resolved: F1, F2, F3, F5, F7+F8.**
-> **Open: F4 (a product call), F6.** The surface-contract gate now reports **zero gaps**.
+> **Open: F4 (a product call); F6 M0–M4 landed** — ADR-0071: the `lag_minutes` column, both DTOs and
+> the N34 rejects (M0); the histogram read (M1); the levelling pass's per-resource demand windows
+> (M2); Earned Value's per-component PV phasing with the ADR-0025 per-assignment cost baseline behind
+> it (M3); and **the planner's control** behind `VITE_ASSIGNMENT_LAG` (M4). The surface-contract gate
+> now reports **zero known gaps** — every scheduling field the engine reads is one a planner can
+> reach, or carries a written reason why they never will. F6's remaining milestones are M5
+> (interchange, blocked on evidence) and M6 (the enablement gate pass).
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -169,6 +175,102 @@ its own spec, plan and ADR.
 **Decision (2026-08-02, product owner):** take assignment lag now, alongside the other fixes; scope
 roles separately, later. Recorded here because "2 excepted" reads as one item and is two very
 different ones.
+
+**M0 landed (2026-08-02).** `resource_assignments.lag_minutes` exists — working minutes, unsigned,
+constant `DEFAULT 0` so the ADD COLUMN is metadata-only and every existing row keeps today's
+behaviour. `lagMinutes` is on both write DTOs (`@Min(0)`/`@Max(ASSIGNMENT_LAG_MINUTES_MAX)`, **N34**),
+on the response DTO and on `ResourceAssignmentSummary`.
+
+Two decisions inside M0 are worth the sentence, because both are the kind of thing that looks like a
+detail and is not:
+
+- **The column is unsigned, deliberately unlike `dependencies.lag_minutes`.** A negative dependency
+  lag is a lead and means something; a resource joining before the work starts does not. And a signed
+  column here would be a _trap_ rather than harmless symmetry — the shipped read-model applies the lag
+  only when `> 0` (a parity fast path for the overwhelmingly common zero case), so a stored negative
+  would be **silently discarded** and the assignment would behave as unlagged with the API having said
+  yes. The DTO is the primary reject; the DB CHECK is defence in depth; the guard line now says in
+  the code which of the three it is.
+- **The field is never cost-gated.** `budgetedCost`/`actualCost` are withheld from a caller without
+  `cost:read` (EV4a); a lag is a scheduling fact, so gating it would make a Viewer's picture of when
+  the resource arrives disagree with a Planner's. That is pinned by an e2e case rather than asserted.
+
+**M1 landed (2026-08-02).** The histogram read-model now reads the stored lag instead of the
+hard-coded `0` it passed under a comment saying SchedulePoint does not model the column — a comment
+that would have outlived the column by one milestone had M0 not named it. The lag walks the same
+activity calendar the span does, because both are resolved at the same seam.
+
+The tests state the one thing about it that is easy to mistake for the lag being ignored: the shared
+axis is the union of **effective** spans, so a lagged assignment with an unlagged peer reads as a gap
+at the front, while a lagged assignment on its own moves the axis instead of padding it. Both are
+pinned.
+
+The catalogue gap closed with it. `res_assignment_lag` was **excepted** in `seed --coverage` with the
+reason "an assignment has no lag field: work starts with its activity" — true of the data model and
+badly underselling the position, since the engine half was already built and scored against the
+fixture's own AS0027 case. The exception is deleted and the key is reached by `A_LAG`, a twin of
+`A_BELL` differing in exactly one thing.
+
+**Two of the milestone's planned tasks were withdrawn on measurement, and that is the more useful
+result.** A typed "lag unreachable" error mapped to a 422 was written and then reverted: the
+working-time port does not throw for any legal lag — a calendar working one minute a week walks the
+full ten-year ceiling and returns a date in the year 102,759 — so the `catch` would have shipped as
+permanent dead code under a docblock asserting a defect that does not exist. And the N34 hostile
+cases do not belong in the seed negative tier, which `negative.spec.ts` pins to the conformance
+fixture's own case list; they live at the DTO boundary and in the API e2e instead. Both are recorded
+in [`docs/specs/assignment-lag/implementation-plan.md`](assignment-lag/implementation-plan.md) beside
+the tasks that asked for them. A plan is a document too: ADR-0058's rule reaches it as well.
+
+**M2 landed (2026-08-02).** The levelling pass reserves capacity from the moment each resource
+arrives rather than from the activity's start — so a crane joining on day four stops blocking the
+front of a fortnight it is not on. The cost is that ADR-0041's parity argument had to **split in
+two**: Gate A (levelling off ⇒ `computeSchedule` byte-identical) stays structural, but Gate B (all
+lags zero ⇒ identical levelled output) is now **data-conditional**, because both the occupancy model
+and the placement search were rewritten. It is held by a corpus of eight scenarios snapshotted
+**before** the refactor — a snapshot written afterwards asserts a refactor against itself — and
+recorded as an amendment on ADR-0041 rather than left for a reader to re-derive. The placement
+search's per-resource candidate starts are bounded by a calendar-port **call-count** gate, because a
+candidate list that grows with the span would pass every behavioural test while silently
+reintroducing the per-minute scan ADR-0041 §F forbids.
+
+**M3 landed (2026-08-02), and answered CQ-1 the expensive way.** Earned Value now phases planned
+value **per cost component** — the activity's own expense over its window, each assignment over
+`[start ⊕ lag, finish)` — so the PV curve stops claiming cost accrues before the resource incurring
+it exists. The zero-lag path takes the previous single-window expression **verbatim**, which is a
+requirement rather than an optimisation: summing rounded components can differ from rounding one
+total by a minor unit, and a silent ±1 on every existing plan's PV is precisely the defect class this
+register keeps finding after the fact.
+
+Splitting a **baselined** total was the open question. The product owner overturned both the spec's
+default and my recommendation: ADR-0025 takes a **second amendment** and a capture now freezes
+per-assignment cost **and its lag** (`baseline_assignments`), making the split exact for every
+baseline captured after it. Baselines captured before it **cannot be back-filled**, so the read
+carries both paths and says which one a plan is on — `costPhasingApproximatedCount`. The level is
+read from a stored discriminator through an exhaustive `switch`, never inferred from a row count:
+an assignment-free plan's baseline has zero component rows and is **exact**, a pre-amendment baseline
+has zero rows and can only be **approximated**. Same observation, opposite answers — which is the
+whole reason the column exists.
+
+**M4 landed (2026-08-02), and the register's own gate now reads zero gaps.** A planner can set the
+join lag: a **Joins after** field on the assign form and on each assignment row, reading ADR-0070's
+`d`/`h`/`m` grammar. Three decisions are worth stating rather than inferring from the diff.
+
+The factor is the activity's **saved** calendar, not the one a pending edit has selected. That is the
+opposite of what the duration field does — and correctly so, because a duration and a calendar save
+together while an assignment write carries no calendar at all, so converting `2d` against an unsaved
+choice would store minutes measured on a calendar the activity does not have. The two rules live in
+separate modules for exactly that reason rather than sharing one that would have to guess.
+
+The **degraded** state is different from a relationship lag's, because the assignment DTO carries
+only `lagMinutes` — there is no `lagDays` to fall back to. So instead of a whole-days box, the field
+keeps the units that need no factor: hours and minutes stay available while the calendar list is in
+flight, and only days are refused, with their own sentence. Hiding the field would have been simpler
+and strictly worse.
+
+And the surface-contract gate found the third gap this milestone had to close. F6's two write DTOs
+were the known ones; `EngineAssignment.lagMinutes` was added to the engine's input type in M2 and the
+gate caught it on the next run — the same shape as F7, which the gate found rather than the manual
+sweep. A register that only lists what a person noticed is a register that stops being true.
 
 ### F7 — the critical float threshold has no control (outward; found by the gate, not by me) — **RESOLVED**
 

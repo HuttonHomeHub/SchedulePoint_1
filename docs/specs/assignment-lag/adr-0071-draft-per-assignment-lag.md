@@ -146,16 +146,27 @@ on a lagged assignment recognises at `start + lag`; `UNIFORM` spreads across the
 no-op**, because it recognises at the activity finish, which the lag does not move — worth saying, because it
 is the case a reader assumes changed.
 
-**Splitting `pvCost` — the approximation, written down.** PV's cost source is `baselineBudgetedCost ?? bac`,
-a single activity-level number: the ADR-0025 snapshot does not decompose by assignment. We allocate it by
-**live budget shares** (`share_c = liveCost_c / liveBAC`, using the exact expressions `leafBudgetAndActual`
-already sums, `earned-value.ts:284-292`), guarding `liveBAC === 0` by falling through to the single-window
-path. This is exact whenever `pvCost === bac` (the live-budget fallback). **When a cost baseline exists and
-the assignment mix has changed since capture, the split approximates a decomposition the snapshot never
-held.** That goes in this ADR's consequences _and_ in the endpoint's OpenAPI description, because an
-approximation nobody wrote down is how an invisible defect starts. Extending the baseline to carry
-per-assignment cost is the recorded follow-on (a schema change and an ADR-0025 amendment) and is the spec's
-**CQ-1**.
+**Splitting `pvCost` — exact where the baseline can say, approximate where it cannot, and it always says
+which.** PV's cost source is `baselineBudgetedCost ?? bac`, one activity-level number. **CQ-1 was answered
+_extend the baseline_** (below), so a capture now also freezes a per-assignment breakdown
+(`baseline_assignments`, the ADR-0025 amendment 2) and PV phases **those** components through **their own
+frozen lags**. The live mix is not consulted at all on that path — reading a live lag while spending frozen
+money is the drift the table removes.
+
+Where no frozen breakdown exists — a baseline captured before the amendment, which **cannot be back-filled**
+— the components are the **live** budget mix (`share_c = liveCost_c / total`, the exact expressions
+`leafBudgetAndActual` already sums), guarding a zero total by falling through to the single-window path.
+That path is exact whenever `pvCost === bac` (the live-budget fallback) and **approximates a decomposition
+the snapshot never held** whenever a baseline exists and the assignment mix has moved since capture. Both
+paths run through **one** phasing routine over a resolved component list (`pvDecomposition`), so they cannot
+drift apart; which one ran is reported as **`costPhasingApproximatedCount`**, in this ADR's consequences
+_and_ in the endpoint's OpenAPI description, because an approximation nobody wrote down is how an invisible
+defect starts.
+
+The level is read from `baselines.cost_snapshot_level` through an **exhaustive `switch` with no `default`**,
+never from a row count: an `ASSIGNMENT`-level baseline of a plan with no assignments has **zero** component
+rows and is nonetheless exact, while a pre-amendment baseline has zero rows and can only be approximated —
+the same observation, opposite answers.
 
 **Parity by an explicit fast path, not by numerical luck.** With every lag zero, all component percentages
 are equal, so the component sum equals today's expression _in exact arithmetic_ — but not provably in
@@ -212,6 +223,24 @@ name and units recorded in that table. **MSPDI is a drop in both directions.** M
 `<Assignment><Delay>` is a plausible equivalent; it is read nowhere in this repo and has not been checked
 against a real file, so it sits in the same confirm-first bucket rather than being wired on assumption.
 
+**M5 landed (2026-08-02), and it is the whole milestone rather than a deferral of it.** The fixture claim
+above was re-verified before building — `p6_torture_test_v1.xer:378` still declares those seven columns and
+no eighth — so the parser stays blocked and everything that does not depend on it shipped: `lagMinutes` on
+the canonical model and the import/export graphs, carried through the mapper, the interchange commit and the
+API's export reader, plus the two findings.
+
+The **asymmetry between the directions is the design**, and each half is pinned by a test. Import reports the
+drop **unconditionally** wherever assignments exist, because it cannot read the column and therefore cannot
+know whether anything was lost; a silent zero presented as fidelity is the ADR-0050 "best-effort is reported,
+never silent" rule inverted. Export reports it **only when a non-zero lag is present**, because there it
+knows exactly — a standing finding on the overwhelming majority of exports, which lose nothing, is how a
+reader learns to skip the section that matters. The export finding names a **count**, since "some data was
+dropped" is not actionable.
+
+Carrying the value into the commit and the export reader rather than defaulting it at each seam is
+deliberate: the day a real export is read, the parser is the only thing that changes, and no seam is left
+quietly discarding what it now receives.
+
 ### 6. Semantics, conformance and the catalogue
 
 ADR-0035 gains **§34** (assignment-lag semantics: unsigned; the activity's own calendar; the degenerate-lag
@@ -256,9 +285,11 @@ ADR-0044 Q5 "units are schedule data, not cost" precedent); **not** exposed to E
 - **Per-assignment `accrualType`.** Rejected for this epic: the lag already supplies the window; a second
   axis with no fixture case behind it, and ADR-0044 §32 chose one activity-level value over a per-expense
   table for the same reason.
-- **Extend the baseline snapshot to carry per-assignment cost (exact PV split).** Deferred — a schema change,
-  an ADR-0025 amendment, a migration, and existing baselines that cannot be back-filled, so the approximation
-  would still apply to every baseline captured before it. The spec's **CQ-1**.
+- **Leave the PV split approximate (allocate baselined cost by live budget shares).** ~~Chosen~~ —
+  **rejected** by the product owner as **CQ-1**, overturning both the spec's default and my own
+  recommendation. It ships without a schema change, and that was the whole of its case. Extending the
+  baseline is now §3 above; the cost it was avoiding (a migration, an ADR-0025 amendment, and baselines that
+  cannot be back-filled) is real and accepted rather than discovered later.
 - **Rely on `Math.round` to absorb the component-sum rounding difference.** Rejected — it is a silent ±1
   minor unit on every existing plan, decided by IEEE-754. The explicit fast path costs one branch.
 - **Guess the XER column name.** Rejected — §5.
@@ -275,18 +306,22 @@ additive, constant-defaulted and behind a default-off flag, with each consumer s
 "data-conditional on a column default", and that is a claim a future reader must re-verify rather than read
 off a type signature. The levelling placement search — the pass's cost centre and its determinism guarantee —
 is rewritten, which is the highest-risk change in the epic; it is mitigated by capturing goldens **before**
-the change, but mitigation is not immunity. Earned Value gains a genuinely new PV model whose baseline split
-is a **documented approximation**, and the honest reading is that a plan with a cost baseline and a changed
-assignment mix gets a PV curve that is _more_ right than today's and still not exact. The interchange half is
+the change, but mitigation is not immunity. Earned Value gains a genuinely new PV model, and CQ-1 buys its
+exactness with a **schema change, a migration and an ADR-0025 amendment**: baselines captured before it stay
+on the documented approximation **for their whole lives**, since a breakdown that was never recorded cannot
+be recovered from a total. The honest reading for those is a PV curve that is _more_ right than today's and
+still not exact — which the response now states as `costPhasingApproximatedCount` rather than leaving in an
+ADR. The interchange half is
 **blocked on evidence this repository does not contain**. And levelling's behaviour under a lag is
 **non-monotone**, which will surprise a planner who expects "less reservation, earlier dates" and must be
 said in the release note rather than left to be reported as a bug.
 
 **Neutral / follow-ups.** ADR-0035 gains §34 + N34. `@repo/types`, the OpenAPI spec, `docs/API.md`,
 `docs/DATABASE.md`, `CAPABILITY_MATRIX.md`, `TEST_PLAYBOOK.md`, `TECH_DEBT.md`, the ADR-0050 mapping table and
-the engine-surface audit register all move in lock-step. Recorded follow-ons: the exact baseline PV split
-(CQ-1 option B); the XER round-trip once a real export is read; `res_role`, which F6 correctly separates as
-an epic of its own.
+the engine-surface audit register all move in lock-step. ADR-0025 takes its **second amendment** (§Amendments
+2), which also finally records its **first** — ADR-0042's cost baseline had amended it for a year with the
+note living only in the amending document. Recorded follow-ons: the XER round-trip once a real export is
+read; `res_role`, which F6 correctly separates as an epic of its own.
 
 ## References
 
@@ -368,3 +403,60 @@ calendar** and says so in its help text. On a mixed-calendar plan that is a disc
 an activity on a different calendar is still compared against a threshold entered in the plan
 calendar's days, and no single scalar can be right for all of them. Saying which day the planner is
 typing in is strictly better than today, where nobody is told anything.
+
+## M6 — the enablement gate pass (2026-08-02, `VITE_ASSIGNMENT_LAG` default-ON)
+
+Five specialists over the combined M0–M5 diff. **Security and backend-performance passed clean**;
+**ux, accessibility and component each blocked**, on five defects in code that had already passed a
+human read. Every one carries a regression test verified to fail against the old code first.
+
+1. **A compound duration was silently converted at the wrong factor** (component). The day-check
+   was a bespoke `/\d\s*d\b/` needing a word boundary after the `d`, so on the degraded path — with
+   the calendar unresolved, the state the whole module exists to handle — `2d4h` slipped past it,
+   reached the parser with the placeholder factor of 24, and stored **3,120** minutes where 1,200
+   was meant. Accepted, `ok: true`, no error shown. `namesDays` now lives beside the parser in
+   `lib/duration-text.ts` and tokenizes through the parser's own splitter, so a second opinion about
+   where a part ends is structurally impossible. This is the ADR-0065 `routeOrthogonal` rule
+   arriving as a real defect rather than an argument.
+2. **The row's Save used the native `disabled` attribute** (accessibility) — the control flips
+   unavailability twice per save and a natively-disabled element holding focus is blurred to
+   `<body>` each time (WCAG 2.4.3). It is `aria-disabled` with a real click guard, the pattern
+   ADR-0060 M6 and ADR-0063 M6 each paid to learn and `ScopeSaveBar`'s own docblock documents.
+3. **The assign form refused a day-denominated lag by doing nothing** (accessibility) — no
+   `setError`, so nothing landed in RHF's `errors`, `FormErrorSummary` (`role="alert"`) had nothing
+   to announce, focus never moved, and the Assign button stayed lit while doing nothing when
+   pressed. The code's own comment claimed parity with `AddLinkSection`, which has always called
+   `setError(..., { shouldFocus: true })`.
+4. **A third entry route never received the day factor** (ux) — `plan-dialogs.tsx`, reachable
+   whenever `VITE_ACTIVITY_EDITOR_CONVERGENCE` is rolled back, which is a supported rollback. The
+   field there rendered, looked right, and refused `2d` on a plan whose calendar was perfectly
+   resolvable: the "renders, looks right, quietly refuses" failure this epic and ADR-0070 both exist
+   to stop, shipped inside the epic that names it.
+5. **The placeholder read `0d`** (ux) regardless of the factor, so in the degraded state it offered
+   an example in the one unit its own label said the field could not take.
+
+Four of the five are the ADR-0064 §7 shape again — **one correct pattern applied to a control and
+not its neighbour**, inside a diff whose docblocks describe the right thing.
+
+Also folded: the error/help disclosure now matches the shared `TextField` (error **or** help, never
+both) so one field does not read two ways depending on which surface it was opened from; and
+`assignmentLagTextField` — the zod rule the form actually mounts — gained the direct coverage it had
+none of.
+
+**The flag-on journey** (`apps/web/e2e-assignment-lag/`, its own CI step) drives the field against a
+real API with the pen enforced on an eight-hour calendar. It is deliberately **one test**: the
+claims edit the same assignment in sequence and Playwright gives each test its own browser context,
+which would drop the session and the pen. It reads storage back from the API rather than asserting
+the DOM under test, and it asserts the Save button's unavailability **by mechanism**
+(`aria-disabled`), because `toBeDisabled()` accepts either and which one is used is the whole point
+of finding 2.
+
+The two backend-performance suggestions were folded rather than deferred: a third boundedness case
+in `level.spec.ts` using **mixed demand against spare capacity** (the two existing cases both take
+the whole resource, so every blackout merges into one run and "scan the blackout" costs the same as
+"scan the span"), and `docs/TECH_DEBT.md` **#84**, recording that levelling is quadratic in the
+number of activities contending on one resource — pre-existing, untouched by this diff, and written
+down because ADR-0041 §F's boundedness wording rules out span-dependence and reads as if it ruled
+this out too.
+
+**The CPM engine is not modified and the ADR-0034 recalc parity gate is untouched.**

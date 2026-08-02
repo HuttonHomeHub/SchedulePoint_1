@@ -164,6 +164,17 @@ export interface EngineAssignment {
   resourceId: string;
   /** The per-working-hour demand rate (ADR-0040). The service resolves a NULL DB rate to 0 (no demand). */
   unitsPerHour: number;
+  /**
+   * Working minutes into the activity at which **this** resource joins it (ADR-0071 §1) — so the demand
+   * window is `[start + lagMinutes, finish)` rather than the whole span. Measured on the **activity's**
+   * calendar. Unsigned; `0` or **absent** means the resource joins with the activity.
+   *
+   * Optional deliberately: absent is the input every caller passed before ADR-0071 and every plan holds
+   * today, so the zero-lag path stays byte-identical by construction rather than by a default nobody
+   * checks (ADR-0071 Gate B). A lag ≥ the span reserves **nothing** — a window with no working time in
+   * it is not capacity anyone is holding.
+   */
+  lagMinutes?: number;
 }
 
 /**

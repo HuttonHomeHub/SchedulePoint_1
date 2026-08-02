@@ -347,6 +347,9 @@ describe('adaptMspdiToCanonical — resources + assignments', () => {
         budgetedUnits: 80, // 80h of work
         unitsPerHour: null,
         isDriving: false,
+        // MSPDI's `<Assignment><Delay>` is NOT read (ADR-0071 §5) — an unverified equivalent, not a
+        // mapping. Asserted so a future wiring of it has to come past this expectation.
+        lagMinutes: 0,
         actualUnits: 0,
       },
     ]);

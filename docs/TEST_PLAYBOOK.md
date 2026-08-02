@@ -93,6 +93,7 @@ need to know which feature caused it.
 | Kinds, driving, curves and duration types | `plan:capability-resources`   | `T_TASK` beside `T_RES`                | Same duration, **different finishes**: the resource-dependent one schedules on its driving resource's calendar | The two finishing together — the driving resource's calendar is not being resolved                 |
 | Levelling a deliberate over-allocation    | `plan:capability-levelling`   | The levelled dates and `levelingDelay` | With levelling on, demand no longer exceeds capacity; network float stays authoritative                        | Levelling changing the critical path. It is an overlay (ADR-0041 Q2), not a recalculation of float |
 | Expenses, accrual and earned value        | `plan:capability-cost-and-ev` | The earned-value read                  | PV from the active baseline, EV from physical %, `EAC = BAC/CPI`                                               | EV moving a date. Physical %-complete earns value and changes **no** schedule (ADR-0042)           |
+| A resource that joins late                | `plan:capability-resources`   | `A_LAG`'s histogram beside `A_BELL`'s  | Same units, same curve, same activity dates — `A_LAG`'s load simply starts two days in                         | The two series identical. They differ **only** in the lag, so agreement means the lag is not read  |
 
 ### Inter-project
 

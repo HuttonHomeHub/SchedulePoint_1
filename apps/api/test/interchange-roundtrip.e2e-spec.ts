@@ -95,6 +95,7 @@ describe.skipIf(!hasDatabase)('Interchange round-trip fidelity (e2e)', () => {
     // Baselines and shares hold the plan too. The database is shared with every other e2e file, so
     // this must clear whatever THEY left as well as its own — the first run tripped on a baseline
     // from another suite, not from this one.
+    await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.planShare.deleteMany();

@@ -53,6 +53,7 @@ function assignment(overrides: Partial<ResourceAssignmentSummary> = {}): Resourc
     unitsPerHour: null,
     isDriving: true,
     curveType: 'UNIFORM',
+    lagMinutes: 0,
     actualUnits: 3,
     // 50000 minor = 500.00 major; 25000 minor = 250.00 major.
     budgetedCost: 50000,

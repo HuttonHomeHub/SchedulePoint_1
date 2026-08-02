@@ -10,6 +10,13 @@ import {
   useResources,
 } from '../api/use-resources';
 import {
+  assignmentLagEnabled,
+  assignmentLagHelp,
+  assignmentLagLabel,
+  canAuthorLagDays,
+  parseAssignmentLag,
+} from '../model/assignment-lag-field';
+import {
   RESOURCE_CURVE_LABELS,
   RESOURCE_KIND_LABELS,
   assignmentFormSchema,
@@ -55,6 +62,7 @@ export function ActivityResourcesPanel({
   planId,
   activityId,
   activityDurationType,
+  activityHoursPerDay,
   isMilestone = false,
   canWrite,
   writeReason,
@@ -71,6 +79,17 @@ export function ActivityResourcesPanel({
   activityId?: string;
   /** The owning activity's duration type (ADR-0040), for the driving assignment's derived-duration preview. */
   activityDurationType?: DurationType;
+  /**
+   * How many working hours a *day* is worth on the activity's **saved** calendar — the factor the join
+   * lag is measured in (ADR-0071 §1 / ADR-0070 §3). Deliberately the saved calendar and not a pending
+   * selection: an assignment write does not carry the activity's calendar with it, so converting `2d`
+   * against an unsaved choice would store minutes measured on a calendar the activity does not have.
+   *
+   * `undefined` is a real answer, never a default — the calendar list can be loading, absent or
+   * missing the bound row, and after ADR-0068 there is no safe fallback factor. The lag field then
+   * keeps hours and minutes (which need none) and refuses days, saying why.
+   */
+  activityHoursPerDay?: number;
   /** True when the owning activity is a zero-span milestone: the loading-curve picker is hidden then,
    * since a curve has no span to distribute units over (TECH_DEBT #44b). Defaults false. */
   isMilestone?: boolean;
@@ -125,6 +144,10 @@ export function ActivityResourcesPanel({
   // The loading-curve picker distributes units across the activity's span, so it is meaningless for a
   // zero-span milestone — hidden there (TECH_DEBT #44b), in both the assigned rows and the assign form.
   const showCurve = RESOURCE_CURVES_ENABLED && !isMilestone;
+  // The join lag delays a resource *within* the activity's span, so a zero-span milestone has nothing
+  // for it to sit inside — hidden there for the same reason the loading curve is (#44b), and behind
+  // its own flag (ADR-0071 M4).
+  const showLag = assignmentLagEnabled() && !isMilestone;
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
   const assignedIds = new Set((assignments.data ?? []).map((a) => a.resourceId));
@@ -181,15 +204,28 @@ export function ActivityResourcesPanel({
     handleSubmit,
     reset,
     setValue,
+    setError,
     formState: { errors },
   } = useForm<AssignmentFormValues>({
     resolver: zodResolver(assignmentFormSchema),
-    defaultValues: { resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' },
+    defaultValues: {
+      resourceId: '',
+      budgetedUnits: 0,
+      isDriving: false,
+      curveType: 'UNIFORM',
+      lagText: '',
+    },
   });
 
   useEffect(() => {
     if (enabled) {
-      reset({ resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' });
+      reset({
+        resourceId: '',
+        budgetedUnits: 0,
+        isDriving: false,
+        curveType: 'UNIFORM',
+        lagText: '',
+      });
       create.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on show/target change
@@ -205,20 +241,48 @@ export function ActivityResourcesPanel({
     if (selectedIsMaterial) setValue('isDriving', false);
   }, [selectedIsMaterial, setValue]);
 
+  // The one factor-dependent rule the zod schema cannot hold (ADR-0070 §3): whether the typed lag
+  // can be converted at all. Surfaced beside the field rather than thrown at submit, so a planner who
+  // types `2d` before the calendar list lands is told which units are available right now.
+  const lagText = useWatch({ control, name: 'lagText' }) ?? '';
+  const lagParsed = parseAssignmentLag(lagText, activityHoursPerDay);
+  const lagFactorError =
+    showLag && !lagParsed.ok && errors.lagText === undefined ? lagParsed.message : undefined;
+
   const onSubmit = handleSubmit((values) => {
     const isDriving = selectedIsMaterial ? false : values.isDriving;
+    // Refuse rather than send a silently wrong number — the same rule `lagWriteFields` follows, and
+    // refusing the SAME WAY it does. `AddLinkSection` registers the failure with RHF and moves
+    // focus; an earlier version of this guard only `return`ed, which left the form looking untouched:
+    // nothing in `errors`, so `FormErrorSummary` (`role="alert"`) had nothing to announce, no focus
+    // moved, and the Assign button stayed lit while doing nothing when pressed. A submit that
+    // silently does nothing is worse than one that fails loudly.
+    const lag = parseAssignmentLag(values.lagText ?? '', activityHoursPerDay);
+    if (showLag && !lag.ok) {
+      setError('lagText', { message: lag.message }, { shouldFocus: true });
+      return;
+    }
     create.mutate(
       {
         ...values,
         isDriving,
         // The rate is meaningful only for the driver — drop a stray value entered before un-driving.
         ...(isDriving ? {} : { unitsPerHour: undefined }),
+        // Flag off, no lag is sent at all — the create body is byte-identical to the one that ships
+        // today, which is what makes the rollback a switch rather than a revert.
+        ...(showLag && lag.ok && lag.minutes > 0 ? { lagMinutes: lag.minutes } : {}),
       },
       {
         onSuccess: () => {
           const name = resourceById.get(values.resourceId)?.name ?? 'Resource';
           announce(`“${name}” assigned.`);
-          reset({ resourceId: '', budgetedUnits: 0, isDriving: false, curveType: 'UNIFORM' });
+          reset({
+            resourceId: '',
+            budgetedUnits: 0,
+            isDriving: false,
+            curveType: 'UNIFORM',
+            lagText: '',
+          });
         },
       },
     );
@@ -255,6 +319,10 @@ export function ActivityResourcesPanel({
                   resource={resourceById.get(assignment.resourceId)}
                   durationType={activityDurationType}
                   showCurve={showCurve}
+                  showLag={showLag}
+                  {...(activityHoursPerDay === undefined
+                    ? {}
+                    : { hoursPerDay: activityHoursPerDay })}
                   canWrite={canWrite}
                   canReadCost={canReadCost}
                   onRemoved={() => (onRowRemoved ? onRowRemoved() : listRef.current?.focus())}
@@ -387,6 +455,28 @@ export function ActivityResourcesPanel({
                       histogram only. It doesn’t move any dates.
                     </p>
                   </div>
+                ) : null}
+                {/* The join lag (ADR-0071 §1) — how far into the activity this resource arrives.
+                    Behind its own flag and hidden for a zero-span milestone. The grammar is
+                    ADR-0070's; the factor is the activity's SAVED calendar, so `2d` here means the
+                    same thing the engine will measure. */}
+                {showLag ? (
+                  <TextField
+                    label={assignmentLagLabel(activityHoursPerDay)}
+                    type="text"
+                    inputMode="text"
+                    // The placeholder has to follow the same rule as the label and the help: with
+                    // no factor, `0d` would be an example in the one unit the field is about to
+                    // refuse — a planner typing what the field suggests would be told off for it.
+                    placeholder={canAuthorLagDays(activityHoursPerDay) ? '0d' : '0h'}
+                    hint={assignmentLagHelp(activityHoursPerDay)}
+                    // The schema's syntax error wins when there is one; the factor error is the
+                    // second rule, and only reachable once the text itself reads (see the derivation
+                    // above). One `error` prop either way, so the field cannot show two messages
+                    // that disagree about whether it is valid.
+                    error={errors.lagText?.message ?? lagFactorError}
+                    {...register('lagText')}
+                  />
                 ) : null}
                 {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
                     driving box is ticked, and only behind the flag. An initial rate is stored inert; the

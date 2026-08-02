@@ -230,6 +230,13 @@ export const seedAssignmentSchema = z
     actualUnits: z.number().nonnegative().nullable(),
     /** The ADR-0044 loading profile. **No XER column** — seed-only. */
     curveType: seedResourceCurveTypeSchema,
+    /**
+     * The ADR-0071 join lag in working **minutes** on the activity's own calendar — how far into the
+     * activity this resource arrives. Unsigned; 0 = joins with it. The fixture carries this as
+     * `assignment_lag_h`; **P6's XER has no column for it**, so like `unitsPerHour` and `curveType`
+     * it is seed-only and does not round-trip through interchange.
+     */
+    lagMinutes: z.number().int().nonnegative(),
   })
   .strict();
 export type SeedAssignment = z.infer<typeof seedAssignmentSchema>;

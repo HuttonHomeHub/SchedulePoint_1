@@ -112,6 +112,13 @@ export class HierarchyLifecycleService {
         where: { baseline: { planId: { in: planIds } }, deletedAt: null },
         data: stamp,
       });
+      // The cost decomposition is a snapshot child too (ADR-0071 M3) and rides the same batch, so
+      // a restore brings a baseline back with the components it was captured with rather than with
+      // a decomposition that outlived its parent.
+      await tx.baselineAssignment.updateMany({
+        where: { baseline: { planId: { in: planIds } }, deletedAt: null },
+        data: stamp,
+      });
       return (
         await tx.baseline.updateMany({
           where: { planId: { in: planIds }, deletedAt: null },
@@ -433,6 +440,11 @@ export class HierarchyLifecycleService {
           await tx.baseline.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
         await tx.baselineActivity.updateMany({
+          where: { deleteBatchId: batchId },
+          data: restore,
+        });
+        // …and its cost decomposition (ADR-0071 M3), swept in the same batch above.
+        await tx.baselineAssignment.updateMany({
           where: { deleteBatchId: batchId },
           data: restore,
         });

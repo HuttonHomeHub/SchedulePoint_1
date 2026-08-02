@@ -718,3 +718,33 @@ saw at open. The race is gone by construction rather than by narrowing a window,
 happens to type exactly the seed loses nothing either. Pinned by
 `src/features/activities/model/use-duration-seed.test.ts`, whose central case sets the value with no
 accompanying re-render — verified to fail against the old implementation first.
+
+## 84. Levelling is quadratic in the number of activities contending on ONE resource
+
+**Found by** the backend-performance review of ADR-0071 M2, which measured `level.ts` before and
+after the join-lag rework and reported the honest result: the new implementation is marginally
+**faster** than the old at every size tested (500 → 16,000 activities), and both are quadratic in
+one specific shape — many activities competing for a **single** resource. At 16,000 such activities
+a levelling pass takes ~11.6 s.
+
+**It is pre-existing and this diff did not change it.** It is recorded because ADR-0041 §F's
+boundedness wording ("`O(k log k)`, never a per-minute scan") is easy to read as ruling this out,
+and it does not: §F rules out cost that scales with the **span** being levelled — the defect where
+a two-year plan costs a thousand times a two-day one regardless of how much work it holds. It says
+nothing about cost that scales with the number of **contenders**, which is what this is. A reader
+checking whether levelling is bounded would find §F, find it satisfied, and stop.
+
+**What would fix it**, if a real plan ever hits it: the serial priority-list heuristic re-scans the
+resource's committed intervals for each candidate placement. An interval tree, or carrying a
+per-resource cursor forward through the priority order, would take it to `O(n log n)`. Neither is
+worth doing on a measurement of a synthetic worst case — a real programme spreads demand across many
+resources, and the shape that is slow is one crew doing 16,000 activities in sequence. **Measure a
+real plan before building either** (ADR-0053 M4's rule: an index is added on a measurement, not an
+instinct).
+
+**Also measured, and accepted:** baseline capture went from ~384 ms to ~920 ms at 2,000 activities /
+6,000 assignments, all of it inside the plan-locked transaction, because ADR-0071 M3 now freezes the
+per-assignment cost decomposition alongside the activity rows (CQ-1 "extend the baseline — exact").
+That is the cost of the answer being exact rather than approximated, it is a once-per-baseline
+operation a planner initiates deliberately, and 920 ms is well inside what a captured snapshot is
+expected to take.

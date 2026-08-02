@@ -194,20 +194,30 @@ capability, the coverage exception is deleted, and audit finding **F6** closes.
 - **Development steps:** repository select; the caller; delete the comment; add a note at
   `resource-histogram.ts:222` that the `> 0` guard is the parity fast path and not a validation.
 
-##### Task 1.2 — Map the horizon error to a 422
+##### Task 1.2 — Map the horizon error to a 422 — **WITHDRAWN (premise measured false, 2026-08-02)**
 
-- **Description:** `HistogramLagUnreachableError { activityId, resourceId }` in `resource-histogram.ts`
-  (a sibling of `HistogramTooManyBucketsError`), raised when the `effStart` walk throws
-  `WorkingTimeHorizonExceededError`; mapped at `schedule.service.ts:745-755` to a 422
-  `ASSIGNMENT_LAG_UNREACHABLE` naming the assignment.
-- **Complexity:** S
-- **Dependencies:** 1.1, 0.4
-- **Risks:** the existing `catch` rethrows everything that is not the bucket error → a 500. That is the
-  defect being closed; the test must prove a 422, not merely "an error".
-- **Testing:** unit test on the read-model raising the typed error with the right ids; service test asserting
-  **422** (not 500) and the `details.reason`; a Supertest e2e on a window-only calendar plan.
-- **Development steps:** the error class; the per-assignment try/catch around the `effStart` walk; the
-  service mapping; the OpenAPI declaration on the histogram route.
+This task was written on the belief that a legal lag on a starved calendar makes `addWorkingTime`
+throw, so the histogram answers 500. **It does not.** Measured directly against the real port: a
+calendar working **one minute per week** walks the full ceiling lag (5,256,000 working minutes) to
+completion, returning `+102759-01T09:01`. The `HORIZON_DAYS` guard is an **iteration** cap and the
+search window grows quadratically (`hi += weekSpan * (1 + guard)`), so it is never reached inside the
+lag ceiling — the port only fails at ~100× the ceiling, and then with a `Date` overflow rather than
+the horizon message.
+
+So there is no 500 to convert. The error class, its mapping and its OpenAPI line were **written and
+then reverted**, because an unreachable `catch` is dead code and a test that cannot make it fire is
+worse than no test — it reads as proof that the case is handled.
+
+What is true, and smaller than the drafted defect: an absurd lag on a starved calendar produces an
+effective start tens of thousands of years out, which the **existing** `MAX_HISTOGRAM_BUCKETS` guard
+already refuses as `HISTOGRAM_GRANULARITY_TOO_FINE`. That message is unhelpful for this cause but it
+is not a wrong answer, and inventing a second guard to say it better is not worth a branch nobody can
+reach. Recorded rather than fixed.
+
+Method note: this is ADR-0058's rule applied to a plan rather than to prose. The plan is a document;
+its claim that the walk throws was never verified, and the 25 lines it asked for would have shipped
+as permanent dead code carrying a docblock asserting a defect that does not exist — the exact ADR-0066
+M5.4 shape it warned about in its own risks line.
 
 ##### Task 1.3 — The capability plan, the coverage exception, the matrix and the playbook
 
@@ -230,18 +240,25 @@ capability, the coverage exception is deleted, and audit finding **F6** closes.
   5. `docs/specs/engine-surface-audit.md` — F6 resolved; the coverage block at `:214-217` corrected.
   6. `docs/TECH_DEBT.md:502` — the repeated exception sentence updated.
 
-##### Task 1.4 — **N34** negative cases
+##### Task 1.4 — **N34** negative cases — **RELOCATED (the tier does not accept them)**
 
-- **Description:** the three hostile attempts in `packages/seed/src/negative/cases.ts` — negative lag,
-  oversized lag, unreachable-horizon lag — as one API attempt each, and the ADR-0035 §34 / N34 register
-  entry.
-- **Complexity:** S
-- **Dependencies:** 0.3, 1.2
-- **Risks:** the unreachable case needs a host plan with a window-only calendar, which the tier's host
-  builder supports (`options.calendars`) → no new machinery.
-- **Testing:** the negative tier runs and each attempt reports the expected 422 with the expected reason.
-- **Development steps:** the three cases; ADR-0035 §34 + N34 + the acceptance-ledger row (Accepts with M1
-  for the boundary, with M2/M3 for the consumer semantics).
+The drafted home for these was `packages/seed/src/negative/cases.ts`. That tier is **pinned to the
+conformance fixture's own case list** by `negative.spec.ts` — "covers every case in the fixture, with
+no invented ones" — so adding `N34A`/`N34B` there fails the suite by design. The fixture has no
+assignment-lag negative, and inventing one into a register whose whole point is that it mirrors the
+benchmark would quietly make the tier something else.
+
+So the N34 rejects live where they can actually run:
+
+- **DTO boundary** — `assignment-dto.validation.spec.ts`: `-1`, `-60`, `ceiling + 1`, `1.5` and the
+  string `'3d'` all rejected on **both** create and update; `0`, `1440`, the ceiling and an omitted
+  field all accepted; plus a test pinning the DTO's `@Max` to the **shared** `@repo/types` constant
+  rather than a copied literal.
+- **API e2e** — `resources.e2e-spec.ts`: a negative lag refused **422** on create and on update
+  against a real Postgres, alongside the round-trip and the not-cost-gated case.
+
+The ADR-0035 §34 / N34 register entry still lands with M2, where the levelling semantics it also has
+to describe are decided.
 
 ##### Task 1.5 — Ship M1
 

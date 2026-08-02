@@ -464,3 +464,221 @@ describe('levelSchedule — performance (2,000 activities, ADR-0041 §2)', () =>
     expect(elapsedMs).toBeLessThan(5000);
   });
 });
+
+describe('levelSchedule — per-assignment join lag (ADR-0071 §1)', () => {
+  /** `assign` with a join lag, in whole 24-hour days on the 24/7 test calendar. */
+  const lagged = (
+    activityId: string,
+    resourceId: string,
+    unitsPerHour: number,
+    lagDays: number,
+  ): EngineAssignment => ({
+    activityId,
+    resourceId,
+    unitsPerHour,
+    lagMinutes: lagDays * DAY,
+  });
+
+  it('frees the front of a lagged activity’s window for someone else — the whole point', () => {
+    // CRANE capacity 1. A runs four days but the crane only joins on day 2, so it holds the crane
+    // over [day 2, day 4) and NOT over [day 0, day 2). B needs the crane for two days and fits in
+    // exactly that gap.
+    //
+    // Before ADR-0071 the pass reserved the crane for A's WHOLE span, so B was pushed to day 4 with a
+    // four-day delay for capacity nobody was using. That is the pessimism the epic exists to remove,
+    // and this is the case that shows it.
+    const { byId } = run(
+      [task('A', 4), task('B', 2)],
+      [],
+      [lagged('A', 'CRANE', 1, 2), assign('B', 'CRANE', 1)],
+      [{ id: 'CRANE', capacity: 1 }],
+    );
+    expect(byId.get('A')!.leveledStart).toBe('2026-01-01');
+    expect(byId.get('A')!.levelingDelay).toBe(0);
+    // B is not delayed at all: its two days sit entirely before the crane is claimed.
+    expect(byId.get('B')!.leveledStart).toBe('2026-01-01');
+    expect(byId.get('B')!.leveledFinish).toBe('2026-01-02');
+    expect(byId.get('B')!.levelingDelay).toBe(0);
+  });
+
+  it('still serialises when the windows genuinely overlap', () => {
+    // The same shape with a one-day lag: A holds the crane over [day 1, day 4), so B's two days no
+    // longer fit in front of it and it waits. Proof that the previous test is the lag doing work and
+    // not the contention having quietly disappeared.
+    const { byId } = run(
+      [task('A', 4), task('B', 2)],
+      [],
+      [lagged('A', 'CRANE', 1, 1), assign('B', 'CRANE', 1)],
+      [{ id: 'CRANE', capacity: 1 }],
+    );
+    expect(byId.get('B')!.levelingDelay).toBeGreaterThan(0);
+    expect(byId.get('B')!.leveledStart).toBe('2026-01-05');
+  });
+
+  it('a lag at or past the span reserves nothing at all', () => {
+    // The spec's degenerate case: a window with no working time in it is not capacity anyone holds,
+    // so the crane is free for B across the whole of A.
+    const { byId } = run(
+      [task('A', 2), task('B', 2)],
+      [],
+      [lagged('A', 'CRANE', 1, 2), assign('B', 'CRANE', 1)],
+      [{ id: 'CRANE', capacity: 1 }],
+    );
+    expect(byId.get('B')!.leveledStart).toBe('2026-01-01');
+    expect(byId.get('B')!.levelingDelay).toBe(0);
+  });
+
+  it('asks each resource about its OWN window when one activity holds two', () => {
+    // A holds the crane from day 0 but the pump only from day 3. B needs the pump for two days and
+    // fits in front of it; C needs the crane and does not. One activity, two resources, two different
+    // answers — which is the thing a single merged feasibility timeline could not express.
+    const { byId } = run(
+      [task('A', 4), task('B', 2), task('C', 2)],
+      [],
+      [
+        assign('A', 'CRANE', 1),
+        lagged('A', 'PUMP', 1, 3),
+        assign('B', 'PUMP', 1),
+        assign('C', 'CRANE', 1),
+      ],
+      [
+        { id: 'CRANE', capacity: 1 },
+        { id: 'PUMP', capacity: 1 },
+      ],
+    );
+    expect(byId.get('B')!.levelingDelay).toBe(0);
+    expect(byId.get('B')!.leveledStart).toBe('2026-01-01');
+    expect(byId.get('C')!.levelingDelay).toBeGreaterThan(0);
+  });
+
+  it('an explicit zero lag is identical to an absent one', () => {
+    // The field is optional so that every pre-ADR-0071 caller keeps its exact behaviour. This is the
+    // property that makes that true rather than merely intended, and it is cheap enough to keep.
+    const shape = (assignments: readonly EngineAssignment[]) =>
+      run([task('A', 2), task('B', 3), task('C', 1)], [edge('A', 'C')], assignments, [
+        { id: 'CRANE', capacity: 1 },
+      ]).leveled.results;
+
+    const absent = shape([assign('A', 'CRANE', 1), assign('B', 'CRANE', 1)]);
+    const explicitZero = shape([lagged('A', 'CRANE', 1, 0), lagged('B', 'CRANE', 1, 0)]);
+    expect(explicitZero).toEqual(absent);
+  });
+
+  // Deliberately NOT tested: that adding a lag can only pull dates earlier. It is not true — freeing
+  // the front of one window changes the order later activities are packed in, and a different packing
+  // can place some individual activity later than it sat before. The guarantee is per-window capacity
+  // correctness, not per-activity monotonicity, and a test asserting otherwise would be asserting a
+  // property the design does not have.
+});
+
+describe('levelSchedule — placement-search cost is bounded by placements, not by time (ADR-0041 §F)', () => {
+  /**
+   * A counting stub over the real calendar (the ADR-0054 precedent). The assertion is the **shape** of
+   * the cost, not a millisecond count: a CI runner's wall clock is noise, but "does the search walk
+   * the calendar a bounded number of times, or once per minute of the span" is a fact a stub can state.
+   *
+   * This guards the specific way the ADR-0071 rewrite could regress. The pass moved from one merged
+   * feasible/blackout timeline to per-resource candidate starts, and a candidate list that grew with
+   * the *span* rather than with the number of placed intervals would still be correct, still pass every
+   * behavioural test, and quietly reintroduce the per-minute scan the ADR-0041 §F invariant forbids.
+   */
+  const counting = (inner: typeof allMinutesWorkCalendar) => {
+    const counts = { addWorkingTime: 0, workingTimeBetween: 0 };
+    const calendar = {
+      addWorkingTime(from: string, minutes: number): string {
+        counts.addWorkingTime += 1;
+        return inner.addWorkingTime(from, minutes);
+      },
+      workingTimeBetween(from: string, to: string): number {
+        counts.workingTimeBetween += 1;
+        return inner.workingTimeBetween(from, to);
+      },
+    };
+    return { calendar, counts };
+  };
+
+  it('a fragmented profile costs per interval, not per minute of the span', () => {
+    // 40 activities of one day each, all on one capacity-1 resource, so the profile fragments and the
+    // last placement searches across the whole accumulated history. The span reaches 40 days = 57,600
+    // minutes; a per-minute scan would be that order. Bound generously — the point is the ORDER OF
+    // MAGNITUDE, so the number stays meaningful without pinning an implementation detail.
+    const N = 40;
+    const { calendar, counts } = counting(allMinutesWorkCalendar);
+    const activities: EngineActivity[] = [];
+    const assignments: EngineAssignment[] = [];
+    for (let i = 0; i < N; i += 1) {
+      activities.push(task(`N${i}`, 1, { levelingPriority: i }));
+      assignments.push(assign(`N${i}`, 'R', 1));
+    }
+    const output = computeSchedule(activities, [], { dataDate: DATA_DATE, calendar });
+    const before = counts.addWorkingTime + counts.workingTimeBetween;
+    levelSchedule(activities, output, assignments, [{ id: 'R', capacity: 1 }], {
+      levelWithinFloatOnly: false,
+      dataDate: DATA_DATE,
+      planCalendar: calendar,
+    });
+    const spent = counts.addWorkingTime + counts.workingTimeBetween - before;
+    // Measured: 477. Quadratic in N would be ~1,600 and a per-minute scan ~57,600, so the bound is set
+    // between the measurement and the failure mode — tight enough to catch a regression to either,
+    // loose enough that an honest refactor does not have to update it.
+    expect(spent).toBeLessThan(800);
+  });
+
+  it('a lagged profile does not multiply the cost by the lag', () => {
+    // The same shape with every assignment lagged half a day. A lag is applied by ONE calendar walk
+    // per candidate per resource, so the cost stays the same order — it does not scale with the lag,
+    // which is what a naive "step forward a minute at a time until the resource joins" would do.
+    const N = 40;
+    const { calendar, counts } = counting(allMinutesWorkCalendar);
+    const activities: EngineActivity[] = [];
+    const assignments: EngineAssignment[] = [];
+    for (let i = 0; i < N; i += 1) {
+      activities.push(task(`N${i}`, 2, { levelingPriority: i }));
+      assignments.push({ activityId: `N${i}`, resourceId: 'R', unitsPerHour: 1, lagMinutes: 720 });
+    }
+    const output = computeSchedule(activities, [], { dataDate: DATA_DATE, calendar });
+    const before = counts.addWorkingTime + counts.workingTimeBetween;
+    levelSchedule(activities, output, assignments, [{ id: 'R', capacity: 1 }], {
+      levelWithinFloatOnly: false,
+      dataDate: DATA_DATE,
+      planCalendar: calendar,
+    });
+    const spent = counts.addWorkingTime + counts.workingTimeBetween - before;
+    // Measured: 634 — the same order as the unlagged 477, not 720× it.
+    expect(spent).toBeLessThan(1000);
+  });
+
+  it('mixed demand against spare capacity still costs per interval', () => {
+    // The two cases above both take the WHOLE resource (need === capacity), so every committed
+    // interval is a full blackout and they merge into one contiguous run — the shape a placement
+    // search finds easiest. This one gives the resource capacity 6 and varies the demand 1/2/3 units
+    // per activity, so partial occupancy leaves genuine gaps: the remaining capacity rises and falls,
+    // some candidates fit into a hole between two commitments, and the blackout regions do NOT
+    // collapse into a single block.
+    //
+    // That is the case where a search tempted to walk the timeline would show it, and where the two
+    // tests above would stay green: with everything merged, "scan the one blackout" and "scan the
+    // span" cost the same. Raised by the ADR-0071 backend-performance review for exactly that reason.
+    const N = 40;
+    const { calendar, counts } = counting(allMinutesWorkCalendar);
+    const activities: EngineActivity[] = [];
+    const assignments: EngineAssignment[] = [];
+    for (let i = 0; i < N; i += 1) {
+      activities.push(task(`M${i}`, 1 + (i % 3), { levelingPriority: i }));
+      // 1, 2 or 3 units against a capacity of 6 — never a clean divisor of the whole, so the
+      // occupancy profile is genuinely fragmented rather than all-or-nothing.
+      assignments.push(assign(`M${i}`, 'R', 1 + (i % 3)));
+    }
+    const output = computeSchedule(activities, [], { dataDate: DATA_DATE, calendar });
+    const before = counts.addWorkingTime + counts.workingTimeBetween;
+    levelSchedule(activities, output, assignments, [{ id: 'R', capacity: 6 }], {
+      levelWithinFloatOnly: false,
+      dataDate: DATA_DATE,
+      planCalendar: calendar,
+    });
+    const spent = counts.addWorkingTime + counts.workingTimeBetween - before;
+    // Measured: 471. The span here reaches ~80 days ≈ 115,200 minutes, so a per-minute scan would be
+    // that order — the bound sits between the measurement and the failure mode, as above.
+    expect(spent).toBeLessThan(1200);
+  });
+});

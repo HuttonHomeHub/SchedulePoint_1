@@ -213,6 +213,15 @@ export const importAssignmentSchema = z
     isDriving: z.boolean(),
     /** Actual units of work performed. Non-negative; defaults to 0. */
     actualUnits: z.number().min(0).default(0),
+    /**
+     * Working minutes into the activity at which this resource joins it (ADR-0071 §1). Non-negative;
+     * defaults to 0 = joins with the activity.
+     *
+     * On **import** no parser writes this — see `canonicalAssignmentSchema.lagMinutes` for why — so it
+     * is always 0 and the import reports the capability as dropped. On **export** it is read from the
+     * stored assignment, so the mapper can tell whether a real value is about to be lost and say so.
+     */
+    lagMinutes: z.number().int().min(0).default(0),
   })
   .strict();
 export type ImportAssignment = z.infer<typeof importAssignmentSchema>;

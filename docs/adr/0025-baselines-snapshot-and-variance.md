@@ -93,6 +93,48 @@ performance NFRs: capture < 5s, variance < 300ms p95 at 2,000).
   `HierarchyLifecycleService` gains a `'baseline'` cascade level so a plan/project/client
   delete soft-deletes contained baselines in the same batch.
 
+## Amendments
+
+### 1 — the cost baseline (ADR-0042, EV1, 2026-07-17)
+
+A capture also freezes **cost**: `baseline_activities.budgeted_cost`, the committed PV curve the
+Earned-Value read time-phases against. Recorded in ADR-0042 §"Amends ADR-0025" and **not, until now,
+here** — which is why this section exists. An amendment that lives only in the amending document is
+findable by whoever already knows to look for it.
+
+### 2 — per-assignment cost components (ADR-0071 M3 / CQ-1, 2026-08-02)
+
+Amendment 1 froze **one number per activity**. That is enough to time-phase a whole activity's cost,
+and not enough to time-phase it **per resource** — which is what a per-assignment join lag
+(ADR-0071 §1) asks for, because a crane arriving on day four spends its share of the money over a
+different window from the crew that started on day one. Splitting a frozen total by **live** budget
+shares would reallocate committed money using a mix that has changed since the commitment, which is
+an approximation of a decomposition the snapshot never held.
+
+So a capture now also writes **`baseline_assignments`** — one row per active assignment, carrying its
+**resolved** `budgeted_cost` and its **`lag_minutes` at capture**. The lag is frozen for the same
+reason the cost is: a snapshot holding frozen money and reading the live lag would phase committed
+cost through a window somebody edited afterwards. The components are computed by the **same
+expression** that sums the activity total (`assignmentBudgetedCost`), so the decomposition sums to
+its own total by construction rather than by agreement between two spellings.
+
+Three consequences are accepted rather than discovered later:
+
+- **`baselines.cost_snapshot_level`** (`ACTIVITY` | `ASSIGNMENT`, constant-`DEFAULT ACTIVITY`) is the
+  discriminator, and it is **load-bearing**: zero `baseline_assignments` rows is **ambiguous** — a
+  pre-amendment capture and a genuinely assignment-free plan look identical and require **opposite**
+  answers. The level is therefore read from the column and **never inferred from a row count**, via
+  an exhaustive `switch` with no `default` (`frozenCostComponents`), so a third level cannot be
+  silently absorbed into one of the two.
+- **Baselines captured before this cannot be back-filled.** A breakdown that was never recorded is
+  not recoverable from a frozen total. Those keep the live-share approximation for the life of the
+  baseline, and the read **says so** — `costPhasingApproximatedCount` on the Earned-Value response,
+  which re-capturing the baseline is what clears. The half of this decision that is not schema.
+- **The CPM engine is untouched.** Cost is a read-model (ADR-0042), so `computeSchedule` never sees
+  any of it and the ADR-0034 recalc parity gate is structurally unaffected. An all-zero-lag frozen
+  breakdown also leaves PV **byte-identical** to the pre-amendment answer, which is asserted rather
+  than asserted-about: capturing components must not by itself move a single minor unit.
+
 ## References
 
 - Feature spec: [`docs/specs/baselines.md`](../specs/baselines.md) · Implementation plan:

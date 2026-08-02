@@ -220,7 +220,26 @@ export function mapExportGraphToCanonical(graph: ExportGraph): ExportMapResult {
     unitsPerHour: assignment.unitsPerHour,
     isDriving: assignment.isDriving,
     actualUnits: assignment.actualUnits,
+    lagMinutes: assignment.lagMinutes,
   }));
+
+  // The join lag (ADR-0071 §1) reaches the canonical model and stops there: neither serialiser writes
+  // it, because this repository has never seen a real export carrying one and will not invent a column
+  // name (ADR-0071 §5). Reported **only when there is something to lose** — a plan whose resources all
+  // join with their activities loses nothing, and a standing finding on every export would train a
+  // reader to skip the section that matters. The count is named so a planner can tell whether the
+  // programme they are handing over is one of the affected ones.
+  const laggedAssignments = graph.assignments.filter((assignment) => assignment.lagMinutes > 0);
+  if (laggedAssignments.length > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'assignment',
+      sourceRef: null,
+      detail: `${String(laggedAssignments.length)} resource assignment(s) carry a join delay, which is not written to the exported file`,
+      reason:
+        'no interchange format this repository has verified carries a per-assignment lag; the receiving tool will read every resource as starting with its activity (ADR-0071 §5)',
+    });
+  }
 
   const model: CanonicalModel = {
     source: { format: 'XER', version: null, filename: null },

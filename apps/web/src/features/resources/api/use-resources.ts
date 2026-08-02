@@ -353,7 +353,7 @@ export function useAssignments(
 export function useCreateAssignment(orgSlug: string, activityId: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: AssignmentFormValues) =>
+    mutationFn: (input: AssignmentFormValues & { lagMinutes?: number }) =>
       apiFetch<ResourceAssignmentSummary>(
         `/organizations/${orgSlug}/activities/${activityId}/assignments`,
         {
@@ -379,6 +379,9 @@ export function useCreateAssignment(orgSlug: string, activityId: string, planId?
               ? {}
               : { actualCost: majorInputToMinor(input.actualCost) }),
             ...(input.actualUnits === undefined ? {} : { actualUnits: input.actualUnits }),
+            // The join lag (ADR-0071 §1), in working minutes on the activity's calendar. Omitted when
+            // absent or zero, so an unlagged assign sends the body it always did.
+            ...(input.lagMinutes === undefined ? {} : { lagMinutes: input.lagMinutes }),
           }),
         },
       ),
@@ -427,6 +430,12 @@ export function useUpdateAssignment(orgSlug: string, planId?: string) {
       budgetedCost?: number | null;
       actualCost?: number;
       actualUnits?: number;
+      /**
+       * The join lag in working minutes (ADR-0071 §1) — how far into the activity this resource
+       * arrives. Sent only when the caller edits it, so a units/rate/driving/cost save never touches
+       * it (the PATCH treats absent fields as unchanged). `0` is a real value: it clears the lag.
+       */
+      lagMinutes?: number;
     }) =>
       apiFetch<ResourceAssignmentSummary>(
         `/organizations/${orgSlug}/assignments/${input.assignmentId}`,
@@ -441,6 +450,7 @@ export function useUpdateAssignment(orgSlug: string, planId?: string) {
             ...(input.budgetedCost !== undefined ? { budgetedCost: input.budgetedCost } : {}),
             ...(input.actualCost !== undefined ? { actualCost: input.actualCost } : {}),
             ...(input.actualUnits !== undefined ? { actualUnits: input.actualUnits } : {}),
+            ...(input.lagMinutes !== undefined ? { lagMinutes: input.lagMinutes } : {}),
             version: input.version,
           }),
         },

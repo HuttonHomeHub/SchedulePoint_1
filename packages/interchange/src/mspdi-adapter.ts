@@ -635,8 +635,24 @@ export function adaptMspdiToCanonical(
         // MSP has no driving flag; no assignment drives by default (RESOURCE_DEPENDENT is not produced).
         isDriving: false,
         actualUnits,
+        // `<Assignment><Delay>` is a PLAUSIBLE equivalent of the join lag and is deliberately not read
+        // (ADR-0071 §5): it appears in no fixture here and has been checked against no real file, so
+        // wiring it would be an assumption about another tool's semantics dressed as a mapping.
+        lagMinutes: 0,
       });
     }
+  }
+  // The capability drop, once — see the XER adapter for why this is unconditional rather than
+  // conditional on a value being present.
+  if (assignments.length > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'assignment',
+      sourceRef: null,
+      detail: 'a per-assignment join delay was not read; every resource joins with its activity',
+      reason:
+        '<Assignment><Delay> is an unverified equivalent and is not read on assumption (ADR-0071 §5)',
+    });
   }
 
   const model: CanonicalModel = {

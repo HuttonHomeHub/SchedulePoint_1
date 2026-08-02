@@ -274,6 +274,11 @@ export function fixtureSpec(): SeedSpec {
       isDriving: assignment.driving ?? false,
       actualUnits: assignment.actual_units ?? null,
       curveType: CURVE_TYPE[assignment.curve ?? ''] ?? 'UNIFORM',
+      // The fixture states the join lag in HOURS (`assignment_lag_h`); SchedulePoint stores working
+      // minutes (ADR-0071 §1 / ADR-0036). Rounded rather than floored, and never negative — the
+      // fixture is a benchmark, not a trusted input, and a negative here would be silently dropped
+      // by the read-model's `> 0` fast path rather than rejected.
+      lagMinutes: Math.max(0, Math.round((assignment.assignment_lag_h ?? 0) * 60)),
     })),
     unplaceable,
   };
@@ -462,6 +467,8 @@ interface FixtureShape {
     actual_units?: number | null;
     driving?: boolean;
     curve?: string | null;
+    /** The fixture's join lag in HOURS (ADR-0071 §1); optional here, always present in the file. */
+    assignment_lag_h?: number;
   }>;
   roles?: Array<{ id?: string }>;
   activity_code_types?: Array<{ id?: string }>;

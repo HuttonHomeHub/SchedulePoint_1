@@ -836,7 +836,9 @@ describe('ScheduleService.getEarnedValue', () => {
           assignments: [],
         },
       ]),
-      loadActiveBaselineCostSnapshot: vi.fn().mockResolvedValue([]),
+      // `null` = the plan has no active baseline. Deliberately not an empty snapshot: zero rows would
+      // be ambiguous, which is the invariant the discriminator exists to hold (ADR-0071 M3).
+      loadActiveBaselineCostSnapshot: vi.fn().mockResolvedValue(null),
       loadPlanCalendar: vi.fn().mockResolvedValue(null),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
@@ -887,17 +889,113 @@ describe('ScheduleService.getEarnedValue', () => {
   });
 
   it('joins the active baseline cost snapshot for PV (not flagged as missing)', async () => {
-    schedule.loadActiveBaselineCostSnapshot.mockResolvedValue([
-      {
-        sourceActivityId: 'act-1',
-        budgetedCost: 100000n,
-        baselineStart: new Date('2026-01-01T00:00:00Z'),
-        baselineFinish: new Date('2026-01-05T00:00:00Z'),
-      },
-    ]);
+    schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
+      costSnapshotLevel: 'ACTIVITY',
+      activities: [
+        {
+          sourceActivityId: 'act-1',
+          budgetedCost: 100000n,
+          budgetedExpense: 100000n,
+          baselineStart: new Date('2026-01-01T00:00:00Z'),
+          baselineFinish: new Date('2026-01-05T00:00:00Z'),
+        },
+      ],
+      assignments: [],
+    });
     const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
     // A snapshot cost is present for every leaf → the live-budget fallback flag is off.
     expect(result.costBaselineMissing).toBe(false);
+  });
+
+  describe('the cost-snapshot level decides the PV split, and a row count never does', () => {
+    const DAY = 1440;
+    /** One task, a £1,000 assignment joining on day 4, over a ten-day baseline window. */
+    const laggedPlan = () => {
+      schedule.loadEarnedValueActivities.mockResolvedValue([
+        {
+          id: 'act-1',
+          type: 'TASK',
+          parentId: null,
+          percentCompleteType: 'DURATION',
+          percentComplete: 50,
+          physicalPercentComplete: null,
+          steps: [],
+          budgetedExpense: 0n,
+          actualExpense: null,
+          earlyStart: null,
+          earlyFinish: null,
+          assignments: [
+            {
+              budgetedCost: 100000n,
+              actualCost: 0n,
+              budgetedUnits: new Prisma.Decimal(0),
+              actualUnits: new Prisma.Decimal(0),
+              lagMinutes: 4 * DAY,
+              resource: { costPerUnit: null },
+            },
+          ],
+        },
+      ]);
+    };
+    const snapshot = (
+      costSnapshotLevel: 'ACTIVITY' | 'ASSIGNMENT',
+      assignments: unknown[] = [],
+    ) => ({
+      costSnapshotLevel,
+      activities: [
+        {
+          sourceActivityId: 'act-1',
+          budgetedCost: 100000n,
+          budgetedExpense: 0n,
+          baselineStart: new Date('2026-01-01T00:00:00Z'),
+          baselineFinish: new Date('2026-01-11T00:00:00Z'),
+        },
+      ],
+      assignments,
+    });
+
+    it('reports an ACTIVITY-level baseline’s lagged split as approximated', async () => {
+      // Captured before per-assignment cost was frozen. The breakdown was never recorded, so PV
+      // reallocates the committed total by live shares — and the read says so rather than staying
+      // quiet, which is the half of CQ-1 option B that is not the schema.
+      laggedPlan();
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('ACTIVITY'));
+      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+      expect(result.costPhasingLaggedCount).toBe(1);
+      expect(result.costPhasingApproximatedCount).toBe(1);
+    });
+
+    it('reads an ASSIGNMENT-level baseline’s frozen components as exact', async () => {
+      // Same live plan, same committed £1,000 — but the snapshot holds its own breakdown, so nothing
+      // is reallocated and nothing is reported approximate.
+      laggedPlan();
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(
+        snapshot('ASSIGNMENT', [
+          {
+            sourceActivityId: 'act-1',
+            sourceAssignmentId: 'asg-1',
+            budgetedCost: 100000n,
+            lagMinutes: 4 * DAY,
+          },
+        ]),
+      );
+      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+      expect(result.costPhasingLaggedCount).toBe(1);
+      expect(result.costPhasingApproximatedCount).toBe(0);
+    });
+
+    it('an ASSIGNMENT-level baseline with NO component rows is exact, not approximated', async () => {
+      // The ambiguity in one test. Zero `baseline_assignments` rows is the SAME observation as the
+      // ACTIVITY case above and must produce the opposite answer: this activity is exactly known to
+      // have carried no assignments at capture, so it phases its frozen expense over the activity
+      // window and never reaches for the live assignment it has acquired since. Inferring the level
+      // from the row count would silently make this the approximate branch.
+      laggedPlan();
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('ASSIGNMENT'));
+      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+      expect(result.costPhasingLaggedCount).toBe(0);
+      expect(result.costPhasingApproximatedCount).toBe(0);
+    });
   });
 });
 
@@ -915,6 +1013,7 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     activityId: 'act-1',
     budgetedUnits: new Prisma.Decimal(1200),
     curveType: 'BELL' as const,
+    lagMinutes: 0,
     // A 21-day span on the (null-calendar → all-days-work) plan calendar, DAY-aligned to the profile.
     earlyStart: new Date('2026-01-01T00:00:00Z'),
     earlyFinish: new Date('2026-01-22T00:00:00Z'),
@@ -997,6 +1096,59 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     );
     expect(result.series[0]!.values).toEqual(new Array(21).fill(10));
     expect(result.curveNormalisedCount).toBe(0);
+  });
+
+  it('shifts the load by the assignment’s stored lag (ADR-0071 M1)', async () => {
+    // The engine has accepted a per-assignment lag since the ADR-0044 rung-5 slice; until M0 nothing
+    // could store one and the service passed a hard-coded 0. This is the case that would have caught
+    // that. Two resources on one 21-day activity: one joins on day 0, the other eleven days late.
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ resourceId: 'early', curveType: 'UNIFORM', budgetedUnits: new Prisma.Decimal(210) }),
+      row({
+        resourceId: 'late',
+        curveType: 'UNIFORM',
+        budgetedUnits: new Prisma.Decimal(100),
+        lagMinutes: 11 * 1440,
+      }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    // The shared axis is the union of the EFFECTIVE spans, so the unlagged peer holds it open across
+    // the whole activity — which is what makes the lag visible as a gap rather than as a shorter axis.
+    expect(result.buckets).toHaveLength(21);
+    const early = result.series.find((x) => x.resourceId === 'early')!;
+    const late = result.series.find((x) => x.resourceId === 'late')!;
+    expect(early.values).toEqual(new Array(21).fill(10));
+    expect(late.values.slice(0, 11)).toEqual(new Array(11).fill(0));
+    expect(late.values.slice(11).every((v) => v > 0)).toBe(true);
+    // Units are conserved: a lag compresses the load into a shorter window, it does not discard it.
+    expect(late.values.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 4);
+  });
+
+  it('the lag alone moves the axis when nothing else holds it open', async () => {
+    // Stated rather than left implicit: with one lagged assignment the axis starts at the EFFECTIVE
+    // start, so the picture is ten days of work and not eleven empty buckets followed by ten. That
+    // falls out of the shared-axis rule above and is easy to mistake for the lag being ignored.
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ curveType: 'UNIFORM', budgetedUnits: new Prisma.Decimal(100), lagMinutes: 11 * 1440 }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    expect(result.buckets).toHaveLength(10);
+    expect(result.series[0]!.values.every((v) => v > 0)).toBe(true);
+    expect(result.series[0]!.values.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 4);
   });
 
   it('offset-pages the per-resource series', async () => {

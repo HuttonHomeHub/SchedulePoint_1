@@ -30,6 +30,7 @@
     "test:e2e:library": "playwright test --config playwright.library.config.ts --pass-with-no-tests",
     "test:e2e:calendar-shifts": "playwright test --config playwright.calendar-shifts.config.ts --pass-with-no-tests",
     "test:e2e:sub-day": "playwright test --config playwright.sub-day.config.ts --pass-with-no-tests",
+    "test:e2e:assignment-lag": "playwright test --config playwright.assignment-lag.config.ts --pass-with-no-tests",
     "measure:draw": "node scripts/measure-link-routing.mjs 120 scale --headed",
     "test:e2e:designed-ui": "playwright test --config playwright.designed-ui.config.ts --pass-with-no-tests",
     "test:e2e:designed-chrome": "playwright test --config playwright.designed-chrome.config.ts --pass-with-no-tests",

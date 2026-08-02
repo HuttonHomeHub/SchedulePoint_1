@@ -29,6 +29,29 @@ export interface CaptureActivityRow {
    * `costBaselineMissing`), so a baseline captured now ALWAYS stores an integer, never NULL.
    */
   budgetedCost: number;
+  /**
+   * The activity-expense HALF of {@link budgetedCost}, frozen separately (ADR-0071 M3 / CQ-1 B).
+   *
+   * Stated rather than derived as `budgetedCost − Σ(components)`: that subtraction is exact integer
+   * arithmetic today and becomes silently wrong the day the total is computed by a rule it does not
+   * know about. One number is cheaper than that risk.
+   */
+  budgetedExpense: number;
+  /**
+   * This activity's cost DECOMPOSITION at capture (ADR-0071 M3) — one entry per active assignment,
+   * carrying the same per-assignment expression {@link budgetedCost} sums, so the components add up
+   * to the total by construction rather than by a second calculation that could disagree.
+   *
+   * The **lag is frozen with the cost**, not read live at EV time: a snapshot holding frozen money
+   * but a live window would time-phase that money through a window somebody edited afterwards — the
+   * drift ADR-0025's copy-not-reference rule exists to prevent, one field along.
+   */
+  assignments: {
+    sourceAssignmentId: string;
+    sourceResourceId: string;
+    budgetedCost: number;
+    lagMinutes: number;
+  }[];
 }
 
 /** The baseline row to insert, plus the already-projected snapshot rows. */
@@ -79,6 +102,13 @@ export class BaselineRepository {
         dataDate: input.dataDate,
         capturedProjectFinish: input.capturedProjectFinish,
         hoursPerDayMinutes: input.hoursPerDayMinutes,
+        // ADR-0071 M3 / CQ-1 (B). Written unconditionally, including when the plan has NO
+        // assignments at all: that is the whole point of the discriminator. Zero component rows
+        // then means "there genuinely were none, and this snapshot is complete", which Earned
+        // Value must read as EXACT — the opposite of what zero rows means on a baseline captured
+        // before this existed. A row count cannot tell those apart; this column is the only thing
+        // that can, so it must never be conditional on there being something to count.
+        costSnapshotLevel: 'ASSIGNMENT',
         createdBy: input.actorId,
         updatedBy: input.actorId,
       },
@@ -104,10 +134,31 @@ export class BaselineRepository {
           // The cost baseline frozen at capture (EV1, ADR-0042 / the ADR-0025 amendment) — an
           // integer minor-unit budget, computed by the service-side load below.
           budgetedCost: a.budgetedCost,
+          // The activity-expense component of that total (ADR-0071 M3), so the decomposition is
+          // stated rather than recovered by subtracting the assignment rows.
+          budgetedExpense: a.budgetedExpense,
           createdBy: input.actorId,
           updatedBy: input.actorId,
         })),
       });
+      // The cost decomposition (ADR-0071 M3). Same transaction as the baseline row and the activity
+      // rows, so the `ASSIGNMENT` discriminator and the rows it promises are never separately
+      // visible — the pairing cannot be a database CHECK (different tables), so this transaction is
+      // where the invariant actually lives.
+      const components = input.activities.flatMap((a) =>
+        a.assignments.map((asg) => ({
+          organizationId: input.organizationId,
+          baselineId: baseline.id,
+          sourceAssignmentId: asg.sourceAssignmentId,
+          sourceActivityId: a.id,
+          sourceResourceId: asg.sourceResourceId,
+          budgetedCost: asg.budgetedCost,
+          lagMinutes: asg.lagMinutes,
+          createdBy: input.actorId,
+          updatedBy: input.actorId,
+        })),
+      );
+      if (components.length > 0) await db.baselineAssignment.createMany({ data: components });
     }
     return baseline;
   }
@@ -143,8 +194,12 @@ export class BaselineRepository {
         assignments: {
           where: { deletedAt: null, resource: { deletedAt: null } },
           select: {
+            id: true,
+            resourceId: true,
             budgetedCost: true,
             budgetedUnits: true,
+            // Frozen alongside the cost (ADR-0071 M3) — see CaptureActivityRow.assignments.
+            lagMinutes: true,
             resource: { select: { costPerUnit: true } },
           },
         },
@@ -153,6 +208,15 @@ export class BaselineRepository {
     return rows.map(({ budgetedExpense, assignments, ...rest }) => ({
       ...rest,
       budgetedCost: computeBudgetedCost(budgetedExpense, assignments),
+      budgetedExpense: Number(budgetedExpense ?? 0n),
+      assignments: assignments.map((a) => ({
+        sourceAssignmentId: a.id,
+        sourceResourceId: a.resourceId,
+        // The SAME expression computeBudgetedCost sums, deliberately — two spellings of one number
+        // is how a decomposition stops adding up to its own total.
+        budgetedCost: assignmentBudgetedCost(a),
+        lagMinutes: a.lagMinutes,
+      })),
     }));
   }
 
@@ -346,6 +410,13 @@ export class BaselineRepository {
       where: { baselineId: id, deletedAt: null },
       data: stamp,
     });
+    // The cost decomposition rides the SAME batch (ADR-0071 M3). Left behind, its rows would stay
+    // active under a deleted parent — invisible to every read, and restored out of step with the
+    // activity rows they belong to, since restore is batch-cohesion-guarded.
+    await db.baselineAssignment.updateMany({
+      where: { baselineId: id, deletedAt: null },
+      data: stamp,
+    });
     await db.baseline.updateMany({ where: { id, deletedAt: null }, data: stamp });
   }
 
@@ -397,6 +468,22 @@ export class BaselineRepository {
  * or the derived `round(budgetedUnits × (costPerUnit ?? 0))`. Money is `BIGINT` (→ `Number`); units
  * and the cost rate are `Decimal(18,4)` (→ `toNumber`). Always returns an integer (0 for no cost).
  */
+/**
+ * ONE assignment's budget in minor units: the explicit override, else `budgetedUnits × costPerUnit`
+ * (ADR-0040's rate-on-the-assignment precedent). Extracted so the frozen components and the frozen
+ * total are the same arithmetic — a decomposition computed a second way is a decomposition that can
+ * stop summing to its own total without anything failing.
+ */
+function assignmentBudgetedCost(a: {
+  budgetedCost: bigint | null;
+  budgetedUnits: Prisma.Decimal;
+  resource: { costPerUnit: Prisma.Decimal | null };
+}): number {
+  return a.budgetedCost !== null
+    ? Number(a.budgetedCost)
+    : Math.round(a.budgetedUnits.toNumber() * (a.resource.costPerUnit?.toNumber() ?? 0));
+}
+
 function computeBudgetedCost(
   budgetedExpense: bigint | null,
   assignments: {
@@ -407,10 +494,7 @@ function computeBudgetedCost(
 ): number {
   let cost = Number(budgetedExpense ?? 0n);
   for (const a of assignments) {
-    cost +=
-      a.budgetedCost !== null
-        ? Number(a.budgetedCost)
-        : Math.round(a.budgetedUnits.toNumber() * (a.resource.costPerUnit?.toNumber() ?? 0));
+    cost += assignmentBudgetedCost(a);
   }
   return cost;
 }

@@ -1,4 +1,4 @@
-import { DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
+import { ASSIGNMENT_LAG_MINUTES_MAX, DECIMAL_18_4_MAX, MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { describe, expect, it } from 'vitest';
@@ -119,4 +119,73 @@ describe('assignment DTO @Max overflow guards (TECH_DEBT #40a)', () => {
       expect(errors.some((e) => e.property === field)).toBe(true);
     });
   }
+});
+
+/**
+ * **N34** — the per-assignment join lag (ADR-0071 §1). Unsigned, integral, working MINUTES, capped at
+ * {@link ASSIGNMENT_LAG_MINUTES_MAX}.
+ *
+ * The negative rows carry the weight here. The shipped histogram read-model applies the lag only when
+ * `> 0` (a parity fast path for the zero-lag common case, `resource-histogram.ts`), so a stored
+ * negative would be silently discarded and the assignment would behave as unlagged — the API having
+ * said yes. The DTO is therefore the primary reject, not the DB CHECK.
+ */
+describe('assignment lagMinutes validation (ADR-0071 §1, N34)', () => {
+  const REJECTED: readonly [string, unknown][] = [
+    ['a negative minute', -1],
+    ['a negative day-sized lead', -60],
+    ['one above the ceiling', ASSIGNMENT_LAG_MINUTES_MAX + 1],
+    ['a fractional minute', 1.5],
+    ['the d/h/m grammar (that is a client-side spelling, never a wire value)', '3d'],
+  ];
+
+  it.each(REJECTED)('rejects %s on create', (_label, value) => {
+    const errors = errorsFor(CreateAssignmentDto, { resourceId: RESOURCE_ID, lagMinutes: value });
+    expect(errors.some((e) => e.property === 'lagMinutes')).toBe(true);
+  });
+
+  it.each(REJECTED)('rejects %s on update', (_label, value) => {
+    const errors = errorsFor(UpdateAssignmentDto, { version: 1, lagMinutes: value });
+    expect(errors.some((e) => e.property === 'lagMinutes')).toBe(true);
+  });
+
+  const ACCEPTED: readonly [string, number][] = [
+    ['zero — joins with the activity, the parity default', 0],
+    ['a whole day on a 24-hour calendar', 1440],
+    ['the ceiling itself', ASSIGNMENT_LAG_MINUTES_MAX],
+  ];
+
+  it.each(ACCEPTED)('accepts %s on create', (_label, value) => {
+    const errors = errorsFor(CreateAssignmentDto, { resourceId: RESOURCE_ID, lagMinutes: value });
+    expect(errors.some((e) => e.property === 'lagMinutes')).toBe(false);
+  });
+
+  it.each(ACCEPTED)('accepts %s on update', (_label, value) => {
+    const errors = errorsFor(UpdateAssignmentDto, { version: 1, lagMinutes: value });
+    expect(errors.some((e) => e.property === 'lagMinutes')).toBe(false);
+  });
+
+  it('accepts an omitted lagMinutes — the field is optional and defaults to 0', () => {
+    const created = errorsFor(CreateAssignmentDto, { resourceId: RESOURCE_ID });
+    expect(created.some((e) => e.property === 'lagMinutes')).toBe(false);
+    expect(
+      errorsFor(UpdateAssignmentDto, { version: 1 }).some((e) => e.property === 'lagMinutes'),
+    ).toBe(false);
+  });
+
+  it('pins the DTO ceiling to the SHARED constant, not a copy', () => {
+    // A hand-written 5_256_000 here and a different one in @repo/types would disagree in exactly one
+    // direction — the API accepting what the type says is out of range — and no runtime test would see
+    // it. Asserting the boundary AT the exported value is what makes them one number.
+    const atCeiling = errorsFor(CreateAssignmentDto, {
+      resourceId: RESOURCE_ID,
+      lagMinutes: ASSIGNMENT_LAG_MINUTES_MAX,
+    });
+    const above = errorsFor(CreateAssignmentDto, {
+      resourceId: RESOURCE_ID,
+      lagMinutes: ASSIGNMENT_LAG_MINUTES_MAX + 1,
+    });
+    expect(atCeiling.some((e) => e.property === 'lagMinutes')).toBe(false);
+    expect(above.some((e) => e.property === 'lagMinutes')).toBe(true);
+  });
 });

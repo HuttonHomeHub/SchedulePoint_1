@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ResourceCurveType, type ResourceAssignment } from '@prisma/client';
-import type { ResourceAssignmentSummary } from '@repo/types';
+import { ASSIGNMENT_LAG_MINUTES_MAX, type ResourceAssignmentSummary } from '@repo/types';
 
 /**
  * Public representation of a resource assignment (ADR-0039). `budgetedUnits` is stored as
@@ -41,6 +41,17 @@ export class ResourceAssignmentResponseDto implements ResourceAssignmentSummary 
       'a flat load (shapes only the histogram — no CPM date, no levelling).',
   })
   curveType!: ResourceCurveType;
+
+  @ApiProperty({
+    minimum: 0,
+    maximum: ASSIGNMENT_LAG_MINUTES_MAX,
+    description:
+      'Delay in working minutes between the activity starting and this resource joining it (ADR-0071 §1 / ' +
+      'ADR-0035 §34), measured on the activity’s own calendar. The lag eats INTO the activity — its dates ' +
+      'do not move; the resource joins late and works a shorter window. Unsigned: a resource cannot join ' +
+      'before the work starts. 0 = joins with the activity. Always present; NOT cost-gated.',
+  })
+  lagMinutes!: number;
 
   @ApiProperty({
     description: 'Quantity of work actually done (exact numeric, >= 0) — EV1, ADR-0042.',
@@ -91,6 +102,10 @@ export class ResourceAssignmentResponseDto implements ResourceAssignmentSummary 
       isDriving: entity.isDriving,
       // Resource loading curve (M7 rung 5, ADR-0044 §3) — a plain enum, not cost-gated.
       curveType: entity.curveType,
+      // The join delay (ADR-0071 §1) is a scheduling fact, not money — read by everyone who may read
+      // the assignment at all, exactly like `curveType` and `isDriving`. Gating it on `cost:read` would
+      // make a Viewer's histogram silently disagree with a Planner's about when the resource arrives.
+      lagMinutes: entity.lagMinutes,
       actualUnits: entity.actualUnits.toNumber(),
       // Money (BigInt minor units → number) is gated on `cost:read` (EV4a): null unless the caller may
       // read cost. `budgetedCost` is additionally null when unset; `actualCost` is NOT NULL (default 0).

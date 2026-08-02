@@ -9,6 +9,13 @@ import { useId, useState } from 'react';
 
 import { useDeleteAssignment, useUpdateAssignment } from '../api/use-resources';
 import {
+  assignmentLagHelp,
+  assignmentLagLabel,
+  formatAssignmentLagRead,
+  parseAssignmentLag,
+  seedAssignmentLag,
+} from '../model/assignment-lag-field';
+import {
   formatDurationDays,
   previewDerivedDuration,
   type DurationDerivationPreview,
@@ -245,6 +252,8 @@ export function AssignmentRow({
   resource,
   durationType,
   showCurve,
+  showLag,
+  hoursPerDay,
   canWrite,
   canReadCost = true,
   onRemoved,
@@ -259,6 +268,10 @@ export function AssignmentRow({
   durationType: DurationType | undefined;
   /** Whether the loading-curve control is applicable (false for a zero-span milestone, TECH_DEBT #44b). */
   showCurve: boolean;
+  /** Whether the join-lag control is applicable — the flag, and not a zero-span milestone (ADR-0071 M4). */
+  showLag: boolean;
+  /** Working hours per day on the activity's SAVED calendar — see {@link ActivityResourcesPanel}. */
+  hoursPerDay?: number;
   canWrite: boolean;
   /** May this member see cost figures (see {@link ActivityResourcesPanel}). Defaults true. */
   canReadCost?: boolean;
@@ -275,6 +288,9 @@ export function AssignmentRow({
   const rateErrorId = useId();
   const rateNoteId = useId();
   const curveId = useId();
+  const lagId = useId();
+  const lagErrorId = useId();
+  const lagHelpId = useId();
   // Seeded from the row's persisted value. The parent keys this component by the
   // assignment id (not its version), so a save/driving-toggle refetch keeps the row
   // mounted — focus is preserved — while the persisted-value diff below drives Save.
@@ -282,6 +298,10 @@ export function AssignmentRow({
   const [rate, setRate] = useState(
     assignment.unitsPerHour === null ? '' : String(assignment.unitsPerHour),
   );
+  // Seeded from the persisted lag in the grammar the field accepts back, so what is shown is always
+  // something that can be handed to the field again (ADR-0071 M4).
+  const lagSeeded = seedAssignmentLag(assignment.lagMinutes, hoursPerDay);
+  const [lagText, setLagText] = useState(lagSeeded);
 
   const isMaterial = isMaterialResource(resource);
   const name = resource?.name ?? 'Unknown resource';
@@ -409,6 +429,44 @@ export function AssignmentRow({
       {
         onSuccess: () =>
           announce(`Loading curve for “${name}” set to ${RESOURCE_CURVE_LABELS[next]}.`),
+      },
+    );
+  };
+
+  // The join lag (ADR-0071 §1): a plain store like the curve, but text-parsed, so it carries its own
+  // Save rather than writing on every keystroke. No `editedField` — a lag is not a triad term and
+  // must never trigger a duration recompute.
+  const lagParsed = parseAssignmentLag(lagText, hoursPerDay);
+  const lagChanged = lagText !== lagSeeded;
+  const lagError = lagChanged && !lagParsed.ok ? lagParsed.message : undefined;
+  // Shaded rather than natively disabled — see the button. Nothing to save, something wrong with
+  // what was typed, or a save already in flight.
+  const lagUnavailable = !lagChanged || lagError !== undefined || update.isPending;
+
+  const saveLag = (): void => {
+    // The click guard the `aria-disabled` shading needs: an `aria-disabled` control is still
+    // clickable, so every reason the button looks unavailable has to be re-checked here.
+    if (lagUnavailable) return;
+    if (!lagParsed.ok) {
+      announce(`Join delay for “${name}” not saved: ${lagParsed.message}`);
+      return;
+    }
+    update.mutate(
+      {
+        assignmentId: assignment.id,
+        activityId,
+        version: assignment.version,
+        budgetedUnits: assignment.budgetedUnits,
+        isDriving: assignment.isDriving,
+        lagMinutes: lagParsed.minutes,
+      },
+      {
+        onSuccess: () =>
+          announce(
+            lagParsed.minutes === 0
+              ? `“${name}” now joins with the activity.`
+              : `“${name}” now joins after ${seedAssignmentLag(lagParsed.minutes, hoursPerDay)}.`,
+          ),
       },
     );
   };
@@ -548,6 +606,61 @@ export function AssignmentRow({
                 </Select>
               </div>
             ) : null}
+            {/* The join lag (ADR-0071 §1) — how far into the activity this resource arrives. Its own
+                Save, like units and rate, because the value is parsed text: writing on every
+                keystroke would send `4` on the way to `4h`. */}
+            {showLag ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={lagId}>{assignmentLagLabel(hoursPerDay)}</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={lagId}
+                    type="text"
+                    inputMode="text"
+                    value={lagText}
+                    onChange={(event) => setLagText(event.target.value)}
+                    aria-invalid={lagError ? true : undefined}
+                    // Whichever paragraph is actually rendered — the help is replaced by the error,
+                    // so naming both would point at an id that is not in the document.
+                    aria-describedby={lagError ? lagErrorId : lagHelpId}
+                    className="w-28"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Save join delay for ${name}`}
+                    // `aria-disabled`, never the native attribute (ADR-0060 M6 / ADR-0063 M6, and
+                    // `ScopeSaveBar`'s own docblock). This control flips its unavailability TWICE
+                    // per save — once when the request starts, once when the refetched row makes
+                    // `lagChanged` false again — and a natively-disabled element holding focus is
+                    // blurred to `<body>` by the browser each time. `saveLag` re-checks the same
+                    // condition, so the click guard is real rather than decorative.
+                    aria-disabled={lagUnavailable || undefined}
+                    className={lagUnavailable ? 'pointer-events-none opacity-50' : undefined}
+                    aria-busy={update.isPending}
+                    onClick={saveLag}
+                  >
+                    Save
+                  </Button>
+                </div>
+                {/* Error OR help, never both — the rule the shared `TextField` follows, and the
+                    assign form's copy of this same field gets it from that primitive. The row
+                    hand-rolls its controls (as every other field in it does), so the rule has to be
+                    stated here rather than inherited; showing both made one field read two ways
+                    depending on which surface you opened it from. Each lag message is
+                    self-contained and says what to type instead, so nothing is lost. */}
+                {lagError ? (
+                  <p id={lagErrorId} className="text-destructive-text text-sm">
+                    {lagError}
+                  </p>
+                ) : (
+                  <p id={lagHelpId} className="text-muted-foreground text-sm">
+                    {assignmentLagHelp(hoursPerDay)}
+                  </p>
+                )}
+              </div>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -581,6 +694,9 @@ export function AssignmentRow({
           {showCurve && assignment.curveType !== 'UNIFORM'
             ? ` · ${RESOURCE_CURVE_LABELS[assignment.curveType]} curve`
             : ''}
+          {/* A lag of zero appends nothing: "· 0d" reads as a setting somebody chose, when it is
+              simply the default every unlagged assignment has. */}
+          {showLag ? (formatAssignmentLagRead(assignment.lagMinutes, hoursPerDay) ?? '') : ''}
         </p>
       )}
     </li>

@@ -250,6 +250,10 @@ export class ExportService {
         unitsPerHour: decimalOrNull(a.unitsPerHour),
         isDriving: a.isDriving,
         actualUnits: decimalToNumber(a.actualUnits),
+        // Carried so the pure mapper can tell whether this export is about to lose a real value
+        // (ADR-0071 §5). Neither serialiser writes it; the report says so, and can only say so
+        // truthfully if the number reaches it.
+        lagMinutes: a.lagMinutes,
       })),
     };
   }

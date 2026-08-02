@@ -249,6 +249,106 @@ describe.skipIf(!hasDatabase)('Resources API (e2e)', () => {
       expect(empty.body.data).toHaveLength(0);
     });
 
+    describe('per-assignment join lag (surface audit F6, ADR-0071 §1)', () => {
+      it('round-trips the lag, defaults it to 0 and clears it with an explicit 0', async () => {
+        const { actor, orgId } = await adminWithOrg();
+        const activityId = await seedActivity(orgId, actor.userId);
+        const { id: resourceId } = await createResource(actor, {
+          name: 'Crane',
+          kind: 'EQUIPMENT',
+        });
+
+        // Omitted ⇒ 0. This is the M0 parity bar: every assignment that existed before the column
+        // did behaves exactly as it always has — the resource joins with the activity.
+        const bare = await actor.agent
+          .post(assignmentsUrl(activityId))
+          .send({ resourceId })
+          .expect(201);
+        expect(bare.body.data.lagMinutes).toBe(0);
+        await actor.agent.delete(assignmentUrl(bare.body.data.id)).expect(204);
+
+        const created = await actor.agent
+          .post(assignmentsUrl(activityId))
+          .send({ resourceId, lagMinutes: 240 })
+          .expect(201);
+        expect(created.body.data.lagMinutes).toBe(240);
+        const id = created.body.data.id as string;
+
+        const listed = await actor.agent.get(assignmentsUrl(activityId)).expect(200);
+        expect(listed.body.data[0].lagMinutes).toBe(240);
+
+        const patched = await actor.agent
+          .patch(assignmentUrl(id))
+          .send({ lagMinutes: 90, version: 1 })
+          .expect(200);
+        expect(patched.body.data.lagMinutes).toBe(90);
+
+        // 0 clears it. There is deliberately no null: "no lag" and "joins with the activity" are the
+        // same fact, so a second spelling for it would be a second thing to keep in step.
+        const cleared = await actor.agent
+          .patch(assignmentUrl(id))
+          .send({ lagMinutes: 0, version: 2 })
+          .expect(200);
+        expect(cleared.body.data.lagMinutes).toBe(0);
+      });
+
+      it('leaves the lag untouched when the update omits it', async () => {
+        const { actor, orgId } = await adminWithOrg();
+        const activityId = await seedActivity(orgId, actor.userId);
+        const { id: resourceId } = await createResource(actor, { name: 'Crew', kind: 'LABOUR' });
+        const created = await actor.agent
+          .post(assignmentsUrl(activityId))
+          .send({ resourceId, lagMinutes: 480 })
+          .expect(201);
+        const patched = await actor.agent
+          .patch(assignmentUrl(created.body.data.id))
+          .send({ budgetedUnits: 12, version: 1 })
+          .expect(200);
+        expect(patched.body.data.lagMinutes).toBe(480);
+      });
+
+      it('rejects a negative lag (422, N34) rather than storing one the read-model would ignore', async () => {
+        const { actor, orgId } = await adminWithOrg();
+        const activityId = await seedActivity(orgId, actor.userId);
+        const { id: resourceId } = await createResource(actor, { name: 'Crew', kind: 'LABOUR' });
+        await actor.agent
+          .post(assignmentsUrl(activityId))
+          .send({ resourceId, lagMinutes: -1 })
+          .expect(422);
+
+        const ok = await actor.agent
+          .post(assignmentsUrl(activityId))
+          .send({ resourceId })
+          .expect(201);
+        await actor.agent
+          .patch(assignmentUrl(ok.body.data.id))
+          .send({ lagMinutes: -60, version: 1 })
+          .expect(422);
+      });
+
+      it('returns a REAL lag to a Viewer whose cost fields are null — a lag is not money', async () => {
+        // The one thing this test exists to pin. `budgetedCost`/`actualCost` are gated on `cost:read`
+        // (EV4a); `lagMinutes` deliberately is not, because it is a scheduling fact. Gating it would
+        // make a Viewer's picture of when the resource arrives silently disagree with a Planner's.
+        const { actor, orgId } = await adminWithOrg();
+        const activityId = await seedActivity(orgId, actor.userId);
+        const { id: resourceId } = await createResource(actor, { name: 'Crew', kind: 'LABOUR' });
+        await actor.agent
+          .post(assignmentsUrl(activityId))
+          .send({ resourceId, lagMinutes: 120, budgetedCost: 5000, actualCost: 1000 })
+          .expect(201);
+
+        const viewer = await signUp('lag-viewer@example.com');
+        await prisma.orgMember.create({
+          data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+        });
+        const seen = await viewer.agent.get(assignmentsUrl(activityId)).expect(200);
+        expect(seen.body.data[0].lagMinutes).toBe(120);
+        expect(seen.body.data[0].budgetedCost).toBeNull();
+        expect(seen.body.data[0].actualCost).toBeNull();
+      });
+    });
+
     it('rejects negative budgetedUnits (422, N14)', async () => {
       const { actor, orgId } = await adminWithOrg();
       const activityId = await seedActivity(orgId, actor.userId);

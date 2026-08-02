@@ -124,6 +124,28 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
 
   @ApiProperty({
     description:
+      'The count of leaf activities whose planned value was time-phased PER COST COMPONENT because at ' +
+      'least one assignment joins late (ADR-0071 §1) — the activity’s own expense over its window, and ' +
+      'each assignment over [start + lag, finish). 0 on every plan with no lag, and that is the parity ' +
+      'signal: a zero-lag activity takes the previous single-window expression verbatim, so no existing ' +
+      'plan can shift by a minor unit. A count of leaves, not a cost. See costPhasingApproximatedCount ' +
+      'for how many of these were split approximately rather than from the baseline’s own breakdown.',
+  })
+  costPhasingLaggedCount!: number;
+
+  @ApiProperty({
+    description:
+      'Of the costPhasingLaggedCount leaves, how many had their split APPROXIMATED from the live budget ' +
+      'mix rather than taken from the cost baseline’s own frozen per-assignment breakdown (ADR-0071 ' +
+      'CQ-1). Non-zero means the plan’s active baseline predates that breakdown and cannot be ' +
+      'back-filled — a decomposition that was never recorded is not recoverable from a frozen total — ' +
+      'so re-capturing the baseline is what clears it. 0 when there is no cost baseline at all (a ' +
+      'live-budget planned value has nothing to approximate). Always <= costPhasingLaggedCount.',
+  })
+  costPhasingApproximatedCount!: number;
+
+  @ApiProperty({
+    description:
       'The count of leaf activities whose progress steps are all zero-weight (ADR-0044 §33, N27), so ' +
       'the weighted-mean rollup fell back to the manual physical % — a read-time data-quality warning.',
   })
@@ -148,6 +170,8 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
       currencyCode: result.currencyCode,
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
+      costPhasingLaggedCount: result.costPhasingLaggedCount,
+      costPhasingApproximatedCount: result.costPhasingApproximatedCount,
       stepWeightZeroCount: result.stepWeightZeroCount,
       activities: result.activities.map((a) => ({ ...a })),
       total: { ...result.total },

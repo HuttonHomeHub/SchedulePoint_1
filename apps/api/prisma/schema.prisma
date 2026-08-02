@@ -167,6 +167,9 @@ model Organization {
   // / IDOR check and the cascade batch filter one indexed column.
   baselines           Baseline[]
   baselineActivities  BaselineActivity[]
+  // The per-assignment cost decomposition inside a baseline (ADR-0071 M3). Its
+  // organization_id is denormalised from the parent baseline, like BaselineActivity's.
+  baselineAssignments BaselineAssignment[]
   // Ephemeral per-plan edit-lock coordination rows (ADR-0028). organization_id is
   // denormalised from the plan (copied by the service, never client input) purely as
   // a scope tag for scoped reads/audit; the row itself is owned by its plan.
@@ -508,6 +511,47 @@ enum NoteEntityType {
 enum CalendarScope {
   ORG
   PROJECT
+}
+
+// WHAT a baseline's frozen cost snapshot decomposes to (ADR-0071 M3 / CQ-1 option B — the
+// second amendment to ADR-0025 after ADR-0042's cost baseline itself).
+//
+//   ACTIVITY   one committed number per activity (`baseline_activities.budgeted_cost`) and
+//              NOTHING about how that number was made up. Every baseline captured before this
+//              rung is exactly this, which is why it is the constant DEFAULT — no data migration,
+//              and no existing row is described as something it is not.
+//   ASSIGNMENT that same per-activity total PLUS its decomposition: the activity's own expense
+//              (`baseline_activities.budgeted_expense`) and one `baseline_assignments` row per
+//              resource assignment, each carrying its frozen cost AND its frozen `lag_minutes`.
+//
+// THIS COLUMN IS THE ANSWER TO THE ONE QUESTION THE ROWS THEMSELVES CANNOT ANSWER, and it is the
+// point of the whole slice. A baseline with zero `baseline_assignments` rows is either
+//   (a) captured BEFORE this existed — its total is undecomposable, so PV must fall back to
+//       splitting it by LIVE budget shares (the documented ADR-0071 approximation), or
+//   (b) captured from a plan whose activities genuinely carry NO resource assignments — in which
+//       case the snapshot is COMPLETE and PV is exact with no assignment component at all.
+// Those two are opposite instructions to the Earned-Value read, and `rows.length === 0` cannot
+// tell them apart. This discriminator can, and it is the ONLY thing that can. NEVER infer the
+// level from a row count, and never from `budgeted_expense IS NULL` — those are corroborating
+// facts, not the decision.
+//
+// (a) IS PERMANENT. A per-assignment breakdown that was never recorded cannot be recovered from a
+// frozen total: the live assignments it was made of may since have been re-costed, added or
+// deleted, and their resources' `cost_per_unit` may have moved. Any back-fill would invent a
+// decomposition out of today's data and stamp it as history — precisely what ADR-0025's
+// copy-not-reference rule exists to prevent. So the read carries BOTH paths for good.
+//
+// The pairing between this discriminator and the child rows CANNOT be a CHECK — they live in
+// different tables, and a CHECK sees one row of one table. It is a SERVICE invariant held inside
+// the single capture transaction (the "exactly one driving assignment" precedent), which is also
+// why the DEFAULT is the conservative value: a write path that has not been taught the new pass
+// reads as APPROXIMATE, never as exact-but-empty. Fail-closedness then lives at the TypeScript
+// boundary — read it with an exhaustive switch so a future third level (per-step? per-expense?)
+// is a compile error rather than a silently mis-scaled PV curve. MUST stay in lock-step with the
+// `BaselineCostSnapshotLevel` union in @repo/types when EV surfaces it.
+enum BaselineCostSnapshotLevel {
+  ACTIVITY
+  ASSIGNMENT
 }
 
 model Client {
@@ -1657,6 +1701,19 @@ model Baseline {
   // reads exactly as it does today. Bounds: ck_baselines_hours_per_day_minutes_range (raw SQL).
   hoursPerDayMinutes Int @default(1440) @map("hours_per_day_minutes")
 
+  // WHAT this baseline's cost snapshot decomposes to (ADR-0071 M3 / CQ-1 option B) — see the
+  // BaselineCostSnapshotLevel docblock, which carries the reasoning this column exists for.
+  // ACTIVITY (the constant DEFAULT, and every pre-ADR-0071 row) = a per-activity total only;
+  // ASSIGNMENT = that total plus `baseline_activities.budgeted_expense` and the
+  // `baseline_assignments` rows. It is a CAPTURE-level fact, not a per-activity one: one pass
+  // freezes the whole plan inside one transaction, so all activities of a baseline share it —
+  // and the EV read needs the answer BEFORE it looks at any row, since the answer decides
+  // whether "no rows" means "nothing to decompose" or "nothing was decomposed".
+  //
+  // Set by the capture path, then IMMUTABLE like every other snapshot column. Constant DEFAULT
+  // ⇒ metadata-only ADD COLUMN, no rewrite, and every existing baseline keeps today's meaning.
+  costSnapshotLevel BaselineCostSnapshotLevel @default(ACTIVITY) @map("cost_snapshot_level")
+
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1665,9 +1722,13 @@ model Baseline {
   deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  plan         Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
   activities   BaselineActivity[]
+  // The per-assignment cost decomposition (ADR-0071 M3). EMPTY on an ACTIVITY-level baseline
+  // AND on an ASSIGNMENT-level one whose plan has no assignments — read `costSnapshotLevel`,
+  // never this list's length, to tell those apart.
+  assignments  BaselineAssignment[]
 
   // Baseline name is unique per PLAN among ACTIVE rows — partial unique
   // (uq_baselines_plan_name ON (plan_id, name) WHERE deleted_at IS NULL), raw SQL in
@@ -1728,6 +1789,29 @@ model BaselineActivity {
   // DARK until EV2 reads it.
   budgetedCost BigInt? @map("budgeted_cost")
 
+  // The ACTIVITY-EXPENSE half of that total, frozen (ADR-0071 M3 / CQ-1 option B): the activity's
+  // own lump-sum (`activities.budgeted_expense`) as it stood at capture, in the same BIGINT minor
+  // units. `budgeted_cost` = this + Σ of the baseline's `baseline_assignments` rows for this
+  // `source_activity_id` — an EXACT integer identity within one capture (both sides are computed
+  // from the same rows in the same locked transaction).
+  //
+  // WHY STORE IT RATHER THAN SUBTRACT IT. Earned Value phases the expense component over the
+  // activity's OWN window while each assignment component starts a lag later (ADR-0071 §3), so the
+  // split is read, not decorative. Deriving it as `budgeted_cost − Σ(rows)` would be arithmetically
+  // exact today and would silently become wrong the day the activity total is computed by a rule
+  // the subtraction does not know about — a decade-long snapshot should not depend on a rule stated
+  // only in code. One BIGINT is cheaper than that risk.
+  //
+  // NULLABLE / NO DEFAULT, and the NULL means "not decomposed", i.e. this row belongs to an
+  // ACTIVITY-level baseline. It is a CORROBORATING fact only: the authoritative discriminator is
+  // `baselines.cost_snapshot_level`, and the read must branch on that (see its docblock) — two
+  // sources of truth for one question is how the two absences get confused again. A `NOT NULL
+  // DEFAULT 0` was rejected for the same reason: 0 is a claim ("this activity had no expense"), and
+  // on a pre-ADR-0071 baseline that claim is unknowable, not zero. Immutable after capture.
+  // ck_baseline_activities_budgeted_expense_nonneg (nullable-safe `>= 0`) mirrors the live
+  // ck_activities_budgeted_expense_nonneg exactly. No index (the snapshot is loaded whole).
+  budgetedExpense BigInt? @map("budgeted_expense")
+
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1747,6 +1831,124 @@ model BaselineActivity {
   @@index([baselineId, sourceActivityId])
   @@index([organizationId])
   @@map("baseline_activities")
+}
+
+// A BaselineAssignment — ONE resource assignment's frozen cost, inside a baseline
+// (ADR-0071 M3 / CQ-1 option B; the second amendment to ADR-0025 after ADR-0042's cost
+// baseline). A sibling of BaselineActivity in every respect: a self-contained COPY whose
+// `source_*` ids are PLAIN correlation UUIDs with NO foreign key, so the snapshot survives
+// the live assignment being re-costed, re-lagged, unassigned or hard-purged. Rows are
+// immutable after capture and soft-delete with the parent baseline under one
+// `delete_batch_id`. Full housekeeping set (UUID v7 PK, timestamptz UTC, TEXT audit ids,
+// optimistic-locking `version`), matching BaselineActivity rather than the owned-value
+// shape of CalendarShift — a baseline row is a historical record, not a value fragment.
+//
+// WHY IT EXISTS. Earned Value's PV is no longer one cost over one window: since ADR-0071 an
+// assignment's cost is phased over `[start ⊕ lag, finish)` while the activity's own expense
+// keeps `[start, finish)`. The committed PV curve therefore needs the baseline's cost split
+// PER COMPONENT. Before this table the only frozen number was the activity TOTAL, so the
+// shipped read (`laggedPlannedValue`, earned-value.ts) weights the components by LIVE budget
+// shares — exact on the live-budget path, an approximation against a captured baseline whose
+// assignment mix has since changed. These rows make it exact for every baseline captured
+// after them; CQ-1 option (B), product owner, 2026-08-02.
+//
+// WHY A SIBLING TABLE AND NOT COLUMNS OR JSON ON BaselineActivity. An activity has 0..n
+// assignments, so a column set would have to be repeating columns (an arity cap, arbitrary)
+// or a JSONB blob. JSONB was rejected on the house rules, not on taste: money is BIGINT minor
+// units precisely so nothing rounds it (docs/DATABASE.md), and a JSON number is a double in
+// most drivers; the DB could enforce neither `cost >= 0` nor the lag range ("the database
+// enforces integrity … the last line of defence"); it would be the schema's FIRST json column,
+// which is an ADR-level precedent, not a convenience; and the shape would then be versioned
+// forever in application code. A relational child costs one batched `createMany` inside a
+// capture transaction that already writes one row per activity.
+//
+// WHAT IS DELIBERATELY *NOT* FROZEN HERE: `budgeted_units`, `units_per_hour`, `curve_type`
+// and the activity's `accrual_type`. PV weights COST and phases it by the ACTIVITY-level
+// accrual (ADR-0044 §32, unchanged by ADR-0071); the histogram and levelling read LIVE rows
+// by design. A snapshot column nothing reads is a claim nobody checks — each is additive the
+// day a reader needs it (the ADR-0039 reserved-columns precedent, used in reverse).
+model BaselineAssignment {
+  id             String @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent baseline (never client input). RESTRICT.
+  organizationId String @map("organization_id") @db.Uuid
+  baselineId     String @map("baseline_id") @db.Uuid
+
+  // The three correlation ids — PLAIN UUIDs, NO foreign keys, exactly like
+  // BaselineActivity.source_activity_id and for the same ADR-0025 reason: a snapshot that
+  // referenced live rows would either block their deletion or rot with them.
+  //   * source_assignment_id — the resource_assignments row this froze. The component's
+  //     identity, and the key a "what changed since baseline?" report joins on.
+  //   * source_activity_id — DENORMALISED from that assignment's activity so the EV read
+  //     groups components under their activity WITHOUT joining back through
+  //     baseline_activities (the ADR-0046 denormalised `plan_id` precedent). Its value
+  //     always equals some baseline_activities.source_activity_id of the same baseline —
+  //     a service invariant of the one capture transaction, not an FK.
+  //   * source_resource_id — WHICH resource, so a variance/EV breakdown can name the
+  //     component ("Tower crane: £12,400") without resolving a possibly-deleted assignment.
+  sourceAssignmentId String @map("source_assignment_id") @db.Uuid
+  sourceActivityId   String @map("source_activity_id") @db.Uuid
+  sourceResourceId   String @map("source_resource_id") @db.Uuid
+
+  // The RESOLVED budgeted cost of this assignment at capture, in BIGINT minor units of the
+  // plan's currency — i.e. `budgeted_cost ?? round(budgeted_units × resource.cost_per_unit)`,
+  // the same expression `computeBudgetedCost` already sums into the activity total, evaluated
+  // once and frozen. Resolved rather than "units + rate" on purpose: a snapshot must not
+  // depend on a resource row that can be re-rated afterwards.
+  //
+  // NOT NULL with NO DEFAULT, deliberately unlike its live counterpart. There are no
+  // pre-existing rows to default for — the table IS the feature — and a default here would let
+  // a capture record a cost it never stated. Prisma therefore requires it in `create`, so the
+  // compiler asks the question. ck_baseline_assignments_budgeted_cost_nonneg (`>= 0`, plain —
+  // NOT nullable-safe, because the column is NOT NULL) is the DB backstop, the
+  // ck_baseline_activities_budgeted_cost_nonneg / N22 posture.
+  budgetedCost BigInt @map("budgeted_cost")
+
+  // The assignment's join lag AT CAPTURE, working minutes (ADR-0071 §1). The cost alone is not
+  // enough to phase PV: the component's window is `[baseline_start ⊕ lag, baseline_finish)`, so
+  // a snapshot carrying the frozen cost but reading the LIVE lag would time-phase frozen money
+  // through a window somebody edited afterwards — the same class of drift this whole table
+  // removes, one field along. Unsigned, and NOT defaulted, for the reasons above;
+  // ck_baseline_assignments_lag_minutes_range (`BETWEEN 0 AND 5256000`) repeats the live
+  // ck_resource_assignments_lag_minutes_range so the schema gives ONE answer to "how large may
+  // a working-minute quantity be".
+  lagMinutes Int @map("lag_minutes")
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  baseline     Baseline     @relation(fields: [baselineId], references: [id], onDelete: Restrict)
+
+  // INDEXES — two, and the first one does three jobs (raw SQL in the migration; Prisma cannot
+  // express a WHERE, so NO @@index is declared for it — a declared index the database does not
+  // have is the CI schema-drift failure of TECH_DEBT #54):
+  //   * uq_baseline_assignments_baseline_source_assignment (baseline_id, source_assignment_id)
+  //     WHERE deleted_at IS NULL — (1) states the freeze-once invariant in the DB (a capture
+  //     writes each assignment at most once; a duplicate could only ever be a bug, which is
+  //     what a unique index is for), (2) IS the EV read path via its leftmost prefix
+  //     (`WHERE baseline_id = ? AND deleted_at IS NULL`, the whole snapshot, grouped in JS
+  //     exactly as loadActiveBaselineCostSnapshot already does), and (3) covers the
+  //     `baseline_id` FK. MEASURED, not assumed (docs/ADR-0053 M4): at 200 baselines ×
+  //     200,000 rows, loading one baseline's 1,000 components runs 1.181 ms on this index vs
+  //     12.538 ms on a sequential scan (~10.6×) — and the sequential cost grows with every
+  //     baseline the tenant ever captured, while the index scan's does not. Partial (not full)
+  //     because baseline rows soft-delete
+  //     only, so the FK RESTRICT check never fires — the idx_plan_shares_plan_id /
+  //     uq_resource_assignments_activity_resource precedent.
+  //   * idx_baseline_assignments_delete_batch_id (delete_batch_id) WHERE ... IS NOT NULL —
+  //     batch restore, like every sibling.
+  // A `(baseline_id, source_activity_id)` composite mirroring BaselineActivity's was measured
+  // and REJECTED: the read loads the whole baseline and groups in memory, so the second column
+  // is never a predicate — it bought 0.007 ms (1.188 vs 1.181 ms, inside the run-to-run spread)
+  // for 9,736 kB and a third index on every bulk capture insert.
+  // organization_id is a FULL index (backs its FK RESTRICT + org-scoped IDOR loads).
+  @@index([organizationId])
+  @@map("baseline_assignments")
 }
 
 // ---------------------------------------------------------------------------
@@ -2123,6 +2325,44 @@ model ResourceAssignment {
   // read with the whole plan's assignments, never filtered across plans). MUST stay in
   // lock-step with the `ResourceCurveType` union in @repo/types.
   curveType     ResourceCurveType @default(UNIFORM) @map("curve_type")
+  // The delay between the activity starting and THIS resource joining it (ADR-0071 §1,
+  // ADR-0035 §34) — the engine's `resource-histogram.ts` has taken a per-assignment
+  // `lagMinutes` since the ADR-0044 rung-5 slice, and nothing could store one. Working
+  // MINUTES, the `*_minutes` naming convention (duration_minutes / lag_minutes /
+  // hours_per_day_minutes): the unit is in the column name because a day/minute confusion
+  // has already cost two defects (ADR-0068, and the F8 critical-float threshold).
+  // CLIENT-SETTABLE. Constant DEFAULT 0 ⇒ metadata-only ADD COLUMN, no rewrite, and every
+  // existing row keeps today's behaviour — the M0 parity bar.
+  //
+  // UNSIGNED, deliberately UNLIKE dependencies.lag_minutes (which is signed: a negative
+  // lag is a LEAD, meaningful between two activities). A resource cannot join before the
+  // work it is assigned to starts, so a lead here has no meaning — and a signed column
+  // would be a TRAP rather than harmless symmetry: the shipped read-model applies the lag
+  // only when `> 0` (resource-histogram.ts:222), so a negative would be SILENTLY
+  // DISCARDED, the assignment would behave as unlagged, and the API would have said yes.
+  // The `> 0` guard is therefore a PARITY FAST PATH and explicitly NOT a validation.
+  // The primary reject lives at the DTO (@Min(0) / @Max(ASSIGNMENT_LAG_MINUTES_MAX), N34);
+  // ck_resource_assignments_lag_minutes_range (BETWEEN 0 AND 5_256_000, raw SQL) is
+  // DEFENCE IN DEPTH so a bypass can never persist one — never the primary reject, the
+  // budgeted_units/N14 and units_per_hour/N19 precedent. The 5_256_000 ceiling (≈ 10 y) is
+  // the SAME magnitude as ck_dependencies_lag_minutes_range and
+  // ck_plans_critical_float_threshold_minutes_range, so the schema gives ONE answer to
+  // "how large may a working-minute quantity be" rather than three.
+  //
+  // Measured on the ACTIVITY'S OWN calendar (ADR-0037), which is what the read-model
+  // already uses — the lag eats INTO the activity: the activity's dates do not move, the
+  // resource joins late and works a shorter window (`effFinish = a.finish`, the AS0027
+  // golden; product-owner decision 2026-08-02, CQ-3). NO `lag_calendar` SIBLING, unlike
+  // dependencies: an edge sits between two activities on potentially different calendars
+  // and needs the seam; an assignment has exactly ONE natural frame — the activity it is
+  // attached to. A sibling enum would create a seam with THREE consumers (histogram,
+  // levelling, EV) to keep in step for a choice no fixture case asks for. Additive if ever
+  // wanted. NO INDEX: read only as part of the plan-scoped assignment loads the histogram,
+  // levelling and EV already run — never a WHERE or ORDER BY predicate, so an index would
+  // be pure write cost (the curve_type / is_driving precedent, and the ADR-0053 M4 rule
+  // that an index is added on a MEASUREMENT, not an instinct). Nothing was measured
+  // because there is no new predicate to measure. MUST stay in lock-step with @repo/types.
+  lagMinutes    Int               @default(0) @map("lag_minutes")
 
   // Earned Value cost inputs (EV1, ADR-0042). Money is BIGINT minor units in the plan's
   // `currency_code`; `actual_units` is an exact-numeric QUANTITY like `budgeted_units`.

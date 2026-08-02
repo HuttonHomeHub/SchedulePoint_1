@@ -2,9 +2,10 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 25
-> models across 41 committed migrations — is the single source of truth for the
-> data model. See ADR-0008.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 26
+> models across 45 committed migrations (counted 2026-08-02, `grep -c '^model '` /
+> `ls migrations`, not memory) — is the single source of truth for the data model.
+> See ADR-0008.
 
 ## Philosophy
 
@@ -145,8 +146,9 @@ precisely because **restore** is already a guarded, conflict-capable operation.
 - **Money is `BIGINT` minor units + a currency code (EV1, ADR-0042).** The first
   money columns land with the cost/earned-value rung: the stored amounts
   `resource_assignments.budgeted_cost`/`actual_cost`,
-  `activities.budgeted_expense`/`actual_expense`, and
-  `baseline_activities.budgeted_cost` are all **`BIGINT` minor units** (e.g.
+  `activities.budgeted_expense`/`actual_expense`,
+  `baseline_activities.budgeted_cost`/`budgeted_expense` and
+  `baseline_assignments.budgeted_cost` (ADR-0071 M3) are all **`BIGINT` minor units** (e.g.
   pence/cents) in the plan's currency (`resources.cost_per_unit` is a **rate**, not
   a stored amount — see the house rule below); `plans.currency_code` is `CHAR(3)`
   ISO-4217 (a genuine fixed-width code — the "text unless a real limit applies"
@@ -675,6 +677,86 @@ AND deleted_at IS NULL`) guarantees **at most one active baseline per plan** —
   Capture reads its snapshot **inside the plan write-lock**, so it is never taken
   mid-recalculation.
 
+#### The cost snapshot's two levels — and why "no rows" is never the signal
+
+ADR-0042 (EV1) amended ADR-0025 so a baseline freezes a **cost** as well as a schedule:
+`baseline_activities.budgeted_cost`, one committed total per activity. **ADR-0071 M3
+(CQ-1 option B)** amends it a second time, because Planned Value stopped being one cost over
+one window: an assignment's cost is now phased over `[start ⊕ lag, finish)` while the
+activity's own expense keeps `[start, finish)`, so the committed PV curve needs the frozen
+cost **decomposed per component**. Three additions, all additive and all dark until the M3
+service slice reads them:
+
+| Addition                               | Shape                                                       | Meaning                                                                                 |
+| -------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `baselines.cost_snapshot_level`        | `BaselineCostSnapshotLevel`, NOT NULL, `DEFAULT 'ACTIVITY'` | **the discriminator** — `ACTIVITY` = a total only; `ASSIGNMENT` = total + decomposition |
+| `baseline_activities.budgeted_expense` | `BIGINT` nullable, no default                               | the activity-expense component, frozen; `NULL` = not decomposed                         |
+| `baseline_assignments`                 | new table, one row per assignment                           | that assignment's frozen `budgeted_cost` **and** its frozen `lag_minutes`               |
+
+**The back-fill is impossible, not skipped.** A baseline captured before this froze one number
+per activity, and that number cannot be decomposed after the fact — the assignments it was made
+of may since have been re-costed, re-lagged, added or unassigned, and their resources'
+`cost_per_unit` may have moved. Any back-fill would compute a breakdown out of **today's** rows
+and stamp it as history, which is precisely what ADR-0025's copy-not-reference rule exists to
+prevent. Pre-ADR-0071 baselines therefore keep the **live-budget-shares approximation
+permanently**, and the Earned-Value read carries both paths for good.
+
+Which is why the discriminator exists, and why it is the load-bearing part of the design: a
+baseline with **zero** `baseline_assignments` rows is either **(a)** captured before this
+existed — undecomposable, so PV must fall back to live shares — or **(b)** captured from a plan
+whose activities genuinely carry no resource assignments, in which case the snapshot is
+**complete** and PV is exact with no assignment component at all. Those are opposite
+instructions, and `count(*) = 0` cannot tell them apart. `cost_snapshot_level` can, and it is
+the **only** thing that can. Never infer the level from a row count, and never from
+`budgeted_expense IS NULL` — those are corroborating facts, not the decision. The constant
+`DEFAULT 'ACTIVITY'` is true of every row that already exists **and** is the safe direction: a
+write path not yet taught the new pass reads as approximate, never as exact-but-empty.
+
+The pairing between the discriminator and the child rows **cannot be a CHECK** — they are in
+different tables, and a CHECK sees one row of one table. It is a service invariant held inside
+the single capture transaction (the "exactly one driving assignment" precedent); fail-closedness
+lives at the TypeScript boundary, where the level is read with an exhaustive switch so a future
+third level is a compile error rather than a silently mis-scaled PV curve.
+
+`baseline_assignments` is a **sibling of `baseline_activities` in every respect**: `source_*` ids
+are plain correlation UUIDs with **no** foreign key (so the snapshot survives the live assignment
+being re-costed, unassigned or hard-purged), rows are immutable after capture, the full
+housekeeping set applies, and the whole set soft-deletes with its parent baseline under one
+`delete_batch_id`. Both the **cost and the lag** are frozen — a snapshot carrying frozen money
+but reading the **live** lag would time-phase it through a window somebody edited afterwards.
+`budgeted_units`, `units_per_hour`, `curve_type` and the activity's `accrual_type` are
+deliberately **not** frozen: PV weights cost and phases it by the activity-level accrual
+(ADR-0044 §32, unchanged), and the histogram and levelling read live rows by design — a snapshot
+column nothing reads is a claim nobody checks. `budgeted_cost`/`lag_minutes` are **NOT NULL with
+no default**, unlike their live counterparts: there are no pre-existing rows to default for, and
+a default would let a capture record a number it never stated. A **JSONB column** on
+`baseline_activities` was rejected on the house rules, not on taste — money is `BIGINT` minor
+units precisely so nothing rounds it and a JSON number is a double in most drivers; the database
+could enforce neither `cost >= 0` nor the lag range; and it would be the schema's first `json`
+column, an ADR-level precedent rather than a convenience.
+
+**Indexes on `baseline_assignments` — measured, per the ADR-0053 M4 rule that an index is added
+on a measurement and not an instinct.** One partial unique does three jobs:
+
+| Index                                                | On                                    | Kind           | Serves                                                                                                                                                                                                 |
+| ---------------------------------------------------- | ------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `uq_baseline_assignments_baseline_source_assignment` | `(baseline_id, source_assignment_id)` | partial unique | the **freeze-once** invariant (`WHERE deleted_at IS NULL`) **and**, via its leftmost prefix, the whole Earned-Value read (`WHERE baseline_id = ? AND deleted_at IS NULL`) **and** the `baseline_id` FK |
+| `baseline_assignments_organization_id_idx`           | `(organization_id)`                   | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR loads                                                                                                                                                |
+| `idx_baseline_assignments_delete_batch_id`           | `(delete_batch_id)`                   | partial        | batch restore lookup                                                                                                                                                                                   |
+
+Measured on PostgreSQL 16.13 at 200 baselines × 1,000 components (200,000 rows, 54 MB, ANALYZEd,
+best of 5 after warm-up), reading one baseline's whole component set: **1.181 ms** on the partial
+unique (bitmap index scan; 10 index buffers + 1,000 heap blocks) vs **12.538 ms** with index scans
+disabled (parallel seq scan, 199,000 rows removed by filter) — ~10.6×, and the sequential cost
+grows with every baseline the tenant ever captured while the index scan's does not. A
+`(baseline_id, source_activity_id)` composite mirroring `baseline_activities`' was measured and
+**rejected**: the read loads the whole baseline and groups in memory, so the second column is never
+a predicate — it bought 0.007 ms (1.188 ms), inside the run-to-run spread, for 9,736 kB and a third
+index on every bulk capture insert. The unique is partial (not full) because baselines soft-delete
+only, so the FK `RESTRICT` check never fires — the `idx_plan_shares_plan_id` precedent. No index on
+`cost_snapshot_level` (read with its own row by id, never a predicate — the `scheduling_mode`
+precedent) or on `budgeted_expense` (part of a snapshot loaded whole).
+
 ### PlanLock: the edit-lock lease
 
 The `plan_locks` table (ADR-0028) is the **single-editor "pen"** — the human-facing
@@ -762,6 +844,44 @@ OR >= 0`, raw SQL — nullable-safe) is the DB backstop behind the DTO `@Min(0)`
   reject (**N20** — a CHECK cannot read the activity's `duration_type` to know the rate is a
   divisor). `resource.max_units_per_hour` (a levelling availability cap) and the assignment
   cost/earned-value columns stay **reserved** for their later rungs (ADR-0040).
+- **`lag_minutes`** (surface audit **F6**, ADR-0071 §1 / ADR-0035 §34) is the delay between the
+  activity starting and **this** resource joining it — working **minutes**, `INTEGER NOT NULL
+DEFAULT 0`. The constant default is the parity bar: metadata-only `ADD COLUMN` (no rewrite, no
+  backfill — which is what makes the migration safe on the **self-migrating** image, ADR-0018)
+  and every existing row keeps today's behaviour. It closes an **inverted** register finding:
+  `engine/resource-histogram.ts` has taken a per-assignment `lagMinutes` since ADR-0044 rung 5
+  and nothing could store one, so the caller hardcoded `0` — the ENGINE supporting what no
+  storage could hold, where F2/F3 are storage supporting what no write path can produce.
+  - **Unsigned**, deliberately unlike `dependencies.lag_minutes`, which is **signed** because a
+    negative lag on a logic edge is a **lead** and means something. A resource cannot join before
+    the work starts. Worse than meaningless: the read-model applies the lag only when `> 0`, so a
+    negative would be **silently discarded** and the assignment would behave as unlagged while the
+    API had said yes — a signed column would be a **trap dressed as symmetry**. That `> 0` guard
+    is a **parity fast path, not a validation**.
+  - **`ck_resource_assignments_lag_minutes_range`** (`BETWEEN 0 AND 5256000`, raw SQL) is the DB
+    **backstop, never the primary reject** — the primary reject is the DTO's `@Min(0)
+@Max(ASSIGNMENT_LAG_MINUTES_MAX)` (**N34**), which is what returns an actionable 422; a
+    constraint violation would surface as a 500 and mean something bypassed the boundary. The
+    `budgeted_units`/N14 and `units_per_hour`/N19 posture exactly. The ceiling (≈ 10 years) is the
+    **same magnitude** as `ck_dependencies_lag_minutes_range` and
+    `ck_plans_critical_float_threshold_minutes_range`, so the schema gives **one** answer to "how
+    large may a working-minute quantity be". It does **not** make the calendar walk safe —
+    5 256 000 _working_ minutes on a window-only calendar can still exceed the engine's ~200-year
+    horizon, which is ADR-0071 §4's typed error and 422, not this constraint's job.
+  - Measured on the **activity's own calendar** (ADR-0037) — what the read-model already uses. The
+    lag eats **into** the activity: its dates do not move, the resource joins late and works a
+    shorter window (`effFinish = a.finish`; product-owner decision 2026-08-02, CQ-3). **No
+    `lag_calendar` sibling**, unlike `dependencies`: an edge sits between two activities on
+    potentially different calendars and needs the ADR-0036 §6 seam; an assignment has exactly
+    **one** natural frame. A sibling enum would create a resolution seam with **three** consumers
+    (histogram, levelling, earned value) to keep in step, for a choice no fixture case asks for —
+    additive if ever wanted.
+  - **No index**, recorded rather than left as silence: read only as part of the plan-scoped
+    assignment loads the histogram, levelling and EV already run — never a `WHERE`, `ORDER BY` or
+    join predicate, so an index would be pure write cost (the `curve_type`/`is_driving`
+    precedent). Nothing was measured because the change introduces **no new predicate to measure**
+    — the ADR-0053 M4 rule that an index is added on a measurement, not an instinct. A partial
+    `(organization_id) WHERE lag_minutes > 0` is the documented measure-first upgrade.
 - **Driver designation.** `is_driving` marks THE driving resource of a
   `RESOURCE_DEPENDENT` activity (its calendar governs scheduling, M7.2). The partial
   unique `uq_resource_assignments_activity_driving (activity_id) WHERE is_driving AND

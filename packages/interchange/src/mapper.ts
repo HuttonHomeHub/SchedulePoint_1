@@ -233,6 +233,9 @@ export function mapCanonicalToImportGraph(
     budgetedUnits: assignment.budgetedUnits,
     unitsPerHour: assignment.unitsPerHour,
     isDriving: assignment.isDriving,
+    // Carried through rather than defaulted, so a parser that learns to read a lag needs no change
+    // here (ADR-0071 §5). 0 from every parser today.
+    lagMinutes: assignment.lagMinutes,
     actualUnits: assignment.actualUnits,
   }));
 

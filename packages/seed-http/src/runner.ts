@@ -381,6 +381,7 @@ export async function seedPlan(
             budgetedUnits: assignment.budgetedUnits,
             isDriving: assignment.isDriving,
             curveType: assignment.curveType,
+            lagMinutes: assignment.lagMinutes,
             ...(assignment.unitsPerHour === null ? {} : { unitsPerHour: assignment.unitsPerHour }),
             ...(assignment.actualUnits === null ? {} : { actualUnits: assignment.actualUnits }),
           });

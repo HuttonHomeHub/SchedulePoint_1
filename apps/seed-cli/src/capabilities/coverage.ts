@@ -43,10 +43,6 @@ export const UNREACHABLE: Readonly<Record<string, CoverageException>> = {
     reason: 'SchedulePoint has no role model; a resource is assigned directly',
     debt: null,
   },
-  res_assignment_lag: {
-    reason: 'an assignment has no lag field: work starts with its activity',
-    debt: null,
-  },
 } as const;
 
 export interface CoverageRow {

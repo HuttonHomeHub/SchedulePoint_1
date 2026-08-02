@@ -80,6 +80,34 @@ const MAX_DURATION_MINUTES = 10_000 * 24 * 60;
 const PART = /^(\d+(?:\.\d+)?)([dhm])$/;
 
 /**
+ * Does this text name **days** — an explicit `d` part, or the bare number that has always meant
+ * days?
+ *
+ * It lives here, beside the parser, because it must tokenize **exactly** as {@link parseDurationText}
+ * does or it is worse than useless. A caller that cannot convert days uses this to refuse them; a
+ * day-part this misses is a day-part that reaches the parser and is silently measured against
+ * whatever placeholder factor the caller had to pass. The first version of this check lived in the
+ * consumer as `/\d\s*d\b/`, which reads `2d 4h` but not `2d4h` — the compound form the parser
+ * explicitly supports — so the compound spelling was converted at 24 hours a day with no error
+ * shown. One tokenizer, one answer.
+ */
+export function namesDays(text: string): boolean {
+  const trimmed = text.trim().toLowerCase();
+  if (trimmed === '') return false;
+  // The bare-number case, which the parser reads as days before it splits anything.
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) return true;
+  return splitDurationParts(trimmed).some((part) => PART.exec(part)?.[2] === 'd');
+}
+
+/**
+ * Split on whitespace, and also between a unit and the next digit so `2d4h` reads like `2d 4h`.
+ * Shared by the parser and {@link namesDays} so the two can never disagree about where a part ends.
+ */
+function splitDurationParts(trimmedLowercase: string): string[] {
+  return trimmedLowercase.replace(/([dhm])(?=\d)/g, '$1 ').split(/\s+/);
+}
+
+/**
  * Is this text a well-formed duration, **without** knowing the calendar it will be measured on?
  * Returns the failure reason, or `null` when it reads.
  *
@@ -118,8 +146,7 @@ export function parseDurationText(text: string, hoursPerDay: number): DurationPa
     return bounded(Number(trimmed) * minutesPerDay);
   }
 
-  // Split on whitespace, and also between a unit and the next digit so `2d4h` reads like `2d 4h`.
-  const parts = trimmed.replace(/([dhm])(?=\d)/g, '$1 ').split(/\s+/);
+  const parts = splitDurationParts(trimmed);
   const seen = new Set<string>();
   let minutes = 0;
 

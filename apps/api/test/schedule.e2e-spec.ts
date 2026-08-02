@@ -49,6 +49,12 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
 
   // Delete children before parents so the FK restrictions never bite.
   async function resetDatabase(): Promise<void> {
+    // Baselines first: this file's Earned-Value lag case captures one, and the shared e2e database
+    // means a suite that leaves baselines behind fails a LATER file's `plan.deleteMany()` — with the
+    // failure appearing in a spec that has nothing to do with baselines (see the afterAll note).
+    await prisma.baselineAssignment.deleteMany();
+    await prisma.baselineActivity.deleteMany();
+    await prisma.baseline.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();
     await prisma.activityDependency.deleteMany();
@@ -550,6 +556,55 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const rows = res.body.data.activities as Array<{ activityId: string; bac: number }>;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ activityId: a, bac: 100000 });
+  });
+
+  it('phases PV from a lagged assignment’s frozen baseline cost (ADR-0071 M3 / CQ-1)', async () => {
+    // The whole F6 EV path through the REAL write surface (ADR-0066's premise): assign a resource with
+    // a join lag, capture a baseline, read Earned Value back. The engine suite proves the arithmetic on
+    // hand-built inputs; NOTHING there can tell you the lag reaches the read, that capture froze it, or
+    // that the read chose the exact branch — those live in the DTO, the capture transaction and the
+    // `cost_snapshot_level` discriminator, all of which are invisible to a pure function.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate'); // clears the calendar → every day works
+    const a = await makeActivity(actor, planId, 'A', 10);
+
+    const crane = await actor.agent
+      .post('/api/v1/organizations/acme/resources')
+      .send({ name: 'Crane', kind: 'EQUIPMENT', costPerUnit: 100 })
+      .expect(201);
+    // £1,000 of committed cost, joining four working days into the ten-day activity.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a}/assignments`)
+      .send({
+        resourceId: crane.body.data.id as string,
+        budgetedCost: 100000,
+        lagMinutes: 4 * 1440,
+      })
+      .expect(201);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+      .send({ name: 'Contract' })
+      .expect(201);
+
+    const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
+    // The data date is the plan start, so nothing has elapsed — but the LAG is what is being proved,
+    // and the counters say which branch produced the number.
+    expect(res.body.data).toMatchObject({
+      costBaselineMissing: false,
+      // The component sum ran: a zero-lag plan would report 0 here and take the previous expression.
+      costPhasingLaggedCount: 1,
+      // And it ran EXACTLY — the baseline this capture wrote carries its own per-assignment breakdown,
+      // so no committed money was reallocated by a live share.
+      costPhasingApproximatedCount: 0,
+    });
+
+    // The frozen component is the evidence the capture actually wrote one, at the right lag.
+    const frozen = await prisma.baselineAssignment.findMany({
+      where: { sourceActivityId: a, deletedAt: null },
+      select: { budgetedCost: true, lagMinutes: true },
+    });
+    expect(frozen).toEqual([{ budgetedCost: 100000n, lagMinutes: 4 * 1440 }]);
   });
 
   it('forbids a Viewer and a Contributor from reading Earned Value (403 — cost:read)', async () => {
