@@ -828,6 +828,12 @@ export function ActivityEditorDialog({
                   planId={planId}
                   activityId={activity.id}
                   activityDurationType={activity.durationType}
+                  // The join lag's day↔minute factor (ADR-0071 M4). Deliberately `seedFactor` — the
+                  // SAVED calendar — and not the `hoursPerDay` the duration field uses: that one
+                  // follows the Scheduling tab's pending selection, which is right for a duration
+                  // saved alongside it and wrong for an assignment write that does not carry the
+                  // calendar at all.
+                  {...(seedFactor === undefined ? {} : { activityHoursPerDay: seedFactor })}
                   isMilestone={isMilestoneType(activity.type)}
                   canWrite={gating.resources.writable}
                   // Shaded with the reason, never hidden — the same seam the Logic tab uses one

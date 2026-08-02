@@ -100,4 +100,6 @@ interface ImportMetaEnv {
   readonly VITE_CALENDAR_SHIFT_EDITOR?: string;
   /** ADR-0070 — type a duration or lag in days, hours and minutes. Default off. */
   readonly VITE_SUB_DAY_DURATIONS?: string;
+  /** ADR-0071 M4 — set how far into an activity a resource joins it. Default off. */
+  readonly VITE_ASSIGNMENT_LAG?: string;
 }

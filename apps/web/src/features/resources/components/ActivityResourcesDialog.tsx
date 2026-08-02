@@ -22,6 +22,7 @@ export function ActivityResourcesDialog({
   activityId,
   activityName,
   activityDurationType,
+  activityHoursPerDay,
   isMilestone = false,
   open,
   onClose,
@@ -35,6 +36,8 @@ export function ActivityResourcesDialog({
   activityName?: string;
   /** See {@link ActivityResourcesPanel} — forwarded unchanged. */
   activityDurationType?: DurationType;
+  /** See {@link ActivityResourcesPanel} — forwarded unchanged (the join lag's day factor). */
+  activityHoursPerDay?: number;
   /** See {@link ActivityResourcesPanel} — forwarded unchanged. */
   isMilestone?: boolean;
   open: boolean;
@@ -56,6 +59,7 @@ export function ActivityResourcesDialog({
           canWrite={canWrite}
           enabled={open}
           isMilestone={isMilestone}
+          {...(activityHoursPerDay === undefined ? {} : { activityHoursPerDay })}
           // Keep the dialog's focus-restore target: after an unassign the removed row unmounts, and
           // Close is the stable control the dialog has always handed focus back to.
           onRowRemoved={() => closeButtonRef.current?.focus()}

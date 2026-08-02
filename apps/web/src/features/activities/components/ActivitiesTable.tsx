@@ -257,6 +257,13 @@ export function ActivitiesTable({
   const managingResources = resourcesId
     ? activities.data?.find((a) => a.id === resourcesId)
     : undefined;
+  // The join lag's day↔minute factor for the Resources dialog's subject (ADR-0071 M4), read from that
+  // activity's SAVED calendar. `undefined` is a real answer (the list can be loading or absent) and
+  // the field degrades to hours and minutes rather than guessing a day.
+  const resourcesHoursPerDay = effectiveHoursPerDay(calendars, {
+    activityCalendarId: managingResources?.calendarId ?? '',
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+  });
   const editingSteps = stepsId ? activities.data?.find((a) => a.id === stepsId) : undefined;
   const intended = editorIntent
     ? activities.data?.find((a) => a.id === editorIntent.activityId)
@@ -799,6 +806,12 @@ export function ActivitiesTable({
                 activityId: managingResources.id,
                 activityName: managingResources.name,
                 activityDurationType: managingResources.durationType,
+                // The join lag's day↔minute factor (ADR-0071 M4), from the row's SAVED calendar —
+                // there is no pending selection here, and none is wanted: an assignment write does
+                // not carry the activity's calendar with it.
+                ...(resourcesHoursPerDay === undefined
+                  ? {}
+                  : { activityHoursPerDay: resourcesHoursPerDay }),
                 // A milestone is zero-span, so a loading curve has nothing to distribute over — the
                 // dialog hides the curve picker (TECH_DEBT #44b). Classified here (the activities
                 // feature owns the type helpers) so the resources feature stays free of a back-import.

@@ -3,12 +3,13 @@
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
 > building F7's control, and blocked it. **Resolved: F1, F2, F3, F5, F7+F8.**
-> **Open: F4 (a product call); F6 in progress** — ADR-0071 **M0–M3 landed**: the `lag_minutes`
-> column, both DTOs and the N34 rejects (M0); the histogram read (M1); the levelling pass's
-> per-resource demand windows (M2); and Earned Value's per-component PV phasing with the ADR-0025
-> per-assignment cost baseline behind it (M3). **M4 — the planner's control — is next**, and until it
-> ships the surface-contract gate reports **three known gaps**: F6's two write DTOs and the engine's
-> own `EngineAssignment.lagMinutes`, all three flipping to `surface` together.
+> **Open: F4 (a product call); F6 M0–M4 landed** — ADR-0071: the `lag_minutes` column, both DTOs and
+> the N34 rejects (M0); the histogram read (M1); the levelling pass's per-resource demand windows
+> (M2); Earned Value's per-component PV phasing with the ADR-0025 per-assignment cost baseline behind
+> it (M3); and **the planner's control** behind `VITE_ASSIGNMENT_LAG` (M4). The surface-contract gate
+> now reports **zero known gaps** — every scheduling field the engine reads is one a planner can
+> reach, or carries a written reason why they never will. F6's remaining milestones are M5
+> (interchange, blocked on evidence) and M6 (the enablement gate pass).
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -249,6 +250,27 @@ read from a stored discriminator through an exhaustive `switch`, never inferred 
 an assignment-free plan's baseline has zero component rows and is **exact**, a pre-amendment baseline
 has zero rows and can only be **approximated**. Same observation, opposite answers — which is the
 whole reason the column exists.
+
+**M4 landed (2026-08-02), and the register's own gate now reads zero gaps.** A planner can set the
+join lag: a **Joins after** field on the assign form and on each assignment row, reading ADR-0070's
+`d`/`h`/`m` grammar. Three decisions are worth stating rather than inferring from the diff.
+
+The factor is the activity's **saved** calendar, not the one a pending edit has selected. That is the
+opposite of what the duration field does — and correctly so, because a duration and a calendar save
+together while an assignment write carries no calendar at all, so converting `2d` against an unsaved
+choice would store minutes measured on a calendar the activity does not have. The two rules live in
+separate modules for exactly that reason rather than sharing one that would have to guess.
+
+The **degraded** state is different from a relationship lag's, because the assignment DTO carries
+only `lagMinutes` — there is no `lagDays` to fall back to. So instead of a whole-days box, the field
+keeps the units that need no factor: hours and minutes stay available while the calendar list is in
+flight, and only days are refused, with their own sentence. Hiding the field would have been simpler
+and strictly worse.
+
+And the surface-contract gate found the third gap this milestone had to close. F6's two write DTOs
+were the known ones; `EngineAssignment.lagMinutes` was added to the engine's input type in M2 and the
+gate caught it on the next run — the same shape as F7, which the gate found rather than the manual
+sweep. A register that only lists what a person noticed is a register that stops being true.
 
 ### F7 — the critical float threshold has no control (outward; found by the gate, not by me) — **RESOLVED**
 

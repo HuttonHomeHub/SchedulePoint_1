@@ -1114,3 +1114,27 @@ export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
  * date, silently, so the rollback has to be a switch rather than a revert.
  */
 export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_DAY_DURATIONS);
+
+/**
+ * **Per-assignment join lag** (`VITE_ASSIGNMENT_LAG`, default **OFF**) — ADR-0071 M4, the planner's
+ * half of the engine-surface audit's F6.
+ *
+ * The CPM engine, the resource histogram, the levelling pass and the Earned-Value read have all
+ * carried a per-assignment join lag since ADR-0071 M0–M3 — so a crane arriving four days into a
+ * fortnight schedules, loads, levels and earns correctly, and **nothing in the product could set
+ * one**. It could be imported, and that was the whole of it. This flag is the field.
+ *
+ * Flag ON adds a "Joins after" control to the assign form and to each assignment row, reading the
+ * ADR-0070 `d`/`h`/`m` grammar against the activity's **saved** calendar — not the calendar a
+ * pending edit has selected, because an assignment write does not carry the calendar with it and
+ * converting against an unsaved choice would store minutes measured on a calendar the activity does
+ * not have. Where the factor is unresolved the field keeps hours and minutes and refuses days,
+ * naming the reason; that is the same code path a rollback leaves behind, so the degraded state and
+ * the flag-off state cannot rot separately.
+ *
+ * Rollback: set `VITE_ASSIGNMENT_LAG=false` and rebuild the web image. Nothing persisted depends on
+ * it — `lagMinutes` has been on the assignment DTOs since ADR-0071 M0, an existing lag keeps
+ * scheduling, loading and earning exactly as it does now, and the flag-off surface simply stops
+ * showing it. The flag-off parity suite is kept, not weakened: it is the rollback contract.
+ */
+export const ASSIGNMENT_LAG_ENABLED = flagDefaultOff(import.meta.env.VITE_ASSIGNMENT_LAG);

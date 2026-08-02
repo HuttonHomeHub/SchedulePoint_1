@@ -8,6 +8,8 @@ import {
 } from '@repo/types';
 import { z } from 'zod';
 
+import { assignmentLagTextField } from '../model/assignment-lag-field';
+
 import { moneyMajorAmount } from '@/lib/money-schema';
 
 /** Human labels for the resource kinds — used by the table and the form's kind select. */
@@ -221,6 +223,12 @@ export const assignmentFormSchema = z.object({
       'Use at most 4 decimal places.',
     )
     .optional(),
+  // The per-assignment join lag (ADR-0071 §1 / M4), as TEXT in the ADR-0070 `d`/`h`/`m` grammar.
+  // Text rather than a number because the grammar is the point: a lift is `4h`, not `240`. The rule
+  // here is deliberately **factor-independent syntax only** — whether `2d` can be converted depends
+  // on the activity's calendar, which the field answers at submit where the factor is in hand. Blank
+  // means no lag (joins with the activity), which is the default and the overwhelming majority.
+  lagText: assignmentLagTextField().optional(),
 });
 
 export type AssignmentFormValues = z.infer<typeof assignmentFormSchema>;

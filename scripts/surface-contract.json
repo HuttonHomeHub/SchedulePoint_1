@@ -408,7 +408,7 @@
     "exempt": "a join key, not a value a planner types"
   },
   "engine/EngineAssignment.lagMinutes": {
-    "gap": "F6 (ADR-0071): the levelling pass's view of the per-assignment join lag. Same finding as `resources/create-assignment.lagMinutes` — M0 lands storage + API, the flagged web control is M4, and both flip to `surface` then."
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4, VITE_ASSIGNMENT_LAG)"
   },
   "engine/EngineAssignment.resourceId": {
     "exempt": "a join key, not a value a planner types"
@@ -537,7 +537,7 @@
     "surface": "config/env.ts"
   },
   "resources/create-assignment.lagMinutes": {
-    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 — this flips to `surface` then."
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4, VITE_ASSIGNMENT_LAG)"
   },
   "resources/create-assignment.resourceId": {
     "surface": "components/layout/workspace/resource-strip-panel.tsx"
@@ -588,7 +588,7 @@
     "surface": "config/env.ts"
   },
   "resources/update-assignment.lagMinutes": {
-    "gap": "F6 (ADR-0071): the per-assignment join lag. M0 lands storage + API; the flagged web control is M4 — this flips to `surface` then."
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4, VITE_ASSIGNMENT_LAG)"
   },
   "resources/update-assignment.unitsPerHour": {
     "surface": "config/env.ts"
