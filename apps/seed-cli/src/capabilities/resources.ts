@@ -101,6 +101,10 @@ export function resourcesPlan(): SeedSpec {
       activity('A_FRONT', { name: 'Front-loaded', testTags: ['res_curve_front_loaded'] }),
       activity('A_BACK', { name: 'Back-loaded', testTags: ['res_curve_back_loaded'] }),
       activity('A_PEAK', { name: 'Double-peak', testTags: ['res_curve_double_peak'] }),
+      // A_LAG is A_BELL's twin and differs in ONE thing: the crew joins two days late. Anything else
+      // different between them (units, curve, duration, calendar) would make the histogram contrast
+      // ambiguous — which is the whole point of the pairing.
+      activity('A_LAG', { name: 'Bell-loaded, crew joins late', testTags: ['res_assignment_lag'] }),
     ],
     dependencies: [link('A_TASK', 'A_DRIVE', { type: 'SS' })],
     assignments: [
@@ -115,6 +119,14 @@ export function resourcesPlan(): SeedSpec {
       assignment('A_FU', 'R_LAB', { budgetedUnits: 40, unitsPerHour: 2 }),
       assignment('A_FUT', 'R_LAB', { budgetedUnits: 40, unitsPerHour: 2 }),
       assignment('A_BELL', 'R_LAB', { budgetedUnits: 80, unitsPerHour: 2, curveType: 'BELL' }),
+      assignment('A_LAG', 'R_LAB', {
+        budgetedUnits: 80,
+        unitsPerHour: 2,
+        curveType: 'BELL',
+        // Two working days on RS_CAL's five-day week. The units are conserved and the same curve is
+        // applied — the load simply starts two days in, so A_LAG's series is A_BELL's compressed.
+        lagMinutes: 2 * 24 * 60,
+      }),
       assignment('A_FRONT', 'R_LAB', {
         budgetedUnits: 80,
         unitsPerHour: 2,

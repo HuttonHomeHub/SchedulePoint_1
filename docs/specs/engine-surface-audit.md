@@ -201,6 +201,22 @@ axis is the union of **effective** spans, so a lagged assignment with an unlagge
 at the front, while a lagged assignment on its own moves the axis instead of padding it. Both are
 pinned.
 
+The catalogue gap closed with it. `res_assignment_lag` was **excepted** in `seed --coverage` with the
+reason "an assignment has no lag field: work starts with its activity" — true of the data model and
+badly underselling the position, since the engine half was already built and scored against the
+fixture's own AS0027 case. The exception is deleted and the key is reached by `A_LAG`, a twin of
+`A_BELL` differing in exactly one thing.
+
+**Two of the milestone's planned tasks were withdrawn on measurement, and that is the more useful
+result.** A typed "lag unreachable" error mapped to a 422 was written and then reverted: the
+working-time port does not throw for any legal lag — a calendar working one minute a week walks the
+full ten-year ceiling and returns a date in the year 102,759 — so the `catch` would have shipped as
+permanent dead code under a docblock asserting a defect that does not exist. And the N34 hostile
+cases do not belong in the seed negative tier, which `negative.spec.ts` pins to the conformance
+fixture's own case list; they live at the DTO boundary and in the API e2e instead. Both are recorded
+in [`docs/specs/assignment-lag/implementation-plan.md`](assignment-lag/implementation-plan.md) beside
+the tasks that asked for them. A plan is a document too: ADR-0058's rule reaches it as well.
+
 ### F7 — the critical float threshold has no control (outward; found by the gate, not by me) — **RESOLVED**
 
 `plans.critical_float_threshold` is writable on `update-plan.dto.ts` (line 101), exposed on the shared

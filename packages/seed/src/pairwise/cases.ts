@@ -146,6 +146,9 @@ function caseSpec(caseId: string, row: DimensionAssignment): SeedSpec {
         isDriving: row.driving === 'yes',
         actualUnits: null,
         curveType: row.curveType as SeedResourceCurveType,
+        // The pairwise grid does not vary the lag (ADR-0071 M1): it varies one dimension per column,
+        // and a lagged twin belongs in the per-capability tier where the contrast is the point.
+        lagMinutes: 0,
       },
     ],
     unplaceable: [],

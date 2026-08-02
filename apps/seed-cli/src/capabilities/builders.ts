@@ -136,6 +136,7 @@ export function assignment(
     isDriving: false,
     actualUnits: null,
     curveType: 'UNIFORM',
+    lagMinutes: 0,
     ...overrides,
   };
 }

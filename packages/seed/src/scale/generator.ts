@@ -209,6 +209,7 @@ export function scaleSpec(options: ScaleOptions): SeedSpec {
             isDriving: false,
             actualUnits: null,
             curveType: 'UNIFORM',
+            lagMinutes: 0,
           });
         }
         taskOrdinal += 1;
