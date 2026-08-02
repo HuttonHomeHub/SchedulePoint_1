@@ -62,7 +62,13 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   ).toEqual([]);
   await dialog.getByLabel('Name').fill('Excavate');
   await dialog.getByLabel('Code').fill('A100');
-  await dialog.getByLabel('Duration (working days)', { exact: true }).fill('10');
+  // Just `Duration` since ADR-0070 turned `VITE_SUB_DAY_DURATIONS` on by default: once the field
+  // can resolve how many hours this activity's day is worth it reads `d`/`h`/`m` text and stops
+  // promising whole days in its label. `10` still means ten days — a bare number always does, which
+  // is the property that made the grammar safe to ship into a field planners already used. The
+  // whole-days control, and this label, survive on the degraded path and are covered by the unit
+  // suites; the sub-day path has its own journey (`e2e-sub-day/`).
+  await dialog.getByLabel('Duration', { exact: true }).fill('10');
   // Choosing a constraint reveals its date field — check that revealed state is accessible.
   await dialog.getByLabel('Constraint', { exact: true }).selectOption('SNET');
   await dialog.getByLabel('Constraint date').fill('2026-05-01');
@@ -80,7 +86,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await page.getByRole('button', { name: 'New activity' }).click();
   await dialog.getByLabel('Name').fill('Kickoff');
   await dialog.getByLabel('Type', { exact: true }).selectOption('START_MILESTONE');
-  await expect(dialog.getByLabel('Duration (working days)', { exact: true })).toBeHidden();
+  await expect(dialog.getByLabel('Duration', { exact: true })).toBeHidden();
   await dialog.getByRole('button', { name: 'Create activity' }).click();
 
   await expect(page.getByRole('cell', { name: 'Kickoff', exact: true })).toBeVisible();

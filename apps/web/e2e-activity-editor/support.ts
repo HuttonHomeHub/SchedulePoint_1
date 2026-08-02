@@ -67,7 +67,11 @@ export async function addActivity(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: 'New activity' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name').fill(name);
-  await dialog.getByLabel('Duration (working days)').fill('5');
+  // Either label: `Duration` once the field can resolve the calendar's working hours (ADR-0070,
+  // default-on), `Duration (working days)` on the degraded path. This is fixture setup, not the
+  // thing under test, so it accepts both rather than pinning one and breaking on a default flip.
+  // Anchored so it cannot also match `Duration type`.
+  await dialog.getByLabel(/^Duration( \(working days\))?$/).fill('5');
   await dialog.getByRole('button', { name: 'Create activity' }).click();
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
 }

@@ -249,14 +249,15 @@ pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 cheaper than the one after it and than the CI round-trip it replaces, so a
 failure should surface at the earliest step that can see it.
 
-| #   | Run                                | When                                                                                 |
-| --- | ---------------------------------- | ------------------------------------------------------------------------------------ |
-| 1   | `pnpm lint && pnpm typecheck`      | always                                                                               |
-| 2   | `pnpm test`                        | always                                                                               |
-| 3   | `scripts/e2e-local.sh api`         | you touched `apps/api` — service, controller, DTO, schema or migration               |
-| 4   | `scripts/e2e-local.sh web:<suite>` | you **added or changed** a flag-on Playwright suite, or changed a surface one drives |
-| 5   | `pnpm check:playbook`              | you added, renamed or removed a seed-catalogue plan (ADR-0066)                       |
-| 6   | `pnpm check:build-contract`        | you added a shared `packages/*` workspace package, or changed a Dockerfile           |
+| #   | Run                                                         | When                                                                                 |
+| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                               |
+| 2   | `pnpm test`                                                 | always                                                                               |
+| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration               |
+| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives |
+| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite)) |
+| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                       |
+| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile           |
 
 `scripts/e2e-local.sh` brings up Postgres, creates the `app` role and `app_test`
 database **with the same credentials CI uses**, applies migrations, finds the
@@ -280,6 +281,28 @@ lives in a collapsible panel under the flags that suite sets, a button labelled
 `Diagram` that the spec called `TSLD`, and an ambiguous `role="status"` query.
 Every one was visible in the first local run and none was visible without one.
 Two of them were also masked by assertion order — see the rule below.
+
+### Flipping a default changes the base suite
+
+A flag flip is not covered by step 4, and the wording used to read as if it were.
+The new journey you wrote pins the flag **on**, so it passes; what moves under you
+is every suite that does **not** pin it — starting with the **base** suite, which
+serves the app on the shipped defaults. Flipping a default is a change to the
+surface that suite drives, even though you touched none of its files.
+
+ADR-0070's flip proved it. `VITE_SUB_DAY_DURATIONS` default-on renames the
+activity form's control from `Duration (working days)` to `Duration` — deliberate,
+because the field no longer promises whole days — and three journeys were still
+asking for the old label: the base `e2e/activities.spec.ts` and the
+`e2e-activity-editor` / `e2e-programme` fixtures. The full local gate, both flag-on
+journeys included, was green; CI went red on the base suite.
+
+So: after a flip, run the base suite, and `grep` the other `e2e*/` directories for
+any locator naming the copy the flip changes. Where the locator is **fixture setup**
+rather than the assertion, accept both spellings with an anchored regex
+(`/^Duration( \(working days\))?$/`) so the fixture survives the next flip; where
+the label **is** what the test is about, pin the shipped default and let it fail
+loudly if that default moves.
 
 **Assert presence before absence.** `toHaveCount(0)` is satisfied by a surface
 that never rendered, so an absence assertion placed first will pass for the
