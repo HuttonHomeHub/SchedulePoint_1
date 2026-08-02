@@ -147,8 +147,8 @@ export class PlansService {
     if (dto.criticalPathDefinition !== undefined) {
       patch.criticalPathDefinition = dto.criticalPathDefinition;
     }
-    if (dto.criticalFloatThreshold !== undefined) {
-      patch.criticalFloatThreshold = dto.criticalFloatThreshold;
+    if (dto.criticalFloatThresholdMinutes !== undefined) {
+      patch.criticalFloatThresholdMinutes = dto.criticalFloatThresholdMinutes;
     }
     if (dto.totalFloatMode !== undefined) patch.totalFloatMode = dto.totalFloatMode;
     if (dto.makeOpenEndsCritical !== undefined) {

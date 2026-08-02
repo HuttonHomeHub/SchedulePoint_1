@@ -139,7 +139,7 @@ export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUA
 
 /**
  * How the CPM engine decides which activities are **critical** (M6, ADR-0035 §17–§20). `TOTAL_FLOAT`
- * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThreshold`;
+ * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThresholdMinutes`;
  * `LONGEST_PATH` marks the contiguous chain of driving ties back from the latest-finishing activities.
  * Mirrors the API's Prisma `CriticalPathDefinition` enum (kept in lock-step).
  */
@@ -207,7 +207,7 @@ export interface PlanSummary {
    * Total-float threshold in whole working days (M6, ADR-0035 §17): at/below this an activity is
    * critical under the `TOTAL_FLOAT` definition. Default 0 (P6/behaviour-preserving).
    */
-  criticalFloatThreshold: number;
+  criticalFloatThresholdMinutes: number;
   /**
    * How total float is measured (M6, ADR-0035 §18): `FINISH` (default), `START`, or `SMALLEST`.
    * Behaviour-preserving default `FINISH`.

@@ -227,7 +227,7 @@ export async function seedPlan(
           progressRecalcMode: spec.plan.options.progressRecalcMode,
           useExpectedFinishDates: spec.plan.options.useExpectedFinishDates,
           criticalPathDefinition: spec.plan.options.criticalPathDefinition,
-          criticalFloatThreshold: spec.plan.options.criticalFloatThreshold,
+          criticalFloatThresholdMinutes: spec.plan.options.criticalFloatThresholdMinutes,
           totalFloatMode: spec.plan.options.totalFloatMode,
           makeOpenEndsCritical: spec.plan.options.makeOpenEndsCritical,
           levelResources: spec.plan.options.levelResources,

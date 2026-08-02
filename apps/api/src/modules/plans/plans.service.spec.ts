@@ -49,7 +49,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
     criticalPathDefinition: 'TOTAL_FLOAT',
-    criticalFloatThreshold: 0,
+    criticalFloatThresholdMinutes: 0,
     totalFloatMode: 'FINISH',
     makeOpenEndsCritical: false,
     levelResources: false,
@@ -257,14 +257,14 @@ describe('PlansService', () => {
       plans.updateIfVersionMatches.mockResolvedValue(1);
       await service.update(principalWith(ALL), 'acme', 'pl1', {
         criticalPathDefinition: 'LONGEST_PATH',
-        criticalFloatThreshold: 3,
+        criticalFloatThresholdMinutes: 3,
         totalFloatMode: 'SMALLEST',
         makeOpenEndsCritical: true,
         version: 1,
       });
       const patch = plans.updateIfVersionMatches.mock.calls[0]?.[2] as PlanPatch;
       expect(patch.criticalPathDefinition).toBe('LONGEST_PATH');
-      expect(patch.criticalFloatThreshold).toBe(3);
+      expect(patch.criticalFloatThresholdMinutes).toBe(3);
       expect(patch.totalFloatMode).toBe('SMALLEST');
       expect(patch.makeOpenEndsCritical).toBe(true);
     });

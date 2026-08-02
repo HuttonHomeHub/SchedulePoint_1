@@ -955,7 +955,13 @@ export class ScheduleService {
       progressMode: plan.progressRecalcMode,
       useExpectedFinishDates: plan.useExpectedFinishDates,
       criticalDefinition: plan.criticalPathDefinition,
-      criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY,
+      // Stored in working MINUTES since the F8 migration, so it is passed through rather than
+      // converted. It used to be `× MINUTES_PER_DAY` from a day-denominated column, which compared a
+      // flat-1440 day against a float measured on the ACTIVITY's own calendar — three working days
+      // of float on an eight-hour calendar for a planner who asked for one (ADR-0068's defect, one
+      // field along). Never reintroduce a factor here: there is no scalar that is right for a plan
+      // whose activities sit on different calendars, which is why the column is minutes.
+      criticalFloatThresholdMinutes: plan.criticalFloatThresholdMinutes,
       totalFloatMode: plan.totalFloatMode,
       makeOpenEndsCritical: plan.makeOpenEndsCritical,
       // Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): when on, the engine

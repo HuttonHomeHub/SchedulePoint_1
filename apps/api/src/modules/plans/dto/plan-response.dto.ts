@@ -59,7 +59,7 @@ export class PlanResponseDto implements PlanSummary {
     description:
       'Total-float threshold in whole working days (M6, ADR-0035 §17): at/below this an activity is critical under TOTAL_FLOAT. Default 0.',
   })
-  criticalFloatThreshold!: number;
+  criticalFloatThresholdMinutes!: number;
 
   @ApiProperty({
     enum: TotalFloatMode,
@@ -145,7 +145,7 @@ export class PlanResponseDto implements PlanSummary {
       progressRecalcMode: entity.progressRecalcMode,
       useExpectedFinishDates: entity.useExpectedFinishDates,
       criticalPathDefinition: entity.criticalPathDefinition,
-      criticalFloatThreshold: entity.criticalFloatThreshold,
+      criticalFloatThresholdMinutes: entity.criticalFloatThresholdMinutes,
       totalFloatMode: entity.totalFloatMode,
       makeOpenEndsCritical: entity.makeOpenEndsCritical,
       levelResources: entity.levelResources,
