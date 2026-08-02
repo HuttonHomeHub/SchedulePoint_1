@@ -93,6 +93,9 @@ function assign(
     unitsPerHour: null,
     isDriving,
     actualUnits: 0,
+    // Stated rather than defaulted: no format this repository has verified carries a per-assignment
+    // join lag, so every imported assignment is unlagged and the report says so (ADR-0071 M5).
+    lagMinutes: 0,
   };
 }
 

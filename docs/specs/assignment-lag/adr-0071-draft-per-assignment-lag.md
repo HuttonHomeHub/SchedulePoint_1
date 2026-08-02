@@ -403,3 +403,60 @@ calendar** and says so in its help text. On a mixed-calendar plan that is a disc
 an activity on a different calendar is still compared against a threshold entered in the plan
 calendar's days, and no single scalar can be right for all of them. Saying which day the planner is
 typing in is strictly better than today, where nobody is told anything.
+
+## M6 — the enablement gate pass (2026-08-02, `VITE_ASSIGNMENT_LAG` default-ON)
+
+Five specialists over the combined M0–M5 diff. **Security and backend-performance passed clean**;
+**ux, accessibility and component each blocked**, on five defects in code that had already passed a
+human read. Every one carries a regression test verified to fail against the old code first.
+
+1. **A compound duration was silently converted at the wrong factor** (component). The day-check
+   was a bespoke `/\d\s*d\b/` needing a word boundary after the `d`, so on the degraded path — with
+   the calendar unresolved, the state the whole module exists to handle — `2d4h` slipped past it,
+   reached the parser with the placeholder factor of 24, and stored **3,120** minutes where 1,200
+   was meant. Accepted, `ok: true`, no error shown. `namesDays` now lives beside the parser in
+   `lib/duration-text.ts` and tokenizes through the parser's own splitter, so a second opinion about
+   where a part ends is structurally impossible. This is the ADR-0065 `routeOrthogonal` rule
+   arriving as a real defect rather than an argument.
+2. **The row's Save used the native `disabled` attribute** (accessibility) — the control flips
+   unavailability twice per save and a natively-disabled element holding focus is blurred to
+   `<body>` each time (WCAG 2.4.3). It is `aria-disabled` with a real click guard, the pattern
+   ADR-0060 M6 and ADR-0063 M6 each paid to learn and `ScopeSaveBar`'s own docblock documents.
+3. **The assign form refused a day-denominated lag by doing nothing** (accessibility) — no
+   `setError`, so nothing landed in RHF's `errors`, `FormErrorSummary` (`role="alert"`) had nothing
+   to announce, focus never moved, and the Assign button stayed lit while doing nothing when
+   pressed. The code's own comment claimed parity with `AddLinkSection`, which has always called
+   `setError(..., { shouldFocus: true })`.
+4. **A third entry route never received the day factor** (ux) — `plan-dialogs.tsx`, reachable
+   whenever `VITE_ACTIVITY_EDITOR_CONVERGENCE` is rolled back, which is a supported rollback. The
+   field there rendered, looked right, and refused `2d` on a plan whose calendar was perfectly
+   resolvable: the "renders, looks right, quietly refuses" failure this epic and ADR-0070 both exist
+   to stop, shipped inside the epic that names it.
+5. **The placeholder read `0d`** (ux) regardless of the factor, so in the degraded state it offered
+   an example in the one unit its own label said the field could not take.
+
+Four of the five are the ADR-0064 §7 shape again — **one correct pattern applied to a control and
+not its neighbour**, inside a diff whose docblocks describe the right thing.
+
+Also folded: the error/help disclosure now matches the shared `TextField` (error **or** help, never
+both) so one field does not read two ways depending on which surface it was opened from; and
+`assignmentLagTextField` — the zod rule the form actually mounts — gained the direct coverage it had
+none of.
+
+**The flag-on journey** (`apps/web/e2e-assignment-lag/`, its own CI step) drives the field against a
+real API with the pen enforced on an eight-hour calendar. It is deliberately **one test**: the
+claims edit the same assignment in sequence and Playwright gives each test its own browser context,
+which would drop the session and the pen. It reads storage back from the API rather than asserting
+the DOM under test, and it asserts the Save button's unavailability **by mechanism**
+(`aria-disabled`), because `toBeDisabled()` accepts either and which one is used is the whole point
+of finding 2.
+
+The two backend-performance suggestions were folded rather than deferred: a third boundedness case
+in `level.spec.ts` using **mixed demand against spare capacity** (the two existing cases both take
+the whole resource, so every blackout merges into one run and "scan the blackout" costs the same as
+"scan the span"), and `docs/TECH_DEBT.md` **#84**, recording that levelling is quadratic in the
+number of activities contending on one resource — pre-existing, untouched by this diff, and written
+down because ADR-0041 §F's boundedness wording rules out span-dependence and reads as if it ruled
+this out too.
+
+**The CPM engine is not modified and the ADR-0034 recalc parity gate is untouched.**

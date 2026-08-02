@@ -5,10 +5,13 @@ import {
   LAG_TOO_LARGE,
   assignmentLagHelp,
   assignmentLagLabel,
+  assignmentLagTextField,
   formatAssignmentLagRead,
   parseAssignmentLag,
   seedAssignmentLag,
 } from './assignment-lag-field';
+
+import { DURATION_PARSE_MESSAGE } from '@/lib/duration-text';
 
 /**
  * The join-lag field's grammar (ADR-0071 M4). The interesting half is the **degraded** path: unlike a
@@ -75,6 +78,30 @@ describe('parseAssignmentLag — with the activity calendar unresolved', () => {
     });
   });
 
+  it('refuses the COMPOUND spelling too, which the space-separated form used to hide', () => {
+    // `2d4h` is a form the parser explicitly supports, and the first version of the day-check was a
+    // bespoke `/\d\s*d\b/` that needed a word boundary after the `d` — so a `d` followed by a digit
+    // slipped through, was measured at a placeholder 24 hours a day, and was accepted with no error
+    // shown. On an eight-hour calendar that stores 3,120 minutes where 1,200 was meant: a wrong
+    // number, silently, which is the exact defect this module exists to prevent. The check now
+    // tokenizes through the parser's own splitter, so the two cannot disagree.
+    expect(parseAssignmentLag('2d4h', undefined)).toEqual({
+      ok: false,
+      message: LAG_DAYS_UNAVAILABLE,
+    });
+    expect(parseAssignmentLag('1d30m', undefined)).toEqual({
+      ok: false,
+      message: LAG_DAYS_UNAVAILABLE,
+    });
+    expect(parseAssignmentLag('3d2h1m', undefined)).toEqual({
+      ok: false,
+      message: LAG_DAYS_UNAVAILABLE,
+    });
+    // And the compound form WITHOUT a day part is still accepted, so the fix refuses days rather
+    // than refusing compounds.
+    expect(parseAssignmentLag('2h30m', undefined)).toEqual({ ok: true, minutes: 150 });
+  });
+
   it('says which units are available in the label and the help', () => {
     expect(assignmentLagLabel(undefined)).toContain('hours or minutes');
     expect(assignmentLagHelp(undefined)).toContain('hasn’t loaded yet');
@@ -114,5 +141,41 @@ describe('formatAssignmentLagRead — the read-only row', () => {
 
   it('names the delay for a lagged one', () => {
     expect(formatAssignmentLagRead(480, 8)).toBe(' · joins after 1d');
+  });
+});
+
+describe('assignmentLagTextField — the zod rule the assign form actually mounts', () => {
+  // The exported rule had no direct coverage: every other export of the module was tested, and the
+  // component suites only reached the FACTOR-dependent refusal (`parseAssignmentLag`). Syntax is a
+  // separate gate, decided without a calendar, and this is the seam that decides it.
+  const field = assignmentLagTextField();
+
+  it('accepts an empty field — no lag is the default, not a validation failure', () => {
+    expect(field.safeParse('').success).toBe(true);
+    expect(field.safeParse('   ').success).toBe(true);
+  });
+
+  it('accepts every spelling the grammar supports, factor or no factor', () => {
+    for (const text of ['0d', '2d', '4h', '90m', '1d 4h', '2d4h', '1.5d', '7']) {
+      expect(field.safeParse(text).success, text).toBe(true);
+    }
+  });
+
+  it('refuses a unit the grammar does not have, and says which ones it does', () => {
+    // Weeks are refused rather than guessed (ADR-0070): a construction week is five days to one
+    // planner and seven to another, and SchedulePoint has no setting to disambiguate.
+    const week = field.safeParse('1w');
+    expect(week.success).toBe(false);
+    expect(week.error?.issues[0]?.message).toBe(DURATION_PARSE_MESSAGE['unknown-unit']);
+    expect(field.safeParse('soon').success).toBe(false);
+    expect(field.safeParse('2 days').success).toBe(false);
+  });
+
+  it('refuses malformed and negative text', () => {
+    expect(field.safeParse('d').success).toBe(false);
+    expect(field.safeParse('1.').success).toBe(false);
+    expect(field.safeParse('-2d').success).toBe(false);
+    // A repeated unit is a typo, not an addition.
+    expect(field.safeParse('1d 2d').success).toBe(false);
   });
 });

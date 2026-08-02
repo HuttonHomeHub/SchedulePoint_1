@@ -13,6 +13,7 @@ import {
   assignmentLagEnabled,
   assignmentLagHelp,
   assignmentLagLabel,
+  canAuthorLagDays,
   parseAssignmentLag,
 } from '../model/assignment-lag-field';
 import {
@@ -203,6 +204,7 @@ export function ActivityResourcesPanel({
     handleSubmit,
     reset,
     setValue,
+    setError,
     formState: { errors },
   } = useForm<AssignmentFormValues>({
     resolver: zodResolver(assignmentFormSchema),
@@ -249,10 +251,17 @@ export function ActivityResourcesPanel({
 
   const onSubmit = handleSubmit((values) => {
     const isDriving = selectedIsMaterial ? false : values.isDriving;
-    // Refuse rather than send a silently wrong number — the same rule `lagWriteFields` follows. The
-    // message is already under the field, so this is the guard, not the notification.
+    // Refuse rather than send a silently wrong number — the same rule `lagWriteFields` follows, and
+    // refusing the SAME WAY it does. `AddLinkSection` registers the failure with RHF and moves
+    // focus; an earlier version of this guard only `return`ed, which left the form looking untouched:
+    // nothing in `errors`, so `FormErrorSummary` (`role="alert"`) had nothing to announce, no focus
+    // moved, and the Assign button stayed lit while doing nothing when pressed. A submit that
+    // silently does nothing is worse than one that fails loudly.
     const lag = parseAssignmentLag(values.lagText ?? '', activityHoursPerDay);
-    if (showLag && !lag.ok) return;
+    if (showLag && !lag.ok) {
+      setError('lagText', { message: lag.message }, { shouldFocus: true });
+      return;
+    }
     create.mutate(
       {
         ...values,
@@ -456,7 +465,10 @@ export function ActivityResourcesPanel({
                     label={assignmentLagLabel(activityHoursPerDay)}
                     type="text"
                     inputMode="text"
-                    placeholder="0d"
+                    // The placeholder has to follow the same rule as the label and the help: with
+                    // no factor, `0d` would be an example in the one unit the field is about to
+                    // refuse — a planner typing what the field suggests would be told off for it.
+                    placeholder={canAuthorLagDays(activityHoursPerDay) ? '0d' : '0h'}
                     hint={assignmentLagHelp(activityHoursPerDay)}
                     // The schema's syntax error wins when there is one; the factor error is the
                     // second rule, and only reachable once the text itself reads (see the derivation

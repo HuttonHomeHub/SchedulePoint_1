@@ -439,8 +439,14 @@ export function AssignmentRow({
   const lagParsed = parseAssignmentLag(lagText, hoursPerDay);
   const lagChanged = lagText !== lagSeeded;
   const lagError = lagChanged && !lagParsed.ok ? lagParsed.message : undefined;
+  // Shaded rather than natively disabled — see the button. Nothing to save, something wrong with
+  // what was typed, or a save already in flight.
+  const lagUnavailable = !lagChanged || lagError !== undefined || update.isPending;
 
   const saveLag = (): void => {
+    // The click guard the `aria-disabled` shading needs: an `aria-disabled` control is still
+    // clickable, so every reason the button looks unavailable has to be re-checked here.
+    if (lagUnavailable) return;
     if (!lagParsed.ok) {
       announce(`Join delay for “${name}” not saved: ${lagParsed.message}`);
       return;
@@ -614,7 +620,9 @@ export function AssignmentRow({
                     value={lagText}
                     onChange={(event) => setLagText(event.target.value)}
                     aria-invalid={lagError ? true : undefined}
-                    aria-describedby={lagError ? `${lagErrorId} ${lagHelpId}` : lagHelpId}
+                    // Whichever paragraph is actually rendered — the help is replaced by the error,
+                    // so naming both would point at an id that is not in the document.
+                    aria-describedby={lagError ? lagErrorId : lagHelpId}
                     className="w-28"
                   />
                   <Button
@@ -622,21 +630,35 @@ export function AssignmentRow({
                     size="sm"
                     variant="outline"
                     aria-label={`Save join delay for ${name}`}
-                    disabled={!lagChanged || lagError !== undefined || update.isPending}
+                    // `aria-disabled`, never the native attribute (ADR-0060 M6 / ADR-0063 M6, and
+                    // `ScopeSaveBar`'s own docblock). This control flips its unavailability TWICE
+                    // per save — once when the request starts, once when the refetched row makes
+                    // `lagChanged` false again — and a natively-disabled element holding focus is
+                    // blurred to `<body>` by the browser each time. `saveLag` re-checks the same
+                    // condition, so the click guard is real rather than decorative.
+                    aria-disabled={lagUnavailable || undefined}
+                    className={lagUnavailable ? 'pointer-events-none opacity-50' : undefined}
                     aria-busy={update.isPending}
                     onClick={saveLag}
                   >
                     Save
                   </Button>
                 </div>
+                {/* Error OR help, never both — the rule the shared `TextField` follows, and the
+                    assign form's copy of this same field gets it from that primitive. The row
+                    hand-rolls its controls (as every other field in it does), so the rule has to be
+                    stated here rather than inherited; showing both made one field read two ways
+                    depending on which surface you opened it from. Each lag message is
+                    self-contained and says what to type instead, so nothing is lost. */}
                 {lagError ? (
                   <p id={lagErrorId} className="text-destructive-text text-sm">
                     {lagError}
                   </p>
-                ) : null}
-                <p id={lagHelpId} className="text-muted-foreground text-sm">
-                  {assignmentLagHelp(hoursPerDay)}
-                </p>
+                ) : (
+                  <p id={lagHelpId} className="text-muted-foreground text-sm">
+                    {assignmentLagHelp(hoursPerDay)}
+                  </p>
+                )}
               </div>
             ) : null}
             <Button

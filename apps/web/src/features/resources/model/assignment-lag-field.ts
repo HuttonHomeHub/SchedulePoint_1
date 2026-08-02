@@ -6,6 +6,7 @@ import {
   DURATION_PARSE_MESSAGE,
   checkDurationText,
   formatDurationText,
+  namesDays,
   parseDurationText,
 } from '@/lib/duration-text';
 
@@ -70,12 +71,6 @@ export const LAG_DAYS_UNAVAILABLE =
 
 /** The API's `@Max` on `lagMinutes`, mirrored so the field refuses before a 422. */
 export const LAG_TOO_LARGE = 'That’s longer than a resource can be delayed.';
-
-/** Does this text name days — a `d` part, or the bare number that has always meant days? */
-function namesDays(text: string): boolean {
-  const trimmed = text.trim().toLowerCase();
-  return /\d\s*d\b/.test(trimmed) || /^\d+(?:\.\d+)?$/.test(trimmed);
-}
 
 /**
  * Read the field into working minutes, or say why not.

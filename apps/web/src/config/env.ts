@@ -1116,7 +1116,8 @@ export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
 export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_DAY_DURATIONS);
 
 /**
- * **Per-assignment join lag** (`VITE_ASSIGNMENT_LAG`, default **OFF**) — ADR-0071 M4, the planner's
+ * **Per-assignment join lag** (`VITE_ASSIGNMENT_LAG`, default **ON** since 2026-08-02) — ADR-0071
+ * M4/M6, the planner's
  * half of the engine-surface audit's F6.
  *
  * The CPM engine, the resource histogram, the levelling pass and the Earned-Value read have all
@@ -1132,9 +1133,17 @@ export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_
  * naming the reason; that is the same code path a rollback leaves behind, so the degraded state and
  * the flag-off state cannot rot separately.
  *
+ * Flipped default-ON by M6, once the deferred specialist gates ran over the whole M0–M5 diff and
+ * every blocking finding was folded — a silently-wrong `2d4h` on the degraded path, a Save button on
+ * the native `disabled` attribute, an assign-form refusal that registered with nothing and announced
+ * nothing, an entry route that never received the day factor and so was permanently degraded, and a
+ * placeholder offering an example in the unit its own label was refusing. The flag-on journey
+ * (`apps/web/e2e-assignment-lag/`, its own CI step) proves the factor, the pen and the optimistic
+ * `version` against a real API.
+ *
  * Rollback: set `VITE_ASSIGNMENT_LAG=false` and rebuild the web image. Nothing persisted depends on
  * it — `lagMinutes` has been on the assignment DTOs since ADR-0071 M0, an existing lag keeps
  * scheduling, loading and earning exactly as it does now, and the flag-off surface simply stops
  * showing it. The flag-off parity suite is kept, not weakened: it is the rollback contract.
  */
-export const ASSIGNMENT_LAG_ENABLED = flagDefaultOff(import.meta.env.VITE_ASSIGNMENT_LAG);
+export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNMENT_LAG);

@@ -145,6 +145,23 @@ describe('ActivityResourcesPanel — the join lag, flag on', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  it('registers the refusal with the form rather than failing silently', async () => {
+    // The guard used to just `return`: nothing landed in RHF's `errors`, so the form's own
+    // `FormErrorSummary` (role="alert") had nothing to announce, focus never moved, and the Assign
+    // button stayed lit while doing nothing when pressed. `AddLinkSection` — the sibling this code's
+    // comment claims parity with — has always called `setError(..., { shouldFocus: true })`.
+    renderPanel({ noFactor: true });
+    const field = assignForm().getByLabelText('Joins after (hours or minutes)');
+    fireEvent.change(assignForm().getByLabelText('Resource'), { target: { value: 'res-2' } });
+    fireEvent.change(field, { target: { value: '2d' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
+
+    await waitFor(() => {
+      expect(field).toHaveAttribute('aria-invalid', 'true');
+    });
+    expect(field).toHaveFocus();
+  });
+
   it('accepts hours with no factor, because an hour needs none', async () => {
     renderPanel({ noFactor: true });
     fireEvent.change(assignForm().getByLabelText('Resource'), { target: { value: 'res-2' } });
@@ -186,6 +203,22 @@ describe('ActivityResourcesPanel — the join lag, flag on', () => {
     // A lag save must not carry an `editedField`: a lag is not a triad term (ADR-0040) and must
     // never trigger a duration recompute.
     expect(body.editedField).toBeUndefined();
+  });
+
+  it('shades the row’s Save rather than natively disabling it', async () => {
+    // ADR-0060 M6 / ADR-0063 M6: this control flips its unavailability twice per save, and a
+    // natively-disabled element holding focus is blurred to `<body>` each time (WCAG 2.4.3). It must
+    // be `aria-disabled` with a real click guard — clicking it while shaded must write nothing.
+    renderPanel({}, [{ ...ASSIGNMENT, lagMinutes: 960 }]);
+    const save = screen.getByRole('button', { name: 'Save join delay for Crew A' });
+    // Nothing has changed yet, so there is nothing to save.
+    expect(save).not.toBeDisabled();
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+
+    fireEvent.click(save);
+    await waitFor(() => {
+      expect(apiFetch).not.toHaveBeenCalled();
+    });
   });
 
   it('states an existing lag on a read-only row, and states nothing when there is none', () => {

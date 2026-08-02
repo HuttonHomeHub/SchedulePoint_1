@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { chooseComboboxOption } from '../e2e/combobox';
+
 import {
   addActivity,
   createAndOpenPlan,
@@ -112,7 +113,13 @@ test('the join lag round-trips through the real API, pen-gated', async ({ page }
   // the planner is told at the field; the assertion that matters is that Save is unavailable and
   // nothing was written.
   await row.getByLabel('Joins after').fill('99999d');
-  await expect(row.getByRole('button', { name: 'Save join delay for Tower crane' })).toBeDisabled();
+  const save = row.getByRole('button', { name: 'Save join delay for Tower crane' });
+  // `aria-disabled`, not the native attribute (ADR-0060 M6) — asserted by mechanism, because the
+  // whole point of the fix is WHICH one is used, and Playwright's `toBeDisabled()` accepts either.
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  // Shaded is not enough on its own: an `aria-disabled` control is still clickable, so the click
+  // guard has to be real. Pressing it must write nothing.
+  await save.click({ force: true });
   expect((await readAssignments(page, orgSlug, activityId))[0]?.lagMinutes).toBe(0);
 
   // ------------------------------------------------------------- 5. Not authorable without the pen
