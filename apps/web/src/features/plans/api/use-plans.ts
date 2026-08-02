@@ -224,6 +224,7 @@ export type PlanScheduleOptionPatch = Partial<
     | 'eacMethod'
     | 'currencyCode'
     | 'ignoreExternalRelationships'
+    | 'criticalFloatThresholdMinutes'
   >
 >;
 

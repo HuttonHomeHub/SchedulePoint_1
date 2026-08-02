@@ -2,7 +2,8 @@
 
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
-> building F7's control, and BLOCKS it. None fixed yet beyond the gate, F2's API half and F5.
+> building F7's control, and blocked it. **Resolved: F1, F5, F7+F8, and F2's API half.**
+> **Open: F2's web half, F3, F4, F6.**
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -140,7 +141,7 @@ its own spec, plan and ADR.
 roles separately, later. Recorded here because "2 excepted" reads as one item and is two very
 different ones.
 
-### F7 — the critical float threshold has no control (outward; found by the gate, not by me)
+### F7 — the critical float threshold has no control (outward; found by the gate, not by me) — **RESOLVED**
 
 `plans.critical_float_threshold` is writable on `update-plan.dto.ts` (line 101), exposed on the shared
 type, and consumed by the engine as `ComputeOptions.criticalFloatThresholdMinutes`. Under the default
@@ -158,7 +159,13 @@ first run. The audit missed it because I grepped the plan settings as a combined
 which is precisely the shortcut a script does not take. Cheapest fix on the register: one number field
 in a dialog that already exists, beside the setting it governs.
 
-### F8 — the critical float threshold is converted at a flat 1440, while float is not (correctness)
+**Resolved** by `PlanCriticalFloatThresholdField.tsx`, rendered by `PlanScheduleSettings` last in the
+group — the threshold only means anything under the `TOTAL_FLOAT` definition two controls above it,
+and reading it first inverts the sentence. It reads the ADR-0070 `d`/`h`/`m` grammar rather than a
+raw minute count, which is what makes F8's storage change survivable for a planner; see F8 for why
+the two had to ship together and what the field says out loud about _which_ calendar's day it means.
+
+### F8 — the critical float threshold is converted at a flat 1440, while float is not (correctness) — **RESOLVED**
 
 Found while building F7's control, by asking what its unit means before drawing a box for it.
 
@@ -189,6 +196,23 @@ measured on — which is per-activity, so the honest options are (a) resolve the
 at comparison time, or (b) redefine the field as minutes and let the control carry the ADR-0070
 `d`/`h`/`m` grammar, which already knows how to ask a calendar what a day is worth.
 
+**Resolved by (b)**, in two commits that had to be one release. The column became
+`critical_float_threshold_minutes` (migration `20260802120000`, backfilled `× 1440` in `bigint` with
+a clamp, so every existing value keeps the meaning it had — an identity for every row, not only for
+the zeros); `schedule.service.ts` now passes it through with **no factor at all**, because there is
+no scalar that is right for a plan whose activities sit on different calendars. That is exactly why
+the column is minutes and the _control_ — not the service — does the day arithmetic.
+
+The control resolves a day on the **plan** calendar and **says so in the hint**, because the
+threshold is plan-level while total float is measured on each activity's own calendar (ADR-0037 §4).
+On a mixed-calendar plan that is a disclosure, not a fix: an activity on a different calendar is
+still compared against a figure typed in the plan calendar's days. Naming the day you are typing in
+beats the status quo ante, where nobody was told anything and the number was silently trebled.
+
+One latent bug fell out of the same read: `apps/api/test/pairwise/spec-to-engine.ts:86` fed **days**
+into the minutes-denominated option while the service multiplied, so the differential harness and the
+application disagreed about the unit — invisible while the value was pinned at 0.
+
 Two more flat-1440 conversions sit in the same file — `relativeFloat / MINUTES_PER_DAY` (line 575,
 the float-paths read-model) and `durationMinutes / MINUTES_PER_DAY` (line 905). **Neither has been
 checked.** They are named here so the next pass starts from a list rather than a search.
@@ -202,7 +226,8 @@ classified in `scripts/surface-contract.json` as `surface` (a planner can author
 an **unclassified** field, not on an honestly-marked gap, because a gate that fails on day one gets
 deleted rather than fixed (ADR-0058).
 
-Current state: 187 surfaced, 8 exempt, 5 gaps — F1, F3 (two entries) and F7 (two entries).
+Current state: **190 surfaced, 8 exempt, 3 gaps** — F2's `endDate` (API-side only, no control yet)
+and F3 (two entries).
 
 **What it cannot catch, so nobody trusts it further than it goes.** It enumerates fields that exist.
 It is blind to a field that _should_ exist and does not — F2's missing `endDate` on the exception

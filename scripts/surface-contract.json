@@ -318,7 +318,7 @@
     "surface": "features/plans/components/PlanScheduleSettings.tsx (Critical-path definition)"
   },
   "engine/ComputeOptions.criticalFloatThresholdMinutes": {
-    "gap": "F7 \u2014 fed by plan.criticalFloatThresholdMinutes, which still has no control"
+    "surface": "features/plans/components/PlanCriticalFloatThresholdField.tsx"
   },
   "engine/ComputeOptions.dataDate": {
     "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
@@ -462,7 +462,7 @@
     "surface": "components/layout/workspace/plan-dialogs.tsx"
   },
   "plans/update-plan.criticalFloatThresholdMinutes": {
-    "gap": "F7 \u2014 stored in minutes since the F8 migration; still no control sets it"
+    "surface": "features/plans/components/PlanCriticalFloatThresholdField.tsx"
   },
   "plans/update-plan.criticalPathDefinition": {
     "surface": "features/plans/components/PlanScheduleSettings.tsx"

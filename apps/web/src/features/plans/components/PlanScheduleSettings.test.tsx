@@ -1,4 +1,5 @@
-import type { PlanSummary } from '@repo/types';
+import type { CalendarSummary, PlanSummary } from '@repo/types';
+import { WorkingWeekdays } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,6 +42,25 @@ const PLAN: PlanSummary = {
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };
+
+/** An eight-hour plan calendar, so a day factor that is wrong shows up as a wrong number. */
+const CALENDARS: CalendarSummary[] = [
+  {
+    id: 'cal-standard',
+    name: 'Standard',
+    description: null,
+    workingWeekdays: 31,
+    shifts: WorkingWeekdays.toFullDayShifts(31),
+    hoursPerDay: 8,
+    hoursPerDayMinutes: 480,
+    scope: 'ORG',
+    projectId: null,
+    archivedAt: null,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+];
 
 function renderSettings(props: Partial<React.ComponentProps<typeof PlanScheduleSettings>> = {}) {
   const queryClient = new QueryClient();
@@ -102,6 +122,20 @@ describe('PlanScheduleSettings', () => {
       makeOpenEndsCritical: true,
       version: 4,
     });
+  });
+
+  it('resolves the threshold field’s day factor from the PLAN calendar', () => {
+    renderSettings({
+      calendars: CALENDARS,
+      plan: { ...PLAN, criticalFloatThresholdMinutes: 2400 },
+    });
+    // 2,400 minutes is five eight-hour days. Reading a flat 1,440 would print `1d 16h` (F8).
+    expect(screen.getByLabelText('Critical float threshold')).toHaveValue('5d');
+  });
+
+  it('degrades the threshold field to minutes when no calendar list is composed', () => {
+    renderSettings({ plan: { ...PLAN, criticalFloatThresholdMinutes: 2400 } });
+    expect(screen.getByLabelText('Critical float threshold')).toHaveValue('2400');
   });
 
   it('renders read-only (no selects) for a non-editor, showing all three values', () => {
