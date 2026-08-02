@@ -299,24 +299,6 @@ export function useTsldToolbarContext({
       reasons: hit.reasons,
     };
   }, [navState.isolateActive, navState.conflictCursorId, orderedConflictHits]);
-  // The shared select-and-reveal seam (audit F4). On the canvas it centres the bar first, then lifts
-  // the selection — the same two steps `goToNextConflict` below takes, deliberately, rather than a
-  // second opinion about what "go to" means. In the Gantt the canvas handle is null and the
-  // selection alone is what the grid scrolls to.
-  const goToActivity = useMemo(
-    () =>
-      (activityId: string): void => {
-        const activity = activities.find((a) => a.id === activityId);
-        if (activity?.earlyStart) canvasControlRef.current?.centerOnDate(activity.earlyStart);
-        requestSelectActivity(activityId);
-        // Optional-chained like `model.dependencies?.data` above: a dozen spec files render this
-        // builder with a partial model, and a hard call would make them all need a field they have
-        // no other use for.
-        model.onSelectionChange?.(activityId);
-      },
-    [activities, canvasControlRef, requestSelectActivity, model],
-  );
-
   const goToNextConflict = useMemo(
     () => (): void => {
       if (orderedConflictHits.length === 0) return;
@@ -429,6 +411,14 @@ export function useTsldToolbarContext({
       imageHeight: number;
     } | null => {
       const dataDate = plan.plannedStart;
+      // `react-hooks/refs` disabled on this line and on `goToNextConflict` below. Both read the
+      // canvas handle inside a CALLBACK — this one runs when an export command is invoked, that one
+      // on a Next-conflict click — never during render, which is what the rule is protecting. The
+      // React Compiler only began flagging them when this already-large context memo grew by three
+      // more properties (audit F4), so the trigger is its analysis budget rather than a change in
+      // what the code does. Recorded as `docs/TECH_DEBT.md` #85: the fix is to split this memo, not
+      // to move the ref reads. Do not remove the disables without doing that first.
+      // eslint-disable-next-line react-hooks/refs -- read in a command callback, not during render
       const live = canvasControlRef.current?.getViewport();
       if (dataDate === null || !live) return null;
       const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
@@ -685,8 +675,8 @@ export function useTsldToolbarContext({
       activityCount: activities.length,
       floatPathsOpen: model.floatPaths?.open ?? false,
       toggleFloatPaths,
-      goToActivity,
       currentConflict,
+      // eslint-disable-next-line react-hooks/refs -- see the note on `buildDiagramImage` above
       goToNextConflict,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
@@ -990,7 +980,6 @@ export function useTsldToolbarContext({
     // Float paths — re-identify when the dock's pressed state or the plan's activity count changes.
     model.floatPaths?.open,
     toggleFloatPaths,
-    goToActivity,
     orderedConflictHits.length,
     currentConflict,
     goToNextConflict,

@@ -411,6 +411,9 @@ export function ToolbarPlanWorkspace({
       // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
       // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
       overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
+      // Float-path emphasis (audit F4): the ONE derived set, handed to the canvas here and to the
+      // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
+      floatPathIds={floatPaths.emphasisIds}
     />
   );
 
@@ -461,6 +464,14 @@ export function ToolbarPlanWorkspace({
           model.setLogicActivity(activity);
         }}
         selectedActivityId={model.selectedActivityId ?? model.logicActivity?.id}
+        // Float-path emphasis (audit F4): the SAME derived set the canvas above receives, so the
+        // two views cannot disagree about which activities are on the path. Bring-into-view follows
+        // the workspace selection, which the panel lifts when a chain row is activated —
+        // scroll only, never focus, so the planner stays in the panel they are reading.
+        emphasisIds={floatPaths.emphasisIds}
+        {...(floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+          ? { bringIntoViewActivityId: model.selectedActivityId }
+          : {})}
       />
     ) : (
       canvas
@@ -528,9 +539,11 @@ export function ToolbarPlanWorkspace({
     </section>
   );
 
-  // The Float paths dock's content (audit F4). `onActivateActivity` goes through the ONE
-  // `goToActivity` seam, so the panel never learns which view is mounted — calling `centerOnDate`
-  // from here would be silently inert whenever the Gantt is showing.
+  // The Float paths dock's content (audit F4). `onActivateActivity` is ONE workspace-level seam,
+  // so the panel never learns which view is mounted: it lifts the selection and each view reveals
+  // it its own way — the canvas pans the selected bar in, the Gantt scrolls its row. Deliberately
+  // not `centerOnDate`, which is null whenever the Gantt is showing and would leave half the work
+  // silently skipped in half the product (the ADR-0059 M6 shape).
   const floatPathsDockContent = floatPathsDockActive ? (
     <FloatPathsPanel
       panel={floatPaths}
@@ -540,7 +553,10 @@ export function ToolbarPlanWorkspace({
           : ((model.activities.data ?? []).find((a) => a.id === floatPaths.suggestedTargetId)
               ?.name ?? null)
       }
-      onActivateActivity={ctx.goToActivity}
+      onActivateActivity={(activityId) => {
+        canvasUi.requestSelectActivity(activityId);
+        model.onSelectionChange(activityId);
+      }}
     />
   ) : null;
 

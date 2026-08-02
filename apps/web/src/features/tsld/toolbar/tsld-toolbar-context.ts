@@ -292,14 +292,6 @@ export interface TsldToolbarContext {
   floatPathsOpen: boolean;
   /** Open the analysis on the current selection, or close it if it is already showing. */
   toggleFloatPaths: () => void;
-  /**
-   * Select an activity and bring it into view — the ONE seam both views go through, so the Float
-   * paths panel never has to know which is mounted. On the canvas it centres the bar and lifts the
-   * selection; in the Gantt it lifts the selection and the grid scrolls its row. Calling
-   * `centerOnDate` directly would be silently inert whenever the Gantt is showing, because the
-   * canvas handle is null then (the ADR-0059 M6 lit-but-inert shape).
-   */
-  goToActivity: (activityId: string) => void;
   /** The current-conflict readout the **visible** Next-conflict status chip renders (U2) — the 1-based
    * position, the total, the name, and every matched reason of the last-visited conflict. `null` until
    * the user starts cycling (no cursor), while isolating, when there are no conflicts, or flag-off — so

@@ -89,6 +89,29 @@ export interface GanttPanelProps {
   /** Called when a row is chosen, so selection stays shared with the TSLD. */
   onSelectActivity?: (activity: ActivitySummary) => void;
   selectedActivityId?: string | undefined;
+  /**
+   * The activities on the selected **float path** (audit F4). Rows not in the set are visually
+   * de-emphasised and carry a text marker; rows in it are unchanged.
+   *
+   * The set is the SAME one the canvas receives, derived once by the plan workspace — so the two
+   * views cannot disagree about which activities are on the path (the ADR-0063 `wbs-band-source`
+   * rule), and that identity is a test rather than a convention.
+   *
+   * De-emphasis is **visual only**. Never `visibility: hidden`, never the native `disabled`
+   * attribute: a de-emphasised row keeps its tab stop, its `aria-rowindex` and its activation (the
+   * ADR-0063 M6 / ADR-0060 M6 findings). Absent or empty ⇒ every row is unchanged.
+   */
+  emphasisIds?: ReadonlySet<string> | undefined;
+  /**
+   * Scroll this activity's row into view **without moving focus** (audit F4 — the panel's chain
+   * rows). Focus stays where the planner put it; yanking it out of the panel mid-chain is the
+   * defect this deliberately avoids.
+   *
+   * Resolved to an index HERE rather than by the caller, because `sort` and `collapsed` are this
+   * component's own state and the caller cannot know the row order. A target inside a collapsed
+   * summary is expanded to first — silently doing nothing is the lit-but-inert shape.
+   */
+  bringIntoViewActivityId?: string | undefined;
 }
 
 /**
@@ -116,6 +139,8 @@ export function GanttPanel({
   error,
   onSelectActivity,
   selectedActivityId,
+  emphasisIds,
+  bringIntoViewActivityId,
 }: GanttPanelProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -182,6 +207,41 @@ export function GanttPanel({
     },
     [rows, virtualizer],
   );
+
+  // Bring a panel-chosen activity into view. Scroll ONLY — `focusRowAt` above also sets
+  // `pendingFocus`, which would pull focus out of the Float paths panel the planner is reading.
+  // `virtualizer.scrollToIndex` is the only correct call: `rowRefs` holds RENDERED rows, so
+  // `element.scrollIntoView()` on a row outside the window is a silent no-op.
+  const emphasisRowIndex = useMemo(
+    () =>
+      bringIntoViewActivityId === undefined
+        ? -1
+        : rows.findIndex((row) => rowId(row) === bringIntoViewActivityId),
+    [rows, bringIntoViewActivityId],
+  );
+  useEffect(() => {
+    if (bringIntoViewActivityId === undefined) return;
+    if (emphasisRowIndex >= 0) {
+      virtualizer.scrollToIndex(emphasisRowIndex, { align: 'center' });
+      return;
+    }
+    // Not in `rows` — its WBS parent is collapsed. Expand every collapsed ancestor rather than
+    // doing nothing; the next render resolves the index and this effect scrolls to it.
+    const ancestors = new Set<string>();
+    const byId = new Map(activities.map((a) => [a.id, a]));
+    let cursor = byId.get(bringIntoViewActivityId)?.parentId ?? null;
+    while (cursor !== null) {
+      ancestors.add(cursor);
+      cursor = byId.get(cursor)?.parentId ?? null;
+    }
+    if (ancestors.size === 0) return;
+    setCollapsed((prev) => {
+      if ([...ancestors].every((id) => !prev.has(id))) return prev;
+      const next = new Set(prev);
+      for (const id of ancestors) next.delete(id);
+      return next;
+    });
+  }, [bringIntoViewActivityId, emphasisRowIndex, virtualizer, activities]);
 
   const toggleCollapsed = useCallback((id: string, collapse: boolean): void => {
     setCollapsed((prev) => {
@@ -400,6 +460,10 @@ export function GanttPanel({
               },
               onFocusRow: () => setFocusedId(id),
               onToggle: toggleCollapsed,
+              // Only when a path is actually selected: an absent/empty set leaves every row's
+              // classes and cells exactly as they are, which is the parity contract.
+              offFloatPath:
+                emphasisIds !== undefined && emphasisIds.size > 0 && !emphasisIds.has(id),
             };
             return row.kind === 'bucket' ? (
               <GanttBucketRowView key={id} row={row} {...shared} />
@@ -442,6 +506,7 @@ function GanttBucketRowView({
   registerRef,
   onFocusRow,
   onToggle,
+  offFloatPath = false,
 }: {
   row: GanttBucketRow;
   rowIndex: number;
@@ -454,6 +519,12 @@ function GanttBucketRowView({
   isTabStop: boolean;
   registerRef: (element: HTMLDivElement | null) => void;
   onFocusRow: () => void;
+  /**
+   * True when a float path is selected and this row is not on it (audit F4). A derived bucket never
+   * is — it is a grouping, not an activity — so this fades with the rest rather than staying bright
+   * and reading as though the bucket were part of the chain.
+   */
+  offFloatPath?: boolean;
   onToggle: (id: string, collapse: boolean) => void;
 }): React.ReactElement {
   const bracket = spanGeometry(row, anchorIso, pxPerDay);
@@ -481,6 +552,7 @@ function GanttBucketRowView({
         'absolute left-0 flex items-center outline-none',
         'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset',
         'hover:bg-muted/50',
+        offFloatPath && 'opacity-45',
       )}
       style={{ top, height: GANTT_ROW_HEIGHT, width: gridWidth + chartPx }}
     >
@@ -566,6 +638,8 @@ interface GanttRowViewProps {
   onFocusRow: () => void;
   onSelect?: ((activity: ActivitySummary) => void) | undefined;
   onToggle: (id: string, collapse: boolean) => void;
+  /** True when a float path is selected and this row is not on it (audit F4). */
+  offFloatPath?: boolean;
 }
 
 function GanttRowView({
@@ -584,6 +658,7 @@ function GanttRowView({
   onFocusRow,
   onSelect,
   onToggle,
+  offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
   const { activity, depth, hasChildren, expanded } = row;
   const geometry = barGeometry(activity, anchorIso, pxPerDay);
@@ -616,6 +691,11 @@ function GanttRowView({
         'absolute left-0 flex items-center outline-none',
         'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset',
         isSelected ? 'bg-accent' : 'hover:bg-muted/50',
+        // De-emphasis only — the row keeps its tab stop, its `aria-rowindex` and its activation.
+        // `visibility: hidden` or a native `disabled` would take it out of the tab order, which is
+        // the ADR-0063 M6 defect exactly. The word in the first cell is what carries the meaning
+        // for anyone who cannot see the fade (WCAG 1.4.1); opacity alone would not.
+        offFloatPath && 'opacity-45',
       )}
       style={{ top, height: GANTT_ROW_HEIGHT, width: gridWidth + chartPx }}
     >
@@ -666,6 +746,13 @@ function GanttRowView({
             <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
               {column.value(activity)}
             </span>
+            {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
+                emphasis alone is precisely the WCAG 1.4.1 defect ADR-0055 exists about. Rendered
+                `sr-only` because the sighted cue is the fade and a visible tag on every off-path
+                row would drown the on-path ones it exists to pick out. */}
+            {offFloatPath && i === 1 ? (
+              <span className="sr-only"> (off the float path)</span>
+            ) : null}
           </div>
         ))}
         {showVariance ? (
