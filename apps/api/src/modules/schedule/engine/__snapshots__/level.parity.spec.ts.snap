@@ -1,0 +1,257 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > a capacity-2 resource admits partial concurrency 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-02",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-02",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "C",
+    "leveledFinish": "2026-01-04",
+    "leveledStart": "2026-01-03",
+    "levelingDelay": 2880,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > a delay absorbed by float, ahead of a successor chain 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-02",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-04",
+    "leveledStart": "2026-01-03",
+    "levelingDelay": 2880,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "C",
+    "leveledFinish": null,
+    "leveledStart": null,
+    "levelingDelay": null,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "D",
+    "leveledFinish": null,
+    "leveledStart": null,
+    "levelingDelay": null,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > a delay that must propagate down a chain of successors 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-06",
+    "leveledStart": "2026-01-04",
+    "levelingDelay": 4320,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-03",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "C",
+    "leveledFinish": null,
+    "leveledStart": null,
+    "levelingDelay": null,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "D",
+    "leveledFinish": null,
+    "leveledStart": null,
+    "levelingDelay": null,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "E",
+    "leveledFinish": null,
+    "leveledStart": null,
+    "levelingDelay": null,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > a five-day working week, so every delay crosses a weekend 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-03",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-08",
+    "leveledStart": "2026-01-06",
+    "levelingDelay": 4320,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > a milestone is an exclusion and never moves 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-02",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-04",
+    "leveledStart": "2026-01-03",
+    "levelingDelay": 2880,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "M",
+    "leveledFinish": null,
+    "leveledStart": null,
+    "levelingDelay": null,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > the same contention with levelWithinFloatOnly, which forbids extending 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-02",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-04",
+    "leveledStart": "2026-01-03",
+    "levelingDelay": 2880,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "C",
+    "leveledFinish": null,
+    "leveledStart": null,
+    "levelingDelay": null,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > three resources interleaved, so the priority order is exercised 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-02",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-05",
+    "leveledStart": "2026-01-03",
+    "levelingDelay": 2880,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "C",
+    "leveledFinish": "2026-01-01",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "D",
+    "leveledFinish": "2026-01-04",
+    "leveledStart": "2026-01-03",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "E",
+    "leveledFinish": "2026-01-06",
+    "leveledStart": "2026-01-06",
+    "levelingDelay": 7200,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
+
+exports[`levelSchedule — pre-ADR-0071 parity corpus (zero lag) > two equal activities contend for a single-unit resource 1`] = `
+[
+  {
+    "id": "A",
+    "leveledFinish": "2026-01-02",
+    "leveledStart": "2026-01-01",
+    "levelingDelay": 0,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+  {
+    "id": "B",
+    "leveledFinish": "2026-01-04",
+    "leveledStart": "2026-01-03",
+    "levelingDelay": 2880,
+    "levelingWindowExceeded": false,
+    "selfOverAllocated": false,
+  },
+]
+`;
