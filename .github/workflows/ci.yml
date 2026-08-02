@@ -262,6 +262,16 @@ jobs:
       - name: Web end-to-end tests (calendar shift editor flag on)
         run: pnpm --filter @repo/web test:e2e:calendar-shifts
 
+      # Flag-ON sub-day durations/lags journey (playwright.sub-day.config.ts) serving the app with
+      # VITE_SUB_DAY_DURATIONS on. It proves what a mocked fetch structurally cannot (ADR-0070): that
+      # `4h` is stored as 240 minutes on a calendar whose day is 480 and not 1440 — a wrong factor
+      # errors nowhere, it just stores three times the work — that a bare number still converts on
+      # the plan's own day, that an unrelated rename does not flatten a sub-day value through the
+      # full-definition PATCH, and that a lag moved to the 24-hour calendar is re-measured as
+      # elapsed time.
+      - name: Web end-to-end tests (sub-day durations flag on)
+        run: pnpm --filter @repo/web test:e2e:sub-day
+
       # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
       # theme, which is how the Corporate theme shipped with six contrast defects past a green
       # axe run. This one boots the shell once per picker option — light, dark, corporate, and

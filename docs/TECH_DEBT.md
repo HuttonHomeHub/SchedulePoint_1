@@ -697,3 +697,26 @@ spend the operator's disk one finding at a time. Now clamped (2,000 / 500 / 100 
 truncation stated rather than trailing off mid-word). This does **not** clear the alert — the taint
 flow is unchanged — and it was not done to. It is the one genuine defect the rule's neighbourhood
 contained, found by taking the finding seriously rather than by trying to satisfy it.
+
+## 83. A typed duration can be overwritten by the calendar factor landing (ADR-0070 M5)
+
+**Found by** `apps/web/e2e-sub-day/` on its first run against a real API — the journey the epic
+added, doing the job it was added for.
+
+**Symptom.** In the flag-on create dialog, typing `4h` and submitting immediately stores **one whole
+day** (the seeded default), not 240 minutes. The field accepts the text and the label is correct, so
+nothing on screen says the value was discarded.
+
+**Suspected cause, not yet confirmed.** `useDurationSeed` (ADR-0070 M1) re-seeds the field once the
+working-hours factor resolves, guarded on `dirtyFields.duration`. If the calendar list lands in the
+same tick as the first keystroke — or before React Hook Form has marked the field dirty — the re-seed
+wins and silently replaces what was typed. That is a race between an async query and a human, so it
+will reproduce far more often in a fast automated run than in hand testing, which is why no unit test
+and no manual pass caught it.
+
+**Why it is recorded rather than rushed.** The fix is a change to when the field may re-seed, and the
+wrong fix (dropping the re-seed) reintroduces the defect M1 added it for: a sub-day duration shown as
+its rounded day because the factor was not known at open. It needs the two cases separated properly
+and a regression test that fails first.
+
+**Blocking the flag flip.** `VITE_SUB_DAY_DURATIONS` stays **default-off** until this is closed.
