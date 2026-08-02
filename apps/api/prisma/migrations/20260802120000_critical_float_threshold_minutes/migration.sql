@@ -1,0 +1,135 @@
+-- The critical float threshold: whole working DAYS → working MINUTES
+-- (surface audit F8, docs/specs/engine-surface-audit.md; product-owner decision 2026-08-02).
+--
+-- THE DEFECT. `plans.critical_float_threshold` was documented and validated as whole working
+-- DAYS, and the service converted it for the engine at a FLAT 1440:
+--
+--     criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY   (schedule.service.ts:958)
+--
+-- The engine then compares that number against a total float measured in working minutes ON THE
+-- ACTIVITY'S OWN CALENDAR (engine/types.ts, ADR-0037 §4). On a 24-hour calendar the two agree. On
+-- an eight-hour calendar — the shape ADR-0067 made authorable and ADR-0068 made a first-class
+-- quantity — one working day of float is 480 minutes, so a planner asking for a ONE-DAY threshold
+-- would get 1440 minutes, i.e. THREE working days of float treated as critical. That is ADR-0068's
+-- defect one field along: a day-denominated value converted at 1440 instead of the calendar's own
+-- hours-per-day.
+--
+-- WHY MINUTES AND NOT A PER-ACTIVITY DAY CONVERSION. Float is measured on each activity's own
+-- calendar, so there is NO single day→minute factor a plan-level day-denominated threshold could
+-- correctly use — not the plan calendar's, because a mixed-calendar plan compares the same
+-- threshold against floats measured on several different day lengths. The only representation that
+-- is unambiguous for every activity is the one the engine already uses: working MINUTES. So the
+-- column becomes the value the engine compares, with no conversion in between, and the day↔minute
+-- question moves to the ONE place that can answer it — the ADR-0070 `d`/`h`/`m` control, which
+-- resolves a day against a named calendar's `hours_per_day_minutes` (ADR-0068).
+--
+-- ============================================================================================
+-- THE DATA MIGRATION, AND WHY IT IS PROVABLY BEHAVIOUR-PRESERVING
+-- ============================================================================================
+--
+-- The backfill is `× 1440` — the SAME factor the service applied on every recalculation since the
+-- column shipped. So the number handed to `computeSchedule` is bit-for-bit what it was before this
+-- migration, FOR EVERY ROW AND EVERY VALUE OF n, not merely for n = 0:
+--
+--     before:  engine input = stored_days × 1440
+--     after:   engine input = stored_minutes = stored_days × 1440
+--
+-- That is the whole parity argument (ADR-0034), and it deliberately does NOT rest on the audit's
+-- observation that every row is currently 0. It is an identity, so it holds even if the claim is
+-- wrong. (The claim was checked anyway: `critical_float_threshold` is writable ONLY through
+-- `PATCH /plans/:id` — it is absent from `create-plan.dto.ts`, from the interchange plan create and
+-- from every seed spec, where `DEFAULT_SEED_PLAN_OPTIONS.criticalFloatThreshold` is 0 — and no web
+-- control has ever set it, F7. A non-zero row therefore requires a hand-written API call. Local
+-- `app`/`app_test` hold zero such rows. The migration does not depend on that.)
+--
+-- A TEMPTING ALTERNATIVE, REJECTED: backfilling `× plan_calendar.hours_per_day_minutes` — "what
+-- the planner meant". It would change the computed schedule of any non-zero plan on a non-24-hour
+-- calendar, breaking parity in a migration that runs unattended on a self-migrating image
+-- (ADR-0018); it would still be wrong for activities on other calendars; and the old semantics
+-- were ambiguous precisely BECAUSE no factor was right, so "what they meant" is not recoverable
+-- from the stored number. Preserving behaviour and letting the owner re-enter an honest value in
+-- the new control is the only defensible reading. What DOES change for such a row is what it now
+-- SAYS: a stored 1 day becomes a stored 1440 minutes, which the new control renders as "3d" on an
+-- eight-hour calendar — the number the engine has always used, shown honestly for the first time.
+--
+-- ============================================================================================
+-- SHAPE, BOUNDS AND LOCKS
+-- ============================================================================================
+--
+-- Name follows the repo's `*_minutes` convention (`duration_minutes`, `lag_minutes`,
+-- `remaining_duration_minutes`, `hours_per_day_minutes`): the unit is in the column name, because
+-- this is the second time a day/minute confusion has cost a defect.
+--
+-- The CHECK is `BETWEEN 0 AND 5256000`, and both ends are deliberate:
+--   * `>= 0` re-states, in the database, the `@Min(0)` that `update-plan.dto.ts` has enforced on
+--     every write since the field's first commit (a283c0c, 2026-07-17) — so the constraint cannot
+--     fail on existing data, and the invariant stops depending on one decorator in one DTO. A
+--     negative threshold ("only activities already behind are critical") is not currently
+--     authorable; widening a CHECK later is free, narrowing one is not.
+--   * `<= 5256000` (≈ ±10 years, 3650 × 1440) is the SAME magnitude as
+--     `ck_dependencies_lag_minutes_range`, so the schema gives one answer to "how large may a
+--     working-minute quantity be" rather than two. Ten years of float is already absurd; the
+--     ceiling exists to keep the column inside a range every consumer can reason about.
+-- The old column carried NO CHECK at all (the M6 migration says so explicitly: "left
+-- UNCONSTRAINED … mirroring the other option ints"), so there is none to drop.
+--
+-- The backfill multiplies in BIGINT and clamps with LEAST. `@IsInt` carries no `@Max`, so a
+-- hand-written API call could have stored a value whose `× 1440` overflows int4 — and an
+-- overflow here would abort the migration, which on a self-migrating image (ADR-0018) means the
+-- API container does not boot: an outage, caused by a value that cannot mean anything different
+-- from the clamp (any threshold beyond a plan's total span already marks every activity critical).
+-- The clamp is the ONE place this file is not an exact identity, and it is recorded as such.
+-- No `GREATEST(0, …)` guard is paired with it: a negative value cannot exist, and if one somehow
+-- does, VALIDATE must fail LOUDLY rather than silently rewrite it — that would be a genuine
+-- integrity surprise, not an absurd magnitude (fail-closed, docs/DATABASE.md).
+--
+-- Pattern is the ADR-0036 day→minute precedent (…_activity_dependency_baseline_minutes): ADD
+-- COLUMN with a constant DEFAULT (metadata-only on PostgreSQL 11+ — no rewrite, no scan) →
+-- backfill → ADD CONSTRAINT … NOT VALID → VALIDATE (SHARE UPDATE EXCLUSIVE only, not blocking
+-- reads or writes) → DROP the old column. `plans` is a small table, so the two-step is free; it is
+-- used to keep the pattern uniform.
+--
+-- NO INDEX. Unchanged from the M6 migration's reasoning: a single-row plan column read with the
+-- plan row, never filtered or sorted across plans (like `scheduling_mode`, `total_float_mode`,
+-- `level_resources`). An index would cost writes for no read benefit (docs/DATABASE.md — index
+-- real query patterns, not columns). Nothing was measured because there is no new predicate to
+-- measure.
+--
+-- FORWARD-ONLY (docs/DATABASE.md). The rename is a semantic reinterpretation as well as a unit
+-- change; rolling back means the prior image reading minutes as days and multiplying by 1440
+-- again. A "down" is therefore a compensating migration plus the prior image, not a down-migration
+-- — the same posture as …_activity_dependency_baseline_minutes and …_require_plan_planned_start.
+
+-- plans: critical_float_threshold (working days) → critical_float_threshold_minutes -----------
+-- Constant DEFAULT 0 is metadata-only and is the same P6/behaviour-preserving default the day
+-- column carried (0 days × 1440 = 0 minutes — the two defaults are the same value in both units,
+-- which is why the default needs no thought and the non-default rows do).
+ALTER TABLE "plans" ADD COLUMN "critical_float_threshold_minutes" INTEGER NOT NULL DEFAULT 0;
+
+-- Backfill at the service's own historical factor (see the parity argument above). bigint
+-- arithmetic + LEAST clamp so a pathological stored value cannot abort the deploy.
+UPDATE "plans"
+SET "critical_float_threshold_minutes" =
+  LEAST("critical_float_threshold"::bigint * 1440, 5256000)::integer;
+
+ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_critical_float_threshold_minutes_range"
+  CHECK ("critical_float_threshold_minutes" BETWEEN 0 AND 5256000) NOT VALID;
+ALTER TABLE "plans" VALIDATE CONSTRAINT "ck_plans_critical_float_threshold_minutes_range";
+
+-- Drop the day column. Nothing references it by FK, index or constraint (it never had a CHECK),
+-- so this is metadata-only. It is dropped rather than kept dual-written because days CANNOT
+-- represent the target values — a sub-day threshold is the point of the change, and a retained
+-- day column would be a second, lossy opinion about the same setting, which is the drift ADR-0065
+-- and ADR-0069 both refuse. Contrast ADR-0070, which ADDED `durationMinutes` BESIDE `durationDays`
+-- on the DTOs: there the day field had a live client and a shipped meaning to keep working. This
+-- one has neither — no control writes it, so there is no caller to keep compatible.
+ALTER TABLE "plans" DROP COLUMN "critical_float_threshold";
+
+-- Down (forward-only in production; documented for completeness). Reversible only in
+-- representation, and only while every stored value is a whole multiple of 1440:
+--   ALTER TABLE "plans" ADD COLUMN "critical_float_threshold" INTEGER NOT NULL DEFAULT 0;
+--   UPDATE "plans" SET "critical_float_threshold" = "critical_float_threshold_minutes" / 1440;
+--   ALTER TABLE "plans" DROP CONSTRAINT "ck_plans_critical_float_threshold_minutes_range";
+--   ALTER TABLE "plans" DROP COLUMN "critical_float_threshold_minutes";
+-- The UPDATE above TRUNCATES anything sub-day — which is precisely the value this migration
+-- exists to make authorable, so a down-migration silently destroys the feature's data.

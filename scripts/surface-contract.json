@@ -102,7 +102,7 @@
     "surface": "features/share/guest-api.ts"
   },
   "activities/update-activity-progress.suspendDate": {
-    "gap": "F1 \u2014 a control exists, but the recalculation never SELECTs the column: authorable and inert"
+    "surface": "features/activities/components/ActivityProgressPanels.tsx \u2014 a record, and the field says so (F1 resolved: ADR-0035 \u00a74 withdrew the unimplemented clause)"
   },
   "activities/update-activity.accrualType": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"

@@ -167,15 +167,24 @@ export function ReportedProgressPanel({
         />
         {PROGRESS_INGESTION_ENABLED ? (
           <>
+            {/* Suspend is a RECORD, resume is the schedule input, and the two look identical
+                sitting side by side — so each says which it is (surface audit F1, ADR-0035 §4).
+                Only the resume date reaches the engine: it floors the remaining work at
+                `max(data date, resume date)`. The suspend date is stored, shown and exported, and
+                the recalculation does not read it. Saying so here is the whole fix: a planner who
+                sets a suspend date and sees no dates move should be able to find out why from the
+                field rather than from the source. */}
             <TextField
               label="Suspend date"
               type="date"
+              hint="Recorded only — it does not move any dates."
               disabled={!gate.writable}
               {...form.register('suspendDate')}
             />
             <TextField
               label="Resume date"
               type="date"
+              hint="Remaining work is scheduled from this date, or the data date if later."
               disabled={!gate.writable}
               error={form.formState.errors.resumeDate?.message}
               {...form.register('resumeDate')}
