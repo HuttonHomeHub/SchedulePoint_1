@@ -762,6 +762,44 @@ OR >= 0`, raw SQL — nullable-safe) is the DB backstop behind the DTO `@Min(0)`
   reject (**N20** — a CHECK cannot read the activity's `duration_type` to know the rate is a
   divisor). `resource.max_units_per_hour` (a levelling availability cap) and the assignment
   cost/earned-value columns stay **reserved** for their later rungs (ADR-0040).
+- **`lag_minutes`** (surface audit **F6**, ADR-0071 §1 / ADR-0035 §34) is the delay between the
+  activity starting and **this** resource joining it — working **minutes**, `INTEGER NOT NULL
+DEFAULT 0`. The constant default is the parity bar: metadata-only `ADD COLUMN` (no rewrite, no
+  backfill — which is what makes the migration safe on the **self-migrating** image, ADR-0018)
+  and every existing row keeps today's behaviour. It closes an **inverted** register finding:
+  `engine/resource-histogram.ts` has taken a per-assignment `lagMinutes` since ADR-0044 rung 5
+  and nothing could store one, so the caller hardcoded `0` — the ENGINE supporting what no
+  storage could hold, where F2/F3 are storage supporting what no write path can produce.
+  - **Unsigned**, deliberately unlike `dependencies.lag_minutes`, which is **signed** because a
+    negative lag on a logic edge is a **lead** and means something. A resource cannot join before
+    the work starts. Worse than meaningless: the read-model applies the lag only when `> 0`, so a
+    negative would be **silently discarded** and the assignment would behave as unlagged while the
+    API had said yes — a signed column would be a **trap dressed as symmetry**. That `> 0` guard
+    is a **parity fast path, not a validation**.
+  - **`ck_resource_assignments_lag_minutes_range`** (`BETWEEN 0 AND 5256000`, raw SQL) is the DB
+    **backstop, never the primary reject** — the primary reject is the DTO's `@Min(0)
+@Max(ASSIGNMENT_LAG_MINUTES_MAX)` (**N34**), which is what returns an actionable 422; a
+    constraint violation would surface as a 500 and mean something bypassed the boundary. The
+    `budgeted_units`/N14 and `units_per_hour`/N19 posture exactly. The ceiling (≈ 10 years) is the
+    **same magnitude** as `ck_dependencies_lag_minutes_range` and
+    `ck_plans_critical_float_threshold_minutes_range`, so the schema gives **one** answer to "how
+    large may a working-minute quantity be". It does **not** make the calendar walk safe —
+    5 256 000 _working_ minutes on a window-only calendar can still exceed the engine's ~200-year
+    horizon, which is ADR-0071 §4's typed error and 422, not this constraint's job.
+  - Measured on the **activity's own calendar** (ADR-0037) — what the read-model already uses. The
+    lag eats **into** the activity: its dates do not move, the resource joins late and works a
+    shorter window (`effFinish = a.finish`; product-owner decision 2026-08-02, CQ-3). **No
+    `lag_calendar` sibling**, unlike `dependencies`: an edge sits between two activities on
+    potentially different calendars and needs the ADR-0036 §6 seam; an assignment has exactly
+    **one** natural frame. A sibling enum would create a resolution seam with **three** consumers
+    (histogram, levelling, earned value) to keep in step, for a choice no fixture case asks for —
+    additive if ever wanted.
+  - **No index**, recorded rather than left as silence: read only as part of the plan-scoped
+    assignment loads the histogram, levelling and EV already run — never a `WHERE`, `ORDER BY` or
+    join predicate, so an index would be pure write cost (the `curve_type`/`is_driving`
+    precedent). Nothing was measured because the change introduces **no new predicate to measure**
+    — the ADR-0053 M4 rule that an index is added on a measurement, not an instinct. A partial
+    `(organization_id) WHERE lag_minutes > 0` is the documented measure-first upgrade.
 - **Driver designation.** `is_driving` marks THE driving resource of a
   `RESOURCE_DEPENDENT` activity (its calendar governs scheduling, M7.2). The partial
   unique `uq_resource_assignments_activity_driving (activity_id) WHERE is_driving AND

@@ -1,0 +1,106 @@
+-- Per-assignment lag: resource_assignments.lag_minutes
+-- (surface audit F6, docs/specs/engine-surface-audit.md; ADR-0071 §1; ADR-0035 §34/N34.)
+--
+-- THE OMISSION. `engine/resource-histogram.ts` has taken a per-assignment `lagMinutes` since the
+-- ADR-0044 rung-5 slice landed: it shifts the effective span to `[start + lag, finish)` on the
+-- ACTIVITY'S OWN calendar (`resource-histogram.ts:222`, `:224`) and is scored against the P6-class
+-- fixture's own 24-hour case (AS0027). Nothing in SchedulePoint could store one — no column, no DTO
+-- field, no `@repo/types` field, no control — so the production caller hardcoded `lagMinutes: 0`
+-- under a comment asserting that SchedulePoint "does not model a per-assignment lag column". That
+-- is the engine↔planner register's other findings INVERTED: F2/F3 are storage supporting what no
+-- write path can produce; here the ENGINE supports what no storage can hold. This migration is the
+-- storage half only. NOTHING CONSUMES THE COLUMN YET — the histogram caller still passes 0 until
+-- M1, so this migration is provably inert and separately revertible (drop the column).
+--
+-- ============================================================================================
+-- WHY THIS MIGRATION CANNOT FAIL — and why that sentence is load-bearing
+-- ============================================================================================
+--
+-- The API image is SELF-MIGRATING (ADR-0018): the container entrypoint runs `prisma migrate
+-- deploy` on start, and the product owner runs the ADR-0047 Watchtower profile, so a released
+-- image is pulled and recreated unattended. A migration that CAN fail is therefore the API failing
+-- to BOOT — an outage, not a failed deploy step. This one cannot fail, and the reason is that it
+-- touches no existing data at all:
+--
+--   * ADD COLUMN ... NOT NULL DEFAULT 0 with a CONSTANT default is METADATA-ONLY on PostgreSQL 11+
+--     (the default is recorded in `pg_attribute.attmissingval` and materialised lazily on write).
+--     No table rewrite, no full scan, no long ACCESS EXCLUSIVE hold — the lock is taken and
+--     released at catalogue speed however many assignment rows a tenant has. A VOLATILE default
+--     (or a backfill `UPDATE`) would forfeit exactly this property, which is why there is neither.
+--   * The CHECK is added NOT VALID and then VALIDATEd. It cannot fail on existing data because
+--     EVERY existing row holds the constant 0, which is inside `BETWEEN 0 AND 5256000` — this is
+--     not "no row is known to violate it", it is that no row can hold any other value, since the
+--     column did not exist one statement earlier. The two-step is kept anyway so the pattern is
+--     uniform with its siblings (…_activity_dependency_baseline_minutes,
+--     …_critical_float_threshold_minutes) and so VALIDATE takes only SHARE UPDATE EXCLUSIVE,
+--     blocking neither reads nor writes.
+--
+-- No data migration, no backfill, no lock-heavy step, nothing destructive. Every existing row keeps
+-- today's behaviour by construction — the M0 acceptance bar.
+--
+-- ============================================================================================
+-- SHAPE AND BOUNDS
+-- ============================================================================================
+--
+-- Name follows the repo's `*_minutes` convention (`duration_minutes`, `lag_minutes`,
+-- `remaining_duration_minutes`, `hours_per_day_minutes`, `critical_float_threshold_minutes`): the
+-- unit is in the column name, because a day/minute confusion has already cost two defects
+-- (ADR-0068's `× 1440`, and the F8 threshold one migration ago).
+--
+-- The CHECK is `BETWEEN 0 AND 5256000`, and both ends are deliberate:
+--   * `>= 0` — UNSIGNED, deliberately unlike `dependencies.lag_minutes`, which is signed because a
+--     negative lag on a logic edge is a LEAD and means something. A resource cannot join before the
+--     work starts, so a lead here means nothing. It is worse than merely meaningless: the shipped
+--     read-model applies the lag only when `> 0`, so a negative would be SILENTLY DISCARDED and the
+--     assignment would behave as unlagged while the API had said yes. That `> 0` guard is a PARITY
+--     FAST PATH, NOT a validation, and this constraint is the place that says so in the database.
+--   * `<= 5256000` (≈ 10 years, 3650 × 1440) — the SAME magnitude as
+--     `ck_dependencies_lag_minutes_range` and `ck_plans_critical_float_threshold_minutes_range`, so
+--     the schema gives ONE answer to "how large may a working-minute quantity be" rather than three.
+--     Ten years of lag is already absurd; the ceiling exists to keep the column inside a range every
+--     consumer can reason about — and, specifically, to bound the calendar walk the later slices
+--     perform on it. (It does NOT make that walk safe: 5,256,000 WORKING minutes on a window-only
+--     calendar can still exceed the engine's ~200-year horizon, which is ADR-0071 §4's typed error
+--     and 422, not this constraint's job.)
+--
+-- THE CHECK IS A BACKSTOP, NEVER THE PRIMARY REJECT. The primary reject is the DTO's
+-- `@Min(0) @Max(ASSIGNMENT_LAG_MINUTES_MAX)` (N34, Task 0.3) — that is what returns an actionable
+-- 422 to the planner. A constraint violation surfaces as a 500 and means something bypassed the
+-- boundary; it exists so that a bypass cannot PERSIST a value the engine would then silently
+-- discard. Same posture as `ck_resource_assignments_budgeted_units_nonneg` (N14) and
+-- `_units_per_hour_nonneg` (N19) on the sibling columns.
+--
+-- NO `lag_calendar` SIBLING. A dependency lag needs one (ADR-0036 §6) because an edge sits between
+-- two activities on potentially different calendars. An assignment lag has exactly ONE natural
+-- frame — the activity's own calendar (ADR-0037), which is what `resource-histogram.ts:222` already
+-- uses. A sibling enum would create a resolution seam with THREE consumers (histogram, levelling,
+-- earned value) to keep in step, for a choice no fixture case asks for. Additive if ever wanted.
+--
+-- NO INDEX, and the refusal is recorded rather than left as silence. `lag_minutes` is read only as
+-- part of the plan-scoped assignment loads the histogram, levelling and EV already run — it is
+-- never a `WHERE` predicate, never an `ORDER BY` key, never a join column. An index would be pure
+-- write cost on every assignment insert and update for no read benefit (docs/DATABASE.md — index
+-- real query patterns, not columns). The `curve_type` / `is_driving` precedent: a low-cardinality
+-- value read WITH the whole plan's assignments, never filtered across plans. Nothing was measured
+-- because there is no new predicate to measure — the ADR-0053 M4 rule is that an index is added on
+-- a measurement, and this change introduces nothing to measure. Should a "find every lagged
+-- assignment in the org" screen ever exist, a partial `(organization_id) WHERE lag_minutes > 0`
+-- is the documented measure-first upgrade.
+--
+-- FORWARD-ONLY in production (docs/DATABASE.md). Unlike the two migrations above it, this one is
+-- genuinely reversible in representation — the down is recorded below and destroys only data that
+-- did not exist before this ran.
+
+-- resource_assignments: the per-assignment lag ------------------------------------------------
+-- Constant DEFAULT 0 = "the resource joins when the activity starts" = today's behaviour for every
+-- existing row, and metadata-only (see the boot-safety argument above).
+ALTER TABLE "resource_assignments" ADD COLUMN "lag_minutes" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "resource_assignments" ADD CONSTRAINT "ck_resource_assignments_lag_minutes_range"
+  CHECK ("lag_minutes" BETWEEN 0 AND 5256000) NOT VALID;
+ALTER TABLE "resource_assignments" VALIDATE CONSTRAINT "ck_resource_assignments_lag_minutes_range";
+
+-- Down (forward-only in production; documented for completeness). Safe here in a way its siblings
+-- are not — the column is new, so dropping it destroys only values authored after this shipped:
+--   ALTER TABLE "resource_assignments" DROP CONSTRAINT "ck_resource_assignments_lag_minutes_range";
+--   ALTER TABLE "resource_assignments" DROP COLUMN "lag_minutes";

@@ -72,6 +72,11 @@ function assignment(overrides: Partial<ResourceAssignment> = {}): ResourceAssign
     // Resource loading curve (F3 schema, ADR-0044 §31) — already in the committed schema; the parity
     // default keeps this factory valid after `prisma generate`. F3 owns the curve behaviour/tests.
     curveType: 'UNIFORM',
+    // Per-assignment lag (ADR-0071 §1) — in the committed schema from M0 Task 0.1; the constant
+    // 0 default is the parity value (no lag = the resource joins with its activity), so this
+    // factory keeps producing exactly the rows it did before, after `prisma generate`. Nothing
+    // consumes the column until M1 — the write boundary and its N34 rejects are Tasks 0.3/0.5.
+    lagMinutes: 0,
     budgetedCost: null,
     actualCost: 0n,
     actualUnits: new Prisma.Decimal(0),
