@@ -1,5 +1,99 @@
 # @repo/api
 
+## 0.36.0
+
+### Minor Changes
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The critical float threshold is stored in working minutes, not days
+
+  `criticalFloatThreshold` was documented and validated as whole working **days**, and the service
+  converted it for the engine at a flat `× 1440`. The engine then compared that against a total float
+  measured in working minutes on the **activity's own** calendar. On a 24-hour calendar those agree;
+  on an eight-hour one a planner asking for a 1-day threshold got three working days of float treated
+  as critical. ADR-0068's defect one field along (surface audit F8).
+
+  The field becomes `criticalFloatThresholdMinutes` — working minutes, stored as compared, no lossy
+  conversion in between. A plan-level _day_ threshold is unfixable by choosing a better factor: a
+  mixed-calendar plan compares one threshold against floats measured on several different day lengths,
+  so there is no correct scalar. Minutes is the only representation that is unambiguous for every
+  activity.
+
+  **Breaking:** the field is renamed on the update DTO, the plan response and `PlanSummary`. Pre-1.0,
+  so a minor bump. `forbidNonWhitelisted` is on, so a client still sending `criticalFloatThreshold`
+  gets a 422 naming the property rather than a quietly wrong schedule — which is the point of renaming
+  rather than redefining in place.
+
+  Existing data is backfilled at `× 1440`, the same factor the service applied on every recalculation
+  since the column shipped, so the engine receives an identical number and no plan's persisted
+  criticality changes. The backfill multiplies in `bigint` and clamps at the ten-year ceiling, because
+  the DTO carried no upper bound and an overflow would abort the migration — which on a self-migrating
+  image means the API does not boot.
+
+  It also fixes a latent disagreement in the ADR-0066 pairwise harness, which fed the seed spec's day
+  number straight into the engine's minutes option with no conversion while the service multiplied.
+  The differential has been comparing two different thresholds, and stayed green only because the
+  default is 0.
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - One calendar exception can cover a shutdown, instead of fourteen separate days
+
+  `calendar_exceptions` has stored a **range** since the table was created — `start_date`, `end_date`,
+  and a Postgres exclusion constraint over `daterange(start_date, end_date, '[]')` to stop two
+  exceptions overlapping — the read DTO has always returned `endDate`, and the CPM engine has always
+  scheduled across the whole span. Only the write paths collapsed it, so a Christmas fortnight, a
+  two-week turnaround or a plant shutdown had to be entered as ten to fourteen separate one-day
+  exceptions, one at a time, on a schema and a read model that both described the range the planner
+  actually meant (surface audit F2).
+
+  The exception editor now takes **From** and **To (optional)** — empty still means a single day,
+  which is what a date on its own has always meant, so nothing a planner already knows how to enter
+  changes. Existing exceptions read back exactly as before.
+
+  An exception's **last** day is also editable. Its **first** day still is not: moving an exception is
+  indistinguishable from deleting one and adding another, which the neighbouring actions already do
+  visibly — but extending a shutdown by two days is not moving anything, it is the edit a planner most
+  often needs, and the alternative is the delete-then-recreate the edit endpoint exists to remove
+  (there is a window in between during which a holiday is an ordinary working day, and a
+  recalculation landing in it schedules work).
+
+  A range that ends before it starts is a 422 naming both dates — an empty range is the one shape the
+  overlap constraint cannot express, because it overlaps nothing. A span that would collide with the
+  next exception along is the same 409 as adding a duplicate day, from the same translation of the
+  same constraint. A span longer than 10,000 days is refused: a year typed as 2226 rather than 2026 is
+  a typo, and it is also the bound the engine's calendar build now relies on, since it expands each
+  exception once per recalculation and the "single day, so O(E)" premise no longer holds.
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Report a four-hour remainder, instead of rounding it to "no work left"
+
+  ADR-0070 made an activity's **duration** sub-day authorable and left its **remaining work** a
+  whole-number days box. So a planner could type `4h` for the duration, report progress, and then
+  state the remainder only as `0` or `1` day — and on an incomplete activity `0` is not a rounding
+  artefact, it is also the value that means _no work left_. The asymmetry sharpened it: the derived
+  remaining (percent × duration) is minute-exact, so stating the remainder explicitly was **less**
+  precise than saying nothing (surface audit F3).
+
+  `remainingDurationMinutes` joins the progress DTO as the mutually-exclusive sibling of
+  `remainingDurationDays` — the same pair `api-v0.34.0` gave duration and lag — and the activity
+  response and `ActivitySummary` now carry it, so a sub-day remainder can be read back exactly rather
+  than as the `0` its day field rounds to.
+
+  The progress editor's field takes the same `d`/`h`/`m` grammar as a duration, reusing that field's
+  predicate, degrade rule and flag rather than a second reading of `2d 4h`. Blank still means "derive
+  it from percent complete" — which is the one thing this field has that a duration does not, and the
+  only part the shared module does not own. Where the calendar's working hours cannot be resolved it
+  degrades to whole days, which is the same code path as flag-off, so the rollback contract and the
+  not-yet-loaded state cannot rot apart.
+
+  The seeder now sends the minutes its spec already held, instead of rounding them and recording the
+  loss as an approximation — a sub-day remainder in a seeded plan was never what the spec asked for.
+
+  With this, `pnpm check:surface-contract` reports **zero gaps**: every writable field on a scheduling
+  DTO and every CPM engine input has a surface a planner can reach, or a written reason why not.
+
+### Patch Changes
+
+- Updated dependencies [[`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a), [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a), [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a)]:
+  - @repo/types@0.20.0
+
 ## 0.35.0
 
 ### Minor Changes

@@ -1,5 +1,71 @@
 # @repo/seed-http
 
+## 0.2.0
+
+### Minor Changes
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The critical float threshold is stored in working minutes, not days
+
+  `criticalFloatThreshold` was documented and validated as whole working **days**, and the service
+  converted it for the engine at a flat `× 1440`. The engine then compared that against a total float
+  measured in working minutes on the **activity's own** calendar. On a 24-hour calendar those agree;
+  on an eight-hour one a planner asking for a 1-day threshold got three working days of float treated
+  as critical. ADR-0068's defect one field along (surface audit F8).
+
+  The field becomes `criticalFloatThresholdMinutes` — working minutes, stored as compared, no lossy
+  conversion in between. A plan-level _day_ threshold is unfixable by choosing a better factor: a
+  mixed-calendar plan compares one threshold against floats measured on several different day lengths,
+  so there is no correct scalar. Minutes is the only representation that is unambiguous for every
+  activity.
+
+  **Breaking:** the field is renamed on the update DTO, the plan response and `PlanSummary`. Pre-1.0,
+  so a minor bump. `forbidNonWhitelisted` is on, so a client still sending `criticalFloatThreshold`
+  gets a 422 naming the property rather than a quietly wrong schedule — which is the point of renaming
+  rather than redefining in place.
+
+  Existing data is backfilled at `× 1440`, the same factor the service applied on every recalculation
+  since the column shipped, so the engine receives an identical number and no plan's persisted
+  criticality changes. The backfill multiplies in `bigint` and clamps at the ten-year ceiling, because
+  the DTO carried no upper bound and an overflow would abort the migration — which on a self-migrating
+  image means the API does not boot.
+
+  It also fixes a latent disagreement in the ADR-0066 pairwise harness, which fed the seed spec's day
+  number straight into the engine's minutes option with no conversion while the service multiplied.
+  The differential has been comparing two different thresholds, and stayed green only because the
+  default is 0.
+
+### Patch Changes
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Report a four-hour remainder, instead of rounding it to "no work left"
+
+  ADR-0070 made an activity's **duration** sub-day authorable and left its **remaining work** a
+  whole-number days box. So a planner could type `4h` for the duration, report progress, and then
+  state the remainder only as `0` or `1` day — and on an incomplete activity `0` is not a rounding
+  artefact, it is also the value that means _no work left_. The asymmetry sharpened it: the derived
+  remaining (percent × duration) is minute-exact, so stating the remainder explicitly was **less**
+  precise than saying nothing (surface audit F3).
+
+  `remainingDurationMinutes` joins the progress DTO as the mutually-exclusive sibling of
+  `remainingDurationDays` — the same pair `api-v0.34.0` gave duration and lag — and the activity
+  response and `ActivitySummary` now carry it, so a sub-day remainder can be read back exactly rather
+  than as the `0` its day field rounds to.
+
+  The progress editor's field takes the same `d`/`h`/`m` grammar as a duration, reusing that field's
+  predicate, degrade rule and flag rather than a second reading of `2d 4h`. Blank still means "derive
+  it from percent complete" — which is the one thing this field has that a duration does not, and the
+  only part the shared module does not own. Where the calendar's working hours cannot be resolved it
+  degrades to whole days, which is the same code path as flag-off, so the rollback contract and the
+  not-yet-loaded state cannot rot apart.
+
+  The seeder now sends the minutes its spec already held, instead of rounding them and recording the
+  loss as an approximation — a sub-day remainder in a seeded plan was never what the spec asked for.
+
+  With this, `pnpm check:surface-contract` reports **zero gaps**: every writable field on a scheduling
+  DTO and every CPM engine input has a surface a planner can reach, or a written reason why not.
+
+- Updated dependencies [[`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a)]:
+  - @repo/seed@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
