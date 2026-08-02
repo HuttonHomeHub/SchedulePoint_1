@@ -129,6 +129,33 @@ batched `UPDATE … FROM unnest(...)`, never a write DTO, never touching `versio
 ADR-0022 contract). With levelling off, recalculate is **byte-identical** to the pre-rung output across
 every golden + scenario (the ADR-0034/0039/0040 gate).
 
+#### Amendment (ADR-0071 M2, 2026-08-02) — the parity argument is now two claims, not one
+
+Per-assignment join lags (ADR-0071 §1) mean the levelling pass no longer holds a resource for the whole
+of an activity: assignment `j` is demanded over `[start ⊕ lag_j, finish)`. That splits the single
+sentence above into **two claims with different strengths**, and the honest statement of it is the point
+of this amendment — a reader who keeps quoting one guarantee will over-trust the other.
+
+- **Gate A — structural, unchanged.** With `levelResources` **off**, the pass does not run and the lag is
+  never even loaded (`schedule.service.ts` assembles the demand model inside `if (plan.levelResources)`).
+  `computeSchedule` is byte-identical, and the golden suite still proves it by construction. Nothing about
+  this claim weakened.
+- **Gate B — data-conditional, new.** With `levelResources` **on** and every participating assignment at
+  `lagMinutes = 0`, levelling output is byte-identical to the pre-ADR-0071 output. This is **no longer
+  structurally impossible to break** — the occupancy model and the placement search were both rewritten —
+  so it is held by a **captured corpus** instead: `engine/level.parity.spec.ts`, whose snapshots were
+  taken **before** `level.ts` was touched, over the eight shapes the pass branches on. A snapshot taken
+  afterwards would have asserted the refactor against itself.
+
+Two consequences worth stating plainly. The engine port's `EngineAssignment.lagMinutes` is **optional**,
+so an unlagged caller constructs the identical object it always did rather than relying on a default
+someone has to remember; and the placement search moved from one merged feasible/blackout timeline to
+**per-resource candidate starts**, because two resources on one activity now ask about different windows
+and a merged timeline cannot express that. The `O(k log k)` boundedness of §F is preserved and is now
+pinned by a calendar-port **call-count** gate as well as the wall-clock assert, since a candidate list
+that grew with the span rather than with the placed intervals would still be correct, still pass every
+behavioural test, and quietly reintroduce the per-minute scan.
+
 ### Invariants (the service/engine own them; recorded so they are not "simplified")
 
 - **(a) Determinism.** Same plan + priorities ⇒ same leveled dates, independent of input order (the

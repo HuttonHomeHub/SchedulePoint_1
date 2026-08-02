@@ -101,6 +101,22 @@ export function levelSchedule(
 
   const calendarOf = (a: EngineActivity): WorkingTimeCalendar => a.calendar ?? planCalendar;
 
+  /**
+   * Where THIS assignment's demand begins (ADR-0071 §1): `lagMinutes` working minutes into the
+   * activity, on the activity's own calendar. Absent or `0` returns the activity's start unchanged —
+   * the same instant every caller produced before ADR-0071, which is what makes Gate B structural
+   * rather than a default someone has to remember. A lag past the finish yields a start beyond it and
+   * {@link occupy} then reserves nothing, which is the spec's degenerate case, not an edge to guard.
+   */
+  const demandStart = (
+    cal: WorkingTimeCalendar,
+    startInst: number,
+    asg: EngineAssignment,
+  ): number => {
+    const lag = asg.lagMinutes ?? 0;
+    return lag > 0 ? advanceWorking(cal, startInst, lag) : startInst;
+  };
+
   /** Reconstruct an offset (plan-frame working minutes from the data date) as an absolute instant. */
   const instOfOffset = (offset: number): number =>
     advanceWorking(planCalendar, dataDateAbs, offset);
@@ -144,9 +160,13 @@ export function levelSchedule(
     selfOver: boolean,
   ): void => {
     const r = resultById.get(id)!;
+    const a = activityById.get(id);
+    const cal = a ? calendarOf(a) : planCalendar;
     const startInst = instOfOffset(r.earlyStartOffset);
     const finishInst = instOfOffset(r.earlyFinishOffset);
-    for (const asg of finiteAsgs) occupy(asg.resourceId, startInst, finishInst, asg.unitsPerHour);
+    for (const asg of finiteAsgs) {
+      occupy(asg.resourceId, demandStart(cal, startInst, asg), finishInst, asg.unitsPerHour);
+    }
     overlayById.set(id, {
       leveledStartOffset: r.earlyStartOffset,
       leveledFinishOffset: r.earlyFinishOffset,
@@ -202,6 +222,7 @@ export function levelSchedule(
     const perResource = finiteAsgs.map((asg) => ({
       intervals: profile.get(asg.resourceId) ?? [],
       need: resourceById.get(asg.resourceId)!.capacity! - asg.unitsPerHour,
+      lagMinutes: asg.lagMinutes ?? 0,
     }));
     const { start: candidate, finish: finishInst } = earliestFeasibleStart(
       calA,
@@ -250,7 +271,12 @@ export function levelSchedule(
       }
     }
     for (const asg of finiteAsgs) {
-      occupy(asg.resourceId, leveledStartInst, leveledFinishInst, asg.unitsPerHour);
+      occupy(
+        asg.resourceId,
+        demandStart(calA, leveledStartInst, asg),
+        leveledFinishInst,
+        asg.unitsPerHour,
+      );
     }
     overlayById.set(a.id, {
       leveledStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, leveledStartInst),
@@ -314,24 +340,102 @@ interface ResourceContention {
   intervals: ReadonlyArray<{ start: number; finish: number; demand: number }>;
   /** capacity − this activity's demand: the max concurrent PLACED demand the resource may already carry. */
   need: number;
+  /**
+   * Working minutes into the run before THIS resource joins (ADR-0071 §1). `0` = joins with the
+   * activity, which is every assignment that predates the column and the whole of Gate B.
+   */
+  lagMinutes: number;
+}
+
+/** A half-open `[start, finish)` region in absolute minutes where a resource is over its `need`. */
+interface Blackout {
+  start: number;
+  finish: number;
 }
 
 /**
- * The earliest working start ≥ `esAbs` at which every touched resource has spare capacity for the whole
- * run (ADR-0041 §2), found by a **single blackout-gap sweep** — no retry loop, so it cannot hang.
+ * One resource's **blackout regions** — the maximal spans over which its already-placed demand exceeds
+ * `need`, so this activity cannot join it there. A single sweep of `±demand` events (a finish before a
+ * start at an equal instant, so touching intervals do not overlap), returned sorted and disjoint.
+ */
+function blackoutsOf(rc: ResourceContention, esAbs: number): Blackout[] {
+  const events: Array<{ t: number; delta: number }> = [];
+  for (const p of rc.intervals) {
+    if (p.finish <= esAbs) continue; // cannot affect a placement at or after the early start
+    events.push({ t: Math.max(p.start, esAbs), delta: p.demand });
+    events.push({ t: p.finish, delta: -p.demand });
+  }
+  if (events.length === 0) return [];
+  events.sort((a, b) => a.t - b.t || a.delta - b.delta);
+
+  const out: Blackout[] = [];
+  let load = 0;
+  let openedAt: number | null = null;
+  let i = 0;
+  while (i < events.length) {
+    const t = events[i]!.t;
+    while (i < events.length && events[i]!.t === t) {
+      load += events[i]!.delta;
+      i += 1;
+    }
+    const over = load > rc.need;
+    if (over && openedAt === null) openedAt = t;
+    else if (!over && openedAt !== null) {
+      out.push({ start: openedAt, finish: t });
+      openedAt = null;
+    }
+  }
+  // Every placed interval finishes, so `load` returns to 0 and no blackout can still be open here.
+  return out;
+}
+
+/**
+ * Whether `[from, to)` clears every blackout in `sorted`. Binary-searches the first blackout that could
+ * still be running at `from`, so the check is `O(log b)` rather than a scan — the blackouts are disjoint
+ * and ascending, so if that one clears, every later one starts even later.
+ */
+function windowIsClear(sorted: readonly Blackout[], from: number, to: number): boolean {
+  if (to <= from) return true; // a zero-length demand window (lag ≥ span) reserves nothing
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid]!.finish <= from) lo = mid + 1;
+    else hi = mid;
+  }
+  const first = sorted[lo];
+  return first === undefined || first.start >= to;
+}
+
+/**
+ * The earliest working start ≥ `esAbs` at which **every touched resource has spare capacity across its
+ * own demand window** (ADR-0041 §2, generalised by ADR-0071 §1). Non-iterative over a finite candidate
+ * list — it cannot hang.
  *
- * A merged event stream (`+demand` at each placed interval's start, `−demand` at its finish, clamped to
- * `esAbs` and tagged by resource) is swept in time order (a finish before a start at an equal instant —
- * touching intervals do not overlap). Maintaining a per-resource concurrent load and a count of
- * resources currently **over** their `need`, the timeline splits into **feasible** regions (over-count
- * 0) and **blackout** regions (over-count > 0). The run is placed in the first feasible region it fits:
- * `advanceWorking(cal, cand, d) ≤ regionEnd`. Because every interval finishes, the over-count returns to
- * 0 after the last event, so the final region `[lastBlackoutEnd, +∞)` always fits — termination is
- * inherent. A run placed past a resource's own availability window is caught by the caller's
- * window-coverage check (`levelingWindowExceeded`), not here.
+ * Before ADR-0071 every resource on an activity was held for the whole run, so one merged feasible/
+ * blackout timeline answered for all of them. A per-assignment lag breaks that: resource `j` is demanded
+ * only over `[start ⊕ lag_j, start ⊕ d)`, so two resources on one activity now ask about **different**
+ * windows and a span that blocks one may be free for the other.
  *
- * Cost is O(k log k) over the k placed intervals across the touched resources (the sort), never a
- * per-minute scan.
+ * The search therefore works on **candidate starts** rather than merged regions:
+ *
+ * 1. Each resource's own blackouts are computed independently ({@link blackoutsOf}).
+ * 2. The candidates are `start0` plus, for every blackout end `b` on resource `j`, the start `b ⊖ lag_j`
+ *    that would place `j`'s joining instant exactly there. That set is **complete**: feasibility can only
+ *    change where some resource's demand window crosses one of its own blackout boundaries, and moving a
+ *    start later never helps via the finish (that only pushes the window further right).
+ * 3. Candidates are tested ascending and the first feasible one wins.
+ *
+ * **Termination is inherent.** The largest candidate lies at or past every blackout end on every
+ * resource, so each window `[cand ⊕ lag_j, cand ⊕ d)` begins after the last blackout finishes and clears
+ * them all — there is always an answer, and the list is finite.
+ *
+ * With every `lag_j` at `0` this reduces to the previous behaviour exactly: the candidates become the
+ * blackout ends themselves, the per-resource checks agree with the merged over-count, and the run is
+ * placed in the first gap it fits (ADR-0071 Gate B, pinned by `level.parity.spec.ts`).
+ *
+ * Cost is `O(k log k)` over the k placed intervals (the sorts), with an `O(log b)` check per candidate
+ * per resource — never a per-minute scan.
  */
 function earliestFeasibleStart(
   cal: WorkingTimeCalendar,
@@ -343,66 +447,40 @@ function earliestFeasibleStart(
   // A milestone (zero duration) occupies no span, so no resource can ever block it.
   if (d === 0) return { start: start0, finish: start0 };
 
-  // Merge the touched resources' placed intervals into demand events; only intervals reaching past the
-  // early start can affect a placement at or after it. Tag each event with its resource index `j`.
-  const events: Array<{ t: number; delta: number; j: number }> = [];
-  for (let j = 0; j < perResource.length; j += 1) {
-    for (const p of perResource[j]!.intervals) {
-      if (p.finish <= esAbs) continue;
-      events.push({ t: Math.max(p.start, esAbs), delta: p.demand, j });
-      events.push({ t: p.finish, delta: -p.demand, j });
-    }
-  }
+  const blackouts = perResource.map((rc) => blackoutsOf(rc, esAbs));
+  const anyBlackout = blackouts.some((b) => b.length > 0);
   // No contention → the earliest working start fits immediately.
-  if (events.length === 0) return { start: start0, finish: advanceWorking(cal, start0, d) };
-  // Time ascending; at an equal instant a finish (negative delta) precedes a start (positive delta).
-  events.sort((a, b) => a.t - b.t || a.delta - b.delta);
+  if (!anyBlackout) return { start: start0, finish: advanceWorking(cal, start0, d) };
 
-  const load = new Array<number>(perResource.length).fill(0);
-  const need = perResource.map((rc) => rc.need);
-
-  /** Place the run at the earliest working start ≥ max(regionStart, start0) that finishes ≤ regionEnd. */
-  const tryFit = (
-    regionStart: number,
-    regionEnd: number,
-  ): { start: number; finish: number } | null => {
-    if (regionEnd <= start0) return null; // the region ends before the run could even start
-    const cand = rollForwardToWorking(cal, Math.max(regionStart, start0));
-    if (cand >= regionEnd) return null; // rolling to a working minute pushed past the region
-    const finish = advanceWorking(cal, cand, d);
-    return finish <= regionEnd ? { start: cand, finish } : null;
-  };
-
-  let overCount = 0; // resources whose placed load currently exceeds `need` (a blackout when > 0)
-  let regionStart = esAbs; // the start of the CURRENT feasible region (we begin feasible)
-  let i = 0;
-  let guard = 0;
-  const maxRegions = events.length + 2; // belt-and-suspenders; the loop is already finite
-  while (i < events.length) {
-    const t = events[i]!.t;
-    const wasFeasible = overCount === 0;
-    // Apply every event at this instant (finishes before starts) before re-reading the region state.
-    while (i < events.length && events[i]!.t === t) {
-      const e = events[i]!;
-      const before = load[e.j]! > need[e.j]!;
-      load[e.j]! += e.delta;
-      const after = load[e.j]! > need[e.j]!;
-      if (after && !before) overCount += 1;
-      else if (!after && before) overCount -= 1;
-      i += 1;
+  // Candidate starts. A blackout end is translated BACK by the resource's own lag, because it is the
+  // resource's joining instant — not the activity's start — that has to clear the blackout.
+  const candidates = new Set<number>([start0]);
+  for (let j = 0; j < blackouts.length; j += 1) {
+    const lag = perResource[j]!.lagMinutes;
+    for (const b of blackouts[j]!) {
+      const cand = lag > 0 ? advanceWorking(cal, b.finish, -lag) : b.finish;
+      if (cand > start0) candidates.add(cand);
     }
-    const nowFeasible = overCount === 0;
-    if (wasFeasible && !nowFeasible) {
-      // A feasible region [regionStart, t) just closed against a blackout at t — try to fit it.
-      const fit = tryFit(regionStart, t);
-      if (fit) return fit;
-    } else if (!wasFeasible && nowFeasible) {
-      regionStart = t; // a feasible region opens at t
-    }
-    if ((guard += 1) > maxRegions) break; // defensive only; termination is inherent
   }
-  // Every interval has finished, so over-count is 0: the final region [regionStart, +∞) always fits.
-  const cand = rollForwardToWorking(cal, Math.max(regionStart, start0));
+
+  const ordered = [...candidates].sort((a, b) => a - b);
+  for (const raw of ordered) {
+    const cand = rollForwardToWorking(cal, Math.max(raw, start0));
+    const finish = advanceWorking(cal, cand, d);
+    let feasible = true;
+    for (let j = 0; j < blackouts.length && feasible; j += 1) {
+      const lag = perResource[j]!.lagMinutes;
+      const from = lag > 0 ? advanceWorking(cal, cand, lag) : cand;
+      feasible = windowIsClear(blackouts[j]!, from, finish);
+    }
+    if (feasible) return { start: cand, finish };
+  }
+
+  // Unreachable: the largest candidate clears every blackout (see the termination note above). Kept as
+  // a total function rather than a throw — a levelling pass that cannot place an activity should still
+  // return a schedule, and this is the same answer the final open region gave before ADR-0071.
+  const last = ordered[ordered.length - 1] ?? start0;
+  const cand = rollForwardToWorking(cal, Math.max(last, start0));
   return { start: cand, finish: advanceWorking(cal, cand, d) };
 }
 

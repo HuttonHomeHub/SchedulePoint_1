@@ -1007,6 +1007,11 @@ export class ScheduleService {
           resourceId: a.resourceId,
           // A NULL demand rate (ADR-0040 inert triad) contributes zero demand (parity-safe).
           unitsPerHour: a.unitsPerHour === null ? 0 : a.unitsPerHour.toNumber(),
+          // The join delay (ADR-0071 §1): this resource is demanded from `lagMinutes` into the
+          // activity, not from its start. Spread rather than always set, so a plan whose assignments
+          // are all unlagged builds the SAME object the pass received before the column existed —
+          // Gate B by construction rather than by a default that has to be remembered.
+          ...(a.lagMinutes > 0 ? { lagMinutes: a.lagMinutes } : {}),
         }));
         leveling = { assignments, resources };
       }

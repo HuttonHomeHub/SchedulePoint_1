@@ -72,6 +72,11 @@ export interface ScheduleAssignmentRow {
   resourceId: string;
   /** The per-working-hour demand rate (ADR-0040); NULL = no rate (resolved to zero demand). */
   unitsPerHour: Prisma.Decimal | null;
+  /**
+   * Working minutes into the activity before this resource joins it (ADR-0071 §1); `0` = joins with
+   * it, which is every row that predates the column.
+   */
+  lagMinutes: number;
 }
 
 /** A resource assigned in a plan, as the levelling pass reads it (ADR-0041 §2). */
@@ -271,7 +276,7 @@ export class ScheduleRepository {
         activity: { planId, deletedAt: null },
         resource: { deletedAt: null },
       },
-      select: { activityId: true, resourceId: true, unitsPerHour: true },
+      select: { activityId: true, resourceId: true, unitsPerHour: true, lagMinutes: true },
     });
   }
 
