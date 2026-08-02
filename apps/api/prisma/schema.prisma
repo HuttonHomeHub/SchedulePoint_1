@@ -510,6 +510,47 @@ enum CalendarScope {
   PROJECT
 }
 
+// WHAT a baseline's frozen cost snapshot decomposes to (ADR-0071 M3 / CQ-1 option B — the
+// second amendment to ADR-0025 after ADR-0042's cost baseline itself).
+//
+//   ACTIVITY   one committed number per activity (`baseline_activities.budgeted_cost`) and
+//              NOTHING about how that number was made up. Every baseline captured before this
+//              rung is exactly this, which is why it is the constant DEFAULT — no data migration,
+//              and no existing row is described as something it is not.
+//   ASSIGNMENT that same per-activity total PLUS its decomposition: the activity's own expense
+//              (`baseline_activities.budgeted_expense`) and one `baseline_assignments` row per
+//              resource assignment, each carrying its frozen cost AND its frozen `lag_minutes`.
+//
+// THIS COLUMN IS THE ANSWER TO THE ONE QUESTION THE ROWS THEMSELVES CANNOT ANSWER, and it is the
+// point of the whole slice. A baseline with zero `baseline_assignments` rows is either
+//   (a) captured BEFORE this existed — its total is undecomposable, so PV must fall back to
+//       splitting it by LIVE budget shares (the documented ADR-0071 approximation), or
+//   (b) captured from a plan whose activities genuinely carry NO resource assignments — in which
+//       case the snapshot is COMPLETE and PV is exact with no assignment component at all.
+// Those two are opposite instructions to the Earned-Value read, and `rows.length === 0` cannot
+// tell them apart. This discriminator can, and it is the ONLY thing that can. NEVER infer the
+// level from a row count, and never from `budgeted_expense IS NULL` — those are corroborating
+// facts, not the decision.
+//
+// (a) IS PERMANENT. A per-assignment breakdown that was never recorded cannot be recovered from a
+// frozen total: the live assignments it was made of may since have been re-costed, added or
+// deleted, and their resources' `cost_per_unit` may have moved. Any back-fill would invent a
+// decomposition out of today's data and stamp it as history — precisely what ADR-0025's
+// copy-not-reference rule exists to prevent. So the read carries BOTH paths for good.
+//
+// The pairing between this discriminator and the child rows CANNOT be a CHECK — they live in
+// different tables, and a CHECK sees one row of one table. It is a SERVICE invariant held inside
+// the single capture transaction (the "exactly one driving assignment" precedent), which is also
+// why the DEFAULT is the conservative value: a write path that has not been taught the new pass
+// reads as APPROXIMATE, never as exact-but-empty. Fail-closedness then lives at the TypeScript
+// boundary — read it with an exhaustive switch so a future third level (per-step? per-expense?)
+// is a compile error rather than a silently mis-scaled PV curve. MUST stay in lock-step with the
+// `BaselineCostSnapshotLevel` union in @repo/types when EV surfaces it.
+enum BaselineCostSnapshotLevel {
+  ACTIVITY
+  ASSIGNMENT
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -1657,6 +1698,19 @@ model Baseline {
   // reads exactly as it does today. Bounds: ck_baselines_hours_per_day_minutes_range (raw SQL).
   hoursPerDayMinutes Int @default(1440) @map("hours_per_day_minutes")
 
+  // WHAT this baseline's cost snapshot decomposes to (ADR-0071 M3 / CQ-1 option B) — see the
+  // BaselineCostSnapshotLevel docblock, which carries the reasoning this column exists for.
+  // ACTIVITY (the constant DEFAULT, and every pre-ADR-0071 row) = a per-activity total only;
+  // ASSIGNMENT = that total plus `baseline_activities.budgeted_expense` and the
+  // `baseline_assignments` rows. It is a CAPTURE-level fact, not a per-activity one: one pass
+  // freezes the whole plan inside one transaction, so all activities of a baseline share it —
+  // and the EV read needs the answer BEFORE it looks at any row, since the answer decides
+  // whether "no rows" means "nothing to decompose" or "nothing was decomposed".
+  //
+  // Set by the capture path, then IMMUTABLE like every other snapshot column. Constant DEFAULT
+  // ⇒ metadata-only ADD COLUMN, no rewrite, and every existing baseline keeps today's meaning.
+  costSnapshotLevel BaselineCostSnapshotLevel @default(ACTIVITY) @map("cost_snapshot_level")
+
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1665,9 +1719,13 @@ model Baseline {
   deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  plan         Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
   activities   BaselineActivity[]
+  // The per-assignment cost decomposition (ADR-0071 M3). EMPTY on an ACTIVITY-level baseline
+  // AND on an ASSIGNMENT-level one whose plan has no assignments — read `costSnapshotLevel`,
+  // never this list's length, to tell those apart.
+  assignments  BaselineAssignment[]
 
   // Baseline name is unique per PLAN among ACTIVE rows — partial unique
   // (uq_baselines_plan_name ON (plan_id, name) WHERE deleted_at IS NULL), raw SQL in
@@ -1727,6 +1785,29 @@ model BaselineActivity {
   // defence-in-depth (N22 family). No index (the snapshot is loaded whole per baseline).
   // DARK until EV2 reads it.
   budgetedCost BigInt? @map("budgeted_cost")
+
+  // The ACTIVITY-EXPENSE half of that total, frozen (ADR-0071 M3 / CQ-1 option B): the activity's
+  // own lump-sum (`activities.budgeted_expense`) as it stood at capture, in the same BIGINT minor
+  // units. `budgeted_cost` = this + Σ of the baseline's `baseline_assignments` rows for this
+  // `source_activity_id` — an EXACT integer identity within one capture (both sides are computed
+  // from the same rows in the same locked transaction).
+  //
+  // WHY STORE IT RATHER THAN SUBTRACT IT. Earned Value phases the expense component over the
+  // activity's OWN window while each assignment component starts a lag later (ADR-0071 §3), so the
+  // split is read, not decorative. Deriving it as `budgeted_cost − Σ(rows)` would be arithmetically
+  // exact today and would silently become wrong the day the activity total is computed by a rule
+  // the subtraction does not know about — a decade-long snapshot should not depend on a rule stated
+  // only in code. One BIGINT is cheaper than that risk.
+  //
+  // NULLABLE / NO DEFAULT, and the NULL means "not decomposed", i.e. this row belongs to an
+  // ACTIVITY-level baseline. It is a CORROBORATING fact only: the authoritative discriminator is
+  // `baselines.cost_snapshot_level`, and the read must branch on that (see its docblock) — two
+  // sources of truth for one question is how the two absences get confused again. A `NOT NULL
+  // DEFAULT 0` was rejected for the same reason: 0 is a claim ("this activity had no expense"), and
+  // on a pre-ADR-0071 baseline that claim is unknowable, not zero. Immutable after capture.
+  // ck_baseline_activities_budgeted_expense_nonneg (nullable-safe `>= 0`) mirrors the live
+  // ck_activities_budgeted_expense_nonneg exactly. No index (the snapshot is loaded whole).
+  budgetedExpense BigInt? @map("budgeted_expense")
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)

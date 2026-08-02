@@ -637,6 +637,10 @@ export class ScheduleService {
           budgetedUnits: a.budgetedUnits.toNumber(),
           actualUnits: a.actualUnits.toNumber(),
           costPerUnit: a.resource.costPerUnit === null ? null : a.resource.costPerUnit.toNumber(),
+          // The join delay (ADR-0071 §1) phases THIS assignment's cost from when its resource arrives.
+          // Spread only when non-zero, so an unlagged plan builds the identical object the EV read
+          // received before the column existed and takes the single-window fast path by construction.
+          ...(a.lagMinutes > 0 ? { lagMinutes: a.lagMinutes } : {}),
         })),
         baselineStart: base ? day(base.baselineStart) : null,
         baselineFinish: base ? day(base.baselineFinish) : null,
@@ -666,6 +670,7 @@ export class ScheduleService {
       currencyCode: plan.currencyCode,
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
+      costPhasingLaggedCount: result.costPhasingLaggedCount,
       // N27 (ADR-0044 §33): leaf activities whose steps are all zero-weight, so the manual physical %
       // fallback was used — a read-time data-quality warning, mirroring costWarningCount.
       stepWeightZeroCount: result.stepWeightZeroCount,

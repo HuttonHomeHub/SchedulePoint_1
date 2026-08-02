@@ -34,6 +34,13 @@ export interface EvAssignmentInput {
   actualUnits: number;
   /** The driving resource's price-per-unit rate; null = 0 (no cost). */
   costPerUnit: number | null;
+  /**
+   * Working minutes into the activity at which this resource joins (ADR-0071 §1) — so THIS
+   * assignment's cost phases over `[start + lagMinutes, finish)` rather than the activity's whole
+   * window. Measured on the activity's calendar. Optional: absent is what every caller passed before
+   * ADR-0071, and the absent case takes a fast path that is the previous expression verbatim.
+   */
+  lagMinutes?: number;
 }
 
 /**
@@ -175,6 +182,13 @@ export interface PlanEarnedValueResult {
    * module carries no independent activity status.
    */
   costWarningCount: number;
+  /**
+   * Leaf activities whose PV was time-phased **per cost component** because at least one assignment
+   * joins late (ADR-0071 §1). `0` on every plan with no lag — and that is the parity signal: a
+   * non-zero count is the only way the component sum was reached at all, since the zero-lag path takes
+   * the previous single-window expression verbatim.
+   */
+  costPhasingLaggedCount: number;
   /**
    * The count of leaf activities whose progress steps are present but **all zero-weight** (ADR-0044 §33,
    * N27) — so {@link rollupPhysicalPercent} fell back to the manual `physicalPercentComplete`. A
@@ -356,6 +370,80 @@ function leafPlannedPercent(
 }
 
 /**
+ * PV for a leaf whose assignments do **not** all join with the activity (ADR-0071 §1) — a
+ * **cost-component-weighted sum** rather than one activity-level percentage.
+ *
+ * Returns `null` when no assignment carries a positive lag, and the caller then takes the previous
+ * single-window expression **verbatim**. That is a hard requirement, not a shortcut: summing rounded
+ * per-component values can differ from rounding one total by a minor unit, and a silent ±1 on the PV of
+ * every plan already in the system is precisely the class of defect this repository keeps finding after
+ * the fact. A plan reaches this function only when a lag asks it to.
+ *
+ * ## The components
+ *
+ * - the activity's own **expense**, which has no resource and therefore keeps the activity's window;
+ * - each **assignment**, over `[start ⊕ lag, finish)` on the activity's calendar.
+ *
+ * Each is phased by the **same** activity-level `accrualType`, because accrual is a property of the
+ * activity in ADR-0044 §32 and nothing here changes that. `END` is consequently a **no-op** for the lag
+ * — everything is recognised at the finish whatever time the resource arrived — which is the case a
+ * reader is most likely to assume changed.
+ *
+ * ## Whose money is being split
+ *
+ * `pvCost` is the committed baseline cost when one exists and the live `bac` otherwise. The components
+ * are weighted by their **live** budget shares, so on the live-budget path the split is exact by
+ * construction. Against a captured baseline it is exact only where the baseline carries per-assignment
+ * cost; for a baseline captured before that existed it approximates a decomposition the snapshot never
+ * held, and `liveBac === 0` falls back to the single window rather than dividing by zero.
+ */
+function laggedPlannedValue(
+  activity: EvActivityInput,
+  liveBac: number,
+  pvCost: number,
+  start: string | null,
+  finish: string | null,
+  dataDate: string | null,
+  calendar: WorkingTimeCalendar,
+): number | null {
+  const lagged = activity.assignments.some((a) => (a.lagMinutes ?? 0) > 0);
+  if (!lagged) return null;
+  // No live budget to weight the split by — there is no honest decomposition, so use the whole-window
+  // answer rather than inventing shares. Not an error: an activity may carry dates and no cost at all.
+  if (liveBac <= 0) return null;
+  // A milestone has no span for a lag to sit inside, and START/END recognise at a single endpoint that
+  // no lag moves. Deferring to the single-window path keeps those three answers bit-for-bit as they are.
+  const isMilestone = activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE';
+  if (isMilestone || activity.accrualType === 'END') return null;
+  if (dataDate === null || start === null || finish === null) return null;
+
+  let pv = 0;
+  const share = (cost: number): number => (pvCost * cost) / liveBac;
+  // The activity expense keeps the activity's own window — it belongs to no resource, so nothing about
+  // it joins late.
+  if (activity.budgetedExpense !== 0) {
+    const percent = leafPlannedPercent(activity, start, finish, dataDate, calendar);
+    pv += (share(activity.budgetedExpense) * percent) / 100;
+  }
+  for (const a of activity.assignments) {
+    const cost = a.budgetedCost ?? Math.round(a.budgetedUnits * (a.costPerUnit ?? 0));
+    if (cost === 0) continue;
+    const lag = a.lagMinutes ?? 0;
+    // A lag at or past the finish leaves a window with no working time in it. `leafPlannedPercent`
+    // already answers 100 past a zero-length span, which is the spec's degenerate case: the cost is
+    // recognised at the effective start rather than smeared over a window that does not exist.
+    const from = lag > 0 ? calendar.addWorkingTime(start, lag) : start;
+    const effFrom = from > finish ? finish : from;
+    const percent = leafPlannedPercent(activity, effFrom, finish, dataDate, calendar);
+    pv += (share(cost) * percent) / 100;
+  }
+  // Round ONCE at the end. Rounding each component would let a many-assignment activity drift several
+  // minor units from `pvCost` at completion, which is visible as a plan that never quite reaches its
+  // own budget.
+  return Math.round(pv);
+}
+
+/**
  * Compute the plan's Earned-Value analysis (ADR-0042). Pure: it reads `input` and returns a fresh
  * result, never mutating and never touching I/O. Every non-deleted activity — including WBS summaries —
  * appears in {@link PlanEarnedValueResult.activities}.
@@ -396,6 +484,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
   const resultById = new Map<string, EvActivityResult>();
   let costBaselineMissing = false;
   let costWarningCount = 0;
+  let costPhasingLaggedCount = 0;
   let stepWeightZeroCount = 0;
 
   // Leaves first — they do not depend on the rollup.
@@ -414,7 +503,13 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
     if (activity.baselineBudgetedCost === null) costBaselineMissing = true;
     const pvCost = activity.baselineBudgetedCost ?? bac;
     const plannedPercent = leafPlannedPercent(activity, start, finish, dataDate, calendar);
-    const pv = Math.round((pvCost * plannedPercent) / 100);
+    // The zero-lag fast path is the PREVIOUS EXPRESSION VERBATIM, and that is a hard requirement
+    // rather than an optimisation: summing rounded per-component values can differ from rounding one
+    // total by a minor unit, and a silent ±1 on every existing plan's PV is exactly the kind of defect
+    // that survives review. A plan reaches the component sum only when a lag actually asks it to.
+    const laggedPv = laggedPlannedValue(activity, bac, pvCost, start, finish, dataDate, calendar);
+    const pv = laggedPv === null ? Math.round((pvCost * plannedPercent) / 100) : laggedPv;
+    if (laggedPv !== null) costPhasingLaggedCount += 1;
 
     rolled.set(activity.activityId, { bac, pv, ev, ac });
     resultById.set(activity.activityId, {
@@ -463,6 +558,7 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
   return {
     costBaselineMissing,
     costWarningCount,
+    costPhasingLaggedCount,
     stepWeightZeroCount,
     activities: activities.map((a) => resultById.get(a.activityId)!),
     total,

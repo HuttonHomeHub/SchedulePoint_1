@@ -452,3 +452,139 @@ describe('computeEarnedValue', () => {
     expect(physicalStarted.costWarningCount).toBe(0);
   });
 });
+
+describe('computeEarnedValue — per-component PV phasing for a late-joining resource (ADR-0071 §1)', () => {
+  const DAY = 1440;
+  /** A ten-day activity, £1,000 of assignment cost, no expense; the data date sits at day 5. */
+  const tenDay = (overrides: Partial<EvActivityInput> = {}): EvActivityInput =>
+    activity({
+      activityId: 'A',
+      accrualType: 'UNIFORM',
+      earlyStart: '2026-01-01',
+      earlyFinish: '2026-01-11',
+      assignments: [assignment({ budgetedCost: 1000 })],
+      ...overrides,
+    });
+
+  it('takes the previous single-window expression verbatim when nothing is lagged', () => {
+    // Not a performance shortcut: summing rounded components can differ from rounding one total by a
+    // minor unit, and a silent ±1 on the PV of every existing plan is the defect class this guards.
+    // `costPhasingLaggedCount` is the observable proof of WHICH path ran.
+    const result = run([tenDay()], '2026-01-06');
+    expect(result.costPhasingLaggedCount).toBe(0);
+    expect(result.total.pv).toBe(500);
+  });
+
+  it('phases a lagged assignment’s cost from the day its resource joins', () => {
+    // The crew joins on day 4, so at day 5 only one of the remaining six days has elapsed: 1000 × 1/6.
+    const result = run(
+      [tenDay({ assignments: [assignment({ budgetedCost: 1000, lagMinutes: 4 * DAY })] })],
+      '2026-01-06',
+    );
+    expect(result.costPhasingLaggedCount).toBe(1);
+    expect(result.total.pv).toBe(Math.round(1000 / 6));
+    // Strictly less than the unlagged 500 — the whole point, stated as a comparison rather than left
+    // for a reader to infer from the arithmetic.
+    expect(result.total.pv).toBeLessThan(500);
+  });
+
+  it('mixes an activity expense with a lagged assignment, each on its own window', () => {
+    // The expense belongs to no resource, so it keeps the activity's window and is 50% elapsed; the
+    // lagged assignment is 1/6. Shares are by live budget: 500 expense + 1000 assignment = 1500 BAC.
+    const result = run(
+      [
+        tenDay({
+          budgetedExpense: 500,
+          assignments: [assignment({ budgetedCost: 1000, lagMinutes: 4 * DAY })],
+        }),
+      ],
+      '2026-01-06',
+    );
+    expect(result.costPhasingLaggedCount).toBe(1);
+    expect(result.total.pv).toBe(Math.round(500 * 0.5 + 1000 / 6));
+  });
+
+  it('END accrual is a no-op for the lag — the case a reader assumes changed', () => {
+    // Accrual is a property of the ACTIVITY (ADR-0044 §32). Under END everything is recognised at the
+    // finish whatever time the resource arrived, so a lag cannot move it.
+    const at = (dataDate: string) =>
+      run(
+        [
+          tenDay({
+            accrualType: 'END',
+            assignments: [assignment({ budgetedCost: 1000, lagMinutes: 4 * DAY })],
+          }),
+        ],
+        dataDate,
+      );
+    expect(at('2026-01-06').total.pv).toBe(0);
+    expect(at('2026-01-11').total.pv).toBe(1000);
+    expect(at('2026-01-06').costPhasingLaggedCount).toBe(0);
+  });
+
+  it('START accrual recognises a lagged assignment at start + lag, not at the activity’s start', () => {
+    // The asymmetry with END, and the one worth stating: START recognises at the point the COMPONENT
+    // begins, which for a lagged assignment is when its resource joins. END recognises at the
+    // activity's finish, which no lag moves. Same enum, opposite sensitivity to the lag.
+    const at = (dataDate: string) =>
+      run(
+        [
+          tenDay({
+            accrualType: 'START',
+            assignments: [assignment({ budgetedCost: 1000, lagMinutes: 4 * DAY })],
+          }),
+        ],
+        dataDate,
+      );
+    expect(at('2026-01-02').total.pv).toBe(0); // the activity has started; the crew has not
+    expect(at('2026-01-05').total.pv).toBe(1000); // the crew joins
+  });
+
+  it('a lag at or past the span recognises at the effective start rather than vanishing', () => {
+    // The degenerate case. A window with no working time in it is a zero-length span, which the
+    // existing branch already reads as fully planned once the data date reaches it.
+    // The effective window collapses to a point at the finish, and from there the component behaves
+    // exactly like an EXISTING zero-span activity: nothing until the data date passes it, all of it
+    // after. Reusing that convention rather than inventing a rule for the degenerate lag is the point
+    // — a planner who has seen a zero-duration activity phase already knows this answer.
+    const at = (dataDate: string) =>
+      run(
+        [tenDay({ assignments: [assignment({ budgetedCost: 1000, lagMinutes: 20 * DAY })] })],
+        dataDate,
+      );
+    expect(at('2026-01-11').total.pv).toBe(0);
+    expect(at('2026-01-12').total.pv).toBe(1000);
+    expect(at('2026-01-12').costPhasingLaggedCount).toBe(1);
+  });
+
+  it('falls back to the single window when there is no live budget to weight shares by', () => {
+    // liveBAC of 0 would divide by zero. An activity may legitimately carry dates and no cost, so this
+    // is the whole-window answer rather than an error or a NaN.
+    const result = run(
+      [tenDay({ assignments: [assignment({ budgetedCost: 0, lagMinutes: 4 * DAY })] })],
+      '2026-01-06',
+    );
+    expect(result.costPhasingLaggedCount).toBe(0);
+    expect(Number.isNaN(result.total.pv)).toBe(false);
+    expect(result.total.pv).toBe(0);
+  });
+
+  it('leaves EV, AC and BAC alone — a lag phases PV and nothing else', () => {
+    // The lag is a cost-PHASING input. Wiring it into the performance percent would make a late crew
+    // look like less work done, which is a different and wrong claim.
+    const unlagged = run([tenDay({ percentComplete: 40 })], '2026-01-06');
+    const lagged = run(
+      [
+        tenDay({
+          percentComplete: 40,
+          assignments: [assignment({ budgetedCost: 1000, lagMinutes: 4 * DAY })],
+        }),
+      ],
+      '2026-01-06',
+    );
+    expect(lagged.total.bac).toBe(unlagged.total.bac);
+    expect(lagged.total.ev).toBe(unlagged.total.ev);
+    expect(lagged.total.ac).toBe(unlagged.total.ac);
+    expect(lagged.total.pv).not.toBe(unlagged.total.pv);
+  });
+});

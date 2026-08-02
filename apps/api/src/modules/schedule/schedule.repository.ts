@@ -145,6 +145,8 @@ export interface EarnedValueActivityRow {
     actualCost: bigint;
     budgetedUnits: Prisma.Decimal;
     actualUnits: Prisma.Decimal;
+    /** Working minutes before this resource joins (ADR-0071 §1); 0 = joins with the activity. */
+    lagMinutes: number;
     resource: { costPerUnit: Prisma.Decimal | null };
   }[];
 }
@@ -509,6 +511,7 @@ export class ScheduleRepository {
             actualCost: true,
             budgetedUnits: true,
             actualUnits: true,
+            lagMinutes: true,
             resource: { select: { costPerUnit: true } },
           },
         },

@@ -124,6 +124,18 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
 
   @ApiProperty({
     description:
+      'The count of leaf activities whose planned value was time-phased PER COST COMPONENT because at ' +
+      'least one assignment joins late (ADR-0071 §1) — the activity’s own expense over its window, and ' +
+      'each assignment over [start + lag, finish). 0 on every plan with no lag, and that is the parity ' +
+      'signal: a zero-lag activity takes the previous single-window expression verbatim, so no existing ' +
+      'plan can shift by a minor unit. A count of leaves, not a cost. NOTE the approximation it implies ' +
+      'against a captured baseline: where the baseline does not carry per-assignment cost, the split is ' +
+      'weighted by LIVE budget shares and therefore approximates a decomposition the snapshot never held.',
+  })
+  costPhasingLaggedCount!: number;
+
+  @ApiProperty({
+    description:
       'The count of leaf activities whose progress steps are all zero-weight (ADR-0044 §33, N27), so ' +
       'the weighted-mean rollup fell back to the manual physical % — a read-time data-quality warning.',
   })
@@ -148,6 +160,7 @@ export class PlanEarnedValueDto implements PlanEarnedValue {
       currencyCode: result.currencyCode,
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
+      costPhasingLaggedCount: result.costPhasingLaggedCount,
       stepWeightZeroCount: result.stepWeightZeroCount,
       activities: result.activities.map((a) => ({ ...a })),
       total: { ...result.total },

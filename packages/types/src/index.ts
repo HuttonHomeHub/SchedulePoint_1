@@ -1561,6 +1561,13 @@ export interface PlanEarnedValue {
    */
   costWarningCount: number;
   /**
+   * Leaf activities whose PV was time-phased **per cost component** because at least one assignment
+   * joins late (ADR-0071 §1). `0` on every plan with no lag — and that is the parity signal: a
+   * non-zero count is the only way the component sum was reached at all, since the zero-lag path takes
+   * the previous single-window expression verbatim.
+   */
+  costPhasingLaggedCount: number;
+  /**
    * The count of leaf activities whose progress steps are all zero-weight (M7 rung 5, ADR-0044 §33,
    * N27) — so the weighted-mean rollup fell back to the manual `physicalPercentComplete`. A read-time
    * data-quality WARNING, never a reject (the resolver never divides by zero); mirrors

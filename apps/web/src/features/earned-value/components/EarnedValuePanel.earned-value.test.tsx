@@ -42,6 +42,7 @@ const EV: PlanEarnedValue = {
   eacMethod: 'CPI',
   currencyCode: 'USD',
   costBaselineMissing: false,
+  costPhasingLaggedCount: 0,
   costWarningCount: 0,
   stepWeightZeroCount: 0,
   total: metrics({
