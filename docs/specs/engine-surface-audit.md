@@ -1,8 +1,8 @@
 # Engine ↔ planner surface audit — findings register
 
-> **Status:** audit complete for the scope stated in _Limits_ below. **Seven findings.** F7 was
-> found by the surface-contract gate on its first run, not by the manual sweep. None fixed yet
-> beyond the gate itself.
+> **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
+> found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
+> building F7's control, and BLOCKS it. None fixed yet beyond the gate, F2's API half and F5.
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -157,6 +157,41 @@ engine has always been able to answer it.
 first run. The audit missed it because I grepped the plan settings as a combined list and saw hits,
 which is precisely the shortcut a script does not take. Cheapest fix on the register: one number field
 in a dialog that already exists, beside the setting it governs.
+
+### F8 — the critical float threshold is converted at a flat 1440, while float is not (correctness)
+
+Found while building F7's control, by asking what its unit means before drawing a box for it.
+
+`plans.critical_float_threshold` is documented and validated as **whole working days**
+(`update-plan.dto.ts` ~line 92, `@IsInt @Min(0)`). The service converts it for the engine as
+
+```ts
+criticalFloatThresholdMinutes: plan.criticalFloatThreshold * MINUTES_PER_DAY; // schedule.service.ts:958
+```
+
+where `MINUTES_PER_DAY` is a flat **1440** (`day-compat-calendar.ts:2`). The engine then compares it
+against a total float measured in working minutes **on the activity's own calendar** (`types.ts:20`,
+ADR-0037 §4).
+
+On a 24-hour calendar those agree. On an **eight-hour** calendar — the shape ADR-0067 made authorable
+and ADR-0068 made a first-class quantity — one "day" of float is 480 working minutes, so a planner
+asking for a **1-day** threshold gets 1440 minutes, i.e. **three working days** of float treated as
+critical. This is ADR-0068's defect one field along: a day-denominated value converted at 1440
+instead of the calendar's own hours-per-day.
+
+**It has never bitten, for exactly one reason: the threshold is pinned at 0** (F7 — no control sets
+it), and `0 × anything` is 0. So the two findings are entangled: **shipping F7's control is what
+would make F8 bite**, on the default critical-path definition, silently, in the direction of calling
+too much work critical.
+
+F7 therefore must not ship on its own. The fix is to convert on the same factor the float was
+measured on — which is per-activity, so the honest options are (a) resolve the threshold per activity
+at comparison time, or (b) redefine the field as minutes and let the control carry the ADR-0070
+`d`/`h`/`m` grammar, which already knows how to ask a calendar what a day is worth.
+
+Two more flat-1440 conversions sit in the same file — `relativeFloat / MINUTES_PER_DAY` (line 575,
+the float-paths read-model) and `durationMinutes / MINUTES_PER_DAY` (line 905). **Neither has been
+checked.** They are named here so the next pass starts from a list rather than a search.
 
 ## The gate
 
