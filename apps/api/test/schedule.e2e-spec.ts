@@ -484,6 +484,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const paths = res.body.data.paths as Array<{
       index: number;
       relativeFloat: number;
+      relativeFloatMinutes: number;
       activityIds: string[];
     }>;
     expect(res.body.data.targetActivityId).toBe(d);
@@ -497,6 +498,12 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(branch).toBeDefined();
     expect(branch!.index).toBeGreaterThanOrEqual(1);
     expect(branch!.relativeFloat).toBe(2);
+    // The 24-hour reference for the eight-hour twin below: `makePlan` clears the calendar, so a
+    // working day here IS 1,440 minutes and the day field happens to be right. That coincidence is
+    // exactly why the defect survived — see the next test.
+    expect(branch!.relativeFloatMinutes).toBe(2 * 1440);
+    // Nothing was truncated at the default ceiling.
+    expect(res.body.data.hasMorePaths).toBe(false);
 
     // schedule:read — a Viewer can run the analysis.
     const viewer = await signUp('viewer@example.com');
@@ -504,6 +511,97 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
     });
     await viewer.agent.get(floatPathsUrl(planId, d)).expect(200);
+  });
+
+  it('reports relative float in MINUTES, which a flat 1440 gets wrong on an eight-hour day', async () => {
+    // **This test is the record of the defect** — the audit register's prose is not.
+    //
+    // Total float is measured on the ACTIVITY'S OWN calendar (ADR-0037 §4). The read-model used to
+    // divide the engine's working minutes by a flat 1440, so on an eight-hour calendar one working
+    // day of relative float (480 minutes) rounded to **0** — indistinguishable from the driving
+    // path — and larger values were understated threefold. F8 named this exact conversion as
+    // unchecked; nothing consumed the field, so nothing caught it.
+    //
+    // Deliberately the SAME network as the 24-hour case above, differing in exactly one thing: the
+    // calendar. That is the ADR-0034 flip-one-option discipline — if the two agreed, the fixture
+    // rather than the behaviour would be doing the work.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({
+        name: 'Eight hour week',
+        shifts: [0, 1, 2, 3, 4].map((weekday) => ({
+          weekday,
+          startMinute: 8 * 60,
+          endMinute: 16 * 60,
+        })),
+      })
+      .expect(201);
+    const calId = cal.body.data.id as string;
+    // ADR-0068: the calendar derives its own hours-per-day when the shifts are written.
+    expect(cal.body.data.hoursPerDay).toBe(8);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: calId, version: 2 })
+      .expect(200);
+
+    const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 4);
+    const c = await makeActivity(actor, planId, 'C', 2);
+    const d = await makeActivity(actor, planId, 'D', 5);
+    await link(actor, planId, a, b);
+    await link(actor, planId, a, c);
+    await link(actor, planId, b, d);
+    await link(actor, planId, c, d);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const res = await actor.agent.get(floatPathsUrl(planId, d)).expect(200);
+    const paths = res.body.data.paths as Array<{
+      relativeFloat: number;
+      relativeFloatMinutes: number;
+      activityIds: string[];
+    }>;
+    const branch = paths.find((p) => p.activityIds.includes(c));
+    expect(branch).toBeDefined();
+    // Two working days of relative float on an EIGHT-hour calendar = 960 minutes, not 2,880.
+    expect(branch!.relativeFloatMinutes).toBe(2 * 480);
+    // And the deprecated day field is demonstrably wrong here: round(960 / 1440) = 1, where the
+    // planner has two whole working days of headroom. Asserted rather than merely described, so
+    // nobody "tidies" the new field away believing the old one was fine.
+    expect(branch!.relativeFloat).toBe(1);
+  });
+
+  it('says when it truncated the list, and does not say so when it did not', async () => {
+    // A hub with four non-driving branch predecessors: into E there is the driving chain plus one
+    // path per branch. The off-by-one that matters is the EXACTLY-maxPaths case — a naive
+    // `length >= maxPaths` would claim truncation on a complete list.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const spine = await makeActivity(actor, planId, 'Spine', 10);
+    const target = await makeActivity(actor, planId, 'Target', 5);
+    await link(actor, planId, spine, target);
+    const branches: string[] = [];
+    for (const [i, days] of [1, 2, 3, 4].entries()) {
+      const id = await makeActivity(actor, planId, `Branch${String(i)}`, days);
+      await link(actor, planId, id, target);
+      branches.push(id);
+    }
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const all = await actor.agent.get(floatPathsUrl(planId, target, 50)).expect(200);
+    const total = (all.body.data.paths as unknown[]).length;
+    expect(total).toBeGreaterThan(2);
+    expect(all.body.data.hasMorePaths).toBe(false);
+
+    const cut = await actor.agent.get(floatPathsUrl(planId, target, 2)).expect(200);
+    expect((cut.body.data.paths as unknown[]).length).toBe(2);
+    expect(cut.body.data.hasMorePaths).toBe(true);
+
+    // Exactly the number that exist: a complete list must not claim there is more.
+    const exact = await actor.agent.get(floatPathsUrl(planId, target, total)).expect(200);
+    expect((exact.body.data.paths as unknown[]).length).toBe(total);
+    expect(exact.body.data.hasMorePaths).toBe(false);
   });
 
   it('404s when the target activity is not in the plan', async () => {

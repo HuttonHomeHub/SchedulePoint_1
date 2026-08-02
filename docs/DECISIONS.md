@@ -1292,11 +1292,25 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   come out by non-decreasing relative float. `relativeFloat` = the entry activity's total float minus the
   target's; it may be **negative** when a branch is more critical than a floating target (a
   constraint-broken predecessor). Bounded by `maxPaths` + a per-chain depth guard (no blow-up on dense
-  graphs). The read endpoint `GET .../schedule/float-paths?target=&maxPaths=` (schedule:read; relative
-  float in working days; 422 if the plan has no start date; 404 for a target not in the plan) now exposes
+  graphs). The read endpoint `GET .../schedule/float-paths?target=&maxPaths=` (schedule:read; 422 if the
+  plan has no start date; 404 for a target not in the plan) now exposes
   it — the analysis recomputes the schedule live via the shared engine-input builder, so it can never
   drift from a recalculate (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing
   schedule + driving edges).
+- **Float-path relative float is reported in MINUTES (audit F4 M0, 2026-08-02).** This entry used to
+  say "relative float in working days", and that clause was **false in a way that mattered**. The
+  read-model divided the engine's working minutes by a flat 1440 while total float is measured on the
+  **activity's own** calendar (ADR-0037 §4, ADR-0068) — so on an eight-hour calendar one working day
+  of relative float (480 minutes) rounded to **0**, indistinguishable from the driving path, and
+  larger values were understated threefold. It never bit because nothing consumed the field;
+  **building the F4 surface is what would have made it bite**. The response now carries
+  `relativeFloatMinutes` (the engine's figure, unconverted) alongside a retained-and-deprecated
+  `relativeFloat`; readers convert against the calendar they are presenting on, which for the F4
+  panel is the **target activity's** (recorded in `docs/specs/float-paths-surface/feature-spec.md`
+  §7, CQ-3). The envelope also gained `hasMorePaths`, derived by asking the engine for `maxPaths + 1`
+  and slicing — **`engine/float-paths.ts` is unmodified**, pinned by
+  `schedule/float-paths.structural.spec.ts`. This is F8's defect one field along, and F8 had named
+  this exact conversion as unchecked.
 - **TSLD export & print (Stage C1, `VITE_EXPORT_PRINT`, on by default 2026-07-20).** The `export`/`print`
   toolbar placeholders became four **client-side** deliverables — no API/schema/`@repo/types`/CPM-engine
   change, so the recalc parity gate is structurally untouched (spec `docs/specs/export-print/`). Key

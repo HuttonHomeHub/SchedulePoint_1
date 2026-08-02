@@ -616,15 +616,29 @@ export class ScheduleService {
       throw new NotFoundError('Activity not found in this plan.');
     }
 
-    const paths = computeFloatPaths(activities, edges, options, targetActivityId, maxPaths).map(
-      (p) => ({
-        index: p.index,
-        // Engine float is working minutes (ADR-0036); expose days like the activity rows.
-        relativeFloat: Math.round(p.relativeFloat / MINUTES_PER_DAY),
-        activityIds: p.activityIds,
-      }),
-    );
-    return { targetActivityId, paths };
+    // Ask for ONE more path than the caller wants, so "is there more?" is answered by the analysis
+    // rather than guessed. `engine/float-paths.ts` is deliberately not modified: adding a `hasMore`
+    // to a pure engine module's return type would change its contract and its goldens for what is
+    // purely a presentation concern. The extra chain walk is bounded by the same per-chain depth
+    // guard and is negligible beside the `computeSchedule` call that dominates this request.
+    //
+    // Note the probe deliberately exceeds the DTO's declared `maxPaths` ceiling by one. That ceiling
+    // is REQUEST validation; this internal call is not re-validated, and clamping it here would
+    // silently disable the probe at the top of the range.
+    const found = computeFloatPaths(activities, edges, options, targetActivityId, maxPaths + 1);
+    const hasMorePaths = found.length > maxPaths;
+    const paths = found.slice(0, maxPaths).map((p) => ({
+      index: p.index,
+      // Retained and deprecated (F4 M0.1). A flat 1440 against a per-activity calendar (ADR-0037 §4)
+      // understates the figure threefold on an eight-hour calendar, where one working day of
+      // relative float is 480 minutes and `Math.round(480 / 1440)` is 0 — the same shape as the
+      // audit's F8 defect. Readers take `relativeFloatMinutes` and convert on the calendar they are
+      // presenting against.
+      relativeFloat: Math.round(p.relativeFloat / MINUTES_PER_DAY),
+      relativeFloatMinutes: p.relativeFloat,
+      activityIds: p.activityIds,
+    }));
+    return { targetActivityId, paths, hasMorePaths };
   }
 
   /**

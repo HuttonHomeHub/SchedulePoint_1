@@ -138,6 +138,15 @@ A capability construction planners actively want ("show me the second and third 
 critical one"), fully built and reachable only with `curl`. Whether it earns a surface is a product
 call, not a defect call — but it should be a decision rather than an omission.
 
+> **Decided, and in build (2026-08-02).** It earns a surface: the planner's job is **compression
+> planning** — "if I shorten the critical path, what binds next, and by how much?" — and nothing
+> shipped answers it (Isolate gives path 0 with no figure; colour-by-float is per-activity and
+> non-contiguous; the near-critical threshold gives a set, not a ranked partition). The spec and plan
+> are [`docs/specs/float-paths-surface/`](float-paths-surface/); the product-owner answers to its
+> three critical questions are recorded in that spec's §7. Designing it immediately turned up the
+> **unit defect** recorded under F8 above, which is the argument for surfacing built-but-unreachable
+> capability rather than leaving it: an endpoint nobody renders is an endpoint nobody checks.
+
 ### F5 — capability matrix row N14 is stale (documentation)
 
 `docs/specs/engine-conformance-framework/CAPABILITY_MATRIX.md` marks **N14 negative units** as
@@ -347,6 +356,24 @@ application disagreed about the unit — invisible while the value was pinned at
 Two more flat-1440 conversions sit in the same file — `relativeFloat / MINUTES_PER_DAY` (line 575,
 the float-paths read-model) and `durationMinutes / MINUTES_PER_DAY` (line 905). **Neither has been
 checked.** They are named here so the next pass starts from a list rather than a search.
+
+> **Both have now been checked (2026-08-02, F4 M0).** They split, which is why checking beat
+> assuming in either direction:
+>
+> - **`relativeFloat / MINUTES_PER_DAY` — WRONG, and fixed.** Total float is measured on the
+>   activity's own calendar (ADR-0037 §4), so on an eight-hour calendar one working day of relative
+>   float (480 minutes) rounded to **0** — indistinguishable from the driving path — and larger
+>   values were understated threefold. The response now carries `relativeFloatMinutes` unconverted;
+>   the day field is retained and deprecated rather than deleted, since removing it breaks readers
+>   for no gain. Pinned by an **eight-hour-calendar API e2e** in `schedule.e2e-spec.ts`, built as a
+>   twin of the existing 24-hour case so the two differ in exactly one thing.
+> - **`durationMinutes / MINUTES_PER_DAY` — CORRECT, deliberately, and already documented.** It
+>   feeds `deriveExternalInstants`, which walks `addDays` over **calendar** days, so elapsed days
+>   are what it needs; scaling by working hours there would compound two approximations in the one
+>   place the result moves computed dates. Its docblock already said so. No change.
+>
+> The lesson worth keeping: the two lines looked identical and one of them was a defect. A list is
+> only useful if somebody reads it.
 
 ## The gate
 
