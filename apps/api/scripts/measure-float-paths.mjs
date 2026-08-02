@@ -44,11 +44,12 @@ if (!org || !planId || !email || !password) {
 }
 
 let cookie = '';
+const origin = args.get('origin') ?? 'http://localhost:5173';
 
 async function call(path, init = {}) {
   const res = await fetch(`${base}${path}`, {
     ...init,
-    headers: { 'content-type': 'application/json', cookie, ...(init.headers ?? {}) },
+    headers: { 'content-type': 'application/json', origin, cookie, ...(init.headers ?? {}) },
   });
   const setCookie = res.headers.get('set-cookie');
   if (setCookie) cookie = setCookie.split(';')[0];
@@ -62,9 +63,11 @@ function percentiles(samples) {
   return { p50: at(50), p95: at(95), min: sorted[0], max: sorted[sorted.length - 1] };
 }
 
+// The Origin header is not optional: Better Auth applies CSRF/origin checks to its own routes, and
+// a bare fetch is rejected 403 without it (the e2e suites set the same header for the same reason).
 const signIn = await fetch(`${base}/api/auth/sign-in/email`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', origin },
   body: JSON.stringify({ email, password }),
 });
 if (!signIn.ok) {
@@ -74,17 +77,29 @@ if (!signIn.ok) {
 cookie = (signIn.headers.get('set-cookie') ?? '').split(';')[0];
 
 // The target matters: paths are computed INTO one activity, and the deepest one exercises the
-// longest driving chain. Take the plan's last activity by early finish — the closest thing to
-// "the project finish", which is also the panel's suggested default (CQ-2).
-const listed = await call(
-  `/api/v1/organizations/${org}/plans/${planId}/activities?limit=500&sort=earlyFinish:desc`,
-);
-if (!listed.ok) {
-  console.error(`activity list failed: ${String(listed.status)}`);
-  process.exit(1);
+// longest driving chain. Page the whole plan and take the LATEST-FINISHING activity — the closest
+// thing to "the project finish", which is also the panel's suggested default (CQ-2).
+const activities = [];
+let cursor;
+for (;;) {
+  const page = await call(
+    `/api/v1/organizations/${org}/plans/${planId}/activities?limit=100${cursor ? `&cursor=${cursor}` : ''}`,
+  );
+  if (!page.ok) {
+    console.error(`activity list failed: ${String(page.status)}`);
+    process.exit(1);
+  }
+  const body = await page.json();
+  activities.push(...(body.data ?? []));
+  cursor = body.meta?.nextCursor ?? body.meta?.cursor?.next;
+  if (!cursor) break;
 }
-const activities = (await listed.json()).data;
-const target = activities[0]?.id;
+// Skip WBS summaries: a summary's dates are a rollup, and paths INTO one are not the analysis a
+// planner means when they ask what binds after the critical path.
+const leaves = activities.filter((a) => a.type !== 'WBS_SUMMARY');
+const target = [...leaves].sort((a, b) =>
+  (b.earlyFinish ?? '').localeCompare(a.earlyFinish ?? ''),
+)[0]?.id;
 if (!target) {
   console.error('the plan has no activities');
   process.exit(1);

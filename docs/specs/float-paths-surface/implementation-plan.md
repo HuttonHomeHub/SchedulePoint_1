@@ -168,6 +168,37 @@ assumption. Nothing user-visible ships; nothing can regress, because nothing con
   2. Time 20 requests at each size; record p50/p95 and the recalculate reference.
   3. Record the result **in this document** under M1.3's decision, with caveats.
 
+> ### M0.5 RESULT (measured 2026-08-02) — and the M1.3 decision it settles
+>
+> Harness: `apps/api/scripts/measure-float-paths.mjs`, 20 runs after one warm-up, against a
+> **540-activity / 800-link** ADR-0066 scale plan (`--tier scale --activities 500`) seeded through
+> the public REST API. Target = the latest-finishing non-summary activity, which is also the panel's
+> suggested default (CQ-2).
+>
+> | request                                   | p50      | p95          | min / max     |
+> | ----------------------------------------- | -------- | ------------ | ------------- |
+> | `GET …/schedule/float-paths`              | 85.7 ms  | **100.4 ms** | 75.7 / 107.9  |
+> | `POST …/schedule/recalculate` (reference) | 148.2 ms | 165.3 ms     | 119.2 / 166.1 |
+>
+> **float-paths is 0.61× a recalculate at p95.** That is the number that matters: it is _cheaper_
+> than the write a planner already presses a button for and waits on, on a plan larger than most.
+> The "one request ≈ one CPM run" worry is real in mechanism and small in magnitude, because the
+> forward/backward pass over 540 activities is simply not expensive — and this request skips the
+> batched persistence a recalculate pays for.
+>
+> **Decision for M1.3: fetch on panel open.** No explicit **Analyse** press, no confirmation step. A
+> ~100 ms request behind a control the planner deliberately opened is an ordinary read; making them
+> press twice for it would be ceremony. `staleTime` is set to **0 with the query kept mounted** —
+> the analysis is derived from the live schedule, so a stale float path is a _wrong_ float path, and
+> the ADR-0022 recalc invalidation (`scheduleKeys.all`) already sweeps this key by construction
+> because it lives in the same namespace.
+>
+> **Caveats, stated rather than implied.** A container on shared infrastructure is not a planner's
+> machine and not a production host; treat the absolutes as indicative and the **ratio** as the
+> finding. This is one plan shape — the ADR-0066 scale generator's spine-and-branches — not a survey.
+> If a real programme ever lands where float-paths is materially _slower_ than its own recalculate,
+> that inverts the reasoning above and the fetch policy should be revisited, not patched.
+
 ##### Task M0.6 — Check the second flat-1440 conversion F8 named (check, do not necessarily change)
 
 - **Description:** F8 listed two unchecked conversions. This epic closes one. Read the other —
