@@ -154,20 +154,42 @@ function isRealDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+/** `YYYY-MM-DD`, and a day that actually exists. Shared by both ends of an exception's range. */
+const calendarDay = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date.')
+  .refine(isRealDate, 'Enter a valid date.');
+
 /**
  * Calendar-exception add form schema — mirrors the API DTO. `date` is the raw
  * `<input type="date">` value (`YYYY-MM-DD`); `isWorking` defaults to a holiday
  * (false); `label` is an optional name (e.g. "Christmas Day").
+ *
+ * `endDate` is the range's last day, **inclusive** and optional — one exception for a shutdown or a
+ * Christmas fortnight instead of fourteen separate entries (surface audit F2). Empty means a single
+ * day, which is what every value entered before this existed meant.
+ *
+ * The ordering rule is checked here as well as at the API, and deliberately so: the API's 422 is
+ * the enforcing boundary, but a planner who has typed both dates should be told at the field rather
+ * than after a round trip. Both compare `YYYY-MM-DD` strings, which sort as dates.
  */
-export const exceptionFormSchema = z.object({
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date.')
-    .refine(isRealDate, 'Enter a valid date.'),
-  // Defaults to a holiday (false) via the form's default values.
-  isWorking: z.boolean(),
-  label: z.string().trim().max(120, 'Label is too long.').optional(),
-});
+export const exceptionFormSchema = z
+  .object({
+    date: calendarDay,
+    endDate: z.union([calendarDay, z.literal('')]).optional(),
+    // Defaults to a holiday (false) via the form's default values.
+    isWorking: z.boolean(),
+    label: z.string().trim().max(120, 'Label is too long.').optional(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.endDate !== undefined && values.endDate !== '' && values.endDate < values.date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endDate'],
+        message: 'The last day cannot be before the first day.',
+      });
+    }
+  });
 
 export type ExceptionFormValues = z.infer<typeof exceptionFormSchema>;
 

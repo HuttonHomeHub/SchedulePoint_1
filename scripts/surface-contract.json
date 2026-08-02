@@ -204,7 +204,7 @@
     "surface": "components/ui/window-list-editor.tsx"
   },
   "calendars/create-calendar-exception.endDate": {
-    "gap": "F2 \u2014 the API accepts a range as of b0acd3f; the calendar editor has no end-date control yet"
+    "surface": "features/calendars/components/CalendarExceptionsEditor.tsx (To (optional))"
   },
   "calendars/create-calendar-exception.isWorking": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
@@ -235,6 +235,9 @@
   },
   "calendars/create-calendar.workingWeekdays": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "calendars/update-calendar-exception.endDate": {
+    "surface": "features/calendars/components/CalendarExceptionsEditor.tsx (To)"
   },
   "calendars/update-calendar-exception.isWorking": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"

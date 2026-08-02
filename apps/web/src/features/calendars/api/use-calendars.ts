@@ -391,6 +391,11 @@ export function useAddException(orgSlug: string, calendarId: string) {
           method: 'POST',
           body: JSON.stringify({
             date: input.date,
+            // Omitted (not `null`) when the planner left it empty: the API reads an absent
+            // `endDate` as "a single day", which is what `date` alone has always meant.
+            ...(input.endDate === undefined || input.endDate === ''
+              ? {}
+              : { endDate: input.endDate }),
             // Flag off, no caller supplies `hours` and the body is byte-for-byte what it always was.
             ...hoursBody(input.hours ?? { isWorking: input.isWorking }),
             label: optional(input.label),
@@ -421,6 +426,8 @@ export function useUpdateException(orgSlug: string, calendarId: string) {
     mutationFn: (input: {
       exceptionId: string;
       version: number;
+      /** The range's new last day. Send the first day itself to collapse a range back to one. */
+      endDate?: string;
       hours?: ExceptionHours;
       label?: string | null;
     }) =>
@@ -430,6 +437,7 @@ export function useUpdateException(orgSlug: string, calendarId: string) {
           method: 'PATCH',
           body: JSON.stringify({
             version: input.version,
+            ...(input.endDate === undefined ? {} : { endDate: input.endDate }),
             ...(input.hours === undefined ? {} : hoursBody(input.hours)),
             ...(input.label === undefined ? {} : { label: input.label }),
           }),

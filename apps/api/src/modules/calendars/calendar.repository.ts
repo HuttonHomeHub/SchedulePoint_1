@@ -699,7 +699,7 @@ export class CalendarRepository {
   async updateExceptionIfVersionMatches(
     id: string,
     expectedVersion: number,
-    patch: { label?: string | null; windows?: readonly WindowRow[] },
+    patch: { label?: string | null; endDate?: Date; windows?: readonly WindowRow[] },
     updatedBy: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {

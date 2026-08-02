@@ -1094,9 +1094,9 @@ export interface CalendarExceptionSummary {
   /** First calendar day of the exception (`YYYY-MM-DD`). */
   date: string;
   /**
-   * Last calendar day, inclusive. Storage holds a range (ADR-0036 §2); only a single day is
-   * authorable today, so this equals {@link CalendarExceptionSummary.date} for every exception
-   * the API creates. Present so the range is never silently dropped on read.
+   * Last calendar day, inclusive. Storage has always held a range (ADR-0036 §2) and both write
+   * paths now author one, so a shutdown or a Christmas fortnight is **one** exception rather than
+   * fourteen (surface audit F2). Equals {@link CalendarExceptionSummary.date} for a single day.
    */
   endDate: string;
   /**

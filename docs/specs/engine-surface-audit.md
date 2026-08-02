@@ -2,8 +2,8 @@
 
 > **Status:** audit complete for the scope stated in _Limits_ below. **Eight findings.** F7 was
 > found by the surface-contract gate on its first run, not by the manual sweep; F8 was found while
-> building F7's control, and blocked it. **Resolved: F1, F5, F7+F8, and F2's API half.**
-> **Open: F2's web half, F3, F4, F6.**
+> building F7's control, and blocked it. **Resolved: F1, F2, F5, F7+F8.**
+> **Open: F3, F4, F6.**
 >
 > **Method:** ADR-0058's rule — _verify the claim; do not trust the document._ Every row was
 > established by reading the engine's input types, the Prisma columns, the DTOs, the repositories and
@@ -50,7 +50,7 @@ it. That is the ADR-0064 "lit but inert" shape, in the progress model rather tha
 Recommend **(2) first, on its own**: honest immediately, cheap, and it does not block (1) later.
 Shipping (1) silently would change dates on every plan that already carries a suspend date.
 
-### F2 — a calendar exception cannot span more than one day (outward, and the most practical)
+### F2 — a calendar exception cannot span more than one day (outward, and the most practical) — **RESOLVED**
 
 `calendar_exceptions` stores a **range**: `start_date` and `end_date`, with a Postgres exclusion
 constraint over `daterange(start_date, end_date, '[]')` to stop two exceptions overlapping. The
@@ -70,6 +70,21 @@ differ from its start.
 This is the ADR-0067 / ADR-0070 shape a third time: storage and the read model support something no
 write path can produce. It is also the one on this list a construction planner will hit most often —
 shutdowns are common, and long.
+
+**Resolved in two halves.** The API half added `endDate` to the create DTO with an inverted-range
+422; the web half added **From** / **To (optional)** to the exception editor, made the row and every
+announcement read the span rather than its first day, and made an exception's **last** day editable
+— the first day still is not, because moving an exception is remove-then-add, but extending a
+shutdown is neither of those and the alternative is the delete-then-recreate the edit endpoint
+exists to remove.
+
+Two things fell out of it that the finding did not anticipate. Extending a range can now **collide**
+with the next exception along, which is the same conflict as a duplicate day — so both write paths
+go through one `runExceptionWrite` translation of the exclusion constraint rather than two copies
+that could drift about which 409 it is. And `buildWorkingTimeCalendar` expands **every day of every
+exception** at build time; its own comment justified that with "the single-day API shape keeps it at
+O(E)", a premise this finding removes. A 10,000-day span ceiling replaces it explicitly — a typo
+guard, and the bound the engine's cost now rests on.
 
 ### F3 — remaining duration is day-only, immediately after ADR-0070 made durations sub-day
 
@@ -226,8 +241,7 @@ classified in `scripts/surface-contract.json` as `surface` (a planner can author
 an **unclassified** field, not on an honestly-marked gap, because a gate that fails on day one gets
 deleted rather than fixed (ADR-0058).
 
-Current state: **190 surfaced, 8 exempt, 3 gaps** — F2's `endDate` (API-side only, no control yet)
-and F3 (two entries).
+Current state: **192 surfaced, 8 exempt, 2 gaps** — both F3.
 
 **What it cannot catch, so nobody trusts it further than it goes.** It enumerates fields that exist.
 It is blind to a field that _should_ exist and does not — F2's missing `endDate` on the exception

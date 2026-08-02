@@ -13,6 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { IsCalendarDate } from '../../../common/validation/calendar-date';
 import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
 
 import {
@@ -27,15 +28,28 @@ const trim = ({ value }: { value: unknown }): unknown =>
 /**
  * Request body for editing a dated exception.
  *
- * The date is deliberately **not** editable: an exception is identified by the day it applies to,
- * and moving one is indistinguishable from deleting it and adding another — which is what the two
- * existing endpoints already do, visibly. What this changes is the day's hours and its label.
+ * The **first** day is deliberately not editable: an exception is identified by the day it starts
+ * on, and moving one is indistinguishable from deleting it and adding another — which is what the
+ * two existing endpoints already do, visibly. Its **last** day is a different question, and is
+ * editable: extending a shutdown by two days is not moving an exception, it is the edit a planner
+ * most often needs, and the alternative is the delete-then-recreate this endpoint exists to remove.
  *
  * Before this endpoint the only way to correct an exception's hours was delete-then-recreate: two
  * writes, a new id, and a window in which a holiday had become an ordinary working day. A
  * recalculation landing in that window would have scheduled work on it.
  */
 export class UpdateCalendarExceptionDto {
+  @ApiPropertyOptional({
+    format: 'date',
+    description:
+      'New last calendar day (YYYY-MM-DD), INCLUSIVE — extend or shorten the range without ' +
+      'recreating it. Must not precede the exception’s existing first day. Send the first day ' +
+      'itself to collapse a range back to one day. Omitted leaves the span untouched.',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  endDate?: string;
+
   @ApiPropertyOptional({
     description:
       'false = holiday (non-working); true = a worked exception for the WHOLE day. Shorthand for ' +

@@ -163,7 +163,9 @@ export function buildWorkingTimeCalendar(
   // and `endDay` are both monotonic in `sorted`, so a whole-day-span adjustment is an O(log E) range
   // query (two binary searches + a prefix diff, boundary exceptions clipped) instead of a scan over
   // every exception on the plan span — the ADR-0036 §5 "never a per-exception loop" contract. The
-  // one-time build cost is O(total exception days), which the single-day API shape keeps at O(E).
+  // one-time build cost is O(total exception days). Ranges became authorable with surface audit F2,
+  // so that is no longer O(E) — it is bounded instead by the service's per-exception span ceiling
+  // (`MAX_EXCEPTION_SPAN_DAYS`), which exists for exactly this reason as well as the typo one.
   const excCumDelta = new Array<number>(sorted.length + 1);
   excCumDelta[0] = 0;
   for (let i = 0; i < sorted.length; i += 1) {
