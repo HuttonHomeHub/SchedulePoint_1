@@ -1,6 +1,6 @@
 {
   "name": "@repo/seed-http",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "The HTTP seeder: creates a SeedSpec as a real plan through the public REST API (ADR-0066). Authenticates, obeys RBAC and holds the plan edit-lock like any other client; never touches a database.",
   "license": "MIT",

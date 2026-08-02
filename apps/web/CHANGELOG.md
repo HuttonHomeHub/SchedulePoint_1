@@ -1,5 +1,110 @@
 # @repo/web
 
+## 0.65.0
+
+### Minor Changes
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Set the critical float threshold — the near-critical band a planner actually asks for
+
+  Under the default **Total float** critical-path definition, an activity is critical when its total
+  float is at or below the plan's **critical float threshold**. The field was writable on the API,
+  carried on the shared type and consumed by the CPM engine — and had **no control anywhere in the
+  app**. Every reference in the web source was a seed value in a test fixture, so the threshold was
+  pinned at 0 on every plan and _show me everything within five days of critical_ — the question P6
+  users ask constantly — could not be asked, though the engine has always been able to answer it.
+
+  It now sits in **Schedule settings**, last in the float & critical group, because it only means
+  anything under the definition two controls above it.
+
+  The field reads the same `d`/`h`/`m` grammar as a duration, so a planner types `5d`, `4h` or `90m`
+  rather than a raw minute count. A day is resolved on the **plan** calendar and the hint says so out
+  loud: the threshold is plan-level while total float is measured on each activity's own calendar, so
+  on a mixed-calendar plan an activity on a different calendar is still compared against a figure
+  typed in the plan calendar's days. Naming which day you are typing in is a disclosure rather than a
+  fix, and it beats the alternative of saying nothing. Where the calendar's hours cannot be resolved
+  the field degrades to plain working minutes — the one unit that needs no factor — rather than
+  guessing one.
+
+  Found by the new `check:surface-contract` gate on its first run, not by the manual audit that
+  preceded it (surface audit F7).
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - One calendar exception can cover a shutdown, instead of fourteen separate days
+
+  `calendar_exceptions` has stored a **range** since the table was created — `start_date`, `end_date`,
+  and a Postgres exclusion constraint over `daterange(start_date, end_date, '[]')` to stop two
+  exceptions overlapping — the read DTO has always returned `endDate`, and the CPM engine has always
+  scheduled across the whole span. Only the write paths collapsed it, so a Christmas fortnight, a
+  two-week turnaround or a plant shutdown had to be entered as ten to fourteen separate one-day
+  exceptions, one at a time, on a schema and a read model that both described the range the planner
+  actually meant (surface audit F2).
+
+  The exception editor now takes **From** and **To (optional)** — empty still means a single day,
+  which is what a date on its own has always meant, so nothing a planner already knows how to enter
+  changes. Existing exceptions read back exactly as before.
+
+  An exception's **last** day is also editable. Its **first** day still is not: moving an exception is
+  indistinguishable from deleting one and adding another, which the neighbouring actions already do
+  visibly — but extending a shutdown by two days is not moving anything, it is the edit a planner most
+  often needs, and the alternative is the delete-then-recreate the edit endpoint exists to remove
+  (there is a window in between during which a holiday is an ordinary working day, and a
+  recalculation landing in it schedules work).
+
+  A range that ends before it starts is a 422 naming both dates — an empty range is the one shape the
+  overlap constraint cannot express, because it overlaps nothing. A span that would collide with the
+  next exception along is the same 409 as adding a duplicate day, from the same translation of the
+  same constraint. A span longer than 10,000 days is refused: a year typed as 2226 rather than 2026 is
+  a typo, and it is also the bound the engine's calendar build now relies on, since it expands each
+  exception once per recalculation and the "single day, so O(E)" premise no longer holds.
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Report a four-hour remainder, instead of rounding it to "no work left"
+
+  ADR-0070 made an activity's **duration** sub-day authorable and left its **remaining work** a
+  whole-number days box. So a planner could type `4h` for the duration, report progress, and then
+  state the remainder only as `0` or `1` day — and on an incomplete activity `0` is not a rounding
+  artefact, it is also the value that means _no work left_. The asymmetry sharpened it: the derived
+  remaining (percent × duration) is minute-exact, so stating the remainder explicitly was **less**
+  precise than saying nothing (surface audit F3).
+
+  `remainingDurationMinutes` joins the progress DTO as the mutually-exclusive sibling of
+  `remainingDurationDays` — the same pair `api-v0.34.0` gave duration and lag — and the activity
+  response and `ActivitySummary` now carry it, so a sub-day remainder can be read back exactly rather
+  than as the `0` its day field rounds to.
+
+  The progress editor's field takes the same `d`/`h`/`m` grammar as a duration, reusing that field's
+  predicate, degrade rule and flag rather than a second reading of `2d 4h`. Blank still means "derive
+  it from percent complete" — which is the one thing this field has that a duration does not, and the
+  only part the shared module does not own. Where the calendar's working hours cannot be resolved it
+  degrades to whole days, which is the same code path as flag-off, so the rollback contract and the
+  not-yet-loaded state cannot rot apart.
+
+  The seeder now sends the minutes its spec already held, instead of rounding them and recording the
+  loss as an approximation — a sub-day remainder in a seeded plan was never what the spec asked for.
+
+  With this, `pnpm check:surface-contract` reports **zero gaps**: every writable field on a scheduling
+  DTO and every CPM engine input has a surface a planner can reach, or a written reason why not.
+
+### Patch Changes
+
+- [#209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/209) [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Say which progress date moves the schedule and which is only a record
+
+  A planner could set a **suspend date** on an in-progress activity, recalculate, and get exactly the
+  dates they would have got without it. The field is validated, stored, returned, displayed and
+  exported to XER and MSPDI — and the recalculation does not read it. `EngineActivity` has no such
+  field and the schedule repository does not even `select` the column. Only the **resume** date is
+  load-bearing: it floors the remaining work at `max(data date, resume date)`.
+
+  Nothing on screen said so, and the two fields sit side by side looking identical. Each now carries a
+  one-line hint: the suspend date is recorded only, the resume date is what the remaining work
+  schedules from.
+
+  ADR-0035 §4 also claimed "the suspended window is excluded from actual duration", which has never
+  been implemented and has no consumer anywhere. That clause is withdrawn rather than left standing —
+  implementing it stays open as a separate decision, because it would change computed actual duration,
+  and therefore dates, on every plan already carrying a suspend date.
+
+- Updated dependencies [[`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a), [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a), [`be6d973`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be6d9734df22b68d863bbb746250a5942983f39a)]:
+  - @repo/types@0.20.0
+
 ## 0.64.0
 
 ### Minor Changes
