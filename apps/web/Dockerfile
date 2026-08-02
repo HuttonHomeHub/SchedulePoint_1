@@ -19,6 +19,7 @@ COPY apps/web/package.json apps/web/
 COPY packages/config/package.json packages/config/
 COPY packages/types/package.json packages/types/
 COPY packages/interchange/package.json packages/interchange/
+COPY packages/layout/package.json packages/layout/
 # @repo/seed is a devDependency used by ONE hand-run bench script, not by `src`. It is here
 # because `apps/web/tsconfig.json` deliberately includes `scripts/` so the benchmark cannot
 # drift from the painter it measures — which makes it part of the `tsc --noEmit` the build
@@ -36,9 +37,13 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 # Build the shared workspace packages first so the production Vite build resolves
 # their compiled output (the `development` export condition only applies to the dev
-# server). @repo/web consumes both @repo/types and @repo/interchange (its Zod schemas).
+# server). @repo/web consumes @repo/types, @repo/interchange (its Zod schemas) and
+# @repo/layout (the shared lane packer behind Auto-arrange, ADR-0069). Every package
+# it imports has to be listed here: a local checkout keeps a `dist/` from an earlier
+# build, so an omission is invisible outside this stage.
 RUN pnpm --filter @repo/types build \
     && pnpm --filter @repo/interchange build \
+    && pnpm --filter @repo/layout build \
     && pnpm --filter @repo/seed build \
     && pnpm --filter @repo/web build
 

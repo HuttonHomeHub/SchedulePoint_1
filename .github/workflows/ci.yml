@@ -63,6 +63,14 @@ jobs:
       - name: Check the test playbook
         run: pnpm check:playbook
 
+      # The ADR-0019 build contract, checked rather than remembered. Adding a shared package means
+      # adding three lines by hand (two Dockerfile stages + the e2e job's direct build step), and
+      # missing one is invisible locally because the developer's checkout still has the package's
+      # `dist/` from an earlier build. `@repo/layout` (ADR-0069) shipped that way and only failed
+      # in the image build, minutes in, with an error naming a module that exists.
+      - name: Check the build contract
+        run: pnpm check:build-contract
+
       - name: Unit tests
         run: pnpm test
 
@@ -107,10 +115,15 @@ jobs:
       # The Playwright API web server runs the compiled app (`nest start` →
       # `node dist/main.js`), which resolves `@repo/types` to its built output
       # (`exports.default` → `dist/`). Unlike the Turbo-driven `quality` job,
-      # this job runs those steps directly, so it must build the shared package
+      # this job runs those steps directly, so it must build the shared packages
       # first — otherwise the web e2e web server crashes with MODULE_NOT_FOUND.
+      #
+      # EVERY package `apps/api` or `apps/web` imports must be listed. A local
+      # checkout hides an omission, because a `dist/` built by an earlier run is
+      # still lying there; CI starts clean and fails at `nest build` instead
+      # (`@repo/layout` was missed exactly this way — ADR-0019 build contract).
       - name: Build shared packages
-        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build
+        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build
 
       - name: Generate Prisma client
         run: pnpm --filter @repo/api prisma:generate

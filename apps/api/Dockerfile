@@ -19,6 +19,7 @@ COPY apps/api/package.json apps/api/
 COPY packages/config/package.json packages/config/
 COPY packages/types/package.json packages/types/
 COPY packages/interchange/package.json packages/interchange/
+COPY packages/layout/package.json packages/layout/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @repo/api...
 
@@ -27,9 +28,13 @@ FROM deps AS build
 COPY . .
 # Build the shared workspace packages first (their compiled JS is required at
 # runtime — the raw TypeScript source cannot be loaded by plain Node). @repo/api
-# consumes both @repo/types and @repo/interchange (ADR-0019 build contract).
+# consumes @repo/types, @repo/interchange and @repo/layout (ADR-0019 build
+# contract). Every package it imports has to be listed here: a local checkout
+# keeps a `dist/` from an earlier build, so an omission is invisible outside
+# this stage — which is how @repo/layout was first missed.
 RUN pnpm --filter @repo/types build \
     && pnpm --filter @repo/interchange build \
+    && pnpm --filter @repo/layout build \
     && pnpm --filter @repo/api prisma:generate \
     && pnpm --filter @repo/api build \
     && pnpm --filter @repo/api --prod --legacy deploy /out \

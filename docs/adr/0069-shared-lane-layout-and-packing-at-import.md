@@ -68,7 +68,14 @@ overlap the moment they gained dates.
   they cannot disagree. The seam is cheap to extend — a future "pack on demand" server action, or
   packing at any other bulk-create path, has somewhere to call.
 - **Negative / new debt.** A third workspace package is a standing build-contract obligation
-  (ADR-0019). Phase 3 adds two reads and one batched write to every commit; at 2,000 activities the
+  (ADR-0019) — **and this ADR did not meet it.** The sentence above was written; the three lines it
+  describes (both Dockerfile stages, plus the CI e2e job's direct "Build shared packages" step) were
+  never added. Nothing local could see it: `packages/layout/dist` already existed from an earlier
+  build, so the full pre-push gate passed, both e2e halves included. It surfaced only on a clean
+  machine, as `Cannot find module '@repo/layout'` inside `nest build` — an error naming a module
+  that plainly exists. The obligation is now a computed gate rather than a paragraph
+  (`pnpm check:build-contract`, ADR-0058), which is the only reason the next package will not repeat
+  it. Phase 3 also adds two reads and one batched write to every commit; at 2,000 activities the
   whole request still lands well inside the e2e's 60 s bound, but it is not free, and it is the
   first thing to look at if import latency ever becomes a complaint.
 - **Neutral.** **The CPM engine is not imported and the ADR-0034 recalc parity gate is untouched** —

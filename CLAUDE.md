@@ -1185,7 +1185,9 @@ When operating in this repo, Claude Code should:
    gates to make CI pass.
 7. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
    push" — `pnpm lint && pnpm typecheck && pnpm test` (plus `pnpm check:playbook`
-   when you add or rename a seed plan), **plus
+   when you add or rename a seed plan, and `pnpm check:build-contract` when you
+   add a shared `packages/*` workspace package — a local checkout has its
+   `dist/` already and cannot see a missing build line), **plus
    `scripts/e2e-local.sh api` when you touched `apps/api`, plus
    `scripts/e2e-local.sh web:<suite>` when you added or changed a flag-on
    Playwright suite** — before declaring work done, and report failures

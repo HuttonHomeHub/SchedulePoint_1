@@ -68,6 +68,22 @@ schedule a reconciliation pass to catch what cannot be gated.**
      These join the gates that already existed for the same reason: the schema
      drift check, the token-contrast matrix, the structural seam test, and the
      flag-off parity suites.
+
+   Added since, on the same principle:
+
+   - `pnpm check:build-contract` (`scripts/check-build-contract.mjs`) — every
+     `@repo/*` an app lists in `dependencies` is COPYd and built in that app's
+     Dockerfile, and built in the CI e2e job's direct "Build shared packages"
+     step (ADR-0019). Three hand-maintained lines per package, and **a local
+     checkout cannot see a missing one**: the package already has a `dist/` from
+     an earlier build, so everything resolves right up until a clean machine
+     builds the image. `@repo/layout` (ADR-0069) shipped with all three absent
+     and surfaced as `Cannot find module '@repo/layout'` inside `nest build` —
+     an error naming a module that plainly exists, minutes into CI, after a full
+     green local gate including both e2e halves. This is the ADR's own thesis
+     landing on it: the obligation was written down in a Dockerfile comment and
+     the comment was not a gate.
+
 2. **The bar for a gate is that it computes, not that it reads.** A test that
    asserts the _shape_ of a thing beats a reviewer who is asked to look for it.
 3. **A reconciliation pass runs at each epic boundary**, with a three-month hard

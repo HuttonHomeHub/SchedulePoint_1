@@ -256,6 +256,7 @@ failure should surface at the earliest step that can see it.
 | 3   | `scripts/e2e-local.sh api`         | you touched `apps/api` — service, controller, DTO, schema or migration               |
 | 4   | `scripts/e2e-local.sh web:<suite>` | you **added or changed** a flag-on Playwright suite, or changed a surface one drives |
 | 5   | `pnpm check:playbook`              | you added, renamed or removed a seed-catalogue plan (ADR-0066)                       |
+| 6   | `pnpm check:build-contract`        | you added a shared `packages/*` workspace package, or changed a Dockerfile           |
 
 `scripts/e2e-local.sh` brings up Postgres, creates the `app` role and `app_test`
 database **with the same credentials CI uses**, applies migrations, finds the
@@ -298,8 +299,15 @@ Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   [`TEST_PLAYBOOK.md`](TEST_PLAYBOOK.md) against the plans the seed catalogue's
   builders actually produce, **in both directions** — a row naming a plan that
   no longer exists sends a reader to seed nothing, and a plan with no row gets
-  seeded and demonstrates nothing (ADR-0066 M5.3). Neither check needs a
-  database.
+  seeded and demonstrates nothing (ADR-0066 M5.3). `pnpm check:build-contract`
+  asserts the ADR-0019 obligation that every `@repo/*` an app depends on at
+  runtime is COPYd and built in that app's Dockerfile **and** in the e2e job's
+  direct "Build shared packages" step. That one exists because a local checkout
+  cannot see the failure: the package already has a `dist/` from an earlier
+  build, so the omission only appears on a clean machine — `@repo/layout`
+  (ADR-0069) shipped that way and turned up as `Cannot find module` inside
+  `nest build`, minutes into CI, for a module that plainly exists. None of the
+  three checks needs a database.
 - **e2e** — provisions a Postgres service, generates the Prisma client, applies
   migrations (`prisma migrate deploy`), checks for schema/migration drift, runs
   the API Supertest suite, then runs each Playwright suite as its own step
