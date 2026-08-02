@@ -155,6 +155,11 @@ export interface ResourceHistogramAssignmentRow {
   activityId: string;
   budgetedUnits: Prisma.Decimal;
   curveType: ResourceCurveType;
+  /**
+   * The assignment's join delay in working minutes (ADR-0071 §1) — how far into the activity this
+   * resource starts. 0 = joins with it, which is every row that predates the column.
+   */
+  lagMinutes: number;
   /** The owning activity's persisted early start / finish (the span); null = never-calculated ⇒ off-axis. */
   earlyStart: Date | null;
   earlyFinish: Date | null;
@@ -531,6 +536,7 @@ export class ScheduleRepository {
         activityId: true,
         budgetedUnits: true,
         curveType: true,
+        lagMinutes: true,
         activity: { select: { earlyStart: true, earlyFinish: true, calendarId: true } },
       },
     });
@@ -539,6 +545,7 @@ export class ScheduleRepository {
       activityId: r.activityId,
       budgetedUnits: r.budgetedUnits,
       curveType: r.curveType,
+      lagMinutes: r.lagMinutes,
       earlyStart: r.activity.earlyStart,
       earlyFinish: r.activity.earlyFinish,
       calendarId: r.activity.calendarId,

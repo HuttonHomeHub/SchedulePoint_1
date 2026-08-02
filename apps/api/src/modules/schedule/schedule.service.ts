@@ -734,10 +734,11 @@ export class ScheduleService {
       profile: resolveCurveProfile(r.curveType),
       start: r.earlyStart ? formatCalendarDate(r.earlyStart) : null,
       finish: r.earlyFinish ? formatCalendarDate(r.earlyFinish) : null,
-      // SchedulePoint does not model a per-assignment lag column (the fixture's assignment_lag_h is a
-      // conformance-only concept, exercised via the adapter); production always distributes over the
-      // whole activity span.
-      lagMinutes: 0,
+      // The assignment's own join delay (ADR-0071 §1), measured on the activity's calendar resolved
+      // just above — so the lag walks the same working time the span does. Until M0 there was no
+      // column to read and this was pinned at 0 under a comment saying so; that comment outlived the
+      // column by one milestone, which is exactly the drift the surface audit exists to catch.
+      lagMinutes: r.lagMinutes,
       calendar: portFor(r.calendarId),
     }));
 

@@ -191,10 +191,15 @@ detail and is not:
   `cost:read` (EV4a); a lag is a scheduling fact, so gating it would make a Viewer's picture of when
   the resource arrives disagree with a Planner's. That is pinned by an e2e case rather than asserted.
 
-M1 (histogram) is next, and it has a visible seam waiting for it: `schedule.service.ts` currently
-passes `lagMinutes: 0` into the histogram input under a comment saying SchedulePoint does not model
-the column. As of M0 that comment is false — which is exactly the drift this register exists to
-catch, so it is named here rather than left for the next reader.
+**M1 landed (2026-08-02).** The histogram read-model now reads the stored lag instead of the
+hard-coded `0` it passed under a comment saying SchedulePoint does not model the column — a comment
+that would have outlived the column by one milestone had M0 not named it. The lag walks the same
+activity calendar the span does, because both are resolved at the same seam.
+
+The tests state the one thing about it that is easy to mistake for the lag being ignored: the shared
+axis is the union of **effective** spans, so a lagged assignment with an unlagged peer reads as a gap
+at the front, while a lagged assignment on its own moves the axis instead of padding it. Both are
+pinned.
 
 ### F7 — the critical float threshold has no control (outward; found by the gate, not by me) — **RESOLVED**
 

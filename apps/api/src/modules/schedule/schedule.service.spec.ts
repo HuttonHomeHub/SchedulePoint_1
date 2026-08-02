@@ -915,6 +915,7 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     activityId: 'act-1',
     budgetedUnits: new Prisma.Decimal(1200),
     curveType: 'BELL' as const,
+    lagMinutes: 0,
     // A 21-day span on the (null-calendar → all-days-work) plan calendar, DAY-aligned to the profile.
     earlyStart: new Date('2026-01-01T00:00:00Z'),
     earlyFinish: new Date('2026-01-22T00:00:00Z'),
@@ -997,6 +998,59 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     );
     expect(result.series[0]!.values).toEqual(new Array(21).fill(10));
     expect(result.curveNormalisedCount).toBe(0);
+  });
+
+  it('shifts the load by the assignment’s stored lag (ADR-0071 M1)', async () => {
+    // The engine has accepted a per-assignment lag since the ADR-0044 rung-5 slice; until M0 nothing
+    // could store one and the service passed a hard-coded 0. This is the case that would have caught
+    // that. Two resources on one 21-day activity: one joins on day 0, the other eleven days late.
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ resourceId: 'early', curveType: 'UNIFORM', budgetedUnits: new Prisma.Decimal(210) }),
+      row({
+        resourceId: 'late',
+        curveType: 'UNIFORM',
+        budgetedUnits: new Prisma.Decimal(100),
+        lagMinutes: 11 * 1440,
+      }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    // The shared axis is the union of the EFFECTIVE spans, so the unlagged peer holds it open across
+    // the whole activity — which is what makes the lag visible as a gap rather than as a shorter axis.
+    expect(result.buckets).toHaveLength(21);
+    const early = result.series.find((x) => x.resourceId === 'early')!;
+    const late = result.series.find((x) => x.resourceId === 'late')!;
+    expect(early.values).toEqual(new Array(21).fill(10));
+    expect(late.values.slice(0, 11)).toEqual(new Array(11).fill(0));
+    expect(late.values.slice(11).every((v) => v > 0)).toBe(true);
+    // Units are conserved: a lag compresses the load into a shorter window, it does not discard it.
+    expect(late.values.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 4);
+  });
+
+  it('the lag alone moves the axis when nothing else holds it open', async () => {
+    // Stated rather than left implicit: with one lagged assignment the axis starts at the EFFECTIVE
+    // start, so the picture is ten days of work and not eleven empty buckets followed by ten. That
+    // falls out of the shared-axis rule above and is easy to mistake for the lag being ignored.
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ curveType: 'UNIFORM', budgetedUnits: new Prisma.Decimal(100), lagMinutes: 11 * 1440 }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    expect(result.buckets).toHaveLength(10);
+    expect(result.series[0]!.values.every((v) => v > 0)).toBe(true);
+    expect(result.series[0]!.values.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 4);
   });
 
   it('offset-pages the per-resource series', async () => {
