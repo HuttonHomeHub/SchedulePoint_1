@@ -39,10 +39,10 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * It currently has **no consumer** — {@link SUB_DAY_DURATIONS_ENABLED} moved to
- * {@link flagDefaultOn} on 2026-08-02 — and that is the healthy state, which is why it is kept
- * rather than deleted: the next flag needs it on day one. Covered by `env.test.ts`, including the
- * case-sensitivity that makes `"TRUE"` read as off.
+ * Its one current consumer is {@link FLOAT_PATHS_ENABLED}, which is exactly the state this helper
+ * is kept for: it went a day with none after {@link SUB_DAY_DURATIONS_ENABLED} moved to
+ * {@link flagDefaultOn} on 2026-08-02, and the next epic needed it on day one. Covered by
+ * `env.test.ts`, including the case-sensitivity that makes `"TRUE"` read as off.
  *
  * (The sentence this replaces had been corrupted by an earlier edit into two spliced halves
  * naming five long-closed debt items — noticed only when the last consumer went away.)
@@ -1147,3 +1147,35 @@ export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_
  * showing it. The flag-off parity suite is kept, not weakened: it is the rollback contract.
  */
 export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNMENT_LAG);
+
+/**
+ * **The Float paths panel** (`VITE_FLOAT_PATHS`, default **off**) — the engine↔planner surface
+ * audit's F4, and its last open finding.
+ *
+ * The engine has computed the ranked contiguous driving chains into an activity since M6-F6
+ * (ADR-0035 §19, conformance scenario S11), and `GET …/schedule/float-paths` has exposed them
+ * since the reconciliation pass that followed. **Nothing in the product ever called it.** So the
+ * question a planner actually asks — _if I compress the critical path, what binds next and by how
+ * much?_ — could be answered by SchedulePoint's engine and only read in the tool SchedulePoint
+ * exists to replace.
+ *
+ * Flag ON adds a **Float paths** item to the toolbar's `find` group and a non-modal panel that
+ * ranks the chains, plus path emphasis in **both** the Diagram and the Gantt view — it is an
+ * analysis, not a canvas viewport command, so it is live in both (the ADR-0059 M6 lesson inverted).
+ * The relative float is rendered from `relativeFloatMinutes`, never the deprecated day field: that
+ * field divides by a flat 1440 and total float is measured on the activity's own calendar
+ * (ADR-0037 §4, ADR-0068), so on an eight-hour calendar one working day of float rounded to `0`.
+ * Fixing that at the API was M0 of this epic and shipped first, unflagged and alone.
+ *
+ * The panel fetches on open with `staleTime: 0`. That is a measured decision, not a guess: unlike
+ * its sibling read-models the endpoint runs a full `computeSchedule` per request, and the harness
+ * `apps/api/scripts/measure-float-paths.mjs` put it at **100.4 ms p95 — 0.61× a recalculate** on a
+ * 540-activity plan. Cheaper than the write a planner already presses a button for; and because the
+ * analysis is derived from the live schedule, a stale float path is a *wrong* float path.
+ *
+ * Rollback: set `VITE_FLOAT_PATHS=false` and rebuild. There is no schema, no write path, no
+ * permission and no pen here — flag-off is byte-for-byte today's product: no toolbar item, no
+ * panel, no query, no scene contribution. The flag-off parity suite is the rollback contract and is
+ * kept rather than weakened (the ADR-0053 M6 rule).
+ */
+export const FLOAT_PATHS_ENABLED = flagDefaultOff(import.meta.env.VITE_FLOAT_PATHS);

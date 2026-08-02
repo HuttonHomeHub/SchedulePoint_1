@@ -103,6 +103,7 @@ export function useTsldToolbarContext({
   openDialog,
   legend,
   revealComments,
+  toggleFloatPaths = () => {},
   planView = DEFAULT_PLAN_VIEW_MODE,
   setPlanView = () => {},
 }: {
@@ -116,6 +117,15 @@ export function useTsldToolbarContext({
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
+  /**
+   * Open the Float paths analysis on the current selection, or close it if it is already showing
+   * (audit F4). Passed IN for the same reason as `revealComments`: the two are right-side docks and
+   * only one can hold the edge, so the mutual exclusion belongs to the workspace that lays them out
+   * — not to the toolbar, which would have to know about a column it does not render.
+   *
+   * Defaults to a no-op, describing a build where the panel has no host.
+   */
+  toggleFloatPaths?: () => void;
   /**
    * Which projection the workspace is showing, and how to switch it (ADR-0059 §3).
    *
@@ -289,6 +299,24 @@ export function useTsldToolbarContext({
       reasons: hit.reasons,
     };
   }, [navState.isolateActive, navState.conflictCursorId, orderedConflictHits]);
+  // The shared select-and-reveal seam (audit F4). On the canvas it centres the bar first, then lifts
+  // the selection — the same two steps `goToNextConflict` below takes, deliberately, rather than a
+  // second opinion about what "go to" means. In the Gantt the canvas handle is null and the
+  // selection alone is what the grid scrolls to.
+  const goToActivity = useMemo(
+    () =>
+      (activityId: string): void => {
+        const activity = activities.find((a) => a.id === activityId);
+        if (activity?.earlyStart) canvasControlRef.current?.centerOnDate(activity.earlyStart);
+        requestSelectActivity(activityId);
+        // Optional-chained like `model.dependencies?.data` above: a dozen spec files render this
+        // builder with a partial model, and a hard call would make them all need a field they have
+        // no other use for.
+        model.onSelectionChange?.(activityId);
+      },
+    [activities, canvasControlRef, requestSelectActivity, model],
+  );
+
   const goToNextConflict = useMemo(
     () => (): void => {
       if (orderedConflictHits.length === 0) return;
@@ -650,6 +678,14 @@ export function useTsldToolbarContext({
       setIsolateMode,
       conflictCount: orderedConflictHits.length,
       hasConflicts: orderedConflictHits.length > 0,
+
+      // Float paths (audit F4) — the count the ladder reads, the pressed state, and the toggle.
+      // Inert while `VITE_FLOAT_PATHS` is off: the registry does not register the item at all, so
+      // nothing reads these and `toggleFloatPaths` is never called.
+      activityCount: activities.length,
+      floatPathsOpen: model.floatPaths?.open ?? false,
+      toggleFloatPaths,
+      goToActivity,
       currentConflict,
       goToNextConflict,
       snapToGrid: navState.snapToGrid,
@@ -951,6 +987,10 @@ export function useTsldToolbarContext({
     toggleIsolate,
     setIsolateMode,
     toggleSnapToGrid,
+    // Float paths — re-identify when the dock's pressed state or the plan's activity count changes.
+    model.floatPaths?.open,
+    toggleFloatPaths,
+    goToActivity,
     orderedConflictHits.length,
     currentConflict,
     goToNextConflict,

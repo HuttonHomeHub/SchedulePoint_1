@@ -41,6 +41,7 @@ import {
   usePlanDependencies,
   useUpdateDependency,
 } from '@/features/dependencies';
+import { useFloatPathsPanel } from '@/features/float-paths';
 import { useActivityNoteCounts } from '@/features/notes';
 import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
 import { usePlan } from '@/features/plans';
@@ -364,6 +365,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         : undefined,
     [progressActivityId, activities.data],
   );
+  // **Float paths** (audit F4, `VITE_FLOAT_PATHS`) — the ranked driving chains into one activity.
+  // Hosted here rather than in either view because the emphasis id-set it derives is handed to BOTH
+  // the canvas and the Gantt: two derivations of "which activities are on the path" would differ
+  // eventually, and only in a screenshot or a printed programme (the ADR-0063 `wbs-band-source`
+  // rule). Its query is `enabled`-gated on the panel being open with a target, so a closed panel
+  // costs nothing — this endpoint runs a full `computeSchedule` per request.
+  const floatPaths = useFloatPathsPanel({
+    orgSlug,
+    planId,
+    activities: activities.data ?? [],
+    planCalendarId: plan.data?.calendarId ?? null,
+    calendars: calendars.data ?? [],
+    selectedActivityId,
+  });
+
   // The resolved Resources-dialog target (entry-route win 2), derived from the live query like the
   // progress/edit targets above — so it carries the current row and becomes undefined the moment its
   // activity is deleted, closing the dialog with no extra effect.
@@ -1329,6 +1345,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // setter the toolbar Comments button and the drawer's Close control drive. Inert flag-off.
     notesOpen,
     setNotesOpen,
+    // The Float paths panel's whole state, actions and derived emphasis set, as ONE bundle rather
+    // than eight loose fields — `PlanWorkspaceModel` is consumed by ~30 files and widening it a
+    // field at a time is how it got to this length. Inert when `VITE_FLOAT_PATHS` is off: nothing
+    // opens it and the query's `enabled` is false by construction.
+    floatPaths,
     // Resources dialog target from the canvas selection bar (entry-route win 2, `VITE_ENTRY_ROUTES`):
     // the opener + the resolved row + the close setter. `resourcesActivity` re-derives from the live
     // query, so it closes the dialog when the row is deleted. Inert flag-off.

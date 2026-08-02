@@ -102,4 +102,6 @@ interface ImportMetaEnv {
   readonly VITE_SUB_DAY_DURATIONS?: string;
   /** ADR-0071 M4 — set how far into an activity a resource joins it. Default off. */
   readonly VITE_ASSIGNMENT_LAG?: string;
+  /** Audit F4 — the Float paths panel: what binds after the critical path, and by how much. Default off. */
+  readonly VITE_FLOAT_PATHS?: string;
 }
