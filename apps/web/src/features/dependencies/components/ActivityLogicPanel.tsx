@@ -147,6 +147,14 @@ export function ActivityLogicPanel({
     ? (planActivities ?? []).filter((candidate) => candidate.id !== activity.id)
     : [];
 
+  // What both tables need to read a lag on its own lag calendar (ADR-0070 M4) — grouped so the two
+  // cannot be given different answers about the same link.
+  const lagReadout = {
+    calendars,
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+    planActivities: planActivities ?? [],
+  };
+
   // Shown to anyone who may add links, and to a member the host can explain the refusal to.
   // Without a reason it stays hidden — a shaded form with no explanation is the dead end the
   // house rule forbids, and a Viewer should not see one at all.
@@ -216,6 +224,7 @@ export function ActivityLogicPanel({
               endpoint="predecessor"
               caption="Predecessors"
               emptyLabel="No predecessors — nothing has to finish before this activity."
+              {...lagReadout}
               {...editHandlers}
             />
           </section>
@@ -226,6 +235,7 @@ export function ActivityLogicPanel({
               endpoint="successor"
               caption="Successors"
               emptyLabel="No successors — this activity doesn’t drive anything yet."
+              {...lagReadout}
               {...editHandlers}
             />
           </section>

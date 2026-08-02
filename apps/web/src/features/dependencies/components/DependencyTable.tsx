@@ -1,6 +1,7 @@
-import type { DependencySummary } from '@repo/types';
+import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
 import type { UseQueryResult } from '@tanstack/react-query';
 
+import { lagHoursPerDay } from '../model/lag-factor';
 import {
   DEPENDENCY_TYPE_LABELS,
   LAG_CALENDAR_LABELS,
@@ -28,6 +29,9 @@ export function DependencyTable({
   onEdit,
   onRemove,
   onNudgeLag,
+  calendars = [],
+  planCalendarId,
+  planActivities = [],
 }: {
   query: UseQueryResult<DependencySummary[]>;
   endpoint: Endpoint;
@@ -36,7 +40,26 @@ export function DependencyTable({
   onEdit?: (dependency: DependencySummary) => void;
   onRemove?: (dependency: DependencySummary) => void;
   onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
+  /**
+   * The calendar library, the plan's calendar and the plan's activities — between them enough to
+   * read each row's lag on the calendar its `lagCalendar` names (ADR-0070 M4). Absent leaves the
+   * column in whole days, which is what it has always shown.
+   */
+  calendars?: CalendarSummary[];
+  planCalendarId?: string;
+  planActivities?: ActivitySummary[];
 }): React.ReactElement {
+  const calendarOf = (activityId: string): string | null | undefined =>
+    planActivities.find((candidate) => candidate.id === activityId)?.calendarId;
+  // Per ROW, not per table: `lagCalendar` is a column, so one page of a plan's logic can
+  // legitimately need several different factors (the API's own note on `resolveLagDayFactorMinutes`).
+  const factorFor = (dep: DependencySummary): number | undefined =>
+    lagHoursPerDay(dep.lagCalendar, {
+      calendars,
+      ...(planCalendarId === undefined ? {} : { planCalendarId }),
+      predecessorCalendarId: calendarOf(dep.predecessor.id),
+      successorCalendarId: calendarOf(dep.successor.id),
+    });
   const columns: Column<DependencySummary>[] = [
     {
       header: 'Activity',
@@ -58,7 +81,7 @@ export function DependencyTable({
       cellClassName: 'whitespace-nowrap',
       cell: (dep) => (
         <span className="text-muted-foreground tabular-nums">
-          {formatLag(dep.lagDays)}
+          {formatLag(dep, factorFor(dep))}
           {dep.lagCalendar === 'TWENTY_FOUR_HOUR' ? (
             // Only surface the lag calendar for 24-hour (elapsed), the one source that changes the
             // computed dates today — an elapsed wait reads very differently from a working-day lag.

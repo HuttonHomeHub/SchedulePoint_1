@@ -1,6 +1,6 @@
 # ADR-0070 — Sub-day durations and lags in the authoring surface
 
-- **Status:** Accepted (M0–M3 landed 2026-08-01; flag `VITE_SUB_DAY_DURATIONS`)
+- **Status:** Accepted (M0–M4 landed 2026-08-01/02; flag `VITE_SUB_DAY_DURATIONS`)
 - **Deciders:** Product owner, engineering
 - **Supersedes:** nothing. **Amends:** nothing structurally — it is the authoring half of
   ADR-0036, in the way ADR-0067 was the authoring half of ADR-0036's calendars.
@@ -99,6 +99,31 @@ M3 also closed a **live defect** in the same family as M2's canvas-move rounding
 of a link re-created it from `lagDays`, so a two-hour cure lag came back as no lag at all — silently,
 with no error anywhere, because the read rounded to zero and the re-create faithfully wrote the zero
 back. The undo command now carries `lagMinutes`.
+
+**5a. The read-out gets finer only where the value actually is finer (M4).**
+
+Typing `4h` into the M3 field and then reading `0 d` back in the table would leave the epic half
+done — worse than half, because `0 d` is what the activities table prints for a **milestone**, so the
+one screen listing a plan's work showed a real activity as having none. The Duration column and the
+Lag column now render the exact stored value when it is not a whole number of days, and keep today's
+shape (`5 d`, `+3d`) when it is: nothing churns visually on a plan with no sub-day work in it.
+
+Two rules make that safe, both learnt the hard way:
+
+- **The whole-day branch prints the row's own `durationDays`/`lagDays`** rather than re-deriving a
+  day count from minutes. The server computed those on the right calendar (ADR-0068 §4); re-dividing
+  client-side rounds. That is not hypothetical — the first version did divide, and the epic's own
+  flag-off parity test caught it printing a four-hour lag as **`+1d`** on the path whose whole job is
+  to be byte-identical to what shipped.
+- **The lag column resolves its factor per row, not per table.** `lagCalendar` is a column, so one
+  page of a plan's logic can legitimately need several different factors — the same note the API's
+  `resolveLagDayFactorMinutes` carries.
+
+The read-only display keeps the **typographic minus** (U+2212) it has always used, while the field
+writes an ASCII hyphen: a value on screen is read, a value in a field has to be retypeable. The
+**painted canvas bar label** (`· 5d`) stays day-granular for now — it is built per frame inside the
+render model, and the ADR-0065 measurement already reports that path at 4–6× ADR-0026's budget, so
+adding a per-bar calendar lookup there needs the TECH_DEBT #75 measurement first, not a guess.
 
 **6. Cross-plan dependency lag is deliberately out of scope.** Its response DTO does not expose
 `lagMinutes` and its service still multiplies by a fixed `MINUTES_PER_DAY` (ADR-0045). Extending the

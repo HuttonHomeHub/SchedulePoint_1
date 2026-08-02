@@ -7,6 +7,7 @@ import { useActivities, useDeleteActivity, useDissolveSummary } from '../api/use
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import { openActivityEditor, type ActivityEditorIntent } from '../lib/activity-editor-intent';
 import { deleteActivityDescription, dissolveSummaryDescription } from '../lib/delete-activity-copy';
+import { formatDurationRead } from '../model/duration-field';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
@@ -42,6 +43,7 @@ import { NoteCountBadge } from '@/features/notes';
 import { ActivityResourcesDialog } from '@/features/resources';
 import { WbsBulkAssignBar } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
+import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
   criticality,
@@ -59,9 +61,14 @@ const VARIANCE_TONE_CLASS: Record<FinishVariance['tone'], string> = {
   neutral: 'text-muted-foreground',
 };
 
-/** "5 d" for a task; an em dash for a milestone (which has no duration). */
-function formatDuration(activity: ActivitySummary): string {
-  return isMilestoneType(activity.type) ? '—' : `${activity.durationDays} d`;
+/**
+ * "5 d" for a task; an em dash for a milestone (which has no duration).
+ *
+ * With the activity's working-hours factor in hand a sub-day duration reads exactly ("4h", "2d 4h")
+ * instead of rounding to "0 d" — which looked identical to a milestone (ADR-0070 M4).
+ */
+function formatDuration(activity: ActivitySummary, hoursPerDay: number | undefined): string {
+  return isMilestoneType(activity.type) ? '—' : formatDurationRead(activity, hoursPerDay);
 }
 
 /** Status label, plus the percentage while an activity is partway through. */
@@ -525,7 +532,17 @@ export function ActivitiesTable({
     {
       header: 'Duration',
       cellClassName: 'whitespace-nowrap tabular-nums',
-      cell: (activity) => <span className="text-muted-foreground">{formatDuration(activity)}</span>,
+      cell: (activity) => (
+        <span className="text-muted-foreground">
+          {formatDuration(
+            activity,
+            effectiveHoursPerDay(calendars, {
+              activityCalendarId: activity.calendarId ?? '',
+              ...(planCalendarId === undefined ? {} : { planCalendarId }),
+            }),
+          )}
+        </span>
+      ),
     },
     {
       header: 'Progress',

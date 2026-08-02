@@ -81,6 +81,33 @@ export function seedDurationText(
 }
 
 /**
+ * A stored duration as a **reader** sees it, in a table cell (ADR-0070 M4).
+ *
+ * Whole-day values keep the shape they have always had (`5 d`), so nothing churns visually on a
+ * plan that has no sub-day work in it. The finer text appears only when the value actually *is*
+ * finer — which is the point: a four-hour lift typed into the field M1 built read back as `0 d`,
+ * indistinguishable from a milestone.
+ *
+ * Degraded (or flag-off, or a calendar we cannot resolve) it is the day count, exactly as before.
+ * There is no way to render `4h` without knowing what a day is worth, so this reports what it knows
+ * rather than inventing a factor — the same rule the field itself follows.
+ */
+export function formatDurationRead(
+  activity: { durationDays: number; durationMinutes: number },
+  hoursPerDay: number | undefined,
+): string {
+  if (!canAuthorSubDay(hoursPerDay)) return `${String(activity.durationDays)} d`;
+  const minutesPerDay = Math.round(hoursPerDay * 60);
+  // The whole-day branch prints the row's OWN `durationDays` rather than re-deriving it. The server
+  // computed that on the activity's calendar; re-dividing here would disagree with it whenever the
+  // client's factor is a step behind, and would round rather than say so.
+  if (minutesPerDay <= 0 || activity.durationMinutes % minutesPerDay === 0) {
+    return `${String(activity.durationDays)} d`;
+  }
+  return formatDurationText(activity.durationMinutes, hoursPerDay);
+}
+
+/**
  * The write-DTO fragment a submit sends. Exactly one of the two mutually-exclusive fields — sending
  * both is a 422 by design (the API's `@IsMutuallyExclusiveWith`), which is why this returns a
  * union rather than an object with two optional keys.
