@@ -1,5 +1,92 @@
 # @repo/types
 
+## 0.21.0
+
+### Minor Changes
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Freeze per-assignment cost in a baseline, so a lagged planned value is exact
+
+  A cost baseline froze **one number per activity**. That is enough to time-phase a whole activity's
+  cost and not enough to time-phase it **per resource** — which is what a per-assignment join lag asks
+  for, because a crane arriving on day four spends its share of the money over a different window from
+  the crew that started on day one. Splitting a frozen total by **live** budget shares reallocates
+  committed money using a mix that has changed since the commitment.
+
+  Capturing a baseline now also records, per active assignment, its resolved budgeted cost **and its
+  join lag at capture**. The lag is frozen for the same reason the cost is: a snapshot holding frozen
+  money while reading the live lag would phase committed cost through a window somebody edited
+  afterwards. The components come from the same expression that sums the activity total, so the
+  decomposition adds up to its own total by construction rather than by two spellings agreeing.
+
+  **Baselines captured before this cannot be back-filled** — a breakdown that was never recorded is not
+  recoverable from a frozen total. Those keep the approximate split for the life of the baseline, and
+  the Earned-Value response now says so: the new `costPhasingApproximatedCount` counts the activities
+  whose lagged split was approximated rather than read from the baseline's own breakdown, and
+  re-capturing the baseline is what clears it. It is `0` when there is no cost baseline at all, because
+  a live-budget planned value has nothing to approximate.
+
+  Which path a baseline is on is read from a stored discriminator and never inferred from whether
+  component rows exist: an assignment-free plan's baseline has zero component rows and is nonetheless
+  exact, while a pre-feature baseline has zero rows and can only be approximated — the same observation
+  with opposite answers. Capturing components does not by itself move any planned value; a baseline
+  whose components all joined with their activity is byte-identical to before.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Phase a late-joining resource's cost from the day it arrives
+
+  Earned Value time-phased a leaf activity's planned value with **one** percentage over **one** window,
+  so a crew joining three days into a fortnight had its cost recognised as if it had been there from the
+  first day. PV now splits into cost components: the activity's own expense keeps the activity's window
+  (it belongs to no resource), and each assignment phases over `[start + lag, finish)` on the activity's
+  calendar.
+
+  **The zero-lag path takes the previous expression verbatim, and that is a hard requirement rather than
+  an optimisation.** Summing rounded per-component values can differ from rounding one total by a minor
+  unit, and a silent ±1 on the planned value of every plan already in the system is exactly the class of
+  defect that survives review. An activity reaches the component sum only when a lag asks it to, and the
+  new `costPhasingLaggedCount` on the Earned-Value response is the observable proof of which path ran —
+  `0` on every plan with no lag.
+
+  Accrual stays a property of the **activity** (ADR-0044 §32), which produces one asymmetry worth
+  knowing before writing a test against it: under `END` a lag is a **no-op**, because everything is
+  recognised at the finish whatever time the resource arrived; under `START` a lagged assignment
+  recognises when its resource joins, not when the activity starts. Same enum, opposite sensitivity. A
+  lag at or past the span collapses the component to a point and then behaves exactly like an existing
+  zero-duration activity — reusing that convention rather than inventing a rule for the degenerate case.
+
+  A lag phases PV and nothing else: earned value, actual cost and budget at completion are unchanged for
+  a lagged plan, and there is a test that says so. Wiring a lag into the performance percent would make
+  a late crew look like less work done, which is a different and wrong claim.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Store a resource's join lag — the delay before a crew arrives on an activity
+
+  The CPM engine's resource-histogram read-model has taken a per-assignment `lagMinutes` since the
+  ADR-0044 rung-5 slice, shifts the effective span by it, and is scored against the fixture's own
+  24-hour lag case — and **nothing in the product could store one**. This is the surface audit's
+  inverted finding (F6): normally storage supports what no write path can produce; here the engine
+  supported what no storage could hold, with the coverage report recording the omission as if it were a
+  design decision ("an assignment has no lag field: work starts with its activity").
+
+  `resource_assignments.lag_minutes` now exists — working minutes, measured on the **activity's own**
+  calendar (ADR-0037), on both write DTOs, on the assignment response and on
+  `ResourceAssignmentSummary`. Constant `DEFAULT 0`, so every existing assignment keeps today's
+  behaviour exactly: the resource joins with the activity.
+
+  The column is **unsigned**, deliberately unlike a dependency's signed lag. A negative dependency lag
+  is a lead and means something; a resource joining before the work starts does not. More to the point,
+  a signed column would be a trap rather than harmless symmetry — the read-model applies the lag only
+  when `> 0` (a parity fast path for the common zero case), so a stored negative would be silently
+  discarded and the assignment would behave as unlagged with the API having said yes. The DTO's
+  `@Min(0)` is the primary reject (N34); the database CHECK is defence in depth.
+
+  `lagMinutes` is **never cost-gated**. A lag is a scheduling fact, not money, so a Viewer reads a real
+  value while `budgetedCost`/`actualCost` are withheld — pinned by an e2e case rather than asserted,
+  because gating it would make a Viewer's picture of when the resource arrives disagree with a
+  Planner's.
+
+  This is ADR-0071 M0: storage and the API. The histogram, levelling and earned-value passes read the
+  stored lag in M1–M3; the planner-facing control lands in M4. **The CPM engine is not modified and the
+  ADR-0034 recalculation parity gate is untouched.**
+
 ## 0.20.0
 
 ### Minor Changes

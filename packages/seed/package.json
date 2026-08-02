@@ -1,6 +1,6 @@
 {
   "name": "@repo/seed",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Pure, engine-free seed-plan substrate: the SeedSpec model and the builders that produce it (ADR-0066). Knows how to DESCRIBE a plan; never how to talk to a server.",
   "license": "MIT",
