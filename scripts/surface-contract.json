@@ -203,6 +203,9 @@
   "calendars/create-calendar-exception.date": {
     "surface": "components/ui/window-list-editor.tsx"
   },
+  "calendars/create-calendar-exception.endDate": {
+    "gap": "F2 \u2014 the API accepts a range as of b0acd3f; the calendar editor has no end-date control yet"
+  },
   "calendars/create-calendar-exception.isWorking": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
   },
