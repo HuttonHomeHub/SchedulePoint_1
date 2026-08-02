@@ -21,6 +21,7 @@
     "check:doc-links": "node scripts/check-doc-links.mjs",
     "check:playbook": "node scripts/check-playbook.mjs",
     "check:build-contract": "node scripts/check-build-contract.mjs",
+    "check:surface-contract": "node scripts/check-surface-contract.mjs",
     "test": "turbo run test",
     "test:coverage": "turbo run test:coverage",
     "test:e2e": "turbo run test:e2e",

@@ -350,8 +350,8 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
       await actor.agent.post(`${base}/${id}/exceptions`).send({ date: '2026-05-04' }).expect(201);
 
       const [exception] = await exceptionsOf(actor, id);
-      // Only a single day is authorable today, so both ends are the one date — the point of the
-      // assertion is that the field is PRESENT, not that it can differ yet.
+      // A date sent on its own is still one day; that a span can now DIFFER is covered by the
+      // range block below.
       expect(exception).toMatchObject({ date: '2026-05-04', endDate: '2026-05-04' });
     });
 
@@ -419,6 +419,161 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     // The proof that the ENGINE reads what was authored — rather than the API merely storing
     // it — lives in `schedule.e2e-spec.ts`, where the plan/activity/recalculate harness already
     // is. Storing a window nothing schedules on would be exactly the defect this closes.
+  });
+
+  /**
+   * An exception spanning more than one day (surface audit F2).
+   *
+   * `calendar_exceptions` has held `start_date`/`end_date` with a GiST exclusion constraint over
+   * `daterange(start_date, end_date, '[]')` since the table was created, the read DTO has always
+   * returned `endDate`, and `plan-calendar.ts` has always fed the engine the whole span. Only the
+   * write paths collapsed it, so a Christmas fortnight or a plant shutdown had to be entered as ten
+   * to fourteen separate one-day exceptions — on a schema, a constraint and a read model that all
+   * described the range the planner actually meant.
+   */
+  describe('exceptions spanning a range (surface audit F2)', () => {
+    const addException = async (actor: Actor, calendarId: string, body: object) =>
+      (await actor.agent.post(`${base}/${calendarId}/exceptions`).send(body).expect(201)).body
+        .data as { id: string; version: number; date: string; endDate: string };
+
+    it('creates one exception covering a shutdown, not fourteen', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Shutdown range');
+
+      const created = await addException(actor, id, {
+        date: '2026-12-24',
+        endDate: '2027-01-02',
+        label: 'Christmas shutdown',
+      });
+      expect(created).toMatchObject({ date: '2026-12-24', endDate: '2027-01-02' });
+
+      const { body } = await actor.agent.get(`${base}/${id}`).expect(200);
+      // ONE row, not ten. That is the whole finding.
+      expect(body.data.exceptions).toHaveLength(1);
+    });
+
+    it('treats an omitted `endDate` as a single day — what `date` alone has always meant', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Single day');
+
+      const created = await addException(actor, id, { date: '2026-05-04' });
+      expect(created).toMatchObject({ date: '2026-05-04', endDate: '2026-05-04' });
+    });
+
+    it('refuses a range that ends before it starts (N-shaped boundary)', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Backwards range');
+
+      const res = await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({ date: '2027-01-02', endDate: '2026-12-24' })
+        .expect(422);
+      // An empty range is the one shape the DB's exclusion constraint cannot express — it overlaps
+      // nothing — so the service owns this check and names both dates.
+      expect(res.body.error.details).toMatchObject({ reason: 'EXCEPTION_RANGE_INVERTED' });
+    });
+
+    it('rejects a second exception overlapping an existing span', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Overlapping spans');
+      await addException(actor, id, { date: '2026-12-24', endDate: '2027-01-02' });
+
+      // Inside the shutdown, on a day the first exception already covers.
+      const res = await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({ date: '2026-12-28' })
+        .expect(409);
+      expect(res.body.error.details).toMatchObject({ reason: 'DUPLICATE_EXCEPTION' });
+    });
+
+    it('extends a shutdown in place, keeping the same row', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Extendable');
+      const created = await addException(actor, id, { date: '2026-12-24', endDate: '2027-01-02' });
+
+      const res = await actor.agent
+        .patch(`${base}/${id}/exceptions/${created.id}`)
+        .send({ endDate: '2027-01-05', version: created.version })
+        .expect(200);
+      // Same id: extending a shutdown is an edit, not a delete-and-recreate — which is exactly the
+      // window in which a holiday briefly becomes an ordinary working day.
+      expect(res.body.data).toMatchObject({
+        id: created.id,
+        date: '2026-12-24',
+        endDate: '2027-01-05',
+      });
+    });
+
+    it('collapses a range back to one day when `endDate` equals the first day', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Collapsible');
+      const created = await addException(actor, id, { date: '2026-12-24', endDate: '2027-01-02' });
+
+      const res = await actor.agent
+        .patch(`${base}/${id}/exceptions/${created.id}`)
+        .send({ endDate: '2026-12-24', version: created.version })
+        .expect(200);
+      expect(res.body.data).toMatchObject({ date: '2026-12-24', endDate: '2026-12-24' });
+    });
+
+    it('refuses an edit that would end the exception before its first day', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Backwards edit');
+      const created = await addException(actor, id, { date: '2026-12-24', endDate: '2027-01-02' });
+
+      const res = await actor.agent
+        .patch(`${base}/${id}/exceptions/${created.id}`)
+        .send({ endDate: '2026-12-01', version: created.version })
+        .expect(422);
+      // Measured against the row's OWN first day: this endpoint cannot move an exception, so there
+      // is no sibling field to compare with.
+      expect(res.body.error.details).toMatchObject({ reason: 'EXCEPTION_RANGE_INVERTED' });
+    });
+
+    it('reports an extension that collides with the next exception as a 409', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Colliding extension');
+      const first = await addException(actor, id, { date: '2026-12-24', endDate: '2026-12-28' });
+      await addException(actor, id, { date: '2027-01-02' });
+
+      // Extending the shutdown across New Year would swallow the second exception's day. The
+      // exclusion constraint catches it; the service turns it into the same 409 create reports,
+      // because it is the same conflict.
+      const res = await actor.agent
+        .patch(`${base}/${id}/exceptions/${first.id}`)
+        .send({ endDate: '2027-01-05', version: first.version })
+        .expect(409);
+      expect(res.body.error.details).toMatchObject({ reason: 'DUPLICATE_EXCEPTION' });
+    });
+
+    it('refuses a span beyond the ceiling — a typo, and an unbounded engine build', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Century shutdown');
+
+      // The year typed as 2226 rather than 2026. Storing it would also make every recalculation
+      // walk 73,000 days building this calendar, because the engine expands each exception once.
+      const res = await actor.agent
+        .post(`${base}/${id}/exceptions`)
+        .send({ date: '2026-12-24', endDate: '2226-01-02' })
+        .expect(422);
+      expect(res.body.error.details).toMatchObject({ reason: 'EXCEPTION_RANGE_TOO_LONG' });
+    });
+
+    it('leaves the span alone when `endDate` is omitted from an edit', async () => {
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Untouched span');
+      const created = await addException(actor, id, { date: '2026-12-24', endDate: '2027-01-02' });
+
+      const res = await actor.agent
+        .patch(`${base}/${id}/exceptions/${created.id}`)
+        .send({ label: 'Renamed', version: created.version })
+        .expect(200);
+      expect(res.body.data).toMatchObject({
+        date: '2026-12-24',
+        endDate: '2027-01-02',
+        label: 'Renamed',
+      });
+    });
   });
 
   /**

@@ -71,6 +71,14 @@ jobs:
       - name: Check the build contract
         run: pnpm check:build-contract
 
+      # The surface contract (docs/specs/engine-surface-audit.md). Four of that audit's findings are
+      # one defect: a scheduling field grew a storage half and an API half, never grew a UI half, and
+      # nothing noticed for a year. Each looked right in the layer its author was in; none is visible
+      # without holding two layers side by side, which is what this does and a reviewer does not.
+      # It fails on an UNCLASSIFIED field, not on one honestly marked a known gap.
+      - name: Check the surface contract
+        run: pnpm check:surface-contract
+
       - name: Unit tests
         run: pnpm test
 

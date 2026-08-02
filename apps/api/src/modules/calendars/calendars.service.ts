@@ -12,7 +12,7 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import { normaliseSearchTerm, type ArchivedFilter } from '../../common/query/library-filters';
-import { parseCalendarDate } from '../../common/validation/calendar-date';
+import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { ProjectRepository } from '../projects/project.repository';
@@ -48,6 +48,37 @@ export const CALENDAR_CONFLICT = {
    */
   CALENDAR_SCOPE_NARROWING_BLOCKED: 'CALENDAR_SCOPE_NARROWING_BLOCKED',
 } as const;
+
+/**
+ * The longest span one exception may cover, in calendar days (~27 years).
+ *
+ * Two reasons, and the second is the one that would not have been noticed. It is a **typo guard**
+ * first — a shutdown entered as `2226` rather than `2026` should be refused at the boundary rather
+ * than stored. It is also the bound the **engine's calendar build** now relies on: `buildWorking
+ * TimeCalendar` walks every day of every exception once (O(total exception days)), a cost its own
+ * comment used to justify by "the single-day API shape keeps it at O(E)". Making ranges authorable
+ * (surface audit F2) removed that premise, so the ceiling replaces it explicitly rather than
+ * leaving a per-recalculation cost the API can be asked for without limit.
+ */
+const MAX_EXCEPTION_SPAN_DAYS = 10_000;
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Refuse an exception span longer than {@link MAX_EXCEPTION_SPAN_DAYS}. Shared by create and
+ * update so the two cannot disagree; a caller that sends no `endDate` is a single day and passes.
+ */
+function assertSpanWithinCeiling(date: string, endDate: string | undefined): void {
+  if (endDate === undefined) return;
+  const days = Math.round(
+    (parseCalendarDate(endDate).getTime() - parseCalendarDate(date).getTime()) / MS_PER_DAY,
+  );
+  if (days > MAX_EXCEPTION_SPAN_DAYS) {
+    throw new ValidationError(
+      `An exception cannot span more than ${String(MAX_EXCEPTION_SPAN_DAYS)} days.`,
+      { reason: 'EXCEPTION_RANGE_TOO_LONG', date, endDate, days },
+    );
+  }
+}
 
 /**
  * Business logic for the org-scoped working-day calendar library (ADR-0024).
@@ -436,14 +467,29 @@ export class CalendarsService {
     if (!calendar) throw new NotFoundError('Calendar not found.');
     this.assertMayWriteExceptions(principal, calendar.scope, organization.id);
 
-    try {
-      const exception = await this.prisma.$transaction(async (tx) => {
+    // An inclusive range must not run backwards (surface audit F2). Checked here rather than by a
+    // DTO cross-field validator for the same reason the resume/suspend order is (§progress): the
+    // message names both dates, which a decorator on one of them cannot. The DB's exclusion
+    // constraint is the backstop for OVERLAP; this is the one shape it cannot express, because an
+    // empty range is not an overlap with anything.
+    if (dto.endDate !== undefined && dto.endDate < dto.date) {
+      throw new ValidationError('The exception’s last day cannot precede its first day.', {
+        reason: 'EXCEPTION_RANGE_INVERTED',
+        date: dto.date,
+        endDate: dto.endDate,
+      });
+    }
+    assertSpanWithinCeiling(dto.date, dto.endDate);
+
+    const exception = await this.runExceptionWrite(async () =>
+      this.prisma.$transaction(async (tx) => {
         const created = await this.calendars.createException(
           {
             // Denormalise the organisation id from the parent calendar, never input.
             organizationId: calendar.organizationId,
             calendarId: calendar.id,
             date: parseCalendarDate(dto.date),
+            ...(dto.endDate === undefined ? {} : { endDate: parseCalendarDate(dto.endDate) }),
             isWorking: dto.isWorking ?? false,
             // Conditional spread: `exactOptionalPropertyTypes` counts an explicit `undefined` as a
             // present key, which would make the repository's "explicit windows win" branch fire on
@@ -457,21 +503,18 @@ export class CalendarsService {
         );
         await this.calendars.touchVersion(calendar.id, principal.userId, tx);
         return created;
-      });
-      this.logger.info(
-        {
-          organizationId: organization.id,
-          calendarId: calendar.id,
-          exceptionId: exception.id,
-          userId: principal.userId,
-        },
-        'calendar exception added',
-      );
-      return exception;
-    } catch (error) {
-      if (this.isExceptionOverlapViolation(error)) throw this.duplicateExceptionError();
-      throw error;
-    }
+      }),
+    );
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        calendarId: calendar.id,
+        exceptionId: exception.id,
+        userId: principal.userId,
+      },
+      'calendar exception added',
+    );
+    return exception;
   }
 
   /**
@@ -506,32 +549,50 @@ export class CalendarsService {
     );
     if (!existing) throw new NotFoundError('Calendar exception not found.');
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const changed = await this.calendars.updateExceptionIfVersionMatches(
-        exceptionId,
-        dto.version,
-        {
-          ...(dto.label === undefined ? {} : { label: dto.label }),
-          // `isWorking` and `windows` are mutually exclusive at the DTO, and BOTH absent means the
-          // hours are untouched — a label-only edit. `exceptionWindowRowsFor` would answer "no
-          // windows" for that case, which is a holiday, so the decision has to be made here.
-          ...(dto.windows !== undefined
-            ? { windows: dto.windows }
-            : dto.isWorking !== undefined
-              ? { windows: exceptionWindowRowsFor(undefined, dto.isWorking) }
-              : {}),
-        },
-        principal.userId,
-        tx,
-      );
-      if (changed === 0) {
-        throw new ConflictError('This exception has changed since you loaded it.', {
-          reason: 'STALE_VERSION',
-        });
-      }
-      await this.calendars.touchVersion(calendar.id, principal.userId, tx);
-      return this.calendars.findExceptionWithWindows(exceptionId, tx);
-    });
+    // The same rule create enforces, against the row's OWN first day rather than a sibling field:
+    // the first day is not editable here, so a shortened range is measured from where it starts.
+    // The DB's exclusion constraint is the backstop for overlap; an empty range is not an overlap
+    // with anything, so it is the one shape the constraint cannot express.
+    if (dto.endDate !== undefined && dto.endDate < formatCalendarDate(existing.startDate)) {
+      throw new ValidationError('The exception’s last day cannot precede its first day.', {
+        reason: 'EXCEPTION_RANGE_INVERTED',
+        date: formatCalendarDate(existing.startDate),
+        endDate: dto.endDate,
+      });
+    }
+    assertSpanWithinCeiling(formatCalendarDate(existing.startDate), dto.endDate);
+
+    const updated = await this.runExceptionWrite(async () =>
+      this.prisma.$transaction(async (tx) => {
+        const changed = await this.calendars.updateExceptionIfVersionMatches(
+          exceptionId,
+          dto.version,
+          {
+            ...(dto.label === undefined ? {} : { label: dto.label }),
+            // Extending a range can collide with the next exception along, which is the same 409
+            // the create path reports — see `runExceptionWrite`.
+            ...(dto.endDate === undefined ? {} : { endDate: parseCalendarDate(dto.endDate) }),
+            // `isWorking` and `windows` are mutually exclusive at the DTO, and BOTH absent means the
+            // hours are untouched — a label-only edit. `exceptionWindowRowsFor` would answer "no
+            // windows" for that case, which is a holiday, so the decision has to be made here.
+            ...(dto.windows !== undefined
+              ? { windows: dto.windows }
+              : dto.isWorking !== undefined
+                ? { windows: exceptionWindowRowsFor(undefined, dto.isWorking) }
+                : {}),
+          },
+          principal.userId,
+          tx,
+        );
+        if (changed === 0) {
+          throw new ConflictError('This exception has changed since you loaded it.', {
+            reason: 'STALE_VERSION',
+          });
+        }
+        await this.calendars.touchVersion(calendar.id, principal.userId, tx);
+        return this.calendars.findExceptionWithWindows(exceptionId, tx);
+      }),
+    );
     if (!updated) throw new NotFoundError('Calendar exception not found.');
 
     this.logger.info(
@@ -731,6 +792,23 @@ export class CalendarsService {
     return new ConflictError(`A calendar with this name already exists ${tier}.`, {
       reason: CALENDAR_CONFLICT.DUPLICATE_CALENDAR,
     });
+  }
+
+  /**
+   * Run a write that can collide with the exclusion constraint, turning `23P01` into the API's
+   * 409 `DUPLICATE_EXCEPTION`.
+   *
+   * Shared by create and update because since ranges became editable both can collide: extending a
+   * shutdown into the next bank holiday is the same conflict as adding a second exception on one
+   * day, and two translations of one constraint would eventually disagree about which 409 it is.
+   */
+  private async runExceptionWrite<T>(write: () => Promise<T>): Promise<T> {
+    try {
+      return await write();
+    } catch (error) {
+      if (this.isExceptionOverlapViolation(error)) throw this.duplicateExceptionError();
+      throw error;
+    }
   }
 
   private duplicateExceptionError(): ConflictError {

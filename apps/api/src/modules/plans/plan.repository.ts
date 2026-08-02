@@ -26,7 +26,7 @@ export interface PlanPatch {
   /** Critical-path definition (M6, ADR-0035 §17): TOTAL_FLOAT or LONGEST_PATH. */
   criticalPathDefinition?: CriticalPathDefinition;
   /** Total-float threshold in whole working days (M6, ADR-0035 §17). */
-  criticalFloatThreshold?: number;
+  criticalFloatThresholdMinutes?: number;
   /** Total-float measure (M6, ADR-0035 §18): FINISH / START / SMALLEST. */
   totalFloatMode?: TotalFloatMode;
   /** Make open-ended activities critical (M6, ADR-0035 §20). */

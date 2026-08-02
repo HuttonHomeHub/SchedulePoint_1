@@ -90,7 +90,7 @@ describe('CalendarExceptionsEditor — hours (VITE_CALENDAR_SHIFT_EDITOR)', () =
   it('adds an exception with specific hours rather than a whole worked day', async () => {
     renderEditor({ ...DETAIL, exceptions: [] });
 
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2027-01-02' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2027-01-02' } });
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'hours' } });
     const hours = screen.getByRole('group', { name: 'Exception hours' });
     fireEvent.click(within(hours).getByRole('button', { name: /^Add hours/ }));
@@ -110,7 +110,7 @@ describe('CalendarExceptionsEditor — hours (VITE_CALENDAR_SHIFT_EDITOR)', () =
 
   it('still sends the whole-day shorthand for an ordinary worked day', async () => {
     renderEditor({ ...DETAIL, exceptions: [] });
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2027-01-02' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2027-01-02' } });
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'allDay' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
 
@@ -121,7 +121,7 @@ describe('CalendarExceptionsEditor — hours (VITE_CALENDAR_SHIFT_EDITOR)', () =
 
   it('refuses "specific hours" with no periods, and says what to do instead', async () => {
     renderEditor({ ...DETAIL, exceptions: [] });
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2027-01-02' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2027-01-02' } });
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'hours' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
 

@@ -139,7 +139,7 @@ export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUA
 
 /**
  * How the CPM engine decides which activities are **critical** (M6, ADR-0035 §17–§20). `TOTAL_FLOAT`
- * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThreshold`;
+ * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThresholdMinutes`;
  * `LONGEST_PATH` marks the contiguous chain of driving ties back from the latest-finishing activities.
  * Mirrors the API's Prisma `CriticalPathDefinition` enum (kept in lock-step).
  */
@@ -207,7 +207,7 @@ export interface PlanSummary {
    * Total-float threshold in whole working days (M6, ADR-0035 §17): at/below this an activity is
    * critical under the `TOTAL_FLOAT` definition. Default 0 (P6/behaviour-preserving).
    */
-  criticalFloatThreshold: number;
+  criticalFloatThresholdMinutes: number;
   /**
    * How total float is measured (M6, ADR-0035 §18): `FINISH` (default), `START`, or `SMALLEST`.
    * Behaviour-preserving default `FINISH`.
@@ -402,6 +402,13 @@ export interface ActivitySummary {
    * before it).
    */
   remainingDurationDays: number | null;
+  /**
+   * The stored truth behind {@link ActivitySummary.remainingDurationDays}: explicit remaining work
+   * in working **minutes** (ADR-0036), the unit the engine consumes. Read this rather than the day
+   * field for a sub-day remainder — four hours reads back as `remainingDurationDays: 0`, which on an
+   * incomplete activity is also the value meaning "no work left" (surface audit F3).
+   */
+  remainingDurationMinutes: number | null;
   /**
    * Suspend / resume calendar days (`YYYY-MM-DD`) for a paused in-progress activity (M2, ADR-0035 §4),
    * or null. A resume after the data date floors the remaining work at the resume day; a resume on or
@@ -1094,9 +1101,9 @@ export interface CalendarExceptionSummary {
   /** First calendar day of the exception (`YYYY-MM-DD`). */
   date: string;
   /**
-   * Last calendar day, inclusive. Storage holds a range (ADR-0036 §2); only a single day is
-   * authorable today, so this equals {@link CalendarExceptionSummary.date} for every exception
-   * the API creates. Present so the range is never silently dropped on read.
+   * Last calendar day, inclusive. Storage has always held a range (ADR-0036 §2) and both write
+   * paths now author one, so a shutdown or a Christmas fortnight is **one** exception rather than
+   * fourteen (surface audit F2). Equals {@link CalendarExceptionSummary.date} for a single day.
    */
   endDate: string;
   /**

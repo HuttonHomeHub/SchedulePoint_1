@@ -82,7 +82,7 @@ describe('CalendarExceptionsEditor', () => {
   it('POSTs a new exception with the date and holiday default', async () => {
     renderEditor({ ...DETAIL, exceptions: [] });
 
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2027-01-01' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2027-01-01' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
 
     await waitFor(() =>
@@ -111,7 +111,7 @@ describe('CalendarExceptionsEditor', () => {
     );
     renderEditor({ ...DETAIL, exceptions: [] });
 
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-12-25' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
 
     expect(

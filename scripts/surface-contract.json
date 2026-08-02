@@ -1,0 +1,611 @@
+{
+  "activities/create-activity.accrualType": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.actualExpense": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.budgetedExpense": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.calendarId": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "activities/create-activity.code": {
+    "surface": "components/ui/scope-save-bar.tsx"
+  },
+  "activities/create-activity.constraintDate": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.constraintType": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "activities/create-activity.durationDays": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.durationMinutes": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.durationType": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "activities/create-activity.expectedFinish": {
+    "surface": "features/plans/components/PlanExpectedFinishToggle.tsx"
+  },
+  "activities/create-activity.externalEarlyStart": {
+    "surface": "config/env.ts"
+  },
+  "activities/create-activity.externalLateFinish": {
+    "surface": "config/env.ts"
+  },
+  "activities/create-activity.laneIndex": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.levelingPriority": {
+    "surface": "config/env.ts"
+  },
+  "activities/create-activity.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "activities/create-activity.parentId": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.percentCompleteType": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.physicalPercentComplete": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/create-activity.scheduleAsLateAsPossible": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/create-activity.secondaryConstraintDate": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/create-activity.secondaryConstraintType": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/create-activity.type": {
+    "surface": "components/ui/button.tsx"
+  },
+  "activities/create-activity.visualStart": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/replace-steps.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "activities/replace-steps.percentComplete": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/replace-steps.steps": {
+    "surface": "components/ui/panel-resizer.tsx"
+  },
+  "activities/replace-steps.weight": {
+    "surface": "components/ui/toolbar/toolbar-styles.ts"
+  },
+  "activities/update-activity-progress.actualFinish": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/update-activity-progress.actualStart": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/update-activity-progress.percentComplete": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity-progress.remainingDurationDays": {
+    "surface": "features/activities/components/ActivityProgressPanels.tsx (Remaining duration)"
+  },
+  "activities/update-activity-progress.remainingDurationMinutes": {
+    "surface": "features/activities/components/ActivityProgressPanels.tsx (Remaining duration)"
+  },
+  "activities/update-activity-progress.resumeDate": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/update-activity-progress.suspendDate": {
+    "surface": "features/activities/components/ActivityProgressPanels.tsx \u2014 a record, and the field says so (F1 resolved: ADR-0035 \u00a74 withdrew the unimplemented clause)"
+  },
+  "activities/update-activity.accrualType": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.actualExpense": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.budgetedExpense": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.calendarId": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "activities/update-activity.code": {
+    "surface": "components/ui/scope-save-bar.tsx"
+  },
+  "activities/update-activity.constraintDate": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.constraintType": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "activities/update-activity.durationDays": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.durationMinutes": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.durationType": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "activities/update-activity.expectedFinish": {
+    "surface": "features/plans/components/PlanExpectedFinishToggle.tsx"
+  },
+  "activities/update-activity.externalEarlyStart": {
+    "surface": "config/env.ts"
+  },
+  "activities/update-activity.externalLateFinish": {
+    "surface": "config/env.ts"
+  },
+  "activities/update-activity.laneIndex": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.levelingPriority": {
+    "surface": "config/env.ts"
+  },
+  "activities/update-activity.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "activities/update-activity.parentId": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.percentCompleteType": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.physicalPercentComplete": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-activity.scheduleAsLateAsPossible": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/update-activity.secondaryConstraintDate": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/update-activity.secondaryConstraintType": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "activities/update-activity.type": {
+    "surface": "components/ui/button.tsx"
+  },
+  "activities/update-activity.visualStart": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-parents.id": {
+    "surface": "components/ui/spinner.tsx"
+  },
+  "activities/update-parents.parentId": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-parents.parents": {
+    "surface": "features/wbs/components/ActivityMembersPanel.tsx"
+  },
+  "activities/update-positions.id": {
+    "surface": "components/ui/spinner.tsx"
+  },
+  "activities/update-positions.laneIndex": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-positions.positions": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "baselines/create-baseline.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "calendars/create-calendar-exception.date": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "calendars/create-calendar-exception.endDate": {
+    "surface": "features/calendars/components/CalendarExceptionsEditor.tsx (To (optional))"
+  },
+  "calendars/create-calendar-exception.isWorking": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "calendars/create-calendar-exception.label": {
+    "surface": "components/ui/spinner.tsx"
+  },
+  "calendars/create-calendar-exception.windows": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "calendars/create-calendar.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "calendars/create-calendar.hoursPerDay": {
+    "surface": "features/dependencies/model/lag-field.ts"
+  },
+  "calendars/create-calendar.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "calendars/create-calendar.projectId": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "calendars/create-calendar.scope": {
+    "surface": "components/ui/tabs.tsx"
+  },
+  "calendars/create-calendar.shifts": {
+    "surface": "config/env.ts"
+  },
+  "calendars/create-calendar.workingWeekdays": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "calendars/update-calendar-exception.endDate": {
+    "surface": "features/calendars/components/CalendarExceptionsEditor.tsx (To)"
+  },
+  "calendars/update-calendar-exception.isWorking": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "calendars/update-calendar-exception.label": {
+    "surface": "components/ui/spinner.tsx"
+  },
+  "calendars/update-calendar-exception.windows": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "calendars/update-calendar.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "calendars/update-calendar.hoursPerDay": {
+    "surface": "features/dependencies/model/lag-field.ts"
+  },
+  "calendars/update-calendar.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "calendars/update-calendar.projectId": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "calendars/update-calendar.scope": {
+    "surface": "components/ui/tabs.tsx"
+  },
+  "calendars/update-calendar.shifts": {
+    "surface": "config/env.ts"
+  },
+  "calendars/update-calendar.workingWeekdays": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "cross-plan-dependencies/create-cross-plan-dependency.lagCalendar": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "cross-plan-dependencies/create-cross-plan-dependency.lagDays": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "cross-plan-dependencies/create-cross-plan-dependency.predecessorActivityId": {
+    "surface": "features/cross-plan-dependencies/components/AddCrossPlanLinkDialog.tsx"
+  },
+  "cross-plan-dependencies/create-cross-plan-dependency.successorActivityId": {
+    "surface": "features/cross-plan-dependencies/components/AddCrossPlanLinkDialog.tsx"
+  },
+  "cross-plan-dependencies/create-cross-plan-dependency.type": {
+    "surface": "components/ui/button.tsx"
+  },
+  "dependencies/create-dependency.lagCalendar": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "dependencies/create-dependency.lagDays": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "dependencies/create-dependency.lagMinutes": {
+    "surface": "config/env.ts"
+  },
+  "dependencies/create-dependency.predecessorId": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "dependencies/create-dependency.successorId": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "dependencies/create-dependency.type": {
+    "surface": "components/ui/button.tsx"
+  },
+  "dependencies/update-dependency.lagCalendar": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "dependencies/update-dependency.lagDays": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "dependencies/update-dependency.lagMinutes": {
+    "surface": "config/env.ts"
+  },
+  "dependencies/update-dependency.type": {
+    "surface": "components/ui/button.tsx"
+  },
+  "engine/ComputeOptions.calendar": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "engine/ComputeOptions.criticalDefinition": {
+    "surface": "features/plans/components/PlanScheduleSettings.tsx (Critical-path definition)"
+  },
+  "engine/ComputeOptions.criticalFloatThresholdMinutes": {
+    "surface": "features/plans/components/PlanCriticalFloatThresholdField.tsx"
+  },
+  "engine/ComputeOptions.dataDate": {
+    "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
+  },
+  "engine/ComputeOptions.ignoreExternalRelationships": {
+    "surface": "config/env.ts"
+  },
+  "engine/ComputeOptions.makeOpenEndsCritical": {
+    "surface": "features/plans/components/PlanScheduleSettings.tsx"
+  },
+  "engine/ComputeOptions.progressMode": {
+    "surface": "features/plans/components/PlanRecalcModePicker.tsx"
+  },
+  "engine/ComputeOptions.totalFloatMode": {
+    "surface": "features/plans/components/PlanScheduleSettings.tsx"
+  },
+  "engine/ComputeOptions.useExpectedFinishDates": {
+    "surface": "config/env.ts"
+  },
+  "engine/EngineActivity.actualFinish": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "engine/EngineActivity.actualStart": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "engine/EngineActivity.calendar": {
+    "surface": "features/activities/ \u2014 the per-activity calendar picker (ADR-0037)"
+  },
+  "engine/EngineActivity.constraintDate": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "engine/EngineActivity.constraintType": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "engine/EngineActivity.durationMinutes": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "engine/EngineActivity.expectedFinish": {
+    "surface": "features/plans/components/PlanExpectedFinishToggle.tsx"
+  },
+  "engine/EngineActivity.externalEarlyStart": {
+    "surface": "config/env.ts"
+  },
+  "engine/EngineActivity.externalLateFinish": {
+    "surface": "config/env.ts"
+  },
+  "engine/EngineActivity.id": {
+    "exempt": "identity"
+  },
+  "engine/EngineActivity.levelingPriority": {
+    "surface": "config/env.ts"
+  },
+  "engine/EngineActivity.parentId": {
+    "surface": "features/wbs/ \u2014 the WBS band and Members panel"
+  },
+  "engine/EngineActivity.remainingMinutes": {
+    "surface": "features/activities/components/ActivityProgressPanels.tsx (Remaining duration)"
+  },
+  "engine/EngineActivity.resourceDriverMissing": {
+    "exempt": "engine-owned produce-and-flag, computed by the service; never planner input"
+  },
+  "engine/EngineActivity.resumeDate": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "engine/EngineActivity.scheduleAsLateAsPossible": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "engine/EngineActivity.secondaryConstraintDate": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "engine/EngineActivity.secondaryConstraintType": {
+    "surface": "features/share/guest-api.ts"
+  },
+  "engine/EngineActivity.type": {
+    "surface": "components/ui/button.tsx"
+  },
+  "engine/EngineActivity.visualStart": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "engine/EngineAssignment.activityId": {
+    "exempt": "a join key, not a value a planner types"
+  },
+  "engine/EngineAssignment.resourceId": {
+    "exempt": "a join key, not a value a planner types"
+  },
+  "engine/EngineAssignment.unitsPerHour": {
+    "surface": "features/resources/ \u2014 assignment units/time"
+  },
+  "engine/EngineEdge.id": {
+    "exempt": "identity, carried through so the engine can key its driving output"
+  },
+  "engine/EngineEdge.lagCalendar": {
+    "surface": "features/dependencies/ \u2014 the lag-calendar selector"
+  },
+  "engine/EngineEdge.lagMinutes": {
+    "surface": "config/env.ts"
+  },
+  "engine/EngineEdge.predecessorId": {
+    "exempt": "set by making the link, not by typing an id"
+  },
+  "engine/EngineEdge.successorId": {
+    "exempt": "set by making the link, not by typing an id"
+  },
+  "engine/EngineEdge.type": {
+    "surface": "components/ui/button.tsx"
+  },
+  "engine/EngineResource.calendar": {
+    "surface": "features/resources/ \u2014 the resource calendar picker"
+  },
+  "engine/EngineResource.capacity": {
+    "surface": "config/env.ts"
+  },
+  "engine/EngineResource.id": {
+    "exempt": "identity"
+  },
+  "engine/LevelingOptions.dataDate": {
+    "surface": "the plan data date (features/plans/) \u2014 not a levelling control"
+  },
+  "engine/LevelingOptions.levelWithinFloatOnly": {
+    "surface": "config/env.ts"
+  },
+  "engine/LevelingOptions.planCalendar": {
+    "surface": "features/plans/components/PlanCalendarPicker.tsx"
+  },
+  "plans/create-plan.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "plans/create-plan.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "plans/create-plan.plannedStart": {
+    "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
+  },
+  "plans/create-plan.schedulingMode": {
+    "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
+  },
+  "plans/create-plan.status": {
+    "surface": "components/ui/spinner.tsx"
+  },
+  "plans/update-plan.calendarId": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "plans/update-plan.criticalFloatThresholdMinutes": {
+    "surface": "features/plans/components/PlanCriticalFloatThresholdField.tsx"
+  },
+  "plans/update-plan.criticalPathDefinition": {
+    "surface": "features/plans/components/PlanScheduleSettings.tsx"
+  },
+  "plans/update-plan.currencyCode": {
+    "surface": "config/env.ts"
+  },
+  "plans/update-plan.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "plans/update-plan.eacMethod": {
+    "surface": "features/plans/components/PlanEarnedValueSettings.tsx"
+  },
+  "plans/update-plan.ignoreExternalRelationships": {
+    "surface": "config/env.ts"
+  },
+  "plans/update-plan.levelResources": {
+    "surface": "features/plans/components/PlanLevellingSettings.tsx"
+  },
+  "plans/update-plan.levelWithinFloatOnly": {
+    "surface": "config/env.ts"
+  },
+  "plans/update-plan.makeOpenEndsCritical": {
+    "surface": "features/plans/components/PlanScheduleSettings.tsx"
+  },
+  "plans/update-plan.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "plans/update-plan.plannedStart": {
+    "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
+  },
+  "plans/update-plan.progressRecalcMode": {
+    "surface": "features/plans/components/PlanRecalcModePicker.tsx"
+  },
+  "plans/update-plan.schedulingMode": {
+    "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
+  },
+  "plans/update-plan.status": {
+    "surface": "components/ui/spinner.tsx"
+  },
+  "plans/update-plan.totalFloatMode": {
+    "surface": "features/plans/components/PlanScheduleSettings.tsx"
+  },
+  "plans/update-plan.useExpectedFinishDates": {
+    "surface": "config/env.ts"
+  },
+  "resources/create-assignment.actualCost": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/create-assignment.actualUnits": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/create-assignment.budgetedCost": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/create-assignment.budgetedUnits": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/create-assignment.curveType": {
+    "surface": "config/env.ts"
+  },
+  "resources/create-assignment.isDriving": {
+    "surface": "config/env.ts"
+  },
+  "resources/create-assignment.resourceId": {
+    "surface": "components/layout/workspace/resource-strip-panel.tsx"
+  },
+  "resources/create-assignment.unitsPerHour": {
+    "surface": "config/env.ts"
+  },
+  "resources/create-resource.calendarId": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "resources/create-resource.code": {
+    "surface": "components/ui/scope-save-bar.tsx"
+  },
+  "resources/create-resource.costPerUnit": {
+    "surface": "features/resources/components/ResourceFormDialog.tsx"
+  },
+  "resources/create-resource.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "resources/create-resource.kind": {
+    "surface": "components/ui/tabs.tsx"
+  },
+  "resources/create-resource.maxUnitsPerHour": {
+    "surface": "config/env.ts"
+  },
+  "resources/create-resource.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "resources/create-resource.parentId": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "resources/update-assignment.actualCost": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/update-assignment.actualUnits": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/update-assignment.budgetedCost": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/update-assignment.budgetedUnits": {
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx"
+  },
+  "resources/update-assignment.curveType": {
+    "surface": "config/env.ts"
+  },
+  "resources/update-assignment.isDriving": {
+    "surface": "config/env.ts"
+  },
+  "resources/update-assignment.unitsPerHour": {
+    "surface": "config/env.ts"
+  },
+  "resources/update-resource.calendarId": {
+    "surface": "components/layout/workspace/plan-dialogs.tsx"
+  },
+  "resources/update-resource.code": {
+    "surface": "components/ui/scope-save-bar.tsx"
+  },
+  "resources/update-resource.costPerUnit": {
+    "surface": "features/resources/components/ResourceFormDialog.tsx"
+  },
+  "resources/update-resource.description": {
+    "surface": "components/ui/window-list-editor.tsx"
+  },
+  "resources/update-resource.kind": {
+    "surface": "components/ui/tabs.tsx"
+  },
+  "resources/update-resource.maxUnitsPerHour": {
+    "surface": "config/env.ts"
+  },
+  "resources/update-resource.name": {
+    "surface": "components/ui/search-field.tsx"
+  },
+  "resources/update-resource.parentId": {
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  }
+}

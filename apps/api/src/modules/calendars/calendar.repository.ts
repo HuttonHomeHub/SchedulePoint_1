@@ -110,6 +110,8 @@ export interface CreateCalendarExceptionInput {
   organizationId: string;
   calendarId: string;
   date: Date;
+  /** Inclusive last day; absent = a single-day exception (surface audit F2). */
+  endDate?: Date;
   isWorking: boolean;
   windows?: readonly WindowRow[];
   label: string | null;
@@ -669,10 +671,12 @@ export class CalendarRepository {
       data: {
         organizationId: input.organizationId,
         calendarId: input.calendarId,
-        // The public dated exception is a single-day inclusive range (ADR-0036 §2); a multi-day
-        // range is storable but not yet authorable, so both ends are the one date.
+        // An inclusive range (ADR-0036 §2). `endDate` omitted means a single day — what `date`
+        // alone has always meant, and what every pre-F2 client sends. The exclusion constraint
+        // over `daterange(start_date, end_date, '[]')` is what stops two ranges overlapping;
+        // the service maps its violation to the same 409 a duplicate day always produced.
         startDate: input.date,
-        endDate: input.date,
+        endDate: input.endDate ?? input.date,
         label: input.label,
         createdBy: input.createdBy,
         updatedBy: input.updatedBy,
@@ -695,7 +699,7 @@ export class CalendarRepository {
   async updateExceptionIfVersionMatches(
     id: string,
     expectedVersion: number,
-    patch: { label?: string | null; windows?: readonly WindowRow[] },
+    patch: { label?: string | null; endDate?: Date; windows?: readonly WindowRow[] },
     updatedBy: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {

@@ -3,6 +3,16 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 
 import { IsCalendarDate } from '../../../common/validation/calendar-date';
+import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exclusive';
+
+/**
+ * The minutes ceiling for a remaining duration: the day field's 10,000-day bound at 24 h.
+ *
+ * Stated as the day bound × 1440 rather than as its own number, so the two cannot drift into
+ * disagreeing about what "too long" means — the whole point of the pair is that they are two
+ * spellings of one quantity.
+ */
+const MAX_REMAINING_MINUTES = 10_000 * 24 * 60;
 
 /**
  * Request body for reporting an activity's PROGRESS (Contributor upward). This is
@@ -51,7 +61,8 @@ export class UpdateActivityProgressDto {
     nullable: true,
     example: 3,
     description:
-      'Remaining work in whole days for an in-progress activity (M2, ADR-0035). Null derives it from percent complete.',
+      'Remaining work in whole days for an in-progress activity (M2, ADR-0035). Null derives it ' +
+      'from percent complete. Mutually exclusive with `remainingDurationMinutes`.',
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
@@ -59,7 +70,28 @@ export class UpdateActivityProgressDto {
   @IsInt()
   @Min(0)
   @Max(10000)
+  @IsMutuallyExclusiveWith('remainingDurationMinutes')
   remainingDurationDays?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: MAX_REMAINING_MINUTES,
+    nullable: true,
+    example: 240,
+    description:
+      'Remaining work in working MINUTES — the unit storage and the engine use (ADR-0036). The ' +
+      'day-denominated sibling above cannot state a four-hour remainder: it rounds to 0, which on ' +
+      'an incomplete activity is also the value meaning "no work left" (surface audit F3). Null ' +
+      'derives the remainder from percent complete. Mutually exclusive with `remainingDurationDays`.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(MAX_REMAINING_MINUTES)
+  @IsMutuallyExclusiveWith('remainingDurationDays')
+  remainingDurationMinutes?: number | null;
 
   @ApiPropertyOptional({
     format: 'date',

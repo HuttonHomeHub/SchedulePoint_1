@@ -239,9 +239,10 @@ describe('the payload contracts the real API enforces', () => {
     expect(body).not.toHaveProperty('status');
     expect(body).not.toHaveProperty('percentCompleteType');
     expect(body).not.toHaveProperty('physicalPercentComplete');
-    // Minutes in the spec model, whole days at the API (TECH_DEBT #78).
-    expect(body).not.toHaveProperty('remainingDurationMinutes');
-    expect(body.remainingDurationDays).toBe(3);
+    // Minutes, sent as the spec holds them (surface audit F3). This used to round to whole days
+    // and report the loss, so a sub-day remainder in a seeded plan was never what the spec asked.
+    expect(body).not.toHaveProperty('remainingDurationDays');
+    expect(body.remainingDurationMinutes).toBe(3 * 1440);
     expect(body.percentComplete).toBe(40);
     expect(body.version).toEqual(expect.any(Number));
     // A calendar DATE, not the spec's minute-granular instant.

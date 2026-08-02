@@ -1,4 +1,9 @@
-import type { CriticalPathDefinition, PlanSummary, TotalFloatMode } from '@repo/types';
+import type {
+  CalendarSummary,
+  CriticalPathDefinition,
+  PlanSummary,
+  TotalFloatMode,
+} from '@repo/types';
 
 import {
   CRITICAL_PATH_DEFINITION_LABELS,
@@ -7,11 +12,14 @@ import {
   TOTAL_FLOAT_MODES,
 } from '../schemas/plan-schemas';
 
+import { PlanCriticalFloatThresholdField } from './PlanCriticalFloatThresholdField';
 import {
   ON_OFF_OPTIONS,
   PlanScheduleOptionSelect,
   type OnOffValue,
 } from './PlanScheduleOptionSelect';
+
+import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
  * The plan's **float & critical scheduling settings** (M6, ADR-0035 §17/§18/§20) — three options
@@ -37,12 +45,20 @@ import {
 export function PlanScheduleSettings({
   orgSlug,
   plan,
+  calendars,
   canEdit,
 }: {
   orgSlug: string;
   plan: PlanSummary;
+  /** The plan-usable calendar list, for the threshold field's day factor. Absent = degrade to minutes. */
+  calendars?: CalendarSummary[];
   canEdit: boolean;
 }): React.ReactElement {
+  // The threshold is plan-level, so it resolves a day on the PLAN calendar — see the field's docblock
+  // for why that is a disclosure rather than a fix on a mixed-calendar plan.
+  const hoursPerDay = effectiveHoursPerDay(calendars ?? [], {
+    ...(plan.calendarId === null ? {} : { planCalendarId: plan.calendarId }),
+  });
   if (!canEdit) {
     return (
       // The three settings are one logical group (WCAG 1.3.1) — `aria-label` names it for AT without
@@ -60,6 +76,12 @@ export function PlanScheduleSettings({
           <dt className="text-muted-foreground">Open-ends criticality</dt>
           <dd>{plan.makeOpenEndsCritical ? 'On' : 'Off'}</dd>
         </div>
+        <PlanCriticalFloatThresholdField
+          orgSlug={orgSlug}
+          plan={plan}
+          hoursPerDay={hoursPerDay}
+          canEdit={false}
+        />
       </dl>
     );
   }
@@ -113,6 +135,14 @@ export function PlanScheduleSettings({
         announceMessage={(value) =>
           `Open-ends criticality turned ${value === 'on' ? 'on' : 'off'}.`
         }
+      />
+      {/* Last, because it only means anything under the TOTAL_FLOAT definition two controls above —
+          the threshold IS that definition, and reading it before the definition inverts the sentence. */}
+      <PlanCriticalFloatThresholdField
+        orgSlug={orgSlug}
+        plan={plan}
+        hoursPerDay={hoursPerDay}
+        canEdit
       />
     </fieldset>
   );

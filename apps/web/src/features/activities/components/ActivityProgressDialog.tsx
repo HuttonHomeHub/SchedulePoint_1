@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useUpdateActivityProgress } from '../api/use-activities';
+import { seedRemainingText } from '../model/remaining-field';
 import {
   deriveStatusLabel,
   progressFormSchema,
@@ -53,7 +54,7 @@ export function ActivityProgressDialog({
       percentComplete: 0,
       actualStart: '',
       actualFinish: '',
-      remainingDurationDays: undefined,
+      remaining: '',
       suspendDate: '',
       resumeDate: '',
     },
@@ -66,8 +67,11 @@ export function ActivityProgressDialog({
         actualStart: activity.actualStart ?? '',
         actualFinish: activity.actualFinish ?? '',
         // Seed the M2 fields from the row even when the inputs are hidden (flag off), so an
-        // edit round-trips a stored remaining/suspend/resume unchanged (ADR-0035).
-        remainingDurationDays: activity.remainingDurationDays ?? undefined,
+        // edit round-trips a stored remaining/suspend/resume unchanged (ADR-0035). This dialog is
+        // the ADR-0062 flag-off path and composes no calendar list, so the remaining field takes
+        // its degraded whole-days shape — the same code path an unresolved calendar takes in the
+        // tabbed editor, which is what keeps the two states from rotting apart (ADR-0070 §4).
+        remaining: seedRemainingText(activity, undefined),
         suspendDate: activity.suspendDate ?? '',
         resumeDate: activity.resumeDate ?? '',
       });
@@ -88,7 +92,7 @@ export function ActivityProgressDialog({
   const onSubmit = handleSubmit((values) => {
     if (!activity) return;
     update.mutate(
-      { activityId: activity.id, version: activity.version, ...values },
+      { activityId: activity.id, version: activity.version, hoursPerDay: undefined, ...values },
       {
         onSuccess: (result) => {
           // Surface any server-side repairs (ADR-0035 §6) so a silent field override doesn't go
@@ -142,17 +146,17 @@ export function ActivityProgressDialog({
               These reschedule the remaining work on the next recalculation; they don’t change the
               status (that stays derived from percent complete and the actual dates).
             </p>
+            {/* Whole days only here, deliberately: this is the flag-off path and it composes no
+                calendar list, so there is no factor to read hours and minutes against. Blank
+                clears the explicit remaining (null → the API derives it from percent). */}
             <TextField
               label="Remaining duration (days, optional)"
               type="number"
               min={0}
               max={10000}
               hint="Leave blank to derive it from percent complete."
-              error={errors.remainingDurationDays?.message}
-              {...register('remainingDurationDays', {
-                // Blank clears the explicit remaining (undefined → the API derives it from percent).
-                setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
-              })}
+              error={errors.remaining?.message}
+              {...register('remaining')}
             />
             <TextField
               label="Suspend date (optional)"

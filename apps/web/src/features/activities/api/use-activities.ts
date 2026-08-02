@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 
 import { durationWriteFields } from '../model/duration-field';
+import { remainingWriteFields } from '../model/remaining-field';
 import {
   isDurationDerivedType,
   type ActivityFormValues,
@@ -423,7 +424,16 @@ export function useUpdateActivityParents(orgSlug: string, planId: string) {
   });
 }
 
-function progressBody(input: ProgressFormValues & { version: number }) {
+/**
+ * `hoursPerDay` is a **required** parameter, never defaulted (ADR-0070 §3): the remaining duration
+ * is day-denominated text and after ADR-0068 a day is a per-calendar quantity, so defaulting to 24
+ * would read a planner's `1d` on an eight-hour calendar as three days of remaining work and
+ * defaulting to 8 would do the reverse — both silent, both moving dates. `undefined` is a real
+ * answer meaning "not resolved", and the field degrades to whole days for it.
+ */
+function progressBody(
+  input: ProgressFormValues & { version: number; hoursPerDay: number | undefined },
+) {
   return {
     percentComplete: input.percentComplete,
     // A blank date field clears the value (null), matching the API.
@@ -431,8 +441,9 @@ function progressBody(input: ProgressFormValues & { version: number }) {
     actualFinish: input.actualFinish ? input.actualFinish : null,
     // M2 progress-ingestion fields (ADR-0035). The dialog seeds these from the row, so a stored
     // value round-trips even with the inputs hidden; a cleared field sends null (derive remaining
-    // from percent / drop the suspend/resume pause).
-    remainingDurationDays: input.remainingDurationDays ?? null,
+    // from percent / drop the suspend/resume pause). Exactly one of the two remaining spellings
+    // goes out — sending both is a 422 by design (surface audit F3).
+    ...(remainingWriteFields(input.remaining, input.hoursPerDay) ?? {}),
     suspendDate: input.suspendDate ? input.suspendDate : null,
     resumeDate: input.resumeDate ? input.resumeDate : null,
     version: input.version,
@@ -444,7 +455,14 @@ export function useUpdateActivityProgress(orgSlug: string, planId: string) {
   // Uses the envelope form so the caller can read `meta.warnings` — the server-side repairs it
   // applied to keep the report self-consistent (M2, ADR-0035 §6). An ordinary report has no meta.
   return useMutation({
-    mutationFn: (input: { activityId: string; version: number } & ProgressFormValues) =>
+    mutationFn: (
+      input: {
+        activityId: string;
+        version: number;
+        /** The activity's effective working hours per day, or `undefined` when unresolved. */
+        hoursPerDay: number | undefined;
+      } & ProgressFormValues,
+    ) =>
       apiFetchEnvelope<ActivitySummary, { warnings?: ProgressWarning[] }>(
         `/organizations/${orgSlug}/activities/${input.activityId}/progress`,
         {

@@ -83,7 +83,7 @@ export function specToEngineInput(spec: SeedSpec): EngineInput {
       progressMode: spec.plan.options.progressRecalcMode,
       useExpectedFinishDates: spec.plan.options.useExpectedFinishDates,
       criticalDefinition: spec.plan.options.criticalPathDefinition,
-      criticalFloatThresholdMinutes: spec.plan.options.criticalFloatThreshold,
+      criticalFloatThresholdMinutes: spec.plan.options.criticalFloatThresholdMinutes,
       totalFloatMode: spec.plan.options.totalFloatMode,
       makeOpenEndsCritical: spec.plan.options.makeOpenEndsCritical,
       ignoreExternalRelationships: spec.plan.options.ignoreExternalRelationships,

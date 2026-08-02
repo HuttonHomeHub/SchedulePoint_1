@@ -345,7 +345,7 @@ function loeCaseSpec(): SeedSpec {
         progressRecalcMode: 'RETAINED_LOGIC',
         useExpectedFinishDates: false,
         criticalPathDefinition: 'TOTAL_FLOAT',
-        criticalFloatThreshold: 0,
+        criticalFloatThresholdMinutes: 0,
         totalFloatMode: 'FINISH',
         makeOpenEndsCritical: false,
         levelResources: false,

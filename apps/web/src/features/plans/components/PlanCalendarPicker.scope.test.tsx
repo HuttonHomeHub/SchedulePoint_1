@@ -33,7 +33,7 @@ const PLAN: PlanSummary = {
   progressRecalcMode: 'RETAINED_LOGIC',
   useExpectedFinishDates: false,
   criticalPathDefinition: 'TOTAL_FLOAT',
-  criticalFloatThreshold: 0,
+  criticalFloatThresholdMinutes: 0,
   totalFloatMode: 'FINISH',
   makeOpenEndsCritical: false,
   ignoreExternalRelationships: false,

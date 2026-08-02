@@ -98,7 +98,7 @@ export class UpdatePlanDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  criticalFloatThreshold?: number;
+  criticalFloatThresholdMinutes?: number;
 
   @ApiPropertyOptional({
     enum: TotalFloatMode,

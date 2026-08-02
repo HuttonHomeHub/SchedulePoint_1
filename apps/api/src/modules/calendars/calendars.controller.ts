@@ -249,21 +249,25 @@ export class CalendarsController {
 
   @Patch(':calendarId/exceptions/:exceptionId')
   @ApiOperation({
-    summary: 'Edit a calendar exception’s hours and/or label (optimistic locking).',
+    summary: 'Edit a calendar exception’s span, hours and/or label (optimistic locking).',
     description:
       'Replaces the day’s working windows as a set, or edits only the label when neither ' +
-      '`windows` nor `isWorking` is sent. The date is not editable — moving an exception is ' +
-      'deleting one and adding another, which the existing endpoints already do visibly.',
+      '`windows` nor `isWorking` is sent. `endDate` extends or shortens the span. The FIRST day ' +
+      'is not editable — moving an exception is deleting one and adding another, which the ' +
+      'existing endpoints already do visibly.',
   })
   @ApiOkResponse({ type: CalendarExceptionResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiNotFoundResponse({ description: 'Calendar or exception not found in this organisation.' })
   @ApiUnprocessableEntityResponse({
     description:
-      'Windows overlap, are unsorted, are empty, or were sent together with `isWorking`.',
+      'Windows overlap, are unsorted, are empty, or were sent together with `isWorking`; or ' +
+      '`endDate` precedes the exception’s first day.',
   })
   @ApiConflictResponse({
-    description: 'Stale `version` — the exception changed since it was read.',
+    description:
+      'Stale `version` — the exception changed since it was read; or the new span overlaps ' +
+      'another exception on this calendar.',
   })
   async updateException(
     @CurrentUser() principal: Principal,

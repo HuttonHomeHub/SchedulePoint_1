@@ -7,6 +7,14 @@ import { measureBody } from '../api/scope-bodies';
 import { useUpdateActivityProgress } from '../api/use-activities';
 import { useActivitySteps, useReplaceActivitySteps } from '../api/use-activity-steps';
 import type { ScopeGate } from '../lib/activity-editor-gating';
+import { durationInputProps } from '../model/duration-field';
+import {
+  REMAINING_NEEDS_WHOLE_DAYS,
+  remainingHelp,
+  remainingLabel,
+  remainingWriteFields,
+  seedRemainingText,
+} from '../model/remaining-field';
 import {
   PERCENT_COMPLETE_TYPE_LABELS,
   PERCENT_COMPLETE_TYPE_OPTIONS,
@@ -60,6 +68,7 @@ export function ReportedProgressPanel({
   orgSlug,
   planId,
   activity,
+  hoursPerDay,
   gate,
   open,
   announce,
@@ -67,6 +76,12 @@ export function ReportedProgressPanel({
   orgSlug: string;
   planId: string;
   activity: ActivitySummary;
+  /**
+   * The activity's effective working hours per day, or `undefined` when the calendar list has not
+   * resolved. Required rather than defaulted (ADR-0070 §3) — after ADR-0068 there is no safe
+   * default, and the remaining field degrades to whole days rather than guessing one.
+   */
+  hoursPerDay: number | undefined;
   gate: ScopeGate;
   open: boolean;
   announce: (message: string) => void;
@@ -78,9 +93,7 @@ export function ReportedProgressPanel({
       percentComplete: row?.percentComplete ?? 0,
       actualStart: row?.actualStart ?? '',
       actualFinish: row?.actualFinish ?? '',
-      ...(row?.remainingDurationDays === null || row?.remainingDurationDays === undefined
-        ? {}
-        : { remainingDurationDays: row.remainingDurationDays }),
+      remaining: row === undefined ? '' : seedRemainingText(row, hoursPerDay),
       suspendDate: row?.suspendDate ?? '',
       resumeDate: row?.resumeDate ?? '',
     }),
@@ -94,7 +107,7 @@ export function ReportedProgressPanel({
     mutation.mutate(
       // `version` is read from the live row at submit time, not captured on open — a sibling
       // scope's save bumps it, and a stale one would 409 every time after the first.
-      { activityId: activity.id, version: activity.version, ...submitted },
+      { activityId: activity.id, version: activity.version, hoursPerDay, ...submitted },
       {
         onSuccess: (result) => {
           form.reset(submitted);
@@ -141,15 +154,17 @@ export function ReportedProgressPanel({
         />
         {PROGRESS_INGESTION_ENABLED ? (
           <TextField
-            label="Remaining duration (days)"
-            type="number"
-            min={0}
-            hint="Leave blank to derive the remaining work from the percent complete."
+            label={remainingLabel(hoursPerDay)}
+            {...durationInputProps(hoursPerDay)}
+            hint={remainingHelp(hoursPerDay)}
             disabled={!gate.writable}
-            error={form.formState.errors.remainingDurationDays?.message}
-            {...form.register('remainingDurationDays', {
-              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-            })}
+            error={
+              form.formState.errors.remaining?.message ??
+              (remainingWriteFields(values.remaining ?? '', hoursPerDay) === null
+                ? REMAINING_NEEDS_WHOLE_DAYS
+                : undefined)
+            }
+            {...form.register('remaining')}
           />
         ) : null}
         <TextField
@@ -167,15 +182,24 @@ export function ReportedProgressPanel({
         />
         {PROGRESS_INGESTION_ENABLED ? (
           <>
+            {/* Suspend is a RECORD, resume is the schedule input, and the two look identical
+                sitting side by side — so each says which it is (surface audit F1, ADR-0035 §4).
+                Only the resume date reaches the engine: it floors the remaining work at
+                `max(data date, resume date)`. The suspend date is stored, shown and exported, and
+                the recalculation does not read it. Saying so here is the whole fix: a planner who
+                sets a suspend date and sees no dates move should be able to find out why from the
+                field rather than from the source. */}
             <TextField
               label="Suspend date"
               type="date"
+              hint="Recorded only — it does not move any dates."
               disabled={!gate.writable}
               {...form.register('suspendDate')}
             />
             <TextField
               label="Resume date"
               type="date"
+              hint="Remaining work is scheduled from this date, or the data date if later."
               disabled={!gate.writable}
               error={form.formState.errors.resumeDate?.message}
               {...form.register('resumeDate')}

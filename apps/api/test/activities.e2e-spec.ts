@@ -158,6 +158,96 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     });
   });
 
+  /**
+   * The same asymmetry one field along (surface audit F3). ADR-0070 made an activity's DURATION
+   * sub-day authorable and left its REMAINING work a whole-days field — so a planner could type a
+   * four-hour lift and then report the remainder only as `0` or `1` day. On an incomplete activity
+   * `0` is not a rounding artefact: it is also the value that means *no work left*.
+   */
+  describe('sub-day remaining duration (surface audit F3)', () => {
+    const progressOf = async (
+      actor: Actor,
+      activityId: string,
+      body: object,
+      expected = 200,
+    ): Promise<{ remainingDurationDays: number | null; remainingDurationMinutes: number | null }> =>
+      (
+        await actor.agent
+          .patch(`/api/v1/organizations/acme/activities/${activityId}/progress`)
+          .send(body)
+          .expect(expected)
+      ).body.data;
+
+    const startedActivity = async () => {
+      const { actor, planId } = await setup();
+      const created = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Cure slab', durationDays: 2 })
+        .expect(201);
+      return {
+        actor,
+        id: created.body.data.id as string,
+        version: created.body.data.version as number,
+      };
+    };
+
+    it('reports a four-hour remainder and reads it back exactly', async () => {
+      const { actor, id, version } = await startedActivity();
+
+      const data = await progressOf(actor, id, {
+        percentComplete: 60,
+        // On or before the plan's data date (2026-01-01) — a later actual is a 422 by design.
+        actualStart: '2026-01-01',
+        remainingDurationMinutes: 240,
+        version,
+      });
+      // The day field still rounds — that is the point, and why the minute field must be readable.
+      expect(data).toMatchObject({ remainingDurationMinutes: 240, remainingDurationDays: 0 });
+
+      const got = await actor.agent.get(`/api/v1/organizations/acme/activities/${id}`).expect(200);
+      expect(got.body.data.remainingDurationMinutes).toBe(240);
+    });
+
+    it('refuses a payload carrying both units rather than picking a winner', async () => {
+      const { actor, id, version } = await startedActivity();
+      const res = await actor.agent
+        .patch(`/api/v1/organizations/acme/activities/${id}/progress`)
+        .send({ remainingDurationDays: 1, remainingDurationMinutes: 240, version })
+        .expect(422);
+      expect(JSON.stringify(res.body)).toContain('send one, not both');
+    });
+
+    it('keeps the day field working unchanged for every existing client', async () => {
+      const { actor, id, version } = await startedActivity();
+      const data = await progressOf(actor, id, {
+        percentComplete: 50,
+        actualStart: '2026-01-01',
+        remainingDurationDays: 1,
+        version,
+      });
+      expect(data).toMatchObject({ remainingDurationDays: 1, remainingDurationMinutes: 1440 });
+    });
+
+    it('clears the explicit remainder with null, in either unit', async () => {
+      const { actor, id, version } = await startedActivity();
+      const set = await progressOf(actor, id, {
+        percentComplete: 60,
+        actualStart: '2026-01-01',
+        remainingDurationMinutes: 240,
+        version,
+      });
+      expect(set.remainingDurationMinutes).toBe(240);
+
+      const cleared = await progressOf(actor, id, {
+        remainingDurationMinutes: null,
+        version: version + 1,
+      });
+      // Null means "derive it from percent complete", which is a different state from zero.
+      expect(cleared.remainingDurationMinutes).toBeNull();
+      expect(cleared.remainingDurationDays).toBeNull();
+    });
+  });
+
   it('creates an activity with defaults, gets and lists it', async () => {
     const { actor, planId } = await setup();
     const res = await actor.agent

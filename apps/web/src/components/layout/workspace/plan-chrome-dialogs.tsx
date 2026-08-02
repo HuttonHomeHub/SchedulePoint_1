@@ -124,7 +124,12 @@ export function PlanChromeDialogs({
           </SettingsSection>
           {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
             <SettingsSection title="Critical path & float">
-              <PlanScheduleSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+              <PlanScheduleSettings
+                orgSlug={model.orgSlug}
+                plan={plan}
+                calendars={model.calendars.data ?? []}
+                canEdit={model.canWrite}
+              />
             </SettingsSection>
           ) : null}
           {PROGRESS_INGESTION_ENABLED ? (

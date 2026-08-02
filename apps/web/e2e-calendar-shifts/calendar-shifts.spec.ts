@@ -88,7 +88,7 @@ test('a shift calendar round-trips its hours, survives a rename, and an empty we
 
   // ------------------------------------------------------ 4. A dated exception with real hours
   await openCalendar(page, 'Turnaround');
-  await dialog.getByLabel('Date').fill('2026-12-24');
+  await dialog.getByLabel('From').fill('2026-12-24');
   await dialog.getByLabel('Type').selectOption('hours');
   const addHours = dialog.getByRole('group', { name: 'Exception hours' });
   await addHours.getByRole('button', { name: /^Add hours/ }).click();
@@ -109,6 +109,28 @@ test('a shift calendar round-trips its hours, survives a rename, and an empty we
 
   await page.reload();
   await openCalendar(page, 'Turnaround');
+  await expect(dialog.getByText('08:00–13:30')).toBeVisible();
+
+  // ------------------------------------------- 5. A shutdown is ONE exception, not fourteen (F2)
+  // Storage, the overlap constraint and the engine have always handled a range; only the write
+  // paths collapsed it. Driven here against a real API because the span survives a round trip or
+  // it does not — a mocked fetch would accept whatever the client sent.
+  await dialog.getByLabel('From').fill('2026-12-28');
+  await dialog.getByLabel('To (optional)').fill('2027-01-02');
+  await dialog.getByRole('button', { name: 'Add exception' }).click();
+  await expect(dialog.getByText('28 Dec 2026 – 02 Jan 2027')).toBeVisible();
+
+  // Extend it in place. Before this, lengthening a shutdown meant delete-then-recreate — two
+  // writes with a window in between during which the holiday was an ordinary working day.
+  await dialog.getByRole('button', { name: /^Edit exception on 28 Dec 2026/ }).click();
+  await dialog.getByLabel('To', { exact: true }).fill('2027-01-05');
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByText('28 Dec 2026 – 05 Jan 2027')).toBeVisible();
+
+  await page.reload();
+  await openCalendar(page, 'Turnaround');
+  // One row for the whole shutdown, and the single-day exception beside it, unchanged.
+  await expect(dialog.getByText('28 Dec 2026 – 05 Jan 2027')).toBeVisible();
   await expect(dialog.getByText('08:00–13:30')).toBeVisible();
 
   expect(

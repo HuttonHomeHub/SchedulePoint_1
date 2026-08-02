@@ -27,13 +27,33 @@ const trim = ({ value }: { value: unknown }): unknown =>
 /**
  * Request body for adding a dated exception to a calendar. `isWorking` defaults
  * to `false` (a holiday); pass `true` for a worked exception (e.g. a worked
- * Saturday). `date` is a strict `YYYY-MM-DD` calendar day; it is unique per
- * calendar among active rows (a duplicate is a 409 `DUPLICATE_EXCEPTION`).
+ * Saturday). `date` is a strict `YYYY-MM-DD` calendar day; overlapping an existing
+ * active exception is a 409 `DUPLICATE_EXCEPTION`.
+ *
+ * An exception may span a **range**: `endDate` (inclusive) makes one row cover a
+ * shutdown, a turnaround or a Christmas fortnight. Storage has modelled a range since
+ * the table was created — `start_date`, `end_date` and an exclusion constraint over
+ * `daterange(start_date, end_date, '[]')` — and the read DTO has always returned
+ * `endDate`; only this write path collapsed it, so every exception was exactly one day
+ * and a two-week shutdown was fourteen separate entries (surface audit F2). Omitting
+ * `endDate` still means a single day, which is what every existing client sends.
  */
 export class CreateCalendarExceptionDto {
-  @ApiProperty({ format: 'date', description: 'Calendar day (YYYY-MM-DD).' })
+  @ApiProperty({ format: 'date', description: 'First calendar day (YYYY-MM-DD).' })
   @IsCalendarDate()
   date!: string;
+
+  @ApiPropertyOptional({
+    format: 'date',
+    description:
+      'Last calendar day (YYYY-MM-DD), INCLUSIVE — one row for a shutdown or a holiday period. ' +
+      'Must not precede `date`. Omit for a single day (the default, and what `date` alone has ' +
+      'always meant). Every day in the range takes the same `isWorking`/`windows`: a range is ' +
+      'one exception with a span, not a bulk-create of independent days.',
+  })
+  @IsOptional()
+  @IsCalendarDate()
+  endDate?: string;
 
   @ApiPropertyOptional({
     default: false,

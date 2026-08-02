@@ -47,6 +47,20 @@ function isDuplicateException(error: unknown): boolean {
   );
 }
 
+/**
+ * How an exception's span reads: one day as itself, a range as `from – to` (surface audit F2).
+ *
+ * Stated once and used for the row, the edit form's heading, its hours legend and every
+ * announcement, so a two-week shutdown cannot appear as a fortnight in one place and as its first
+ * day in another. Takes the two dates rather than the whole exception because the add form
+ * announces a span it has only just typed and has no row to pass.
+ */
+function formatExceptionSpan(date: string, endDate: string | undefined): string {
+  const first = formatCalendarDate(date);
+  if (endDate === undefined || endDate === '' || endDate === date) return first;
+  return `${first} – ${formatCalendarDate(endDate)}`;
+}
+
 /** The options offered, flag off (two) and flag on (three) — see {@link ExceptionKind}. */
 const OFFERED_KINDS: ExceptionKind[] = CALENDAR_SHIFT_EDITOR_ENABLED
   ? ['holiday', 'allDay', 'hours']
@@ -57,20 +71,16 @@ function ExceptionKindSelect({
   kind,
   onKindChange,
   selectId,
-  selectRef,
 }: {
   kind: ExceptionKind;
   onKindChange: (kind: ExceptionKind) => void;
   selectId: string;
-  /** Lets a host claim focus for this control — the edit form does, on open. */
-  selectRef?: React.Ref<HTMLSelectElement>;
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={selectId}>Type</Label>
       <Select
         id={selectId}
-        {...(selectRef ? { ref: selectRef } : {})}
         value={kind}
         onChange={(event) => onKindChange(event.target.value as ExceptionKind)}
       >
@@ -128,11 +138,13 @@ function ExceptionWindowFields({
 }
 
 /**
- * Edit one exception's hours and label in place (ADR-0067 §3, flag-on only).
+ * Edit one exception's span, hours and label in place (ADR-0067 §3, flag-on only).
  *
- * The date is not editable here — moving an exception is remove-then-add, which the neighbouring
- * actions already do visibly. `version` is the exception's own, so a row edited from two tabs is a
- * 409 rather than a silent overwrite.
+ * The FIRST day is not editable here — moving an exception is remove-then-add, which the
+ * neighbouring actions already do visibly. Its LAST day is: extending a shutdown by two days is
+ * not moving anything, it is the edit a planner most often needs, and the alternative is the
+ * delete-then-recreate this form exists to remove (surface audit F2). `version` is the exception's
+ * own, so a row edited from two tabs is a 409 rather than a silent overwrite.
  */
 function ExceptionEditForm({
   exception,
@@ -152,17 +164,25 @@ function ExceptionEditForm({
   // something claims it. Claimed here, on the first control, the way `WindowListEditor` claims it
   // after removing a row — a keyboard user must not have to find their way back to a form they
   // just opened. `onDone` restores focus to the row's own trigger (see the row below).
-  const firstControlRef = useRef<HTMLSelectElement>(null);
+  const firstControlRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     firstControlRef.current?.focus();
   }, []);
   const [kind, setKind] = useState<ExceptionKind>(() => exceptionKindOf(exception));
   const [rows, setRows] = useState<TimeRow[]>(() => exceptionRowsOf(exception));
   const [label, setLabel] = useState(exception.label ?? '');
+  const [endDate, setEndDate] = useState(exception.endDate);
   const [problems, setProblems] = useState<readonly WindowProblem[]>([]);
   const [message, setMessage] = useState<string | undefined>(undefined);
+  // Checked here as well as at the API for the same reason the add form checks it: the 422 is the
+  // enforcing boundary, but a planner who has just typed both dates should be told at the field.
+  const rangeError =
+    endDate !== '' && endDate < exception.date
+      ? 'The last day cannot be before the first day.'
+      : undefined;
 
   const onSave = (): void => {
+    if (rangeError !== undefined) return;
     const result = toExceptionHours(kind, rows);
     if (!result.ok) {
       setProblems(result.problems);
@@ -176,12 +196,16 @@ function ExceptionEditForm({
       {
         exceptionId: exception.id,
         version: exception.version,
+        // Emptying the field collapses the range to its first day rather than meaning "unchanged":
+        // there is no such thing as an exception with no last day, so a blank has to mean something,
+        // and "one day" is the only reading that matches what the field shows when it is blank.
+        endDate: endDate === '' ? exception.date : endDate,
         hours,
         label: label.trim() === '' ? null : label.trim(),
       },
       {
-        onSuccess: () => {
-          announce(`Exception on ${formatCalendarDate(exception.date)} updated.`);
+        onSuccess: (updated) => {
+          announce(`Exception on ${formatExceptionSpan(updated.date, updated.endDate)} updated.`);
           onDone();
         },
       },
@@ -190,25 +214,30 @@ function ExceptionEditForm({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="font-medium">{formatCalendarDate(exception.date)}</p>
+      <p className="font-medium">{formatExceptionSpan(exception.date, exception.endDate)}</p>
       {updateException.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
           {updateException.error.message}
         </p>
       ) : null}
-      <ExceptionKindSelect
-        kind={kind}
-        onKindChange={setKind}
-        selectId={selectId}
-        selectRef={firstControlRef}
+      <TextField
+        ref={firstControlRef}
+        label="To"
+        type="date"
+        value={endDate}
+        min={exception.date}
+        error={rangeError}
+        hint={`Last day of the exception. Set to ${formatCalendarDate(exception.date)} for a single day.`}
+        onChange={(event) => setEndDate(event.target.value)}
       />
+      <ExceptionKindSelect kind={kind} onKindChange={setKind} selectId={selectId} />
       <ExceptionWindowFields
         kind={kind}
         rows={rows}
         onRowsChange={setRows}
         problems={problems}
         message={message}
-        legend={`Hours on ${formatCalendarDate(exception.date)}`}
+        legend={`Hours on ${formatExceptionSpan(exception.date, exception.endDate)}`}
       />
       <TextField
         label="Label (optional)"
@@ -286,7 +315,7 @@ export function CalendarExceptionsEditor({
     formState: { errors },
   } = useForm<ExceptionFormValues>({
     resolver: zodResolver(exceptionFormSchema),
-    defaultValues: { date: '', isWorking: false, label: '' },
+    defaultValues: { date: '', endDate: '', isWorking: false, label: '' },
   });
 
   const onAdd = handleSubmit((values) => {
@@ -302,8 +331,8 @@ export function CalendarExceptionsEditor({
       { ...values, isWorking: kind === 'allDay', hours: result.hours },
       {
         onSuccess: () => {
-          announce(`Exception on ${formatCalendarDate(values.date)} added.`);
-          reset({ date: '', isWorking: false, label: '' });
+          announce(`Exception on ${formatExceptionSpan(values.date, values.endDate)} added.`);
+          reset({ date: '', endDate: '', isWorking: false, label: '' });
           setKind('holiday');
           setRows([]);
         },
@@ -332,7 +361,7 @@ export function CalendarExceptionsEditor({
   const onRemove = (exception: CalendarExceptionSummary): void => {
     removeException.mutate(exception.id, {
       onSuccess: () => {
-        announce(`Exception on ${formatCalendarDate(exception.date)} removed.`);
+        announce(`Exception on ${formatExceptionSpan(exception.date, exception.endDate)} removed.`);
         // The removed row (and its Remove button) unmounts, so move focus to the
         // stable list region rather than letting it fall back to <body>.
         listRegionRef.current?.focus();
@@ -386,7 +415,9 @@ export function CalendarExceptionsEditor({
                 ) : (
                   <>
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="font-medium">{formatCalendarDate(exception.date)}</span>
+                      <span className="font-medium">
+                        {formatExceptionSpan(exception.date, exception.endDate)}
+                      </span>
                       <Badge variant={exception.isWorking ? 'neutral' : 'warning'} size="sm">
                         {exception.isWorking ? 'Working day' : 'Holiday'}
                       </Badge>
@@ -411,7 +442,7 @@ export function CalendarExceptionsEditor({
                             // Queried by `closeEditor` to hand focus back to the control that
                             // opened the form — a per-row ref map for one lookup would be worse.
                             data-edit-exception={exception.id}
-                            aria-label={`Edit exception on ${formatCalendarDate(exception.date)}`}
+                            aria-label={`Edit exception on ${formatExceptionSpan(exception.date, exception.endDate)}`}
                           >
                             Edit
                           </Button>
@@ -420,7 +451,7 @@ export function CalendarExceptionsEditor({
                           variant="ghost"
                           size="sm"
                           onClick={() => onRemove(exception)}
-                          aria-label={`Remove exception on ${formatCalendarDate(exception.date)}`}
+                          aria-label={`Remove exception on ${formatExceptionSpan(exception.date, exception.endDate)}`}
                         >
                           Remove
                         </Button>
@@ -450,11 +481,22 @@ export function CalendarExceptionsEditor({
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <TextField
-              label="Date"
+              label="From"
               type="date"
               error={errors.date?.message}
               className="sm:w-auto"
               {...register('date')}
+            />
+            {/* One exception with a span, not fourteen entries for a Christmas fortnight (surface
+                audit F2). Optional, and empty means a single day — which is what a date on its own
+                has always meant, so nothing a planner already knows how to enter changes. */}
+            <TextField
+              label="To (optional)"
+              type="date"
+              error={errors.endDate?.message}
+              hint="Leave empty for a single day."
+              className="sm:w-auto"
+              {...register('endDate')}
             />
             <ExceptionKindSelect kind={kind} onKindChange={setKind} selectId={addKindId} />
             <TextField

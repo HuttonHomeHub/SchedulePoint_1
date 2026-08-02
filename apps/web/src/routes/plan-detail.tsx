@@ -202,7 +202,12 @@ function LegacyPlanLayout({
       ) : null}
       {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
         <div className="mt-3">
-          <PlanScheduleSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
+          <PlanScheduleSettings
+            orgSlug={orgSlug}
+            plan={plan}
+            calendars={model.calendars.data ?? []}
+            canEdit={model.canWrite}
+          />
         </div>
       ) : null}
       {RESOURCE_LEVELLING_ENABLED ? (

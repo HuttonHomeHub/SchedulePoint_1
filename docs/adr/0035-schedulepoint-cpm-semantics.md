@@ -68,9 +68,22 @@ We will implement the following semantics. Each cites the milestone that will bu
    start to the **data date**, not the project start (A9500).
 3. **A negative lag (lead) may not pull remaining work before the data date** — the lead is
    **truncated to the data date**, not honoured (N13).
-4. **Suspend / resume.** Remaining work is scheduled from `max(data date, resume date)`; the
-   suspended window is excluded from actual duration. A resume date **after** the data date (A4230)
-   floors remaining work at the resume date, not the data date.
+4. **Suspend / resume.** Remaining work is scheduled from `max(data date, resume date)`. A resume
+   date **after** the data date (A4230) floors remaining work at the resume date, not the data date.
+
+   **Only `resumeDate` is load-bearing.** `suspendDate` is a **record** of when work stopped: it is
+   validated (a resume before a suspend is a 422), stored, returned, displayed and exported — and the
+   recalculation does not read it. `EngineActivity` has no such field and `ScheduleRepository` does
+   not even `select` the column. This paragraph previously also said "the suspended window is
+   excluded from actual duration", which has **never** been implemented and had no consumer anywhere;
+   it is withdrawn rather than left standing, because a planner setting a suspend date and seeing no
+   dates move deserves the document to agree with the product (surface audit F1). The progress editor
+   now says which field does what.
+
+   Implementing the excluded-window semantic remains open, and is deliberately a **separate**
+   decision: it would change computed actual duration, and therefore dates, on every plan that
+   already carries a suspend date.
+
 5. **Stopped activity** (remaining duration 0, duration-% 100, no actual finish): the remaining early
    finish is set to the **data date** (A3040), and that value propagates to successors (never null).
 6. **Actuals never move.** Recorded actual start/finish are immutable across a recalc; only remaining
