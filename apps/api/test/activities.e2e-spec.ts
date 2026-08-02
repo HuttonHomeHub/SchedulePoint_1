@@ -196,7 +196,8 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
 
       const data = await progressOf(actor, id, {
         percentComplete: 60,
-        actualStart: '2026-05-01',
+        // On or before the plan's data date (2026-01-01) — a later actual is a 422 by design.
+        actualStart: '2026-01-01',
         remainingDurationMinutes: 240,
         version,
       });
@@ -220,7 +221,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       const { actor, id, version } = await startedActivity();
       const data = await progressOf(actor, id, {
         percentComplete: 50,
-        actualStart: '2026-05-01',
+        actualStart: '2026-01-01',
         remainingDurationDays: 1,
         version,
       });
@@ -231,7 +232,7 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       const { actor, id, version } = await startedActivity();
       const set = await progressOf(actor, id, {
         percentComplete: 60,
-        actualStart: '2026-05-01',
+        actualStart: '2026-01-01',
         remainingDurationMinutes: 240,
         version,
       });
