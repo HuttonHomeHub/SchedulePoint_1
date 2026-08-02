@@ -92,6 +92,9 @@ const fixture: CanonicalModel = {
       unitsPerHour: 1,
       isDriving: true,
       actualUnits: 0,
+      // Present in the fixture rather than left to the schema default, so this round-trip keeps
+      // asserting equality rather than quietly proving the default exists (ADR-0071 §5).
+      lagMinutes: 0,
     },
   ],
 };

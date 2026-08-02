@@ -223,6 +223,24 @@ name and units recorded in that table. **MSPDI is a drop in both directions.** M
 `<Assignment><Delay>` is a plausible equivalent; it is read nowhere in this repo and has not been checked
 against a real file, so it sits in the same confirm-first bucket rather than being wired on assumption.
 
+**M5 landed (2026-08-02), and it is the whole milestone rather than a deferral of it.** The fixture claim
+above was re-verified before building — `p6_torture_test_v1.xer:378` still declares those seven columns and
+no eighth — so the parser stays blocked and everything that does not depend on it shipped: `lagMinutes` on
+the canonical model and the import/export graphs, carried through the mapper, the interchange commit and the
+API's export reader, plus the two findings.
+
+The **asymmetry between the directions is the design**, and each half is pinned by a test. Import reports the
+drop **unconditionally** wherever assignments exist, because it cannot read the column and therefore cannot
+know whether anything was lost; a silent zero presented as fidelity is the ADR-0050 "best-effort is reported,
+never silent" rule inverted. Export reports it **only when a non-zero lag is present**, because there it
+knows exactly — a standing finding on the overwhelming majority of exports, which lose nothing, is how a
+reader learns to skip the section that matters. The export finding names a **count**, since "some data was
+dropped" is not actionable.
+
+Carrying the value into the commit and the export reader rather than defaulting it at each seam is
+deliberate: the day a real export is read, the parser is the only thing that changes, and no seam is left
+quietly discarding what it now receives.
+
 ### 6. Semantics, conformance and the catalogue
 
 ADR-0035 gains **§34** (assignment-lag semantics: unsigned; the activity's own calendar; the degenerate-lag

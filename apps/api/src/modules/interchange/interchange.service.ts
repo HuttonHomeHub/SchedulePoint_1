@@ -728,6 +728,10 @@ export class InterchangeService {
         unitsPerHour: assignment.unitsPerHour,
         isDriving: assignment.isDriving,
         actualUnits: assignment.actualUnits,
+        // Always 0 today — no parser reads a join lag (ADR-0071 §5) — but written from the graph
+        // rather than left to the column default, so the day a parser does read one it arrives here
+        // with no second change needed and no seam left silently ignoring it.
+        lagMinutes: assignment.lagMinutes,
         ...stamp,
       }),
     );

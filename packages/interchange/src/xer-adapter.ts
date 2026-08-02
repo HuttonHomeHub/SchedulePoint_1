@@ -742,6 +742,25 @@ export function adaptXerToCanonical(
       unitsPerHour,
       isDriving: field(row, 'driving_flag') === 'Y',
       actualUnits,
+      // Not read — see the finding below and `canonicalAssignmentSchema.lagMinutes`. Written
+      // explicitly rather than left to the schema default so a reader of this block can see that the
+      // omission is a decision, not an oversight.
+      lagMinutes: 0,
+    });
+  }
+  // The **capability** drop, reported once rather than per row (ADR-0071 §5). Unlike the export side
+  // this cannot be conditional on there being something to lose: we cannot read the column, so we
+  // cannot know whether the source had one. Saying so plainly is the honest position — the alternative
+  // is a silent zero presented as fidelity, which is the ADR-0050 "best-effort is reported, never
+  // silent" rule inverted.
+  if (assignments.length > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'assignment',
+      sourceRef: null,
+      detail: 'a per-assignment join delay was not read; every resource joins with its activity',
+      reason:
+        'this repository has verified no P6 export carrying an assignment lag, so the XER column name and units are unknown and will not be guessed (ADR-0071 §5)',
     });
   }
 

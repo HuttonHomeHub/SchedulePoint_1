@@ -253,6 +253,10 @@ export function buildRichExportGraph(overrides: ExportGraphOverrides = {}): Expo
         unitsPerHour: null,
         isDriving: true,
         actualUnits: 10,
+        // Zero here on purpose: the RICH fixture is the round-trip baseline, and a non-zero lag is a
+        // documented export DROP (ADR-0071 §5) — putting one here would make the round-trip assert a
+        // loss instead of fidelity. The lagged case has its own test.
+        lagMinutes: 0,
       },
     ],
   };

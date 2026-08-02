@@ -297,6 +297,23 @@ export const canonicalAssignmentSchema = z
     isDriving: z.boolean(),
     /** Actual units of work performed (progress). Non-negative; defaults to 0. */
     actualUnits: z.number().min(0).default(0),
+    /**
+     * Working minutes into the activity at which this resource joins it (ADR-0071 §1). Non-negative;
+     * **defaults to 0**, which is "joins with the activity" and the value every parser produces today.
+     *
+     * The field exists in the canonical model and is **written by no parser and read by no emitter**,
+     * which is deliberate rather than unfinished (ADR-0071 §5). This repository's own P6-class fixture
+     * declares `TASKRSRC` as `taskrsrc_id task_id rsrc_id target_qty target_qty_per_hr driving_flag
+     * act_reg_qty` — **no lag column of any kind** — so it contains no evidence of the P6 field's name,
+     * its units, or whether P6 emits one at all. Coding it from memory is the ADR-0058 failure mode
+     * with a column name attached. MSPDI's `<Assignment><Delay>` is a plausible equivalent and sits in
+     * the same confirm-first bucket: read nowhere in this repo, checked against no real file.
+     *
+     * So the shape is here — a plan authored in SchedulePoint carries the field through the model
+     * unchanged, and the day a real export is inspected the parsers have somewhere to put it — and
+     * until then **both directions report the drop** rather than passing a silent zero off as fidelity.
+     */
+    lagMinutes: z.number().int().min(0).default(0),
   })
   .strict();
 export type CanonicalAssignment = z.infer<typeof canonicalAssignmentSchema>;
