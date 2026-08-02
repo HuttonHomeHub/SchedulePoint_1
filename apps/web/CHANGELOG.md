@@ -1,5 +1,73 @@
 # @repo/web
 
+## 0.66.0
+
+### Minor Changes
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Set how far into an activity a resource joins it (behind `VITE_ASSIGNMENT_LAG`)
+
+  The CPM engine, the resource histogram, the levelling pass and the Earned-Value read have all
+  carried a per-assignment join lag for several releases — a crane arriving four days into a fortnight
+  schedules, loads, levels and earns correctly — and **nothing in the product could set one**. It could
+  be imported, and that was the whole of it. The engine-surface audit's F6 closes here.
+
+  Behind the flag, the assign form and each assignment row gain a **Joins after** field reading the
+  same `d`/`h`/`m` grammar as durations and lags (`2d`, `4h`, `90m`; a bare number still means days).
+  It is measured against the activity's **saved** calendar, not the calendar a pending edit has
+  selected: an assignment write does not carry the calendar with it, so converting `2d` against an
+  unsaved choice would store minutes measured on a calendar the activity does not have.
+
+  Where that factor cannot be resolved — the calendar list still loading, absent, or missing the bound
+  row — the field keeps hours and minutes and refuses days, saying so. That is deliberate rather than a
+  gap: unlike a relationship lag there is no whole-days fallback to degrade to, and hours and minutes
+  need no factor at all, so a planner can still type a four-hour lift while the list is in flight. Only
+  the unit that depends on a calendar has to wait for one.
+
+  A lag is hidden for a zero-span milestone, which has nothing for it to sit inside, and a lag of zero
+  appends nothing to a read-only row — "0 d" reads as a setting somebody chose when it is simply what
+  every unlagged assignment has. Rollback: set `VITE_ASSIGNMENT_LAG=false` and rebuild. An existing lag
+  keeps scheduling, loading and earning exactly as it does now; the surface stops offering it, and an
+  assign request goes back to the body it sends today — with no `lagMinutes` key at all, rather than an
+  explicit zero that would overwrite a colleague's value.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Turn the per-assignment **join lag** on by default (`VITE_ASSIGNMENT_LAG`), and fix what the
+  enablement gates found.
+
+  A join delay — how far into an activity a particular resource actually arrives — has scheduled,
+  loaded, levelled and earned correctly since ADR-0071 M0–M3, and until now nothing in the product
+  could set one. It is now a "Joins after" field on the assign form and on every assignment row,
+  reading the `d`/`h`/`m` grammar against the **activity's own** calendar.
+
+  Five defects the deferred specialist reviews found in code that had already passed a human read:
+
+  - **A compound duration was silently converted at the wrong factor.** With the activity's calendar
+    not yet resolved, `2d4h` slipped past the day-check (which needed a space before the next unit)
+    and was measured at a placeholder 24 hours a day — storing 3,120 minutes where 1,200 was meant,
+    accepted, with no error shown. The check now tokenizes through the parser's own splitter, so the
+    two cannot disagree.
+  - **The row's Save used the native `disabled` attribute**, which blurs focus to the page body twice
+    per save. It is `aria-disabled` with a real click guard.
+  - **The assign form refused a day-denominated lag by doing nothing** — no error registered, nothing
+    announced, no focus moved, and the Assign button still lit. It now reports the refusal the same
+    way its sibling link form always has.
+  - **One entry route never received the day factor**, so the field there was permanently degraded:
+    it rendered, looked right, and refused `2d` on a plan whose calendar was perfectly resolvable.
+  - **The placeholder offered `0d`** even while the label said the field could only take hours or
+    minutes — an example in the unit it was about to refuse.
+
+  A flag-on journey (`apps/web/e2e-assignment-lag/`, its own CI step) proves against a real API, with
+  the pen enforced, that `1d` on an eight-hour calendar stores 480 minutes and not 1,440, that the
+  write is pen-gated, and that the optimistic version round-trips across two consecutive saves.
+
+  Rollback stays byte-for-byte: set `VITE_ASSIGNMENT_LAG=false`. Nothing persisted depends on the
+  flag, and the flag-off parity suite is kept as the contract.
+
+### Patch Changes
+
+- Updated dependencies [[`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985), [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985), [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985), [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985)]:
+  - @repo/types@0.21.0
+  - @repo/interchange@0.8.0
+
 ## 0.65.0
 
 ### Minor Changes

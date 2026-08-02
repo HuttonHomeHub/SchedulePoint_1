@@ -1,5 +1,180 @@
 # @repo/api
 
+## 0.37.0
+
+### Minor Changes
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Freeze per-assignment cost in a baseline, so a lagged planned value is exact
+
+  A cost baseline froze **one number per activity**. That is enough to time-phase a whole activity's
+  cost and not enough to time-phase it **per resource** — which is what a per-assignment join lag asks
+  for, because a crane arriving on day four spends its share of the money over a different window from
+  the crew that started on day one. Splitting a frozen total by **live** budget shares reallocates
+  committed money using a mix that has changed since the commitment.
+
+  Capturing a baseline now also records, per active assignment, its resolved budgeted cost **and its
+  join lag at capture**. The lag is frozen for the same reason the cost is: a snapshot holding frozen
+  money while reading the live lag would phase committed cost through a window somebody edited
+  afterwards. The components come from the same expression that sums the activity total, so the
+  decomposition adds up to its own total by construction rather than by two spellings agreeing.
+
+  **Baselines captured before this cannot be back-filled** — a breakdown that was never recorded is not
+  recoverable from a frozen total. Those keep the approximate split for the life of the baseline, and
+  the Earned-Value response now says so: the new `costPhasingApproximatedCount` counts the activities
+  whose lagged split was approximated rather than read from the baseline's own breakdown, and
+  re-capturing the baseline is what clears it. It is `0` when there is no cost baseline at all, because
+  a live-budget planned value has nothing to approximate.
+
+  Which path a baseline is on is read from a stored discriminator and never inferred from whether
+  component rows exist: an assignment-free plan's baseline has zero component rows and is nonetheless
+  exact, while a pre-feature baseline has zero rows and can only be approximated — the same observation
+  with opposite answers. Capturing components does not by itself move any planned value; a baseline
+  whose components all joined with their activity is byte-identical to before.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Phase a late-joining resource's cost from the day it arrives
+
+  Earned Value time-phased a leaf activity's planned value with **one** percentage over **one** window,
+  so a crew joining three days into a fortnight had its cost recognised as if it had been there from the
+  first day. PV now splits into cost components: the activity's own expense keeps the activity's window
+  (it belongs to no resource), and each assignment phases over `[start + lag, finish)` on the activity's
+  calendar.
+
+  **The zero-lag path takes the previous expression verbatim, and that is a hard requirement rather than
+  an optimisation.** Summing rounded per-component values can differ from rounding one total by a minor
+  unit, and a silent ±1 on the planned value of every plan already in the system is exactly the class of
+  defect that survives review. An activity reaches the component sum only when a lag asks it to, and the
+  new `costPhasingLaggedCount` on the Earned-Value response is the observable proof of which path ran —
+  `0` on every plan with no lag.
+
+  Accrual stays a property of the **activity** (ADR-0044 §32), which produces one asymmetry worth
+  knowing before writing a test against it: under `END` a lag is a **no-op**, because everything is
+  recognised at the finish whatever time the resource arrived; under `START` a lagged assignment
+  recognises when its resource joins, not when the activity starts. Same enum, opposite sensitivity. A
+  lag at or past the span collapses the component to a point and then behaves exactly like an existing
+  zero-duration activity — reusing that convention rather than inventing a rule for the degenerate case.
+
+  A lag phases PV and nothing else: earned value, actual cost and budget at completion are unchanged for
+  a lagged plan, and there is a test that says so. Wiring a lag into the performance percent would make
+  a late crew look like less work done, which is a different and wrong claim.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Show a resource's join lag in the loading histogram
+
+  The histogram read-model built its input with a hard-coded `lagMinutes: 0` under a comment stating
+  that SchedulePoint does not model a per-assignment lag column. That column landed in the previous
+  change, so the comment was already false — it would have outlived the column by a milestone had the
+  findings register not named it. The repository now selects the stored lag and the caller passes it
+  through, measured on the same activity calendar the span is.
+
+  The seed catalogue closes the matching gap. `res_assignment_lag` was one of the two capabilities
+  `seed --coverage` reported as **excepted** with the reason "an assignment has no lag field: work
+  starts with its activity" — true of the data model at the time and badly underselling the position,
+  since the engine half was already built and tested. That exception is deleted and the key is now
+  **reached** by `A_LAG` in `plan:capability-resources`: a twin of `A_BELL` differing in exactly one
+  thing, so the two histograms are a controlled contrast rather than two unrelated pictures.
+  `docs/TEST_PLAYBOOK.md` says what right and wrong look like for the pair, and the fixture's
+  `assignment_lag_h` now maps into the seeded plan instead of being dropped.
+
+  Two tasks the plan asked for were **not** built, because measuring their premises showed both to be
+  false, and both are recorded in the plan rather than quietly skipped. A typed "lag unreachable" error
+  mapped to a 422 was written and reverted: the working-time port does not throw for any legal lag — a
+  calendar working one minute per week walks the full ten-year ceiling and returns a date in the year
+  102,759 — so the `catch` would have been permanently dead code carrying a docblock asserting a defect
+  that does not exist. And the N34 hostile cases do not belong in the seed negative tier, which is
+  pinned to the conformance fixture's own case list; they live at the DTO boundary and in the API e2e,
+  where they run.
+
+  **The CPM engine is not modified and the ADR-0034 recalculation parity gate is untouched** — the
+  histogram is a read-model and `computeSchedule` has never seen an assignment.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Report the per-assignment join lag as an interchange gap instead of losing it silently.
+
+  A join delay authored in SchedulePoint (ADR-0071) has no counterpart in any interchange format this
+  repository has verified, so an export cannot carry it and an import cannot recover one. That was
+  already true before this change — what was missing is that nobody was told.
+
+  The canonical model now carries `lagMinutes` on an assignment, and both halves of the asymmetry are
+  stated in the `InterchangeReport`:
+
+  - **Export** knows exactly what is lost, so it reports a `drop` finding **only when** assignments
+    actually carry a delay, counting them.
+  - **Import** cannot know whether the source file held one, so it reports the gap **unconditionally**
+    whenever a file brings assignments at all — for XER, that P6's own export was checked and carries
+    no such field; for MSPDI, that no equivalent has been verified.
+
+  The ADR-0050 mapping-contract table moves in lock-step. No schedule dates change: `lagMinutes` is
+  read by no parser and written by no emitter, deliberately, and the CPM engine is not involved.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Stop levelling from reserving a resource for days it never takes
+
+  The levelling pass held a resource for the **whole** of an activity, so a crew that only joins on day
+  three was nevertheless reserved from day one. Anything else needing that resource was pushed out for
+  capacity nobody was using — safe, but pessimistic, and it produced a levelled programme longer than
+  the resources actually require.
+
+  With a stored join lag (ADR-0071 §1) the pass now demands each resource only over
+  `[start + lag, finish)` on the activity's own calendar. A lag at or past the span reserves nothing at
+  all, which is the honest reading of a window with no working time in it.
+
+  The placement search had to change with it. One merged feasible/blackout timeline could answer for
+  every resource on an activity while they all shared the activity's span; once two resources on one
+  activity ask about **different** windows, it cannot. The search now works on per-resource candidate
+  starts — the earliest start, plus each blackout end translated back by that resource's own lag — and
+  takes the first that clears every resource's own window. Termination is still inherent (the largest
+  candidate lies past every blackout) and the `O(k log k)` bound is preserved.
+
+  **ADR-0041's parity argument is restated rather than repeated, and that is the substantive part.** It
+  was one sentence; it is now two claims of different strength. Gate A — with `levelResources` off the
+  pass never runs and the lag is never loaded — is unchanged and still structural. Gate B — with
+  levelling on and every lag zero, output is byte-identical to before — is **no longer structurally
+  impossible to break**, because both the occupancy model and the search were rewritten. It is held
+  instead by a corpus of snapshots captured **before** `level.ts` was touched, across the eight shapes
+  the pass branches on. A snapshot taken afterwards would have asserted the refactor against itself.
+
+  The `O(k log k)` boundedness now has a calendar-port **call-count** gate beside the wall-clock assert:
+  a candidate list that grew with the span rather than with the placed intervals would still be correct,
+  still pass every behavioural test, and quietly reintroduce the per-minute scan ADR-0041 §F forbids.
+  Measured 477 calls unlagged and 634 lagged over 40 contending activities, against ~1,600 for quadratic
+  and ~57,600 for a per-minute scan.
+
+  **`computeSchedule` is not modified and the ADR-0034 recalculation parity gate is untouched** — the
+  CPM network pass has never seen an assignment.
+
+- [#211](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/211) [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Store a resource's join lag — the delay before a crew arrives on an activity
+
+  The CPM engine's resource-histogram read-model has taken a per-assignment `lagMinutes` since the
+  ADR-0044 rung-5 slice, shifts the effective span by it, and is scored against the fixture's own
+  24-hour lag case — and **nothing in the product could store one**. This is the surface audit's
+  inverted finding (F6): normally storage supports what no write path can produce; here the engine
+  supported what no storage could hold, with the coverage report recording the omission as if it were a
+  design decision ("an assignment has no lag field: work starts with its activity").
+
+  `resource_assignments.lag_minutes` now exists — working minutes, measured on the **activity's own**
+  calendar (ADR-0037), on both write DTOs, on the assignment response and on
+  `ResourceAssignmentSummary`. Constant `DEFAULT 0`, so every existing assignment keeps today's
+  behaviour exactly: the resource joins with the activity.
+
+  The column is **unsigned**, deliberately unlike a dependency's signed lag. A negative dependency lag
+  is a lead and means something; a resource joining before the work starts does not. More to the point,
+  a signed column would be a trap rather than harmless symmetry — the read-model applies the lag only
+  when `> 0` (a parity fast path for the common zero case), so a stored negative would be silently
+  discarded and the assignment would behave as unlagged with the API having said yes. The DTO's
+  `@Min(0)` is the primary reject (N34); the database CHECK is defence in depth.
+
+  `lagMinutes` is **never cost-gated**. A lag is a scheduling fact, not money, so a Viewer reads a real
+  value while `budgetedCost`/`actualCost` are withheld — pinned by an e2e case rather than asserted,
+  because gating it would make a Viewer's picture of when the resource arrives disagree with a
+  Planner's.
+
+  This is ADR-0071 M0: storage and the API. The histogram, levelling and earned-value passes read the
+  stored lag in M1–M3; the planner-facing control lands in M4. **The CPM engine is not modified and the
+  ADR-0034 recalculation parity gate is untouched.**
+
+### Patch Changes
+
+- Updated dependencies [[`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985), [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985), [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985), [`5acf551`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5acf551ee0891948440798a74662e40d9917b985)]:
+  - @repo/types@0.21.0
+  - @repo/interchange@0.8.0
+
 ## 0.36.0
 
 ### Minor Changes
