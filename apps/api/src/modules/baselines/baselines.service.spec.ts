@@ -66,6 +66,9 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     dataDate: new Date('2026-01-05T00:00:00Z'),
     capturedProjectFinish: new Date('2026-03-01T00:00:00Z'),
     hoursPerDayMinutes: 1440,
+    // ADR-0071 M3: what this baseline's cost snapshot decomposes to. ACTIVITY is the column's
+    // constant default and what every capture writes until the M3 service slice lands.
+    costSnapshotLevel: 'ACTIVITY',
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
