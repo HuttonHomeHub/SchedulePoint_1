@@ -317,3 +317,54 @@ an epic of its own.
   the field lands on), [ADR-0068](../../adr/0068-calendar-hours-per-day.md) /
   [ADR-0070](../../adr/0070-sub-day-durations-and-lags-in-the-authoring-surface.md) (the `d/h/m` grammar and
   the required-`hoursPerDay` rule).
+
+---
+
+## Decisions taken (product owner, 2026-08-02)
+
+The spec left three critical questions open rather than defaulting them away. All three are now
+answered, and one **overturns the spec's own default** while another **overturns mine**. Recorded
+here rather than in a chat thread, because a decision that lives only in conversation is the drift
+ADR-0058 exists to stop.
+
+**CQ-1 — PV split when a cost baseline exists: _extend the baseline_ (option B).**
+
+The spec defaulted to allocating baselined PV by **live** budget shares, documenting the
+approximation; I recommended the same, on the grounds that it ships without a schema change. That is
+overruled. ADR-0025 is amended so a cost baseline snapshots **per-assignment** cost, making the split
+exact for every baseline captured after it.
+
+The consequences are real and are accepted, not discovered later: the baseline schema is **in scope**
+for this epic, ADR-0025 takes an amendment rather than a reference, and **baselines captured before
+this ships cannot be back-filled** — a per-assignment breakdown that was never recorded cannot be
+recovered from a frozen total. Those keep the live-shares approximation permanently, so the read
+model must carry both paths and say which one a given baseline is on. A baseline is a frozen copy
+(ADR-0025's central call), and this makes it a more faithful one.
+
+**CQ-2 — an unresolvable stored lag at recalculation: _produce-and-flag_.**
+
+The spec defaulted to a hard 422 and flagged that ADR-0035's house style points the other way. It
+does, in three places — mandatory constraints (§7), external dates (§30) and LOE no-span (§21) — and
+the house style wins. The activity schedules with the lag dropped, carries a per-activity flag, and
+the plan carries a count.
+
+The reasoning is that a recalculation which refuses outright takes a whole plan down for a data
+problem in one row, and a planner cannot act on an error that hides the schedule they need in order
+to find the row. The **write-time pre-flight stays** and is the first line of defence: the honest
+place to refuse an unreachable lag is the edit that creates it, where the planner is looking at the
+one assignment concerned.
+
+**CQ-3 — the shipped semantic is _confirmed_: a lag eats INTO the activity.**
+
+`effFinish = a.finish` (`resource-histogram.ts:224`) stands. The activity's dates do not move; the
+resource joins late and works a shorter window. This is what the AS0027 golden already asserts, so
+confirming costs nothing — and it is how the case is described out loud ("the inspector shows up on
+day eight" does not make the activity longer). The levelling and earned-value windows inherit the
+same rule, which is the reason this was worth settling before M2 and M3 rather than after.
+
+**Related, from the same round — the F7/F8 control's factor.** The critical float threshold is now
+stored in working minutes (audit F8, landed). Its control resolves `d`/`h`/`m` against the **plan
+calendar** and says so in its help text. On a mixed-calendar plan that is a disclosure, not a fix:
+an activity on a different calendar is still compared against a threshold entered in the plan
+calendar's days, and no single scalar can be right for all of them. Saying which day the planner is
+typing in is strictly better than today, where nobody is told anything.
