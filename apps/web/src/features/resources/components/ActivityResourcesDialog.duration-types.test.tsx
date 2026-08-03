@@ -1,6 +1,6 @@
 import type { DurationType, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assignmentKeys, resourceKeys } from '../api/use-resources';
@@ -63,7 +63,20 @@ function assignment(overrides: Partial<ResourceAssignmentSummary> = {}): Resourc
   };
 }
 
-function renderDialog(assignments: ResourceAssignmentSummary[], durationType: DurationType) {
+/**
+ * `activityHoursPerDay` defaults to **8** rather than being omitted: the derived-duration preview
+ * measures days against the activity's calendar (ADR-0068), and a harness that never supplies it was
+ * silently exercising the degraded no-calendar path while its assertion read like a day figure.
+ * Pass **`null`** to cover the degrade — not `undefined`, which is exactly what a default parameter
+ * substitutes for, so `renderDialog(…, undefined)` would silently re-run the 8-hour case while
+ * reading like the no-calendar one.
+ */
+function renderDialog(
+  assignments: ResourceAssignmentSummary[],
+  durationType: DurationType,
+  hoursPerDayOrNone: number | null = 8,
+) {
+  const activityHoursPerDay = hoursPerDayOrNone ?? undefined;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -79,6 +92,7 @@ function renderDialog(assignments: ResourceAssignmentSummary[], durationType: Du
         open
         onClose={vi.fn()}
         canWrite
+        {...(activityHoursPerDay === undefined ? {} : { activityHoursPerDay })}
       />
     </QueryClientProvider>,
   );
@@ -94,9 +108,28 @@ describe('ActivityResourcesDialog — units/time rate (flag on)', () => {
     const rate = screen.getByLabelText('Units / time (rate)');
     fireEvent.change(rate, { target: { value: '5' } });
 
-    // 240 units ÷ 5 units/hour = 48 h = 2 days.
-    expect(screen.getByText(/Duration becomes 2 days/)).toBeInTheDocument();
+    // 240 units ÷ 5 units/hour = 48 working hours. On this activity's EIGHT-hour calendar that is
+    // six working days — not the two the old flat-1440 formatter printed, which is what this
+    // assertion used to read. The factor is the whole point of the figure.
+    expect(screen.getByText(/Duration becomes 6d/)).toBeInTheDocument();
 
+    // The same 48 working hours on a 24-hour calendar is two days. Asserted alongside the eight-hour
+    // case so the preview is pinned to the FACTOR, not to one plan's arithmetic — the coincidence
+    // that made the flat-1440 defect survive was that on a 24-hour calendar it looked right.
+    cleanup();
+    renderDialog([assignment()], 'FIXED_UNITS', 24);
+    fireEvent.change(screen.getByLabelText('Units / time (rate)'), { target: { value: '5' } });
+    expect(screen.getByText(/Duration becomes 2d/)).toBeInTheDocument();
+
+    // And with no calendar resolved it degrades to hours rather than guessing a day length.
+    cleanup();
+    renderDialog([assignment()], 'FIXED_UNITS', null);
+    fireEvent.change(screen.getByLabelText('Units / time (rate)'), { target: { value: '5' } });
+    expect(screen.getByText(/Duration becomes 48h/)).toBeInTheDocument();
+
+    cleanup();
+    renderDialog([assignment()], 'FIXED_UNITS');
+    fireEvent.change(screen.getByLabelText('Units / time (rate)'), { target: { value: '5' } });
     // Each Save has a distinct accessible name (a row can show two).
     fireEvent.click(screen.getByRole('button', { name: 'Save rate for Crew A' }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDurationDays, previewDerivedDuration } from './duration-triad';
+import { formatDerivedDuration, previewDerivedDuration } from './duration-triad';
 
 /**
  * The client-side duration-derivation preview (ADR-0040) — a focused mirror of the server's
@@ -74,15 +74,31 @@ describe('previewDerivedDuration', () => {
   });
 });
 
-describe('formatDurationDays', () => {
-  it('shows whole days as an integer, singular for one day', () => {
-    expect(formatDurationDays(2880)).toBe('2 days');
-    expect(formatDurationDays(1440)).toBe('1 day');
-    expect(formatDurationDays(0)).toBe('0 days');
+describe('formatDerivedDuration', () => {
+  it('measures days against the calendar it is given, not a flat 1440', () => {
+    // The regression this function exists for. 480 minutes is ONE working day on an eight-hour
+    // calendar and a THIRD of one on a 24-hour calendar. The previous implementation divided by a
+    // flat 1440 and told an eight-hour planner their one-day derivation was "0.3 days".
+    expect(formatDerivedDuration(480, 8)).toBe('1d');
+    expect(formatDerivedDuration(480, 24)).toBe('8h');
   });
 
-  it('shows a fractional derived duration to one decimal place', () => {
-    expect(formatDurationDays(2160)).toBe('1.5 days'); // 1.5 days
-    expect(formatDurationDays(720)).toBe('0.5 days'); // half a day
+  it('renders whole and part days in the same d/h/m grammar the duration field uses', () => {
+    expect(formatDerivedDuration(2880, 24)).toBe('2d');
+    expect(formatDerivedDuration(2400, 8)).toBe('5d');
+    expect(formatDerivedDuration(600, 8)).toBe('1d 2h');
+    expect(formatDerivedDuration(150, 8)).toBe('2h 30m');
+  });
+
+  it('degrades to hours and minutes when the calendar has not resolved', () => {
+    // Never a guessed factor: with no calendar, days cannot be stated at all, so the text says only
+    // what is knowable without one.
+    expect(formatDerivedDuration(480, undefined)).toBe('8h');
+    expect(formatDerivedDuration(150, undefined)).toBe('2h 30m');
+  });
+
+  it('renders a zero derivation as a real value rather than blank', () => {
+    expect(formatDerivedDuration(0, 8)).toBe('0d');
+    expect(formatDerivedDuration(0, undefined)).toBe('0d');
   });
 });

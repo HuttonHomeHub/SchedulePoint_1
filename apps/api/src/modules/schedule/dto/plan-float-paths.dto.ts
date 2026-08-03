@@ -4,21 +4,21 @@ import type { PlanFloatPath, PlanFloatPaths } from '@repo/types';
 /**
  * One float path into the target activity (M6-F6, ADR-0035 §19): a contiguous driving chain, ranked
  * by the float it carries above the driving path. `index` 0 is the driving path; `activityIds` are
- * target-first; **`relativeFloatMinutes` is the figure to read** — see its description, and the
- * deprecation note on `relativeFloat`.
+ * target-first; the float figure is **`relativeFloatMinutes`**, and it is the only one.
+ *
+ * There was a day-denominated `relativeFloat` beside it, converted at a flat 1440. It was removed
+ * rather than left deprecated: with no reader left, "retained so existing readers do not break" was
+ * an argument with nothing behind it, and what remained was a field returning a **plausible wrong
+ * number** — 0 where the answer is one working day on an eight-hour calendar. A wrong value that
+ * looks right is worse than an absent one, because the only thing standing between it and the next
+ * consumer is a description nobody has to read. Re-adding a day form means giving it the calendar to
+ * measure against (ADR-0068), which is a per-activity question this envelope cannot answer.
  */
 export class PlanFloatPathDto implements PlanFloatPath {
   @ApiProperty({
     description: '0 = the driving path (relative float 0); higher = increasingly floaty.',
   })
   index!: number;
-
-  @ApiProperty({
-    deprecated: true,
-    description:
-      'DEPRECATED — use relativeFloatMinutes. Working days of float above the driving path, computed as a flat minutes/1440. Total float is measured on the ACTIVITY’S OWN calendar (ADR-0037 §4), so on an eight-hour calendar one working day of relative float (480 minutes) rounds to 0 here — indistinguishable from the driving path — and larger values are understated threefold. Retained so existing readers do not break.',
-  })
-  relativeFloat!: number;
 
   @ApiProperty({
     description:
@@ -56,7 +56,6 @@ export class PlanFloatPathsDto implements PlanFloatPaths {
       targetActivityId: result.targetActivityId,
       paths: result.paths.map((p) => ({
         index: p.index,
-        relativeFloat: p.relativeFloat,
         relativeFloatMinutes: p.relativeFloatMinutes,
         activityIds: p.activityIds,
       })),

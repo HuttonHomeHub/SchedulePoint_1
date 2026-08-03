@@ -10,6 +10,40 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-03 — The deprecated day float field is removed, not carried
+
+**What was decided.** `relativeFloat` (days) is deleted from the float-paths response, one release
+after it shipped deprecated in `api-v0.38.0`. `relativeFloatMinutes` is the only float figure, and
+there is deliberately no replacement day form.
+
+**Why, given the entry below explicitly chose to retain it.** That decision rested on one clause —
+"removing it would break any existing reader for no gain" — and the clause was checkable. There are
+no readers: the web client has only ever read the minutes field, and the product owner confirmed no
+external consumers. With the cost side empty, what was left is a field that returns a **plausible
+wrong number**. On an eight-hour calendar, one working day of relative float came back as `0`. That
+does not look like a fault; it looks like "this branch is on the driving path", which is a different
+and confident claim. Deprecation protects the reader who looks at the docs; deletion is enforced by
+the compiler.
+
+**Why no day field replaces it.** A float path can span activities on different calendars, and after
+ADR-0068 a day is a per-calendar quantity. The envelope therefore has no single factor to divide by
+— picking one and being wrong for the others is precisely what the removed field did. Conversion
+belongs to the caller, which knows the calendar it is presenting on.
+
+**Consequences.** A breaking response-shape change against a published version, so a changeset says
+so and the API e2e now asserts the **absence** of the property rather than merely not checking it —
+a future "convenience" day field cannot come back without that failing first. Two web-side siblings
+of the same defect were fixed alongside: the resource assignment row's derived-duration preview was
+also dividing by a flat 1440 (telling an eight-hour planner a one-day derivation was "0.3 days"),
+and the "render minutes without a day factor" arithmetic existed in three copies, now one.
+
+**How it was caught.** Not by a gate — by asking, after the epic shipped, whether any flat-1440
+arithmetic was left in the app. Two of the three fixes here were live defects nothing was testing,
+and the third was a docblock that had gone on describing the old behaviour after the code changed
+under it, one method along from the fix that changed it.
+
+---
+
 ### 2026-08-02 — Float paths ship as a panel with one-path emphasis, in both views
 
 **What was decided.** Audit finding **F4** — the engine computes multiple float paths and
@@ -1345,7 +1379,8 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   larger values were understated threefold. It never bit because nothing consumed the field;
   **building the F4 surface is what would have made it bite**. The response now carries
   `relativeFloatMinutes` (the engine's figure, unconverted) alongside a retained-and-deprecated
-  `relativeFloat`; readers convert against the calendar they are presenting on, which for the F4
+  `relativeFloat` — **superseded 2026-08-03: that day field was removed; see the entry at the top of
+  this log.** Readers convert against the calendar they are presenting on, which for the F4
   panel is the **target activity's** (recorded in `docs/specs/float-paths-surface/feature-spec.md`
   §7, CQ-3). The envelope also gained `hasMorePaths`, derived by asking the engine for `maxPaths + 1`
   and slicing — **`engine/float-paths.ts` is unmodified**, pinned by

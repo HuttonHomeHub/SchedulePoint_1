@@ -6,6 +6,7 @@ import {
   DURATION_PARSE_MESSAGE,
   checkDurationText,
   formatDurationText,
+  formatWorkingMinutesNoDays,
   namesDays,
   parseDurationText,
 } from '@/lib/duration-text';
@@ -105,15 +106,11 @@ export function seedAssignmentLag(
   if (canAuthorLagDays(hoursPerDay)) return formatDurationText(minutes, hoursPerDay);
   // With no factor, days cannot be RENDERED either — and rendering them anyway would print a value
   // the field is about to refuse, which is worse than a long one. So the degraded seed spells the
-  // same minutes in hours and minutes, the two units both halves of this module agree on.
-  if (minutes <= 0) return '0d';
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes - hours * 60;
-  const parts = [
-    hours > 0 ? `${String(hours)}h` : '',
-    remainder > 0 ? `${String(remainder)}m` : '',
-  ];
-  return parts.filter(Boolean).join(' ');
+  // same minutes in hours and minutes, the two units both halves of this module agree on. The
+  // arithmetic is shared (`formatWorkingMinutesNoDays`) rather than spelled out here: it had been
+  // written out three times across the app, and three spellings of one rule drift unnoticed because
+  // each reads correctly on its own screen.
+  return formatWorkingMinutesNoDays(minutes);
 }
 
 /**

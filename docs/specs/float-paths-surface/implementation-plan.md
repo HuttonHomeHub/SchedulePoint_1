@@ -68,6 +68,9 @@ assumption. Nothing user-visible ships; nothing can regress, because nothing con
 > below name the two engine files as **not modified** and Task M0.7 adds a structural test that fails
 > if `computeSchedule`'s parameter list changes. _The day field looks redundant and invites deletion_ →
 > it is explicitly retained and deprecated; deleting it is a break for no gain.
+>
+> **Superseded 2026-08-03.** It was deleted after all: "a break for no gain" assumed a reader, and
+> there was none. See `docs/DECISIONS.md`, entry of that date.
 > **Testing requirements:** API e2e on an **eight-hour** calendar proving the unit (the defect pinned
 > as a test, not described in prose); truncation e2e; the existing engine goldens re-run **unchanged**
 > as the proof that no engine file moved.

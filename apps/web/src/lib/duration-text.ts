@@ -207,6 +207,39 @@ export function formatDurationText(minutes: number, hoursPerDay: number): string
 }
 
 /**
+ * Render working minutes **without a day factor** — hours and minutes only, e.g. `7h 30m`, `45m`.
+ *
+ * The degraded partner of {@link formatDurationText}, for the caller that genuinely cannot resolve
+ * `hoursPerDay` yet: an activity whose calendar list has not loaded, an assignment row on a plan
+ * whose calendar is still in flight. Hours and minutes are the two units that need no calendar to
+ * mean something, so this is the honest rendering rather than a guess.
+ *
+ * It is a **separate export, not an optional parameter**, on purpose. Making `hoursPerDay` optional
+ * on `formatDurationText` would hand every caller a silent way to skip the factor and get days
+ * anyway — which is precisely the enforcement ADR-0070 exists to provide. A caller that wants the
+ * degraded form has to say so by name.
+ *
+ * It lives here because **two** features had already grown their own copy of this arithmetic (the
+ * assignment lag field and the float-paths panel), and the derived-duration preview would have been
+ * a third. Separate spellings of "hours and minutes" drift in exactly the way nobody notices: each
+ * reads correctly on its own screen.
+ *
+ * Zero is `0d` — the one `d` this function emits, and on purpose: it is what {@link
+ * formatDurationText} emits for zero and what the lag field seeds, so a zero round-trips the same
+ * way whether or not the calendar resolved. `0h` would be a second spelling of zero.
+ */
+export function formatWorkingMinutesNoDays(minutes: number): string {
+  if (minutes <= 0) return '0d';
+  const hours = Math.floor(minutes / MINUTES_PER_HOUR);
+  const remainder = minutes - hours * MINUTES_PER_HOUR;
+  const parts = [
+    hours > 0 ? `${String(hours)}h` : '',
+    remainder > 0 ? `${String(remainder)}m` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : '0d';
+}
+
+/**
  * Both minus signs a lag field can meet: the ASCII hyphen a planner types, and the real minus
  * (U+2212) `formatLag` has always rendered — so a value copied off the screen pastes back in.
  */

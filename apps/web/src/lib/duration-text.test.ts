@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDurationText, parseDurationText } from './duration-text';
+import { formatDurationText, formatWorkingMinutesNoDays, parseDurationText } from './duration-text';
 
 /** An eight-hour working day — the calendar most of these cases are read on. */
 const EIGHT = 8;
@@ -150,6 +150,31 @@ describe('the round trip', () => {
         if (!parsed.ok) continue;
         expect(parsed.minutes).toBe(original);
       }
+    }
+  });
+});
+
+describe('formatWorkingMinutesNoDays', () => {
+  it('spells minutes in hours and minutes, never days', () => {
+    // The degraded rendering, for a caller that cannot resolve `hoursPerDay` yet. It must never
+    // emit a `d` part: days are exactly what it does not know how to measure.
+    expect(formatWorkingMinutesNoDays(480)).toBe('8h');
+    expect(formatWorkingMinutesNoDays(150)).toBe('2h 30m');
+    expect(formatWorkingMinutesNoDays(45)).toBe('45m');
+    expect(formatWorkingMinutesNoDays(2400)).toBe('40h');
+  });
+
+  it('renders zero and negative input as `0d`, the canonical zero', () => {
+    // The one place a `d` appears, deliberately: `0d` is what `formatDurationText` emits for zero
+    // and what the lag field seeds, so a zero must round-trip identically through both. "0h" would
+    // be a second spelling of zero that only this path produces.
+    expect(formatWorkingMinutesNoDays(0)).toBe('0d');
+    expect(formatWorkingMinutesNoDays(-5)).toBe('0d');
+  });
+
+  it('never emits a day part for any non-zero magnitude', () => {
+    for (const minutes of [1, 59, 60, 480, 1440, 100_000]) {
+      expect(formatWorkingMinutesNoDays(minutes)).not.toMatch(/d/);
     }
   });
 });

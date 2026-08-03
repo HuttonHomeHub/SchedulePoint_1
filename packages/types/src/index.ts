@@ -816,22 +816,20 @@ export interface ProgrammeScheduleLockedDetails {
 /**
  * One **float path** into a target activity (M6-F6, ADR-0035 §19): a maximal contiguous chain of
  * activities linked by logic, ranked by how much float it carries above the driving path. `index` 0
- * is the driving path (`relativeFloat` 0); higher indices are increasingly floaty. `activityIds` are
+ * is the driving path (relative float 0); higher indices are increasingly floaty. `activityIds` are
  * **target-first** (the target … the chain's driving root). Relative float is the entry activity's
  * total float minus the target's; it can be **negative** when a branch is more critical than a
  * floating target (a real signal, not an error).
+ *
+ * The float figure is `relativeFloatMinutes`, and it is the only one. A day-denominated
+ * `relativeFloat` sat beside it briefly, converted at a flat 1440 and marked deprecated; it was
+ * **removed** rather than carried, because a field that returns a plausible wrong number is worse
+ * than an absent one — `0` where the answer is one working day on an eight-hour calendar reads as
+ * "on the driving path", which is a different claim entirely. Deprecation only helps a reader who
+ * looks; deletion is checked by the compiler.
  */
 export interface PlanFloatPath {
   index: number;
-  /**
-   * @deprecated Use {@link PlanFloatPath.relativeFloatMinutes}. This field divides the engine's
-   * working **minutes** by a flat 1440, but total float is measured on the **activity's own**
-   * calendar (ADR-0037 §4, ADR-0068) — so on an eight-hour calendar one working day of relative
-   * float is 480 minutes and `Math.round(480 / 1440)` is **0**, indistinguishable from the driving
-   * path, with larger values understated threefold. Retained because removing it would break any
-   * existing reader for no gain; never render it.
-   */
-  relativeFloat: number;
   /**
    * Working **minutes** of total float above the driving path — the engine's own figure, carried
    * through with no conversion. Path 0 is always 0; branch paths are non-decreasing. Convert for
@@ -845,7 +843,7 @@ export interface PlanFloatPath {
 /**
  * The ranked contiguous float paths into a target activity — a read-only CPM analysis over the
  * live-computed schedule (P6 "multiple float paths"). `targetActivityId` echoes the requested target;
- * `paths` is ordered by non-decreasing `relativeFloat`, path 0 being the target's own driving chain,
+ * `paths` is ordered by non-decreasing relative float, path 0 being the target's own driving chain,
  * bounded by the requested `maxPaths`.
  */
 export interface PlanFloatPaths {

@@ -778,3 +778,31 @@ The float-paths surface deliberately does **not** add a third ref reader: its se
 lifts the workspace selection and lets each view reveal it, rather than calling `centerOnDate` —
 which is null whenever the Gantt is showing, so half its work would be silently skipped in half the
 product anyway.
+
+## 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
+
+**Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
+inherited it rather than introducing it.
+
+`effectiveHoursPerDay()` (`apps/web/src/lib/effective-hours-per-day.ts`) resolves the factor as the
+**activity's own** `calendarId`, falling back to the plan's. That is correct for every activity type
+but one. For a **`RESOURCE_DEPENDENT`** activity, ADR-0039 §23 makes the **driving resource's**
+calendar authoritative — the service resolves and overrides the activity's own, which
+`ActivityCalendarField.tsx` already documents on screen. The web factor never accounts for it.
+
+**What it costs.** Any day-denominated figure the client _renders_ for such an activity is measured
+against the wrong day length: the assignment join-lag field (shipped under ADR-0071) and now the
+derived-duration preview. Both are display and neither writes a wrong value — the API stores
+minutes, and the engine reschedules on the correct calendar regardless — so this is a misleading
+read-out, not corrupt data. It bites only where a `RESOURCE_DEPENDENT` activity has a driving
+resource on a calendar whose `hoursPerDay` differs from the activity's own.
+
+**Why it is not fixed here.** `AssignmentRow` cannot resolve it without the driving `resource.calendarId`
+plus the calendars list plumbed to a component that currently needs neither — real work, and out of
+scope for a three-line formatter fix. Doing it badly (guessing, or resolving in two places) is how
+the flat-1440 defect this entry sits beside came about.
+
+**The fix when it is taken:** teach `effectiveHoursPerDay()` the `RESOURCE_DEPENDENT` branch — take
+the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT` and a driver
+exists, else today's answer — so every caller is corrected at once rather than per-surface. The
+engine is not involved and the recalc parity gate is untouched.

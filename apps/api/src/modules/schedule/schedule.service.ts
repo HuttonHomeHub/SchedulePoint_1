@@ -583,8 +583,12 @@ export class ScheduleService {
    * live from the plan's active graph (never mutates or persists), then walks the driving chains into
    * the target: path 0 is its own driving chain (relative float 0), branch paths follow in
    * non-decreasing relative-float order, bounded by `maxPaths`. Requires a plan start (422) for a data
-   * date; 404s if the target activity is not active in this plan. Relative float is returned in
-   * working days (÷1440), matching the day-denominated float on the activity rows (ADR-0036 §7).
+   * date; 404s if the target activity is not active in this plan.
+   *
+   * Relative float is returned in working **minutes** (`relativeFloatMinutes`) and in nothing else.
+   * This sentence used to say "working days (÷1440)" and went on saying it after F4 M0 changed the
+   * behaviour underneath it — the ADR-0058 failure, one method along from the fix. A day is a
+   * per-calendar quantity (ADR-0068); the caller converts against the calendar it is presenting on.
    */
   async floatPaths(
     principal: Principal,
@@ -629,12 +633,11 @@ export class ScheduleService {
     const hasMorePaths = found.length > maxPaths;
     const paths = found.slice(0, maxPaths).map((p) => ({
       index: p.index,
-      // Retained and deprecated (F4 M0.1). A flat 1440 against a per-activity calendar (ADR-0037 §4)
-      // understates the figure threefold on an eight-hour calendar, where one working day of
-      // relative float is 480 minutes and `Math.round(480 / 1440)` is 0 — the same shape as the
-      // audit's F8 defect. Readers take `relativeFloatMinutes` and convert on the calendar they are
-      // presenting against.
-      relativeFloat: Math.round(p.relativeFloat / MINUTES_PER_DAY),
+      // The engine's working minutes, carried through unconverted — there is deliberately no day
+      // form beside it. A day is a per-calendar quantity (ADR-0068) and total float is measured on
+      // the ACTIVITY'S OWN calendar (ADR-0037 §4), so this envelope has no single factor to divide
+      // by: the paths it returns can span activities on different calendars. Converting here would
+      // have to pick one and be wrong for the rest, which is what the removed `relativeFloat` did.
       relativeFloatMinutes: p.relativeFloat,
       activityIds: p.activityIds,
     }));

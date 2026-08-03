@@ -41,10 +41,11 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // ── 1 · The API's own answer, before any of it reaches a pixel ────────────────────────────
   const analysis = await readFloatPaths(page, orgSlug, planId, targetId);
   expect(analysis.paths[0]?.relativeFloatMinutes).toBe(0);
-  // One working day on an eight-hour calendar. `relativeFloat` (days) is the deprecated field and
-  // rounds this to 0 — asserted so the deprecation stays honest rather than quietly correct.
+  // One working day on an eight-hour calendar — the figure the whole epic exists to get right, read
+  // back from the API rather than off the screen. A day form would have rounded this to 0 against a
+  // flat 1440; there is no longer one to round, and the envelope is asserted not to carry it.
   expect(analysis.paths[1]?.relativeFloatMinutes).toBe(480);
-  expect(analysis.paths[1]?.relativeFloat).toBe(0);
+  expect(analysis.paths[1]).not.toHaveProperty('relativeFloat');
   // Fourteen chains, ten asked for.
   expect(analysis.hasMorePaths).toBe(true);
 
