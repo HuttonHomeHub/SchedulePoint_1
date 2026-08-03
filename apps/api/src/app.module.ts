@@ -16,6 +16,7 @@ import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
 import { ActivitiesModule } from './modules/activities/activities.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { BaselinesModule } from './modules/baselines/baselines.module';
 import { CalendarsModule } from './modules/calendars/calendars.module';
 import { ClientsModule } from './modules/clients/clients.module';
@@ -100,6 +101,9 @@ function isPrettyLoggingAvailable(): boolean {
     PrismaModule,
     AuthModule,
     MailModule,
+    // Global, like MailModule: the producers live in nine feature modules and an audit call must
+    // never be skipped for want of an import (ADR-0072).
+    AuditModule,
     HealthModule,
     VersionModule,
     MeModule,
