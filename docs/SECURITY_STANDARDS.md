@@ -112,21 +112,52 @@ store only a hash**.
 - Guard against enumeration (uniform responses on auth and on share-token
   resolution), and cap payload sizes and pagination limits server-side.
 
-## Audit logging — _not yet implemented_
+## Audit logging (ADR-0072)
 
-The standard we intend to meet:
+The standard, and what is actually built:
 
-- **Append-only audit log** for security- and sensitive events
-  (authentication events, permission changes, sensitive mutations,
-  deletions/exports): who, what, when, and before→after where relevant.
-- Audit entries are **never mutated or deleted** and are separate from
-  operational logs. **No secrets or full PII** in audit payloads.
+- **Append-only audit log** for security- and sensitive events: authentication,
+  permission changes (membership roles, invitations, organisation creation) and
+  hierarchy deletions/restores — who, what, when, and before→after where relevant.
+  Eighteen actions from a closed vocabulary; a new one is a compile error until
+  someone decides what it may record.
+- Audit entries are **never mutated or deleted** and are separate from operational
+  logs. **No secrets or full PII** in payloads: `changes` is an **allow-list** keyed
+  by action, not a deny-list, so a field is invisible until a person names it, and a
+  substring ban on `password`/`token`/`secret`/`hash` is the second chance.
+- Membership and hierarchy events are written **inside the caller's transaction** —
+  an action that cannot be recorded does not happen. Authentication events are
+  best-effort for the opposite reason: refusing every sign-in because the audit
+  table is unavailable turns a logging fault into an outage. Both trades are
+  documented at their call sites.
+- **Every route is gated on an audit decision.** A new endpoint that is neither
+  audited nor explicitly excused with a named reason fails CI, so the gap cannot
+  open silently.
 
-Today there is no audit table. What exists instead: every row carries
-`created_by`/`updated_by` and timestamps, soft deletes are correlated by
+### What "append-only" honestly means here
+
+The guarantee is enforced by `BEFORE UPDATE OR DELETE` (row) and `BEFORE TRUNCATE`
+(statement) triggers, set `ENABLE ALWAYS` so they also fire in a replication
+session. That stops accident, and it stops application code — **it does not stop
+the table's owner**, who can `ALTER TABLE … DISABLE TRIGGER`. In the shipped Docker
+Compose stack the application role is a superuser, so the honest claim is
+**tamper-resistant, not tamper-proof**.
+
+That bound is stated rather than implied, and `apps/api/test/audit-reset.ts` is the
+proof it is accurate: the e2e harness clears the table by disabling the trigger,
+because nothing else can. Nothing in `src/` may import it. Getting a copy off the
+box — the only real tamper-**evidence** — is gated on the deployment-target
+decision ([`TECH_DEBT.md`](TECH_DEBT.md) #5).
+
+Row attribution remains what it was and is still not an audit trail: every row
+carries `created_by`/`updated_by` and timestamps, soft deletes are correlated by
 `delete_batch_id`, and sensitive operations emit structured logs
-([`OBSERVABILITY.md`](OBSERVABILITY.md)). That is attribution, not an audit
-trail — logs are rotated and mutable at the sink. Tracked as
+([`OBSERVABILITY.md`](OBSERVABILITY.md)) which are rotated and mutable at the sink.
+The audit table is the durable record; those are the corroboration, joined to it by
+`correlation_id`.
+
+Coverage widening (content edits, share grants, reads of the log itself) is
+deliberately deferred and tracked — see ADR-0072 and
 [`TECH_DEBT.md`](TECH_DEBT.md) #14.
 
 ## Dependency security

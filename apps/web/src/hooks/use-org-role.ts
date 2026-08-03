@@ -12,6 +12,7 @@ export {
   canSharePlan,
   canWriteNotes,
   canManageOrgCalendars,
+  canReadAuditLog,
 } from '@/lib/rbac';
 
 /**

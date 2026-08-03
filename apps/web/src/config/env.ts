@@ -1206,3 +1206,38 @@ export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNM
  * kept rather than weakened (the ADR-0053 M6 rule).
  */
 export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATHS);
+
+/**
+ * **The audit log** (`VITE_AUDIT_LOG`, default **OFF**) — the web surface for ADR-0072, and the
+ * closing half of `docs/TECH_DEBT.md` #14.
+ *
+ * The API records eighteen events across membership, invitations, the organisation, authentication
+ * and hierarchy deletes/restores, into an append-only table, and exposes two reads. Until this flag
+ * flips, **nothing in the product can see any of it** — which is the shape this repository keeps
+ * finding (ADR-0067's shift patterns, ADR-0070's sub-day durations): a capability that is stored,
+ * enforced and exported, and that no screen can reach.
+ *
+ * Flag ON adds two screens and one nav entry:
+ *
+ * - **Audit log** (`/orgs/$orgSlug/audit-log`), Org Admin only. The nav entry is hidden for every
+ *   other role, and that is a courtesy rather than the control — the API answers 403 regardless,
+ *   and a non-member gets 404 before it (anti-enumeration).
+ * - **My activity** (`/me/activity`), for anyone. It takes NO user id: the actor comes from the
+ *   session, so there is no parameter to tamper with and no permission to hold. That is why an
+ *   ordinary member can read their own sign-in history without an Org Admin handing it over.
+ *
+ * Both render the same `AuditEventList`, differing only in scope and in whether the actor column is
+ * shown (on `/me` every row is the same person). Two tables would drift about how a role change
+ * reads, and only a reader who opened both would ever see it.
+ *
+ * `ipAddress` and `userAgent` are recorded and deliberately **not** rendered: the ordinary reader
+ * here is an Org Admin looking at a membership history, and a colleague's home IP on that screen is
+ * a privacy cost with no matching benefit. Showing them is a decision with its own scope.
+ *
+ * Rollback: set `VITE_AUDIT_LOG=false` and rebuild the web image. There is no write path, no
+ * mutation and no pen here — flag-off is byte-for-byte the prior product: no routes registered, no
+ * nav entry, no queries. The API keeps recording either way, which is the point of shipping the
+ * producers first: the log is being written long before anyone can read it, so the first screen
+ * shows real history rather than an empty table.
+ */
+export const AUDIT_LOG_ENABLED = flagDefaultOff(import.meta.env.VITE_AUDIT_LOG);

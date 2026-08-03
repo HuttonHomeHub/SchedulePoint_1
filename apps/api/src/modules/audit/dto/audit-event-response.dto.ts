@@ -16,12 +16,17 @@ import { AUDIT_ACTIONS, AUDIT_ACTOR_TYPES, AUDIT_OUTCOMES } from '@repo/types';
  * email/name as they were, so renaming an account cannot rewrite history and deleting one does not
  * leave a trail of blanks. The reader gets what happened, not what is currently true.
  *
- * `ipAddress` and `userAgent` are deliberately **absent from this DTO**. They are recorded, and
- * they are evidence for an investigation, but the log's ordinary readers are Org Admins looking at
- * a membership history — putting a colleague's home IP on that screen is a privacy cost with no
- * matching benefit. Exposing them is a decision with its own scope, not a field to add by default.
+ * `ipAddress` and `userAgent` are recorded in the table and deliberately **not exposed**. They are
+ * evidence for an investigation, but the log's ordinary readers are Org Admins looking at a
+ * membership history, and a colleague's home IP on that screen is a privacy cost with no matching
+ * benefit. Exposing them is a decision with its own scope, not a field to add by default.
+ *
+ * That decision lives in `@repo/types`' `AuditEvent`, which has no such fields — so `implements`
+ * enforces it rather than describing it. (This said `Omit<AuditEvent, 'ipAddress' | 'userAgent'>`
+ * first, which reads as "the shared type has them and this drops them" and compiled happily
+ * because `Omit` of a key that does not exist is a no-op. A guarantee that cannot fail is not one.)
  */
-export class AuditEventResponseDto implements Omit<AuditEvent, 'ipAddress' | 'userAgent'> {
+export class AuditEventResponseDto implements AuditEvent {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 

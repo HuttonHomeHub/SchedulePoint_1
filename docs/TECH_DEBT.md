@@ -43,7 +43,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 13 | **TypeScript pinned to v5** | TypeScript 7 (the native compiler) removed `baseUrl` and `moduleResolution: node10` from tsconfig, which the shared presets rely on for the `@/` and `@repo/*` path aliases. The major is ignored in Dependabot. | Missing TypeScript 7 speed/features until migrated. | Migrate the tsconfig presets (drop `baseUrl`, move to `paths`/`bundler` resolution), verify nest/vite resolution, then un-ignore. |
 
-| 14 | **Append-only audit log missing** | No append-only audit-log framework exists yet (flagged in the A1 and C1 security reviews), so security-sensitive events are only in operational logs + row audit columns: (a) authentication events (sign-up/in/out); (a2) membership role changes / removals and invitation create/revoke/accept (who did what to which org, before→after); (b) Better Auth's rate-limit store is in-process memory — per-replica once scaled; (c) the `accounts` OAuth token columns are unencrypted at rest (harmless today — only email+password is enabled). | No tamper-evident audit trail for permission changes / deletions / auth; rate limits weaken under horizontal scaling; token columns unencrypted before OAuth ships. | Build an `AuditLog` model + service (SECURITY_STANDARDS.md) and write auth + membership/invitation events to it; back the rate-limit store with Redis (ADR-0010) before scaling out; add field-level encryption for OAuth token columns before enabling social providers. |
+| 14 | **Audit log: the two remaining halves** | (a) and (a2) are **closed** by ADR-0072 — authentication events and membership/invitation/organisation changes are recorded before→after in an append-only table, with hierarchy deletes/restores added beyond the original scope and a route census gating every future endpoint on an audit decision. What remains: **(b)** Better Auth's rate-limit store is in-process memory — per-replica once scaled (sibling of #49); **(c)** the `accounts` OAuth token columns are unencrypted at rest (harmless today — only email+password is enabled). | (b) a scraper gets N× the intended budget on scale-out; (c) a database read would expose OAuth tokens the day a social provider is enabled. | (b) back both throttler stores with the ADR-0010 Redis, with #49, before the API runs more than one replica; (c) encrypt the columns before enabling any OAuth provider. |
 
 | 15 | **OpenAPI accuracy gaps** | Repo-wide, from the B2 API review: (a) `201 Create` responses don't set a `Location` header (`docs/API.md` asks for one) — present in the reference template too; (b) the `@Api*Response` decorators declare the bare DTO, not the `{ data }`/`{ data, meta }` envelope the `TransformInterceptor` actually returns. | Generated OpenAPI is slightly inaccurate about response shape and `Location`. | Add a shared `@ApiDataResponse()`/`@ApiPaginatedResponse()` swagger helper and a `Location` header on creates; backport to the reference template so the two stay in step (ADR-0015). |
 
@@ -779,6 +779,29 @@ the value.
 
 ---
 
+### 90. `idx_audit_events_actor_occurred` was never measured
+
+**Found:** 2026-08-03, landing ADR-0072 M1.
+
+ADR-0072's own Consequences section says the third index — the one the `/me/audit-events` read
+needs — "**was not in the measured set. It is flagged as unmeasured and must be measured before it
+lands.**" It has landed, and it has not been measured.
+
+The reasoning for shipping it anyway is sound and is not the same as measuring it: a self-scoped
+query without an index on `(actor_user_id, occurred_at DESC, id DESC)` is a sequential scan of a
+table that only grows, and the alternative was to ship the self-read without the index it obviously
+needs. But the ADR set a bar and the bar was not met — recording that is the point of this row.
+
+**What is owed:** the same `EXPLAIN (ANALYZE, BUFFERS)` treatment the other two partial indexes got,
+at a realistic row count, confirming (i) the index is used for the `/me` keyset page, (ii) the
+organisation read still uses its own partial index rather than this one, and (iii) the write cost of
+a third index on an insert-only table is what it was assumed to be.
+
+**Where it sits:** it composes with the growth measurement ADR-0072 already gates coverage widening
+on. Both want the same seeded table, so they are one afternoon rather than two.
+
+---
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this
@@ -809,4 +832,4 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 90.**
+**Next free number: 91.**

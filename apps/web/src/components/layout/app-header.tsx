@@ -6,9 +6,9 @@ import { BrandMark } from '@/components/layout/brand-mark';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
-import { RESOURCES_ENABLED } from '@/config/env';
+import { AUDIT_LOG_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { OrgSwitcher } from '@/features/organizations';
-import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import { canManageHierarchy, canReadAuditLog, useOrgRole } from '@/hooks/use-org-role';
 import { cn } from '@/lib/utils';
 
 const NAV_LINK_CLASS =
@@ -42,7 +42,8 @@ function HeaderContents(): React.ReactElement {
   const onHierarchy = /\/orgs\/[^/]+\/(clients|projects)(\/|$)/.test(pathname);
   // The recycle bin is a writer surface (only writers can restore); non-writers
   // never see the entry point, though the API read itself is member-level.
-  const canWrite = canManageHierarchy(useOrgRole(orgSlug ?? ''));
+  const role = useOrgRole(orgSlug ?? '');
+  const canWrite = canManageHierarchy(role);
   // Present only inside the persistent shell (VITE_NAV_TREE on); opens the rail as a
   // drawer below `lg`, where the pinned rail is hidden.
   const shell = useShell();
@@ -100,6 +101,13 @@ function HeaderContents(): React.ReactElement {
             <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
               Members
             </Link>
+            {/* Org Admin only (ADR-0072). Hiding it for other roles is a courtesy, not the
+                control: the API answers 403 whether or not this link is rendered. */}
+            {AUDIT_LOG_ENABLED && canReadAuditLog(role) ? (
+              <Link to="/orgs/$orgSlug/audit-log" params={{ orgSlug }} className={NAV_LINK_CLASS}>
+                Audit log
+              </Link>
+            ) : null}
             {canWrite ? (
               <Link
                 to="/orgs/$orgSlug/recently-deleted"

@@ -330,9 +330,10 @@ compose up` does not produce. Recorded as the escalation.
   question is gated rather than assumed away.
 - **Fail-open on the auth path can silently lose events under stress.** Accepted for the opposite
   reason, and it is why the asymmetry is documented at both sites with the reason attached.
-- **67 mutating routes must be classified once**, and every future one classified as it is written.
-  That is the price of the coverage guarantee and it is charged up front.
-- **One extra parameter on ~13 controller handlers** (`@RequestContext()`), because there is no
+- **Every route must be classified once**, and every future one classified as it is written. That
+  is the price of the coverage guarantee and it is charged up front. (This line said "67 mutating
+  routes" before M1 counted them: there are **116**, of which 12 audit — see §M1 below.)
+- **One extra parameter on 12 controller handlers** (`@RequestContext()`), because there is no
   ambient request context and inventing one would hide the dependency.
 - **A JSONB precedent now exists**, narrowly scoped here. The next proposal to use JSONB must show
   its payload is open-ended, never queried and never computed.
@@ -351,6 +352,63 @@ compose up` does not produce. Recorded as the escalation.
 - Task 1.7's Better Auth spike findings are folded back into this ADR when M1 lands, **including
   anything the hook seam turned out not to supply** — the ADR-0064 discipline of recording what was
   measured and what could not be reproduced.
+
+## M1 as built (2026-08-03)
+
+The ADR asked for Task 1.7's Better Auth spike to be folded back in "**including anything the hook
+seam turned out not to supply**". It did not supply two of the four events, and that is the
+milestone's largest finding.
+
+### The authentication seam is three seams, not one
+
+The drafted design — one `hooks.after` switching on `ctx.path` — was written first, then read
+against `better-auth@1.6.25`'s actual endpoints. Two events are invisible to it:
+
+- **`/sign-out`** (`api/routes/sign-out.mjs`) reads the session **cookie** directly and never
+  resolves a session onto the context. An after-hook has no idea who signed out. It is recorded
+  from a **`before` hook** that resolves the session while the cookie is still valid; the row
+  therefore means "a sign-out was requested by X" rather than "…completed", which is not a
+  distinction a reader could act on since the endpoint swallows its own delete error and always
+  returns success.
+- **`/verify-email`** returns `{ status: true, user: null }` — the user is deliberately withheld —
+  and, when a `callbackURL` is present (which is how the emailed link works), succeeds by
+  **throwing a redirect**. An after-hook would see no user and an error on the success path. It is
+  recorded from **`emailVerification.afterEmailVerification(user)`**, which fires only on success
+  and receives the user.
+
+Both would have been the ADR-0064 failure exactly: a producer that runs, looks right, and silently
+records nothing.
+
+What the hook seam **does** supply, and the ADR was right to rely on: `dispatchAuthEndpoint` catches
+a thrown `APIError`, assigns it to `context.returned`, and **still runs the after-hooks**. A failed
+sign-in is therefore observable — which matters more than the successes, because the row nobody can
+produce is the one showing somebody trying.
+
+### The route census is 116, not 67
+
+Counted by walking `AppModule`'s module graph and reading Nest's own `path`/`method` metadata
+(`audit-coverage.structural.spec.ts`), not by hand. 12 routes audit; 104 are declared unaudited
+against one of nine **named** reasons. Two of those reasons are admissions rather than
+justifications and are separated from ordinary reads so they stay visible: **reading the audit log
+is itself worth recording**, and **minting a share link IS a permission change** — both M2
+candidates.
+
+### Append-only + `ON DELETE RESTRICT` has a test-harness consequence
+
+The two rules compose into something neither states alone: a spec that clears organisations fails
+on the FK, and **cannot fix that by deleting the audit rows first**, because the trigger refuses
+that too. 392 pre-existing e2e assertions failed on the first real run. `apps/api/test/audit-reset.ts`
+resolves it by momentarily disabling the trigger — and is therefore the **proof that this ADR's
+honesty note is accurate rather than aspirational**: a trigger stops accident and stops application
+code, but not the table's owner. Nothing in `src/` may import it.
+
+### Still outstanding
+
+- **`idx_audit_events_actor_occurred` remains unmeasured.** The ADR said it "must be measured before
+  it lands"; it has landed with the self-read, on the reasoning that a `/me` query without it is a
+  sequential scan of the whole table. The measurement is owed, not waived —
+  `docs/TECH_DEBT.md` #90.
+- Coverage widening stays gated on the growth measurement, unchanged.
 
 ## References
 

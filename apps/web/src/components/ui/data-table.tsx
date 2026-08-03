@@ -39,7 +39,13 @@ export function DataTable<T>({
 }: {
   caption: string;
   columns: Column<T>[];
-  query: Pick<UseQueryResult<T[]>, 'isPending' | 'isError' | 'data' | 'refetch'>;
+  /**
+   * A `react-query` result, narrowed to what the states need. `refetch` is typed as returning
+   * `unknown` rather than borrowed from `UseQueryResult` so an INFINITE query's result can be
+   * adapted here too — its refetch resolves to a paged shape, and the retry button only ever
+   * fires it. Widening the primitive beat giving the audit log a second table (ADR-0072).
+   */
+  query: Pick<UseQueryResult<T[]>, 'isPending' | 'isError' | 'data'> & { refetch: () => unknown };
   getRowKey: (row: T) => string;
   empty: React.ReactNode;
   loadingLabel: string;

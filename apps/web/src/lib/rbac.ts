@@ -108,3 +108,15 @@ export function canManageOrgCalendars(role: OrganizationRole | undefined): boole
 export function canExportSchedule(role: OrganizationRole | undefined): boolean {
   return role !== undefined;
 }
+
+/**
+ * Roles allowed to read the organisation's audit log (mirrors the API's `audit:read`, ADR-0072 —
+ * Org Admin only).
+ *
+ * The client mirror decides what to *show*; the API decides what is *allowed*, and a caller who
+ * reaches the endpoint without the permission still gets 403. Hiding the nav entry is a courtesy,
+ * never the control.
+ */
+export function canReadAuditLog(role: OrganizationRole | undefined): boolean {
+  return role === 'ORG_ADMIN';
+}

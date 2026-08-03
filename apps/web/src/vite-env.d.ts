@@ -104,4 +104,6 @@ interface ImportMetaEnv {
   readonly VITE_ASSIGNMENT_LAG?: string;
   /** Audit F4 — the Float paths panel: what binds after the critical path, and by how much. Default ON. */
   readonly VITE_FLOAT_PATHS?: string;
+  /** ADR-0072 — the audit log screens: an organisation's history, and your own. Default off. */
+  readonly VITE_AUDIT_LOG?: string;
 }
