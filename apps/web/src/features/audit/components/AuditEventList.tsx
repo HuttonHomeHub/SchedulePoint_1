@@ -104,15 +104,26 @@ export function AuditEventList({
         }
       />
 
-      {query.hasNextPage ? (
+      {/*
+        Rendered whenever a page has loaded, and SHADED rather than removed once there is nothing
+        more. Unmounting it on the final press would destroy the element the reader is standing on
+        and drop focus to `<body>` — the ADR-0064 finding, caused here by the user's own click.
+        `aria-disabled` rather than `disabled`, so it stays focusable and keeps its accessible name
+        (the ScopeSaveBar lesson).
+      */}
+      {events.length > 0 ? (
         <div>
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => void query.fetchNextPage()}
+            aria-disabled={!query.hasNextPage || query.isFetchingNextPage}
             aria-busy={query.isFetchingNextPage}
+            onClick={() => {
+              if (!query.hasNextPage || query.isFetchingNextPage) return;
+              void query.fetchNextPage();
+            }}
           >
-            {query.isFetchingNextPage ? 'Loading…' : 'Load more'}
+            {loadMoreLabel(query)}
           </Button>
         </div>
       ) : null}
@@ -127,13 +138,25 @@ export function AuditEventList({
 }
 
 /**
+ * The reader's own locale, resolved once. Constructing an `Intl.DateTimeFormat` is the expensive
+ * part and this list renders 50 rows per page and grows without bound as pages load.
+ */
+const WHEN_FORMAT = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+/**
  * An instant in the reader's own locale. Deliberately absolute rather than "3 hours ago": an audit
  * log is consulted to establish when something happened, and a relative label makes two rows
  * impossible to order once they are more than a day apart.
  */
 function formatWhen(iso: string): string {
-  const date = new Date(iso);
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    date,
-  );
+  return WHEN_FORMAT.format(new Date(iso));
+}
+
+/** The button's label across its three states. "All events shown" is the shaded reason. */
+function loadMoreLabel(query: { hasNextPage: boolean; isFetchingNextPage: boolean }): string {
+  if (query.isFetchingNextPage) return 'Loading…';
+  return query.hasNextPage ? 'Load more' : 'All events shown';
 }
