@@ -23,6 +23,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ProjectResponseDto } from './dto/project-response.dto';
@@ -79,8 +80,9 @@ export class ProjectsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('projectId', ParseUuidPipe) projectId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, projectId);
+    await this.service.remove(principal, orgSlug, projectId, context);
   }
 
   @Post(':projectId/restore')
@@ -93,7 +95,10 @@ export class ProjectsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('projectId', ParseUuidPipe) projectId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<ProjectResponseDto> {
-    return ProjectResponseDto.from(await this.service.restore(principal, orgSlug, projectId));
+    return ProjectResponseDto.from(
+      await this.service.restore(principal, orgSlug, projectId, context),
+    );
   }
 }
