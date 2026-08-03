@@ -1,5 +1,5 @@
 import type * as ReactRouter from '@tanstack/react-router';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppHeader } from '@/components/layout/app-header';
@@ -99,6 +99,13 @@ describe('flag OFF — the prior product, byte for byte', () => {
     // Flag-off is not "audit hidden", it is the prior header: the rest of the nav is untouched.
     expect(screen.getByRole('link', { name: 'Members' })).toBeInTheDocument();
   });
+
+  it('renders no My activity item in the account menu', () => {
+    renderHeader();
+    fireEvent.click(screen.getByRole('button', { name: /Account:/ }));
+    expect(screen.queryByRole('menuitem', { name: 'My activity' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
+  });
 });
 
 describe('flag ON — the entry appears for the role that can use it', () => {
@@ -119,5 +126,16 @@ describe('flag ON — the entry appears for the role that can use it', () => {
     renderHeader();
     expect(screen.queryByRole('link', { name: 'Audit log' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Members' })).toBeInTheDocument();
+  });
+
+  it('offers My activity in the account menu to EVERY role, including a Planner', () => {
+    // `/me/activity` needs no permission — the actor id comes from the session and the route takes
+    // no user id, so there is nothing to gate. It sits in the account menu rather than the
+    // organisation nav because it is not org-scoped: it spans every organisation the reader
+    // belongs to and carries the org-less authentication rows too.
+    role.current = 'PLANNER';
+    renderHeader();
+    fireEvent.click(screen.getByRole('button', { name: /Account:/ }));
+    expect(screen.getByRole('menuitem', { name: 'My activity' })).toBeInTheDocument();
   });
 });

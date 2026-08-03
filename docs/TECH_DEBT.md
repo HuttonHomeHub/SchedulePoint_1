@@ -802,6 +802,35 @@ on. Both want the same seeded table, so they are one afternoon rather than two.
 
 ---
 
+### 91. A failed sign-in is recorded and readable by nobody
+
+**Found:** 2026-08-03, writing the ADR-0072 M1 journey.
+
+`auth.sign_in_failed` is the one audited event with **no organisation and no actor**: authentication
+happens before an organisation is known, and a failed attempt is by definition not attributable to a
+signed-in user (`classifyAuthEvent` returns `actorType: 'ANONYMOUS'`, `actorUserId: null`). Both
+read endpoints filter on exactly those two columns — `listForOrganization` on `organization_id`,
+`listForSelf` on `actor_user_id` — so the row lands in the table and then appears on no screen in
+the product.
+
+That is not a defect in either read; each is correctly scoped, and the attempted email is
+attacker-supplied text that must not be handed to whoever happens to own that address. It is a gap
+in **coverage**: repeated failed sign-ins against one account are the single most useful thing an
+audit log has to say, and today the only way to see them is `psql`.
+
+**What is owed:** a decision, then the surface. The scoping question is the whole of it — a failed
+attempt names an account but proves nothing about who made it, so "show it to the account's owner"
+leaks an attacker's timing to the victim and "show it to every Org Admin the account belongs to"
+resolves an organisation from a credential that did not authenticate. A plausible answer is a
+**third, deliberately narrow** read — attempts against an email that _is_ a member, exposed on the
+organisation feed with the actor left as "Not signed in" — but it is a security decision with its
+own reasoning, not a filter to widen.
+
+**Where it sits:** with the ADR-0072 M2 coverage question, which already has to decide what else the
+log records. Doing it there keeps one conversation about scope instead of two.
+
+---
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this
@@ -832,4 +861,4 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 91.**
+**Next free number: 92.**

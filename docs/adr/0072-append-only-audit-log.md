@@ -402,13 +402,55 @@ resolves it by momentarily disabling the trigger — and is therefore the **proo
 honesty note is accurate rather than aspirational**: a trigger stops accident and stops application
 code, but not the table's owner. Nothing in `src/` may import it.
 
+### The web surface, and what reading its own diff found
+
+Two screens behind `VITE_AUDIT_LOG` (default off): the organisation log at
+`/orgs/$orgSlug/audit-log`, and the caller's own history at `/me/activity`. **One** list component
+serves both — the organisation feed and a person's own history differ in what they are scoped to and
+in nothing else, and two tables would eventually disagree about how a role change or a failed
+sign-in reads, a divergence only somebody who opened both would ever see.
+
+Reading the epic's own diff against the ux / accessibility / component checklists found four defects
+that had passed a human read, all four the shapes this repository already has names for:
+
+- The refusal — "Only an Org Admin can read this organisation's audit log" — rendered **while the
+  organisations query was still in flight**, because `useOrgRole` answers `undefined` until it
+  resolves and `canReadAuditLog` turns that into "no". An Org Admin was told they were not one, for
+  as long as the request took. The ADR-0060 invented-message finding, one screen along.
+- "Load more" **unmounted itself on the final press**, destroying the element the reader was
+  standing on and dropping focus to `<body>` (WCAG 2.4.3) — triggered by the user's own click. It
+  now shades with `aria-disabled` and the label "All events shown".
+- `Intl.DateTimeFormat` was constructed per cell, in a table of 50 rows a page that grows without
+  bound.
+- **`/me/activity` had no route to it but a typed URL** — and the audit log's own refusal told the
+  reader their activity was "on My activity", naming a place the product did not take them. It is
+  now an account-menu item, which is the right home precisely because the screen is **not**
+  org-scoped: it spans every organisation the reader belongs to and carries the org-less
+  authentication rows too.
+
+`apps/web/e2e-audit/` (its own CI step) drives the whole thing against a real API and database,
+because a mocked fetch cannot be wrong about a row it invented. It proves the producers fire inside
+the transactions that succeeded, that a role change's `before` is the membership's real prior value
+(the detail reads "Planner → Contributor" only if the service read the row under its lock), that
+`audit:read` is refused with a **403** in the non-admin's own session rather than by the hidden nav
+link, and that `/me` is scoped by **actor** — the teammate is the _subject_ of the role change and
+must not see it.
+
 ### Still outstanding
 
 - **`idx_audit_events_actor_occurred` remains unmeasured.** The ADR said it "must be measured before
   it lands"; it has landed with the self-read, on the reasoning that a `/me` query without it is a
   sequential scan of the whole table. The measurement is owed, not waived —
   `docs/TECH_DEBT.md` #90.
+- **A failed sign-in is recorded and readable by nobody.** It carries neither an organisation nor an
+  actor, and both reads filter on exactly those columns — so the most useful thing an audit log has
+  to say is, today, reachable only from `psql`. Neither read is wrong; the gap is coverage, and
+  closing it is a security decision about scope rather than a filter to widen
+  (`docs/TECH_DEBT.md` #91).
 - Coverage widening stays gated on the growth measurement, unchanged.
+- **`VITE_AUDIT_LOG` ships default off.** The product owner runs the ADR-0047 Watchtower profile, so
+  anything default-on reaches a real host on the next release; the flip is a decision to put, not to
+  take.
 
 ## References
 

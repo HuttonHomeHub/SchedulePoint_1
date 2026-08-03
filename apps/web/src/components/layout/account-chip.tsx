@@ -1,8 +1,9 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Building2, Check, ChevronDown, Monitor, Moon, Sun } from 'lucide-react';
+import { Building2, Check, ChevronDown, Monitor, Moon, ScrollText, Sun } from 'lucide-react';
 import { useId } from 'react';
 
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
+import { AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { useTheme, type Theme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
@@ -90,6 +91,22 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
           >
             {email}
           </p>
+        ) : null}
+        {/* `/me/activity` is not org-scoped — it spans every organisation the reader belongs to and
+            includes the org-less authentication rows — so the organisation nav is the wrong home
+            for it and this menu, which is already the account's, is the right one. Without it the
+            screen existed with no route to it but a typed URL, while the audit log's own refusal
+            told the reader their activity was "on My activity" — a sentence naming a place the
+            product did not take them. ADR-0072. */}
+        {AUDIT_LOG_ENABLED ? (
+          <MenuItem
+            onSelect={() => {
+              void navigate({ to: '/me/activity' });
+            }}
+          >
+            <ScrollText aria-hidden="true" className="size-4" />
+            My activity
+          </MenuItem>
         ) : null}
         <p className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium" id={themeLabelId}>
           Theme
