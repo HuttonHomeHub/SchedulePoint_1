@@ -15,7 +15,57 @@ a millisecond count. This benchmark answers the other half of the question, and 
 
 ---
 
-## What to run
+## Two ways to run it, and they measure different things
+
+**Route A — in the app you already run.** No checkout, no install, no Node. Paste a snippet into
+your browser's DevTools console on a plan you actually care about. Start here: it measures the real
+thing on the real machine, and it is the route that closes TECH_DEBT #75.
+
+**Route B — the scripted harness.** Needs a checkout and a Playwright browser. It times the painter
+in isolation against a generated 2,000-activity programme, which makes runs comparable to each
+other and to the published figures — but it is a synthetic scene, and it is not your plan.
+
+They answer different questions and both are worth having. Route A tells you whether the product is
+smooth for you; Route B tells you what the painter costs on a fixed scene.
+
+---
+
+## Route A — measure the running app (no install)
+
+1. Open SchedulePoint, open your **largest real plan**, and make sure the **Diagram (TSLD)** view is
+   showing — not Gantt.
+2. Pick a zoom and remember which: **Fit** (whole programme) and **Week** are the two worth having,
+   because they stress opposite things. Do a run for each.
+3. Open DevTools (`F12` on Windows/Linux, `⌥⌘I` on a Mac) and click the **Console** tab.
+4. Paste the whole contents of
+   [`apps/web/scripts/measure-draw-in-browser.js`](../../apps/web/scripts/measure-draw-in-browser.js)
+   and press Enter. If Chrome asks you to type `allow pasting` first, do that and paste again.
+5. It runs in two phases and tells you what to do:
+   - **2 seconds idle** — don't touch anything. This reads your display's refresh rate, which is
+     what a dropped frame is measured against. A 120 Hz laptop has an 8.3 ms budget, not 16.7 ms,
+     and scoring it against 60 Hz would flatter it.
+   - **10 seconds panning** — drag the diagram left and right, continuously, without stopping. A
+     paused drag measures an idle canvas, which is cheap and meaningless.
+6. It prints a report block. Run `copy(window.__schedulepointDrawReport)` to put it on the clipboard.
+
+Paste the block back **with the machine it came from** — model, year, RAM, and whether it was on
+mains or battery. A number without its machine is not a measurement. Laptops throttle hard on
+battery, so the same machine can produce two honest answers that differ by a factor of two.
+
+**What it reports, and why there are two cost figures.** The snippet wraps
+`window.requestAnimationFrame` and times every callback, so `frame JS (all)` is the whole frame's
+work — painter, ruler sync, interaction layer, everything — while `heaviest callback` isolates the
+canvas loop, which is far and away the biggest of them. The first number is what you feel; the
+second is the one comparable to Route B. `frame interval` and `dropped frames` are the actual
+deliverable: they say whether panning was smooth, which is the question ADR-0026 §16 was reaching
+for when it wrote down a paint duration.
+
+Nothing is sent anywhere. It reads the DOM and `performance`, prints to your console, and restores
+the original `requestAnimationFrame` when it finishes.
+
+---
+
+## Route B — the scripted harness
 
 ```bash
 git clone <this repo> && cd SchedulePoint
@@ -28,7 +78,7 @@ That's it. It takes about a minute and prints a block per zoom level. Paste the 
 **with the machine it came from** — model, year, RAM, and whether it was on mains or battery. A
 number without its machine is not a measurement.
 
-## What it does
+### What it does (Route B)
 
 It paints the real painter against a real Canvas 2D context in Chromium, over a generated programme
 of **2,000 activities / 160 WBS summaries / 3,200 links across 50 lanes** — the ADR-0066 scale
@@ -47,7 +97,7 @@ Two zoom levels are reported because they answer different questions:
 Each is measured with link routing **off** and **on** (ADR-0065), so the routing feature's own cost
 is visible rather than baked into a single figure.
 
-## Why `--headed` matters
+### Why `--headed` matters (Route B)
 
 `measure:draw` runs **headed** deliberately. Headless Chromium can rasterise Canvas 2D in software,
 which measures a code path no planner ever runs — and it will happily report numbers that look
@@ -59,7 +109,7 @@ If you want the headless number anyway (for comparison with a CI-adjacent figure
 node apps/web/scripts/measure-link-routing.mjs 120 scale
 ```
 
-## Options
+### Options (Route B)
 
 ```bash
 node scripts/measure-link-routing.mjs [frames] [scale|grid] [--headed] [--viewport WxH]

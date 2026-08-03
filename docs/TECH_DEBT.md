@@ -417,17 +417,29 @@ would not exercise the code being budgeted.
    viewport, and only the second is a design property worth having. (This clause is the residue of
    the former #59, folded here: both rows waited on the same single run, so closing one would have
    left the other stale — the failure this register keeps having.)
-   The command now exists and is documented:
-   `pnpm --filter @repo/web measure:draw`, with the runbook at
-   [`docs/guides/measure-draw-performance.md`](guides/measure-draw-performance.md) — a checkout, one
-   install, one command, about a minute. It runs **headed** on purpose: headless Chromium can
-   rasterise Canvas 2D in software, so a headless figure measures a path no planner runs, and the
-   script prints a loud warning when it is.
+   Two routes exist, and the runbook is
+   [`docs/guides/measure-draw-performance.md`](guides/measure-draw-performance.md).
+   **Route B** is `pnpm --filter @repo/web measure:draw` — a checkout, one install, one command,
+   about a minute, timing the painter alone on a generated 2,000-activity programme. It runs
+   **headed** on purpose: headless Chromium can rasterise Canvas 2D in software, so a headless
+   figure measures a path no planner runs, and the script prints a loud warning when it is.
+   **Route A, added 2026-08-03, needs no install at all** — the operator runs the app as a Docker
+   Compose stack and asked for a way to measure it without putting a toolchain on a second machine,
+   which was the last thing standing between this row and a number.
+   `apps/web/scripts/measure-draw-in-browser.js` is pasted into DevTools on a real plan; it wraps
+   `window.requestAnimationFrame`, reads the display's refresh interval from a 2-second idle phase
+   and then measures 10 seconds of panning.
+   Route A is the **better** answer to step 1 above, not merely the more convenient one: it reports
+   frame pacing and dropped frames on the real machine, real plan and real GPU, where the harness
+   reports one function's wall-clock on a synthetic scene. It is the _worse_ answer to "what does
+   the painter cost", because a frame includes the ruler sync and the interaction layer — so it
+   reports the whole frame **and** the heaviest single callback, and neither figure is implied by
+   the other.
    **Scope narrowed 2026-08-01 (product-owner decision): laptop only, iPad deliberately not
    covered.** A planner authors on a laptop; the iPad is a review device, where the printed
    programme and the Gantt matter more than canvas draw. If the canvas ever becomes a primary iPad
    surface that gap reopens, and the runbook says so rather than leaving it implied.
-   **Awaiting the product owner's laptop run.**
+   **Awaiting the product owner's run** — Route A, at Fit and at Week zoom, with the machine named.
 4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
    answer is "smooth at 2,000, and 16 ms is fine because it is one frame at 60 Hz", the budget was
    simply wrong and should say so. If it is not smooth, ADR-0026's own reserved escalations —
