@@ -19,7 +19,8 @@ import type { ReportFinding } from './report.js';
  *
  * All repairs are **pure + deterministic** (no clock, randomness or input-order sensitivity): the same
  * graph always repairs to the same graph. The steps run in a fixed order:
- *   1. **Duplicate activity code** → suffix later duplicates (`CODE`, `CODE-2`, `CODE-3`, …).
+ *   1. **Duplicate activity code or name** → suffix later duplicates (`X`, `X-2`, `X-3`, …). Both are
+ *      independently unique per plan; the name half is TECH_DEBT #87.
  *   2. **WBS parent** (ADR-0038) → null a parent that is missing / not a `WBS_SUMMARY`; break parent-tree cycles.
  *   3. **Constraint pairing** (ADR-0035 §7) → drop an orphaned constraint type-or-date (both, or neither).
  *   4. **Progress** (ADR-0035 §6) → clamp percents; derive/repair status; N08/N18; `resumeDate ≥ suspendDate`.
@@ -38,32 +39,76 @@ export interface ValidateResult {
   readonly findings: ReportFinding[];
 }
 
-/** Deterministically de-duplicate activity codes by suffixing later collisions. */
-function repairDuplicateCodes(
+/** The ceilings the activities API enforces (`CreateActivityDto`), honoured by the importer. */
+const ACTIVITY_CODE_MAX_LENGTH = 32;
+const ACTIVITY_NAME_MAX_LENGTH = 200;
+
+/**
+ * Deterministically suffix a colliding value (`VALUE`, `VALUE-2`, `VALUE-3`, …), truncating the base
+ * where the suffix would push it past the field's ceiling.
+ *
+ * Shared by the code and name repairs rather than written twice. They are the same algorithm over
+ * different fields with different ceilings, and this repository's recurring defect is one correct
+ * pattern applied to a control and not its neighbour — which is literally how the name repair came
+ * to be missing while the code repair existed (TECH_DEBT #87).
+ */
+function disambiguate(value: string, used: ReadonlySet<string>, maxLength: number): string {
+  for (let suffix = 2; ; suffix += 1) {
+    const tail = `-${String(suffix)}`;
+    const base =
+      value.length + tail.length > maxLength ? value.slice(0, maxLength - tail.length) : value;
+    const candidate = `${base}${tail}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * De-duplicate activity **codes and names**, which are independently unique per plan
+ * (`uq_activities_plan_code`, `uq_activities_plan_name`).
+ *
+ * The name half is TECH_DEBT #87. Only codes were repaired, so a file with repeated names passed
+ * this whole step reporting **zero** findings and then died on the unique index inside the commit
+ * transaction — rolling the entire import back, behind the generic Prisma message "A resource with
+ * these details already exists". That is not an exotic input: **P6 makes the code unique, not the
+ * name**, so a real programme repeats "Excavate" once per zone and per level as a matter of course.
+ * The file that surfaced it had 1,911 duplicate names and 0 duplicate codes.
+ */
+function repairDuplicateCodesAndNames(
   activities: ImportActivity[],
   findings: ReportFinding[],
 ): ImportActivity[] {
-  const used = new Set<string>();
+  const usedCodes = new Set<string>();
+  const usedNames = new Set<string>();
   return activities.map((activity) => {
-    if (!used.has(activity.code)) {
-      used.add(activity.code);
-      return activity;
+    let repaired = activity;
+
+    if (usedCodes.has(repaired.code)) {
+      const candidate = disambiguate(repaired.code, usedCodes, ACTIVITY_CODE_MAX_LENGTH);
+      findings.push({
+        kind: 'repair',
+        entity: 'activity',
+        sourceRef: activity.key,
+        detail: `duplicate activity code "${repaired.code}" renamed to "${candidate}"`,
+        reason: 'activity codes must be unique within a plan',
+      });
+      repaired = { ...repaired, code: candidate };
     }
-    let suffix = 2;
-    let candidate = `${activity.code}-${suffix}`;
-    while (used.has(candidate)) {
-      suffix += 1;
-      candidate = `${activity.code}-${suffix}`;
+    usedCodes.add(repaired.code);
+
+    if (usedNames.has(repaired.name)) {
+      const candidate = disambiguate(repaired.name, usedNames, ACTIVITY_NAME_MAX_LENGTH);
+      findings.push({
+        kind: 'repair',
+        entity: 'activity',
+        sourceRef: activity.key,
+        detail: `duplicate activity name "${repaired.name}" renamed to "${candidate}"`,
+        reason: 'activity names must be unique within a plan',
+      });
+      repaired = { ...repaired, name: candidate };
     }
-    used.add(candidate);
-    findings.push({
-      kind: 'repair',
-      entity: 'activity',
-      sourceRef: activity.key,
-      detail: `duplicate activity code "${activity.code}" renamed to "${candidate}"`,
-      reason: 'activity codes must be unique within a plan',
-    });
-    return { ...activity, code: candidate };
+    usedNames.add(repaired.name);
+
+    return repaired;
   });
 }
 
@@ -780,7 +825,7 @@ function repairCalendars(calendars: ImportCalendar[], findings: ReportFinding[])
 export function validateAndRepair(graph: ImportGraph): ValidateResult {
   const findings: ReportFinding[] = [];
 
-  let activities = repairDuplicateCodes(graph.activities, findings);
+  let activities = repairDuplicateCodesAndNames(graph.activities, findings);
   const activityKeys = new Set(activities.map((a) => a.key));
   const codeByKey = new Map(activities.map((a) => [a.key, a.code] as const));
 

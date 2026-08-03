@@ -40,7 +40,7 @@ green at the engine, wrong in the product.
 A second, related problem: the fixture is **one 129-activity plan**. When a date looks wrong
 there is no way to tell which feature caused it, which is precisely the difficulty behind the
 report that "the WBS rows don't tally". And 129 activities is **6%** of the 2,000-activity scale
-the draw-performance argument (ADR-0026 §16, TECH_DEBT #75) is conducted at, so no plan in the
+the draw-performance argument (ADR-0026 §9, TECH_DEBT #75) is conducted at, so no plan in the
 repository is large enough to test the claim.
 
 ### Users

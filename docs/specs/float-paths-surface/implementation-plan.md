@@ -406,7 +406,7 @@ listbox marked and the change announced.
 > **Complexity:** M
 > **Dependencies:** M1 (F2 — the panel owns the selection)
 > **Risks:** _A new scene field or paint branch would add per-frame cost to a painter already measured
-> at 16.7–23.1 ms p95 against ADR-0026 §16's ≤ 4 ms (TECH_DEBT #75)_ → **no new field and no new
+> at 16.7–23.1 ms p95 against ADR-0026 §9's ≤ 4 ms (TECH_DEBT #75)_ → **no new field and no new
 > branch**; this contributes members to a set the paint loop already reads once per culled bar. Pinned
 > by a paint-parity test. _Dim composed wrongly with an active filter/isolate_ → **union**, the
 > canvas-nav rule; a test with all three active.

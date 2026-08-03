@@ -829,7 +829,7 @@ export const DESIGNED_CHROME_ENABLED = flagDefaultOn(import.meta.env.VITE_DESIGN
  * since 2026-07-26 (S5-T4), once the browser draw measurement was made and recorded: at 2,000
  * activities the band pass sits **inside the baseline's own run-to-run spread** — several runs
  * land below it — so its cost is smaller than the noise floor rather than merely small. Method,
- * hardware and the caveat that this was NOT the ADR-0026 §16 device envelope are written down in
+ * hardware and the caveat that this was NOT the ADR-0026 §9 device envelope are written down in
  * `docs/specs/designed-ui/implementation-plan.md` (S5-T2).
  *
  * When on, the diagram sits on a ground of its own with **alternating month bands**: a planner can

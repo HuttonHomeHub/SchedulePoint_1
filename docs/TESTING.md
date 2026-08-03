@@ -165,7 +165,7 @@ pnpm --filter @repo/web exec node scripts/measure-link-routing.mjs 200
 ```
 
 Run it on a machine whose numbers mean something, and quote the machine with the
-result. Its first run is why `docs/TECH_DEBT.md` #75 exists: ADR-0026 §16's ≤ 4 ms
+result. Its first run is why `docs/TECH_DEBT.md` #75 exists: ADR-0026 §9's ≤ 4 ms
 p95 budget had been quoted for months without anyone measuring it, and the
 already-shipped painter turned out to be four to six times over it.
 

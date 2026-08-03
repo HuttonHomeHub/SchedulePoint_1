@@ -38,7 +38,7 @@ const { paintScene } = PaintModule;
  *
  * The load-bearing claim is that this adds **no new scene field and no new paint branch**: it
  * contributes members to `dimmedIds`, a set the paint loop already reads once per culled bar. That
- * matters because the painter is already measured at 16.7–23.1 ms p95 against ADR-0026 §16's ≤ 4 ms
+ * matters because the painter is already measured at 16.7–23.1 ms p95 against ADR-0026 §9's ≤ 4 ms
  * (TECH_DEBT #75) — this feature must not add to that, and "must not" is asserted here rather than
  * asserted in prose.
  */

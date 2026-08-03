@@ -513,7 +513,7 @@ The brief's constraint, answered explicitly. Current owners of each canvas chann
 Taking **only the dim channel** is what makes the per-frame cost argument trivial: `dimmedIds` is
 already read once per culled bar as a `Set.has`, and this feature contributes members to a set that
 already exists. There is **no new paint branch, no new layer, no new pass** — which matters because
-the painter is already measured at 16.7–23.1 ms p95 against ADR-0026 §16's ≤ 4 ms (TECH_DEBT #75), and
+the painter is already measured at 16.7–23.1 ms p95 against ADR-0026 §9's ≤ 4 ms (TECH_DEBT #75), and
 a feature that adds a per-frame cost right now would need an argument this one does not have to make.
 
 **Colour-only is also a WCAG problem**, which is the second reason the panel leads: path membership
@@ -851,7 +851,7 @@ the plan workspace, and the selected path is emphasised on whichever view is ope
 dimming everything off it. Not (A): the ranked list alone answers "what binds next" but leaves the
 planner to find the chain by eye on a diagram that already draws it. Not (C): an all-paths colour
 mode takes a second visual channel on a canvas where ADR-0054, ADR-0056 and ADR-0065 already own
-most cues, and adds per-frame cost to a painter measured 4–6× over ADR-0026 §16 (TECH_DEBT #75) —
+most cues, and adds per-frame cost to a painter measured 4–6× over ADR-0026 §9 (TECH_DEBT #75) —
 it stays the named M5 deferral. Not (E): §1's table is the argument, and the capability is built,
 correct and unreachable, which is the condition the audit exists to end.
 
