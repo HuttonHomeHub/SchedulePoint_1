@@ -7,6 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for notes (attributed threads on plans & activities, ADR-0046 M2). Boots with the
  * plan edit-lock write-gate ENFORCED (`PLAN_EDIT_LOCK_ENFORCED=true`) so we can PROVE notes are NOT
@@ -69,6 +71,8 @@ describe.skipIf(!hasDatabase)('Notes API (e2e, pen enforced)', () => {
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();

@@ -7,6 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for cross-plan dependencies (LIVE inter-project logic ties, ADR-0045 M2 F3):
  * the flat org-scoped create/get/delete, the per-plan (incoming) and per-activity (both-direction)
@@ -59,6 +61,8 @@ describe.skipIf(!hasDatabase)('Cross-plan dependencies API (e2e)', () => {
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();

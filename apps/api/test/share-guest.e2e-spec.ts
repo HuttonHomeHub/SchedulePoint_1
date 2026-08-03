@@ -7,6 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for the session-less External-Guest READ surface
  * (`/api/v1/share/*`, ADR-0051 F-M3) — the app's FIRST unauthenticated data-read
@@ -67,6 +69,8 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();

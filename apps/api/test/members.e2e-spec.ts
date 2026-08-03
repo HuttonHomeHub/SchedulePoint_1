@@ -7,6 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for membership management: listing, role changes (optimistic
  * locking + last-Org-Admin invariant), removal, the permission matrix, and the
@@ -52,6 +54,8 @@ describe.skipIf(!hasDatabase)('Members API (e2e)', () => {
     await prisma.project.deleteMany();
     await prisma.client.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();

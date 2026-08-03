@@ -1,0 +1,36 @@
+import type { PrismaClient } from '@prisma/client';
+
+/**
+ * Clear `audit_events` between e2e specs.
+ *
+ * **Why this needs a helper at all.** ADR-0072 makes the table append-only with `BEFORE UPDATE OR
+ * DELETE` and `BEFORE TRUNCATE` triggers, and gives `organization_id` an FK with `ON DELETE
+ * RESTRICT`. Both are deliberate: an audit row must not be quietly removed, and deleting an
+ * organisation must not orphan its trail. Together they mean a spec that clears organisations now
+ * fails on the FK, and cannot fix that by deleting the audit rows first, because the trigger
+ * refuses that too.
+ *
+ * **This is the escape hatch ADR-0072 documents rather than hides.** A trigger stops accident and
+ * stops application code; it does not stop the table's OWNER, who can `ALTER TABLE … DISABLE
+ * TRIGGER`. That is stated in the ADR as the limit of what a trigger can promise, and this file is
+ * the proof the statement is accurate rather than aspirational. It lives in `test/` and nothing in
+ * `src/` may import it — production code has no reason to remove an audit row, and the day it
+ * needs one, that is an ADR, not a helper.
+ *
+ * `ENABLE ALWAYS` is restored afterwards, not plain `ENABLE`: the migration sets ALWAYS so the
+ * trigger also fires for a replication/`session_replication_role = replica` session, and a reset
+ * that quietly downgraded it would leave every later test running against a weaker table than
+ * production has.
+ */
+export async function clearAuditEvents(prisma: PrismaClient): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    'ALTER TABLE "audit_events" DISABLE TRIGGER "trg_audit_events_append_only"',
+  );
+  try {
+    await prisma.$executeRawUnsafe('DELETE FROM "audit_events"');
+  } finally {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "audit_events" ENABLE ALWAYS TRIGGER "trg_audit_events_append_only"',
+    );
+  }
+}

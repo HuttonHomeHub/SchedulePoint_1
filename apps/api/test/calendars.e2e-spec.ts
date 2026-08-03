@@ -8,6 +8,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for the working-day calendar library: CRUD, the weekday-mask
  * validation, name uniqueness, the exception editor (add/remove + duplicate
@@ -57,6 +59,8 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();
