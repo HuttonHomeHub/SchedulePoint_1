@@ -1,5 +1,56 @@
 # @repo/api
 
+## 0.41.0
+
+### Minor Changes
+
+- [#225](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/225) [`c6f789f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c6f789ff66927c468cf8b363786cedf2fe72522f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Invitation emails can now actually be sent, over SMTP.
+
+  `common/mail/` has been a logging stub since it was built, so invitations were logged and never
+  delivered. It now binds an SMTP adapter when `MAIL_SMTP_URL` is configured, and keeps the stub
+  when it is not — so nothing changes for an operator who does not set it.
+
+  SMTP rather than a provider SDK: Postmark, SES, Resend, Fastmail and a self-hosted relay all
+  speak it, so which provider you use is configuration rather than a dependency. A send failure is
+  logged and swallowed, because the accept URL is also returned in the create response and shown in
+  the app — a mail outage must never make an invitation fail.
+
+- [#225](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/225) [`c6f789f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c6f789ff66927c468cf8b363786cedf2fe72522f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Send the email-verification link (Theme B2). `AUTH_REQUIRE_EMAIL_VERIFICATION` has existed since
+  ADR-0016 and the accept-time `emailVerified` gate was already wired to it, but no verification email
+  was ever sent — so the switch could only lock people out, and the docblock claiming the message "is
+  sent but not blocking" was wrong on both halves. Better Auth now sends it on sign-up through the
+  `MailService` port.
+
+  The two messages fail differently, deliberately. An invitation swallows a send error because its
+  accept URL is also returned in the create response and shown in the admin UI; a verification failure
+  propagates and fails the sign-up, because the verify URL exists only in that email and a silently
+  unusable account is worse than a sign-up you can retry.
+
+  In production the API now refuses to boot with `AUTH_REQUIRE_EMAIL_VERIFICATION=true` and no
+  `MAIL_SMTP_URL` — without a transport the link is written to the server log and nowhere else.
+
+### Patch Changes
+
+- [#225](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/225) [`c6f789f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c6f789ff66927c468cf8b363786cedf2fe72522f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Let the mail credential actually reach the API container. `MAIL_SMTP_URL` and `MAIL_FROM` were added
+  to the environment schema and documented, but neither compose file listed them under the api
+  service's `environment:` — and a variable reaches a container only by being listed there, not by
+  living in a `.env` beside the compose file, which is used for interpolation. So the transport was
+  configurable in theory and unreachable in practice on the deployment that runs these files.
+  `TRUSTED_PROXY_IPS` had the same gap while `docker-compose.release.yml`'s own header names it as
+  required in production; `PLAN_EDIT_LOCK_ENFORCED` and `LOG_LEVEL` are forwarded for the same reason.
+
+  An empty optional variable now means **absent** rather than invalid. `MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}`
+  always defines the variable, so a plain `.min(1).optional()` would refuse to boot on the ordinary
+  "mail is not configured yet" case — the opposite of optional.
+
+- [#225](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/225) [`c6f789f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c6f789ff66927c468cf8b363786cedf2fe72522f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Treat an empty optional variable as absent at the config **read** seam, not only in the schema. The
+  env schema mapped a blank `MAIL_SMTP_URL` to `undefined` correctly — and `ConfigService.get` then
+  fell through to `process.env`, where the empty string a compose file always defines still sat. So
+  `mailSmtpUrl` returned `''`, which is not `undefined`, and `MailModule` bound the SMTP adapter with
+  no URL: the API booted into `createTransport('')` and died. The rule now holds on both sides of that
+  boundary, pinned by a test built through the real `ConfigModule` rather than a stubbed config
+  service — a stub returns what it was told and could never have shown this.
+
 ## 0.40.0
 
 ### Minor Changes
