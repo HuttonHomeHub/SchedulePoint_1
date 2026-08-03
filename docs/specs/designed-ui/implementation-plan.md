@@ -796,7 +796,7 @@ default-on, and the rollout scaffolding is collapsed.
 
 ##### Task S5-T2 — Browser draw-budget re-confirmation (the flag-flip gate)
 
-- **Description:** on the ADR-0026 §16 hardware envelope (mid-tier laptop + iPad-class Safari), run
+- **Description:** on the ADR-0026 §9 hardware envelope (mid-tier laptop + iPad-class Safari), run
   `prototypes/tsld-spike/` at **500 and 2,000 activities** under a scripted pan/zoom sweep, in **all
   four themes** (Corporate's ground and bands are new fill work Light/Dark did not have), reporting
   draw **median and p95 against the ≤ 4 ms bar**. Record method + hardware + numbers in this plan,
@@ -819,7 +819,7 @@ count: bands **off** (the pre-S4 baseline) and bands **on** in each of the three
 grounds (`system` resolves to Light). Three full repetitions.
 
 _Hardware — read this before quoting the numbers._ Headless Chromium on the **shared cloud runner
-this work was done on**, not the ADR-0026 §16 envelope (mid-tier laptop + iPad-class Safari). No
+this work was done on**, not the ADR-0026 §9 envelope (mid-tier laptop + iPad-class Safari). No
 GPU compositor, so the reported fps is a floor, not a device signal. **The device-authoritative
 measurement on the §16 envelope has not been made** — see the decision below for why that does not
 block, and `TECH_DEBT.md` for the standing gap.

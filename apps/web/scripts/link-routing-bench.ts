@@ -1,7 +1,7 @@
 /**
  * The **browser-side** draw measurement for obstacle-aware link routing (ADR-0065 / ADR-0064 T21).
  *
- * This is not a test and does not run in CI. It exists because the ADR-0026 §16 budget — ≤ 4 ms p95
+ * This is not a test and does not run in CI. It exists because the ADR-0026 §9 budget — ≤ 4 ms p95
  * at 2,000 activities — is about a **real** 2D context, and the jsdom counting stubs the unit gates
  * use cannot measure rasterisation at all. `docs/TECH_DEBT.md` #59 records that the budget has never
  * been measured on the hardware envelope it names; this narrows that gap for one change rather than

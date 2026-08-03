@@ -212,7 +212,7 @@ does not deliver the brief's continuous top region.
    2,000-activity fixture, assert banding adds ≤ visibleMonths+1 `fillRect` and **exactly
    zero** `fillText`/`measureText`, at day zoom _and_ year zoom over a decade. Assert the
    _shape_ of the cost, not milliseconds — CI timings are noise.
-2. **Browser re-confirmation** on the ADR-0026 §16 envelope (mid-tier laptop + iPad-class
+2. **Browser re-confirmation** on the ADR-0026 §9 envelope (mid-tier laptop + iPad-class
    Safari) via `prototypes/tsld-spike/`, 500 and 2,000 activities, scripted pan/zoom,
    reporting draw median and **p95 vs the ≤ 4 ms bar**, in **all four themes**. This is the
    flag-flip gate.

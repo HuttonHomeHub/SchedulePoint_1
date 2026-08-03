@@ -125,7 +125,7 @@ thermal profile. Row virtualization makes the per-frame cost independent of plan
 which is why this did not block the M6 flip — but "in principle" is exactly the phrase #59 exists
 to distrust.
 
-**What would close it:** open a 2,000-activity plan in the Gantt under DevTools on the ADR-0026 §16
+**What would close it:** open a 2,000-activity plan in the Gantt under DevTools on the ADR-0026 §9
 envelope (a mid-tier laptop, iPad-class Safari), record dropped frames while scrolling, and note
 the numbers in ADR-0059. Deliberately **not** turned into a CI gate: a millisecond threshold
 measured on a runner would be noise dressed as a guarantee.
@@ -345,7 +345,7 @@ documented ≤ 10 (ADR-0053 §3).
 > repeated it. **All of that is wrong on two counts, checked against the ADR's own text.**
 >
 > 1. **There is no §16 in ADR-0026.** Its sections run to §9a; the prototype gate is **§9**, the
->    result is **§9a**. Every "ADR-0026 §16" citation in this repository points at a section that
+>    result is **§9a**. Every "ADR-0026 §9" citation in this repository points at a section that
 >    does not exist. (ADR-0026 itself says "the §16 target hardware envelope", which is where the
 >    number was picked up and propagated.)
 > 2. **4 ms was never a budget.** It is the **measured p95 draw time of the throwaway 2026
@@ -484,7 +484,7 @@ would not exercise the code being budgeted.
    So a budget expressed as _paint duration_ would have scored this run as fine at anything above
    9 ms, and a planner panning this plan sees judder. That is step 1's suspicion — "frame pacing
    under rAF, not one function's wall-clock" — confirmed on real hardware rather than argued.
-   Against ADR-0026 §16's ≤ 4 ms the painter is 2.2× over; but the 4 ms is the wrong **quantity**,
+   Against ADR-0026 §9's ≤ 4 ms the painter is 2.2× over; but the 4 ms is the wrong **quantity**,
    not merely the wrong number, which is a stronger conclusion than this row expected to reach.
 
    **Where the missing time goes is not yet measured, and must not be guessed.** The script times

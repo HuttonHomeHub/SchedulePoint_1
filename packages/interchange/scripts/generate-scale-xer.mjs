@@ -1,7 +1,7 @@
 /**
  * Generate a large, realistically-shaped `.xer` for measuring the TSLD canvas (TECH_DEBT #75).
  *
- * The draw budget in ADR-0026 §16 is stated at **2,000 activities**, and nobody has a plan that big
+ * ADR-0026 §9's gate is stated at **2,000 activities**, and nobody has a plan that big
  * to point a browser at. Seeding one needs the ADR-0066 HTTP seeder, which needs a checkout and a
  * toolchain — the exact barrier that left the budget unmeasured for months. Importing a file does
  * not: it is an ordinary product feature, so an operator can drag this in and have a 2,000-activity

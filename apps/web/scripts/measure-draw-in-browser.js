@@ -4,8 +4,8 @@
  * This file is not executed by any tooling in this repo. It is **pasted into the browser's
  * DevTools console** on a plan workspace, against whatever deployment the operator already runs.
  * That is the whole point: `measure:draw` needs a checkout, an install and a Playwright browser,
- * which is a lot to ask of the one person who has the hardware ADR-0026 §16 names — and asking
- * produced months of the budget going unmeasured.
+ * which is a lot to ask of the one person who has the hardware ADR-0026 §9 names — and asking
+ * produced months of the gate going unmeasured.
  *
  * **What it measures, and how it differs from `measure:draw`.** The script harness times
  * `paintScene` in isolation against a synthetic scene. This times **the app**: it wraps
@@ -51,8 +51,8 @@
   /**
    * Refuse an empty or near-empty plan **before** spending the operator's twelve seconds.
    *
-   * The first real run of this script reported 0.5 ms p95 — comfortably inside ADR-0026 §16's
-   * 4 ms — on a plan with **zero** activities. That is not the budget being met, it is an empty
+   * The first real run of this script reported 0.5 ms p95 — a figure that reads as comfortably
+   * fast — on a plan with **zero** activities. That is not the canvas being quick, it is an empty
    * canvas, and it read as a pass. It is the same failure the runbook already records against the
    * scripted harness, whose generated plan once spanned 28 years so "whole plan" zoom culled nine
    * bars in ten and reported a very pretty 4.6 ms.
@@ -75,7 +75,7 @@
   }
   if (activityCount < 200) {
     console.warn(
-      `Only ${activityCount} activities. The run will work, but ADR-0026 §16's budget is stated at 2,000 — a small plan cannot confirm or refute it. Use your largest plan if you have a bigger one.`,
+      `Only ${activityCount} activities. The run will work, but ADR-0026 §9's gate is stated at 2,000 — a small plan cannot confirm or refute it. Use your largest plan if you have a bigger one.`,
     );
   }
 

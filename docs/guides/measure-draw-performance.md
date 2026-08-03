@@ -3,9 +3,16 @@
 **Who this is for:** whoever has the hardware. This measurement cannot be automated, and that is the
 whole reason the document exists.
 
-ADR-0026 §16 set a draw budget of **≤ 4 ms p95 on a mid-tier laptop and iPad-class Safari**. That
-number has never been measured on either device — `docs/TECH_DEBT.md` #59 said so for months and
-nobody ran it, because there was no command to run. There is now.
+ADR-0026 **§9** sets the gate in **frames per second** — ≥ 45 fps @ 500 activities and ≥ 30 fps
+@ 2,000 under sustained pan/zoom/drag — on a mid-tier laptop and iPad-class Safari. It had never
+been measured on either device: `docs/TECH_DEBT.md` #59 said so for months and nobody ran it,
+because there was no command to run. There is now, and **§9b records the result** (measured
+2026-08-03: pass at both zooms on a 2,016-activity plan).
+
+Two corrections worth knowing before you read anything else about this, because they were repeated
+across this repository for months: the frequently-cited "**ADR-0026 §16**" **does not exist** (the
+sections end at §9a), and the "**≤ 4 ms p95 budget**" was never a budget — it is §9a's _measured
+prototype result_, recorded as a pass against a stated ≤ 16 ms frame budget.
 
 CI runners cannot stand in. A shared runner's absolute timings vary by more than the thing being
 measured, which is exactly why the repo's other canvas gates (`paint.dates-budget.test.ts` and its
@@ -57,7 +64,7 @@ battery, so the same machine can produce two honest answers that differ by a fac
 work — painter, ruler sync, interaction layer, everything — while `heaviest callback` isolates the
 canvas loop, which is far and away the biggest of them. The first number is what you feel; the
 second is the one comparable to Route B. `frame interval` and `dropped frames` are the actual
-deliverable: they say whether panning was smooth, which is the question ADR-0026 §16 was reaching
+deliverable: they say whether panning was smooth, which is the question ADR-0026 §9 was reaching
 for when it wrote down a paint duration.
 
 Nothing is sent anywhere. It reads the DOM and `performance`, prints to your console, and restores
@@ -141,7 +148,7 @@ routing, and it has never once been met.
 
 ## What happens with your numbers
 
-They go into `docs/TECH_DEBT.md` #75, and then ADR-0026 §16 gets **amended** — its figure replaced by
+They go into `docs/TECH_DEBT.md` #75, and then ADR-0026 §9 gets **amended** — its figure replaced by
 one that was measured, on hardware that was named, with the scene and viewport stated.
 
 Two outcomes are both fine, and the point of measuring is to find out which:

@@ -109,10 +109,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case 'P2025':
         return { status: HttpStatus.NOT_FOUND, code: 'NOT_FOUND', message: 'Resource not found.' };
       case 'P2002':
+        // Deliberately does NOT say "resource". It used to, meaning a REST resource — but this is a
+        // scheduling product with a resource LIBRARY, so an import that collided on an activity name
+        // told its reader a resource already existed, and sent them to a resource panel that was
+        // empty (TECH_DEBT #87). A generic message must not borrow a domain noun.
         return {
           status: HttpStatus.CONFLICT,
           code: 'CONFLICT',
-          message: 'A resource with these details already exists.',
+          message: 'That would duplicate an existing record. Check any name or code you have used.',
         };
       default:
         return {

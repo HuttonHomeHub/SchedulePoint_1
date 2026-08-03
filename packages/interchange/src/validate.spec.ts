@@ -17,11 +17,16 @@ import type { ReportFinding } from './report.js';
 import { validateAndRepair } from './validate.js';
 
 /** A minimal valid activity for hand-built validate fixtures. */
-function activity(key: string, code = key): ImportActivity {
+/**
+ * `name` defaults to a value derived from `key`, so it is unique unless a test asks otherwise.
+ * That default is why TECH_DEBT #87 went unnoticed: every case here had distinct names by
+ * construction, so the missing name repair could not show up.
+ */
+function activity(key: string, code = key, name = `Activity ${key}`): ImportActivity {
   return {
     key,
     code,
-    name: `Activity ${key}`,
+    name,
     type: 'TASK',
     durationMinutes: 480,
     calendarKey: null,
@@ -174,6 +179,72 @@ describe('validateAndRepair — duplicate activity codes', () => {
     );
     // C wants X → X-2 taken → X-3.
     expect(graph.activities.map((a) => a.code)).toEqual(['X', 'X-2', 'X-3']);
+  });
+});
+
+describe('validateAndRepair — duplicate activity names (TECH_DEBT #87)', () => {
+  it('suffixes later duplicates and reports each', () => {
+    // The shape of a real P6 export: the CODE is unique, the NAME repeats per zone. Before this
+    // repair existed the graph passed with zero findings and the import died on
+    // `uq_activities_plan_name` inside the commit, rolling everything back.
+    const { graph, findings } = validateAndRepair(
+      graphOf(
+        [
+          activity('A', 'A10', 'Excavate'),
+          activity('B', 'B10', 'Excavate'),
+          activity('C', 'C10', 'Excavate'),
+        ],
+        [],
+      ),
+    );
+    expect(graph.activities.map((a) => a.name)).toEqual(['Excavate', 'Excavate-2', 'Excavate-3']);
+    expect(graph.activities.map((a) => a.code)).toEqual(['A10', 'B10', 'C10']);
+    const repairs = findings.filter((f) => f.detail.includes('duplicate activity name'));
+    expect(repairs).toHaveLength(2);
+    expect(repairs[0]?.sourceRef).toBe('B');
+  });
+
+  it('skips a suffix that would itself collide', () => {
+    const { graph } = validateAndRepair(
+      graphOf(
+        [activity('A', 'A1', 'Pour'), activity('B', 'B1', 'Pour-2'), activity('C', 'C1', 'Pour')],
+        [],
+      ),
+    );
+    expect(graph.activities.map((a) => a.name)).toEqual(['Pour', 'Pour-2', 'Pour-3']);
+  });
+
+  it('repairs codes and names independently on the same activity', () => {
+    const { graph } = validateAndRepair(
+      graphOf([activity('A', 'DUP', 'Same'), activity('B', 'DUP', 'Same')], []),
+    );
+    expect(graph.activities.map((a) => a.code)).toEqual(['DUP', 'DUP-2']);
+    expect(graph.activities.map((a) => a.name)).toEqual(['Same', 'Same-2']);
+  });
+
+  it('truncates the base so a suffixed name stays inside the 200-character ceiling', () => {
+    // The API caps a name at 200 chars. Appending a suffix to a name already at the ceiling would
+    // produce a value the write path rejects — trading one opaque failure for another.
+    const long = 'E'.repeat(200);
+    const { graph } = validateAndRepair(
+      graphOf([activity('A', 'A1', long), activity('B', 'B1', long)], []),
+    );
+    const [first, second] = graph.activities;
+    expect(first?.name).toHaveLength(200);
+    expect(second?.name).toHaveLength(200);
+    expect(second?.name).not.toBe(first?.name);
+    expect(second?.name.endsWith('-2')).toBe(true);
+  });
+
+  it('truncates a suffixed CODE to its own 32-character ceiling', () => {
+    // Same rule, the other field — the ceilings differ, which is why the helper takes one.
+    const long = 'C'.repeat(32);
+    const { graph } = validateAndRepair(
+      graphOf([activity('A', long, 'One'), activity('B', long, 'Two')], []),
+    );
+    expect(graph.activities[0]?.code).toHaveLength(32);
+    expect(graph.activities[1]?.code).toHaveLength(32);
+    expect(graph.activities[1]?.code).not.toBe(graph.activities[0]?.code);
   });
 });
 
