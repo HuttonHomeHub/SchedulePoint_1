@@ -50,3 +50,41 @@ describe('validateEnv (production hardening)', () => {
     ).not.toThrow();
   });
 });
+
+describe('mail transport configuration (Theme B1)', () => {
+  it('defaults to no SMTP, which keeps the logging stub — today’s behaviour', () => {
+    const parsed = validateEnv({ ...prodBase });
+    expect(parsed.MAIL_SMTP_URL).toBeUndefined();
+    expect(parsed.MAIL_FROM).toBeUndefined();
+  });
+
+  it('refuses to boot when SMTP is configured without a sender', () => {
+    // Fail at startup rather than at the first invitation. A transport with no From address
+    // cannot send, and discovering that when someone invites their first client is too late.
+    expect(() => validateEnv({ ...prodBase, MAIL_SMTP_URL: 'smtps://user:pw@host:465' })).toThrow(
+      /MAIL_FROM/,
+    );
+  });
+
+  it('accepts a complete mail configuration', () => {
+    const parsed = validateEnv({
+      ...prodBase,
+      MAIL_SMTP_URL: 'smtps://user:pw@host:465',
+      MAIL_FROM: 'SchedulePoint <no-reply@example.com>',
+    });
+    expect(parsed.MAIL_SMTP_URL).toBe('smtps://user:pw@host:465');
+    expect(parsed.MAIL_FROM).toBe('SchedulePoint <no-reply@example.com>');
+  });
+
+  it('checks mail in development too, not only production', () => {
+    // The other cross-field rules guard against insecure PRODUCTION defaults; this one guards
+    // against a transport that cannot send, which is equally wrong on a developer's machine.
+    expect(() =>
+      validateEnv({
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://app:app@db:5432/app',
+        MAIL_SMTP_URL: 'smtps://user:pw@host:465',
+      }),
+    ).toThrow(/MAIL_FROM/);
+  });
+});

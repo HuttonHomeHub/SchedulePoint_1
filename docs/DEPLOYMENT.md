@@ -120,6 +120,29 @@ all three below are mandatory:
 | `CORS_ORIGINS`       | `https://schedulepoint.example`                                                                                    | This is Better Auth's `trustedOrigins`. Must equal the **browser** origin or sign-up/in returns `403 Invalid origin`. |
 | `BETTER_AUTH_URL`    | `https://schedulepoint.example`                                                                                    | The public base URL the auth handler builds links/callbacks against.                                                  |
 | `TRUSTED_PROXY_IPS`  | the proxy hop(s) in front of the API (e.g. the Docker bridge CIDR such as `172.16.0.0/12`, or the web/NPM host IP) | Lets the API trust `X-Forwarded-For`/`-Proto` for the real client IP; guard refuses an empty value in production.     |
+| `MAIL_SMTP_URL`      | `smtps://user:password@smtp.provider.example:465` (**optional**)                                                   | Turns on real invitation email. **Absent = the logging stub**, which is what shipped before — so this is opt-in.      |
+| `MAIL_FROM`          | `SchedulePoint <no-reply@schedulepoint.example>` (required **with** `MAIL_SMTP_URL`)                               | The sender address. The config guard refuses to boot if the SMTP URL is set without it.                               |
+
+### Transactional email
+
+Invitation emails are sent over **SMTP**, so the provider is configuration rather than
+code — Postmark, SES, Resend, Fastmail and a self-hosted relay all speak it, and moving
+between them costs an env change rather than a new adapter.
+
+Two properties worth knowing before you turn it on:
+
+- **The credential's presence is the switch.** There is no separate feature flag. Set
+  `MAIL_SMTP_URL` and mail is live; leave it unset and the logging stub stays. A flag would
+  be a second thing to keep in step with the credential, and the usual failures are a flag
+  on with nothing behind it, or a transport configured and inert because nobody flipped it.
+- **A mail outage cannot fail an invitation.** A send error is logged and swallowed, because
+  the accept URL is also returned in the create response and shown in the admin UI — so an
+  Org Admin can always hand it over another way. The email is a convenience over an existing
+  path, never the only route through.
+
+Put the credential in your secret store, not in `docker-compose.yml`. Deliverability (SPF,
+DKIM, DMARC on the sending domain) is a provider-side task this application does not do for
+you; without it, invitations to external clients will land in spam.
 
 ### Cloudflare & TLS
 

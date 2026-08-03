@@ -39,6 +39,18 @@ export const envSchema = z
      */
     TRUSTED_PROXY_IPS: z.string().default(''),
     /**
+     * SMTP connection URL (`smtps://user:pass@host:465`). **Absent = the logging stub**, which is
+     * exactly today's behaviour — so dev, test and CI are unchanged and an operator opts in by
+     * setting one variable, with no flag to flip and no code path to choose.
+     *
+     * SMTP rather than a provider SDK: Postmark, SES, Resend, Fastmail and a self-hosted relay all
+     * speak it, so **which** provider is configuration rather than a dependency, and swapping one
+     * costs an env change instead of an adapter. It also keeps the credential out of the codebase.
+     */
+    MAIL_SMTP_URL: z.string().min(1).optional(),
+    /** The `From:` address. Required once SMTP is configured — a transport with no sender cannot send. */
+    MAIL_FROM: z.string().min(1).optional(),
+    /**
      * When `true`, structural plan writes (activity/dependency create/update/
      * delete/restore, positions batch, schedule recalculate) require the caller
      * to hold the plan edit-lock (ADR-0028) and return **423** otherwise. Off by
@@ -88,6 +100,22 @@ export const envSchema = z
         code: 'custom',
         path: ['CORS_ORIGINS'],
         message: 'Set CORS_ORIGINS to your real web origin(s) in production (not localhost).',
+      });
+    }
+  })
+  /**
+   * Mail is checked in **every** environment, not just production — the rules above guard against
+   * shipping an insecure default, but this one guards against a transport that cannot send at all,
+   * which is equally wrong in staging or on a developer's machine. Fail at boot rather than at the
+   * first invitation.
+   */
+  .superRefine((env, ctx) => {
+    if (env.MAIL_SMTP_URL !== undefined && env.MAIL_FROM === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_FROM'],
+        message:
+          'MAIL_FROM must be set when MAIL_SMTP_URL is — a transport needs a sender address.',
       });
     }
   });

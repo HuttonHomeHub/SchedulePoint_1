@@ -80,6 +80,20 @@ export class AppConfigService {
       .filter(Boolean);
   }
 
+  /**
+   * SMTP connection URL, or `undefined` for the logging stub. Its **presence is the switch** —
+   * `MailModule` binds the real transport only when this is set, so there is no separate flag to
+   * fall out of step with the credential.
+   */
+  get mailSmtpUrl(): string | undefined {
+    return this.config.get('MAIL_SMTP_URL', { infer: true });
+  }
+
+  /** The `From:` address. The env schema guarantees it is set whenever {@link mailSmtpUrl} is. */
+  get mailFrom(): string | undefined {
+    return this.config.get('MAIL_FROM', { infer: true });
+  }
+
   get rateLimit(): { ttlMs: number; limit: number } {
     return {
       ttlMs: this.config.get('RATE_LIMIT_TTL', { infer: true }) * 1000,
