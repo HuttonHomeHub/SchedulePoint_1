@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { createTransport, type Transporter } from 'nodemailer';
 
-import { type InvitationEmail, MailService } from './mail.service';
+import { type EmailVerificationEmail, type InvitationEmail, MailService } from './mail.service';
 
 /**
  * SMTP adapter for {@link MailService} — the first real transport (TECH_DEBT: mail transport,
@@ -60,6 +60,41 @@ export class SmtpMailService extends MailService {
       );
     }
   }
+
+  /**
+   * Verification, and the one place this adapter lets an error **propagate**.
+   *
+   * `sendInvitation` swallows, because an Org Admin can read the accept URL off the screen and pass
+   * it on. There is no such fallback here: the verify URL exists only in the email. Swallowing would
+   * hand someone an account that — with `AUTH_REQUIRE_EMAIL_VERIFICATION` on — they cannot use, with
+   * no error and nothing on screen explaining why, which is a worse outcome than a sign-up that
+   * fails and can be retried.
+   *
+   * Throwing surfaces through Better Auth's own handler, so the caller learns immediately. Better
+   * Auth also exposes a resend endpoint, so a user who slips through a transient outage is not
+   * permanently stranded — but that is the recovery path, not the primary one.
+   */
+  async sendEmailVerification(email: EmailVerificationEmail): Promise<void> {
+    // Never log `verifyUrl` — it carries the token, and logs are retained and shipped.
+    await this.transporter.sendMail({
+      from: this.from,
+      to: email.to,
+      subject: 'Confirm your email address for SchedulePoint',
+      text: verificationText(email),
+    });
+    this.logger.info({ to: email.to }, 'email-verification link sent');
+  }
+}
+
+/** Mirrors {@link invitationText}: plain text, one action, no template machinery. */
+function verificationText(email: EmailVerificationEmail): string {
+  return [
+    'Confirm your email address to finish setting up your SchedulePoint account:',
+    '',
+    email.verifyUrl,
+    '',
+    'If you did not create an account, you can ignore this message.',
+  ].join('\n');
 }
 
 /**

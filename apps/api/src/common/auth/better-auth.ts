@@ -26,17 +26,30 @@ export interface CreateAuthOptions {
   trustedProxies: string[];
   isProduction: boolean;
   /**
-   * Require a verified email before an account is usable. Off for the alpha
-   * (no verification-email loop yet); when on, it also becomes the real
-   * mailbox-ownership proof the invitation-accept check relies on (ADR-0016).
+   * Require a verified email before an account is usable. When on it is the real
+   * mailbox-ownership proof the invitation-accept check relies on (ADR-0016 §5).
+   * The loop it depends on now exists, so this is a switch that can be turned on
+   * rather than one that would strand every new account.
    */
   requireEmailVerification: boolean;
+  /**
+   * Deliver the verification link (Theme B2). A callback rather than the `MailService` itself, so
+   * this factory stays a pure function of its options and never learns about Nest DI or a transport
+   * — the same reason the rest of the app talks to the port instead of the auth library.
+   *
+   * Rejecting fails the sign-up, which the SMTP adapter does deliberately; see
+   * `SmtpMailService.sendEmailVerification` for why this one message is not swallowed.
+   */
+  sendVerificationEmail: (input: { to: string; verifyUrl: string }) => Promise<void>;
 }
 
 /**
  * Build the Better Auth instance. Email + password only in v1; sessions are
  * cookie-based (secure, http-only, same-site) per docs/SECURITY_STANDARDS.md.
- * Email verification is sent but not blocking for the alpha (ADR-0016).
+ * The verification email IS sent (Theme B2, `emailVerification` below); whether a
+ * verified address is REQUIRED before the account is usable is
+ * `AUTH_REQUIRE_EMAIL_VERIFICATION`. This sentence used to say verification was
+ * "sent but not blocking" while nothing was sent at all — corrected 2026-08-03.
  */
 export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
   return betterAuth({
@@ -51,11 +64,27 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       // Matches the shared password rule in the feature spec (≥ 12 chars).
       minPasswordLength: 12,
       maxPasswordLength: 128,
-      // v1: verification email is not enforced before first use (ADR-0016).
-      // Driven by config so the invitation-accept email check can be hardened
-      // with a single switch once the verification-email loop is built.
+      // Whether an unverified account can be used at all. The loop that makes this
+      // switch usable is `emailVerification` below (Theme B2).
       requireEmailVerification: options.requireEmailVerification,
       autoSignIn: true,
+    },
+    /**
+     * The verification loop (Theme B2). Until this existed the docblock above claimed the email
+     * "is sent but not blocking" — it was **never sent at all**, because no `sendVerificationEmail`
+     * was configured, so `AUTH_REQUIRE_EMAIL_VERIFICATION` was a switch that could only lock people
+     * out. That was the gap standing between an invitation accept and a real proof of mailbox
+     * ownership (ADR-0016 §5); what is left of TECH_DEBT #16 is turning the switch on, which is
+     * now a deployment decision rather than missing code.
+     *
+     * `sendOnSignUp` is on so registration triggers it without a separate call; Better Auth owns the
+     * token's minting, expiry and single-use, and this app only carries the URL.
+     */
+    emailVerification: {
+      sendOnSignUp: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        await options.sendVerificationEmail({ to: user.email, verifyUrl: url });
+      },
     },
     // Deny abusive traffic at the auth layer (Nest's ThrottlerGuard does not see
     // these routes — they are mounted as a raw Node handler). Better Auth applies

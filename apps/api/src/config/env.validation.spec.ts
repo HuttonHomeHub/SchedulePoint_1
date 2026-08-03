@@ -76,6 +76,37 @@ describe('mail transport configuration (Theme B1)', () => {
     expect(parsed.MAIL_FROM).toBe('SchedulePoint <no-reply@example.com>');
   });
 
+  it('refuses to boot when verification is required in production with no transport', () => {
+    // The dead end this guard exists to prevent: with no SMTP the only adapter left is the
+    // logging stub, so the verify URL is written to the server log and nowhere else — every new
+    // account is unusable and nothing on screen says why.
+    expect(() => validateEnv({ ...prodBase, AUTH_REQUIRE_EMAIL_VERIFICATION: 'true' })).toThrow(
+      /AUTH_REQUIRE_EMAIL_VERIFICATION/,
+    );
+  });
+
+  it('accepts verification required once a transport is configured', () => {
+    const parsed = validateEnv({
+      ...prodBase,
+      AUTH_REQUIRE_EMAIL_VERIFICATION: 'true',
+      MAIL_SMTP_URL: 'smtps://user:pw@host:465',
+      MAIL_FROM: 'SchedulePoint <no-reply@example.com>',
+    });
+    expect(parsed.AUTH_REQUIRE_EMAIL_VERIFICATION).toBe(true);
+  });
+
+  it('still allows verification without SMTP outside production — the stub logs the link', () => {
+    // Deliberately not a global rule. Locally the logging adapter prints the verify URL, which is
+    // the only way to complete a verified sign-up on a developer's machine.
+    expect(() =>
+      validateEnv({
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://app:app@localhost:5432/app',
+        AUTH_REQUIRE_EMAIL_VERIFICATION: 'true',
+      }),
+    ).not.toThrow();
+  });
+
   it('checks mail in development too, not only production', () => {
     // The other cross-field rules guard against insecure PRODUCTION defaults; this one guards
     // against a transport that cannot send, which is equally wrong on a developer's machine.

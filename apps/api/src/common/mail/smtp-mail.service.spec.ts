@@ -65,4 +65,41 @@ describe('SmtpMailService', () => {
     expect(logged).not.toContain('tok_secret');
     expect(logged).not.toContain(invitation.acceptUrl);
   });
+
+  it('sends the verification link with the configured sender', async () => {
+    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+    await service.sendEmailVerification({
+      to: 'new@example.com',
+      verifyUrl: 'https://app.example.com/verify?token=tok_secret',
+    });
+
+    const message = sendMail.mock.calls[0]?.[0] as Record<string, string>;
+    expect(message.from).toBe('no-reply@example.com');
+    expect(message.to).toBe('new@example.com');
+    expect(message.text).toContain('https://app.example.com/verify?token=tok_secret');
+  });
+
+  it('THROWS when the verification send fails — the opposite of the invitation rule', async () => {
+    // The asymmetry, pinned. An invitation swallows because its accept URL is also on screen; the
+    // verify URL exists ONLY in this email. Swallowing would hand someone an account that, with
+    // AUTH_REQUIRE_EMAIL_VERIFICATION on, they cannot use — with no error and nothing explaining
+    // why. Failing the sign-up is recoverable; a silently unusable account is not.
+    sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+
+    await expect(
+      service.sendEmailVerification({ to: 'new@example.com', verifyUrl: 'https://x/verify#t' }),
+    ).rejects.toThrow(/ECONNREFUSED/);
+  });
+
+  it('never logs the verify URL on success — it carries the token', async () => {
+    const logger = loggerDouble();
+    await new SmtpMailService('no-reply@example.com', 'smtps://h', logger).sendEmailVerification({
+      to: 'new@example.com',
+      verifyUrl: 'https://app.example.com/verify?token=tok_secret',
+    });
+
+    const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
+    expect(logged).not.toContain('tok_secret');
+  });
 });

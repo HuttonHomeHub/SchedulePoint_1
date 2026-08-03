@@ -22,9 +22,13 @@ export const envSchema = z
      * invitation. The accept flow matches the signed-in user's email to the
      * invitee's, but that only proves mailbox ownership when verification is
      * enforced; otherwise an account can be registered for any address without
-     * proof. Off for the alpha because the verification-email loop is not built
-     * yet (ADR-0016, docs/TECH_DEBT.md) — turning it on is the single switch
-     * that closes that gap.
+     * proof (ADR-0016 §5).
+     *
+     * The verification-email loop now exists (Theme B2, `emailVerification` in
+     * `better-auth.ts`), so this is a switch an operator can turn on rather than
+     * one that would strand every new account. It stays `false` by default
+     * because turning it on is a deployment decision that needs a mail transport
+     * — which is why `MAIL_SMTP_URL` is a hard prerequisite in production below.
      */
     AUTH_REQUIRE_EMAIL_VERIFICATION: z
       .enum(['true', 'false'])
@@ -91,6 +95,20 @@ export const envSchema = z
         path: ['TRUSTED_PROXY_IPS'],
         message:
           'TRUSTED_PROXY_IPS must list your proxy IP(s)/CIDR(s) in production so auth rate limiting cannot be bypassed via a spoofed X-Forwarded-For header.',
+      });
+    }
+
+    // Requiring a verified address with no way to deliver the link is a dead end: without a
+    // transport the only adapter left is the logging stub, so the verify URL exists nowhere but
+    // the server's own log and every new account is unusable with nothing on screen saying why.
+    // The switch and its prerequisite are checked together rather than trusting an operator to
+    // read a doc — the same reason MAIL_FROM is demanded alongside MAIL_SMTP_URL.
+    if (env.AUTH_REQUIRE_EMAIL_VERIFICATION && env.MAIL_SMTP_URL === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AUTH_REQUIRE_EMAIL_VERIFICATION'],
+        message:
+          'AUTH_REQUIRE_EMAIL_VERIFICATION=true requires MAIL_SMTP_URL in production — without a transport the verification link is only written to the server log, so no new account can be used.',
       });
     }
 
