@@ -1922,4 +1922,94 @@ export interface ActivityNoteCount {
   count: number;
 }
 
+// ---------------------------------------------------------------------------
+// Audit log (ADR-0072, TECH_DEBT #14)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every action the audit log can record. **A `const` union, deliberately not a Postgres enum.**
+ *
+ * The vocabulary gains members on every coverage rung, and Postgres needs TWO migrations to add a
+ * label and then use it (ADR-0053 M3 paid that toll). It is also versioned data: a row written
+ * under an old label must stay readable for the table's whole life, which a DB enum makes
+ * impractical. Closed-ness is bought here instead — free, compiler-enforced, and reversible — with
+ * `ck_audit_events_action_format` as the database's backstop against a malformed value.
+ *
+ * Naming is `subject.past_tense_verb`, lower-case, dot-namespaced, ≤ 64 chars. Past tense because
+ * an audit row records something that **happened**; an action named in the imperative reads like a
+ * command and invites someone to log intent rather than outcome.
+ */
+export const AUDIT_ACTIONS = [
+  // — Membership, invitations and the organisation itself.
+  //   The permission changes an audit trail exists for (TECH_DEBT #14 a2).
+  'member.joined',
+  'member.removed',
+  'member.role_changed',
+  'invitation.created',
+  'invitation.revoked',
+  'invitation.accepted',
+  'organization.created',
+  // — Authentication (TECH_DEBT #14 a). Captured in Better Auth's own hook chain rather than a
+  //   Nest service, because the auth handler is mounted as a raw Node handler outside Nest's DI.
+  //   These rows carry NO organisation: authentication happens before one is known.
+  'auth.signed_up',
+  'auth.signed_in',
+  'auth.sign_in_failed',
+  'auth.signed_out',
+  'auth.email_verified',
+  // — Hierarchy soft deletes and restores. Not named in #14, but "who deleted this plan, and
+  //   when" is the question users actually ask. Deletes only: creates and updates are a far
+  //   larger surface and wait on the M3 growth measurement.
+  'client.deleted',
+  'client.restored',
+  'project.deleted',
+  'project.restored',
+  'plan.deleted',
+  'plan.restored',
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** Who performed an audited action. Mirrors the app's real principal kinds. */
+export const AUDIT_ACTOR_TYPES = ['USER', 'GUEST', 'SYSTEM', 'ANONYMOUS'] as const;
+export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
+
+/**
+ * How the action ended. `DENIED` is distinct from `FAILURE` on purpose: a refused permission is
+ * a security-relevant event worth counting, while a failure is an error worth debugging, and
+ * collapsing them would hide a probing attempt inside ordinary noise.
+ */
+export const AUDIT_OUTCOMES = ['SUCCESS', 'DENIED', 'FAILURE'] as const;
+export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
+
+/** One recorded event, as the read endpoints return it. */
+export interface AuditEvent {
+  id: string;
+  occurredAt: string;
+  organizationId: string | null;
+  action: AuditAction;
+  outcome: AuditOutcome;
+  actorType: AuditActorType;
+  actorUserId: string | null;
+  /** The actor's name/email **as it was**, so renaming an account cannot rewrite history. */
+  actorLabel: string | null;
+  subjectType: string;
+  subjectId: string | null;
+  subjectLabel: string | null;
+  /** Allow-listed, redacted, size-capped `{ before, after }` — or null where nothing changed. */
+  changes: AuditChanges | null;
+  correlationId: string | null;
+}
+
+/**
+ * The before/after payload. Both sides are present even when a field only appears on one, so a
+ * reader can tell "set from nothing" from "unchanged" without consulting the action's semantics.
+ */
+export interface AuditChanges {
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  /** True when the service had to drop fields to stay inside the 8 KB column bound. */
+  truncated?: boolean;
+}
+
 export {};
