@@ -23,6 +23,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
@@ -76,8 +77,11 @@ export class MembersController {
     @Param('orgSlug') orgSlug: string,
     @Param('memberId', ParseUuidPipe) memberId: string,
     @Body() dto: UpdateMemberRoleDto,
+    @RequestContext() context: RequestContext,
   ): Promise<MemberResponseDto> {
-    return MemberResponseDto.from(await this.service.changeRole(principal, orgSlug, memberId, dto));
+    return MemberResponseDto.from(
+      await this.service.changeRole(principal, orgSlug, memberId, dto, context),
+    );
   }
 
   @Delete(':memberId')
@@ -90,7 +94,8 @@ export class MembersController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('memberId', ParseUuidPipe) memberId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, memberId);
+    await this.service.remove(principal, orgSlug, memberId, context);
   }
 }

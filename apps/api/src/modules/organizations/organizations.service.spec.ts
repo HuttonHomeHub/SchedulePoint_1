@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationRole, Principal } from '../../common/auth/principal';
 import { NotFoundError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 
 import type { OrgMemberRepository } from './org-member.repository';
 import type { OrganizationRepository } from './organization.repository';
@@ -43,6 +44,7 @@ describe('OrganizationsService', () => {
   let members: { create: ReturnType<typeof vi.fn> };
   let calendarCreate: ReturnType<typeof vi.fn>;
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let audit: { record: ReturnType<typeof vi.fn> };
   let service: OrganizationsService;
 
   beforeEach(() => {
@@ -55,11 +57,13 @@ describe('OrganizationsService', () => {
         cb({ calendar: { create: calendarCreate } }),
       ),
     };
+    audit = { record: vi.fn().mockResolvedValue(undefined) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new OrganizationsService(
       organizations as unknown as OrganizationRepository,
       members as unknown as OrgMemberRepository,
       prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
       logger,
     );
   });
@@ -71,6 +75,29 @@ describe('OrganizationsService', () => {
     );
 
   describe('create', () => {
+    it('records the organisation AND the founding membership, in the transaction', async () => {
+      // Creating an organisation also grants its first Org Admin, and that grant is the more
+      // security-relevant of the two facts. Recording only the organisation would make the
+      // arrival of the account that can do anything in it invisible.
+      organizations.create.mockResolvedValue(makeOrg());
+
+      await service.create(principal(), { name: 'Acme' });
+
+      const actions = audit.record.mock.calls.map((call) => (call[0] as { action: string }).action);
+      expect(actions).toEqual(['organization.created', 'member.joined']);
+      for (const call of audit.record.mock.calls) {
+        expect(call[1]).toBeDefined();
+      }
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'organization.created',
+          organizationId: 'org-1',
+          after: { name: 'Acme', slug: 'acme' },
+        }),
+        expect.anything(),
+      );
+    });
+
     it('creates the org + Org Admin membership and derives a slug', async () => {
       organizations.create.mockResolvedValue(makeOrg());
 

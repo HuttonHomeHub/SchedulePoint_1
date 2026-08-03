@@ -4,6 +4,7 @@ import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { OrganizationRole, Permission, Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
   ForbiddenError,
@@ -14,6 +15,8 @@ import { MailService } from '../../common/mail/mail.service';
 import { generateOpaqueToken, hashToken } from '../../common/tokens/token';
 import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import { OrgMemberRepository } from '../organizations/org-member.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 
@@ -50,6 +53,7 @@ export class InvitationsService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly config: AppConfigService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(InvitationsService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -57,6 +61,7 @@ export class InvitationsService {
     principal: Principal,
     orgSlug: string,
     dto: CreateInvitationDto,
+    context?: RequestContext,
   ): Promise<CreatedInvitationResult> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'member:invite', organization.id);
@@ -94,6 +99,21 @@ export class InvitationsService {
       throw error;
     }
 
+    // Before the email, and deliberately not inside a transaction with the insert: `create` above
+    // is a single statement with no surrounding transaction to join, so there is nothing to roll
+    // back. `record` still throws on failure — an invitation that exists with no record of who
+    // issued it is exactly the gap the log is for, and the caller has not yet emailed anyone.
+    await this.audit.record({
+      action: 'invitation.created',
+      outcome: 'SUCCESS',
+      organizationId: organization.id,
+      subjectType: 'INVITATION',
+      subjectId: invitation.id,
+      subjectLabel: dto.email,
+      after: { email: dto.email, role: dto.role, expiresAt },
+      ...auditActor(principal, context),
+    });
+
     const acceptUrl = `${this.config.appUrl}/accept-invite?token=${token}`;
     // Publish AFTER the row is committed (no external I/O inside a transaction).
     await this.mail.sendInvitation({
@@ -130,7 +150,12 @@ export class InvitationsService {
     return { items, meta: { nextCursor, hasMore } };
   }
 
-  async revoke(principal: Principal, orgSlug: string, invitationId: string): Promise<void> {
+  async revoke(
+    principal: Principal,
+    orgSlug: string,
+    invitationId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'invitation:revoke', organization.id);
 
@@ -143,6 +168,17 @@ export class InvitationsService {
     await this.invitations.setStatus(invitationId, {
       status: 'REVOKED',
       updatedBy: principal.userId,
+    });
+    await this.audit.record({
+      action: 'invitation.revoked',
+      outcome: 'SUCCESS',
+      organizationId: organization.id,
+      subjectType: 'INVITATION',
+      subjectId: invitationId,
+      subjectLabel: invitation.email,
+      before: { email: invitation.email, role: invitation.role, status: invitation.status },
+      after: { email: invitation.email, role: invitation.role, status: 'REVOKED' },
+      ...auditActor(principal, context),
     });
     this.logger.info(
       { organizationId: organization.id, invitationId, userId: principal.userId },
@@ -157,7 +193,11 @@ export class InvitationsService {
     return invitation;
   }
 
-  async accept(principal: Principal, token: string): Promise<AcceptedInvitationResult> {
+  async accept(
+    principal: Principal,
+    token: string,
+    context?: RequestContext,
+  ): Promise<AcceptedInvitationResult> {
     const invitation = await this.invitations.findActiveByTokenHash(hashToken(token));
     if (!invitation) throw new NotFoundError('Invitation not found.');
     if (invitation.status !== 'PENDING') throw new GoneError('This invitation is no longer valid.');
@@ -200,6 +240,39 @@ export class InvitationsService {
         await this.invitations.setStatus(
           invitation.id,
           { status: 'ACCEPTED', acceptedByUserId: principal.userId, acceptedAt: new Date() },
+          tx,
+        );
+
+        // TWO rows, in the caller's transaction, because two different questions get asked of
+        // them: "what happened to this invitation" and "how did this person get access". A reader
+        // auditing an organisation's membership should not have to know that a join can only
+        // arrive via an invitation to find it — and once self-serve joins or SSO exist, that
+        // assumption would be quietly wrong for older rows too.
+        const actor = auditActor(principal, context);
+        await this.audit.record(
+          {
+            action: 'invitation.accepted',
+            outcome: 'SUCCESS',
+            organizationId: invitation.organizationId,
+            subjectType: 'INVITATION',
+            subjectId: invitation.id,
+            subjectLabel: invitation.email,
+            before: { email: invitation.email, role: invitation.role, status: 'PENDING' },
+            after: { email: invitation.email, role: invitation.role, status: 'ACCEPTED' },
+            ...actor,
+          },
+          tx,
+        );
+        await this.audit.record(
+          {
+            action: 'member.joined',
+            outcome: 'SUCCESS',
+            organizationId: invitation.organizationId,
+            subjectType: 'ORG_MEMBER',
+            subjectLabel: invitation.email,
+            after: { role: invitation.role },
+            ...actor,
+          },
           tx,
         );
       });

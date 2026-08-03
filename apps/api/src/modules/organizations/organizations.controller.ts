@@ -12,6 +12,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { OrganizationResponseDto } from './dto/organization-response.dto';
@@ -37,8 +38,9 @@ export class OrganizationsController {
   async create(
     @CurrentUser() principal: Principal,
     @Body() dto: CreateOrganizationDto,
+    @RequestContext() context: RequestContext,
   ): Promise<OrganizationResponseDto> {
-    const { organization, role } = await this.service.create(principal, dto);
+    const { organization, role } = await this.service.create(principal, dto, context);
     return OrganizationResponseDto.from(organization, role);
   }
 

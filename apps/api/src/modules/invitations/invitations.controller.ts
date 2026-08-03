@@ -13,6 +13,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { OrganizationResponseDto } from '../organizations/dto/organization-response.dto';
 
 import { InvitationPreviewDto } from './dto/invitation-preview.dto';
@@ -51,8 +52,9 @@ export class InvitationsController {
   async accept(
     @CurrentUser() principal: Principal,
     @Body() dto: InvitationTokenDto,
+    @RequestContext() context: RequestContext,
   ): Promise<OrganizationResponseDto> {
-    const { organization, role } = await this.service.accept(principal, dto.token);
+    const { organization, role } = await this.service.accept(principal, dto.token, context);
     return OrganizationResponseDto.from(organization, role);
   }
 }
