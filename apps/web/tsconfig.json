@@ -36,6 +36,7 @@
     "e2e-wbs",
     "e2e-calendar-shifts",
     "e2e-sub-day",
-    "e2e-assignment-lag"
+    "e2e-assignment-lag",
+    "e2e-float-paths"
   ]
 }

@@ -10,6 +10,46 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-02 — Float paths ship as a panel with one-path emphasis, in both views
+
+**What was decided.** Audit finding **F4** — the engine computes multiple float paths and
+`GET …/schedule/float-paths` exposes them, and nothing in `apps/web/src` referenced the endpoint —
+resolves as a **surface**, not a written-off capability. `VITE_FLOAT_PATHS` is default-on. The spec
+and plan are [`docs/specs/float-paths-surface/`](specs/float-paths-surface/); the product owner's
+answers to its three critical questions are in that spec's §7 (CQ-1 panel + one-path emphasis, CQ-2
+require a selection and offer a suggestion, CQ-3 render on the target's calendar and disclose it).
+
+**Why a panel and not a lens.** The question a planner is asking is compression planning — "if I
+shorten the critical path, what binds next, and by how much?" — and the answer is a **ranked list
+with a number on each row**. A canvas lens can colour bars; it cannot say `+2d 4h`. Emphasis is the
+panel's companion, not its substitute: selecting a row dims everything off that chain.
+
+**In both views, deliberately.** ADR-0059 M6's rule is "shade what only the canvas can do, never
+what both views can". A float path is an **analysis over the persisted schedule**, not a canvas
+gesture — the Gantt can render it as well as the canvas can, so shading it there would have been
+that rule read backwards. The emphasis set is derived **once** by the workspace and handed to both
+(the ADR-0063 `wbs-band-source` rule), pinned by
+`float-paths-view-agnostic.structural.test.ts` rather than left as a convention.
+
+**Consequences worth knowing.** The endpoint runs a full `computeSchedule` per request — it is not a
+persisted read-model like earned value or the histogram — so the hook's `enabled` is the whole cost
+story (it fetches only while the panel is open) and the security gate's per-IP `@Throttle`
+(20 / 60 s) was taken as the server-side backstop. `staleTime` is nonetheless **0**: a stale float
+path is a wrong float path, not an old one, and a recalculate already sweeps `scheduleKeys.all`.
+**The CPM engine is not imported** — no scene field, no paint branch, and a paint-spy test asserts
+the painter is handed `undefined` when no path is selected — so the ADR-0034 parity gate is
+structurally untouched.
+
+**What building it revealed.** The unit defect recorded in the F4 M0 entry below (a flat 1440
+divisor against per-calendar total float), and a **pre-existing** defect this epic did not
+introduce: the Gantt never fed the workspace selection, so every surface deriving from it was blind
+to a bar clicked in the chart. The five specialist gates then found twelve blocking defects in code
+that had already passed a human read — the ADR-0064 §7 shape again — the largest being a missing
+chain member styled unactivatable with `pointer-events-none`, which a keyboard `Enter` walks
+straight past.
+
+---
+
 ### 2026-07-28 — Printing the Gantt: a print document, not a print stylesheet
 
 **What was decided.** `Print` mounts a purpose-built `GanttPrintSurface` into a detached container
@@ -1292,11 +1332,25 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   come out by non-decreasing relative float. `relativeFloat` = the entry activity's total float minus the
   target's; it may be **negative** when a branch is more critical than a floating target (a
   constraint-broken predecessor). Bounded by `maxPaths` + a per-chain depth guard (no blow-up on dense
-  graphs). The read endpoint `GET .../schedule/float-paths?target=&maxPaths=` (schedule:read; relative
-  float in working days; 422 if the plan has no start date; 404 for a target not in the plan) now exposes
+  graphs). The read endpoint `GET .../schedule/float-paths?target=&maxPaths=` (schedule:read; 422 if the
+  plan has no start date; 404 for a target not in the plan) now exposes
   it — the analysis recomputes the schedule live via the shared engine-input builder, so it can never
   drift from a recalculate (ADR-0035 §19); no standalone ADR (a read-only analysis over the existing
   schedule + driving edges).
+- **Float-path relative float is reported in MINUTES (audit F4 M0, 2026-08-02).** This entry used to
+  say "relative float in working days", and that clause was **false in a way that mattered**. The
+  read-model divided the engine's working minutes by a flat 1440 while total float is measured on the
+  **activity's own** calendar (ADR-0037 §4, ADR-0068) — so on an eight-hour calendar one working day
+  of relative float (480 minutes) rounded to **0**, indistinguishable from the driving path, and
+  larger values were understated threefold. It never bit because nothing consumed the field;
+  **building the F4 surface is what would have made it bite**. The response now carries
+  `relativeFloatMinutes` (the engine's figure, unconverted) alongside a retained-and-deprecated
+  `relativeFloat`; readers convert against the calendar they are presenting on, which for the F4
+  panel is the **target activity's** (recorded in `docs/specs/float-paths-surface/feature-spec.md`
+  §7, CQ-3). The envelope also gained `hasMorePaths`, derived by asking the engine for `maxPaths + 1`
+  and slicing — **`engine/float-paths.ts` is unmodified**, pinned by
+  `schedule/float-paths.structural.spec.ts`. This is F8's defect one field along, and F8 had named
+  this exact conversion as unchecked.
 - **TSLD export & print (Stage C1, `VITE_EXPORT_PRINT`, on by default 2026-07-20).** The `export`/`print`
   toolbar placeholders became four **client-side** deliverables — no API/schema/`@repo/types`/CPM-engine
   change, so the recalc parity gate is structurally untouched (spec `docs/specs/export-print/`). Key

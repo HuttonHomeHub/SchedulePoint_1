@@ -103,6 +103,7 @@ export function useTsldToolbarContext({
   openDialog,
   legend,
   revealComments,
+  toggleFloatPaths = () => {},
   planView = DEFAULT_PLAN_VIEW_MODE,
   setPlanView = () => {},
 }: {
@@ -116,6 +117,15 @@ export function useTsldToolbarContext({
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
+  /**
+   * Open the Float paths analysis on the current selection, or close it if it is already showing
+   * (audit F4). Passed IN for the same reason as `revealComments`: the two are right-side docks and
+   * only one can hold the edge, so the mutual exclusion belongs to the workspace that lays them out
+   * — not to the toolbar, which would have to know about a column it does not render.
+   *
+   * Defaults to a no-op, describing a build where the panel has no host.
+   */
+  toggleFloatPaths?: () => void;
   /**
    * Which projection the workspace is showing, and how to switch it (ADR-0059 §3).
    *
@@ -401,6 +411,14 @@ export function useTsldToolbarContext({
       imageHeight: number;
     } | null => {
       const dataDate = plan.plannedStart;
+      // `react-hooks/refs` disabled on this line and on `goToNextConflict` below. Both read the
+      // canvas handle inside a CALLBACK — this one runs when an export command is invoked, that one
+      // on a Next-conflict click — never during render, which is what the rule is protecting. The
+      // React Compiler only began flagging them when this already-large context memo grew by three
+      // more properties (audit F4), so the trigger is its analysis budget rather than a change in
+      // what the code does. Recorded as `docs/TECH_DEBT.md` #85: the fix is to split this memo, not
+      // to move the ref reads. Do not remove the disables without doing that first.
+      // eslint-disable-next-line react-hooks/refs -- read in a command callback, not during render
       const live = canvasControlRef.current?.getViewport();
       if (dataDate === null || !live) return null;
       const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
@@ -650,7 +668,15 @@ export function useTsldToolbarContext({
       setIsolateMode,
       conflictCount: orderedConflictHits.length,
       hasConflicts: orderedConflictHits.length > 0,
+
+      // Float paths (audit F4) — the count the ladder reads, the pressed state, and the toggle.
+      // Inert while `VITE_FLOAT_PATHS` is off: the registry does not register the item at all, so
+      // nothing reads these and `toggleFloatPaths` is never called.
+      activityCount: activities.length,
+      floatPathsOpen: model.floatPaths?.open ?? false,
+      toggleFloatPaths,
       currentConflict,
+      // eslint-disable-next-line react-hooks/refs -- see the note on `buildDiagramImage` above
       goToNextConflict,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
@@ -951,6 +977,9 @@ export function useTsldToolbarContext({
     toggleIsolate,
     setIsolateMode,
     toggleSnapToGrid,
+    // Float paths — re-identify when the dock's pressed state or the plan's activity count changes.
+    model.floatPaths?.open,
+    toggleFloatPaths,
     orderedConflictHits.length,
     currentConflict,
     goToNextConflict,

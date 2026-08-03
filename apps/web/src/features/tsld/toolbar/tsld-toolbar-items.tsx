@@ -37,6 +37,7 @@ import {
   RefreshCw,
   Redo2,
   Route,
+  Split,
   Rows3,
   Search,
   Share2,
@@ -77,6 +78,7 @@ import {
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   EXPORT_PRINT_ENABLED,
+  FLOAT_PATHS_ENABLED,
   GANTT_VIEW_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
@@ -1829,14 +1831,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       ? {
           ...isolateShape,
           isActive: (ctx) => ctx.isolateActive,
-          // Diagram gate BEFORE the selection gate (an empty plan can't be traced at all).
-          isEnabled: (ctx) => ctx.hasDiagram && ctx.selectedActivity != null,
+          // Diagram gate BEFORE the selection gate (an empty plan can't be traced at all), and
+          // `canvasActive` before both: isolate dims the CANVAS by driving `canvasUi.navState`,
+          // which only `TsldPanel` reads — so in the Gantt it was lit and did nothing. That became
+          // reachable the moment the Gantt started feeding the workspace selection (audit F4); it
+          // is the ADR-0059 M6 rule applied where it belongs — shade what only the canvas can do.
+          isEnabled: (ctx) => ctx.canvasActive && ctx.hasDiagram && ctx.selectedActivity != null,
           disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? LENS_NO_DIAGRAM_REASON
-              : ctx.selectedActivity == null
-                ? ISOLATE_NO_SELECTION_REASON
-                : undefined,
+            !ctx.canvasActive
+              ? CANVAS_ONLY_REASON
+              : !ctx.hasDiagram
+                ? LENS_NO_DIAGRAM_REASON
+                : ctx.selectedActivity == null
+                  ? ISOLATE_NO_SELECTION_REASON
+                  : undefined,
           render: (ctx, api) => <IsolateControl ctx={ctx} api={api} />,
         }
       : placeholderItem(isolateShape),
@@ -1856,6 +1864,44 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.goToNextConflict(),
         }
       : placeholderItem(nextConflictShape),
+    // Float paths (audit F4, `VITE_FLOAT_PATHS`) — the ranked driving chains into the selected
+    // activity, in a docked right panel. Row 1 · Look, `find` group at order 4, beside Isolate and
+    // Next-conflict, which is where a planner already looks to trace logic.
+    //
+    // **Live in the Gantt as well as the Diagram.** It is an analysis, not a viewport command —
+    // the ADR-0059 M6 lesson inverted: shade what only the canvas can do, never what both can.
+    //
+    // The ladder reads `activityCount`, deliberately NOT `hasDiagram`. That flag means *computed*
+    // (it requires a non-null `earlyStart`), and this endpoint runs its own `computeSchedule` per
+    // request — so gating on it would shade the item with "Add an activity first" on a plan full of
+    // activities that simply has not been recalculated yet.
+    //
+    // Flag-off the item is **absent**, not a "Coming soon" placeholder: flag-off must be
+    // byte-for-byte today's toolbar, and a stub would add a control to a shipped row.
+    // View-only: never `penGated`.
+    ...(FLOAT_PATHS_ENABLED
+      ? [
+          {
+            id: 'float-paths',
+            group: 'find',
+            row: 'look',
+            tier: 2,
+            order: 4,
+            label: 'Float paths',
+            icon: <Split className="size-4" />,
+            showLabel: 'auto',
+            isActive: (ctx) => ctx.floatPathsOpen,
+            isEnabled: (ctx) => ctx.activityCount > 0 && ctx.selectedActivity != null,
+            disabledReason: (ctx) =>
+              ctx.activityCount === 0
+                ? 'Add an activity first'
+                : ctx.selectedActivity == null
+                  ? ISOLATE_NO_SELECTION_REASON
+                  : undefined,
+            onActivate: (ctx) => ctx.toggleFloatPaths(),
+          } satisfies ToolbarItem<TsldToolbarContext>,
+        ]
+      : []),
     // Next-conflict VISIBLE status chip (U2) — a presentational `role="status"` read-out pinned next to
     // the Next-conflict button while a conflict is being cycled, so the reason is on screen and not only
     // announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which

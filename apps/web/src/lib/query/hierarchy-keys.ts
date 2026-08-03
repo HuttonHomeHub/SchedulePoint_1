@@ -221,6 +221,25 @@ export const scheduleKeys = {
       'resource-histogram',
       ...(granularity ? [granularity] : []),
     ] as const,
+  // The multiple-float-paths analysis (ADR-0035 §19, audit F4). It lives in the **schedule**
+  // namespace for the same reason as its two siblings above and one sharper one: unlike them it is
+  // not a persisted read-model at all — the service runs a full `computeSchedule` per request, so
+  // its answer is a function of the live network. A recalc's `scheduleKeys.all(orgSlug)` sweep is
+  // therefore not an optimisation here but the correctness rule, and it already covers this key by
+  // construction with no new invalidation to remember.
+  //
+  // `target` and `maxPaths` are both in the key: paths are computed INTO one activity, and a
+  // **Show more** that reused a 10-path cache entry for a 25-path request would silently show the
+  // short list back to the planner who just asked for more.
+  floatPaths: (orgSlug: string, planId: string, targetActivityId: string, maxPaths: number) =>
+    [
+      ...scheduleKeys.all(orgSlug),
+      'plan',
+      planId,
+      'float-paths',
+      targetActivityId,
+      maxPaths,
+    ] as const,
 };
 
 export const shareKeys = {

@@ -48,6 +48,13 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
   });
 
   beforeEach(async () => {
+    // Both link tables first, even though this spec creates neither. `activities` is their FK
+    // target, so ANY dependency row left in the shared local database — by a sibling spec, or by a
+    // Playwright journey run against the same `app_test` — makes this `deleteMany` a foreign-key
+    // violation, and every one of this file's tests then fails in `beforeEach` with an error that
+    // names a table the spec never touches. The sibling specs already sweep in this order.
+    await prisma.crossPlanDependency.deleteMany();
+    await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();

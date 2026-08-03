@@ -36,12 +36,18 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   ENTRY_ROUTES_ENABLED,
+  FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities';
+import {
+  FloatPathsPanel,
+  useFloatPathsPanelPrefs,
+  FLOAT_PATHS_PANEL_MIN_WIDTH,
+} from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
@@ -124,6 +130,8 @@ export function ToolbarPlanWorkspace({
     // the canvas, never overlays. Flag-off keeps the original behaviour — scroll the inline notes
     // heading into view + focus it.
     if (ENTRY_ROUTES_ENABLED) {
+      // The other half of the one-dock-at-a-time rule: revealing Comments closes Float paths.
+      model.floatPaths.close();
       setNotesOpen((open) => !open);
       return;
     }
@@ -133,7 +141,47 @@ export function ToolbarPlanWorkspace({
     // `features/plan-lock/lib/use-pen-lock-view.ts`, which omits `behavior` deliberately).
     el?.scrollIntoView({ block: 'start' });
     el?.focus();
-  }, [setNotesOpen]);
+  }, [setNotesOpen, model.floatPaths]);
+  // **The right edge holds one dock at a time** (audit F4). Notes and Float paths are both docked
+  // right columns, and each reserves `CANVAS_MIN_WIDTH` for the diagram only as a best-effort floor
+  // (see `notesEffectiveMax` below) — two of them plus the Project Explorer rail on a 1280 px screen
+  // leaves the picture unreadable, which is the half of the analysis that needs the pixels. So
+  // opening one closes the other, here in the workspace that lays them out rather than in either
+  // feature, which would have to know about a column it does not render.
+  const floatPaths = model.floatPaths;
+  const openFloatPathsWith = floatPaths.openWith;
+  const closeFloatPaths = floatPaths.close;
+  const floatPathsSelectedId = model.selectedActivityId;
+  // Close the dock AND return focus to the toolbar item — the notes dock's `closeNotes` rule,
+  // copied deliberately. The panel's own Close button and its Escape handler both go through this,
+  // not through the raw `close`: unmounting the focused Close button with nothing to catch focus
+  // strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
+  //
+  // Searched from `document`, not `rootRef`: with `VITE_DESIGNED_CHROME` on the toolbar lives in
+  // the chrome band and is no longer a DOM descendant of the workspace root.
+  const closeFloatPathsAndFocus = useCallback(() => {
+    closeFloatPaths();
+    document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]')?.focus();
+  }, [closeFloatPaths]);
+
+  const toggleFloatPaths = useCallback(() => {
+    if (floatPaths.open) {
+      closeFloatPathsAndFocus();
+      return;
+    }
+    // The ladder already refuses the no-selection case, so this is a guard rather than a branch a
+    // planner reaches: a target is required, never inferred (CQ-2).
+    if (floatPathsSelectedId === null) return;
+    setNotesOpen(false);
+    openFloatPathsWith(floatPathsSelectedId);
+  }, [
+    floatPaths.open,
+    closeFloatPathsAndFocus,
+    openFloatPathsWith,
+    floatPathsSelectedId,
+    setNotesOpen,
+  ]);
+
   // The view switch is router-backed, so the workspace (which is inside the router) owns it and
   // passes it down — exactly like `legend` and `revealComments`. Keeping `useNavigate` out of the
   // toolbar-context builder means the six spec files that render that builder standalone need no
@@ -146,6 +194,7 @@ export function ToolbarPlanWorkspace({
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     revealComments,
+    toggleFloatPaths,
     planView,
     setPlanView,
   });
@@ -250,6 +299,26 @@ export function ToolbarPlanWorkspace({
   const onNotesResize = useCallback(
     (next: number) => notesPanel.setSize(Math.min(next, notesEffectiveMax)),
     [notesPanel, notesEffectiveMax],
+  );
+
+  // The Float paths dock (audit F4) — the notes dock's sibling, on the same shared resizable-panel
+  // prefs, with its own storage key and its own clamp. Mutually exclusive with notes; see
+  // `toggleFloatPaths` above for why.
+  const floatPathsPrefs = useFloatPathsPanelPrefs();
+  const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
+  const floatPathsEffectiveMax = Math.min(
+    NOTES_PANEL_MAX_WIDTH,
+    Math.max(FLOAT_PATHS_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
+  );
+  const floatPathsWidth = Math.min(floatPathsPrefs.size, floatPathsEffectiveMax);
+  const floatPathsPointerToSize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
+    [],
+  );
+  const onFloatPathsResize = useCallback(
+    (next: number) => floatPathsPrefs.setSize(Math.min(next, floatPathsEffectiveMax)),
+    [floatPathsPrefs, floatPathsEffectiveMax],
   );
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
@@ -359,6 +428,9 @@ export function ToolbarPlanWorkspace({
       // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
       // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
       overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
+      // Float-path emphasis (audit F4): the ONE derived set, handed to the canvas here and to the
+      // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
+      floatPathIds={floatPaths.emphasisIds}
     />
   );
 
@@ -397,8 +469,26 @@ export function ToolbarPlanWorkspace({
         // baseline is active, and the chart is then byte-for-byte what it was.
         varianceByActivityId={model.varianceByActivityId}
         loading={model.activities.isPending}
-        onSelectActivity={model.setLogicActivity}
-        selectedActivityId={model.logicActivity?.id}
+        // Selection is workspace state, not view state — which this file already claimed above and
+        // did not do. The Gantt fed only `logicActivity`, so the toolbar's selection-aware items
+        // (which read `selectedActivityId`) were answering with a stale CANVAS selection while the
+        // Gantt showed something else, and were shaded forever in a session that started in the
+        // Gantt. Both stores are now written together. Found by the ui-architect review of the
+        // Float paths panel, whose "select a row, press Float paths" journey is unbuildable without
+        // it (audit F4).
+        onSelectActivity={(activity) => {
+          model.onSelectionChange(activity.id);
+          model.setLogicActivity(activity);
+        }}
+        selectedActivityId={model.selectedActivityId ?? model.logicActivity?.id}
+        // Float-path emphasis (audit F4): the SAME derived set the canvas above receives, so the
+        // two views cannot disagree about which activities are on the path. Bring-into-view follows
+        // the workspace selection, which the panel lifts when a chain row is activated —
+        // scroll only, never focus, so the planner stays in the panel they are reading.
+        emphasisIds={floatPaths.emphasisIds}
+        {...(floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+          ? { bringIntoViewActivityId: model.selectedActivityId }
+          : {})}
       />
     ) : (
       canvas
@@ -465,6 +555,42 @@ export function ToolbarPlanWorkspace({
       </div>
     </section>
   );
+
+  // The Float paths dock's content (audit F4). `onActivateActivity` is ONE workspace-level seam,
+  // so the panel never learns which view is mounted: it lifts the selection and each view reveals
+  // it its own way — the canvas pans the selected bar in, the Gantt scrolls its row. Deliberately
+  // not `centerOnDate`, which is null whenever the Gantt is showing and would leave half the work
+  // silently skipped in half the product (the ADR-0059 M6 shape).
+  const floatPathsDockContent = floatPathsDockActive ? (
+    <FloatPathsPanel
+      model={floatPaths.model}
+      selectedPathIndex={floatPaths.selectedPathIndex}
+      isPending={floatPaths.isPending}
+      isError={floatPaths.isError}
+      planNotScheduled={floatPaths.planNotScheduled}
+      targetMissing={floatPaths.targetMissing}
+      canShowMore={floatPaths.canShowMore}
+      suggestedTargetId={floatPaths.suggestedTargetId}
+      suggestedTargetName={
+        floatPaths.suggestedTargetId === null
+          ? null
+          : ((model.activities.data ?? []).find((a) => a.id === floatPaths.suggestedTargetId)
+              ?.name ?? null)
+      }
+      onSelectPath={floatPaths.selectPath}
+      onSetTarget={floatPaths.setTarget}
+      onShowMore={floatPaths.showMore}
+      onRetry={floatPaths.retry}
+      onClose={closeFloatPathsAndFocus}
+      // Offered only to someone who may actually run it — a Viewer gets the explanation without a
+      // button that would refuse them.
+      {...(model.canRecalc ? { onRecalculate: () => ctx.recalculate() } : {})}
+      onActivateActivity={(activityId) => {
+        canvasUi.requestSelectActivity(activityId);
+        model.onSelectionChange(activityId);
+      }}
+    />
+  ) : null;
 
   // Breadcrumb ends at the plan name (the current page) so the whole trail — Clients → client →
   // project → plan — reads on one header line (ADR-0031 two-row amendment). A visually-hidden <h1>
@@ -671,6 +797,28 @@ export function ToolbarPlanWorkspace({
 
             {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the canvas,
                 never overlays; toggled by Comments. Its vertical splitter sets the width. */}
+            {floatPathsDockActive ? (
+              <>
+                <PanelResizer
+                  orientation="vertical"
+                  size={floatPathsWidth}
+                  min={FLOAT_PATHS_PANEL_MIN_WIDTH}
+                  max={floatPathsEffectiveMax}
+                  label="Resize float paths panel"
+                  onResize={onFloatPathsResize}
+                  pointerToSize={floatPathsPointerToSize}
+                  reverseKeys
+                  className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                />
+                <div
+                  style={{ width: floatPathsWidth }}
+                  className="border-border bg-card shrink-0 border-l"
+                >
+                  {floatPathsDockContent}
+                </div>
+              </>
+            ) : null}
+
             {notesDockActive ? (
               <>
                 <PanelResizer
@@ -694,6 +842,13 @@ export function ToolbarPlanWorkspace({
                 </div>
               </>
             ) : null}
+          </div>
+        ) : floatPathsDockActive ? (
+          // Narrow: a right dock doesn't fit — Float paths takes the single pane, exactly as notes
+          // does below. The emphasis it drives is not visible while it holds the pane; that is the
+          // honest consequence of one-pane-at-a-time, and closing the panel returns the diagram.
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {floatPathsDockContent}
           </div>
         ) : notesDockActive ? (
           // Narrow: a right dock doesn't fit — notes takes the single pane (the one-pane-at-a-time

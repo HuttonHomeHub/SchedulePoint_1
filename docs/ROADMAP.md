@@ -182,7 +182,11 @@ discriminators. Each becomes a spec/plan before build:
   on by default): a selectable **Longest-Path** critical definition (vs Total-Float ≤ 0), **Total Float
   as start / finish / smallest**, **multiple float paths** (contiguous driving chains), a
   **make-open-ends-critical** option, and the **zero-free-float** refinement that completes the
-  as-late-as-possible flag. Engine + plan options + web toggles.
+  as-late-as-possible flag. Engine + plan options + web toggles. The float paths themselves had no
+  planner-reachable surface until the engine↔surface audit's finding **F4** shipped the docked
+  **Float paths** panel (`VITE_FLOAT_PATHS` on by default, 2026-08-02) — ranked chains into a chosen
+  activity with the relative float on each row, and one selected path emphasised in both the canvas
+  and the Gantt.
 - **M5-epic — Advanced activity types (ADR-0035 §21, §23–§24).** **Level-of-Effort** (§21) and
   **WBS-summary** rollup (§24) are **delivered & enabled** (`VITE_ADVANCED_ACTIVITY_TYPES` on by default —
   engine, API, conformance, and the flagged web type/parent pickers; ADR-0038 for the WBS parent tree).

@@ -329,6 +329,17 @@ export interface TsldPanelProps {
    * selfOverAllocated`, ADR-0041) with a non-colour-only badge + a parallel listbox mark + a count
    * announcement. Absent/false ⇒ no `flaggedIds` scene field ⇒ byte-for-byte today's canvas + a11y tree. */
   overAllocationHighlight?: boolean;
+  /**
+   * The activities on the **selected float path** (audit F4, behind `VITE_FLOAT_PATHS`) — everything
+   * else recedes, through the same `dimmedIds` seam the filter and isolate lenses use.
+   *
+   * The set is derived ONCE by the plan workspace and handed to both this view and the Gantt, so
+   * the two cannot disagree about which activities are on the path (the ADR-0063 `wbs-band-source`
+   * rule). Only the complement is computed here, from a list this view already holds.
+   *
+   * Absent or empty ⇒ this contributes no member to `dimmedIds` ⇒ byte-for-byte today's paint.
+   */
+  floatPathIds?: ReadonlySet<string> | undefined;
 }
 
 interface PendingCreate {
@@ -392,6 +403,7 @@ export function TsldPanel({
   resourceStripActive = false,
   resourceStrip = null,
   overAllocationHighlight = false,
+  floatPathIds,
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -712,17 +724,34 @@ export function TsldPanel({
       isolateChain,
     );
   }, [isolateChain, activities]);
-  // The scene's dim set is the UNION of the filter dim and the isolate dim (both recede a bar; the two
-  // are independent, dimming composes). Absent when neither is active ⇒ no `dimmedIds` scene field ⇒
-  // byte-for-byte today's paint.
+  // The complement of the selected FLOAT PATH within the plan — the ids that path recedes (audit
+  // F4). The emphasis set itself is derived once by the workspace and handed to both views; only
+  // the complement is per-view arithmetic, over a list this view already holds. Reuses the shipped
+  // `isolateDimmedIds` helper rather than a second "everything except these" loop.
+  const floatPathDimmed = useMemo<Set<string> | undefined>(() => {
+    if (floatPathIds === undefined || floatPathIds.size === 0) return undefined;
+    return isolateDimmedIds(
+      activities.map((a) => a.id),
+      floatPathIds,
+    );
+  }, [floatPathIds, activities]);
+  // The scene's dim set is the UNION of the filter dim, the isolate dim and the float-path dim (each
+  // recedes a bar; they are independent, and dimming composes). Absent when none is active ⇒ no
+  // `dimmedIds` scene field ⇒ byte-for-byte today's paint.
+  //
+  // The single-contributor shortcut is load-bearing, not a micro-optimisation: returning the ONE
+  // live set unchanged keeps its identity stable, so a plan with a filter running does not churn
+  // the memo (and, through it, the paint) on every unrelated render.
   const dimmedIds = useMemo<Set<string> | undefined>(() => {
-    if (!filterDimmedIds && !isolateDimmed) return undefined;
-    if (filterDimmedIds && !isolateDimmed) return filterDimmedIds;
-    if (!filterDimmedIds && isolateDimmed) return isolateDimmed;
-    const union = new Set(filterDimmedIds);
-    for (const id of isolateDimmed!) union.add(id);
+    const contributors = [filterDimmedIds, isolateDimmed, floatPathDimmed].filter(
+      (set): set is Set<string> => set !== undefined,
+    );
+    if (contributors.length === 0) return undefined;
+    if (contributors.length === 1) return contributors[0];
+    const union = new Set(contributors[0]);
+    for (const set of contributors.slice(1)) for (const id of set) union.add(id);
     return union;
-  }, [filterDimmedIds, isolateDimmed]);
+  }, [filterDimmedIds, isolateDimmed, floatPathDimmed]);
   // The Colour-by fill + inside-label ink overrides. Criticality (the default) ⇒ `undefined` so the
   // painter's own criticality fills/inks run (byte-for-byte parity); the other modes precompute per-id
   // maps from the token palette. Re-resolved on a theme switch (`themeVersion`) so the recoloured bars
@@ -1848,16 +1877,16 @@ export function TsldPanel({
                 // selectable/navigable (dim-not-hide) — so NO `aria-disabled`, which would wrongly signal
                 // an inoperable option (a11y review). When a row is dimmed by BOTH, name both causes (a
                 // single-cause suffix would hide the other), rather than letting isolate silently win.
-                const offPath = isolateDimmed?.has(a.id) ?? false;
-                const filteredOut = filterDimmedIds?.has(a.id) ?? false;
-                const marker =
-                  offPath && filteredOut
-                    ? ' (filtered out, off the logic path)'
-                    : offPath
-                      ? ' (off the logic path)'
-                      : filteredOut
-                        ? ' (filtered out)'
-                        : '';
+                //
+                // Built as a REASONS ARRAY rather than nested ternaries. With two causes that was
+                // four branches and readable; a third makes it eight, and one of the eight ends up
+                // wrong with nobody noticing. The order below is the reading order, fixed.
+                const reasons = [
+                  filterDimmedIds?.has(a.id) === true ? 'filtered out' : '',
+                  isolateDimmed?.has(a.id) === true ? 'off the logic path' : '',
+                  floatPathDimmed?.has(a.id) === true ? 'off the float path' : '',
+                ].filter(Boolean);
+                const marker = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
                 // Over-allocation (Stage E M2) is an ADDITIVE highlight, not a dim — so it marks the
                 // option independently of the dim marker above (a bar can be over-allocated AND dimmed),
                 // mirroring the canvas badge that draws over the dim (WCAG 1.4.1 — the flag isn't

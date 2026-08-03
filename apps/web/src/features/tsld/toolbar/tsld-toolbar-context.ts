@@ -278,6 +278,20 @@ export interface TsldToolbarContext {
   conflictCount: number;
   /** True when the plan has ≥ 1 flagged activity (`conflictCount > 0`). */
   hasConflicts: boolean;
+
+  // ── Float paths (audit F4, `VITE_FLOAT_PATHS`) ─────────────────────────────────────────────
+  /**
+   * How many activities the plan holds — the FIRST rung of the Float-paths ladder, and deliberately
+   * not {@link TsldToolbarContext.hasDiagram}. That flag means *computed*, not *populated*: it
+   * requires a non-null `earlyStart`. The float-paths endpoint runs its own `computeSchedule` per
+   * request, so it answers correctly on a plan that has never been recalculated — and gating on
+   * `hasDiagram` would shade the item with "Add an activity first" on a plan full of activities.
+   */
+  activityCount: number;
+  /** Whether the Float paths dock is showing — the item's `aria-pressed`. */
+  floatPathsOpen: boolean;
+  /** Open the analysis on the current selection, or close it if it is already showing. */
+  toggleFloatPaths: () => void;
   /** The current-conflict readout the **visible** Next-conflict status chip renders (U2) — the 1-based
    * position, the total, the name, and every matched reason of the last-visited conflict. `null` until
    * the user starts cycling (no cursor), while isolating, when there are no conflicts, or flag-off — so

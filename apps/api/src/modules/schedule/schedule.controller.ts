@@ -6,9 +6,11 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
@@ -33,6 +35,17 @@ import { ScheduleService } from './schedule.service';
  * persists the computed columns (Planner or Org Admin); it is a synchronous
  * action, not a resource creation, so it returns `200` with the plan summary.
  */
+/**
+ * The float-paths budget: **20 requests / 60 s**, against the global 100/60 s.
+ *
+ * This route is not a persisted read-model — it runs a full `computeSchedule` per call (~100 ms p95
+ * on a 540-activity plan, `scripts/measure-float-paths.mjs`). Sharing the generic read budget would
+ * let one authenticated member spend it on a hundred CPM recomputations a minute. Twenty is well
+ * above what the panel can generate — it fetches once per open, per target, per page size — and far
+ * below what a loop would want. `ttl` is milliseconds, matching the global `ThrottlerModule`.
+ */
+const FLOAT_PATHS_THROTTLE = { default: { ttl: 60_000, limit: 20 } } as const;
+
 @ApiTags('schedule')
 @ApiCookieAuth('schedulepoint.session_token')
 @ApiUnauthorizedResponse({ description: 'No valid session.' })
@@ -105,11 +118,22 @@ export class ScheduleController {
     return PlanScheduleSummaryDto.from(await this.service.summary(principal, orgSlug, planId));
   }
 
+  // A tighter budget than the global 100/60 s, because this route is **disproportionately
+  // expensive for its bucket**: unlike its sibling reads it is not a persisted read-model — the
+  // service runs a full `computeSchedule` per request, measured at ~100 ms p95 on a 540-activity
+  // plan (`apps/api/scripts/measure-float-paths.mjs`). Sharing the generic budget would let one
+  // authenticated member spend it on 100 CPM recomputations in a minute. Raised by the security
+  // gate on the audit-F4 diff; the guest-share surface's `@Throttle` is the precedent.
+  @Throttle(FLOAT_PATHS_THROTTLE)
   @Get('float-paths')
   @ApiOperation({
     summary: 'Ranked contiguous float paths into a target activity (any member, ADR-0035 §19).',
   })
   @ApiOkResponse({ type: PlanFloatPathsDto })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Rate limit exceeded — this route runs a CPM computation and has a tighter budget.',
+  })
   @ApiNotFoundResponse({
     description: 'Plan not found, or the target activity is not in the plan.',
   })

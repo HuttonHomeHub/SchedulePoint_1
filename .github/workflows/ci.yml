@@ -303,6 +303,16 @@ jobs:
       - name: Web end-to-end tests (assignment lag flag on)
         run: pnpm --filter @repo/web test:e2e:assignment-lag
 
+      # The Float paths surface (audit F4) against a real API and a real eight-hour calendar. What a
+      # mocked fetch structurally cannot prove: that a branch carrying ONE working day of float
+      # reads `+1d` and not `0d` — the defect this whole epic descends from, where dividing the
+      # engine's 480 minutes by a flat 1440 renders a real signal as no signal at all; that the
+      # toolbar item is LIVE in the Gantt rather than shaded, which is the seam this epic found
+      # broken and fixed; that the panel survives a view switch; and that the emphasis reaches both
+      # the canvas's parallel listbox and the Gantt's rows in words, not by opacity alone.
+      - name: Web end-to-end tests (float paths flag on)
+        run: pnpm --filter @repo/web test:e2e:float-paths
+
       # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
       # theme, which is how the Corporate theme shipped with six contrast defects past a green
       # axe run. This one boots the shell once per picker option — light, dark, corporate, and

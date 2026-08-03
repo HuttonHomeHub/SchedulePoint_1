@@ -748,3 +748,33 @@ per-assignment cost decomposition alongside the activity rows (CQ-1 "extend the 
 That is the cost of the answer being exact rather than approximated, it is a once-per-baseline
 operation a planner initiates deliberately, and 920 ms is well inside what a captured snapshot is
 expected to take.
+
+---
+
+### #85 — Two `react-hooks/refs` suppressions in the TSLD toolbar-context memo
+
+**Where:** `apps/web/src/features/tsld/toolbar/use-tsld-toolbar-context.tsx` —
+`buildDiagramImage`'s `canvasControlRef.current?.getViewport()` and the `goToNextConflict` entry
+in the returned context object.
+
+**What happened.** Adding three properties to the context `useMemo` for the Float paths item
+(`activityCount`, `floatPathsOpen`, `toggleFloatPaths` — audit F4 M1) made the React Compiler start
+reporting `Cannot access refs during render` on **two pre-existing ref reads that did not change**.
+Neither reads a ref during render: `buildDiagramImage` runs when an export command is invoked, and
+`goToNextConflict` on a Next-conflict click. The trigger is the compiler's analysis of an
+already-large hook, not a change in what the code does — removing any one of the three new
+properties clears both reports, and they return when it goes back.
+
+**What was done.** Two `eslint-disable-next-line react-hooks/refs` comments, each naming the
+callback the read actually happens in and pointing here. Nothing was moved and no behaviour changed.
+
+**What would fix it.** Split `useTsldToolbarContext`'s single ~250-property memo — the export/print
+commands are the obvious seam, and they are also the only part that reads the canvas handle. That is
+a refactor of a file eight suites render directly, so it is worth doing deliberately rather than
+inside an epic about float paths. **Do not remove the disables without doing that first**; they will
+simply come back, and the next person will not know they were considered.
+
+The float-paths surface deliberately does **not** add a third ref reader: its select-and-reveal seam
+lifts the workspace selection and lets each view reveal it, rather than calling `centerOnDate` —
+which is null whenever the Gantt is showing, so half its work would be silently skipped in half the
+product anyway.
