@@ -719,6 +719,64 @@ the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT`
 exists, else today's answer — so every caller is corrected at once rather than per-surface. The
 engine is not involved and the recalc parity gate is untouched.
 
+### 88. An email link scanner reaches the verification URL before the recipient
+
+**Found:** 2026-08-03, in the production log of the first real verification email (Theme B2), sent
+to a corporate Microsoft 365 mailbox.
+
+```
+HEAD /api/auth/verify-email?token=eyJ… 404 "-" "-" "2a01:111:f400:7e8b::100, …"
+GET  /api/auth/verify-email?token=eyJ… 302     (the recipient, seconds later)
+```
+
+Empty user-agent, empty referer, and an IPv6 address in Microsoft's range: Outlook Safe Links
+prefetching the link out of the mailbox. It used `HEAD`, Better Auth does not answer `HEAD` on that
+route, so it received a 404 and consumed nothing. **That was luck, not design.**
+
+**What it costs.** Scanners at other tenants prefetch with `GET`. One that does would follow the
+verification link on the recipient's behalf — marking the address verified before any human saw the
+message, which quietly removes the only thing a verification email proves, and (for a single-use
+token) can leave the real recipient a "link already used" dead end. This is a general hazard of
+emailed action links rather than anything this codebase introduced, and it applies equally to the
+**invitation accept URL**, which grants org membership.
+
+**Why it is not fixed now.** It has not bitten: `AUTH_REQUIRE_EMAIL_VERIFICATION` is still off, and
+the one real send was scanned harmlessly. Fixing it speculatively means designing an interstitial
+before knowing which tenants matter.
+
+**The fix when it is taken:** make the emailed URL land on a **web page with a confirm button**
+that POSTs the token, rather than a bare GET that acts. A scanner will fetch the page and stop,
+because it does not press buttons. That is one route and one small component, and it covers the
+invitation accept path at the same time. Better Auth's own resend endpoint is the recovery path
+until then.
+
+---
+
+### 89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
+
+**Found:** 2026-08-03, reading production request logs during the Theme B2 verification test.
+
+Every request arriving through Cloudflare → Nginx Proxy Manager → web → api carries:
+
+```
+"x-forwarded-proto": "http",  "x-forwarded-scheme": "https",  "cf-visitor": "{\"scheme\":\"https\"}"
+```
+
+Two of the three say HTTPS and the standard one says HTTP — it reflects the proxy's plaintext hop to
+the web container rather than the scheme the browser used. `docs/DEPLOYMENT.md` "Cloudflare & TLS"
+asserts this header arrives as `https`; it does not. Corrected in that document alongside this row.
+
+**What it costs today: nothing, and that is the trap.** Nothing currently derives behaviour from it
+— absolute URLs come from `BETTER_AUTH_URL`, and the `Secure` cookie flag comes from `NODE_ENV`, not
+the header. So the misconfiguration is invisible and will stay invisible until something reasonable
+reads the standard header and builds an `http://` link or drops a cookie, at which point the cause
+is three hops away from the symptom.
+
+**The fix:** set `proxy_set_header X-Forwarded-Proto $scheme;` on the HTTPS host in Nginx Proxy
+Manager (an operator change, not a code change). Optionally belt-and-braces: have the API prefer
+`cf-visitor`/`x-forwarded-scheme` where present. Not worth doing until something actually consumes
+the value.
+
 ---
 
 ## Closed numbers
@@ -751,4 +809,4 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 88.**
+**Next free number: 90.**
