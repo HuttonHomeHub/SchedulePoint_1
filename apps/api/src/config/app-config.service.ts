@@ -4,6 +4,18 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from './env.validation';
 
 /**
+ * An optional value that a deployment surface left empty is **absent**, not present-and-blank.
+ *
+ * This exists twice — here and as `optionalString` in the env schema — and deliberately so. The
+ * schema's rule governs the parsed env; this one governs what `ConfigService.get` returns, which
+ * is not the same thing, because `get` falls through to `process.env` whenever the validated value
+ * is `undefined`. One rule stated in one place would have been true in one of the two.
+ */
+function absentIfBlank(value: string | undefined): string | undefined {
+  return value === undefined || value.trim() === '' ? undefined : value;
+}
+
+/**
  * Typed accessor for validated configuration. Product code depends on this,
  * never on `process.env` directly (see docs/BACKEND_ARCHITECTURE.md).
  */
@@ -78,6 +90,27 @@ export class AppConfigService {
       .split(',')
       .map((ip) => ip.trim())
       .filter(Boolean);
+  }
+
+  /**
+   * SMTP connection URL, or `undefined` for the logging stub. Its **presence is the switch** —
+   * `MailModule` binds the real transport only when this is set, so there is no separate flag to
+   * fall out of step with the credential.
+   *
+   * Normalised through {@link absentIfBlank} rather than returned raw, because `ConfigService.get`
+   * does not stop at the validated env: when the validated value is `undefined` it **falls back to
+   * `process.env`**, which holds the empty string a compose file always defines. The schema's
+   * "empty means absent" rule is therefore true of the parsed env and false of this getter unless
+   * it is restated here. Without it the API boots into `createTransport('')` and dies — which is
+   * exactly how CI caught it.
+   */
+  get mailSmtpUrl(): string | undefined {
+    return absentIfBlank(this.config.get('MAIL_SMTP_URL', { infer: true }));
+  }
+
+  /** The `From:` address. The env schema guarantees it is set whenever {@link mailSmtpUrl} is. */
+  get mailFrom(): string | undefined {
+    return absentIfBlank(this.config.get('MAIL_FROM', { infer: true }));
   }
 
   get rateLimit(): { ttlMs: number; limit: number } {

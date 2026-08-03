@@ -14,6 +14,27 @@ export interface InvitationEmail {
   expiresAt: Date;
 }
 
+/**
+ * The address-ownership proof (Theme B2). Better Auth mints the URL and token; this port only
+ * carries them, so the token's lifetime, single-use and hashing stay the library's business.
+ */
+export interface EmailVerificationEmail {
+  to: string;
+  /** Absolute URL that marks the address verified when followed. */
+  verifyUrl: string;
+}
+
 export abstract class MailService {
   abstract sendInvitation(email: InvitationEmail): Promise<void>;
+
+  /**
+   * Send the address-verification link.
+   *
+   * **Unlike an invitation, this message has no in-app fallback.** An Org Admin can always read an
+   * invitation's accept URL off the screen and pass it on by another route, which is what makes
+   * swallowing a failed invitation send safe. Nobody can do that here — the URL exists only in the
+   * email. The recovery path is Better Auth's own resend endpoint, and that asymmetry is the reason
+   * the two adapters treat failure differently rather than sharing one rule.
+   */
+  abstract sendEmailVerification(email: EmailVerificationEmail): Promise<void>;
 }

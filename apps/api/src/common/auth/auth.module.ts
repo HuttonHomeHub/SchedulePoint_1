@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 
 import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 import { AuthContextService } from './auth-context.service';
 import { AUTH_INSTANCE, createAuth } from './better-auth';
@@ -17,8 +18,8 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
   providers: [
     {
       provide: AUTH_INSTANCE,
-      inject: [PrismaService, AppConfigService],
-      useFactory: (prisma: PrismaService, config: AppConfigService) =>
+      inject: [PrismaService, AppConfigService, MailService],
+      useFactory: (prisma: PrismaService, config: AppConfigService, mail: MailService) =>
         createAuth(prisma, {
           secret: config.betterAuthSecret,
           baseURL: config.betterAuthUrl,
@@ -26,6 +27,9 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           trustedProxies: config.trustedProxyIps,
           isProduction: config.isProduction,
           requireEmailVerification: config.requireEmailVerification,
+          // The auth library reaches mail through the port, never a transport — so which adapter
+          // is bound stays `MailModule`'s decision and this wiring is the same in every environment.
+          sendVerificationEmail: (input) => mail.sendEmailVerification(input),
         }),
     },
     AuthContextService,

@@ -79,6 +79,17 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-insecure-secret-change-me!!}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-false}
+      # Required in production (the API refuses to boot without it) — the header
+      # above says so, but until now the value had no way through: a variable
+      # only reaches the container if it is listed here, not by living in .env.
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # Transactional email. Unset = the logging stub, which is the default.
+      # Setting AUTH_REQUIRE_EMAIL_VERIFICATION=true in production without these
+      # is refused at boot: the verify link would exist only in the API's log.
+      MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      PLAN_EDIT_LOCK_ENFORCED: ${PLAN_EDIT_LOCK_ENFORCED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - '3000:3000'
 

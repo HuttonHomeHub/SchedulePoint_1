@@ -1,6 +1,19 @@
 import { z } from 'zod';
 
 /**
+ * An optional string where **empty means absent**.
+ *
+ * Every deployment surface this app has — Docker Compose, Dockge, Kubernetes — passes a variable
+ * it does not have a value for as an empty string rather than omitting it, because `FOO: ${FOO}`
+ * in a compose file always defines `FOO`. A plain `.min(1).optional()` therefore refuses to boot
+ * on the ordinary case of "I have not configured mail yet", which is the opposite of optional.
+ */
+const optionalString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+
+/**
  * Environment schema — the single source of truth for configuration shape.
  * The app validates the environment at startup and refuses to boot on invalid
  * config (fail fast). See docs/BACKEND_ARCHITECTURE.md (Configuration).
@@ -22,9 +35,13 @@ export const envSchema = z
      * invitation. The accept flow matches the signed-in user's email to the
      * invitee's, but that only proves mailbox ownership when verification is
      * enforced; otherwise an account can be registered for any address without
-     * proof. Off for the alpha because the verification-email loop is not built
-     * yet (ADR-0016, docs/TECH_DEBT.md) — turning it on is the single switch
-     * that closes that gap.
+     * proof (ADR-0016 §5).
+     *
+     * The verification-email loop now exists (Theme B2, `emailVerification` in
+     * `better-auth.ts`), so this is a switch an operator can turn on rather than
+     * one that would strand every new account. It stays `false` by default
+     * because turning it on is a deployment decision that needs a mail transport
+     * — which is why `MAIL_SMTP_URL` is a hard prerequisite in production below.
      */
     AUTH_REQUIRE_EMAIL_VERIFICATION: z
       .enum(['true', 'false'])
@@ -38,6 +55,18 @@ export const envSchema = z
      * cannot ship. Empty in dev (the app is reached directly).
      */
     TRUSTED_PROXY_IPS: z.string().default(''),
+    /**
+     * SMTP connection URL (`smtps://user:pass@host:465`). **Absent = the logging stub**, which is
+     * exactly today's behaviour — so dev, test and CI are unchanged and an operator opts in by
+     * setting one variable, with no flag to flip and no code path to choose.
+     *
+     * SMTP rather than a provider SDK: Postmark, SES, Resend, Fastmail and a self-hosted relay all
+     * speak it, so **which** provider is configuration rather than a dependency, and swapping one
+     * costs an env change instead of an adapter. It also keeps the credential out of the codebase.
+     */
+    MAIL_SMTP_URL: optionalString,
+    /** The `From:` address. Required once SMTP is configured — a transport with no sender cannot send. */
+    MAIL_FROM: optionalString,
     /**
      * When `true`, structural plan writes (activity/dependency create/update/
      * delete/restore, positions batch, schedule recalculate) require the caller
@@ -82,12 +111,42 @@ export const envSchema = z
       });
     }
 
+    // Requiring a verified address with no way to deliver the link is a dead end: without a
+    // transport the only adapter left is the logging stub, so the verify URL exists nowhere but
+    // the server's own log and every new account is unusable with nothing on screen saying why.
+    // The switch and its prerequisite are checked together rather than trusting an operator to
+    // read a doc — the same reason MAIL_FROM is demanded alongside MAIL_SMTP_URL.
+    if (env.AUTH_REQUIRE_EMAIL_VERIFICATION && env.MAIL_SMTP_URL === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AUTH_REQUIRE_EMAIL_VERIFICATION'],
+        message:
+          'AUTH_REQUIRE_EMAIL_VERIFICATION=true requires MAIL_SMTP_URL in production — without a transport the verification link is only written to the server log, so no new account can be used.',
+      });
+    }
+
     // Don't silently trust only localhost as a CORS/CSRF origin in production.
     if (env.CORS_ORIGINS.split(',').some((origin) => origin.includes('localhost'))) {
       ctx.addIssue({
         code: 'custom',
         path: ['CORS_ORIGINS'],
         message: 'Set CORS_ORIGINS to your real web origin(s) in production (not localhost).',
+      });
+    }
+  })
+  /**
+   * Mail is checked in **every** environment, not just production — the rules above guard against
+   * shipping an insecure default, but this one guards against a transport that cannot send at all,
+   * which is equally wrong in staging or on a developer's machine. Fail at boot rather than at the
+   * first invitation.
+   */
+  .superRefine((env, ctx) => {
+    if (env.MAIL_SMTP_URL !== undefined && env.MAIL_FROM === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_FROM'],
+        message:
+          'MAIL_FROM must be set when MAIL_SMTP_URL is — a transport needs a sender address.',
       });
     }
   });

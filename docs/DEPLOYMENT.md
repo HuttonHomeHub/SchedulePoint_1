@@ -113,13 +113,94 @@ Set these on the **api** container (via your secret manager, not the compose
 defaults). With `NODE_ENV=production` the API enforces its startup guards, so
 all three below are mandatory:
 
-| Variable             | Value for `https://schedulepoint.example`                                                                          | Why                                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`           | `production`                                                                                                       | Enables secure (HTTPS-only) auth cookies and the config guards.                                                       |
-| `BETTER_AUTH_SECRET` | a strong random value (`openssl rand -base64 32`)                                                                  | Guard refuses to boot with a dev/insecure secret.                                                                     |
-| `CORS_ORIGINS`       | `https://schedulepoint.example`                                                                                    | This is Better Auth's `trustedOrigins`. Must equal the **browser** origin or sign-up/in returns `403 Invalid origin`. |
-| `BETTER_AUTH_URL`    | `https://schedulepoint.example`                                                                                    | The public base URL the auth handler builds links/callbacks against.                                                  |
-| `TRUSTED_PROXY_IPS`  | the proxy hop(s) in front of the API (e.g. the Docker bridge CIDR such as `172.16.0.0/12`, or the web/NPM host IP) | Lets the API trust `X-Forwarded-For`/`-Proto` for the real client IP; guard refuses an empty value in production.     |
+| Variable                          | Value for `https://schedulepoint.example`                                                                          | Why                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                        | `production`                                                                                                       | Enables secure (HTTPS-only) auth cookies and the config guards.                                                                   |
+| `BETTER_AUTH_SECRET`              | a strong random value (`openssl rand -base64 32`)                                                                  | Guard refuses to boot with a dev/insecure secret.                                                                                 |
+| `CORS_ORIGINS`                    | `https://schedulepoint.example`                                                                                    | This is Better Auth's `trustedOrigins`. Must equal the **browser** origin or sign-up/in returns `403 Invalid origin`.             |
+| `BETTER_AUTH_URL`                 | `https://schedulepoint.example`                                                                                    | The public base URL the auth handler builds links/callbacks against.                                                              |
+| `TRUSTED_PROXY_IPS`               | the proxy hop(s) in front of the API (e.g. the Docker bridge CIDR such as `172.16.0.0/12`, or the web/NPM host IP) | Lets the API trust `X-Forwarded-For`/`-Proto` for the real client IP; guard refuses an empty value in production.                 |
+| `MAIL_SMTP_URL`                   | `smtps://user:password@smtp.provider.example:465` (**optional**)                                                   | Turns on real invitation and verification email. **Absent = the logging stub**, which is what shipped before — so this is opt-in. |
+| `MAIL_FROM`                       | `SchedulePoint <no-reply@schedulepoint.example>` (required **with** `MAIL_SMTP_URL`)                               | The sender address. The config guard refuses to boot if the SMTP URL is set without it.                                           |
+| `AUTH_REQUIRE_EMAIL_VERIFICATION` | `true` once mail is live (**optional**, defaults `false`)                                                          | Makes the invitation-accept email match a real ownership proof. Requires `MAIL_SMTP_URL` in production — see below.               |
+
+### Transactional email
+
+Invitation and email-verification messages are sent over **SMTP**, so the provider is
+configuration rather than code — Postmark, SES, Resend, Fastmail and a self-hosted relay all
+speak it, and moving between them costs an env change rather than a new adapter.
+
+Three properties worth knowing before you turn it on:
+
+- **The credential's presence is the switch.** There is no separate feature flag. Set
+  `MAIL_SMTP_URL` and mail is live; leave it unset and the logging stub stays. A flag would
+  be a second thing to keep in step with the credential, and the usual failures are a flag
+  on with nothing behind it, or a transport configured and inert because nobody flipped it.
+- **A mail outage cannot fail an invitation.** A send error is logged and swallowed, because
+  the accept URL is also returned in the create response and shown in the admin UI — so an
+  Org Admin can always hand it over another way. The email is a convenience over an existing
+  path, never the only route through.
+- **A verification failure DOES fail the sign-up**, deliberately — the opposite rule. The
+  verify URL exists only in that email; nobody can read it off a screen. Swallowing the error
+  would hand someone an account they cannot use, with nothing saying why, which is worse than
+  a sign-up they can retry. (Better Auth's resend endpoint is the recovery path.)
+
+#### What the application actually sends
+
+Two messages, and no others: the **organisation invitation** and the **email-verification
+link**. There is no password-reset flow (nothing in the web UI, no `sendResetPassword`
+configured), no digest and no notification email — so configuring mail does not silently
+open a channel you have not read about here. If a user forgets their password today the
+only route back is an operator resetting it in the database.
+
+#### Worked example: Resend
+
+Any SMTP provider works; this is the one the project's own deployment uses, recorded because
+two of its details cost an hour the first time.
+
+1. **Verify a sending domain** in Resend and add the DNS records it gives you. Until a domain
+   is verified you may only send **from** `onboarding@resend.dev` and **to** the address on
+   your Resend account — enough to test a sign-up against your own inbox, not enough to invite
+   a client.
+2. **The DNS names are relative.** At Cloudflare (and most providers) enter `resend._domainkey`,
+   `send` and `_dmarc` exactly as given. Pasting the fully-qualified
+   `resend._domainkey.yourdomain.com` creates `…yourdomain.com.yourdomain.com`, which reads as
+   "not found" while everything looks correct on screen. This is the most common cause of a
+   domain that will not verify.
+3. **The `MX` record on `send` does not affect mail you receive.** It is a subdomain, so your
+   root `MX` is untouched; it only gives SES a return path for bounces. Likewise the SPF `TXT`
+   is scoped to `send` and will not collide with an SPF record at your root for another
+   provider.
+4. **Then configure the two variables.** The username is the literal string `resend`; the
+   password is the API key. Give the key **sending** permission — a read-only key fails at
+   send time rather than at boot, so the symptom is a failed sign-up and nothing at startup.
+
+```bash
+MAIL_SMTP_URL=smtps://resend:re_YourApiKeyHere@smtp.resend.com:465
+MAIL_FROM=SchedulePoint <no-reply@yourdomain.com>
+```
+
+`smtps://` selects implicit TLS on 465. The sender address belongs to the **verified root
+domain**, never the `send.` subdomain — DKIM signs for the root, so a root `From:` is what
+aligns for DMARC. `send.` is plumbing and is never a sender.
+
+Resend's keys are alphanumeric plus underscores, so no URL-encoding is needed. A hand-made
+password containing `@ : / #` **must** be percent-encoded, or the URL truncates silently and
+the failure presents as a wrong password.
+
+#### Turning verification on
+
+`AUTH_REQUIRE_EMAIL_VERIFICATION=true` is what makes invitation acceptance a real proof of
+mailbox ownership rather than an email-address match (ADR-0016 §5). It is a separate decision
+from configuring mail, and it needs mail first: with no transport the only adapter left is the
+logging stub, so the verify link is written to the API's log and nowhere else, and every new
+account is unusable. **In production the API refuses to boot** on that combination rather than
+letting you find out from a user who cannot sign in. So the order is: set `MAIL_SMTP_URL` +
+`MAIL_FROM`, confirm a real message arrives, then flip the switch.
+
+Put the credential in your secret store, not in `docker-compose.yml`. Deliverability (SPF,
+DKIM, DMARC on the sending domain) is a provider-side task this application does not do for
+you; without it, invitations to external clients will land in spam.
 
 ### Cloudflare & TLS
 
