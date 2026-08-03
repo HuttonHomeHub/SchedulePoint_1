@@ -446,6 +446,38 @@ would not exercise the code being budgeted.
    | -------------- | ------------ | --------------- | -------------- | ------------ |
    | 0 activities   | 0.5 ms       | 0.5 ms          | 0 / 600        | 16.8 ms      |
    | 144 activities | 1.3 ms       | 1.3 ms          | 0 / 600        | 16.8 ms      |
+   | **2,016, Fit** | **8.9 ms**   | **8.9 ms**      | **54 / 527**   | **33.4 ms**  |
+
+   The 2,016 plan is the generated programme
+   (`packages/interchange/scripts/generate-scale-xer.mjs`) imported through the product's own
+   importer. GPU: `ANGLE (Intel, Intel(R) Arc(TM) Pro Graphics, D3D11)` — the **integrated**
+   adapter, which is what the browser chose on a machine that also has a discrete one. That is what
+   a planner gets, so it is the number that counts.
+
+   **The 2,016 row is the finding, and it is not the one the budget was shaped to catch.** The
+   painter costs **8.9 ms p95 — comfortably inside a 16.7 ms frame** — and **10.2% of frames are
+   still dropped**, with the interval p95 at 33.4 ms and p99 at 50.0 ms. Those are 2× and 3× the
+   refresh period almost exactly: whole missed vsyncs, not a smear.
+   So a budget expressed as _paint duration_ would have scored this run as fine at anything above
+   9 ms, and a planner panning this plan sees judder. That is step 1's suspicion — "frame pacing
+   under rAF, not one function's wall-clock" — confirmed on real hardware rather than argued.
+   Against ADR-0026 §16's ≤ 4 ms the painter is 2.2× over; but the 4 ms is the wrong **quantity**,
+   not merely the wrong number, which is a stronger conclusion than this row expected to reach.
+
+   **Where the missing time goes is not yet measured, and must not be guessed.** The script times
+   rAF callbacks only, so everything between "JS finished" and "frame presented" — style, layout,
+   canvas rasterisation, GPU upload, compositing, and any main-thread work outside rAF — is
+   invisible to it. ~8 ms per frame is unaccounted for. `long tasks > 50 ms` was **0**, which rules
+   out a blocking main-thread stall as the cause. The candidate that fits the shape is full-canvas
+   raster/upload each frame on an integrated GPU, and ADR-0026's own first reserved escalation is
+   **dirty-region repainting** — but that is a hypothesis with a mechanism, not a measurement. A
+   DevTools Performance recording of the same pan would attribute it, and should be taken before
+   any work is scheduled against it.
+
+   Two caveats on this row. It is at **Fit** (whole-plan) zoom — the dearest case, and per the
+   container harness the working zoom can be less than half the cost, so a **Week-zoom run is still
+   owed** and may well show the surface a planner actually uses is smooth. And **DPR 1**: at 150%
+   scaling the backing store is 2.25× larger, so this is the cheap end of this machine.
 
    **The first row is why the script now refuses to run.** It was a real run on a real machine and
    it reported 0.5 ms — comfortably inside the 4 ms budget — for an **empty plan**. Nothing was
@@ -453,19 +485,25 @@ would not exercise the code being budgeted.
    nose-to-tail failure for the third time, so the refusal is a hard stop rather than a warning,
    and a plan under 200 activities now warns that it cannot speak to a budget stated at 2,000.
 
-   The second row is a genuine measurement and says something useful: at the size a planner
-   actually works at, on this hardware, **the canvas is free** — 1.3 ms of a 16.7 ms frame, not one
-   frame dropped in six hundred. It does **not** confirm or refute ADR-0026 §16, because 144 is 7%
-   of the 2,000 the budget names. What is still needed is either a plan an order of magnitude
-   bigger on this machine, or the finding that **no such plan exists**, which would answer step 2's
-   "what is representative?" by saying 2,000 was never a real number.
-   Note also **DPR 1** — Windows at 100% scaling. A 150%-scaled or HiDPI display multiplies the
-   backing store by 2.25×, so this reading is the cheap end of the same machine.
+   The second row is the operator's largest **real** plan, and it says the canvas is free at the
+   size actually in use today: 1.3 ms of a 16.7 ms frame, not one frame dropped in six hundred.
+   Read with the third row it also answers step 2 more usefully than either alone — **the cost is
+   in the plan, not the machine.** 144 activities is free and 2,016 drops a tenth of its frames on
+   the same laptop, in the same browser, at the same zoom, minutes apart. Since the stated
+   direction is importing real client programmes (2026-08-03), the 2,016 row — not the 144 — is the
+   one that describes where this product is going.
 
-4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
-   answer is "smooth at 2,000, and 16 ms is fine because it is one frame at 60 Hz", the budget was
-   simply wrong and should say so. If it is not smooth, ADR-0026's own reserved escalations —
-   dirty-region repainting, then WebGL — are the route, and they now have a measurement to aim at.
+4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. The 2,016 run
+   has largely settled what the number should be **about**: not a paint duration, but **dropped
+   frames while panning** — the only quantity that both matches what a planner perceives and would
+   have failed this run, which a 4 ms or a 16 ms paint budget would not. A first proposal, to be
+   written up once the Week-zoom run lands: **≤ 1% dropped frames at the working zoom** as the
+   binding target, with whole-plan Fit held to a looser figure because it is a transient framing
+   view rather than where work happens. The old 4 ms is then recorded as having measured the wrong
+   quantity, which is the honest version of "it was never met".
+   If the Week zoom is also dropping frames, ADR-0026's reserved escalations — dirty-region
+   repainting first, WebGL second — become live work rather than a note, and step 3's attribution
+   recording tells us which.
 
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
