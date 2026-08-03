@@ -641,6 +641,43 @@ the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT`
 exists, else today's answer — so every caller is corrected at once rather than per-surface. The
 engine is not involved and the recalc parity gate is untouched.
 
+### 87. An import rejects any file with two activities of the same name, opaquely
+
+**Found:** 2026-08-03, by the product owner importing a generated 2,000-activity `.xer`. **Not a
+regression** — this has been true since the importer shipped.
+
+`uq_activities_plan_name` makes an activity's **name** unique per plan. The interchange
+validate/repair step (`packages/interchange/src/validate.ts`) de-duplicates activity **codes** —
+suffixing `CODE`, `CODE-2`, `CODE-3` and reporting each as a repair — and says nothing whatever
+about names. So a file with repeated names passes the whole pure pipeline clean, reports **zero**
+repairs, and then dies on the unique index inside the commit transaction, rolling the entire import
+back.
+
+**This is not an exotic input; it is the normal one.** P6 programmes repeat activity names
+constantly — "Excavate", "Pour slab", "Install ductwork" once per zone, per level, per building —
+because the _code_ is what P6 makes unique, not the name. The file that surfaced this had 1,911
+duplicate names and 0 duplicate codes, which is exactly the shape a real export has. Any planner
+importing a real programme with repeated names loses the whole import.
+
+**And the message names the wrong thing.** The failure surfaces through the generic Prisma `P2002`
+branch in `all-exceptions.filter.ts`, which says _"A resource with these details already exists."_
+There, "resource" means a REST resource. The reader sees the word next to a scheduling product that
+has a **resource library**, opens the resource panel, finds it empty, and has no route to the real
+cause. That is how this was reported.
+
+**The fix** mirrors the code path exactly: a `dedupeNames` beside `dedupeCodes` in `validate.ts`,
+suffixing later collisions and reporting each as a repair, so the interchange report tells the
+planner what was renamed. It is the same shape as the existing repair and the same shape ADR-0053 §5
+already uses for a colliding calendar name — **suffixed + reported, never reused**. Worth doing at
+the same time: give the P2002 branch a message that does not borrow a domain noun, since the same
+trap is set for every other unique constraint in the system.
+
+**Why no gate caught it:** this is the ADR-0066 finding again, one module along. The pure pipeline is
+green because the pure pipeline does not know about the database's unique indexes, and the API e2e
+fixtures all use distinct names. Only an import of a realistically-shaped file exercises it — which
+is the argument ADR-0066 makes for the seed catalogue, and the reason the generator that found this
+now asserts name uniqueness itself.
+
 ---
 
 ## Closed numbers
@@ -672,4 +709,4 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 87.**
+**Next free number: 88.**

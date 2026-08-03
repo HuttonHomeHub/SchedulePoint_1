@@ -144,7 +144,10 @@ for (let p = 0; p < PHASES; p += 1) {
       push({
         key,
         code: key,
-        name: `${TASK_NAMES[t % TASK_NAMES.length]} ${String(t + 1)}`,
+        // The band suffix is not decoration. `uq_activities_plan_name` makes an activity's NAME
+        // unique per plan, and the first version of this generator reused the 22 trade names across
+        // all 40 bands — 1,911 duplicates, which the import rejected. See the assertion below.
+        name: `${TASK_NAMES[t % TASK_NAMES.length]} ${String(t + 1)} — ${bandKey}`,
         type: 'TASK',
         durationMinutes: TASK_DAYS * MINUTES_PER_DAY,
         parentKey: bandKey,
@@ -237,6 +240,32 @@ function longestPathWorkingDays() {
   // A node left unsettled means a cycle, which the cross-band rule is supposed to make impossible.
   if (settled !== activities.length) return Number.POSITIVE_INFINITY;
   return Math.max(...finish.values());
+}
+
+/**
+ * Activity **names** must be unique within a plan, not just codes (`uq_activities_plan_name`).
+ *
+ * This is asserted here because the pure import pipeline does not check it: `validate` de-duplicates
+ * codes and says nothing about names, so a file with 1,911 duplicate names parsed clean, reported
+ * zero repairs, and then failed at the database with "A resource with these details already exists"
+ * — a message about REST resources that reads as a message about the resource library. The first
+ * version of this generator shipped exactly that file.
+ */
+for (const field of ['name', 'code']) {
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const a of activities) {
+    if (seen.has(a[field])) duplicates.add(a[field]);
+    seen.add(a[field]);
+  }
+  if (duplicates.size > 0) {
+    const sample = [...duplicates].slice(0, 3).join(', ');
+    console.error(
+      `${String(duplicates.size)} duplicate activity ${field}s (e.g. ${sample}). ` +
+        `\`uq_activities_plan_name\`/\`uq_activities_plan_code\` would reject this import.`,
+    );
+    process.exit(1);
+  }
 }
 
 const SPAN_CEILING_WORKING_DAYS = 3 * 260; // three years of five-day weeks
