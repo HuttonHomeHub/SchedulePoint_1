@@ -156,7 +156,15 @@ export type OrgPermission =
   // all: a guest holds a revocable `PlanShare` grant, not a membership (the parallel
   // `GuestPrincipal` + `ShareTokenGuard`, ADR-0051 §3). Authoritative org-scope check is on the
   // target plan (anti-IDOR) in the share service.
-  | 'plan:share';
+  | 'plan:share'
+  // Read the organisation's audit log (ADR-0072, TECH_DEBT #14). **Org Admin ONLY**, and
+  // deliberately NOT folded into `HIERARCHY_READ` or `ADMIN`: the log carries other members'
+  // actions and their IP addresses, so it is a narrower grant than "every member" for the same
+  // reason `cost:read` and `plan:share` are — the surface exposes something a colleague would
+  // not expect a peer to read. Widening it later is then a deliberate one-line move rather than
+  // an accident of bundle membership. A member's own history is NOT gated by this: it is scoped
+  // by identity at `GET /me/audit-events` with no permission code at all (ADR-0051's pattern).
+  | 'audit:read';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -268,6 +276,16 @@ const INTERCHANGE_EXPORT: readonly OrgPermission[] = ['interchange:export'];
  */
 const SHARE_MANAGE: readonly OrgPermission[] = ['plan:share'];
 
+/**
+ * Read the organisation's audit log (ADR-0072) — **Org Admin ONLY**.
+ *
+ * Its own bundle rather than a member of `ADMIN`, deliberately. `ADMIN` is "member and invitation
+ * administration"; this is "read what everyone in the organisation did, including their IP
+ * addresses". Keeping it separate means the day someone argues a Planner should see the log, the
+ * change is one line here and the blast radius is visible in the diff.
+ */
+const AUDIT_READ: readonly OrgPermission[] = ['audit:read'];
+
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
 
@@ -318,6 +336,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...COST_READ,
     ...INTERCHANGE,
     ...SHARE_MANAGE,
+    ...AUDIT_READ,
   ],
 };
 

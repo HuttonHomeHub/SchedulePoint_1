@@ -156,6 +156,21 @@ describe('permissionsForRole — CPM schedule (read vs calculate)', () => {
     }
   });
 
+  it('grants audit:read to Org Admin ONLY — not Planner (ADR-0072)', () => {
+    // Narrower than every other read in this file, deliberately. The audit log carries other
+    // members' actions and their IP addresses, so a Planner holding it would let a colleague
+    // read a peer's activity — the reason it is its own bundle rather than part of ADMIN or
+    // HIERARCHY_READ. A member's OWN history is reachable without this permission at all.
+    for (const role of [
+      OrganizationRole.VIEWER,
+      OrganizationRole.CONTRIBUTOR,
+      OrganizationRole.PLANNER,
+    ]) {
+      expect(permissionsForRole(role)).not.toContain('audit:read');
+    }
+    expect(permissionsForRole(OrganizationRole.ORG_ADMIN)).toContain('audit:read');
+  });
+
   it('grants plan:share (manage External-Guest share links) to Planner + Org Admin only (ADR-0051)', () => {
     // Sharing a plan OUTSIDE the org is a governance act, deliberately above a reporter/reader.
     for (const role of [OrganizationRole.VIEWER, OrganizationRole.CONTRIBUTOR]) {
