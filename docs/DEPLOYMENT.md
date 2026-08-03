@@ -145,6 +145,49 @@ Three properties worth knowing before you turn it on:
   would hand someone an account they cannot use, with nothing saying why, which is worse than
   a sign-up they can retry. (Better Auth's resend endpoint is the recovery path.)
 
+#### What the application actually sends
+
+Two messages, and no others: the **organisation invitation** and the **email-verification
+link**. There is no password-reset flow (nothing in the web UI, no `sendResetPassword`
+configured), no digest and no notification email — so configuring mail does not silently
+open a channel you have not read about here. If a user forgets their password today the
+only route back is an operator resetting it in the database.
+
+#### Worked example: Resend
+
+Any SMTP provider works; this is the one the project's own deployment uses, recorded because
+two of its details cost an hour the first time.
+
+1. **Verify a sending domain** in Resend and add the DNS records it gives you. Until a domain
+   is verified you may only send **from** `onboarding@resend.dev` and **to** the address on
+   your Resend account — enough to test a sign-up against your own inbox, not enough to invite
+   a client.
+2. **The DNS names are relative.** At Cloudflare (and most providers) enter `resend._domainkey`,
+   `send` and `_dmarc` exactly as given. Pasting the fully-qualified
+   `resend._domainkey.yourdomain.com` creates `…yourdomain.com.yourdomain.com`, which reads as
+   "not found" while everything looks correct on screen. This is the most common cause of a
+   domain that will not verify.
+3. **The `MX` record on `send` does not affect mail you receive.** It is a subdomain, so your
+   root `MX` is untouched; it only gives SES a return path for bounces. Likewise the SPF `TXT`
+   is scoped to `send` and will not collide with an SPF record at your root for another
+   provider.
+4. **Then configure the two variables.** The username is the literal string `resend`; the
+   password is the API key. Give the key **sending** permission — a read-only key fails at
+   send time rather than at boot, so the symptom is a failed sign-up and nothing at startup.
+
+```bash
+MAIL_SMTP_URL=smtps://resend:re_YourApiKeyHere@smtp.resend.com:465
+MAIL_FROM=SchedulePoint <no-reply@yourdomain.com>
+```
+
+`smtps://` selects implicit TLS on 465. The sender address belongs to the **verified root
+domain**, never the `send.` subdomain — DKIM signs for the root, so a root `From:` is what
+aligns for DMARC. `send.` is plumbing and is never a sender.
+
+Resend's keys are alphanumeric plus underscores, so no URL-encoding is needed. A hand-made
+password containing `@ : / #` **must** be percent-encoded, or the URL truncates silently and
+the failure presents as a wrong password.
+
 #### Turning verification on
 
 `AUTH_REQUIRE_EMAIL_VERIFICATION=true` is what makes invitation acceptance a real proof of
