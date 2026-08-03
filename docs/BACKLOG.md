@@ -72,9 +72,18 @@ decision is made; only the work is outstanding.
 
 ## Engineering / delivery
 
-- `M` **Decide and document the hosting platform** (see
-  [TECH_DEBT.md](TECH_DEBT.md)). The container/registry foundation is
-  deliberately platform-neutral; the decision is still owed.
+- `M` **Re-decide the hosting platform, now that its own trigger has fired.**
+  This entry used to say the decision "is still owed", which
+  [TECH_DEBT.md](TECH_DEBT.md) #5 had already contradicted: the Docker Compose
+  stack with the ADR-0047 Watchtower profile **is** the deployment model, and has
+  been since 2026-08-01. Two documents disagreeing about whether a decision
+  exists is worse than either answer.
+  What reopens it is the condition #5 itself names — **a second operator running
+  their own instance**, or a tenant needing an availability guarantee one host
+  cannot make. Both are now in prospect (external clients, 2026-08-03), so this
+  is a live item again rather than a standing regret. The foundation stays
+  platform-neutral (ADR-0018 self-migrating image, ADR-0027 per-package tags,
+  GHCR), so this is a decision and an ADR, not a rewrite.
 - `S` **PR-title lint in CI** — commitlint runs as a git hook, so a squash-merge
   title is only enforced by convention. Belt-and-braces.
 - `S` **Branch-protection & release-bot permissions** documented as code rather

@@ -15,6 +15,11 @@ The commit message and `DECISIONS.md` are the history; this file is the backlog.
 Where only part of an item is done, rewrite the row to be about **what is left**,
 and rename it to match, rather than appending a "(a) RESOLVED" prefix.
 
+**When you delete a row, add its number to [Closed numbers](#closed-numbers) at
+the foot.** One line. That ledger is not ceremony: ADRs cite these numbers and are
+never rewritten, so a deleted row leaves dangling references — and a freed number
+looks available, which is how two different items both came to be numbered 83.
+
 **Reconcile periodically.** A row is a claim about the code, and claims rot: the
 2026-07-27 pass (below) found one row asserting the app had no domain code when
 it had nineteen modules, one understating a duplication by 5×, and one whose
@@ -56,8 +61,6 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 28 | **TSLD canvas ring/stroke colour treatment** | From the D5 link-legality UX + a11y reviews. **(a)** The **legal** drop-target ring during a link-draw is visually identical to the ordinary **selection** ring (`paint.ts` — both `palette.selection`, solid, 2px), so two rings with different meanings can appear in the same style at once (predates D5). **(b)** The **illegal** ring reuses `palette.critical` (`--color-destructive`), the same token as the CPM critical-path **bar fill** (`paint.ts`), so an illegal drop hovered over a critical-path activity draws red-on-red — weaker contrast exactly where the signal matters, and overloads one colour for two meanings. **(c)** `--color-destructive` is documented (`globals.css`) as tuned for button surfaces; its use as a **state-border/stroke** on the canvas (the critical-bar outline too) wants a contrast check vs `--color-destructive-text` in both themes. | Cosmetic/robustness; the illegal ring is still distinguishable by its dash (colour + pattern, WCAG 1.4.1 holds), so not an AA failure. | Give the legal drop-target ring a distinct treatment from selection; pick a canvas "danger stroke" token distinct from the critical-bar fill; verify destructive-token stroke contrast in both themes when the canvas palette is next revised. |
 
-| ~~29~~ | **RESOLVED 2026-07-30 — auto-deploy is enabled on the operator's host** | The mechanism landed 2026-07-19 (ADR-0047): `docker-compose.release.yml` carries a Watchtower service behind an `autodeploy` compose profile that polls GHCR and recreates only the label-enabled `web`/`api` containers on a moved `:latest`, with the API self-migrating on recreate (ADR-0018). It **ships** off by default — an operator opts in per host — and this row recorded that shipped default as though it were the state of the world, asserting for eleven days that no host had it enabled. **It was wrong.** The product owner runs the Compose stack with the profile on: each release is pulled and recreated automatically, and **every release is looked at by a person**. The original failure mode (production sat on `web:0.12.0` for several releases because nothing pulled) is _fixed_, not merely fixable. | None — the "shipped but not live" gap is closed for the one host that exists. The residual is #5: where this runs long-term is still undecided, and the answer may change how deployment is triggered. | No action. Kept as a **worked example of the ADR-0058 rule**: this row described `docker-compose.release.yml`'s default accurately and then stated a fact about the world it had never checked, and every reader downstream — including AI assistants planning what to build next — reasoned from "nobody has ever run this" for as long as it stood. Verify the claim; do not trust the document. |
-
 | 30 | **Canvas-first workspace fast-follows — what's left (ADR-0030 M1–M5 reviews)** | Of the original eight, four are done — (b) `useMenuTrigger` extracted, (d) the hidden-pane rAF pause (now regression-tested, see the 2026-07-27 entry in DECISIONS.md), (h) the duplicate "Activities" landmark renamed — and (a) was deliberately left as a `matchMedia` transition side-effect in `app-shell.tsx` rather than migrated onto `useMediaQuery`. Remaining: **(c)** the mobile Diagram/Activities `WorkspaceViewToggle` and the pen banner's segmented controls are both hand-rolled roving-`tabindex` single-selects — extract a shared `Tabs`/`SegmentedControl` primitive; **(e)** the panel-height clamp recomputes against `bodyHeight` on every workspace resize (`plan-workspace.tsx`) — an O(n) re-clamp, fine at current scale; **(f)** `usePlanWorkspaceModel` is covered only through the two route layouts, never directly; **(g)** the rail-prefs localStorage key changed shape (`width`→`size`) when it moved onto the shared primitive, dropping any persisted rail width once — accepted pre-1.0 per ADR-0030. | Minor; all current states meet WCAG 2.2 AA and sit within the perf budget. | Extract the `Tabs`/`SegmentedControl` primitive when the next consumer lands (it would be the third); add a direct `usePlanWorkspaceModel` test; revisit the resize re-clamp only if it profiles hot. (g) needs no action. |
 
 | 31 | **`VITE_CANVAS_TOOLBAR` ships dark during build + M5 fast-follows (ADR-0031)** — _(a) `SelectionActionsBar` mounted + (b) plan-chrome dialogs deduped into a shared `PlanChromeDialogs` 2026-07-13_ | The canvas-maximal chrome reclaim + future-proof Toolbar architecture (ADR-0031, spec `docs/specs/canvas-toolbar-architecture.md`) is built behind `VITE_CANVAS_TOOLBAR` (default-off, `apps/web/src/config/env.ts`), layered on ADR-0030's `VITE_CANVAS_WORKSPACE`. M0–M5 have landed (flag/ADR, `<Toolbar>` primitive, TSLD registry, pen-gating + floating selection bar, the toolbar-hosted layout, the flag-on Playwright journey, and the M4/M5 review remediation — recalc-command regression, context/UI-state memoisation, toolbar-control CVA, the below-`md` pane switch, and the three a11y blockers); only the **default-on flip awaits product sign-off**. **Deferred fast-follows:** (a) **resolved 2026-07-13** — the floating `SelectionActionsBar` (M3) is now **mounted**: the canvas writes the selected activity's viewport anchor to a `selectionAnchorRef` each frame (ADR-0026 D3, only on moved frames), the bar reads it on its own rAF (transform-positioned, change-detected) to follow pan/zoom, clamps itself inside the viewport edges, hands focus back to the listbox when it hides/unmounts while focused, and Edit/Delete open host-owned dialogs via a shared `ActivityCrudDialogs` (the "Set constraint" action was dropped as redundant with Edit). **Accepted trade-off (new fast-follow):** floating just above the selection overlays the region directly above it, so on a dense diagram it can cover the activity in the lane above for as long as the selection is active — accepted as a contextual, transient overlay; a future lane-aware / side placement is the fast-follow. (b) the three plan-chrome dialogs (Plan details / Baselines / Calendar) are **duplicated** between `plan-actions-menu.tsx` (flag-off) and `plan-workspace-toolbar.tsx` (flag-on) — extract a shared `PlanChromeDialogs`; (c) the toolbar layout's **collapsed** state is session-local (not persisted; height still persists) — thread a `defaultCollapsed`/separate key through `useResizablePanelPrefs`; (d) on an **empty/uncalculated** plan the frame/lens/help commands are **hidden** (`isVisible: hasDiagram`) rather than shown-disabled-with-reason as the spec's edge-case prefers — accepted for now since the empty plan still surfaces its only relevant actions (Add activity + Recalculate), but reconcile spec↔code (either disable-with-reason, or update the spec) when the empty-state copy is next revised; (e) non-blocking a11y recommendations from the M5 audit — the toolbar doesn't `.focus()` the new roving stop when a `ResizeObserver` demote unmounts the focused button mid-session (rare; falls back to `<body>`); `aria-orientation="horizontal"` while Up/Down are also wired (harmless superset); the segmented zoom presets are `aria-pressed` buttons rather than a `radiogroup`; and a manual NVDA/VoiceOver pass on the `CompactPenStatus` live-region + Start/Stop/Take-over sequence is still owed. | Divergent code paths coexist behind the flag until the flip; three layered flags (`VITE_CANVAS_WORKSPACE` → `VITE_CANVAS_TOOLBAR`); the dialog duplication can drift. | Flip `VITE_CANVAS_TOOLBAR` default-on once signed off (**done**); mount the selection bar (**done**), dedup the dialogs (**done**); still to do: a lane-aware / side placement for the floating bar so it never covers the lane above, persist the collapsed state, reconcile the empty-state hide-vs-disable, and clear the non-blocking a11y recommendations as fast-follows once the layout has soaked. Rollout tracked in the flag comment (`env.ts`). |
@@ -79,7 +82,6 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 | 53 | **Library `q` search is an unindexed (bounded) ILIKE — `pg_trgm` GIN deferred (ADR-0053 §4 / M4)** | The M4 search on `calendars`/`resources` uses Prisma `contains` + `mode: 'insensitive'`, i.e. `name ILIKE '%q%'` (OR'd with `code` on resources). A **leading-wildcard, case-insensitive** match is not a btree range, so no existing or addable btree index can serve it — not the `(organization_id, created_at, id)` composites, not `text_pattern_ops` (left-anchored only), not an expression index on `lower(name)` (prefix only). The chosen plan is deliberate: the leading equality on `organization_id` bounds the candidate set to **one tenant** in cursor order and the ILIKE is a recheck over it — a bounded filter, not a table-wide seq scan, at the ADR-0053 sizing of ≲1,000 calendars / ≲5,000 resources per tenant. For the same measure-first reason the archive filter added **no** index: `archived_at` is tri-state (`exclude`/`include`/`only`), so a partial `WHERE archived_at IS NULL` twin would serve only the default and would today be a byte-for-byte duplicate of the existing composite (no row is archived yet). | Low today and bounded by tenant size; it degrades linearly if a tenant's library grows well past the assumed ceiling (import-heavy tenants are the likely first case), or if archived rows come to dominate a library so the default list scans mostly-filtered entries. Both show up as list/search p95 creep, never as incorrect results. **Measured at the ADR-0053 ceiling during the M6 backend-performance review** (Postgres 16, every migration applied, one org seeded with 1,000 calendars / 5,000 resources): worst-case resource search (no match, full candidate scan) **3.8 ms**; a match at the tail of cursor order **3.2 ms**; the 1,000-calendar case **0.56 ms** — all two orders of magnitude inside the 200 ms p95 budget, confirming the deferral is correct at the stated scale. A committed seeded-benchmark test (so the claim is pinned in CI rather than living in a migration comment and this row) is still outstanding. Escalate only on further measurement (`docs/PERFORMANCE.md`): (a) a `pg_trgm` GIN index on `lower(name)` (`gin_trgm_ops`) — note it needs `CREATE EXTENSION pg_trgm`, a privileged one-off DDL step the app's DB role may not hold, which is part of why it is deferred; (b) a partial `(organization_id, created_at, id) WHERE deleted_at IS NULL AND archived_at IS NULL` composite if archived rows dominate; (c) a partial ORG-tier calendar composite if PROJECT rows dominate the org list (ADR-0053 "Follow-ups"). |
 | 56 | **Pure gesture→overlay helpers live in `TsldCanvas.tsx` rather than a pure module** | Raised by the ADR-0054 M6 component review against `gestureSourceId` / `gestureGhostDetail`, but the finding is older and wider than this epic: `ghostRect`, `liveResize`, `lagChip` and their siblings — all pure `GestureState → overlay geometry` functions with no React, DOM or canvas dependency — already sit at the top of `apps/web/src/features/tsld/components/TsldCanvas.tsx` and are exported solely for unit tests. The ADR-0026 architecture puts pure render logic in `features/tsld/render/*`, so the whole cluster is on the wrong side of that seam. Moving only the two new ones was rejected as making the file _less_ consistent, not more. | Maintainability only — the functions are pure and fully unit-tested where they are. Cost is that a reviewer must read a 1,500-line component file to review pure geometry, and that the component file is the de-facto home for logic the architecture says lives elsewhere. | Move the whole cluster to a `render/gesture-overlay.ts` module in one pass (mechanical: re-export, update the two test files' imports), rather than migrating helpers piecemeal as each epic touches them. |
 | 57 | **Recycle-bin list has no index for its filter or its sort, and the screen pages it to exhaustion** | The `deleted_at IS NOT NULL` filter and the `ORDER BY deleted_at DESC, id ASC` on all three `UNION ALL` branches are unindexed: `clients`/`projects`/`plans` each index `(organization_id, created_at, id)`, none carry `deleted_at`. So Postgres filters and top-N sorts over **every** row for the org in that table, live rows included. That predates TECH_DEBT #22 and was deliberately deferred there as measure-first. What #22 did not weigh: the screen fetches via `apiFetchAllPages` (`use-deleted-items.ts`), which walks `?limit=100` to exhaustion — so the scan is re-run **per page**, making one screen-open cost `O(pages x org rows)` rather than `O(org rows)`. #22's own commit used that same pagination-amplification argument to justify fixing the row over-fetch immediately; it applies with more force here, and I did not apply it consistently. | Grows with an org's total row count, not its deleted-row count, and multiplies by page count. Harmless on a small org; an org that has ever created and deleted a lot of plans pays it on every visit to Recently deleted. | **Measure first — this is still unmeasured** (the reviewing agent had no database either). Get an `EXPLAIN ANALYZE` at realistic row counts; if it confirms the scan, add the partial index already named in `recycle-bin.repository.ts` — `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` per table. Also worth asking whether the screen should page to exhaustion at all. Raised by the backend-performance-reviewer agent, 2026-07-27. |
-| 82 | **Shift-editor epic (ADR-0067/0068) — the non-blocking half of five specialist gates (CLOSED 2026-08-01)** | The five M4 gates found ten blocking defects, all folded with regression tests. These were the rest, deferred by decision rather than missed, and all seven are now done: **(a)** the interchange importer wrote calendar shift/exception windows verbatim without the ordering/overlap check the API’s own DTO enforces, so a hostile or broken file reached the engine’s `validateWindows` and surfaced as an opaque 500 rather than a dry-run finding; the same path let a near-zero `day_hr_cnt` round to 0 minutes and hit the DB CHECK. **(b)** No `@ArrayMaxSize` on the new `shifts`/`windows` DTO arrays. **(c)** `addException`/`removeException` did not take the `calendar:manage_org` check `updateException` took. **(d)** The calendar library table did not summarise a shift calendar (`maxWindowsPerDay` existed with no consumer). **(e)** Window validation fired on Save, not on change. **(f)** An overlapping pair flagged only the second row. **(g)** No unit-test files for `exception-hours.ts`, `shift-summary.ts` and `window-rows.ts`. | Was low each; (a) was the only one with a user-visible failure mode. | **Closed.** (a) is now `repairCalendars` in `packages/interchange/src/validate.ts` — a **repair**, reported per finding, which is where every other import approximation goes; windows are sorted, empty ones dropped and overlapping ones **merged** (their union preserves every minute either claimed), and a `hoursPerDay` below the domain’s 0.25 h floor is raised. (b) `MAX_CALENDAR_SHIFTS` (168) / `MAX_EXCEPTION_WINDOWS` (24), one definition across four DTOs. (c) one shared `assertMayWriteExceptions` on all three verbs, asserted **before** the exception lookup so the tier is not an existence oracle. (d) a `· 2 shifts` suffix on the Working days column. (e) React Hook Form’s own `reValidateMode` rule applied to the week: quiet until you submit, live afterwards — the mirror defect was that a corrected row kept its message until the next Save. (f) both rows of the pair carry a directional message; writing the “unless the row above is already inverted” guard showed that branch to be **unreachable**, which is now a test rather than a guard. (g) three test files, 32 new cases. |
 | 83 | **ADR-0068 §6 promises a count the calendar editor does not show** | §6 states the editor "names how many activities' displayed durations will change" when hours-per-day is edited, following the ADR-0053 §2 per-class-count pattern. What shipped is the consequence without the count ("an activity showing 10 days today will show a different number"), because no endpoint returns that count — it needs a per-calendar usage read across activities and plans. The ADR is corrected to record this as deferred rather than left describing a feature that does not exist (ADR-0058's rule). | Low: the warning is accurate, just less specific than promised. | A `GET …/calendars/:id/usage` returning the affected-activity count, or an amendment dropping the requirement if the count proves not worth the read. |
 
 ## Principles for managing debt
@@ -87,6 +89,16 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 - Prefer paying debt down opportunistically while touching nearby code.
 - Never add **undocumented** debt: if you take a shortcut, add a row here.
 - Security- and data-integrity-related debt is prioritised above convenience.
+
+## Detailed items
+
+The table above carries the older, one-line rows. Items that need more than a table cell get a
+section here. Both are the same register — the split is how much explaining a row needs, not how
+important it is.
+
+Headings are `### <number>. <title>`, always. Three rows had drifted to `##`, which made every
+detailed item a child of "Principles for managing debt" in the document tree rather than a sibling
+of its peers.
 
 ### 58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
 
@@ -97,29 +109,6 @@ were held back rather than rushed alongside a change to the painter's hot path i
 
 They are additive and behind the same `VITE_CANVAS_VISUAL_LANGUAGE` flag, so they can land as their
 own slice without re-opening anything S4 shipped.
-
-### 59. The device-authoritative canvas draw measurement was never made
-
-ADR-0026 §16 defines the hardware envelope for the ≤ 4 ms p95 draw budget: a mid-tier laptop and
-iPad-class Safari. Every measurement the project has actually made — ADR-0054 M3-T5, ADR-0055
-S5-T2 — was made on a **headless Chromium on a shared cloud runner**, which has no GPU compositor
-and no comparable thermal or memory profile.
-
-Those measurements were still the right thing to run, and their conclusions are sound within what
-they measure: each asked _does this change move the cost?_ and answered it against a matched
-baseline. What none of them establishes is the **absolute** number on a real device, so ADR-0026's
-headline budget currently has no device-side evidence behind it.
-
-This did not block S5's flip, and the reasoning is worth keeping: the band pass sits inside the
-baseline's own run-to-run spread, so S4 demonstrably does not move the cost, and blocking a change
-on an unknown it does not affect would be blocking on the wrong thing. But the unknown compounds
-quietly — each additive layer is judged against a baseline nobody has ever measured on the target
-hardware.
-
-**What would close it:** run `prototypes/tsld-spike/bench.mjs` (and, better, the shipped painter
-under DevTools) at 500 and 2,000 activities on the §16 envelope, and record the numbers in
-ADR-0026 the way the flag-flip measurements are recorded in their plans. Until then, treat the
-≤ 4 ms figure as a design target rather than a verified property.
 
 ### 60. The Gantt's scroll behaviour is unmeasured on real hardware
 
@@ -423,7 +412,12 @@ would not exercise the code being budgeted.
    at about two and a half years and fills the viewport — that is what makes the two scenes
    comparable at all.
 
-3. **Run it on the envelope ADR-0026 names.** The command now exists and is documented:
+3. **Run it on the envelope ADR-0026 names.** Take **500 activities as well as 2,000** — 2,000 is
+   the stated ceiling, but two points tell you whether the cost scales with the plan or with the
+   viewport, and only the second is a design property worth having. (This clause is the residue of
+   the former #59, folded here: both rows waited on the same single run, so closing one would have
+   left the other stale — the failure this register keeps having.)
+   The command now exists and is documented:
    `pnpm --filter @repo/web measure:draw`, with the runbook at
    [`docs/guides/measure-draw-performance.md`](guides/measure-draw-performance.md) — a checkout, one
    install, one command, about a minute. It runs **headed** on purpose: headless Chromium can
@@ -485,179 +479,6 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
   test here would assert the client's optimism back at itself. It belongs in a flag-off Playwright
   run, which the repo has no configuration for today — that, not the assertion, is the work.
 
-### 77. The demo Unit 300 file is a lossy rendering of the conformance fixture — CLOSED 2026-08-01
-
-**Closed as superseded, and verified rather than assumed.** The entry's own recommendation was "a
-faithful renderer from `p6_torture_test_v1.json` into an importable plan — XER for what the format
-carries, and a seeding path for groups 2 and 3, which no XER can express", so that "the
-`coverage_index` becomes an executable checklist". That is exactly what the **seed catalogue**
-(ADR-0066) turned out to be. It was built to answer a different question and answered this one on
-the way, and nobody connected the two — so this entry went on describing an open question after it
-had been settled, which is the ADR-0058 failure it now records instead.
-
-What was checked, on 2026-08-01, rather than reasoned about:
-
-- **The checklist is executable and green.** `seed --coverage` reports **115 of 117 capabilities
-  reached, 2 excepted, 0 missing.** The two exceptions are honest domain gaps, not test gaps:
-  `res_assignment_lag` (an assignment has no lag field — work starts with its activity) and
-  `res_role` (SchedulePoint has no role model; a resource is assigned directly).
-- **Loss 1 — the LOE type — round-trips in both directions.** `xer-adapter.ts` maps
-  `TT_LOE → LEVEL_OF_EFFORT` on import and `xer-emit.ts` maps it back on export, with
-  `export-xer.spec.ts` asserting an LOE survives export→import as an LOE with its duration intact.
-  The exporter half was the later fix: it downgraded every LOE to a task, kept alive by a docblock
-  describing importer behaviour that had already been corrected.
-- **Losses 2 and 3 — what XER has no column or table for** — are reached by seeded plans through the
-  **public REST API** instead, which is the "seeding path" this entry asked for and is strictly
-  better than an XER could be: it exercises the write path a planner uses, not a file format.
-- **The demo file itself is not in this repository** and nothing references it. There is therefore
-  nothing here to regenerate. If a fresh demo file is wanted, the way to make one now is to seed a
-  plan and export it — the exporter is no longer lossy for the type this entry was opened about.
-
-Kept as a record rather than deleted, because the sequence is worth reading: a question asked of a
-file, answered by building a test bed, and left open in writing for the time in between.
-
-### 78. The public activity/dependency API is day-denominated, so sub-day durations and lags cannot be authored
-
-Found while building the ADR-0066 seeder. ADR-0036 moved the engine and storage to
-working-**minutes** (`activities.duration_minutes`, `dependencies.lag_minutes`) and shipped intraday
-shift calendars — but `CreateActivityDto` / `UpdateActivityDto` expose only `durationDays`, and
-`CreateDependencyDto` only `lagDays`, both `@IsInt()`. The service multiplies by 1440. **There is no
-minutes field on any DTO.**
-
-The asymmetry is what makes it a defect rather than a limit: **the interchange commit writes
-`duration_minutes` directly**, bypassing the DTO. So an XER carrying a 4-hour activity imports and
-schedules correctly — and then no client, including the web app, can create a comparable one, and
-any edit that touches the duration silently rounds it to whole days. (An edit that does _not_ touch
-the duration preserves the minutes, so the value is not destroyed on unrelated saves.)
-
-**Impact — medium.** The hour-granular calendar rework that ADR-0036 called _gating_ is reachable by
-import but not by hand, so a planner can neither author nor correct the schedules the engine was
-rebuilt to support. It also caps the seed catalogue: the ADR-0066 seeder is API-only by design, so it
-must round and report rather than reproduce the fixture faithfully.
-
-**What would close it:** add `durationMinutes` / `lagMinutes` to the create+update DTOs as an
-alternative to the day fields (mutually exclusive, 422 if both), thread them through the services,
-and surface an hours/minutes control in the activity editor. Until then the seeder rounds to whole
-days and **names every rounding in its report** — never silently.
-
-> Numbering note: this entry was first written as #77, which was already taken by the entry above.
-> Renumbered rather than left ambiguous — the ADR-0058 rule applied to this file's own bookkeeping.
-
-### 79. A window-only calendar is supported by the engine and rejected by the API
-
-ADR-0036 explicitly supports a **window-only base week**: every weekday non-working, with all work
-arriving from dated exception windows. The fixture uses one (a plant turnaround whose only working
-time is the shutdown window), the engine schedules it correctly, and the storage holds it.
-
-`CreateCalendarDto` puts `@Min(1)` on `workingWeekdays`. A zero mask is therefore a 422, so **no
-client can express the calendar the engine supports** — the same import-versus-author asymmetry as
-#78, in a different corner. The seeder reports it as a finding and leaves the affected activities on
-the plan calendar rather than inventing a working week for them: fudging in a Monday would make the
-seeded plan schedule differently from the fixture and say nothing about it.
-
-**Impact — low but sharp.** It affects one calendar shape, but that shape is exactly the one a
-turnaround or a shutdown programme needs, and the failure is a flat refusal with no workaround.
-
-**Closed at the API in `api-v0.34.0`** (`MIN_WORKING_WEEKDAYS_MASK` 1 → 0), and closing it exposed
-the other half of the same unfinished migration. The DTO bound was lifted **without** the engine
-guard it had been standing in for being mapped: `buildWorkingTimeCalendar` throws when a calendar
-has no working minute at all, nothing caught it, and recalculating a plan on a brand-new
-window-only calendar answered an opaque **500**. A user-caused, user-fixable state reported as a
-server fault, naming neither the calendar nor the fix — and reachable in two clicks, default-on, no
-flag, for the three days between that release and this one. Now a **422
-`CALENDAR_HAS_NO_WORKING_TIME`** carrying the calendar's name and what to add, via a named
-`EmptyWorkingTimeCalendarError` (the engine is the only layer that sees both the week and the
-exceptions, so it is the only layer that can raise it; the service is the only one that can phrase
-it). Two e2e cases pin both sides — the empty calendar is refused, the same calendar recalculates
-once one working exception gives it hours.
-
-The lesson is the shape, not the line: **relaxing a boundary check moves the rejection, it does not
-remove it.** The guard underneath had been unreachable for a year and was never re-read when the
-thing keeping it unreachable was deleted. Worth checking for the same pattern whenever a `@Min`,
-`@Max` or `@IsIn` is widened.
-
-The **seeder still refuses the shape** (`packages/seed-http/src/runner.ts`
-`WINDOW_ONLY_CALENDAR_UNSUPPORTED`) and the coverage report still lists `cal_window_only` /
-`cal_empty_base_week` as unreachable, both quoting the `@Min(1)` that no longer exists. That
-reconciliation is the next slice — it is what turns this from "the API accepts it" into "a seeded
-plan proves it", which is the ADR-0066 loop.
-
-**What it took to close (recorded because the prediction was half right):** relaxing the validator
-was the easy half. The question this entry guessed the `@Min(1)` "was probably standing in for" —
-what a zero mask means at the seams that consume it — had a sharper answer than expected: it stands
-in for **nothing at the seams**, because a window-only calendar is perfectly schedulable the moment
-it has one working exception. What it was standing in for was the engine's _own_ guard, unmapped.
-The API e2e this paragraph asked for is the thing that would have caught it, and it was written
-three days late.
-
-### 80. Intraday shift patterns exist in the engine and in storage, and no write path can create one
-
-ADR-0036 was called the **gating** rework: it moved the engine and storage from working-days to
-working-**minutes** and added intraday shift patterns — split shifts, night shifts crossing midnight,
-asymmetric weeks where Friday is a half day. The engine implements all of it, the
-`calendar_shifts` / `calendar_exception_windows` tables hold it, and the ADR-0034 goldens are green
-on it.
-
-**Nothing in the product can author one.** `fullDayShiftsFromMask` in `calendar.repository.ts`
-derives a calendar's shifts from the 7-bit weekday mask — a working day is `[0, 1440)` and a
-non-working day is absent — and it is used by the single `create`, by `update`, by `createException`
-and by the interchange batch alike. There is no shift-window field on any DTO. So every calendar in
-every database is a whole-day calendar, and the minute-granular machinery underneath is exercised
-only by unit tests and the conformance adapter.
-
-Found by the ADR-0066 M2 coverage report, which is the point of it: four of the fixture's 117
-capability keys (`cal_split_shift`, `cal_night_crosses_midnight`, `cal_asymmetric_week`,
-`cal_forces_split`) have no capability plan and cannot have one. They are excepted in
-`apps/seed-cli/src/capabilities/coverage.ts` with this number.
-
-**Impact — the largest of the three write-path gaps** (#78 durations, #79 the window-only mask, this
-one). A planner working a two-shift site or a night-shift possession cannot describe their working
-week at all, and the schedule they get is silently a whole-day approximation of it. It also capped the
-fidelity of every import: an XER or MSPDI carrying real shift patterns was flattened on the way in
-with nothing said, because the mapper had nowhere to put them — **that half is now closed too**
-(see the closing note below).
-
-**What would close it:** a `shifts` array on the calendar create/update DTOs (weekday +
-start/end minute, validated non-overlapping and ordered), a matching `windows` array on the
-exception DTO, the repository taking them instead of deriving, and an editor for the weekly pattern.
-The engine and the storage need no change — that is the whole shape of the problem. Worth doing
-together with #78, since a sub-day duration is meaningless without a sub-day calendar to spend it on.
-
-**The weekly half closed in `api-v0.34.0`** (`shifts` on the calendar create/update/read DTOs).
-**The dated-exception half closes here.** `createException` derived a day's windows from the
-`isWorking` boolean — the exact mirror of the mask→full-day-shift derivation, one table over — so a
-worked exception was always a _whole_ worked day, and a half-day before a holiday or a short-crew
-shutdown day could not be expressed. `windows` now joins `isWorking` on the exception DTO (mutually
-exclusive; an empty array refused, so "no working time" has one spelling), the repository resolves
-them through one `exceptionWindowRowsFor` shared with the interchange batch, and the read DTO
-returns `windows` — without which an authored half-day would be invisible the moment it was saved,
-which is the same defect the weekly half fixed.
-
-`endDate` is exposed on the read too. Storage has always held a **range**; the DTO returned only
-`startDate`, so an end date the client could not see was an end date it could not be told changed.
-Only a single day is authorable, so it always equals `date` today — the point is that the contract
-stops hiding a column. Authoring a multi-day exception stays out of scope.
-
-**CLOSED 2026-08-01.** The three remaining halves all landed with the ADR-0067 editor and the
-ADR-0068 factor:
-
-- **The editor.** `WeeklyShiftEditor` replaces seven weekday checkboxes with a per-day window list,
-  so the shape the API had accepted since `api-v0.34.0` is now authorable by a person. Behind
-  `VITE_CALENDAR_SHIFT_EDITOR`, default-on.
-- **The seeder and the coverage report.** The six `cal_*` exceptions quoting `fullDayShiftsFromMask`
-  are gone — that derivation no longer touches anything the caller supplied — and
-  `capability-shift-calendars` seeds nine calendars whose working **days** are identical and whose
-  **hours** are not, so every one of those keys is proven by a plan rather than excepted. That is
-  what turns "the API accepts it" into "a seeded plan proves it".
-- **Import.** `ImportCalendarBatchInput` now carries `shifts` verbatim plus `hoursPerDayMinutes`, and
-  the pure mapper emits per-weekday windows rather than a mask, so an imported two-shift calendar
-  arrives as a two-shift calendar. Windows are validated and repaired on the way in (see #82) rather
-  than reaching the engine unchecked.
-
-What deliberately did **not** close: multi-day exception **authoring** (`endDate` is exposed on the
-read, so nothing is hidden by the deferral), and the flag-off path, which keeps the flattening
-behaviour as the stated rollback contract.
-
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
 CodeQL flags `writeFileSync(args.out, JSON.stringify(results))` in `apps/seed-cli/src/main.ts` as
@@ -698,28 +519,7 @@ truncation stated rather than trailing off mid-word). This does **not** clear th
 flow is unchanged — and it was not done to. It is the one genuine defect the rule's neighbourhood
 contained, found by taking the finding seriously rather than by trying to satisfy it.
 
-## 83. ~~A typed duration can be overwritten by the calendar factor landing~~ — RESOLVED 2026-08-02
-
-**Found by** `apps/web/e2e-sub-day/` on its first run against a real API — the journey ADR-0070 added,
-doing the job it was added for. In the flag-on create dialog, typing `4h` and submitting immediately
-stored **one whole day** (the seeded default): the field accepted the text, the label was correct,
-and nothing on screen said the value had been discarded.
-
-**Cause.** `useDurationSeed` re-seeds the field once the working-hours factor resolves, and asked
-React Hook Form's `dirtyFields.duration` — a value _captured by the render the effect belongs to_.
-A keystroke and a network response are independent events, so when the calendar list landed before
-RHF had re-rendered with the field marked dirty, the effect read a stale `false` and overwrote what
-had just been typed. An automated journey types and submits far faster than a person, which is why
-it reproduced there and never in hand testing.
-
-**Fix.** Stop asking a flag; ask the field. The hook now takes a `readDuration()` getter called
-**inside** the effect, and re-seeds only if the value is still character-for-character the text it
-saw at open. The race is gone by construction rather than by narrowing a window, and a planner who
-happens to type exactly the seed loses nothing either. Pinned by
-`src/features/activities/model/use-duration-seed.test.ts`, whose central case sets the value with no
-accompanying re-render — verified to fail against the old implementation first.
-
-## 84. Levelling is quadratic in the number of activities contending on ONE resource
+### 84. Levelling is quadratic in the number of activities contending on ONE resource
 
 **Found by** the backend-performance review of ADR-0071 M2, which measured `level.ts` before and
 after the join-lag rework and reported the honest result: the new implementation is marginally
@@ -751,7 +551,7 @@ expected to take.
 
 ---
 
-### #85 — Two `react-hooks/refs` suppressions in the TSLD toolbar-context memo
+### 85. Two `react-hooks/refs` suppressions in the TSLD toolbar-context memo
 
 **Where:** `apps/web/src/features/tsld/toolbar/use-tsld-toolbar-context.tsx` —
 `buildDiagramImage`'s `canvasControlRef.current?.getViewport()` and the `goToNextConflict` entry
@@ -779,7 +579,7 @@ lifts the workspace selection and lets each view reveal it, rather than calling 
 which is null whenever the Gantt is showing, so half its work would be silently skipped in half the
 product anyway.
 
-## 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
+### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
 **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
 inherited it rather than introducing it.
@@ -806,3 +606,36 @@ the flat-1440 defect this entry sits beside came about.
 the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT` and a driver
 exists, else today's answer — so every caller is corrected at once rather than per-surface. The
 engine is not involved and the recalc parity gate is untouched.
+
+---
+
+## Closed numbers
+
+Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this
+ledger is why. Two different items were both numbered **83** because a freed number looked available;
+one was open and one was resolved, in the same file. The register disagreed with itself about what a
+number meant, which is the failure mode this whole document exists to avoid.
+
+It also keeps inbound references resolvable. ADRs are never rewritten (CLAUDE.md §6) and
+`DECISIONS.md` entries are not edited once recorded, so both still cite rows by number long after the
+row is gone — ADR-0047 cites #29, ADR-0066 cites #79 and #80. Without this table those read as
+dangling.
+
+One line each. The story lives where the link points, not here.
+
+| #   | What it was                                                 | Closed     | Where the record is                                          |
+| --- | ----------------------------------------------------------- | ---------- | ------------------------------------------------------------ |
+| 29  | Released images not pulled — "shipped but not live"         | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.            |
+| 59  | The device-authoritative draw measurement was never made    | 2026-08-03 | Folded into **#75**, which waits on the same single run.     |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                           |
+| 78  | Public activity/dependency API was day-denominated          | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs. |
+| 79  | A window-only calendar was rejected by the API              | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".   |
+| 80  | Intraday shift patterns had no write path                   | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.       |
+| 82  | Shift-editor epic — the non-blocking half of five gates     | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                     |
+| 83¹ | A typed duration overwritten by the calendar factor landing | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.  |
+
+¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
+usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
+here by title so neither reference is ambiguous.
+
+**Next free number: 87.**
