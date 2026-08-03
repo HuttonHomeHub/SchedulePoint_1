@@ -338,10 +338,32 @@ confirmed defect — the design (plan-scoped key, skipped on the uncontended pat
 Related: the parent-chain walk inside that lock has **no depth cap**, unlike the resource tree's
 documented ≤ 10 (ADR-0053 §3).
 
-### 75. Is ≤ 4 ms p95 the right draw budget? (measured for the first time, and missed)
+### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-ADR-0026 §16 states ≤ 4 ms p95 at 2,000 activities, and #59 records that it had never been measured
-on real hardware. It now has been, for the first time — by `apps/web/scripts/measure-link-routing.mjs`,
+> **Correction, 2026-08-03 — read this before the rest of the row.** This entry was opened as "is
+> ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
+> repeated it. **All of that is wrong on two counts, checked against the ADR's own text.**
+>
+> 1. **There is no §16 in ADR-0026.** Its sections run to §9a; the prototype gate is **§9**, the
+>    result is **§9a**. Every "ADR-0026 §16" citation in this repository points at a section that
+>    does not exist. (ADR-0026 itself says "the §16 target hardware envelope", which is where the
+>    number was picked up and propagated.)
+> 2. **4 ms was never a budget.** It is the **measured p95 draw time of the throwaway 2026
+>    prototype** (§9a's table), recorded as a **PASS against a stated frame budget of ≤ 16 ms**.
+>    The actual pass/fail gate in §9 is expressed in **frames per second**: **≥ 45 fps @ 500 and
+>    ≥ 30 fps @ 2,000** under sustained pan/zoom/drag, with interaction feedback < 100 ms.
+>
+> So this row spent months asking whether a result was the right target, and the earlier entries
+> below — including the ones written today — argue at length that the budget should be re-expressed
+> as frame pacing. **It already was.** §9 has been an fps gate the whole time; nobody read it.
+> This is ADR-0058's rule ("verify the claim; do not trust the document") failing on the very row
+> created to enforce it, which is why the correction is kept here rather than quietly rewritten.
+>
+> **Against the real gate, both 2026-08-03 readings PASS** — see the verdict at the foot.
+
+ADR-0026 §9a's prototype measured 4.0 ms p95 at 2,000 activities, and #59 records that it had never
+been re-measured on real hardware — the "final device-fps confirmation" §9a explicitly deferred to
+M1. It now has been. First by `apps/web/scripts/measure-link-routing.mjs`,
 which paints the real `paintScene` against a real 2D context in Chromium over 120 panning frames at
 2,000 activities and ~1,500 long-range dependencies:
 
@@ -442,11 +464,12 @@ would not exercise the code being budgeted.
    **First real-hardware readings, 2026-08-03.** Dell Precision 5690, Core Ultra 7 165H (22
    threads), 64 GB, **mains**, Edge 151, 60 Hz display, DPR 1, canvas ~1036×600 CSS px:
 
-   | plan           | frame JS p95 | heaviest cb p95 | dropped frames | interval p95 |
-   | -------------- | ------------ | --------------- | -------------- | ------------ |
-   | 0 activities   | 0.5 ms       | 0.5 ms          | 0 / 600        | 16.8 ms      |
-   | 144 activities | 1.3 ms       | 1.3 ms          | 0 / 600        | 16.8 ms      |
-   | **2,016, Fit** | **8.9 ms**   | **8.9 ms**      | **54 / 527**   | **33.4 ms**  |
+   | plan            | frame JS p95 | heaviest cb p95 | dropped frames | interval p95 |
+   | --------------- | ------------ | --------------- | -------------- | ------------ |
+   | 0 activities    | 0.5 ms       | 0.5 ms          | 0 / 600        | 16.8 ms      |
+   | 144 activities  | 1.3 ms       | 1.3 ms          | 0 / 600        | 16.8 ms      |
+   | **2,016, Fit**  | **8.9 ms**   | **8.9 ms**      | **54 / 527**   | **33.4 ms**  |
+   | **2,016, Week** | **3.9 ms**   | **3.9 ms**      | **0 / 600**    | **16.8 ms**  |
 
    The 2,016 plan is the generated programme
    (`packages/interchange/scripts/generate-scale-xer.mjs`) imported through the product's own
@@ -493,17 +516,34 @@ would not exercise the code being budgeted.
    direction is importing real client programmes (2026-08-03), the 2,016 row — not the 144 — is the
    one that describes where this product is going.
 
-4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. The 2,016 run
-   has largely settled what the number should be **about**: not a paint duration, but **dropped
-   frames while panning** — the only quantity that both matches what a planner perceives and would
-   have failed this run, which a 4 ms or a 16 ms paint budget would not. A first proposal, to be
-   written up once the Week-zoom run lands: **≤ 1% dropped frames at the working zoom** as the
-   binding target, with whole-plan Fit held to a looser figure because it is a transient framing
-   view rather than where work happens. The old 4 ms is then recorded as having measured the wrong
-   quantity, which is the honest version of "it was never met".
-   If the Week zoom is also dropping frames, ADR-0026's reserved escalations — dirty-region
-   repainting first, WebGL second — become live work rather than a note, and step 3's attribution
-   recording tells us which.
+4. **Verdict against ADR-0026 §9's actual gate: PASS at both zooms, at the 2,000 ceiling, on real
+   hardware.** The gate is **≥ 30 fps @ 2,000** under sustained pan.
+
+   | zoom             | mean fps during pan | dropped | JS p95 | §9 gate (≥ 30 fps) |
+   | ---------------- | ------------------- | ------- | ------ | ------------------ |
+   | Week (53 px/day) | ~60                 | 0 / 600 | 3.9 ms | **PASS**           |
+   | Fit (whole plan) | ~53                 | 10.2%   | 8.9 ms | **PASS**           |
+
+   Two things are worth stating plainly. **The 2026 prototype's prediction held**: it measured
+   4.0 ms p95 at 2,000 activities on a synthetic scene, and the shipped canvas — now carrying month
+   bands, a WBS band, float tails, hatching, dates, arrowheads, lag runs and obstacle-aware routing,
+   none of which existed then — measures **3.9 ms** at the working zoom on a real imported
+   programme. That is a better outcome than nine accepted features had any right to expect, and it
+   is the answer to "was Canvas 2D the right substrate": **yes, and no WebGL escalation is
+   warranted**, which is what §9 reserved the escalation for.
+
+   **What the real-hardware run adds that the headless one could not** is the Fit case: JS at 8.9 ms
+   is half a frame, and 10% of frames still drop. §9a chose per-frame draw time precisely because
+   headless fps "is rAF-throttled with no GPU compositor and only a floor" — so the metric was known
+   at the time to be a proxy, and this is the proxy's limit showing up exactly where §9a said the
+   real-hardware confirmation would be needed. It passes the gate; it is not perfectly smooth.
+
+   **What to change, then, is much smaller than this row assumed.** Not a new budget — §9's fps gate
+   is sound and is met. Instead: (a) fix the dead `§16` citations repo-wide so the gate people quote
+   is the gate that exists; (b) record these numbers in ADR-0026 as the deferred device confirmation,
+   closing §9a's open item; (c) leave the Fit-zoom 10% as a **known, passing-but-imperfect** case
+   rather than scheduling work against an unattributed 8 ms — step 3's DevTools attribution comes
+   first if it is ever picked up. Dirty-region repainting stays a reserved escalation, not a task.
 
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
