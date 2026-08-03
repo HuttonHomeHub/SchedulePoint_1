@@ -1,5 +1,74 @@
 # @repo/api
 
+## 0.38.0
+
+### Minor Changes
+
+- [#219](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/219) [`874037f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/874037facb4de56143f98e120df8dd655fbdad31) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Report float-path relative float in working **minutes**, and say when the list was truncated.
+
+  `GET …/schedule/float-paths` divided the engine's working minutes by a flat 1440. Total float is
+  measured on the **activity's own** calendar (ADR-0037 §4, ADR-0068), so on an eight-hour calendar one
+  working day of relative float — 480 minutes — rounded to **0**, indistinguishable from the driving
+  path, and larger figures were understated threefold. Six working days read as "2 days".
+
+  Nothing consumed the field, which is the only reason it never bit; the audit's F8 had named this
+  exact conversion as unchecked. Building a surface for it is what would have made it bite, so the fix
+  lands first and on its own.
+
+  - **`relativeFloatMinutes`** carries the engine's figure with no conversion. Convert for display
+    against the calendar you are presenting on — never against a flat 1440.
+  - **`relativeFloat`** (days) is retained and deprecated rather than removed: deleting it breaks any
+    existing reader for no gain. Its description now states the arithmetic that makes it wrong.
+  - **`hasMorePaths`** on the envelope, so a reader can honestly say "the first N" instead of implying
+    the list is every path into the target. Derived by asking the analysis for `maxPaths + 1` and
+    slicing.
+
+  **The CPM engine is not modified** — `hasMorePaths` is a service-level probe rather than a new engine
+  field, and a structural test now fails CI if `computeSchedule`'s or `computeFloatPaths`'s signature
+  moves. The ADR-0034 recalc parity gate is untouched, and the existing engine goldens pass unedited.
+
+  The unit is pinned by an API e2e on a real eight-hour calendar, built as a twin of the existing
+  24-hour case so the two differ in exactly one thing.
+
+### Patch Changes
+
+- [#219](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/219) [`874037f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/874037facb4de56143f98e120df8dd655fbdad31) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Turn the **Float paths** panel on by default (`VITE_FLOAT_PATHS`) — audit F4, M4.
+
+  The engine has computed multiple float paths since ADR-0035 §19 and the endpoint has exposed them
+  since the reconciliation pass; nothing in the web client referenced either. A planner asking the
+  compression-planning question — "if I shorten the critical path, what binds next, and by how much?" —
+  can now ask it in the product: pick a target, read the ranked chains with the relative float on each,
+  and expand one to recede everything off it in whichever view is showing.
+
+  Enabling it ran the five specialist gates over the combined M0–M3 diff, which found **twelve**
+  blocking defects in code that had already passed a human read — the recurring shape (ADR-0064 §7) of
+  a correct pattern applied to one control and not its neighbour. The ones worth naming:
+
+  - A chain member the client does not hold was styled unactivatable with `pointer-events-none`, which
+    styles a refusal without enforcing it — a keyboard `Enter` walked straight past it into a selection
+    of an activity that is not there. Now a real click guard.
+  - The Gantt's de-emphasis was carried by **opacity alone** (WCAG 1.4.1) and announced on the activity
+    rows but not on the WBS bucket rows. Both fixed; the marker's wording is single-sourced, because
+    the canvas listbox renders it too.
+  - The Gantt never fed the workspace selection at all — a **pre-existing** defect this epic did not
+    introduce. Clicking a bar in the chart set the logic activity but not the workspace's selected
+    activity, so every surface derived from it (this panel's target suggestion among them) was blind to
+    a click in one of the app's two views.
+
+  The API change is the security gate's one hardening suggestion, taken: a per-IP throttle (20 requests
+  / 60 s) on `GET …/schedule/float-paths`, declared in OpenAPI. Unlike the earned-value and histogram
+  reads beside it, this endpoint is **not** a persisted read-model — it runs a full `computeSchedule`
+  per request.
+
+  A flag-on Playwright journey (`apps/web/e2e-float-paths/`, its own CI step) drives the panel against
+  a real API with the pen enforced on an eight-hour calendar, asserting the stored
+  `relativeFloatMinutes` from the API alongside the `+1d` the planner reads — the only place the
+  per-calendar conversion this epic exists to have fixed can be checked end to end. The flag-off parity
+  suite is kept unchanged: it is the rollback contract.
+
+- Updated dependencies [[`874037f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/874037facb4de56143f98e120df8dd655fbdad31)]:
+  - @repo/types@0.22.0
+
 ## 0.37.0
 
 ### Minor Changes

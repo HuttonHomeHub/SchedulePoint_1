@@ -1,5 +1,106 @@
 # @repo/web
 
+## 0.67.0
+
+### Minor Changes
+
+- [#219](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/219) [`874037f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/874037facb4de56143f98e120df8dd655fbdad31) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Show the selected **float path** on the diagram and in the Gantt (behind `VITE_FLOAT_PATHS`) — audit
+  F4, M2–M3.
+
+  Expanding a path in the Float paths panel recedes everything that is not on it, in whichever view is
+  showing. One derived id-set feeds both, so the two cannot disagree about which activities are on the
+  chain — a disagreement that would only ever surface in a screenshot or a printed programme.
+
+  - **Canvas:** contributes members to the `dimmedIds` set the painter already reads once per culled
+    bar. **No new scene field and no new paint branch** — the painter is already measured at
+    16.7–23.1 ms p95 against a ≤ 4 ms budget (`docs/TECH_DEBT.md` [#75](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/75)), and that claim is a test
+    asserting what the painter is handed, not a note in a docblock.
+  - **Gantt:** a new de-emphasis treatment, since the grid had none. Visual only — a receded row keeps
+    its tab stop, its `aria-rowindex` and its activation, and carries the reason in words rather than
+    by opacity alone.
+  - Activating a chain row selects the activity and brings it into view **without taking focus**, so
+    the planner stays in the panel they are reading. In the Gantt that means expanding a collapsed WBS
+    parent first, then scrolling through the virtualizer — `scrollIntoView` on an unrendered row is a
+    silent no-op.
+
+  The canvas listbox's dim marker is rebuilt as a reasons array rather than nested ternaries. Two
+  causes were four readable branches; three would be eight, and one of the eight ends up wrong with
+  nobody noticing.
+
+  **The CPM engine is not imported.** The ADR-0034 recalc parity gate is untouched by construction,
+  and flag-off is byte-for-byte the prior product in both views.
+
+- [#219](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/219) [`874037f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/874037facb4de56143f98e120df8dd655fbdad31) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Turn the **Float paths** panel on by default (`VITE_FLOAT_PATHS`) — audit F4, M4.
+
+  The engine has computed multiple float paths since ADR-0035 §19 and the endpoint has exposed them
+  since the reconciliation pass; nothing in the web client referenced either. A planner asking the
+  compression-planning question — "if I shorten the critical path, what binds next, and by how much?" —
+  can now ask it in the product: pick a target, read the ranked chains with the relative float on each,
+  and expand one to recede everything off it in whichever view is showing.
+
+  Enabling it ran the five specialist gates over the combined M0–M3 diff, which found **twelve**
+  blocking defects in code that had already passed a human read — the recurring shape (ADR-0064 §7) of
+  a correct pattern applied to one control and not its neighbour. The ones worth naming:
+
+  - A chain member the client does not hold was styled unactivatable with `pointer-events-none`, which
+    styles a refusal without enforcing it — a keyboard `Enter` walked straight past it into a selection
+    of an activity that is not there. Now a real click guard.
+  - The Gantt's de-emphasis was carried by **opacity alone** (WCAG 1.4.1) and announced on the activity
+    rows but not on the WBS bucket rows. Both fixed; the marker's wording is single-sourced, because
+    the canvas listbox renders it too.
+  - The Gantt never fed the workspace selection at all — a **pre-existing** defect this epic did not
+    introduce. Clicking a bar in the chart set the logic activity but not the workspace's selected
+    activity, so every surface derived from it (this panel's target suggestion among them) was blind to
+    a click in one of the app's two views.
+
+  The API change is the security gate's one hardening suggestion, taken: a per-IP throttle (20 requests
+  / 60 s) on `GET …/schedule/float-paths`, declared in OpenAPI. Unlike the earned-value and histogram
+  reads beside it, this endpoint is **not** a persisted read-model — it runs a full `computeSchedule`
+  per request.
+
+  A flag-on Playwright journey (`apps/web/e2e-float-paths/`, its own CI step) drives the panel against
+  a real API with the pen enforced on an eight-hour calendar, asserting the stored
+  `relativeFloatMinutes` from the API alongside the `+1d` the planner reads — the only place the
+  per-calendar conversion this epic exists to have fixed can be checked end to end. The flag-off parity
+  suite is kept unchanged: it is the rollback contract.
+
+- [#219](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/219) [`874037f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/874037facb4de56143f98e120df8dd655fbdad31) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the **Float paths** panel (behind `VITE_FLOAT_PATHS`, default off) — audit F4, M1.
+
+  The engine has computed the ranked contiguous driving chains into an activity since M6-F6
+  (ADR-0035 §19), and `GET …/schedule/float-paths` has exposed them since the reconciliation pass that
+  followed. **Nothing in the product ever called it.** So the question a planner actually asks — _if I
+  compress the critical path, what binds next and by how much?_ — could be answered by SchedulePoint's
+  engine and only read in the tool SchedulePoint exists to replace.
+
+  Flag ON adds a **Float paths** item to the toolbar's `find` group and a docked right panel that
+  ranks the chains, live in **both** the Diagram and the Gantt: it is an analysis, not a viewport
+  command. Relative float renders from `relativeFloatMinutes` on the target's calendar, never the
+  deprecated day field. The panel fetches on open with `staleTime: 0` — a measured decision
+  (100.4 ms p95, 0.61× a recalculate on a 540-activity plan), not a guess.
+
+  **Three fixes this milestone's design review found in shipped code, none flag-gated:**
+
+  - The **Gantt did not feed the workspace selection**. It wrote only its own `logicActivity`, so the
+    toolbar's selection-aware items (Update progress, Add note, Clear visual placement) answered with
+    a stale _canvas_ selection while the Gantt showed something else — and were shaded forever in a
+    session that started in the Gantt. Both stores are now written together, which is what this file's
+    own comment already claimed ("selection is workspace state, not view state").
+  - **Isolate logic path was lit and inert in the Gantt.** It drives canvas state only `TsldPanel`
+    reads, and `TsldPanel` is unmounted there. It now shades with "Only in the diagram view".
+  - A chain member the client does not hold was styled un-activatable but **was still activatable**:
+    `pointer-events-none` styles a refusal, it does not enforce one, and a keyboard Enter walks past
+    it. Now `aria-disabled` plus a click guard, the shipped rule.
+
+  Flag-off is byte-for-byte the prior product — no toolbar item (not even a placeholder), no panel, no
+  query — pinned by a parity suite that is the rollback contract.
+
+  **The CPM engine is not imported.** The ADR-0034 recalc parity gate is untouched by construction.
+
+### Patch Changes
+
+- Updated dependencies [[`874037f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/874037facb4de56143f98e120df8dd655fbdad31)]:
+  - @repo/types@0.22.0
+
 ## 0.66.0
 
 ### Minor Changes
