@@ -70,7 +70,11 @@ export function hierarchyAuditEvent({
     subjectLabel: name,
     // The facts go in `before` for a delete and `after` for a restore, which is the direction the
     // change actually ran: a deleted row's name is what it WAS, a restored row's is what it now
-    // is again. Recording both sides would say the name changed, which it did not.
+    // is again. Putting them on BOTH sides would assert a name change that did not happen.
+    //
+    // The redactor still normalises the result to `{ before, after }` with an empty object on the
+    // side this omits — `AuditChanges` documents both keys as always present so a reader can tell
+    // "set from nothing" from "unchanged". Empty is the correct reading here; identical is not.
     ...(kind === 'deleted' ? { before: facts } : { after: facts }),
     ...auditActor(principal, context),
   };

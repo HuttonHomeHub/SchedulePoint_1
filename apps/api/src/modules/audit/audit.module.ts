@@ -1,5 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 
+import { OrganizationsModule } from '../organizations/organizations.module';
+
+import { AuditReadService } from './audit-read.service';
+import { OrganizationAuditController, SelfAuditController } from './audit.controller';
 import { AuditRepository } from './audit.repository';
 import { AuditService } from './audit.service';
 
@@ -11,11 +15,15 @@ import { AuditService } from './audit.service';
  * would give a new feature a reason not to — "it wasn't wired up" is exactly the excuse the
  * coverage gate exists to remove.
  *
- * No controller yet: the read surface arrives with its own DTOs and the `audit:read` guard.
+ * The read surface is a SEPARATE service (`AuditReadService`) and is not exported: `AuditService`
+ * is what nine modules inject to write, and hanging a read on it would put "list somebody's
+ * history" on an object every producer holds.
  */
 @Global()
 @Module({
-  providers: [AuditRepository, AuditService],
+  imports: [OrganizationsModule],
+  controllers: [OrganizationAuditController, SelfAuditController],
+  providers: [AuditRepository, AuditService, AuditReadService],
   exports: [AuditService],
 })
 export class AuditModule {}
