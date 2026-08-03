@@ -16,7 +16,7 @@ import {
   seedAssignmentLag,
 } from '../model/assignment-lag-field';
 import {
-  formatDurationDays,
+  formatDerivedDuration,
   previewDerivedDuration,
   type DurationDerivationPreview,
 } from '../schemas/duration-triad';
@@ -60,9 +60,16 @@ export const DRIVING_HINT =
 function DerivedDurationNote({
   id,
   preview,
+  hoursPerDay,
 }: {
   id: string;
   preview: DurationDerivationPreview | null;
+  /**
+   * The activity's effective working hours per day, or `undefined` while its calendar is still
+   * resolving. Passed rather than defaulted: after ADR-0068 a day is per-calendar, so a preview
+   * rendered against the wrong factor states a duration the planner is about to commit to.
+   */
+  hoursPerDay: number | undefined;
 }): React.ReactElement | null {
   if (!preview) return null;
   if (preview.kind === 'blocked') {
@@ -74,7 +81,8 @@ function DerivedDurationNote({
   }
   return (
     <p id={id} role="status" className="text-muted-foreground text-sm">
-      Duration becomes {formatDurationDays(preview.durationMinutes)} (Recalculate to apply).
+      Duration becomes {formatDerivedDuration(preview.durationMinutes, hoursPerDay)} (Recalculate to
+      apply).
     </p>
   );
 }
@@ -536,7 +544,11 @@ export function AssignmentRow({
                 </p>
               ) : null}
               {unitsChanged ? (
-                <DerivedDurationNote id={unitsNoteId} preview={unitsPreview} />
+                <DerivedDurationNote
+                  id={unitsNoteId}
+                  preview={unitsPreview}
+                  hoursPerDay={hoursPerDay}
+                />
               ) : null}
             </div>
             {/* Units/time (rate) lives on the DRIVING assignment (ADR-0040 §7) — shown only there, and
@@ -574,7 +586,11 @@ export function AssignmentRow({
                   </p>
                 ) : null}
                 {rateChanged && !rateError ? (
-                  <DerivedDurationNote id={rateNoteId} preview={ratePreview} />
+                  <DerivedDurationNote
+                    id={rateNoteId}
+                    preview={ratePreview}
+                    hoursPerDay={hoursPerDay}
+                  />
                 ) : null}
               </div>
             ) : null}

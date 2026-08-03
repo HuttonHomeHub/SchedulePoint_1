@@ -187,7 +187,7 @@ export async function readFloatPaths(
   targetId: string,
   maxPaths = 10,
 ): Promise<{
-  paths: { index: number; relativeFloat: number; relativeFloatMinutes: number }[];
+  paths: { index: number; relativeFloatMinutes: number }[];
   hasMorePaths: boolean;
 }> {
   return page.evaluate(
@@ -198,7 +198,7 @@ export async function readFloatPaths(
       if (!res.ok) throw new Error(`float-paths → ${String(res.status)}`);
       const body = (await res.json()) as {
         data: {
-          paths: { index: number; relativeFloat: number; relativeFloatMinutes: number }[];
+          paths: { index: number; relativeFloatMinutes: number }[];
           hasMorePaths: boolean;
         };
       };

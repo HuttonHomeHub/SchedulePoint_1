@@ -1,12 +1,10 @@
-import { formatDurationText } from '@/lib/duration-text';
+import { formatDurationText, formatWorkingMinutesNoDays } from '@/lib/duration-text';
 
 /**
  * The pure view-model behind the Float paths panel (audit F4). **No React, no DOM, no fetch** — the
  * `features/tsld/render/lenses.ts` idiom, so every branch below is unit-testable without a browser
  * and the same derivation can feed the canvas, the Gantt and (later) a printed programme.
  */
-
-const MINUTES_PER_HOUR = 60;
 
 /**
  * The de-emphasis marker, in words. Single-sourced because BOTH views render it — the canvas's
@@ -113,19 +111,9 @@ export function formatRelativeFloat(minutes: number, hoursPerDay: number | undef
   if (minutes === 0) return '0d';
   const magnitude =
     hoursPerDay === undefined || hoursPerDay <= 0
-      ? formatHoursAndMinutes(Math.abs(minutes))
+      ? formatWorkingMinutesNoDays(Math.abs(minutes))
       : formatDurationText(Math.abs(minutes), hoursPerDay);
   return minutes < 0 ? `−${magnitude}` : `+${magnitude}`;
-}
-
-function formatHoursAndMinutes(minutes: number): string {
-  const hours = Math.floor(minutes / MINUTES_PER_HOUR);
-  const remainder = minutes - hours * MINUTES_PER_HOUR;
-  const parts = [
-    hours > 0 ? `${String(hours)}h` : '',
-    remainder > 0 ? `${String(remainder)}m` : '',
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(' ') : '0m';
 }
 
 export interface BuildFloatPathRowsInput {

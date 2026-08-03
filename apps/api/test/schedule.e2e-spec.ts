@@ -483,25 +483,26 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const res = await actor.agent.get(floatPathsUrl(planId, d)).expect(200);
     const paths = res.body.data.paths as Array<{
       index: number;
-      relativeFloat: number;
       relativeFloatMinutes: number;
       activityIds: string[];
     }>;
     expect(res.body.data.targetActivityId).toBe(d);
     expect(paths.length).toBeGreaterThanOrEqual(2);
     // Path 0 is the driving chain, target-first, relative float 0.
-    expect(paths[0]).toMatchObject({ index: 0, relativeFloat: 0 });
+    expect(paths[0]).toMatchObject({ index: 0, relativeFloatMinutes: 0 });
     expect(paths[0]!.activityIds[0]).toBe(d);
     expect(paths[0]!.activityIds).toEqual(expect.arrayContaining([d, b, a]));
     // A branch path carries C at +2 working days of relative float.
     const branch = paths.find((p) => p.activityIds.includes(c));
     expect(branch).toBeDefined();
     expect(branch!.index).toBeGreaterThanOrEqual(1);
-    expect(branch!.relativeFloat).toBe(2);
     // The 24-hour reference for the eight-hour twin below: `makePlan` clears the calendar, so a
-    // working day here IS 1,440 minutes and the day field happens to be right. That coincidence is
-    // exactly why the defect survived — see the next test.
+    // working day here IS 1,440 minutes. A day-denominated field would have looked right on exactly
+    // this plan, which is why the defect survived a year — see the next test.
     expect(branch!.relativeFloatMinutes).toBe(2 * 1440);
+    // There is no day form on the envelope, and that is the contract rather than an oversight: a
+    // path can span activities on different calendars, so nothing here has one factor to divide by.
+    expect(branch).not.toHaveProperty('relativeFloat');
     // Nothing was truncated at the default ceiling.
     expect(res.body.data.hasMorePaths).toBe(false);
 
@@ -558,7 +559,6 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
 
     const res = await actor.agent.get(floatPathsUrl(planId, d)).expect(200);
     const paths = res.body.data.paths as Array<{
-      relativeFloat: number;
       relativeFloatMinutes: number;
       activityIds: string[];
     }>;
@@ -566,10 +566,11 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(branch).toBeDefined();
     // Two working days of relative float on an EIGHT-hour calendar = 960 minutes, not 2,880.
     expect(branch!.relativeFloatMinutes).toBe(2 * 480);
-    // And the deprecated day field is demonstrably wrong here: round(960 / 1440) = 1, where the
-    // planner has two whole working days of headroom. Asserted rather than merely described, so
-    // nobody "tidies" the new field away believing the old one was fine.
-    expect(branch!.relativeFloat).toBe(1);
+    // This plan is why the day field is gone rather than deprecated. Dividing 960 by a flat 1440
+    // gives 1, where the planner has TWO whole working days of headroom — a number that looks like
+    // an answer and is not one. Pinned here so a future "convenience" day field cannot come back
+    // without this failing first.
+    expect(branch).not.toHaveProperty('relativeFloat');
   });
 
   it('says when it truncated the list, and does not say so when it did not', async () => {
