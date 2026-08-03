@@ -58,6 +58,15 @@ describe('mail transport configuration (Theme B1)', () => {
     expect(parsed.MAIL_FROM).toBeUndefined();
   });
 
+  it('treats an EMPTY mail variable as absent, not as a misconfiguration', () => {
+    // How every deployment surface actually behaves: `MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}` in a
+    // compose file always DEFINES the variable, empty when unset. A bare `.min(1).optional()`
+    // would refuse to boot on the ordinary "I have not configured mail yet" case.
+    const parsed = validateEnv({ ...prodBase, MAIL_SMTP_URL: '', MAIL_FROM: '   ' });
+    expect(parsed.MAIL_SMTP_URL).toBeUndefined();
+    expect(parsed.MAIL_FROM).toBeUndefined();
+  });
+
   it('refuses to boot when SMTP is configured without a sender', () => {
     // Fail at startup rather than at the first invitation. A transport with no From address
     // cannot send, and discovering that when someone invites their first client is too late.

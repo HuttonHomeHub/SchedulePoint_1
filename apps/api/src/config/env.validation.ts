@@ -1,6 +1,19 @@
 import { z } from 'zod';
 
 /**
+ * An optional string where **empty means absent**.
+ *
+ * Every deployment surface this app has — Docker Compose, Dockge, Kubernetes — passes a variable
+ * it does not have a value for as an empty string rather than omitting it, because `FOO: ${FOO}`
+ * in a compose file always defines `FOO`. A plain `.min(1).optional()` therefore refuses to boot
+ * on the ordinary case of "I have not configured mail yet", which is the opposite of optional.
+ */
+const optionalString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+
+/**
  * Environment schema — the single source of truth for configuration shape.
  * The app validates the environment at startup and refuses to boot on invalid
  * config (fail fast). See docs/BACKEND_ARCHITECTURE.md (Configuration).
@@ -51,9 +64,9 @@ export const envSchema = z
      * speak it, so **which** provider is configuration rather than a dependency, and swapping one
      * costs an env change instead of an adapter. It also keeps the credential out of the codebase.
      */
-    MAIL_SMTP_URL: z.string().min(1).optional(),
+    MAIL_SMTP_URL: optionalString,
     /** The `From:` address. Required once SMTP is configured — a transport with no sender cannot send. */
-    MAIL_FROM: z.string().min(1).optional(),
+    MAIL_FROM: optionalString,
     /**
      * When `true`, structural plan writes (activity/dependency create/update/
      * delete/restore, positions batch, schedule recalculate) require the caller

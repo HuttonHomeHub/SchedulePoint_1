@@ -42,8 +42,16 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
-      # Off by default until the verification-email loop exists (ADR-0016).
+      # Off by default: the verification email is sent, but requiring it is a
+      # deployment decision that needs a mail transport (see MAIL_SMTP_URL).
       AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-false}
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # Unset = the logging stub. A variable reaches the container only by being
+      # listed here; putting it in .env alone interpolates but does not pass through.
+      MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      PLAN_EDIT_LOCK_ENFORCED: ${PLAN_EDIT_LOCK_ENFORCED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - '3000:3000'
 
