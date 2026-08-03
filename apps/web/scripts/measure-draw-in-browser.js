@@ -48,6 +48,37 @@
     return;
   }
 
+  /**
+   * Refuse an empty or near-empty plan **before** spending the operator's twelve seconds.
+   *
+   * The first real run of this script reported 0.5 ms p95 — comfortably inside ADR-0026 §16's
+   * 4 ms — on a plan with **zero** activities. That is not the budget being met, it is an empty
+   * canvas, and it read as a pass. It is the same failure the runbook already records against the
+   * scripted harness, whose generated plan once spanned 28 years so "whole plan" zoom culled nine
+   * bars in ten and reported a very pretty 4.6 ms.
+   *
+   * A measurement that cannot distinguish "fast" from "nothing was drawn" is worse than none,
+   * because it retires the question. So this is a hard stop, not a warning.
+   */
+  const activityCount = listbox ? listbox.children.length : null;
+  if (activityCount === null) {
+    console.error(
+      'No activity listbox found — this does not look like the Diagram (TSLD) view. Switch to it and re-run.',
+    );
+    return;
+  }
+  if (activityCount === 0) {
+    console.error(
+      'This plan has NO activities, so the canvas has nothing to draw and any figure would measure an empty screen. Open a plan with real activities in it — ideally your largest — and re-run.',
+    );
+    return;
+  }
+  if (activityCount < 200) {
+    console.warn(
+      `Only ${activityCount} activities. The run will work, but ADR-0026 §16's budget is stated at 2,000 — a small plan cannot confirm or refute it. Use your largest plan if you have a bigger one.`,
+    );
+  }
+
   const originalRaf = window.requestAnimationFrame.bind(window);
   /** @type {Map<number, { total: number, max: number }>} */
   const byFrame = new Map();
@@ -129,6 +160,27 @@
     return null;
   }
 
+  /**
+   * Which GPU the browser is actually on. A mobile workstation typically has two — an integrated
+   * one and a discrete one — and Windows decides per-process which a browser gets. Canvas 2D
+   * rasterisation differs enough between them that a number without this line is not interpretable
+   * on such a machine: two honest runs can differ by more than the feature being measured.
+   *
+   * Read through a throwaway WebGL context, which is the only route JS has. Browsers increasingly
+   * mask it for fingerprinting reasons, so an unavailable answer is reported as unavailable and
+   * `chrome://gpu` named as the fallback — never guessed.
+   */
+  function readGpu() {
+    try {
+      const gl = document.createElement('canvas').getContext('webgl');
+      const info = gl?.getExtension('WEBGL_debug_renderer_info');
+      if (!gl || !info) return 'masked by the browser — check chrome://gpu';
+      return String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+    } catch {
+      return 'masked by the browser — check chrome://gpu';
+    }
+  }
+
   const fmt = (n) => (Number.isFinite(n) ? n.toFixed(1) : '—');
 
   console.log(
@@ -160,8 +212,9 @@
       const report = [
         '=== SchedulePoint draw measurement (TECH_DEBT #75) ===',
         `when            ${new Date().toISOString()}`,
-        `activities      ${listbox ? listbox.children.length : 'unknown (no listbox — is this the TSLD view?)'}`,
+        `activities      ${activityCount}`,
         `canvas          ${Math.round(canvas.getBoundingClientRect().width)}x${Math.round(canvas.getBoundingClientRect().height)} CSS px @ DPR ${window.devicePixelRatio}`,
+        `gpu             ${readGpu()}`,
         `zoom            ${pxPerDay === null ? 'coarser than 1 tick/day — state the preset you used' : `${fmt(pxPerDay)} px/day`}`,
         `display         ${fmt(period)} ms/frame idle (~${Number.isFinite(hz) ? hz : '?'} Hz)`,
         `cores / memory  ${navigator.hardwareConcurrency ?? '?'} / ${navigator.deviceMemory ?? '?'} GB`,

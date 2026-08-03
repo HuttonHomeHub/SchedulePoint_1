@@ -439,7 +439,29 @@ would not exercise the code being budgeted.
    covered.** A planner authors on a laptop; the iPad is a review device, where the printed
    programme and the Gantt matter more than canvas draw. If the canvas ever becomes a primary iPad
    surface that gap reopens, and the runbook says so rather than leaving it implied.
-   **Awaiting the product owner's run** — Route A, at Fit and at Week zoom, with the machine named.
+   **First real-hardware readings, 2026-08-03.** Dell Precision 5690, Core Ultra 7 165H (22
+   threads), 64 GB, **mains**, Edge 151, 60 Hz display, DPR 1, canvas ~1036×600 CSS px:
+
+   | plan           | frame JS p95 | heaviest cb p95 | dropped frames | interval p95 |
+   | -------------- | ------------ | --------------- | -------------- | ------------ |
+   | 0 activities   | 0.5 ms       | 0.5 ms          | 0 / 600        | 16.8 ms      |
+   | 144 activities | 1.3 ms       | 1.3 ms          | 0 / 600        | 16.8 ms      |
+
+   **The first row is why the script now refuses to run.** It was a real run on a real machine and
+   it reported 0.5 ms — comfortably inside the 4 ms budget — for an **empty plan**. Nothing was
+   drawn, and it read as a pass. That is the ADR-0066 scale-generator failure and the 28-year
+   nose-to-tail failure for the third time, so the refusal is a hard stop rather than a warning,
+   and a plan under 200 activities now warns that it cannot speak to a budget stated at 2,000.
+
+   The second row is a genuine measurement and says something useful: at the size a planner
+   actually works at, on this hardware, **the canvas is free** — 1.3 ms of a 16.7 ms frame, not one
+   frame dropped in six hundred. It does **not** confirm or refute ADR-0026 §16, because 144 is 7%
+   of the 2,000 the budget names. What is still needed is either a plan an order of magnitude
+   bigger on this machine, or the finding that **no such plan exists**, which would answer step 2's
+   "what is representative?" by saying 2,000 was never a real number.
+   Note also **DPR 1** — Windows at 100% scaling. A 150%-scaled or HiDPI display multiplies the
+   backing store by 2.25×, so this reading is the cheap end of the same machine.
+
 4. **Then set a number and gate it**, replacing ADR-0026 §16's figure by amendment. If the real
    answer is "smooth at 2,000, and 16 ms is fine because it is one frame at 60 Hz", the budget was
    simply wrong and should say so. If it is not smooth, ADR-0026's own reserved escalations —
