@@ -1,4 +1,10 @@
-import type { AuditAction, AuditChanges, AuditEvent } from '@repo/types';
+import type {
+  AuditAction,
+  AuditCategory,
+  AuditChanges,
+  AuditEvent,
+  AuditOutcome,
+} from '@repo/types';
 
 /**
  * Turning a recorded event into a sentence a person can read.
@@ -151,3 +157,26 @@ export function auditActorName(event: Pick<AuditEvent, 'actorLabel' | 'actorType
   if (event.actorLabel !== null && event.actorLabel !== '') return event.actorLabel;
   return event.actorType === 'ANONYMOUS' ? 'Not signed in' : 'Unknown';
 }
+
+/**
+ * What each filter category is called on screen.
+ *
+ * The labels name a **question a reader arrives with** — "Deletions", not "Hierarchy lifecycle
+ * events" — because a filter whose options need translating before they can be picked charges the
+ * same tax as the unfiltered stream. Exhaustively keyed, so a category added for ADR-0073's coming
+ * actions cannot reach the UI without someone deciding what to call it.
+ */
+export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
+  access: 'Access',
+  deletions: 'Deletions',
+  'plan-structure': 'Plan structure',
+  settings: 'Settings & calendars',
+  'sign-ins': 'Sign-ins',
+};
+
+/** How each outcome reads in the filter. `DENIED` is a refusal; `FAILURE` is an error. */
+export const AUDIT_OUTCOME_LABELS: Record<AuditOutcome, string> = {
+  SUCCESS: 'Succeeded',
+  DENIED: 'Refused',
+  FAILURE: 'Failed',
+};

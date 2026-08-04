@@ -1,10 +1,19 @@
 import { useParams } from '@tanstack/react-router';
 
 import { Spinner } from '@/components/ui/spinner';
+import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
+import { AuditFilterBar } from '@/features/audit/components/AuditFilterBar';
+import {
+  EMPTY_AUDIT_FILTER,
+  isAuditFilterEmpty,
+  parseAuditFilter,
+  toAuditQuery,
+} from '@/features/audit/model/audit-filter';
 import { useOrganizations } from '@/features/organizations';
 import { useOrgRole } from '@/hooks/use-org-role';
+import { useUrlFilterState } from '@/hooks/use-url-filter-state';
 import { canReadAuditLog } from '@/lib/rbac';
 
 /**
@@ -74,15 +83,37 @@ export function AuditLogScreen(): React.ReactElement {
  * quietly calls the API anyway is the lit-but-inert defect inverted.
  */
 function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
-  const query = useOrganizationAuditEvents(orgSlug);
+  // The filter lives in the URL so a narrowed view survives a reload and can be pasted to a
+  // colleague — the rule the library screens already follow. Flag-off the hook is still called (a
+  // hook cannot be conditional) but nothing writes to it and nothing is sent, so the request is
+  // byte-for-byte the one this screen made before the filter existed.
+  const [filter, setFilter] = useUrlFilterState(EMPTY_AUDIT_FILTER, parseAuditFilter);
+  const narrowed = AUDIT_FILTERS_ENABLED && !isAuditFilterEmpty(filter);
+  const query = useOrganizationAuditEvents(
+    orgSlug,
+    AUDIT_FILTERS_ENABLED ? toAuditQuery(filter, 'organization') : undefined,
+  );
+
   return (
-    <AuditEventList
-      query={query}
-      caption="Organisation audit log"
-      showActor
-      // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
-      // log must never say when it means "this is outside what I record". Name the boundary.
-      emptyMessage="Nothing here yet. Building a plan does not appear in this log — only access changes and deletions of clients, projects and plans do."
-    />
+    <div className="flex flex-col gap-4">
+      {AUDIT_FILTERS_ENABLED ? (
+        <AuditFilterBar surface="organization" value={filter} onChange={setFilter} />
+      ) : null}
+      <AuditEventList
+        query={query}
+        caption="Organisation audit log"
+        showActor
+        // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
+        // log must never say when it means "this is outside what I record". Name the boundary.
+        emptyMessage="Nothing here yet. Building a plan does not appear in this log — only access changes and deletions of clients, projects and plans do."
+        // A narrowed view that finds nothing is a different fact from a log with nothing in it, and
+        // saying the second when the first is true is the defect this screen already shipped once.
+        emptyFilteredMessage={
+          narrowed
+            ? 'No events match this filter. Clear it to see everything this log records.'
+            : undefined
+        }
+      />
+    </div>
   );
 }

@@ -1988,6 +1988,118 @@ export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
 export const AUDIT_OUTCOMES = ['SUCCESS', 'DENIED', 'FAILURE'] as const;
 export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
 
+/**
+ * The groups a reader filters by (ADR-0073 C1).
+ *
+ * A category is a **question somebody asks**, not a tidy-up of the action list: "who changed
+ * access?", "what was deleted?", "who has been signing in?". A filter offering twenty machine
+ * names would make the reader translate their question into our vocabulary before they could ask
+ * it, which is the same tax the unfiltered stream already charges.
+ *
+ * **Categories are a reading aid and never travel on the wire.** The API takes actions only — the
+ * client expands a chosen category into its action list before building the request. That keeps
+ * one vocabulary on the boundary, so a category renamed for legibility is a copy change rather
+ * than a breaking API change, and a category regrouped later cannot silently alter what a saved
+ * URL means to the server.
+ */
+export const AUDIT_CATEGORIES = [
+  'access',
+  'deletions',
+  'plan-structure',
+  'settings',
+  'sign-ins',
+] as const;
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+/**
+ * Which category each action belongs to — **exhaustively keyed**, so adding an action without
+ * deciding which question it answers is a compile error. The fourth map in the system with that
+ * discipline (the redactor's allow-list, the census, and the web's copy map are the others), and
+ * for the same reason: a silent default here would put a new event in a group nobody chose.
+ */
+export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
+  // Who can do what, and who was let in or out.
+  'member.joined': 'access',
+  'member.removed': 'access',
+  'member.role_changed': 'access',
+  'invitation.created': 'access',
+  'invitation.revoked': 'access',
+  'invitation.accepted': 'access',
+  'organization.created': 'access',
+  // A share link authorises a read by somebody with no account, which is an access change in
+  // every sense that matters — so it belongs here rather than in a category of its own.
+  'share.created': 'access',
+  'share.revoked': 'access',
+  // Authentication. These rows carry no organisation, which is why the category is withheld from
+  // the organisation surface rather than merely returning nothing there.
+  'auth.signed_up': 'sign-ins',
+  'auth.signed_in': 'sign-ins',
+  'auth.sign_in_failed': 'sign-ins',
+  'auth.signed_out': 'sign-ins',
+  'auth.email_verified': 'sign-ins',
+  // What disappeared, and what came back. A restore sits beside its delete deliberately: a reader
+  // asking "what happened to the Northgate job?" wants both halves in one answer.
+  'client.deleted': 'deletions',
+  'client.restored': 'deletions',
+  'project.deleted': 'deletions',
+  'project.restored': 'deletions',
+  'plan.deleted': 'deletions',
+  'plan.restored': 'deletions',
+};
+
+/**
+ * The categories a surface may offer.
+ *
+ * The organisation log **cannot** offer `sign-ins`: an `auth.*` row carries no `organizationId`
+ * and that read filters on exactly that column, so the choice could only ever return nothing.
+ * Offering it would be the defect ADR-0072 met on its first day wearing a filter's clothes —
+ * absence a reader cannot distinguish from silence — and the API refuses those actions on that
+ * route for the same reason (plus a measured one: a filter that matches nothing is also the most
+ * expensive query the table accepts).
+ *
+ * **A category with nothing in it yet is also withheld**, and that is not a detail. `plan-structure`
+ * and `settings` are declared here because ADR-0073's catalogue puts nineteen coming actions in
+ * them, and giving those actions a home now is what makes adding one a compile error rather than a
+ * decision. But they hold **no action today**, so offering them would put two chips on screen that
+ * can only ever answer "no events" — the precise defect this filter exists to fix, in the control
+ * meant to fix it. They appear by themselves the moment their first action lands.
+ *
+ * Both rules are **derived** from {@link AUDIT_ACTION_CATEGORY} rather than listed, so neither
+ * needs anyone to remember this function: the offering is a property of the vocabulary.
+ */
+export function auditCategoriesForSurface(
+  surface: 'organization' | 'self',
+): readonly AuditCategory[] {
+  return AUDIT_CATEGORIES.filter(
+    (category) => auditActionsForCategories([category], surface).length > 0,
+  );
+}
+
+/** Every action in a category, in vocabulary order. */
+export function auditActionsInCategory(category: AuditCategory): readonly AuditAction[] {
+  return AUDIT_ACTIONS.filter((action) => AUDIT_ACTION_CATEGORY[action] === category);
+}
+
+/**
+ * Expand chosen categories into the `action` list to send — **for a given surface**.
+ *
+ * The surface argument is not decoration. Withholding the `sign-ins` chip from the organisation
+ * screen stops a reader picking an unanswerable filter, but it would not stop a category that
+ * merely *contained* an `auth.*` action from smuggling one into the request, which the API refuses
+ * with a 422. Filtering at the point of expansion makes that unreachable by construction rather
+ * than by the two lists happening to agree — and they are maintained in different places.
+ *
+ * An empty selection returns an empty list, which the caller sends as no `action` parameter at
+ * all: "no category chosen" means every action, not none.
+ */
+export function auditActionsForCategories(
+  categories: readonly AuditCategory[],
+  surface: 'organization' | 'self',
+): readonly AuditAction[] {
+  const actions = categories.flatMap((category) => [...auditActionsInCategory(category)]);
+  return surface === 'self' ? actions : actions.filter((action) => !action.startsWith('auth.'));
+}
+
 /** One recorded event, as the read endpoints return it. */
 export interface AuditEvent {
   id: string;

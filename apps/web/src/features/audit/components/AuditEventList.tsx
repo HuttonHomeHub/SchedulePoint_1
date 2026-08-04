@@ -26,11 +26,21 @@ export function AuditEventList({
   caption,
   showActor,
   emptyMessage,
+  emptyFilteredMessage,
 }: {
   query: UseInfiniteQueryResult<{ pages: AuditPage[] }>;
   caption: string;
   showActor: boolean;
   emptyMessage: string;
+  /**
+   * Shown instead of {@link emptyMessage} when a filter is narrowing the view.
+   *
+   * The two must never collapse into one sentence. "Nothing here yet" and "nothing matches what
+   * you asked for" are different facts, and telling a reader the first when the second is true is
+   * the defect ADR-0072 met on its first day — absence a reader cannot distinguish from silence.
+   * Absent (or undefined) means the screen has no filter, which is the flag-off path.
+   */
+  emptyFilteredMessage?: string | undefined;
 }): React.ReactElement {
   const events = query.data?.pages.flatMap((page) => page.events) ?? [];
 
@@ -99,7 +109,7 @@ export function AuditEventList({
         errorLabel="Couldn’t load the audit log. Please try again."
         empty={
           <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            {emptyMessage}
+            {emptyFilteredMessage ?? emptyMessage}
           </div>
         }
       />

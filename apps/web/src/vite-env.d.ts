@@ -106,4 +106,6 @@ interface ImportMetaEnv {
   readonly VITE_FLOAT_PATHS?: string;
   /** ADR-0072 — the audit log screens: an organisation's history, and your own. Default off. */
   readonly VITE_AUDIT_LOG?: string;
+  /** ADR-0073 C1 — narrow the audit log by category, outcome and date range. Default off. */
+  readonly VITE_AUDIT_FILTERS?: string;
 }

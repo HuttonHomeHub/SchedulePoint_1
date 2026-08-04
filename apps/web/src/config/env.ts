@@ -39,10 +39,11 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * It currently has **no consumer** — {@link AUDIT_LOG_ENABLED}, the last one, moved to
- * {@link flagDefaultOn} on 2026-08-03 — and that is the healthy state, which is why it is kept
- * rather than deleted: every flag in this file started here, and the next one needs it on day one.
- * Covered by `env.test.ts`, including the case-sensitivity that makes `"TRUE"` read as off.
+ * Its current consumer is {@link AUDIT_FILTERS_ENABLED} (ADR-0073 C1), which is what the docblock
+ * below anticipated: the previous consumer, {@link AUDIT_LOG_ENABLED}, moved to
+ * {@link flagDefaultOn} on 2026-08-03, and the note kept here said the next flag would need this
+ * helper on day one. Covered by `env.test.ts`, including the case-sensitivity that makes `"TRUE"`
+ * read as off.
  *
  * (The sentence this replaces had been corrupted by an earlier edit into two spliced halves
  * naming five long-closed debt items — noticed only when the last consumer went away.)
@@ -1243,3 +1244,21 @@ export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATH
  * shows real history rather than an empty table.
  */
 export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);
+
+/**
+ * The audit log's **filter bar** (ADR-0073 C1) — category chips, an outcome control and a date
+ * range on both audit screens, with the chosen filter in the URL so a narrowed view survives a
+ * reload and can be pasted to a colleague.
+ *
+ * **OFF by default until C1.5**, and its flip is a hard precondition for the coverage milestone
+ * rather than a preference. The producers that milestone adds are server-side, and a `VITE_`
+ * constant is a client build-time value that cannot gate a server-side record (the ADR-0060 M0
+ * rule). So the day the first coverage producer merges, every reader's feed gains two to three
+ * orders of magnitude more rows — flag or no flag. If the filter were still off at that moment the
+ * log would be unusable for everyone, with no rollback that helps.
+ *
+ * Flag-off is byte-for-byte the current screens: no bar renders and the client sends no filter
+ * parameter at all, so the request is the one it sends today. Pinned by the parity suites, which
+ * are **kept** after the flip rather than weakened — that is the rollback contract (ADR-0053 M6).
+ */
+export const AUDIT_FILTERS_ENABLED = flagDefaultOff(import.meta.env.VITE_AUDIT_FILTERS);
