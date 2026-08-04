@@ -428,6 +428,43 @@ distinction the model makes: nothing was deleted and nothing stopped working. **
 not imported**, and the recalc parity gate is untouched — an archived calendar schedules exactly as
 it did the moment before.
 
+### Built, C3.4 (2026-08-04) — family G, and the one producer that cannot sit in its transaction
+
+`interchange.imported`, the catalogue's last action and its only import. A plan built by hand is a
+sequence of choices somebody made and can account for; an imported plan arrived **whole**, from a
+file, with hundreds of activities and possibly rows added to the shared libraries — and the upload
+is not retained, so once the tab is closed nothing in the product distinguishes it from a plan
+somebody typed. That is the durability test at its plainest: the act erases its own trace.
+
+**Where it is written is a departure from the implementation plan, and the reason is structural.**
+The plan said "inside the commit transaction", which is right for every other producer in C3 and
+wrong for this one. `audit_events` is append-only **in the database** (ADR-0072) — the application
+role cannot delete a row it wrote. The import's phase 2 recalculates in its own transaction and,
+on failure, **hard-deletes** the just-created plan to honour "nothing is created on failure". A row
+written in phase 1 would survive that compensation and permanently assert an import of a plan that
+does not exist and never did. Every other C3 producer can ride its write's transaction because a
+rollback removes both; here only one of the two is retractable.
+
+So the row is written at the **point of no return**: after phase 2 has made the import durable, and
+before phase 3, which is best-effort and cannot un-import anything. The residual risk inverts —
+this write failing after a successful import leaves **no** row. That is silence rather than a false
+claim, which is the right way round for an audit log, and it is the trade recorded here rather than
+smoothed over.
+
+The payload names the file (`sourceFilename` — display-only, never a path, and the reader's only
+route back to a source that is not kept), the format, and the size of what arrived. `findingCount`
+is a **scalar, not the report**: the report is a document, `normalise()` would reduce it to a type
+marker anyway (the family C lesson), and a count says "this import was not clean, go and read it"
+without pretending the row is the report. The dry-run stays unaudited beside it — it reads a file
+and writes nothing, so there is no act to record.
+
+**`PENDING_COVERAGE` is gone.** It was introduced in C3.1 as a third census reason the spec had not
+anticipated — honestly a _queue_ rather than a decision — pinned as a snapshot so a route quietly
+_arriving_ there would fail rather than pass. C3.4 emptied it, so the constant is deleted and a
+sixth assertion takes its place: every reason in the census must be a declared decision, and the
+string `awaiting-a-later-c3-slice` must not exist. A route added later is classified by the two
+tests, not deferred with a note.
+
 ## Alternatives considered
 
 - **Fan failed sign-ins out to the organisations the matched member belongs to.** Rejected: the

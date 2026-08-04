@@ -2017,6 +2017,12 @@ export const AUDIT_ACTIONS = [
   'resource.deleted',
   'resource.archived',
   'resource.unarchived',
+  // — Provenance (ADR-0073 family G). The catalogue's only import. A plan created by hand is a
+  //   sequence of choices somebody made and can account for; a plan created by an import arrived
+  //   whole, from a file, with hundreds of activities and possibly rows added to the shared
+  //   libraries. "Where did this programme come from, and which file was it?" is a question the
+  //   product otherwise cannot answer at all once the upload is gone.
+  'interchange.imported',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -2125,6 +2131,10 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'calendar.scope_changed': 'settings',
   'resource.archived': 'settings',
   'resource.unarchived': 'settings',
+  // An import is the one CREATE that is also a structural fact: it is how a whole plan's shape
+  // arrived. It sits with the other answers to "why does this plan look like this?" rather than
+  // with settings, which are about the rules a plan is judged by.
+  'interchange.imported': 'plan-structure',
 };
 
 /**

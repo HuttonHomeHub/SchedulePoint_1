@@ -134,6 +134,21 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   'resource.deleted': ['name', 'kind', 'deleteBatchId', 'resourceCount'],
   'resource.archived': ['name', 'kind'],
   'resource.unarchived': ['name', 'kind'],
+  // — Provenance (ADR-0073 family G). `sourceFilename` is the reader's whole route back to the
+  //   file: an import is otherwise indistinguishable from somebody having typed 500 activities.
+  //   The counts are the size of what arrived; `findingCount` says the report was not clean,
+  //   without reproducing it — a report is a document, and the redactor would flatten it to a
+  //   type marker anyway (the family C lesson).
+  'interchange.imported': [
+    'planName',
+    'format',
+    'sourceFilename',
+    'activityCount',
+    'dependencyCount',
+    'calendarCount',
+    'resourceCount',
+    'findingCount',
+  ],
 };
 
 /**

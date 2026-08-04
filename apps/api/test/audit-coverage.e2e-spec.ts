@@ -39,6 +39,28 @@ interface AuditRow {
   changes: { before?: Record<string, unknown>; after?: Record<string, unknown> } | null;
 }
 
+/**
+ * A minimal, parseable XER: one project, two tasks and one relationship. Deliberately built inline
+ * rather than shared with `interchange.e2e-spec.ts` — this spec asserts what the AUDIT ROW says
+ * about an import, so it wants a file whose counts it states outright.
+ */
+function smallXer(projectName: string): string {
+  return [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date',
+    `%R\tP1\t${projectName}\t2026-01-05 00:00\t2026-01-04 00:00`,
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    '%R\tT1\tP1\tA1000\tMobilise\tTT_Task\t40',
+    '%R\tT2\tP1\tA1010\tDesign\tTT_Task\t80',
+    '%T\tTASKPRED',
+    '%F\ttask_pred_id\ttask_id\tpred_task_id\tpred_type\tlag_hr_cnt',
+    '%R\tR1\tT2\tT1\tPR_FS\t0',
+    '%E',
+  ].join('\n');
+}
+
 describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -689,6 +711,55 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
       });
       expect(await rows('resource.unarchived')).toHaveLength(1);
       expect(await rows('resource.deleted')).toHaveLength(0);
+    });
+  });
+
+  describe('interchange.imported (family G)', () => {
+    it('records the file, the format and the size of what arrived', async () => {
+      const { actor, projectId } = await setup();
+
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${projectId}/interchange/commit`)
+        .attach('file', Buffer.from(smallXer('Riverside Phase 2'), 'utf8'), 'p6-export.xer')
+        .expect(201);
+      const planId = res.body.data.planId as string;
+
+      const written = await rows('interchange.imported');
+      expect(written).toHaveLength(1);
+      const row = written[0]!;
+      expect(row.subjectType).toBe('PLAN');
+      expect(row.subjectId).toBe(planId);
+      expect(row.changes?.after).toMatchObject({
+        format: 'XER',
+        // The reader's only surviving route back to the source — the upload itself is not kept.
+        sourceFilename: 'p6-export.xer',
+        activityCount: 2,
+        dependencyCount: 1,
+      });
+      // Scalar, not the report: a count says "go and read it" without pretending to BE it.
+      expect(typeof row.changes?.after?.findingCount).toBe('number');
+    });
+
+    it('writes NOTHING for a dry-run — it reads a file and changes nothing', async () => {
+      const { actor, projectId } = await setup();
+
+      await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${projectId}/interchange/dry-run`)
+        .attach('file', Buffer.from(smallXer('Preview'), 'utf8'), 'p6-export.xer')
+        .expect(200);
+
+      expect(await rows('interchange.imported')).toHaveLength(0);
+    });
+
+    it('writes NOTHING when the file is not a schedule (422)', async () => {
+      const { actor, projectId } = await setup();
+
+      await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${projectId}/interchange/commit`)
+        .attach('file', Buffer.from('not a schedule at all', 'utf8'), 'notes.txt')
+        .expect(422);
+
+      expect(await rows('interchange.imported')).toHaveLength(0);
     });
   });
 

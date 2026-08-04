@@ -1257,6 +1257,19 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   archive paths gained a transaction so the row shares the write's fate — an insert **beside** the
   update, not a lock around it, which is the ADR-0053 §4 property left intact. The web copy says
   **"Calendar retired"**, because the screen has to make the distinction the model makes.
+  **C3.4** closes the coverage with family G — `interchange.imported`, the catalogue's only import.
+  An imported plan arrived **whole**, from a file that is not retained, so once the tab is closed
+  nothing distinguishes it from a plan somebody typed. Its producer is **the one that cannot sit in
+  its write's transaction**, and the plan said it should: `audit_events` is append-only in the
+  database, and the import's phase 2 **hard-deletes** the plan when the recalculation fails — so a
+  row written with the graph would outlive its subject and permanently claim an import that was
+  rolled back. It is written at the point of no return instead, which inverts the residual risk to
+  a **missing** row rather than a false one: silence, which is the right way round. The payload
+  names the file, the format and the size; `findingCount` is a scalar, because the report is a
+  document and a count says "go and read it" without pretending to be it. This slice also **deletes
+  `PENDING_COVERAGE`** — the one census reason that was a queue rather than a decision — and
+  replaces it with an assertion that every reason is a decision somebody made, so the next route is
+  classified by the two tests rather than deferred with a note.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

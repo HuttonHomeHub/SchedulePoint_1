@@ -72,6 +72,9 @@ const TITLES: Record<AuditAction, string> = {
   'resource.deleted': 'Resource deleted',
   'resource.archived': 'Resource retired',
   'resource.unarchived': 'Resource back in use',
+  // "Imported", not "Plan created": a reader scanning this feed needs to see at a glance that this
+  // plan did not come from anybody typing, which is the entire reason the row is recorded.
+  'interchange.imported': 'Programme imported',
 };
 
 function field(side: Record<string, unknown> | undefined, key: string): string | null {
@@ -212,6 +215,21 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
     case 'resource.unarchived': {
       const kind = field(changes?.after, 'kind');
       return kind === null ? null : resourceKindName(kind);
+    }
+    case 'interchange.imported': {
+      // The filename first — it is the only surviving link to the source, and the upload itself is
+      // not kept. The finding count is included ONLY when it is non-zero: "0 findings" on a clean
+      // import is noise on every row, while its presence is the cue to go and read the report.
+      const filename = field(changes?.after, 'sourceFilename');
+      const format = field(changes?.after, 'format');
+      const activities = count(changes?.after, 'activityCount');
+      const findings = count(changes?.after, 'findingCount');
+      const parts = [
+        filename ?? format,
+        activities === null ? null : plural(activities, 'activity', 'activities'),
+        findings !== null && findings > 0 ? plural(findings, 'finding', 'findings') : null,
+      ].filter((part) => part !== null);
+      return parts.length === 0 ? null : parts.join(' · ');
     }
     case 'auth.signed_up':
     case 'auth.signed_in':

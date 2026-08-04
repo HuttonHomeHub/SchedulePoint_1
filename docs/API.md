@@ -634,6 +634,12 @@ WBS summary with forty descendants and sixty links is one `activity.deleted` wit
 `activityCount` / `dependencyCount` and the shared `deleteBatchId`. The same shape now applies to
 `client.*` / `project.*` / `plan.*`, which previously carried the batch id and not the size.
 
+One event is written **outside** its write's transaction, and only one: `interchange.imported`. The
+import's phase 2 hard-deletes the created plan if the recalculation fails, and `audit_events` is
+append-only — so a row written with the graph could outlive its subject and permanently claim an
+import that was rolled back. It is written once the import is durable instead. Every other event in
+families D–G shares its write's transaction and disappears with it.
+
 Refused mutations record **nothing** in families D–G — no `DENIED` row for a 423 from the edit-lock
 or a 409 from an optimistic-lock retry, both of which mean "two people were working at once". A
 `DENIED` row is written only where an _attempt_ is itself signal: a refused permission change.

@@ -88,6 +88,7 @@ describe('InterchangeService.dryRun', () => {
       unused,
       unused,
       unused,
+      unused,
       logger as unknown as PinoLogger,
     );
   });

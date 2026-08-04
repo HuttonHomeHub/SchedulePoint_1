@@ -27,6 +27,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { InterchangeCommitResponseDto } from './dto/interchange-commit-response.dto';
@@ -158,6 +159,7 @@ export class InterchangeController {
     @Param('projectId', ParseUuidPipe) projectId: string,
     @UploadedFile() file: UploadedInterchangeFile | undefined,
     @Body() options: InterchangeImportOptionsDto,
+    @RequestContext() context: RequestContext,
   ): Promise<InterchangeCommitResponseDto> {
     const { planId, report } = await this.service.commit(
       principal,
@@ -165,6 +167,7 @@ export class InterchangeController {
       projectId,
       file,
       toImportOptions(options),
+      context,
     );
     return InterchangeCommitResponseDto.from(planId, report);
   }

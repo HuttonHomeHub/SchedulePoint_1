@@ -103,6 +103,11 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': ['resource.deleted'],
   'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive': ['resource.archived'],
   'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive': ['resource.unarchived'],
+  // — ADR-0073 C3.4, family G: provenance. The dry-run stays unaudited beside it — it reads a file
+  //   and writes nothing, so there is no act to record.
+  'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit': [
+    'interchange.imported',
+  ],
 };
 
 /**
@@ -134,13 +139,6 @@ const REASONS = {
    * the programme. Recording it is the cheapest way to make the log unreadable.
    */
   PLAN_CONTENT: 'plan-content-permanently-excluded',
-  /**
-   * Named in ADR-0073's catalogue and **not yet built** — the only reason in this list that is a
-   * queue rather than a decision. Each entry says which slice claims it, so "we have not got to
-   * it" cannot quietly become "we decided not to": when C3.4 lands, no route carries this and the
-   * constant is deleted.
-   */
-  PENDING_COVERAGE: 'awaiting-a-later-c3-slice',
   /** Taking, holding or handing over the pen. A lease, not a change to the plan (ADR-0028). */
   EDIT_LOCK: 'edit-lock-lease',
   /**
@@ -236,8 +234,6 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'POST /api/v1/organizations/:orgSlug/plans/:planId/schedule/recalculate': REASONS.ENGINE_DERIVED,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/schedule/recalculate-programme':
     REASONS.ENGINE_DERIVED,
-  'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit':
-    REASONS.PENDING_COVERAGE,
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/dry-run':
     REASONS.PLAN_CONTENT,
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/plans': REASONS.DURABLY_ATTRIBUTED,
@@ -428,21 +424,25 @@ describe('audit coverage census (ADR-0072)', () => {
     }
   });
 
-  it('names a claiming slice for every route still awaiting coverage', () => {
-    // `PENDING_COVERAGE` is the one reason that is a queue rather than a decision, so it needs a
-    // shape the next slice cannot ignore: when C3.4 lands this list is empty and the constant goes
-    // with it. Asserted as a **snapshot** rather than a count, because the failure worth catching
-    // is a route quietly ARRIVING here — parked as "later" by whoever added it — not the expected
-    // shrinkage as slices land.
-    const pending = Object.entries(UNAUDITED_ROUTES)
-      .filter(([, reason]) => reason === REASONS.PENDING_COVERAGE)
-      .map(([route]) => route)
-      .sort();
-    expect(pending).toEqual(
-      [
-        // C3.4 — family G, provenance.
-        'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit',
-      ].sort(),
-    );
+  it('records where an imported programme came from', () => {
+    // The sixth positive assertion (ADR-0073 C3.4). An import is the one way a plan arrives whole
+    // rather than being built, and the file it came from is not retained — so this row is the only
+    // surviving link between a programme and its source. Without it an imported plan and a
+    // hand-typed one are indistinguishable a week later.
+    expect(
+      AUDITED_ROUTES['POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit'],
+    ).toEqual(['interchange.imported']);
+  });
+
+  it('leaves no route parked as "coverage decided later"', () => {
+    // `PENDING_COVERAGE` was the one reason that was a queue rather than a decision, and C3.4
+    // emptied it — so the constant is gone and every reason in the list is now a decision somebody
+    // made. This assertion is what stops it being reintroduced by habit: a route added later must
+    // be classified by the two tests (durability, blast radius), not deferred with a note.
+    const reasons = new Set(Object.values(UNAUDITED_ROUTES));
+    for (const reason of reasons) {
+      expect(Object.values(REASONS), `${reason} must be a declared reason`).toContain(reason);
+    }
+    expect(Object.values(REASONS)).not.toContain('awaiting-a-later-c3-slice');
   });
 });
