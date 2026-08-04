@@ -4,6 +4,7 @@ import { createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 
 import type { PrismaService } from '../../prisma/prisma.service';
 import { resolveClientIp } from '../http/client-ip';
+import { hashToken } from '../tokens/token';
 
 import {
   attributeFailedSignIn,
@@ -131,6 +132,42 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       // switch usable is `emailVerification` below (Theme B2).
       requireEmailVerification: options.requireEmailVerification,
       autoSignIn: true,
+      /**
+       * **A completed reset ends every other session** (ADR-0074 B2).
+       *
+       * `resetPassword` deletes the user's sessions only when this is truthy
+       * (`better-auth/dist/api/routes/password.mjs:172`); unset, a reset leaves them all alive.
+       * That is the wrong default for the commonest reason someone resets a password: a forgotten
+       * password is sometimes *caused by* a compromise, and a reset that leaves the compromise
+       * signed in has closed nothing.
+       *
+       * Note it costs the resetting browser nothing, because `/reset-password` issues no session
+       * either — it returns `{ status: true }` and the user signs in afterwards.
+       */
+      revokeSessionsOnPasswordReset: true,
+    },
+    /**
+     * **Verification identifiers are hashed at rest** (ADR-0074 B1).
+     *
+     * With no `verification` key configured, `processIdentifier` returns the identifier unchanged
+     * (`better-auth/dist/db/verification-token-storage.mjs:8-13`) — so a password-reset row would
+     * hold the literal `reset-password:<token>` in cleartext for the token's whole lifetime, and
+     * anyone who could read that table would hold a usable account-takeover credential.
+     *
+     * That is exactly the bar `common/tokens/token.ts` sets for this app's own opaque tokens
+     * (ADR-0016 invitations, ADR-0051 share links): "a database leak never exposes a usable token".
+     * It applies here for the same reason, so it reuses the **same hasher** rather than Better
+     * Auth's `'hashed'` shorthand — one hashing convention in the repository beats two that happen
+     * to agree today.
+     *
+     * This is deliberately configured **before** `sendResetPassword` exists, which is what makes
+     * the window in which a cleartext row could have been written empty rather than merely short.
+     */
+    verification: {
+      // The port is async (Better Auth's own hasher awaits WebCrypto); ours is synchronous, so it
+      // resolves immediately. `Promise.resolve` rather than an `async` arrow only to keep the
+      // no-await-in-async lint rule quiet about a function that never awaits.
+      storeIdentifier: { hash: (identifier: string) => Promise.resolve(hashToken(identifier)) },
     },
     /**
      * The verification loop (Theme B2). Until this existed the docblock above claimed the email
