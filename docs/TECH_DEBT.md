@@ -909,6 +909,35 @@ add an API e2e that drives `/api/auth/sign-up/email` with a failing `MailService
 real HTTP outcome — the existing unit test calls the adapter directly and structurally cannot see the
 layer that swallows.
 
+### 95. `apps/api`'s Vite configs are ESM in a CommonJS package, and a future Vite major will stop loading them
+
+**Found:** 2026-08-04, by accepting the Dependabot vite bump (8.1.4 → 8.2.0), which added the
+warning. It is a new warning, not a new defect — the mismatch predates the bump.
+
+```
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is
+    planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.e2e.config.ts:1:1)
+```
+
+`apps/api/package.json` has **no `"type"` field**, so Node treats its `.ts`/`.js` as CommonJS, while
+`vitest.config.ts`, `vitest.e2e.config.ts` and `vitest.pairwise.config.ts` are written as ESM. Vite
+currently bundles the config before loading it, which hides the mismatch; when `configLoader:
+'native'` becomes the default it will load them directly and they will fail to parse. The root and
+`apps/web` are already `"type": "module"` — `apps/api` is the only workspace that is not.
+
+**Risk:** none today, and loud rather than silent when it lands — the API's three test configs stop
+loading, so `pnpm test` and `scripts/e2e-local.sh api` fail immediately and obviously. The cost of
+ignoring it is that it will arrive attached to an unrelated Vite upgrade, at the least convenient
+moment.
+
+**Remediation:** add `"type": "module"` to `apps/api/package.json` and fix the fallout, which is the
+part to scope properly rather than bundle into a dependency bump — a NestJS app has CommonJS
+assumptions (`__dirname`, `require`, the Nest CLI's own build output, `nest-cli.json`) that need
+checking one at a time against the API e2e suite. Alternatively rename the three configs to
+`.mts`, which is the smaller change and fixes exactly what the warning names. Do it before the Vite
+major that flips the default, not after.
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this
