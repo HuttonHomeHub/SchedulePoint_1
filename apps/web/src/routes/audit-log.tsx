@@ -28,8 +28,23 @@ export function AuditLogScreen(): React.ReactElement {
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
+      {/*
+        Say what is recorded, not what an audit log sounds like it records. The first sentence
+        this screen shipped with promised "permission changes, deletions and sign-ins for this
+        organisation" — and a sign-in can NEVER appear here: authentication happens before an
+        organisation is known, so those rows carry no `organizationId` and this read filters on
+        exactly that column. A planner read that line, went looking for their work, found silence,
+        and reasonably concluded the feature was broken. Naming the boundary is the fix; see the
+        empty state below, which had the same problem from the other side.
+      */}
       <p className="text-muted-foreground mt-1 text-sm">
-        Permission changes, deletions and sign-ins for this organisation, newest first.
+        Who changed access and who deleted things, newest first — role changes, invitations, share
+        links, and deleted or restored clients, projects and plans.
+      </p>
+      <p className="text-muted-foreground mt-1 text-sm">
+        Edits inside a plan — creating, changing or deleting activities and links — are{' '}
+        <strong className="text-foreground font-medium">not recorded yet</strong>. Your own sign-ins
+        are on <strong className="text-foreground font-medium">My activity</strong>, not here.
       </p>
 
       {isPending ? (
@@ -65,7 +80,9 @@ function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
       query={query}
       caption="Organisation audit log"
       showActor
-      emptyMessage="No events recorded yet."
+      // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
+      // log must never say when it means "this is outside what I record". Name the boundary.
+      emptyMessage="Nothing here yet. Building a plan does not appear in this log — only access changes and deletions of clients, projects and plans do."
     />
   );
 }

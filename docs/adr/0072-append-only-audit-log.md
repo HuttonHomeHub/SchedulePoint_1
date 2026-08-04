@@ -500,6 +500,24 @@ rather than an optimisation.
   the log records today, and the measurement above says the question is volume rather than
   performance: 0.6 GB per million rows is affordable, but "every activity edit" changes the arrival
   rate by a factor nobody has estimated. That estimate, not the index plan, is what gates the rung.
+
+  **First contact with a real reader moved this (2026-08-04).** Within hours of the release the
+  product owner created and deleted activities, looked at the audit log, found nothing, and asked
+  why — then said sign-ins were missing too. Neither observation was a fault: activity writes are
+  `content-edit-deferred-to-m3`, and an `auth.*` row carries no `organizationId` so the
+  organisation read can never return one. **Both were the screen's fault.** Its subtitle promised
+  "permission changes, deletions and sign-ins for this organisation", and one of those three is
+  structurally impossible there; its empty state said "No events recorded yet", which asserts
+  nothing happened when the truth is that this log does not record that kind of thing. That is
+  precisely the failure this ADR names — absence a reader cannot distinguish from silence — built
+  correctly for the **permission** case and not at all for the **coverage** case, in the same file,
+  by the same author, on the same day. Fixed by naming the boundary on both screens.
+
+  It is also the first real evidence on 4.3's open question. The rung was gated on "would activity
+  events drown the permission changes"; the first person to open the log went looking for exactly
+  those events. That is one data point, not a decision, but it belongs on the record next to the
+  volume argument rather than in a chat log.
+
 - **The `action` filter and its composite index (Task 4.4) are not built**, so the index it would
   need is not added. Adding an index for a filter that does not exist is the instinct that row
   deliberately warns against.
