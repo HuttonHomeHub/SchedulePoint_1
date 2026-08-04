@@ -15,15 +15,26 @@ export function MyActivityScreen(): React.ReactElement {
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <h1 className="text-2xl font-semibold tracking-tight">My activity</h1>
+      {/*
+        This screen is the only place sign-ins are visible — they carry no organisation, so the
+        organisation log structurally cannot show them. Say so here, because a reader who went
+        looking there first needs to know they are not missing.
+      */}
       <p className="text-muted-foreground mt-1 text-sm">
-        Everything recorded about your account, across every organisation you belong to.
+        What you did, across every organisation you belong to — including your sign-ins, which
+        appear here and nowhere else.
+      </p>
+      <p className="text-muted-foreground mt-1 text-sm">
+        Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
+        is on their organisation&rsquo;s audit log, not here. Edits inside a plan are{' '}
+        <strong className="text-foreground font-medium">not recorded yet</strong>.
       </p>
       <div className="mt-6">
         <AuditEventList
           query={query}
           caption="My audit events"
           showActor={false}
-          emptyMessage="Nothing recorded yet."
+          emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation."
         />
       </div>
     </div>
