@@ -1,7 +1,8 @@
+import { auditCategoriesForSurface } from '@repo/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AUDIT_OUTCOME_LABELS } from '../model/audit-copy';
+import { AUDIT_CATEGORY_LABELS, AUDIT_OUTCOME_LABELS } from '../model/audit-copy';
 import { EMPTY_AUDIT_FILTER, type AuditFilterState } from '../model/audit-filter';
 
 import { AuditFilterBar } from './AuditFilterBar';
@@ -33,21 +34,18 @@ describe('AuditFilterBar (ADR-0073 C1)', () => {
       expect(screen.getByRole('button', { name: 'Sign-ins' })).toBeInTheDocument();
     });
 
-    it('offers no chip that could only ever return nothing', () => {
-      // `settings` is declared for ADR-0073 C3.2's coming actions but holds none today. A chip
-      // that can only answer "no events" is the defect this bar exists to remove.
+    it('offers a chip for every category the surface can answer', () => {
+      // Derived from the vocabulary rather than listed, which is the point: `plan-structure` and
+      // `settings` were both declared-but-empty when C1 shipped and appeared by themselves as
+      // C3.1 and C3.2 populated them, with no edit to the bar. The previous version named an
+      // empty category as its example and needed rewriting twice; this catches the failure that
+      // actually matters — a coverage slice landing its actions without its chip.
       setup();
-      expect(
-        screen.queryByRole('button', { name: 'Settings & calendars' }),
-      ).not.toBeInTheDocument();
-    });
-
-    it('offers Plan structure now that C3.1 has populated it', () => {
-      // The paired assertion, and the one that would have caught a coverage slice landing its
-      // actions without its chip. Six family-D actions live here; the bar is derived from the
-      // vocabulary, so this needed no edit to the bar itself.
-      setup();
-      expect(screen.getByRole('button', { name: 'Plan structure' })).toBeInTheDocument();
+      for (const category of auditCategoriesForSurface('organization')) {
+        expect(
+          screen.getByRole('button', { name: AUDIT_CATEGORY_LABELS[category] }),
+        ).toBeInTheDocument();
+      }
     });
   });
 

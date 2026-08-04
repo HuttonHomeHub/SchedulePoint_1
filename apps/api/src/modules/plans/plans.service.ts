@@ -12,6 +12,7 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
@@ -21,6 +22,7 @@ import { ProjectRepository } from '../projects/project.repository';
 
 import type { CreatePlanDto } from './dto/create-plan.dto';
 import type { UpdatePlanDto } from './dto/update-plan.dto';
+import { diffGovernanceFields } from './plan-governance-fields';
 import { PlanRepository, type PlanPatch } from './plan.repository';
 
 /**
@@ -130,6 +132,7 @@ export class PlansService {
     orgSlug: string,
     planId: string,
     dto: UpdatePlanDto,
+    context?: RequestContext,
   ): Promise<Plan> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'plan:update', organization.id);
@@ -210,6 +213,37 @@ export class PlansService {
         );
         if (changed === 0) {
           throw new ConflictError('This plan was changed elsewhere. Refresh and try again.');
+        }
+
+        /*
+         * A governance change re-dates work that other people own (ADR-0073 family E, Test 2), so
+         * it earns a row where an ordinary update does not.
+         *
+         * Diffed by VALUE against the row loaded above, and only over the governance set. The
+         * settings dialog resends the whole form on every save, so keying on "was it in the DTO?"
+         * would record fifteen changes each time a planner moved one — and a name-only PATCH would
+         * record a governance change that did not happen. `diffGovernanceFields` returns null when
+         * nothing moved, and this writes nothing at all rather than an empty row.
+         *
+         * Inside the same transaction as the write, so a lost optimistic-lock race (409) records
+         * nothing: the row above already threw.
+         */
+        const moved = diffGovernanceFields({ ...existing }, { ...patch });
+        if (moved) {
+          await this.audit.record(
+            {
+              action: 'plan.settings_changed',
+              outcome: 'SUCCESS',
+              organizationId: organization.id,
+              subjectType: 'PLAN',
+              subjectId: planId,
+              subjectLabel: patch.name ?? existing.name,
+              before: moved.before,
+              after: { ...moved.after, planName: patch.name ?? existing.name },
+              ...auditActor(principal, context),
+            },
+            tx,
+          );
         }
       });
     } catch (error) {

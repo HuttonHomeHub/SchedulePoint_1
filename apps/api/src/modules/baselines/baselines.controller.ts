@@ -26,6 +26,7 @@ import type { PlanVarianceSummary } from '@repo/types';
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -92,8 +93,15 @@ export class BaselinesController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Body() dto: CreateBaselineDto,
+    @RequestContext() context: RequestContext,
   ): Promise<BaselineResponseDto> {
-    const { baseline, activityCount } = await this.service.capture(principal, orgSlug, planId, dto);
+    const { baseline, activityCount } = await this.service.capture(
+      principal,
+      orgSlug,
+      planId,
+      dto,
+      context,
+    );
     return BaselineResponseDto.from(baseline, activityCount);
   }
 
@@ -147,12 +155,14 @@ export class BaselinesController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Param('baselineId', ParseUuidPipe) baselineId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<BaselineResponseDto> {
     const { baseline, activityCount } = await this.service.activate(
       principal,
       orgSlug,
       planId,
       baselineId,
+      context,
     );
     return BaselineResponseDto.from(baseline, activityCount);
   }
@@ -167,7 +177,8 @@ export class BaselinesController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Param('baselineId', ParseUuidPipe) baselineId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, planId, baselineId);
+    await this.service.remove(principal, orgSlug, planId, baselineId, context);
   }
 }

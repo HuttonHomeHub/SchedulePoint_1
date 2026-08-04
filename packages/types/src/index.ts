@@ -1990,6 +1990,21 @@ export const AUDIT_ACTIONS = [
   'activity.reparented',
   'dependency.created',
   'dependency.deleted',
+  // — The rules other people's work is judged by (ADR-0073 family E). These are UPDATES, and they
+  //   earn their row on the second test rather than the first: a plan's data date or a shared
+  //   calendar's working time re-dates work that other people own, so `updated_by` on the row
+  //   being edited records who typed it and nothing at all about the blast radius.
+  //
+  //   `plan.settings_changed` is emitted only when a **governance** field actually changed value;
+  //   a PATCH that touches only the name or description writes nothing, because a rename changes
+  //   how nothing computes.
+  'plan.settings_changed',
+  'calendar.working_time_changed',
+  //   A baseline is the committed programme every later variance is measured against, so capturing
+  //   or activating one changes what "late" means for the whole plan.
+  'baseline.captured',
+  'baseline.activated',
+  'baseline.deleted',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -2079,6 +2094,15 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'activity.dissolved': 'plan-structure',
   'activity.reparented': 'plan-structure',
   'dependency.created': 'plan-structure',
+  // The rules the work is judged by. A baseline CAPTURE or ACTIVATION belongs here rather than in
+  // deletions for the same reason a data-date move does: it changes the standard, not the content.
+  'plan.settings_changed': 'settings',
+  'calendar.working_time_changed': 'settings',
+  'baseline.captured': 'settings',
+  'baseline.activated': 'settings',
+  // …and its DELETE belongs with the other deletions, because that is the question a reader asks
+  // about it ("where did the December baseline go?"), not "what changed about the rules".
+  'baseline.deleted': 'deletions',
 };
 
 /**
@@ -2095,9 +2119,9 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
  * that can only ever answer "no events" is the precise defect this filter exists to fix, in the
  * control meant to fix it. `plan-structure` and `settings` were both declared-but-empty when C1
  * shipped, for the compile-error discipline above; `plan-structure` gained its first actions with
- * C3.1 and now offers itself, **without anyone editing this function** — which is the point of
- * deriving the offering rather than listing it. `settings` still holds nothing and still stays
- * hidden, until C3.2 lands its first action.
+ * C3.1 and `settings` with C3.2, each appearing **without anyone editing this function** — which is
+ * the point of deriving the offering rather than listing it. Every declared category now holds at
+ * least one action; the rule stays because the next one declared will not.
  *
  * Both rules are **derived** from {@link AUDIT_ACTION_CATEGORY} rather than listed, so neither
  * needs anyone to remember this function: the offering is a property of the vocabulary.

@@ -5,6 +5,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
   ForbiddenError,
@@ -14,6 +15,8 @@ import {
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveDayFactorMinutes } from '../activities/day-factor';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -60,6 +63,7 @@ export class BaselinesService {
     private readonly baselines: BaselineRepository,
     private readonly calendars: CalendarRepository,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(BaselinesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -110,6 +114,7 @@ export class BaselinesService {
     orgSlug: string,
     planId: string,
     dto: CreateBaselineDto,
+    context?: RequestContext,
   ): Promise<{ baseline: Baseline; activityCount: number }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'baseline:create', organization.id);
@@ -164,6 +169,23 @@ export class BaselinesService {
           },
           tx,
         );
+        // A baseline is the standard every later variance is measured against, so capturing one
+        // changes what "late" means for the whole plan — the blast-radius test, on a CREATE. It is
+        // the one create in the catalogue for that reason, and it sits beside the activation that
+        // may follow rather than being inferable from `created_by` alone.
+        await this.audit.record(
+          {
+            action: 'baseline.captured',
+            outcome: 'SUCCESS',
+            organizationId: organization.id,
+            subjectType: 'BASELINE',
+            subjectId: baseline.id,
+            subjectLabel: baseline.name,
+            after: { name: baseline.name, planName: plan.name },
+            ...auditActor(principal, context),
+          },
+          tx,
+        );
         return { baseline, activityCount: activities.length };
       });
 
@@ -190,13 +212,13 @@ export class BaselinesService {
     orgSlug: string,
     planId: string,
     baselineId: string,
+    context?: RequestContext,
   ): Promise<{ baseline: Baseline; activityCount: number }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'baseline:activate', organization.id);
 
-    if (!(await this.baselines.findActiveByIdInPlan(baselineId, organization.id, planId))) {
-      throw new NotFoundError('Baseline not found.');
-    }
+    const target = await this.baselines.findActiveByIdInPlan(baselineId, organization.id, planId);
+    if (!target) throw new NotFoundError('Baseline not found.');
 
     await this.prisma.$transaction(async (tx) => {
       // Serialise with capture/other activates on this plan. Clear the current active
@@ -213,6 +235,27 @@ export class BaselinesService {
       );
       // Deleted between the existence check and the locked flip → 404 (nothing activated).
       if (changed === 0) throw new NotFoundError('Baseline not found.');
+
+      // Recorded AFTER the flip and inside the same lock, so the 404 above records nothing. The
+      // plan is re-read here rather than carried from outside: `activate` never loaded it, and a
+      // row whose only label is a uuid answers nobody's question.
+      const plan = await tx.plan.findFirst({
+        where: { id: planId, organizationId: organization.id },
+        select: { name: true },
+      });
+      await this.audit.record(
+        {
+          action: 'baseline.activated',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'BASELINE',
+          subjectId: baselineId,
+          subjectLabel: target.name,
+          after: { name: target.name, ...(plan ? { planName: plan.name } : {}) },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
 
     const updated = await this.baselines.findActiveWithCountByIdInPlan(
@@ -234,19 +277,40 @@ export class BaselinesService {
     orgSlug: string,
     planId: string,
     baselineId: string,
+    context?: RequestContext,
   ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'baseline:delete', organization.id);
 
-    if (!(await this.baselines.findActiveByIdInPlan(baselineId, organization.id, planId))) {
-      throw new NotFoundError('Baseline not found.');
-    }
+    const doomed = await this.baselines.findActiveByIdInPlan(baselineId, organization.id, planId);
+    if (!doomed) throw new NotFoundError('Baseline not found.');
 
     // Soft-cascade the baseline and its snapshot rows under one batch. Deleting the
     // active baseline simply leaves the plan with none active (variance is then hidden).
     await this.prisma.$transaction(async (tx) => {
       await acquirePlanWriteLock(tx, planId);
-      await this.baselines.softDeleteWithSnapshot(baselineId, principal.userId, tx);
+      const batchId = await this.baselines.softDeleteWithSnapshot(baselineId, principal.userId, tx);
+      const plan = await tx.plan.findFirst({
+        where: { id: planId, organizationId: organization.id },
+        select: { name: true },
+      });
+      await this.audit.record(
+        {
+          action: 'baseline.deleted',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'BASELINE',
+          subjectId: baselineId,
+          subjectLabel: doomed.name,
+          before: {
+            name: doomed.name,
+            ...(plan ? { planName: plan.name } : {}),
+            deleteBatchId: batchId,
+          },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
     this.logger.info(
       { organizationId: organization.id, planId, baselineId, userId: principal.userId },

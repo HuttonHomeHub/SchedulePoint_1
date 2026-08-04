@@ -342,6 +342,43 @@ fast path becomes reachable. Both are constant-factor moves on a read that is **
 every populated chip**; only the zero-match case on a very large tenant is slow, and it is slow in a
 way this index does not fix.
 
+### Built, C3.2 (2026-08-04) — family E, and the one create in the catalogue
+
+`plan.settings_changed`, `calendar.working_time_changed`, and `baseline.captured` / `.activated` /
+`.deleted`. These are **updates**, which the durability test says do not earn a row — they are here
+on the blast-radius test instead, and that asymmetry is now pinned by a fourth positive census
+assertion, because a future reader applying Test 1 alone would move them to `PLAN_CONTENT` with a
+plausible reason and remove the only explanation the log offers for "everything moved overnight".
+
+**The governance set is one `const`, and the producer diffs by VALUE.** `PLAN_GOVERNANCE_FIELDS`
+is `satisfies readonly (keyof UpdatePlanDto)[]`, so a typo is a compile error, and the redactor's
+allow-list for the action **is that array spread** rather than a second copy — a field removed from
+the set stops being recordable in the same commit. The value diff is not a refinement: the plan
+settings dialog resends the whole form on every save, so a presence check would record fifteen
+changes each time a planner moved one, and `name` and `description` — which are outside the set —
+would still have to be excluded by hand somewhere. Dates compare by instant and `null`/`undefined`
+are one state, because two `Date`s for the same moment are never `!==`-equal and `currencyCode: null`
+means the same thing as never having set one.
+
+**Three calendar-exception routes fold into the PATCH's action rather than earning three of their
+own.** An exception _is_ working time; a reader asking why every date moved does not care which
+control produced the edit. The payload names the **kind** (`shifts` / `hoursPerDay` / `exception`)
+and not the rows: they are non-scalar, so the redactor would reduce them to a type marker anyway,
+but the reason to withhold them is the reader's — a JSON dump of seven days' windows buries the one
+fact the row exists to carry. `hoursPerDay` is its own kind because after ADR-0068 it is the
+day↔minute factor: moving it reinterprets every duration **without** changing when anybody works.
+
+**`baseline.captured` is the catalogue's only audited create**, and it is worth saying why rather
+than letting it look like an inconsistency: a baseline is the standard every later variance is
+measured against, so capturing one changes what "late" means for the whole plan. That is the
+blast-radius test passing on a create, which nothing else in the catalogue does. `baseline.deleted`
+is filed under **deletions** while capture and activation sit in **settings**, because those are
+the questions a reader actually asks about each ("where did the December baseline go?" versus "what
+changed about the rules?").
+
+`softDeleteWithSnapshot` now returns its batch id so the delete row can carry it, which is the same
+thread every other deletion in the log names. **The CPM engine is not imported.**
+
 ## Alternatives considered
 
 - **Fan failed sign-ins out to the organisations the matched member belongs to.** Rejected: the

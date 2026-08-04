@@ -29,10 +29,10 @@ describe('audit categories', () => {
 
   it('never OFFERS a category with nothing in it', () => {
     // A chip that can only answer "no events" is the defect this whole milestone exists to stop,
-    // in the control meant to fix it. `settings` is declared but empty today — it holds ADR-0073's
-    // coming C3.2 actions, which is what makes adding one a compile error — so the rule is about
-    // what is OFFERED, not what is declared. This test failed on the first run for exactly that
-    // reason. (`plan-structure` was the second such category until C3.1 populated it.)
+    // in the control meant to fix it. Stated over EVERY category rather than against a named empty
+    // one: `plan-structure` and `settings` were both declared-but-empty when C1 shipped and were
+    // populated by C3.1 and C3.2, so an example-based test would have needed rewriting twice and
+    // would say nothing about the category declared next.
     for (const surface of ['organization', 'self'] as const) {
       for (const category of auditCategoriesForSurface(surface)) {
         expect(auditActionsForCategories([category], surface).length).toBeGreaterThan(0);
@@ -40,13 +40,26 @@ describe('audit categories', () => {
     }
   });
 
-  it('declares a home for every action the catalogue will add, offered or not', () => {
-    // The declared set is deliberately wider than the offered one. If this shrank to only the
-    // populated categories, C3.2's first `plan.settings_changed` would have nowhere to go and the
-    // compile error that forces the decision would not fire.
-    expect(AUDIT_CATEGORIES).toContain('settings');
-    expect(auditCategoriesForSurface('organization')).not.toContain('settings');
-    expect(auditCategoriesForSurface('self')).not.toContain('settings');
+  it('offers EXACTLY the categories that can answer on each surface', () => {
+    // The other direction, and the one that stops the rule decaying into "offer everything" now
+    // that every declared category holds an action. A category withheld while it CAN answer is a
+    // filter a reader cannot reach; the two assertions together pin the offering to the
+    // vocabulary rather than to anyone's memory.
+    for (const surface of ['organization', 'self'] as const) {
+      const answerable = AUDIT_CATEGORIES.filter(
+        (category) => auditActionsForCategories([category], surface).length > 0,
+      );
+      expect([...auditCategoriesForSurface(surface)]).toEqual(answerable);
+    }
+  });
+
+  it('keeps every declared category reachable, so a new action always has a home', () => {
+    // The declared set was deliberately wider than the offered one through C1–C3.1, which is what
+    // made adding an action a compile error rather than a decision. C3.2 populated the last empty
+    // one, so today the two coincide on `/me` — asserted rather than assumed, because the gap
+    // reopening (a sixth category declared for a later rung) is the case the rule serves.
+    expect(AUDIT_CATEGORIES.every((c) => auditActionsInCategory(c).length > 0)).toBe(true);
+    expect(auditCategoriesForSurface('self')).toEqual([...AUDIT_CATEGORIES]);
   });
 
   it('OFFERS a category the moment its first action lands, with nobody editing the offering', () => {

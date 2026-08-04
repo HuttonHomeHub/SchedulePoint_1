@@ -70,6 +70,25 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/parents': ['activity.reparented'],
   'POST /api/v1/organizations/:orgSlug/plans/:planId/dependencies': ['dependency.created'],
   'DELETE /api/v1/organizations/:orgSlug/dependencies/:dependencyId': ['dependency.deleted'],
+  // — ADR-0073 C3.2, family E: the rules other people's work is judged by. The three exception
+  //   routes fold into ONE action with the calendar PATCH — an exception IS working time, and a
+  //   reader asking why every date moved does not care which control produced the edit.
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId': ['plan.settings_changed'],
+  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId': ['calendar.working_time_changed'],
+  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions': [
+    'calendar.working_time_changed',
+  ],
+  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId': [
+    'calendar.working_time_changed',
+  ],
+  'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId': [
+    'calendar.working_time_changed',
+  ],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines': ['baseline.captured'],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId/activate': [
+    'baseline.activated',
+  ],
+  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId': ['baseline.deleted'],
 };
 
 /**
@@ -127,12 +146,8 @@ type Reason = (typeof REASONS)[keyof typeof REASONS];
 const UNAUDITED_ROUTES: Record<string, Reason> = {
   'DELETE /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId': REASONS.PENDING_COVERAGE,
-  'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId':
-    REASONS.PENDING_COVERAGE,
   'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
-  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId':
-    REASONS.PENDING_COVERAGE,
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/edit-lock': REASONS.EDIT_LOCK,
   'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.PENDING_COVERAGE,
   'GET /api/health': REASONS.INFRASTRUCTURE,
@@ -187,13 +202,9 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'PATCH /api/v1/organizations/:orgSlug/activities/:activityId': REASONS.PLAN_CONTENT,
   'PATCH /api/v1/organizations/:orgSlug/activities/:activityId/progress': REASONS.PLAN_CONTENT,
   'PATCH /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
-  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId': REASONS.PENDING_COVERAGE,
-  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId':
-    REASONS.PENDING_COVERAGE,
   'PATCH /api/v1/organizations/:orgSlug/clients/:clientId': REASONS.DURABLY_ATTRIBUTED,
   'PATCH /api/v1/organizations/:orgSlug/dependencies/:dependencyId': REASONS.PLAN_CONTENT,
   'PATCH /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
-  'PATCH /api/v1/organizations/:orgSlug/plans/:planId': REASONS.PENDING_COVERAGE,
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/positions': REASONS.PLAN_CONTENT,
   'PATCH /api/v1/organizations/:orgSlug/projects/:projectId': REASONS.DURABLY_ATTRIBUTED,
   'PATCH /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.PLAN_CONTENT,
@@ -202,15 +213,11 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'POST /api/v1/organizations/:orgSlug/activities/:activityId/notes': REASONS.PLAN_CONTENT,
   'POST /api/v1/organizations/:orgSlug/calendars': REASONS.DURABLY_ATTRIBUTED,
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': REASONS.PENDING_COVERAGE,
-  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions': REASONS.PENDING_COVERAGE,
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': REASONS.PENDING_COVERAGE,
   'POST /api/v1/organizations/:orgSlug/clients': REASONS.DURABLY_ATTRIBUTED,
   'POST /api/v1/organizations/:orgSlug/clients/:clientId/projects': REASONS.DURABLY_ATTRIBUTED,
   'POST /api/v1/organizations/:orgSlug/cross-plan-dependencies': REASONS.PLAN_CONTENT,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/activities': REASONS.DURABLY_ATTRIBUTED,
-  'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines': REASONS.PENDING_COVERAGE,
-  'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId/activate':
-    REASONS.PENDING_COVERAGE,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/edit-lock': REASONS.EDIT_LOCK,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/edit-lock/handoff': REASONS.EDIT_LOCK,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/edit-lock/heartbeat': REASONS.EDIT_LOCK,
@@ -376,6 +383,25 @@ describe('audit coverage census (ADR-0072)', () => {
     }
   });
 
+  it('audits every change to the rules other work is judged by', () => {
+    // The fourth positive assertion (ADR-0073 C3.2). These are UPDATES, which the durability test
+    // says do NOT earn a row — so without this, a future reader applying Test 1 alone would move
+    // them to `PLAN_CONTENT` with a plausible-sounding reason and remove the only explanation the
+    // log offers for "everything moved overnight".
+    const governance = [
+      'PATCH /api/v1/organizations/:orgSlug/plans/:planId',
+      'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId',
+      'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions',
+      'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId',
+      'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId',
+      'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines',
+      'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId/activate',
+    ];
+    for (const route of governance) {
+      expect(AUDITED_ROUTES[route], `${route} must audit`).toBeDefined();
+    }
+  });
+
   it('names a claiming slice for every route still awaiting coverage', () => {
     // `PENDING_COVERAGE` is the one reason that is a queue rather than a decision, so it needs a
     // shape the next slice cannot ignore: when C3.4 lands this list is empty and the constant goes
@@ -388,15 +414,6 @@ describe('audit coverage census (ADR-0072)', () => {
       .sort();
     expect(pending).toEqual(
       [
-        // C3.2 — family E, the rules other work is judged by.
-        'PATCH /api/v1/organizations/:orgSlug/plans/:planId',
-        'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId',
-        'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions',
-        'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId',
-        'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId',
-        'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines',
-        'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId/activate',
-        'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId',
         // C3.3 — family F, library governance.
         'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId',
         'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive',

@@ -56,6 +56,13 @@ const TITLES: Record<AuditAction, string> = {
   'activity.reparented': 'Activities regrouped',
   'dependency.created': 'Link added',
   'dependency.deleted': 'Link removed',
+  // "Scheduling settings", not "Plan updated": the row exists precisely because these fields are
+  // not an ordinary edit, and a title that sounds like one invites a reader to skip it.
+  'plan.settings_changed': 'Scheduling settings changed',
+  'calendar.working_time_changed': 'Working time changed',
+  'baseline.captured': 'Baseline captured',
+  'baseline.activated': 'Baseline activated',
+  'baseline.deleted': 'Baseline deleted',
 };
 
 function field(side: Record<string, unknown> | undefined, key: string): string | null {
@@ -148,6 +155,24 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       const type = field(changes?.after, 'type') ?? field(changes?.before, 'type');
       return type === null ? `${from} → ${to}` : `${from} → ${to} (${type})`;
     }
+    case 'plan.settings_changed': {
+      // The FIELDS, named. A reader arriving here is asking "what changed about how this plan
+      // computes?", and the row already answers it — listing the names is the whole value, and
+      // `updated_by` on the plan row is what they would otherwise be left with.
+      const fields = Object.keys(changes?.after ?? {}).filter((key) => key !== 'planName');
+      if (fields.length === 0) return null;
+      return fields.map(settingName).join(', ');
+    }
+    case 'calendar.working_time_changed': {
+      const what = field(changes?.after, 'changedWhat');
+      return what === null ? null : (WORKING_TIME_KINDS[what] ?? what);
+    }
+    case 'baseline.captured':
+    case 'baseline.activated':
+    case 'baseline.deleted': {
+      const plan = field(changes?.after, 'planName') ?? field(changes?.before, 'planName');
+      return plan === null ? null : `On ${plan}`;
+    }
     case 'auth.signed_up':
     case 'auth.signed_in':
     case 'auth.sign_in_failed':
@@ -209,6 +234,37 @@ function reparentDestination(changes: AuditChanges | null): string {
 /** The expiry date in the reader's own locale. Date only — the hour a link dies is not a fact
  *  anyone acts on, and a full timestamp crowds the row. */
 const EXPIRY_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+
+/** What a governance field is called on screen. An unlisted name passes through rather than
+ *  becoming an em dash — a field added to the set is legible before anyone writes copy for it. */
+const SETTING_NAMES: Record<string, string> = {
+  plannedStart: 'data date',
+  schedulingMode: 'scheduling mode',
+  calendarId: 'calendar',
+  status: 'status',
+  progressRecalcMode: 'progress recalculation',
+  criticalPathDefinition: 'critical path definition',
+  criticalFloatThresholdMinutes: 'critical float threshold',
+  totalFloatMode: 'total float mode',
+  makeOpenEndsCritical: 'open ends critical',
+  useExpectedFinishDates: 'expected finish dates',
+  levelResources: 'resource levelling',
+  levelWithinFloatOnly: 'level within float only',
+  ignoreExternalRelationships: 'ignore external links',
+  eacMethod: 'estimate-at-completion method',
+  currencyCode: 'currency',
+};
+
+function settingName(field: string): string {
+  return SETTING_NAMES[field] ?? field;
+}
+
+/** The three kinds of working-time edit the API records. */
+const WORKING_TIME_KINDS: Record<string, string> = {
+  shifts: 'Working week',
+  hoursPerDay: 'Hours per day',
+  exception: 'Dated exception',
+};
 
 const ROLE_NAMES: Record<string, string> = {
   ORG_ADMIN: 'Org Admin',

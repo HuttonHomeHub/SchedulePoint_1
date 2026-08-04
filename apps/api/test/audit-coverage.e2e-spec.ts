@@ -39,7 +39,7 @@ interface AuditRow {
   changes: { before?: Record<string, unknown>; after?: Record<string, unknown> } | null;
 }
 
-describe.skipIf(!hasDatabase)('Audit coverage — plan structure and destruction (e2e)', () => {
+describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let priorEnforced: string | undefined;
@@ -70,6 +70,12 @@ describe.skipIf(!hasDatabase)('Audit coverage — plan structure and destruction
     await prisma.crossPlanDependency.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();
+    // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go
+    // before `plan`, deepest first. Family E captures them, which is why this spec needs the
+    // sweep its siblings did not.
+    await prisma.baselineAssignment.deleteMany();
+    await prisma.baselineActivity.deleteMany();
+    await prisma.baseline.deleteMany();
     await prisma.planLock.deleteMany();
     await prisma.planShare.deleteMany();
     await prisma.plan.deleteMany();
@@ -394,6 +400,179 @@ describe.skipIf(!hasDatabase)('Audit coverage — plan structure and destruction
       // One row, from the link that actually exists. The refused one rolled back with its audit
       // insert inside the same transaction.
       expect(await rows('dependency.created')).toHaveLength(1);
+    });
+  });
+
+  describe('plan.settings_changed (family E)', () => {
+    it('writes NOTHING for a PATCH that changes only the name', async () => {
+      const { actor, planId } = await setup();
+      const plan = await actor.agent.get(`/api/v1/organizations/acme/plans/${planId}`).expect(200);
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ name: 'Renamed', version: plan.body.data.version as number })
+        .expect(200);
+
+      // A rename changes how nothing computes, and `updated_by` already records who did it.
+      // Recording it would put noise in the one feed a reader turns to when every date moved.
+      expect(await rows('plan.settings_changed')).toHaveLength(0);
+    });
+
+    it('records a data-date move with that field and NO other', async () => {
+      const { actor, planId } = await setup();
+      const plan = await actor.agent.get(`/api/v1/organizations/acme/plans/${planId}`).expect(200);
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({
+          plannedStart: '2026-03-01',
+          // Resent unchanged, exactly as the settings dialog does — which is why the producer
+          // diffs by VALUE. A presence check would record two changes here.
+          schedulingMode: plan.body.data.schedulingMode as string,
+          name: 'Baseline',
+          version: plan.body.data.version as number,
+        })
+        .expect(200);
+
+      const written = await rows('plan.settings_changed');
+      expect(written).toHaveLength(1);
+      expect(Object.keys(written[0]!.changes?.after ?? {}).sort()).toEqual([
+        'planName',
+        'plannedStart',
+      ]);
+      expect(written[0]!.subjectType).toBe('PLAN');
+    });
+
+    it('writes NOTHING when the optimistic lock refuses the write (409)', async () => {
+      const { actor, planId } = await setup();
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ plannedStart: '2026-03-01', version: 999 })
+        .expect(409);
+      expect(await rows('plan.settings_changed')).toHaveLength(0);
+    });
+  });
+
+  describe('calendar.working_time_changed (family E)', () => {
+    /** A project-scoped calendar the admin can edit, plus the project it belongs to. */
+    async function calendar(actor: Actor): Promise<{ id: string; version: number }> {
+      const res = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Site hours', workingWeekdays: 0b0111110 })
+        .expect(201);
+      return { id: res.body.data.id as string, version: res.body.data.version as number };
+    }
+
+    it('records a working-week edit, naming the KIND rather than dumping the rows', async () => {
+      const { actor } = await setup();
+      const cal = await calendar(actor);
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/calendars/${cal.id}`)
+        .send({ workingWeekdays: 0b0111111, version: cal.version })
+        .expect(200);
+
+      const written = await rows('calendar.working_time_changed');
+      expect(written).toHaveLength(1);
+      expect(written[0]!.changes?.after).toMatchObject({
+        name: 'Site hours',
+        changedWhat: 'shifts',
+      });
+      // The shift rows are not in the payload, deliberately: "the working week changed" is the
+      // fact somebody needs, and a JSON dump of seven days' windows buries it.
+      expect(written[0]!.changes?.after).not.toHaveProperty('shifts');
+    });
+
+    it('writes NOTHING for a rename', async () => {
+      const { actor } = await setup();
+      const cal = await calendar(actor);
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/calendars/${cal.id}`)
+        .send({ name: 'Renamed', version: cal.version })
+        .expect(200);
+      expect(await rows('calendar.working_time_changed')).toHaveLength(0);
+    });
+
+    it('folds all three exception routes into the same action', async () => {
+      const { actor } = await setup();
+      const cal = await calendar(actor);
+      const created = await actor.agent
+        .post(`/api/v1/organizations/acme/calendars/${cal.id}/exceptions`)
+        .send({ date: '2026-12-25', isWorking: false, label: 'Christmas' })
+        .expect(201);
+      const exceptionId = created.body.data.id as string;
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/calendars/${cal.id}/exceptions/${exceptionId}`)
+        .send({ label: 'Christmas Day', version: created.body.data.version as number })
+        .expect(200);
+      await actor.agent
+        .delete(`/api/v1/organizations/acme/calendars/${cal.id}/exceptions/${exceptionId}`)
+        .expect(204);
+
+      // Three rows, one action. An exception IS working time; splitting them would ask a reader
+      // to know which control the planner used.
+      const written = await rows('calendar.working_time_changed');
+      expect(written).toHaveLength(3);
+      for (const row of written) {
+        expect(row.changes?.after).toMatchObject({ changedWhat: 'exception' });
+      }
+    });
+  });
+
+  describe('baseline.captured / .activated / .deleted (family E)', () => {
+    /** A recalculated plan with one activity — the minimum a capture will accept. */
+    async function capturable(): Promise<{ actor: Actor; planId: string }> {
+      const { actor, planId } = await setup();
+      await addActivity(actor, planId, { name: 'Dig' });
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+      return { actor, planId };
+    }
+
+    it('records a capture, an activation and a delete, each naming its plan', async () => {
+      const { actor, planId } = await capturable();
+      const first = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Tender' })
+        .expect(201);
+      const second = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Revision A' })
+        .expect(201);
+
+      expect(await rows('baseline.captured')).toHaveLength(2);
+      expect((await rows('baseline.captured'))[0]!.changes?.after).toMatchObject({
+        name: 'Revision A',
+        planName: 'Baseline',
+      });
+
+      const secondId = second.body.data.id as string;
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines/${secondId}/activate`)
+        .expect(200);
+      const activated = await rows('baseline.activated');
+      expect(activated).toHaveLength(1);
+      expect(activated[0]!.subjectLabel).toBe('Revision A');
+      expect(activated[0]!.changes?.after).toMatchObject({ planName: 'Baseline' });
+
+      await actor.agent
+        .delete(
+          `/api/v1/organizations/acme/plans/${planId}/baselines/${first.body.data.id as string}`,
+        )
+        .expect(204);
+      const deleted = await rows('baseline.deleted');
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0]!.changes?.before).toMatchObject({ name: 'Tender' });
+      expect(typeof deleted[0]!.changes?.before?.deleteBatchId).toBe('string');
+    });
+
+    it('writes NOTHING when the capture is refused for want of a recalculation', async () => {
+      const { actor, planId } = await setup();
+      await addActivity(actor, planId, { name: 'Dig' });
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Too early' })
+        .expect(422);
+      expect(await rows('baseline.captured')).toHaveLength(0);
     });
   });
 

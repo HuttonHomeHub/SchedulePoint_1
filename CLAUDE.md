@@ -1231,6 +1231,19 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   `PENDING_COVERAGE`, that is honestly a queue — pinned as a snapshot so the failure caught is a
   route quietly _arriving_ there, and emptied when C3.4 lands. **The CPM engine is not imported and
   the recalc parity gate is untouched.**
+  **C3.2** adds family E — the rules other people's work is judged by. These are **updates**, which
+  the durability test says do not earn a row; they are here on the blast-radius test, and a fourth
+  positive census assertion now pins that, because a reader applying Test 1 alone would move them
+  back with a plausible reason and remove the only explanation the log offers for "everything moved
+  overnight". The plan's governance field set is **one `const`** that the redactor's allow-list
+  **spreads** rather than restating, so a field removed from the set stops being recordable in the
+  same commit; the producer diffs by **value**, because the settings dialog resends the whole form
+  and a presence check would record fifteen changes each time a planner moved one. A calendar row
+  names the **kind** of working-time edit and not the rows — the hours are non-scalar, but the
+  reason to withhold them is the reader's, since a dump of seven days' windows buries the fact the
+  row exists to carry — and all three exception routes fold into that one action, because an
+  exception **is** working time. `baseline.captured` is the catalogue's only audited **create**, on
+  the same test: a baseline is the standard every later variance is measured against.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

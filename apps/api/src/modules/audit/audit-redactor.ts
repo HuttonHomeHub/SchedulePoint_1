@@ -1,5 +1,7 @@
 import type { AuditAction, AuditChanges } from '@repo/types';
 
+import { PLAN_GOVERNANCE_FIELDS } from '../plans/plan-governance-fields';
+
 /**
  * The 8 KB bound `ck_audit_events_changes_size` enforces. Kept a little under it so the JSON
  * envelope (`{"before":…,"after":…}`) plus the truncation marker cannot push a payload the
@@ -101,6 +103,25 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   // per-calendar quantity, and the audit row has no calendar to interpret one against.
   'dependency.created': ['predecessorName', 'successorName', 'type', 'lagMinutes'],
   'dependency.deleted': ['predecessorName', 'successorName', 'type', 'lagMinutes', 'deleteBatchId'],
+  // — The rules other people's work is judged by (ADR-0073 family E).
+  //
+  //   `plan.settings_changed` is the ONE action whose allow-list is not a hand-written line: it is
+  //   the governance field set itself, imported rather than restated, so a field added to that set
+  //   is recordable without anyone editing this file — and, more importantly, a field REMOVED from
+  //   it stops being recordable in the same commit. Two copies would drift silently: the producer
+  //   would pass a value the allow-list quietly dropped, and the row would say the field did not
+  //   change.
+  'plan.settings_changed': ['planName', ...PLAN_GOVERNANCE_FIELDS],
+  //   The shift rows themselves are deliberately absent. They are not scalar, so `normalise` would
+  //   reduce them to a type marker anyway — but the reason to withhold them is the reader's, not
+  //   the redactor's: "the working week changed" is the fact somebody needs when every date on a
+  //   plan moved, and a JSON dump of seven days' windows buries it. `changedWhat` names the kind.
+  'calendar.working_time_changed': ['name', 'changedWhat'],
+  'baseline.captured': ['name', 'planName'],
+  //   Both sides, because activation is a MOVE: exactly one baseline is active per plan
+  //   (ADR-0025), so the row that stopped being the standard is half the story.
+  'baseline.activated': ['name', 'planName'],
+  'baseline.deleted': ['name', 'planName', 'deleteBatchId'],
 };
 
 /**

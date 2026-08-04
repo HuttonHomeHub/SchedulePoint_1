@@ -404,8 +404,9 @@ export class BaselineRepository {
     id: string,
     actorId: string,
     db: Prisma.TransactionClient,
-  ): Promise<void> {
-    const stamp = { deletedAt: new Date(), deleteBatchId: randomUUID(), updatedBy: actorId };
+  ): Promise<string> {
+    const batchId = randomUUID();
+    const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
     await db.baselineActivity.updateMany({
       where: { baselineId: id, deletedAt: null },
       data: stamp,
@@ -418,6 +419,10 @@ export class BaselineRepository {
       data: stamp,
     });
     await db.baseline.updateMany({ where: { id, deletedAt: null }, data: stamp });
+    // Returned so the caller's audit row can carry it (ADR-0073 C3.2). The batch is what ties the
+    // baseline to the snapshot rows that went with it, which is the same thread every other
+    // deletion in the log names.
+    return batchId;
   }
 
   /** An active baseline with its frozen activity rows (source-id ordered) — the read shape. */
