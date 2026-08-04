@@ -772,10 +772,39 @@ the header. So the misconfiguration is invisible and will stay invisible until s
 reads the standard header and builds an `http://` link or drops a cookie, at which point the cause
 is three hops away from the symptom.
 
-**The fix:** set `proxy_set_header X-Forwarded-Proto $scheme;` on the HTTPS host in Nginx Proxy
-Manager (an operator change, not a code change). Optionally belt-and-braces: have the API prefer
-`cf-visitor`/`x-forwarded-scheme` where present. Not worth doing until something actually consumes
-the value.
+**The fix — and this row was wrong about where it lives (corrected 2026-08-04).** It said "an
+operator change, not a code change". At least half of it is a **code** change, in our own image:
+
+```nginx
+# apps/web/nginx.conf, the /api/ location
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+That `server` block only ever `listen`s on plain `8080` — TLS is terminated upstream — so `$scheme`
+there is **unconditionally `http`**, and this line **overwrites** whatever the proxy sent, on every
+request. A perfectly-configured Nginx Proxy Manager host would have its correct `https` discarded
+here before the API ever saw it. That is also why the other two headers survive intact: nginx passes
+through what it is not told to override, and this is the only one we override.
+
+So the fix is both halves, and the code half must land first or the operator half is untestable:
+
+1. **Repo:** stop deriving the header from this container's own scheme. Preserve what arrived, and
+   fall back to `$scheme` only when nothing did (direct/dev access, where it is correct).
+2. **Operator:** confirm Nginx Proxy Manager sends it at all — Advanced → `proxy_set_header
+X-Forwarded-Proto $scheme;` on the HTTPS host, with Force SSL on.
+
+Still not urgent — nothing consumes the value (verified: no `req.protocol`/`req.secure` anywhere in
+`apps/api/src`), and the four candidates are all deliberately decoupled: cookie `Secure` comes from
+`NODE_ENV`, absolute URLs from `BETTER_AUTH_URL`, HTTPS redirection belongs at the edge, and
+rate-limit keying uses `X-Forwarded-For`, which is **appended** (`$proxy_add_x_forwarded_for`) rather
+than overwritten and is therefore correct today.
+
+**A related claim, also corrected:** `common/http/client-ip.ts` said Express's `trust proxy` was
+"deliberately NOT enabled on this app (checked, not assumed)". It is enabled in production —
+`app-setup.ts` sets it from `TRUSTED_PROXY_IPS`, which env validation makes mandatory there. The
+helper still earns its place (it answers `null` rather than a peer address, and does not vary by
+environment), but the stated reason was false. Both corrections came from planning this row, which
+is the ADR-0058 rule finding two of its own instances in the file that cites it.
 
 ---
 

@@ -1,17 +1,22 @@
 /**
  * Resolve the real client IP from `X-Forwarded-For`, trusting only the proxies we are told to.
  *
- * **Why this exists rather than `request.ip`.** Express's `trust proxy` setting is deliberately NOT
- * enabled on this app (checked, not assumed), so `request.ip` is the immediate peer — the web
- * container — for every request that arrives through the reverse proxy. Recording that in an audit
- * row would be worse than recording nothing: an operator reading "192.168.0.5" for every event has
- * a column that looks like evidence and is not.
+ * **Why this exists rather than `request.ip`.** Not because `trust proxy` is off — it is **on in
+ * production**: `app-setup.ts` calls `app.set('trust proxy', trustedProxyIps)` whenever
+ * `TRUSTED_PROXY_IPS` is set, which env validation makes mandatory there. (An earlier version of
+ * this docblock asserted the opposite, "checked, not assumed", and was simply wrong — the
+ * trust-proxy line predates it by a fortnight. It is corrected rather than quietly deleted because
+ * a false claim about a live security setting is worth a sentence saying so.)
  *
- * **Why not simply switch `trust proxy` on.** It changes `request.ip` AND `request.protocol` for
- * every consumer at once, and `docs/TECH_DEBT.md` #89 records that this deployment currently sends
- * `X-Forwarded-Proto: http` on HTTPS requests. Flipping a global that reads a header we know to be
- * wrong, to fix an unrelated column, is how a small correction becomes an outage. This helper is
- * scoped to the callers that want an IP and changes nothing else.
+ * It exists for two properties `request.ip` does not have:
+ *
+ * 1. **It answers `null` when it cannot tell**, where `request.ip` always yields *something* — the
+ *    immediate peer if the chain is untrustworthy. For an audit column that difference is the whole
+ *    point: an operator reading "192.168.0.5" on every event has a field that looks like evidence
+ *    and is not, and a blank is the honest answer.
+ * 2. **It does not depend on the environment.** `trust proxy` is off in dev and test (no proxies are
+ *    declared), so a producer relying on `request.ip` would record something different there than in
+ *    production, and the tests would agree with themselves.
  *
  * The walk is **right to left**, which is the only safe direction: a client may send its own
  * `X-Forwarded-For` header, and the proxy chain appends to the right. Everything left of the first
