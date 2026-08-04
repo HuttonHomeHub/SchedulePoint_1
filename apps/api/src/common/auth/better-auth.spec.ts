@@ -31,6 +31,7 @@ describe('createAuth security options', () => {
     isProduction: false,
     requireEmailVerification: false,
     sendVerificationEmail: () => Promise.resolve(),
+    sendPasswordReset: () => Promise.resolve(),
     recordAuthEvent: () => Promise.resolve(),
     findUserIdByEmail: () => Promise.resolve(null),
   };

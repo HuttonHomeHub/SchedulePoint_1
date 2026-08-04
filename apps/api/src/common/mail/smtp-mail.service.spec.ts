@@ -81,9 +81,16 @@ describe('SmtpMailService', () => {
 
   it('THROWS when the verification send fails — the opposite of the invitation rule', async () => {
     // The asymmetry, pinned. An invitation swallows because its accept URL is also on screen; the
-    // verify URL exists ONLY in this email. Swallowing would hand someone an account that, with
-    // AUTH_REQUIRE_EMAIL_VERIFICATION on, they cannot use — with no error and nothing explaining
-    // why. Failing the sign-up is recoverable; a silently unusable account is not.
+    // verify URL exists ONLY in this email. Swallowing would discard the only signal that anything
+    // went wrong.
+    //
+    // **Throwing does not fail the sign-up**, and this comment claimed it did until 2026-08-04:
+    // Better Auth calls the port through `runInBackgroundOrAwait`, which catches and logs without
+    // rethrowing. What the throw buys is that the failure reaches a logger with context rather than
+    // vanishing here — which is exactly why routing Better Auth's own logger into Pino
+    // (`docs/TECH_DEBT.md` #94) is part of ADR-0074's M0. This test pins the seam's behaviour, not
+    // a guarantee about the layer above it — a distinction that cost the previous version its
+    // accuracy, because a test one level below where a claim is made cannot see the claim.
     sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'));
     const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
 
@@ -101,5 +108,41 @@ describe('SmtpMailService', () => {
 
     const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
     expect(logged).not.toContain('tok_secret');
+  });
+
+  describe('password reset (ADR-0074)', () => {
+    const reset = {
+      to: 'locked-out@example.com',
+      resetUrl: 'https://app.example.com/api/auth/reset-password/tok_reset_secret',
+    };
+
+    it('sends the reset link, and says the password has not changed', async () => {
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+      await service.sendPasswordReset(reset);
+
+      const message = sendMail.mock.calls[0]?.[0] as Record<string, string>;
+      expect(message.to).toBe('locked-out@example.com');
+      expect(message.text).toContain(reset.resetUrl);
+      // The line that matters for an unrequested reset: it tells the recipient that ignoring the
+      // message is safe, which "you can ignore this" alone does not.
+      expect(message.text).toContain('has not been changed');
+    });
+
+    it('THROWS when the send fails, like verification and unlike an invitation', async () => {
+      sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+
+      await expect(service.sendPasswordReset(reset)).rejects.toThrow(/ECONNREFUSED/);
+    });
+
+    it('never logs the reset URL on success — it can set a password', async () => {
+      const logger = loggerDouble();
+      await new SmtpMailService('no-reply@example.com', 'smtps://h', logger).sendPasswordReset(
+        reset,
+      );
+
+      const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
+      expect(logged).not.toContain('tok_reset_secret');
+    });
   });
 });

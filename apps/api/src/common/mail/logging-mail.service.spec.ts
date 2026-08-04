@@ -11,6 +11,10 @@ const VERIFY_URL = 'https://app.example.com/api/v1/auth/verify-email?token=tok_l
 
 const verification = { to: 'new-user@example.com', verifyUrl: VERIFY_URL };
 
+const RESET_URL = 'https://app.example.com/api/auth/reset-password/tok_reset_secret';
+
+const passwordReset = { to: 'locked-out@example.com', resetUrl: RESET_URL };
+
 const invitation = {
   to: 'invitee@example.com',
   organizationName: 'Acme Construction',
@@ -71,6 +75,40 @@ describe('LoggingMailService', () => {
       const text = loggedText(logger);
       expect(text).toContain('MAIL_SMTP_URL');
       expect(text).toContain('new-user@example.com');
+    });
+  });
+
+  describe('password reset (ADR-0074)', () => {
+    it('logs the reset URL outside production, because the link exists nowhere else', async () => {
+      const logger = loggerDouble();
+      await new LoggingMailService(logger, false).sendPasswordReset(passwordReset);
+
+      expect(logger.info).toHaveBeenCalledTimes(1);
+      expect(loggedText(logger)).toContain(RESET_URL);
+    });
+
+    it('never logs the reset URL or its token in production', async () => {
+      const logger = loggerDouble();
+      await new LoggingMailService(logger, true).sendPasswordReset(passwordReset);
+
+      // The same rule as verification and, if anything, stricter: a verification link proves an
+      // address, a reset link sets a password.
+      const text = loggedText(logger);
+      expect(text).not.toContain(RESET_URL);
+      expect(text).not.toContain('tok_reset_secret');
+      expect(logger.info).not.toHaveBeenCalled();
+    });
+
+    it('says why no reset email went out, naming the missing configuration', async () => {
+      const logger = loggerDouble();
+      await new LoggingMailService(logger, true).sendPasswordReset(passwordReset);
+
+      // The requester cannot be told — the endpoint answers identically for a known and an unknown
+      // address — so this line is the ONLY signal that recovery is inert.
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      const text = loggedText(logger);
+      expect(text).toContain('MAIL_SMTP_URL');
+      expect(text).toContain('locked-out@example.com');
     });
   });
 

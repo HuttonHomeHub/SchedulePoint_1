@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { createTransport, type Transporter } from 'nodemailer';
 
-import { type EmailVerificationEmail, type InvitationEmail, MailService } from './mail.service';
+import {
+  type EmailVerificationEmail,
+  type InvitationEmail,
+  MailService,
+  type PasswordResetEmail,
+} from './mail.service';
 
 /**
  * SMTP adapter for {@link MailService} — the first real transport (TECH_DEBT: mail transport,
@@ -93,6 +98,48 @@ export class SmtpMailService extends MailService {
     });
     this.logger.info({ to: email.to }, 'email-verification link sent');
   }
+
+  /**
+   * Password reset (ADR-0074). Lets its error **propagate**, matching
+   * {@link sendEmailVerification} — and with the same caveat: propagating is not failing the
+   * request. Better Auth calls `sendResetPassword` from inside `/request-password-reset`'s handler,
+   * which answers `{ status: true }` **uniformly** for a known and an unknown address to avoid a
+   * timing and content oracle. A rejection that changed the response would reintroduce the oracle
+   * the library deliberately closes, so it cannot be surfaced to the caller even in principle.
+   *
+   * The throw is still right at this seam — it is what routes the failure to a logger that carries
+   * correlation IDs — and the operator-facing gap that leaves is `docs/TECH_DEBT.md` #94.
+   */
+  async sendPasswordReset(email: PasswordResetEmail): Promise<void> {
+    // Never log `resetUrl` — it is a live single-use credential, and logs are retained and shipped.
+    await this.transporter.sendMail({
+      from: this.from,
+      to: email.to,
+      subject: 'Reset your SchedulePoint password',
+      text: passwordResetText(email),
+    });
+    this.logger.info({ to: email.to }, 'password-reset link sent');
+  }
+}
+
+/**
+ * Mirrors the two above: plain text, one action, no template machinery.
+ *
+ * The closing line is deliberate. A reset email arriving unrequested is the one signal an account
+ * holder gets that somebody is probing their address, and "you can ignore this" alone reads as
+ * routine — so it says the password is unchanged, which is the fact that makes ignoring it safe.
+ */
+function passwordResetText(email: PasswordResetEmail): string {
+  return [
+    'Choose a new password for your SchedulePoint account:',
+    '',
+    email.resetUrl,
+    '',
+    'This link can be used once and expires in about an hour.',
+    '',
+    'If you did not ask to reset your password, you can ignore this message — your password has ' +
+      'not been changed.',
+  ].join('\n');
 }
 
 /** Mirrors {@link invitationText}: plain text, one action, no template machinery. */

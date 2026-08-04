@@ -39,6 +39,15 @@ import { specToEngineInput } from './spec-to-engine';
  * and the whole premise is that the seeder is an ordinary client obeying every DTO, guard and lock.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
+/**
+ * The app's own trusted origin (`CORS_ORIGINS`), sent deliberately rather than the ephemeral socket
+ * URL. Better Auth validates `Origin` against `trustedOrigins`, and this suite listens on a random
+ * port that is not on that list — so sending `baseUrl` as the origin is a request the deployed app
+ * would refuse. It passed only because Better Auth silently skips the origin check under
+ * `isTest()`; ADR-0074 turns that check on explicitly, which is what surfaced this.
+ */
+const TRUSTED_ORIGIN = 'http://localhost:5173';
+
 const PASSWORD = 'correct-horse-battery';
 const EMAIL = 'pairwise@example.com';
 
@@ -85,7 +94,7 @@ describe.skipIf(!hasDatabase)('Pairwise differential (e2e)', () => {
     await resetDatabase();
     projectId = await bootstrapOrganisation();
 
-    client = new SeedClient({ baseUrl, origin: baseUrl });
+    client = new SeedClient({ baseUrl, origin: TRUSTED_ORIGIN });
     await client.authenticate({ email: EMAIL, password: PASSWORD });
   }, 120_000);
 
@@ -123,7 +132,7 @@ describe.skipIf(!hasDatabase)('Pairwise differential (e2e)', () => {
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/sign-up/email')
-      .set('Origin', baseUrl)
+      .set('Origin', TRUSTED_ORIGIN)
       .send({ name: 'Pairwise', email: EMAIL, password: PASSWORD })
       .expect(200);
     await agent.post('/api/v1/organizations').send({ name: 'Pairwise Co' }).expect(201);

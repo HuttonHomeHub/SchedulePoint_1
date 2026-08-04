@@ -58,6 +58,16 @@ export interface CreateAuthOptions {
    */
   sendVerificationEmail: (input: { to: string; verifyUrl: string }) => Promise<void>;
   /**
+   * Deliver the password-reset link (ADR-0074). A callback for the same reason as
+   * `sendVerificationEmail` — this factory stays a pure function of its options.
+   *
+   * **Configuring this is what makes reset exist at all.** Absent, Better Auth's
+   * `/request-password-reset` throws `RESET_PASSWORD_DISABLED` outright
+   * (`api/routes/password.mjs:51-57`), which is why the product had no recovery path rather than
+   * merely no screen for one.
+   */
+  sendPasswordReset: (input: { to: string; resetUrl: string }) => Promise<void>;
+  /**
    * Record an authentication event (ADR-0072). A callback for the same reason as
    * `sendVerificationEmail`: this factory stays a pure function of its options and never learns
    * about Nest DI.
@@ -132,6 +142,17 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       // switch usable is `emailVerification` below (Theme B2).
       requireEmailVerification: options.requireEmailVerification,
       autoSignIn: true,
+      /**
+       * Account recovery (ADR-0074). Configuring this is what makes reset **exist**: without it
+       * `/request-password-reset` answers `RESET_PASSWORD_DISABLED`, which is why the product had
+       * no recovery path at all rather than merely no screen for one.
+       *
+       * Better Auth owns the token's minting, expiry and single-use; this app carries the URL, and
+       * (per the `verification` key below) stores only its hash.
+       */
+      sendResetPassword: async ({ user, url }) => {
+        await options.sendPasswordReset({ to: user.email, resetUrl: url });
+      },
       /**
        * **A completed reset ends every other session** (ADR-0074 B2).
        *
@@ -262,6 +283,22 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       }),
     },
     advanced: {
+      /**
+       * **Keep the origin check on under test.** Better Auth defaults `skipOriginCheck` to
+       * `isTest() ? true : false` (`context/create-context.mjs:210`), so without this line every
+       * e2e in this repository runs with the CSRF and redirect-target validation **switched off** —
+       * a different security posture from production, in the suite whose job is to prove the
+       * production one.
+       *
+       * That matters concretely for ADR-0074: `redirectTo` on `/request-password-reset` is
+       * validated against `trustedOrigins` (bound to `CORS_ORIGINS`), and an app origin missing
+       * from that list makes **every** reset fail with nothing on screen to explain it. Setting it
+       * explicitly is what makes that failure mode testable rather than a deployment surprise.
+       *
+       * Found while writing `test/password-reset.e2e-spec.ts`, when an attacker-controlled
+       * `redirectTo` returned 200.
+       */
+      disableOriginCheck: false,
       cookiePrefix: 'schedulepoint',
       useSecureCookies: options.isProduction,
       // Resolve the client IP for rate limiting only from X-Forwarded-For hops

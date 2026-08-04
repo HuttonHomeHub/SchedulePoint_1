@@ -38,6 +38,8 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           // The auth library reaches mail through the port, never a transport — so which adapter
           // is bound stays `MailModule`'s decision and this wiring is the same in every environment.
           sendVerificationEmail: (input) => mail.sendEmailVerification(input),
+          // Same seam, same reason (ADR-0074). The library never learns which transport is bound.
+          sendPasswordReset: (input) => mail.sendPasswordReset(input),
           // `recordBestEffort`, not `record`: these fire outside any transaction, and refusing
           // every sign-in because the audit table is unavailable would turn a logging fault into
           // an outage. ADR-0072 names that gap rather than hiding it — auth rows are best-effort,
