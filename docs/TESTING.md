@@ -80,7 +80,7 @@ table shows. The low `functions` figure is largely DTO classes and decorators.
 
 - Boot the **real Nest app** (global pipe, filter, interceptor, guards) and
   exercise endpoints via **Supertest**, asserting status codes and the standard
-  `{ data, meta }` / `{ error }` envelopes. 28 specs live in `apps/api/test/`;
+  `{ data, meta }` / `{ error }` envelopes. 32 specs live in `apps/api/test/`;
   `clients.e2e-spec.ts` is the canonical shape.
 - **Every endpoint needs a cross-organisation test** asserting **404**, not 403
   (`docs/SECURITY_STANDARDS.md`). This is the one assertion that catches IDOR,

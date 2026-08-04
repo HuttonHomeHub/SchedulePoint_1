@@ -1,6 +1,17 @@
 # ADR-0006: Styling and design tokens
 
-- **Status:** Accepted
+- **Status:** Accepted — **except the shadcn/ui + Radix clause, which was never
+  adopted.** The token model, Tailwind v4 CSS-first, CVA and the dark-mode
+  strategy below are all live and binding. The component-library clause is not:
+  `src/components/ui/` is **hand-rolled on semantic HTML + the WAI-ARIA APG**,
+  and there has never been a Radix dependency in `apps/web/package.json`. The
+  standard that actually governs a primitive is
+  [`docs/DESIGN_SYSTEM.md`](../DESIGN_SYSTEM.md) and
+  [`docs/COMPONENT_LIBRARY.md`](../COMPONENT_LIBRARY.md); adding a component
+  library is an ADR-level decision that has not been taken. Recorded by the
+  2026-08-04 reconciliation pass, which found this ADR still instructing a
+  reader to copy in shadcn primitives — the decision body is left intact
+  (`CLAUDE.md` §6: never rewrite an ADR) and this line carries the correction.
 - **Date:** 2026-07-08
 - **Deciders:** Frontend architecture, Design System
 

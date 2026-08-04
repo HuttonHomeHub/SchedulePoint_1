@@ -1,7 +1,7 @@
 # Backend Architecture
 
 > **Status:** built and in use. This document defines the architecture the API
-> (`apps/api`) follows: 19 feature modules over shared infrastructure (config,
+> (`apps/api`) follows: 20 feature modules over shared infrastructure (config,
 > Prisma, guards, filters, interceptors, health, bootstrap). The feature patterns
 > are demonstrated by real shipping exemplars —
 > [`modules/clients`](../apps/api/src/modules/clients/) (canonical shape),

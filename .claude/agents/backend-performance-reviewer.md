@@ -51,8 +51,10 @@ not edit code.
 - **Caching (if added):** cache-aside with explicit TTL and an invalidation
   story; namespaced/versioned keys; never caches authoritative/sensitive data
   beyond safe bounds; justified by a hot path, not speculative.
-- **Async:** slow/retriable/scheduled work offloaded to BullMQ; handlers
-  idempotent; requests stay fast.
+- **Async:** requests stay fast. **There is no queue and no worker** — BullMQ
+  and Redis (ADR-0009) are designed but not installed, so "offload it to a job"
+  is not an available remedy today. Flag genuinely slow synchronous work as the
+  case that would justify building the queue; do not review as though it exists.
 - **Scalability:** stateless handlers; bounded connection use; backpressure
   (timeouts, payload/pagination caps) present.
 

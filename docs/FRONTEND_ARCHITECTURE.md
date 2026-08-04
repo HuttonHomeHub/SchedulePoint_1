@@ -1,7 +1,7 @@
 # Frontend Architecture
 
 > **Status:** built and in use. This document defines the architecture the web
-> client (`apps/web`) follows — 23 feature modules inside a persistent app shell
+> client (`apps/web`) follows — 27 feature modules inside a persistent app shell
 > — and every frontend change must respect it. Decisions here are backed by ADRs
 > [0004](adr/0004-frontend-state-management.md)–[0007](adr/0007-forms-and-validation.md),
 > with the shell and workspace shaped by

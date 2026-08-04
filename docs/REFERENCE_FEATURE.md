@@ -157,8 +157,10 @@ committed migration.
 
 ### Observability & health hooks
 
-Structured, correlated logs (above) and OpenTelemetry spans/metrics on critical
-paths (ADR-0013). Liveness/readiness are provided globally by the `health`
+Structured, correlated logs (above). OpenTelemetry spans/metrics on critical
+paths (ADR-0013) are the standard **when that work lands** — no OTel dependency
+is installed today, so a feature cannot and need not emit them
+(`docs/ARCHITECTURE.md` §10). Liveness/readiness are provided globally by the `health`
 module (`@nestjs/terminus`); if a feature introduces a new critical dependency,
 add it to the readiness check.
 

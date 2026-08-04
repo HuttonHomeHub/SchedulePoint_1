@@ -52,6 +52,12 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       PLAN_EDIT_LOCK_ENFORCED: ${PLAN_EDIT_LOCK_ENFORCED:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Declared in the env schema and .env.example, so they must be listed here too —
+      # a variable reaches the container only by appearing in this block. Missing until
+      # the 2026-08-04 reconciliation pass, which is the defect PR #225 fixed for the
+      # mail variables and did not sweep for.
+      RATE_LIMIT_TTL: ${RATE_LIMIT_TTL:-60}
+      RATE_LIMIT_LIMIT: ${RATE_LIMIT_LIMIT:-100}
     ports:
       - '3000:3000'
 

@@ -11,17 +11,20 @@
 
 </div>
 
-> **Project status: SchedulePoint is substantially built.** 19 API modules, 25
-> Prisma models across 41 migrations, a React client with 18 flag-scoped
-> Playwright suites beside the base journey, and 66 ADRs. The CPM/GPM engine is
+> **Project status: SchedulePoint is substantially built.** 20 API modules, 27
+> Prisma models across 47 migrations, a React client with 23 flag-scoped
+> Playwright suites beside the base journey, and 73 ADRs (counted 2026-08-04).
+> The CPM/GPM engine is
 > real and its conformance matrix is closed (ADR-0034), and the **application**
-> has its own test bed as of 2026-07-31 — 36 documented seeded plans and hostile
+> has its own test bed as of 2026-07-31 — 37 documented seeded plans and hostile
 > cases created through the public REST API (ADR-0066, and the
 > [test playbook](docs/TEST_PLAYBOOK.md)). The **Gantt view shipped** on 2026-07-28
 > (ADR-0059), substantially delivering the brief's last outstanding Must-have —
 > §8 words it "read-primary; edit supported", and Gantt editing stays deferred
-> (ADR-0059 M5). The other open question is the deployment target. See the [roadmap](docs/ROADMAP.md) and
-> [project brief](docs/PROJECT_BRIEF.md).
+> (ADR-0059 M5). An **append-only audit log** shipped 2026-08-03 (ADR-0072/0073),
+> closing the register's oldest row. It runs on Docker Compose with releases
+> pulled automatically (ADR-0047) — hosting is settled, not open. See the
+> [roadmap](docs/ROADMAP.md) and [project brief](docs/PROJECT_BRIEF.md).
 
 SchedulePoint is a browser-based **construction scheduling** application built
 around a **Time-Scaled Logic Diagram** as its primary editing surface: planners

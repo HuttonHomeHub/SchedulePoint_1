@@ -226,8 +226,41 @@ discriminators. Each becomes a spec/plan before build:
   printed programme. The CPM engine and the recalc parity gate are untouched. Deliberately not
   done: the band is select-only (a summary's dates are an engine rollup, so there is nothing on it
   to drag), and the derived bucket is never persisted.
+- **Canvas authoring flow & link routing** — **shipped** (ADR-0064
+  `VITE_CANVAS_AUTHORING_FLOW` + ADR-0065 `VITE_CANVAS_LINK_ROUTING`, both default-on 2026-07-31):
+  one arm/disarm contract across all four tool modes with a mode statement band above the scene,
+  a link confirmation naming the direction, token-based recalculation holds so bars cannot move
+  between a planner's two clicks, and keyboard pick parity seeded into the canvas gesture. Then
+  orthogonal corridors that step **around** bars, with near-identical runs bundled onto one trunk.
+  The routing measurement re-opened the draw budget rather than passing it (TECH_DEBT #75).
+- **The seed catalogue** — **shipped** (ADR-0066): 37 documented plans and hostile cases created
+  through the **public REST API** in five tiers, keyed to [`TEST_PLAYBOOK.md`](TEST_PLAYBOOK.md)
+  and gated by `pnpm check:playbook`. The conformance harness proves the **engine**; this proves
+  the **application** — the write paths, DTOs and guards no pure-function gate can reach.
+- **Authorable working time** — **shipped** (ADR-0067 `VITE_CALENDAR_SHIFT_EDITOR` default-on
+  2026-08-01, with ADR-0068): the calendar shift editor, closing a year-old gap where storage and
+  the engine had supported intraday shift patterns since ADR-0036 and **nothing in the product
+  could author one**. Plus a per-calendar **hours-per-day** factor, so "5 days" on an eight-hour
+  calendar is 2,400 working minutes rather than 7,200 — derived once when shifts are written,
+  frozen into baselines, and round-tripped through interchange as P6's `day_hr_cnt`.
+- **Sub-day durations, lags and assignment lag** — **shipped** (ADR-0070 `VITE_SUB_DAY_DURATIONS`
+  default-on 2026-08-02, ADR-0071 `VITE_ASSIGNMENT_LAG` default-on 2026-08-02): a `d`/`h`/`m`
+  text grammar for durations and lags where a bare number still means days, with `hoursPerDay` a
+  **required** parameter of the parser so the compiler forbids the silent-wrong-answer default;
+  and a per-assignment lag the histogram had accepted since ADR-0044 with nothing able to store
+  one. ADR-0069 moved the lane packer to `@repo/layout` so an imported programme opens packed
+  rather than one bar per lane.
+- **The audit log** — **shipped** (ADR-0072 + ADR-0073, `VITE_AUDIT_FILTERS` /
+  `VITE_AUDIT_SELF_SECURITY` default-on 2026-08-04), closing the register's oldest row
+  (TECH_DEBT #14). A single `audit_events` table made append-only **in the database** by
+  `ENABLE ALWAYS` triggers, an allow-list-per-action redactor, and a route census that fails if a
+  route changing who-can-do-what stops being audited. Coverage is derived from two tests —
+  **durability** and **blast radius** — not from a list of opinions; content edits are
+  **permanently** excluded. A failed sign-in is readable by the account it named and nobody else.
+  The CPM engine is not imported, and auditing a recalculation is forbidden by decision.
 - **Export** (PDF/CSV) and **resources** (library + assignments) —
-  Must/Should-have per the brief. (Resources have since shipped — M7.)
+  Must/Should-have per the brief. (Resources have since shipped — M7. Export shipped as the TSLD
+  CSV/PNG/PDF menu, the printed programme, and XER/MSPDI via `GET …/export/:format`.)
 
 ## Guiding constraints
 

@@ -53,7 +53,7 @@ There is deliberately **no cache, queue, or object store in the running system**
 
 - Layered: **controllers** (HTTP + validation) → **services** (business logic)
   → **repositories** → **Prisma** (persistence). One Nest module per feature;
-  19 feature modules under `src/modules/`.
+  20 feature modules under `src/modules/`.
 - Cross-cutting concerns live in `src/common/`: `auth/` (principal, permissions,
   guest principal), `guards/`, `filters/`, `interceptors/`, `db/` (advisory-lock
   helpers), `hierarchy/` (the soft-delete cascade/restore lifecycle service),
@@ -113,8 +113,8 @@ ESLint flat-config presets (`base`, `react`, `nest`) and tsconfig presets.
 
 ### PostgreSQL + Prisma
 
-Prisma is the ORM and migration tool. `apps/api/prisma/schema.prisma` (25
-models) is the source of truth for the data model; 41 migrations are committed.
+Prisma is the ORM and migration tool. `apps/api/prisma/schema.prisma` (27
+models) is the source of truth for the data model; 47 migrations are committed.
 Constraints Prisma cannot express — partial uniques, CHECK constraints, partial
 indexes — are written as raw SQL in the migration and documented as a comment on
 the model, never as an `@@index` that would drift (see
@@ -214,6 +214,40 @@ progress edits do not.
   against a **`GuestPrincipal`** — a separate type with no memberships and no
   `can()`. Member service methods take `Principal`, so passing a guest into one
   is a **compile error**: the isolation is structural, not a runtime check.
+
+### The audit log (ADR-0072 / ADR-0073)
+
+Added here by the 2026-08-04 reconciliation pass, which found this document
+silent on it — an append-only table with database triggers is a structural
+property of the system, not a feature detail.
+
+- A single **`audit_events`** table, made append-only **in the database** by
+  `BEFORE UPDATE OR DELETE` and `BEFORE TRUNCATE` triggers declared
+  `ENABLE ALWAYS`, so the application role cannot bypass them. The honest claim
+  is tamper-**resistant**, not tamper-proof: anyone with `ALTER TABLE` can still
+  disable a trigger.
+- Payloads pass an **allow-list per action**, plus a `NEVER_RECORD` substring
+  ban catching `token`/`hash` independently. The redactor reduces any non-scalar
+  to a type marker **by design**, which is why cascades record scalar counts
+  rather than nested objects.
+- **What earns a row is derived from two tests, not a list of opinions**
+  (ADR-0073): **durability** — does the product otherwise keep a durable record?
+  — and **blast radius** — does it change how _other people's_ work is
+  evaluated? Both negative by default. Content edits are **permanently**
+  excluded. A **route census**, derived by reflecting the live Nest module
+  graph, fails the build if a route that changes who-can-do-what stops being
+  audited, and forces every route to be classified exactly once.
+- **The recalculation is deliberately never audited.** It is deterministic from
+  inputs that are themselves auditable, so a row saying "the schedule was
+  recomputed" is noise rather than evidence. Note the census's real shape before
+  relying on it: it forces routes _to be_ audited and nothing forbids auditing
+  one, so this is a rule with a documented reason, not a gate.
+- Producers use `record()` inside a transaction (the insert shares the write's
+  fate) or `recordBestEffort()` where there is no transaction to roll back. Which
+  one a producer may call is pinned by
+  `audit-producer-seams.structural.spec.ts`, because the property — "if this
+  insert throws, what happens to the caller?" — differs only on a failure the
+  application cannot be made to produce on demand.
 
 ## 8. Configuration
 

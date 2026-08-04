@@ -19,16 +19,21 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 19 API modules
-> (`apps/api/src/modules/`), 25 Prisma models across 42 migrations, ~700 web
-> source files with 19 flag-scoped Playwright suites beside the base journey, and
-> 70 ADRs (recounted 2026-08-01 — every number here is `ls | wc -l`, not memory).
+> **Current stage: the application is substantially built.** 20 API modules
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, ~750 web
+> source files with 23 flag-scoped Playwright suites beside the base journey, and
+> 73 ADRs (recounted 2026-08-04 — every number here is `ls | wc -l`, not memory).
+> **Treat the date, not the word "recounted", as the claim**: the previous
+> recount was three days earlier and every one of these six numbers was already
+> wrong by the time it was read, because an epic shipped in between. If the date
+> is not today's, re-run the commands in
+> [`docs/RECONCILE.md`](docs/RECONCILE.md) §1 rather than quoting this line.
 > The CPM/GPM engine is real and its conformance matrix is closed (ADR-0034).
 > Read the code before assuming anything is missing — this banner said the
 > opposite for months after it stopped being true, which is exactly the failure
 > it now warns against.
 >
-> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): 36
+> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): 37
 > documented seeded plans and hostile cases created through the public REST API,
 > keyed to [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md), which says which plan
 > proves what and what _wrong_ looks like. Use it before hand-building a plan to
@@ -42,8 +47,9 @@ browser-native team use. See the full product context in
 > "read-primary; **edit supported**" — Gantt editing is deferred as ADR-0059 M5,
 > so that line is not yet closed. This banner and the PR that shipped it both said
 > "closing the last Must-have" until the brief was re-read: the same trust-the-
-> document failure the paragraph above warns about, one paragraph later. What
-> remains undecided is the **deployment target**. New work still follows the delivery
+> document failure the paragraph above warns about, one paragraph later. Hosting
+> is **settled** (Docker Compose + ADR-0047 auto-pull, `docs/TECH_DEBT.md` #5) —
+> this banner listed it as the open question until 2026-08-04. New work still follows the delivery
 > process (§21) and the implementation standard (§12), which is demonstrated by
 > real modules rather than by a template to copy (ADR-0057).
 >
@@ -96,16 +102,16 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   19 feature modules
+│   │   ├── src/modules/      #   20 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (25 models) + 41 migrations
+│   │   ├── prisma/           #   Schema (27 models) + 47 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
 │   ├── config/               # Shared ESLint + tsconfig presets (@repo/config)
 │   ├── interchange/          # Pure schedule-interchange model/parsers (ADR-0050)
-│   ├── layout/              # Pure lane packer, shared by the canvas + importer (ADR-0069)
+│   ├── layout/               # Pure lane packer, shared by the canvas + importer (ADR-0069)
 │   ├── engine-conformance/   # Engine-free conformance fixture + loaders (ADR-0034)
 │   ├── seed/                 # Pure SeedSpec model + pairwise/scale/negative builders (ADR-0066)
 │   ├── seed-http/            # The seeder as an ordinary REST client (ADR-0066)
@@ -328,7 +334,9 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
 - **ADR-0003** — Authentication with Better Auth.
 - **ADR-0004** — Frontend state management (server/URL/local/global split).
 - **ADR-0005** — Routing with TanStack Router.
-- **ADR-0006** — Styling and design tokens (Tailwind v4 + shadcn/ui + CVA).
+- **ADR-0006** — Styling and design tokens (Tailwind v4 + CVA). Its shadcn/ui +
+  Radix clause was **never adopted** — primitives are hand-rolled on the APG;
+  see the ADR's status line.
 - **ADR-0007** — Forms and validation (React Hook Form + Zod).
 - **ADR-0008** — Backend as a modular monolith with layered modules.
 - **ADR-0009** — Background processing with BullMQ + Redis.
@@ -1306,15 +1314,31 @@ A lighter-weight running log of smaller decisions is in
   (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
   tracing (0013, of which only Pino is wired). Nothing in the running system
   depends on them and none of their dependencies are installed. Do not cite
-  them as existing capability; see `docs/ARCHITECTURE.md` §10. The mail port is
-  a **logging** stub — invitation emails are logged, not sent.
-- **No append-only audit log** exists; row attribution plus structured logs are
-  not an audit trail (`docs/TECH_DEBT.md` #14). There is likewise no hard-delete
-  or data-export path — every deletion is a soft delete.
-- The **hosted** deployment target (managed host vs. self-hosted Kubernetes) is
-  **not yet decided**; the container/registry foundation is deliberately
-  platform-neutral (`docs/TECH_DEBT.md` #5). What is **not** undecided is whether
-  releases reach anyone: the product owner runs the Docker Compose stack with the
+  them as existing capability; see `docs/ARCHITECTURE.md` §10. The mail port has
+  a **real SMTP adapter** (`common/mail/smtp-mail.service.ts`), selected whenever
+  `MAIL_SMTP_URL` is configured; the logging implementation is the **fallback**
+  when it is not, so on a stock dev environment mail is still only logged. This
+  bullet called the port "a logging stub" until the 2026-08-04 pass, which is
+  the read that leads to building a second mail path.
+- **Every deletion is a soft delete.** There is no hard-delete or
+  data-erasure path: `deleted_at` is set, the row stays, and the recycle bin
+  restores it. Plan for that when reasoning about retention or a
+  right-to-erasure request. (An **append-only audit log** and a **data-export
+  path** were both listed here as missing until the 2026-08-04 reconciliation
+  pass; both had shipped. The log is ADR-0072/0073 — `audit_events`, append-only
+  in the database. Export is `GET …/plans/:id/export/:format` for XER and MSPDI
+  (ADR-0050 M4) plus the TSLD's CSV/PNG/PDF and the printed programme
+  (ADR-0059 M4). Neither is an org-wide account export, which is still absent.)
+- **Hosting is decided** (settled 2026-08-01, `docs/TECH_DEBT.md` #5): Docker
+  Compose on the product owner's host, with releases pulled automatically. A
+  _different_ target — managed host, or self-hosted Kubernetes — has not been
+  costed, and does not need to be until one of #5's three triggers fires; the
+  container/registry foundation is deliberately platform-neutral so that stays a
+  decision rather than a rewrite. This bullet said the target was "not yet
+  decided" until the 2026-08-04 pass, three days after #5 recorded the opposite
+  — a settled decision reading as work owed, which is the mirror image of the
+  failure the rest of this section warns about. What is **not** undecided is
+  whether releases reach anyone: the product owner runs the Docker Compose stack with the
   ADR-0047 Watchtower profile **enabled**, so a merged release is pulled and
   recreated on that host and **every release is reviewed by a person**. Anything
   shipped default-on is in use. This paragraph said the opposite for months — that
@@ -1323,9 +1347,14 @@ A lighter-weight running log of smaller decisions is in
   Do not reason about this product as if it were unused (corrected 2026-07-30).
 - Cross-browser e2e coverage is Chromium-first: the Playwright config defines
   firefox/webkit projects but the journeys are exercised mainly on Chromium.
-- The engine's draw-performance budget (ADR-0026 §16) has never been measured on
+- The canvas draw-performance budget (ADR-0026 §16) has never been measured on
   the hardware envelope it names — a mid-tier laptop and iPad-class Safari. CI
-  runners cannot stand in for that (`docs/TECH_DEBT.md` #59).
+  runners cannot stand in for that. What **has** been measured, in Chromium, is
+  that the painter runs 4–6× over the stated ≤ 4 ms p95 (ADR-0065), so the
+  budget itself is under review rather than merely unverified —
+  `docs/TECH_DEBT.md` **#75**, which also records that §16 was misquoted for
+  months. (#59 was folded into #75 on 2026-08-03; this bullet still cited it
+  until the 2026-08-04 pass.)
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 

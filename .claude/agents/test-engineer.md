@@ -15,8 +15,12 @@ game coverage.
 
 ## Reference
 
-`docs/TESTING.md`, `docs/FRONTEND_QUALITY.md`, and the reference feature's tests
-(`reference.service.spec.ts`, `test/reference.e2e-spec.ts`) as templates.
+`docs/TESTING.md`, `docs/FRONTEND_QUALITY.md`, and
+[`docs/TEST_PLAYBOOK.md`](../../docs/TEST_PLAYBOOK.md) (which seeded plan proves
+what, and what _wrong_ looks like). **The reference feature's tests no longer
+exist** — ADR-0057 deleted them. Read real suites instead:
+`apps/api/src/modules/clients/clients.service.spec.ts` for a unit spec and
+`apps/api/test/clients.e2e-spec.ts` for the canonical Supertest shape.
 
 ## What you do
 
