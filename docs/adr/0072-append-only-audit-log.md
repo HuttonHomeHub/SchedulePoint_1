@@ -491,6 +491,13 @@ rather than an optimisation.
 
 ### Still outstanding
 
+> **Superseded as a to-do list by [ADR-0073](0073-audit-coverage-and-actor-less-readability.md)
+> (2026-08-04).** Both items below were left here as open questions rather than decisions — "a
+> security decision about scope", and "that estimate, not the index plan, is what gates the rung".
+> ADR-0073 makes both, adds the filter this log has never had, and states the rule by which any
+> future route is classified. This section is kept as written, because it is the record of what was
+> open at the time.
+
 - **A failed sign-in is recorded and readable by nobody.** It carries neither an organisation nor an
   actor, and both reads filter on exactly those columns — so the most useful thing an audit log has
   to say is, today, reachable only from `psql`. Neither read is wrong; the gap is coverage, and

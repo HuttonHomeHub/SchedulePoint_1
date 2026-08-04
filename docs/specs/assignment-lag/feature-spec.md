@@ -5,7 +5,7 @@
 - **Date:** 2026-08-02
 - **Tracking issue / epic:** _(to be raised)_
 - **Roadmap link:** engine↔planner surface reconciliation (`docs/specs/engine-surface-audit.md` **F6**)
-- **Related ADR(s):** **ADR-0071 (draft, in this directory)**; amends **ADR-0041** (levelling parity),
+- **Related ADR(s):** **ADR-0071**; amends **ADR-0041** (levelling parity),
   extends **ADR-0042/ADR-0044** (Earned Value / accrual); builds on ADR-0035 (**new §34** + **N34**),
   ADR-0036/0037 (working-minute axis, per-activity calendars), ADR-0039/0040 (resource model),
   ADR-0050/0053 (interchange), ADR-0066 (seed catalogue), ADR-0068/0070 (hours-per-day, `d/h/m` grammar),
@@ -853,8 +853,7 @@ the recalc parity claim restated honestly rather than preserved by weakening the
 ## 5. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
-- Draft ADR: [`./adr-0071-draft-per-assignment-lag.md`](./adr-0071-draft-per-assignment-lag.md)
-  (lands as `docs/adr/0071-per-assignment-lag.md` on approval)
+- ADR: [`../../adr/0071-per-assignment-lag.md`](../../adr/0071-per-assignment-lag.md)
 - Origin: [`docs/specs/engine-surface-audit.md`](../engine-surface-audit.md) **F6**
 - Docs updated by this change: `CLAUDE.md`, `docs/API.md`, `docs/DATABASE.md`, `docs/TEST_PLAYBOOK.md`,
   `docs/TECH_DEBT.md`, `docs/specs/engine-conformance-framework/CAPABILITY_MATRIX.md`,

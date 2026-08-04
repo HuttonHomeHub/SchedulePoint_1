@@ -1110,6 +1110,46 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   shape — a correct pattern applied to one control and not its neighbour, invisible to every gate
   that does not run the real thing.
 
+- **ADR-0071** _(Accepted; M1–M3 landed, `VITE_ASSIGNMENT_LAG` **default-on** 2026-08-02; **filed
+  2026-08-04**)_ — Per-assignment lag, and what it costs the levelling and Earned-Value parity
+  arguments. `engine/resource-histogram.ts` had taken a per-assignment `lagMinutes` since the
+  ADR-0044 rung-5 slice and **nothing in SchedulePoint could store one** — the ADR-0067/ADR-0070
+  shape again, one field along. An unsigned, activity-calendar-framed, constant-defaulted column
+  shifts the effective span to `[start + lag, finish)`; the levelling parity argument **changes**,
+  and the ADR says so in those words rather than asserting it still holds (Gate A / Gate B split
+  amending ADR-0041 §7); Earned Value gains a per-component PV phasing model, described as one
+  rather than smuggled in (extending ADR-0042/0044); the engine's own guard is a **typed error and
+  a 422, not a 500**; and interchange takes a shape now and a parser only once a real export has
+  been read.
+  **This entry, and the ADR's own filing, are the drift finding.** The document lived at
+  `docs/specs/assignment-lag/adr-0071-draft-per-assignment-lag.md` for its whole epic — maintained
+  through M6 and the flag flip — and was never moved into `docs/adr/` on approval, so a decision
+  cited **by number** in `docs/DATABASE.md`, `docs/TECH_DEBT.md`, three other ADRs, two migrations
+  and `packages/types` was absent from the register. The audit-log spec **found it** while choosing
+  its own number, recorded the collision correctly, and routed around it. Noticing drift and
+  stepping over it leaves the register exactly as wrong as not noticing — ADR-0058's rule needs the
+  second half.
+
+- **ADR-0072** _(Accepted; M1–M3 landed, `VITE_AUDIT_LOG` **default-on** 2026-08-03)_ — The
+  append-only audit log, closing TECH_DEBT #14. Row attribution plus structured logs are not an
+  audit trail: `updated_by` says who touched a row last and nothing about who was **refused**, and
+  a log line is not evidence. The record is a single `audit_events` table made append-only **in the
+  database** — `BEFORE UPDATE OR DELETE` and `BEFORE TRUNCATE` triggers, `ENABLE ALWAYS`, so the
+  application role cannot bypass them — which makes the honest claim tamper-**resistant**, not
+  tamper-proof, and the ADR says so. Payloads pass an **allow-list per action** (a `NEVER_RECORD`
+  substring ban catches `token`/`hash` independently), and a **route census** derived by reflecting
+  the live Nest tree fails if a route that changes who can do what stops being audited. M1 covers
+  membership, invitations, organisations, the five `auth.*` events and hierarchy delete/restore;
+  M3 adds share links and **measures** the storage (1M rows: ~592 B/row, both reads sub-millisecond)
+  to answer the partitioning question with data rather than instinct. **The CPM engine is not
+  imported**, and auditing the recalculation is forbidden — a recalculation is deterministic from
+  inputs that are themselves auditable, so a row saying "the schedule was recomputed" is noise, not
+  evidence. Note the census's actual shape before relying on it: its six assertions force a route
+  **to be** audited (and force every route to be classified, once, one way), but **nothing forbids
+  auditing one** — so `ENGINE_DERIVED` is a rule with a documented reason, not a gate. The
+  implementation plan for ADR-0073 states the opposite; if that protection is wanted it has to be
+  written. Coverage widening is ADR-0073.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

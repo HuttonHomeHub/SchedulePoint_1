@@ -1205,6 +1205,12 @@ polymorphic precedent**, and the app's **first producer mounted outside the Nest
 `docs/TECH_DEBT.md`, three other ADRs and two shipped migrations already cite by that number.
 Taking 0071 would collide.
 
+> **Corrected 2026-08-04.** The conclusion above is right and the number is right, but noticing that
+> an accepted decision was missing from the register and then routing around it left the register
+> exactly as wrong as not noticing — ADR-0058's own failure mode, in the document that cites it. The
+> draft has since been filed as [`docs/adr/0071-per-assignment-lag.md`](../../adr/0071-per-assignment-lag.md)
+> and both it and ADR-0072 added to `CLAUDE.md` §16, which had also stopped at 0070.
+
 Options considered are enumerated in **[ADR-0072 §Alternatives](../../adr/0072-append-only-audit-log.md)**
 rather than duplicated here.
 

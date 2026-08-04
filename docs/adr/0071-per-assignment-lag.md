@@ -1,12 +1,22 @@
-# ADR-0071 (DRAFT): Per-assignment lag, and what it costs the levelling and Earned-Value parity arguments
+# ADR-0071: Per-assignment lag, and what it costs the levelling and Earned-Value parity arguments
 
-> **This is a draft, held in the feature's spec directory pending approval.** On approval it lands as
-> `docs/adr/0071-per-assignment-lag.md`. **0071 is the next free number** — `docs/adr/` runs to 0070
-> (`0070-sub-day-durations-and-lags-in-the-authoring-surface.md`), verified by listing the directory rather
-> than by counting the ADR list in `CLAUDE.md`, which has drifted before.
+> **Filed 2026-08-04, two days after the decision it records was implemented and shipped.** This
+> document lived at `docs/specs/assignment-lag/adr-0071-draft-per-assignment-lag.md` for its whole
+> epic — updated through M6 and the `VITE_ASSIGNMENT_LAG` flip — and was never moved here on
+> approval, so an accepted decision that `docs/DATABASE.md`, `docs/TECH_DEBT.md`, three other ADRs,
+> two migrations and `packages/types` all cite **by this number** was absent from the register and
+> from `CLAUDE.md` §16. The header below still said "this is a draft… on approval it lands as
+> `docs/adr/0071-per-assignment-lag.md`", which is the instruction nobody executed.
+>
+> The ADR-0058 detail worth keeping: the audit-log spec **found this** while choosing its own number
+> and recorded it correctly ("0071 is claimed by an unfiled draft… taking 0071 would collide"), then
+> routed around it rather than closing it. Noticing drift and stepping over it leaves the register
+> exactly as wrong as not noticing. The body below is unchanged from what the epic actually agreed —
+> only the status line and this note are new.
 
-- **Status:** **Proposed** (per-milestone acceptance: M1 histogram, M2 levelling, M3 Earned Value)
-- **Date:** 2026-08-02
+- **Status:** **Accepted** (per-milestone: M1 histogram, M2 levelling, M3 Earned Value — all landed;
+  M6 enablement gate passed and `VITE_ASSIGNMENT_LAG` flipped default-on, 2026-08-02)
+- **Date:** 2026-08-02 (decided) · 2026-08-04 (filed)
 - **Deciders:** Product Owner (scope decision of 2026-08-02, and the three critical questions in the spec);
   feature-analyst (design); database-architect (the column, already designed)
 
@@ -325,32 +335,32 @@ read; `res_role`, which F6 correctly separates as an epic of its own.
 
 ## References
 
-- [`docs/specs/assignment-lag/feature-spec.md`](./feature-spec.md) and
-  [`implementation-plan.md`](./implementation-plan.md) — this decision's spec and plan.
-- [`docs/specs/engine-surface-audit.md`](../engine-surface-audit.md) **F6** — the finding, and the product
+- [`docs/specs/assignment-lag/feature-spec.md`](../specs/assignment-lag/feature-spec.md) and
+  [`implementation-plan.md`](../specs/assignment-lag/implementation-plan.md) — this decision's spec and plan.
+- [`docs/specs/engine-surface-audit.md`](../specs/engine-surface-audit.md) **F6** — the finding, and the product
   owner's 2026-08-02 scope decision recorded there.
-- [ADR-0041](../../adr/0041-resource-levelling.md) §2/§3/§7 — **amended** (not superseded) by §2 above.
-- [ADR-0042](../../adr/0042-percent-complete-types-and-earned-value.md) §2 and
-  [ADR-0044](../../adr/0044-resource-curves-accrual-steps.md) §32 — **extended** by §3 above.
-- [ADR-0034](../../adr/0034-engine-conformance-methodology.md) (parity gate, three tiers, flip-one-must-differ)
-  and [ADR-0035](../../adr/0035-schedulepoint-cpm-semantics.md) (**new §34**, **N34**).
-- [ADR-0036](../../adr/0036-hour-granular-calendars-and-durations.md) / [ADR-0037](../../adr/0037-per-activity-calendars-and-instant-axis.md)
+- [ADR-0041](./0041-resource-levelling.md) §2/§3/§7 — **amended** (not superseded) by §2 above.
+- [ADR-0042](./0042-percent-complete-types-and-earned-value.md) §2 and
+  [ADR-0044](./0044-resource-curves-accrual-steps.md) §32 — **extended** by §3 above.
+- [ADR-0034](./0034-engine-conformance-methodology.md) (parity gate, three tiers, flip-one-must-differ)
+  and [ADR-0035](./0035-schedulepoint-cpm-semantics.md) (**new §34**, **N34**).
+- [ADR-0036](./0036-hour-granular-calendars-and-durations.md) / [ADR-0037](./0037-per-activity-calendars-and-instant-axis.md)
   (working-minute axis, per-activity calendar ports, the horizon this decision's §4 is about).
-- [ADR-0039](../../adr/0039-resource-model-and-resource-calendar-scheduling.md) / [ADR-0040](../../adr/0040-duration-types-and-resource-units.md)
+- [ADR-0039](./0039-resource-model-and-resource-calendar-scheduling.md) / [ADR-0040](./0040-duration-types-and-resource-units.md)
   (the assignment model this column joins).
-- [ADR-0050](../../adr/0050-schedule-interchange-canonical-model.md) (the mapping contract §5 updates) and
-  [ADR-0053](../../adr/0053-calendar-scoping-and-resource-management.md) §3/§4 (GROUP and archive invariants
+- [ADR-0050](./0050-schedule-interchange-canonical-model.md) (the mapping contract §5 updates) and
+  [ADR-0053](./0053-calendar-scoping-and-resource-management.md) §3/§4 (GROUP and archive invariants
   that keep the parity argument structural at the resource end).
-- [ADR-0066](../../adr/0066-the-seed-catalogue-and-the-engine-as-oracle.md) (the coverage exception this
+- [ADR-0066](./0066-the-seed-catalogue-and-the-engine-as-oracle.md) (the coverage exception this
   deletes, and the pairwise differential that proves Gate B at the application).
-- [ADR-0058](../../adr/0058-drift-control-and-the-reconciliation-pass.md) — the rule this ADR's §5 and §0 of
+- [ADR-0058](./0058-drift-control-and-the-reconciliation-pass.md) — the rule this ADR's §5 and §0 of
   the spec apply: _verify the claim; do not trust the document._
-- [ADR-0028](../../adr/0028-plan-edit-lock.md) (the pen the write already holds),
-  [ADR-0012](../../adr/0012-authorization-rbac-scoped.md) / [ADR-0016](../../adr/0016-core-identity-tenancy-role-model.md)
-  (RBAC + tenancy), [ADR-0051](../../adr/0051-external-guest-share-links.md) (why guests see none of this),
-  [ADR-0062](../../adr/0062-activity-editor-convergence-logic-resources-notes-as-tabs.md) (the extracted panel
-  the field lands on), [ADR-0068](../../adr/0068-calendar-hours-per-day.md) /
-  [ADR-0070](../../adr/0070-sub-day-durations-and-lags-in-the-authoring-surface.md) (the `d/h/m` grammar and
+- [ADR-0028](./0028-plan-edit-lock.md) (the pen the write already holds),
+  [ADR-0012](./0012-authorization-rbac-scoped.md) / [ADR-0016](./0016-core-identity-tenancy-role-model.md)
+  (RBAC + tenancy), [ADR-0051](./0051-external-guest-share-links.md) (why guests see none of this),
+  [ADR-0062](./0062-activity-editor-convergence-logic-resources-notes-as-tabs.md) (the extracted panel
+  the field lands on), [ADR-0068](./0068-calendar-hours-per-day.md) /
+  [ADR-0070](./0070-sub-day-durations-and-lags-in-the-authoring-surface.md) (the `d/h/m` grammar and
   the required-`hoursPerDay` rule).
 
 ---
