@@ -8,19 +8,21 @@ import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { FromIsBeforeTo } from './from-is-before-to.validator';
 
 /**
- * The most actions one request may name. A filter exists to narrow a feed; a caller enumerating
- * most of a 20-word vocabulary is not narrowing anything, and an unbounded `IN` list lets a
- * request build an arbitrary predicate out of a param that is supposed to be a convenience.
+ * The most actions one request may name: **the vocabulary itself**, derived and never a literal.
  *
- * Twenty is **exactly** today's vocabulary size, not above it — the docblock claimed otherwise and
- * two reviewers caught it independently. The consequence is worth stating rather than hiding: a
- * caller can currently name every action in one request, which costs about what no filter costs
- * (an `IN` over the whole vocabulary matches everything), so this is a bound on predicate size
- * rather than a bound on work. What the cap really protects is the ADR-0073 catalogue's largest
- * single category, which is nine today and stays well under twenty — so no chip selection the UI
- * can produce will ever hit it.
+ * This is a bound on predicate size, not a bound on work — an `IN` over every action matches
+ * everything, which costs about what no filter costs. What it stops is an unbounded array turning
+ * a convenience param into an arbitrary predicate builder.
+ *
+ * It was `20` until C4.1, chosen in C1 as "exactly today's vocabulary size" with the reasoning that
+ * the largest single category held nine, so no chip selection could reach it. C3 then added
+ * nineteen actions and `deletions` grew to twelve: **Deletions + Access is 21**, two chips offered
+ * side by side on the same screen, and an ordinary filter started returning 422. Neither the
+ * literal nor its docblock moved with the vocabulary they described, and both reviewers who read
+ * this file found it independently — which is why the number is now computed rather than asserted.
+ * A cap derived from `AUDIT_ACTIONS` cannot fall behind the next action added to it.
  */
-export const AUDIT_FILTER_MAX_ACTIONS = 20;
+export const AUDIT_FILTER_MAX_ACTIONS = AUDIT_ACTIONS.length;
 
 /**
  * Repeatable params arrive as a string when sent once and an array when sent more than once.

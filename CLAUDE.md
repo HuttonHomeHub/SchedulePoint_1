@@ -1270,6 +1270,21 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   `PENDING_COVERAGE`** — the one census reason that was a queue rather than a decision — and
   replaces it with an assertion that every reason is a decision somebody made, so the next route is
   classified by the two tests rather than deferred with a note.
+  **C4 is the gate pass, and it earned its place for the fourth epic running.** Six specialists over
+  the combined diff: security and backend-performance passed with nothing blocking (both re-derived
+  the epic's own measurements from the final code rather than trusting them); the other four blocked
+  on **six defects that had passed a human read**. The largest is the epic's own rule landing on
+  itself — the action-filter cap shipped in C1 as the literal `20` with a paragraph explaining why no
+  chip selection could reach it, and C3's nineteen new actions made **Deletions + Access 21**, so two
+  chips offered side by side returned **422**. It is now derived from `AUDIT_ACTIONS` and cannot fall
+  behind again. Next: the one producer written **outside** a transaction called `record()`, which
+  fails its caller — so a successful import would have returned 500, invited a retry that creates a
+  second plan, and skipped the pen release, under a comment describing the opposite trade. And the
+  organisation log's own "what this records" sentence listed family D and none of E, F or G, in the
+  milestone that added them; it now states the **rule** rather than an inventory, because an
+  inventory goes stale every time the vocabulary grows. **Four of the six are one correct pattern
+  applied to a control and not its neighbour** — the ADR-0064/ADR-0067 shape again. Every fix carries
+  a regression test verified to fail first; six non-blocking findings are `docs/TECH_DEBT.md` #93.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

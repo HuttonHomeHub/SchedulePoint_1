@@ -55,7 +55,12 @@ export function AuditFilterBar({
   const empty = isAuditFilterEmpty(value);
 
   return (
-    <div className="border-border flex flex-wrap items-end gap-x-6 gap-y-3 rounded-lg border p-3">
+    // Unboxed, the way the calendar and resource library screens render their filter rows. The
+    // first version wrapped this in `rounded-lg border p-3` — a card's radius (DESIGN_SYSTEM
+    // "cards/dialogs use lg") around a row of controls, and a box no other filtered list in the
+    // product has. Two things at once: a one-off recipe, and a visual claim that this row is a
+    // different KIND of thing from every other filter bar, which it is not.
+    <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
       <div className="flex flex-col gap-1.5">
         <span id="audit-filter-categories-label" className="text-muted-foreground text-xs">
           Show
@@ -80,9 +85,14 @@ export function AuditFilterBar({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-muted-foreground text-xs">Outcome</span>
+        {/* Labelled the same way the categories group is: the visible text IS the group's name, so
+            a serial reader hears it once rather than hearing "Outcome" and then "Outcome". */}
+        <span id="audit-filter-outcome-label" className="text-muted-foreground text-xs">
+          Outcome
+        </span>
         <SegmentedControl
           label="Outcome"
+          labelledById="audit-filter-outcome-label"
           // `null` is "any", which is the state the screen opens in — the APG note on the
           // primitive is explicit that an unchosen radiogroup carries no selection rather than
           // defaulting to its first option.
@@ -137,12 +147,17 @@ export function AuditFilterBar({
         // `aria-disabled`, never the native attribute: a control that flips as the filter changes
         // would blur to `<body>` mid-interaction and drop the reader's place (the ScopeSaveBar
         // lesson, ADR-0060/ADR-0063).
+        //
+        // The shading is the repo's static attribute-variant, not a computed className. The first
+        // version hand-rolled `empty ? 'opacity-50' : undefined` and so dropped
+        // `pointer-events-none` — leaving a button that looked disabled, still lit its hover
+        // background, and still took the pointer. Two reviewers found it independently.
         aria-disabled={empty}
         onClick={() => {
           if (empty) return;
           onChange({ categories: '', outcome: '', from: '', to: '' });
         }}
-        className={empty ? 'opacity-50' : undefined}
+        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
       >
         <X aria-hidden="true" className="size-4" />
         Clear filters

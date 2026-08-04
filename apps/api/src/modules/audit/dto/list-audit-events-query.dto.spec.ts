@@ -1,4 +1,9 @@
-import { AUDIT_ACTIONS } from '@repo/types';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_SURFACES,
+  auditActionsForCategories,
+  auditCategoriesForSurface,
+} from '@repo/types';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { describe, expect, it } from 'vitest';
@@ -90,7 +95,26 @@ describe('ListAuditEventsQueryDto (ADR-0073)', () => {
 
     it('rejects one more than the cap', () => {
       const actions = Array.from({ length: AUDIT_FILTER_MAX_ACTIONS + 1 }, () => 'plan.deleted');
-      expect(validate({ action: actions }).join(' ')).toMatch(/20/);
+      expect(validate({ action: actions }).join(' ')).toMatch(
+        new RegExp(String(AUDIT_FILTER_MAX_ACTIONS)),
+      );
+    });
+
+    it('accepts EVERY category combination the surfaces can produce', () => {
+      // Derived from the vocabulary, never from an example. The cap shipped in C1 as the literal
+      // `20` — "exactly today's vocabulary size", with a docblock reasoning that the largest single
+      // category was nine so no chip selection could reach it. C3 then added nineteen actions, and
+      // `deletions` (12) + `access` (9) became 21: two chips a reader can click side by side, both
+      // offered on the same screen, 422. The category chips are independent toggles with no
+      // combination guard, so the only honest bound is the vocabulary itself — and a cap derived
+      // from it cannot fall behind the next action the way a literal did.
+      for (const surface of AUDIT_SURFACES) {
+        const every = auditActionsForCategories(auditCategoriesForSurface(surface), surface);
+        expect(every.length, `${surface}: ${String(every.length)} actions`).toBeLessThanOrEqual(
+          AUDIT_FILTER_MAX_ACTIONS,
+        );
+        expect(validate({ action: [...every] })).toEqual([]);
+      }
     });
   });
 

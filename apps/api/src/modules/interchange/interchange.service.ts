@@ -308,7 +308,13 @@ export class InterchangeService {
     // before phase 3, which is best-effort and cannot un-import anything. The residual risk is the
     // opposite one — this write failing after a successful import, leaving no row. That is
     // silence rather than a false claim, which is the right way round for an audit log.
-    await this.audit.record({
+    //
+    // Which is why this is `recordBestEffort` and not `record`. The first version called `record`,
+    // whose whole contract is to fail its caller — and with the plan already durably created, that
+    // would have turned a successful import into a 500, inviting a retry that creates a SECOND
+    // plan, and skipped both the lane packing and the pen release on the way out. The paragraph
+    // above described the right trade and the call underneath it made the opposite one.
+    await this.audit.recordBestEffort({
       action: 'interchange.imported',
       outcome: 'SUCCESS',
       organizationId: organization.id,

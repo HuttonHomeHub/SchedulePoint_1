@@ -497,6 +497,15 @@ rather than an optimisation.
 > ADR-0073 makes both, adds the filter this log has never had, and states the rule by which any
 > future route is classified. This section is kept as written, because it is the record of what was
 > open at the time.
+>
+> **Both are now closed, and here is where each was resolved.** The failed sign-in is readable by
+> the account it named — ADR-0073 **C2** (write-time attribution into `subject_id`, surfaced by the
+> opt-in `?include=attempts` projection; `docs/TECH_DEBT.md` #91 closed 2026-08-04). The mutation
+> rung landed as **C3**, and the volume question it gated was **measured before a producer shipped**
+> rather than estimated (C3.0: 3,200 rows for a 2,000-activity programme against an estimate of
+> 2,500 — 1.28×, inside a 5× gate). What made it affordable is the decision this ADR did not have:
+> an **ordinary content edit is never an audit event**, permanently, so the recorded class scales
+> with the size of the programme rather than with the number of interactions.
 
 - **A failed sign-in is recorded and readable by nobody.** It carries neither an organisation nor an
   actor, and both reads filter on exactly those columns — so the most useful thing an audit log has

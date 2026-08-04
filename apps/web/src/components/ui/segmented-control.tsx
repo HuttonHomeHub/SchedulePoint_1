@@ -43,6 +43,13 @@ export interface SegmentedOption<T extends string> {
 export interface SegmentedControlProps<T extends string> {
   /** Accessible name for the group — always required; a bare radiogroup is unnameable. */
   label: string;
+  /**
+   * Id of a VISIBLE element that already names the group, used instead of `label` as the accessible
+   * name. Prefer this whenever the name is on screen: `aria-label` would leave a serial reader
+   * hearing the same word twice, once from the caption and once from the group. `label` stays
+   * required so the control can never end up unnamed if the id is wrong.
+   */
+  labelledById?: string;
   /** `null` when nothing is chosen yet — see the APG note above. */
   value: T | null;
   onChange: (value: T) => void;
@@ -55,6 +62,7 @@ export interface SegmentedControlProps<T extends string> {
 
 export function SegmentedControl<T extends string>({
   label,
+  labelledById,
   value,
   onChange,
   options,
@@ -96,7 +104,13 @@ export function SegmentedControl<T extends string>({
   };
 
   return (
-    <div role="radiogroup" aria-label={label} className={cn('flex gap-1', className)}>
+    <div
+      role="radiogroup"
+      {...(labelledById === undefined
+        ? { 'aria-label': label }
+        : { 'aria-labelledby': labelledById })}
+      className={cn('flex gap-1', className)}
+    >
       {options.map((option, index) => (
         <button
           key={option.value}

@@ -26,7 +26,12 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  *    and distinguishes "no events match this filter" from "nothing recorded yet" — the distinction
  *    this milestone exists to make, and the one a mocked fetch cannot be wrong about.
  *
- * 6. **A failed sign-in reaches the account it was aimed at** (ADR-0073 C2). The attempt is made
+ * 5b. **A destructive act inside a plan is recorded, once, after the pen** (ADR-0073 C3.1). An
+ *    activity is deleted through the row menu with the pen held, and the row has to carry the
+ *    cascade size and the plan. `assertHoldsPen` returns 423 and writes nothing — a mocked fetch
+ *    has no pen to refuse, so this is the only place the gate and the producer are both real.
+ *
+ * 6. **A failed sign-in reaches the account it was aimed at, and nobody else** (ADR-0073 C2). The attempt is made
  *    from a third context in a DIFFERENT letter case, so it only attributes if the normaliser is
  *    applied; it then has to appear on that account's own feed and on no organisation log. Every
  *    link in that chain — Better Auth's after-hook firing outside Nest's pipeline, the write-time
@@ -104,6 +109,69 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await admin.getByRole('dialog').getByLabel('Name').fill('Northgate');
   await admin.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
   await expect(admin.getByRole('link', { name: 'Northgate' })).toBeVisible();
+
+  // ------------------------------------------ An activity deleted WITH THE PEN (C3.1, family D)
+  // The C3 coverage rung's whole claim is that a destructive act inside a plan is recorded, once,
+  // after the pen gate — and every one of those words needs a real API. `assertHoldsPen` returns
+  // 423 and writes nothing; a mocked fetch has no pen to refuse. The row must also carry the
+  // cascade SIZE, which C3.1 added because the M1 shape promised counts and recorded none.
+  await admin.getByRole('link', { name: 'Northgate' }).click();
+  await admin.getByRole('button', { name: 'New project' }).click();
+  await admin.getByRole('dialog').getByLabel('Name').fill('Riverside');
+  await admin.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
+  await admin.getByRole('link', { name: 'Riverside' }).click();
+
+  await admin.getByRole('button', { name: 'New plan' }).click();
+  await admin.getByRole('dialog').getByLabel('Name').fill('Programme');
+  await admin
+    .getByRole('dialog')
+    .getByLabel(/Planned start/)
+    .fill('2026-01-05');
+  await admin.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
+  await admin.getByRole('link', { name: 'Programme', exact: true }).click();
+
+  await admin.getByRole('button', { name: 'Start editing' }).click();
+  await expect(admin.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+
+  // Seeded through the API, deliberately: creating an activity is `DURABLY_ATTRIBUTED` and records
+  // nothing by design, so how it got there is not what this assertion is about. The DELETE is
+  // driven through the UI, because that is the path the coverage claim is about.
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(admin.url())?.[1];
+  expect(planId).toBeTruthy();
+  const seeded = await admin.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Excavate', type: 'TASK', durationDays: 5 }),
+      });
+      return { status: response.status, body: await response.text() };
+    },
+    { org: orgSlug, id: planId as string },
+  );
+  expect(seeded.status, seeded.body).toBe(201);
+
+  // The seed went round React Query, so the mounted table still holds the empty page it fetched.
+  // Reload rather than invalidate: this journey drives the product, and a cache poke would be a
+  // test-only path. The reload releases the pen — the client flushes the lease on unmount
+  // (ADR-0028) — so it is retaken here, and the delete below is genuinely gated.
+  await admin.reload();
+  const stopEditing = admin.getByRole('button', { name: 'Stop editing' });
+  if (!(await stopEditing.isVisible().catch(() => false))) {
+    await admin.getByRole('button', { name: 'Start editing' }).click();
+  }
+  await expect(stopEditing).toBeVisible();
+
+  const expand = admin.getByRole('button', { name: 'Expand activities panel' });
+  if ((await expand.count()) > 0) await expand.click();
+  await expect(admin.getByRole('region', { name: 'Activities panel' })).toBeVisible();
+  await admin.getByRole('button', { name: 'Actions for Excavate' }).click();
+  await admin.getByRole('menuitem', { name: 'Delete' }).click();
+  await admin.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(admin.getByRole('button', { name: 'Actions for Excavate' })).toHaveCount(0);
+
+  await navLink(admin, 'Clients').click();
   await admin.getByRole('button', { name: 'Delete Northgate' }).click();
   await admin.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(admin.getByText(/No clients yet/)).toBeVisible();
@@ -116,6 +184,15 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await expect(auditRow(admin, 'Invitation sent')).toBeVisible();
   await expect(auditRow(admin, 'Invitation accepted')).toBeVisible();
   await expect(auditRow(admin, 'Client deleted')).toBeVisible();
+
+  // The C3 coverage rung, on the screen: ONE row for the activity delete, carrying the cascade
+  // size and the plan it was in. Before C3.1 this row did not exist at all — which is the exact
+  // report that opened the milestone ("I deleted activities, opened the log, and found nothing").
+  await expect(admin.getByText('Activity deleted', { exact: true })).toHaveCount(1);
+  await expect(auditRow(admin, 'Activity deleted')).toContainText('1 activity');
+  await expect(auditRow(admin, 'Activity deleted')).toContainText('in Programme');
+  await expect(auditRow(admin, 'Activity deleted')).toContainText(adminEmail);
+
   // A join is recorded per membership, so the admin's own and the teammate's are both here. Two
   // rows rather than one is the design (invitations.service.ts): "how did this person get access"
   // is a different question from "what happened to this invitation".
@@ -255,5 +332,12 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await mate.getByRole('menuitem', { name: 'My activity' }).click();
   await expect(auditRow(mate, 'Invitation accepted')).toBeVisible();
   await expect(mate.getByText('Role changed', { exact: true })).toHaveCount(0);
+
+  // 6b. And the failed attempt aimed at the ADMIN is not on the teammate's feed. This is the other
+  // half of C2 and the half a passing attribution can still get wrong: an `include=attempts`
+  // projection that widened by one column too many would show every account every attempt, which
+  // is a worse leak than the one the milestone set out to close. Asserted on the whole document
+  // rather than a row, because the failure mode is the row existing anywhere on this screen.
+  await expect(mate.getByText('Sign-in failed', { exact: true })).toHaveCount(0);
   await mateContext.close();
 });

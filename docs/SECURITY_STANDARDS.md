@@ -116,11 +116,16 @@ store only a hash**.
 
 The standard, and what is actually built:
 
-- **Append-only audit log** for security- and sensitive events: authentication,
-  permission changes (membership roles, invitations, organisation creation, guest
-  share links) and hierarchy deletions/restores — who, what, when, and before→after
-  where relevant. Twenty actions from a closed vocabulary; a new one is a compile
-  error until someone decides what it may record.
+- **Append-only audit log** for security- and sensitive events — who, what, when, and
+  before→after where relevant, from a closed vocabulary in which a new action is a
+  compile error until someone decides what it may record. What earns a row is decided
+  by **two tests** (ADR-0073), not by a list of opinions: **durability** (does the
+  product otherwise keep a record that this happened, and who did it?) and **blast
+  radius** (does it change the rules _other people's_ work is judged by?). Both
+  negative by default. That yields authentication, permission changes, every
+  deletion and restore across the hierarchy and inside a plan, the settings and
+  baselines a plan is judged by, what the shared calendar and resource libraries
+  offer, and where an imported programme came from.
 - Audit entries are **never mutated or deleted** and are separate from operational
   logs. **No secrets or full PII** in payloads: `changes` is an **allow-list** keyed
   by action, not a deny-list, so a field is invisible until a person names it, and a
@@ -156,9 +161,32 @@ carries `created_by`/`updated_by` and timestamps, soft deletes are correlated by
 The audit table is the durable record; those are the corroboration, joined to it by
 `correlation_id`.
 
-Coverage widening (content edits, share grants, reads of the log itself) is
-deliberately deferred and tracked — see ADR-0072 and
-[`TECH_DEBT.md`](TECH_DEBT.md) #14.
+### What the log deliberately does NOT record
+
+**An ordinary content edit is never an audit event** — permanently, not pending. An
+activity's own name, dates, duration, lane or progress changes nothing outside that
+activity, and the row already carries who last changed it. This is the one class that
+scales with **interactions** rather than with the size of the programme: a planner
+dragging bars for an afternoon generates arbitrarily many, while a 5,000-activity
+programme generates a bounded number of deletes. Recording it is the cheapest way to
+make the log unreadable.
+
+The cost is explicit rather than hidden: **"who changed this duration?" is
+unanswerable**, and both screens say so in those words rather than saying "not yet".
+The feature that would answer it is per-activity **plan revision history** — a
+different feature with a different table, retention story and read model, on
+[`BACKLOG.md`](BACKLOG.md). Naming it is part of the decision; building it is not.
+
+**A failed sign-in is readable by the account it named, and by nobody else** — not by
+an Org Admin. An attacker chooses which tenant to appear in by choosing which address
+to type, and there is no admin-initiated password reset in this product, so fanning
+attempts out to organisations would add noise an admin cannot act on, at an
+attacker's discretion. Attribution is resolved at **write time** and is
+**forward-only**: the table refuses `UPDATE`, so rows written before that shipped can
+never be attributed.
+
+Reads of the log itself are not audited (a read changes nothing); that and the
+remaining ADR-0072 items are tracked in [`TECH_DEBT.md`](TECH_DEBT.md).
 
 ## Dependency security
 

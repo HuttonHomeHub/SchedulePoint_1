@@ -650,15 +650,18 @@ Both endpoints accept the same optional narrowing. **Omitting every parameter re
 page they returned before it existed**, which is what lets the client ship the controls behind a
 flag without changing the request.
 
-| Param     | Shape                                          | Notes                                                                       |
-| --------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| `action`  | repeatable; up to 20; each an `AuditAction`    | Union, not intersection. Repeat the param: `?action=plan.deleted&action=…`. |
-| `outcome` | repeatable; `SUCCESS` \| `DENIED` \| `FAILURE` | Union.                                                                      |
-| `from`    | ISO-8601 instant                               | **Inclusive** lower bound on `occurred_at`.                                 |
-| `to`      | ISO-8601 instant                               | **Inclusive** upper bound, and must not precede `from`.                     |
+| Param     | Shape                                                        | Notes                                                                       |
+| --------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `action`  | repeatable; up to the vocabulary size; each an `AuditAction` | Union, not intersection. Repeat the param: `?action=plan.deleted&action=…`. |
+| `outcome` | repeatable; `SUCCESS` \| `DENIED` \| `FAILURE`               | Union.                                                                      |
+| `from`    | ISO-8601 instant                                             | **Inclusive** lower bound on `occurred_at`.                                 |
+| `to`      | ISO-8601 instant                                             | **Inclusive** upper bound, and must not precede `from`.                     |
 
 **An unmatchable value is a 422 naming it — never a 200 with an empty page.** An unknown action or
-outcome, more than 20 actions, a malformed instant and an inverted range are all rejected. A filter
+outcome, more actions than the vocabulary holds, a malformed instant and an inverted range are all
+rejected. (The action cap is **derived from the vocabulary**, not a literal: it shipped as a
+hand-written `20` and fell behind the moment the coverage rung grew the catalogue, so an ordinary
+two-category selection started 422ing. A bound computed from `AUDIT_ACTIONS` cannot drift.) A filter
 that silently matches nothing is the `order` lesson (TECH_DEBT #19) in the one context where it is
 worse than usual: an audit log answering "no events" to a misspelled filter reads as evidence that
 nothing happened.

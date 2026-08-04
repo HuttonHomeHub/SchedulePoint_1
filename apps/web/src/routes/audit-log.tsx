@@ -46,10 +46,24 @@ export function AuditLogScreen(): React.ReactElement {
         and reasonably concluded the feature was broken. Naming the boundary is the fix; see the
         empty state below, which had the same problem from the other side.
       */}
+      {/*
+        Stated as a RULE, not as an inventory. The first version listed the actions it covered, and
+        by the time the coverage rung landed it named family D and none of E, F or G — so a reader
+        asking "where did the December baseline go?" had no reason to believe this log knew. An
+        itemised list is a promise that goes stale every time the vocabulary grows, which on this
+        feature is every milestone. The two tests that decide coverage (ADR-0073) fit in a sentence;
+        the list never will.
+      */}
       <p className="text-muted-foreground mt-1 text-sm">
-        Who changed access and who deleted things, newest first — role changes, invitations, share
-        links, deleted or restored clients, projects and plans, and, inside a plan, deleted or
-        restored activities, dissolved summaries, regrouped work and added or removed links.
+        Newest first: everything that{' '}
+        <strong className="text-foreground font-medium">removes</strong> something — deleted or
+        restored clients, projects, plans and activities, dissolved summaries, removed links,
+        deleted calendars and resources — and everything that{' '}
+        <strong className="text-foreground font-medium">
+          changes the rules other people&rsquo;s work is judged by
+        </strong>
+        : who has access, scheduling settings, a shared calendar&rsquo;s working time, baselines,
+        what the shared libraries offer, and where an imported programme came from.
       </p>
       <p className="text-muted-foreground mt-1 text-sm">
         Editing an activity&rsquo;s own fields — its name, dates, duration, lane or progress — is{' '}
@@ -108,7 +122,7 @@ function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
         showActor
         // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
         // log must never say when it means "this is outside what I record". Name the boundary.
-        emptyMessage="Nothing here yet. Editing an activity's own fields does not appear in this log — access changes, deletions and structural changes to a plan do."
+        emptyMessage="Nothing here yet. Editing an activity's own fields does not appear in this log — anything that removes something, or that changes the rules other people's work is judged by, does."
         // A narrowed view that finds nothing is a different fact from a log with nothing in it, and
         // saying the second when the first is true is the defect this screen already shipped once.
         emptyFilteredMessage={

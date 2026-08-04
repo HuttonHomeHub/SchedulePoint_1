@@ -2040,6 +2040,14 @@ export const AUDIT_OUTCOMES = ['SUCCESS', 'DENIED', 'FAILURE'] as const;
 export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
 
 /**
+ * Which of the two audit reads a question is being asked of. Named once here rather than spelled
+ * out at each use: the two functions below and the web's filter model all branch on it, and a
+ * union repeated in four places is a union that can be repeated wrongly in a fifth.
+ */
+export const AUDIT_SURFACES = ['organization', 'self'] as const;
+export type AuditSurface = (typeof AUDIT_SURFACES)[number];
+
+/**
  * The groups a reader filters by (ADR-0073 C1).
  *
  * A category is a **question somebody asks**, not a tidy-up of the action list: "who changed
@@ -2053,13 +2061,6 @@ export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
  * than a breaking API change, and a category regrouped later cannot silently alter what a saved
  * URL means to the server.
  */
-/**
- * Which of the two audit reads a question is being asked of. Named once here rather than spelled
- * out at each use: the two functions below and the web's filter model all branch on it, and a
- * union repeated in four places is a union that can be repeated wrongly in a fifth.
- */
-export type AuditSurface = 'organization' | 'self';
-
 export const AUDIT_CATEGORIES = [
   'access',
   'deletions',

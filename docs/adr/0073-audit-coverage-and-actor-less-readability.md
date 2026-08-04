@@ -3,7 +3,7 @@
 - **Status:** **Accepted** (per-milestone: C1 filter — **landed**, `VITE_AUDIT_FILTERS` default-on
   2026-08-04; C2 attribution — **landed**, `VITE_AUDIT_SELF_SECURITY` default-on 2026-08-04;
   C3 coverage — **landed** 2026-08-04, all 19 actions across families D–G, server-side and
-  unflagged; C4 enablement — outstanding)
+  unflagged; C4 enablement — **landed** 2026-08-04)
 - **Date:** 2026-08-04
 - **Deciders:** Product Owner (CQ-A subject-only readability; CQ-B the 19-action catalogue and the
   permanent exclusion of content edits; CQ-C the reorder); feature-analyst (design)
@@ -466,6 +466,63 @@ _arriving_ there would fail rather than pass. C3.4 emptied it, so the constant i
 sixth assertion takes its place: every reason in the census must be a declared decision, and the
 string `awaiting-a-later-c3-slice` must not exist. A route added later is classified by the two
 tests, not deferred with a note.
+
+### The C4 gates (2026-08-04) — six reviews, six defects, and four of one kind
+
+Six specialists over the combined C1–C3.4 diff. **Security and backend-performance passed with no
+blocking finding** — the IDOR boundary, the actor-less-readability rule, the redaction allow-list,
+producer ordering and the append-only guarantee all hold as designed, and the epic's four "Measured"
+sections were re-derived from the final code rather than taken on trust. **API, UX, accessibility
+and component blocked on six defects**, every one of which had passed a human read.
+
+**The filter cap had fallen behind the vocabulary it was derived from.**
+`AUDIT_FILTER_MAX_ACTIONS` shipped in C1 as the literal `20`, documented as "exactly today's
+vocabulary size", with the reasoning that the largest single category held nine so no chip selection
+could reach it. C3 then added nineteen actions and `deletions` grew to twelve: **Deletions + Access
+is 21**. Two chips a reader can click side by side, both offered on the same screen, and the API
+answers **422**. Neither the number nor the paragraph explaining it moved with the thing they
+described — and both reviewers who read that file found it independently. It is now
+`AUDIT_ACTIONS.length`, computed, so it cannot fall behind again; the regression test derives every
+category combination each surface can produce rather than naming one.
+
+**The one producer written outside a transaction called the method that fails its caller.**
+`interchange.imported` sits after phase 2 by design (see C3.4 above), with a comment saying so in
+those words — and then called `record()`, whose whole contract is to roll its caller back. With the
+plan already durably created, a throw would have returned **500 for a successful import**, inviting
+a retry that creates a second plan, and skipped both the lane packing and the pen release on the way
+out. `recordBestEffort()` exists for exactly this and was three lines away. The paragraph above the
+call described the right trade; the call made the opposite one.
+
+**The screen's own coverage sentence went stale inside the milestone that widened coverage.** The
+organisation audit log listed the actions it covered; by the time C3.4 landed it named family D and
+none of E, F or G — so a reader asking "where did the December baseline go?" had no reason to believe
+this log knew. It now states the **rule** (the two tests, in a sentence) rather than an inventory,
+because an inventory is a promise that goes stale every time the vocabulary grows, which on this
+feature is every milestone.
+
+The other three: a **bespoke filter-bar box** (`rounded-lg border p-3` — a card's radius around a row
+of controls, and a chrome no other filtered list in the product has, against the library screens'
+unboxed convention); a **hand-rolled `aria-disabled` shade** that dropped `pointer-events-none`, so
+"Clear filters" looked disabled while still lighting its hover state and taking the pointer (raised
+by two reviewers); and an **orphaned docblock** in `@repo/types`, where `AUDIT_CATEGORIES` lost its
+documentation to a type declaration inserted between them — in the package whose entire discipline
+in this epic is an exhaustively documented vocabulary.
+
+**Four of the six are one correct pattern applied to a control and not its neighbour** — the
+ADR-0064 §7 and ADR-0067 M4 shape, for the third and fourth time. Not design errors: inconsistencies
+inside a diff whose own docblocks described the right thing. Each fix carries a regression test
+verified to fail against the pre-fix code first, including a new
+`audit-producer-seams.structural.spec.ts` that reads which `AuditService` method each producer names
+— the only decidable form of a property whose behavioural test would require making the audit table
+refuse an insert. Six non-blocking findings are `docs/TECH_DEBT.md` #93.
+
+**The journey grew two assertions the unit suites cannot make** (`apps/web/e2e-audit/`): an activity
+deleted through the row menu **with the pen held**, appearing once on the organisation log with its
+cascade size and plan — the C3 coverage claim, end to end, against a gate a mocked fetch has no way
+to enforce; and the failed sign-in **absent** from a second account's feed, which is the half of C2
+a passing attribution can still get wrong. The UX review also caught that the nineteen new detail
+lines had **no unit coverage at all** — the suite proved every action had _a_ title and stopped,
+which is a thin gate for the half of the feature the epic exists to deliver. They have tests now.
 
 ## Alternatives considered
 

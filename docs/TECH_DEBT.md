@@ -837,6 +837,42 @@ the log is not wrong, only incomplete in a way a reader cannot see.
 
 ---
 
+### 93. The audit epic's non-blocking review findings (ADR-0073 C4.1)
+
+**Found:** 2026-08-04, from six specialist reviews over the combined C1–C3.4 diff. The six blocking
+findings were folded with regression tests; these are the remainder, recorded rather than rushed.
+
+(a) **Two producers read one extra row inside a held lock** to label their audit event —
+`baselines.service.ts` (`activate`, `remove`) looks up the plan's name inside the plan-advisory-lock
+transaction, and `activities.service.ts` (`updateParents`) looks up the destination parent's name.
+Each is one indexed primary-key lookup, sub-millisecond, and each producer is a single call rather
+than a loop — so this is a shape to watch, not a cost to pay down now. It becomes real if any of
+those actions is ever driven from a batch.
+
+(b) **`AuditEventList` has seven inline-typed props and no named `Props` interface**, unlike
+`AuditFilterBarProps` beside it. Predates the epic; worth extracting the next time the file is
+touched.
+
+(c) **Counts render without locale grouping** — `plural()` uses `String(n)`, so a 2,400-row cascade
+reads "2400 activities" while the dates in the same file go through `Intl.DateTimeFormat`. Not an
+established pattern for plain counts elsewhere in the app either, so this is a consistency question
+rather than a defect.
+
+(d) **`DataTable`'s `describedById` contract holds only for the populated table** — the empty state
+returns the message without the `role="region"` wrapper, so the My-activity safety caveat is
+reachable by serial reading but not by landmark navigation when there is nothing to show. Harmless
+today (there is no region to land inside), but the contract is undocumented and a future change to
+the empty-state markup could silently regress the populated case's fix.
+
+(e) **Directional facts use a bare `→` glyph** — "Planner → Contributor", predecessor → successor,
+calendar scope from → to. It is real text, so 1.4.1 is satisfied, but glyph pronunciation varies by
+screen reader and the dependency-direction line is the one ADR-0064 names as the defect this row
+exists to prevent. A textual equivalent (`"X to Y"`, or an `sr-only` sibling) would settle it.
+
+(f) **`AUDIT_CATEGORY_LABELS.settings` reads "Settings & calendars"** but the category now also
+holds baseline and library-governance events, so a reader looking for "why did my baseline
+disappear" may not think to try it. The label predates the widened scope.
+
 ---
 
 ## Closed numbers
@@ -871,4 +907,4 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 93.**
+**Next free number: 94.**
