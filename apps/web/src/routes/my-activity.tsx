@@ -46,8 +46,9 @@ export function MyActivityScreen(): React.ReactElement {
       </p>
       <p className="text-muted-foreground mt-1 text-sm">
         Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
-        is on their organisation&rsquo;s audit log, not here. Edits inside a plan are{' '}
-        <strong className="text-foreground font-medium">not recorded yet</strong>.
+        is on their organisation&rsquo;s audit log, not here. Inside a plan, deletions and
+        structural changes appear; editing an activity&rsquo;s own fields is{' '}
+        <strong className="text-foreground font-medium">deliberately not recorded</strong>.
       </p>
       {/*
         What a "Not signed in" row means, and — as importantly — what it does NOT mean. This screen
@@ -84,7 +85,7 @@ export function MyActivityScreen(): React.ReactElement {
           // whatever precedes it — and what precedes it here is the sentence saying a row does not
           // mean anyone got in.
           describedById={AUDIT_SELF_SECURITY_ENABLED ? ATTEMPTS_NOTE_ID : undefined}
-          emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation."
+          emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation and anything you deleted or restructured in a plan."
           emptyFilteredMessage={
             narrowed
               ? 'No events match this filter. Clear it to see everything recorded about you.'

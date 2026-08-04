@@ -12,6 +12,7 @@ import {
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ActivityRepository } from '../activities/activity.repository';
+import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -219,6 +220,9 @@ describe('DependenciesService', () => {
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
     const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    // Stubbed for the reason the activities spec gives: the producers are proven against a real
+    // table in the e2e suite, and a fake here could only assert that a fake was called.
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new DependenciesService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
@@ -228,6 +232,7 @@ describe('DependenciesService', () => {
       lifecycle as unknown as HierarchyLifecycleService,
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
       logger,
     );
   });

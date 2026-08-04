@@ -1210,6 +1210,27 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   and sentence that make it legible; that suite now exists. The journey found two more: an assertion
   scoped to the document rather than the row passed on the prose alone, and **My activity sits
   outside any organisation**, so the nav link the test clicked is not rendered there at all.
+  **C3 is the coverage itself, and C3.0 measured before a producer shipped.** ADR-0072 gated the
+  rung on an estimate nobody had made; the check counts from the seed catalogue's own `SeedSpec`s
+  rather than from persisted rows, because an append-only table cannot be cleaned — narrowing the
+  catalogue is cheap before a producer exists and impossible after. Measured **3,200 link creates
+  for a 2,000-activity programme against an estimate of 2,500 (1.28×)**, inside a 5× gate; the
+  catalogue ships unchanged. **C3.1** lands family D — an activity deleted, restored, dissolved or
+  regrouped, and a link added or removed — each inside the existing transaction after the existing
+  `assertHoldsPen`, and each **one row per user action, never per swept row**: deleting a summary
+  with forty-one descendants records one event carrying scalar counts. It also fixes a promise that
+  had never worked (spec §0.1): family C's cascade counts were specified as a nested
+  `CascadeCounts` and could not have been recorded, because the redactor reduces any non-scalar to a
+  type marker **by design** — so a delete of 412 activities said only that a batch happened. Two
+  departures from the spec's own shape, both because the spec was wrong about a case the API
+  permits: `activity.reparented` gains `parentCount` (a batch may name a different destination per
+  row, which `{ movedCount, parentName }` would render identically to "moved to the top level" —
+  absence a reader cannot distinguish from a fact, the defect this milestone exists to remove), and
+  `activity.dissolved` is filed under **plan-structure, not deletions**, because a dissolve keeps
+  the work. The census's `CONTENT_EDIT` splits into two **permanent** reasons plus a third,
+  `PENDING_COVERAGE`, that is honestly a queue — pinned as a snapshot so the failure caught is a
+  route quietly _arriving_ there, and emptied when C3.4 lands. **The CPM engine is not imported and
+  the recalc parity gate is untouched.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

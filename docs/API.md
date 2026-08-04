@@ -614,6 +614,30 @@ decision with its own scope; `@repo/types`' `AuditEvent` has no such fields, so 
 reader can tell "set from nothing" from "unchanged" without knowing the action's semantics — or
 `null` for the five authentication actions, whose allow-list is deliberately empty.
 
+#### What earns an event (ADR-0073 C3)
+
+There is no write endpoint, so the vocabulary is the contract. A mutating route records an event
+if it passes **either** of two tests, and **no** route records one by default:
+
+- **Durability** — does the product otherwise keep a durable record that this happened, and who did
+  it? A create or an ordinary update does (`created_by` / `updated_by`); a **delete or restore** is
+  the act that erases its own trace, and a **bulk import** produces hundreds of rows with no
+  per-row story. The latter two record.
+- **Blast radius** — does this change the rules by which **other people's** work is evaluated? A
+  plan's data date, a shared calendar's working time, a library object's availability, and a logic
+  **link** all do; an activity's own duration, name, lane or progress does not.
+
+Two consequences a client can rely on. **Editing an activity's own fields is never recorded** —
+permanently, not pending — so a screen must not describe that as "not yet". And an action that
+sweeps many rows writes **one** event carrying scalar counts, never one per swept row: a delete of a
+WBS summary with forty descendants and sixty links is one `activity.deleted` with
+`activityCount` / `dependencyCount` and the shared `deleteBatchId`. The same shape now applies to
+`client.*` / `project.*` / `plan.*`, which previously carried the batch id and not the size.
+
+Refused mutations record **nothing** in families D–G — no `DENIED` row for a 423 from the edit-lock
+or a 409 from an optimistic-lock retry, both of which mean "two people were working at once". A
+`DENIED` row is written only where an _attempt_ is itself signal: a refused permission change.
+
 #### Filtering the audit reads (ADR-0073)
 
 Both endpoints accept the same optional narrowing. **Omitting every parameter returns exactly the

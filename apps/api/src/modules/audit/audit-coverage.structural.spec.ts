@@ -63,6 +63,13 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'POST /api/v1/organizations/:orgSlug/plans/:planId/shares': ['share.created'],
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/shares/:shareId': ['share.revoked'],
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/restore': ['project.restored'],
+  // — ADR-0073 C3.1, family D: every destructive or structural act inside a plan.
+  'DELETE /api/v1/organizations/:orgSlug/activities/:activityId': ['activity.deleted'],
+  'POST /api/v1/organizations/:orgSlug/activities/:activityId/restore': ['activity.restored'],
+  'POST /api/v1/organizations/:orgSlug/activities/:activityId/dissolve': ['activity.dissolved'],
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/parents': ['activity.reparented'],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/dependencies': ['dependency.created'],
+  'DELETE /api/v1/organizations/:orgSlug/dependencies/:dependencyId': ['dependency.deleted'],
 };
 
 /**
@@ -80,12 +87,27 @@ const REASONS = {
    */
   AUDIT_READ: 'audit-read-not-yet-recorded',
   /**
-   * Editing an activity, dependency, calendar, resource, note, step or assignment. M1 deliberately
-   * covers permission changes, identity, and destructive hierarchy changes only; content edits are
-   * a far larger surface whose volume has to be measured before it is written (the M3 decision in
-   * ADR-0072). Recording them now would be the cheapest way to make the log unreadable.
+   * A create, or an ordinary update whose effect stops at the object being edited.
+   * `created_by`/`created_at` and `updated_by`/`updated_at` are already a permanent record of who
+   * and when (ADR-0073 Test 1), and nothing outside the row changes (Test 2 fails). **Permanent** —
+   * this is a decision, not a queue.
    */
-  CONTENT_EDIT: 'content-edit-deferred-to-m3',
+  DURABLY_ATTRIBUTED: 'durably-attributed-by-the-row',
+  /**
+   * Content of one plan object, changing nothing outside it: an activity's own fields, its
+   * progress, its lane, its notes, its steps, its assignments. **Permanent**, and the reason the
+   * whole coverage rung is affordable — this class scales with the number of INTERACTIONS (one
+   * write per drag, resize or keystroke commit) while the recorded class scales with the size of
+   * the programme. Recording it is the cheapest way to make the log unreadable.
+   */
+  PLAN_CONTENT: 'plan-content-permanently-excluded',
+  /**
+   * Named in ADR-0073's catalogue and **not yet built** — the only reason in this list that is a
+   * queue rather than a decision. Each entry says which slice claims it, so "we have not got to
+   * it" cannot quietly become "we decided not to": when C3.4 lands, no route carries this and the
+   * constant is deleted.
+   */
+  PENDING_COVERAGE: 'awaiting-a-later-c3-slice',
   /** Taking, holding or handing over the pen. A lease, not a change to the plan (ADR-0028). */
   EDIT_LOCK: 'edit-lock-lease',
   /**
@@ -93,8 +115,6 @@ const REASONS = {
    * A row saying "the schedule was recomputed" adds noise, not evidence.
    */
   ENGINE_DERIVED: 'engine-derived',
-  /** An import creates a plan; `plan.created` is not in the M1 vocabulary. */
-  IMPORT: 'import-creates-plan',
   /** A session-less guest read (ADR-0051). No member principal, and nothing is changed. */
   GUEST_READ: 'guest-read',
   /** Health, readiness and version. Not organisation data. */
@@ -105,17 +125,16 @@ type Reason = (typeof REASONS)[keyof typeof REASONS];
 
 /** Every route that records nothing, and why. */
 const UNAUDITED_ROUTES: Record<string, Reason> = {
-  'DELETE /api/v1/organizations/:orgSlug/activities/:activityId': REASONS.CONTENT_EDIT,
-  'DELETE /api/v1/organizations/:orgSlug/assignments/:id': REASONS.CONTENT_EDIT,
-  'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId': REASONS.CONTENT_EDIT,
+  'DELETE /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
+  'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId': REASONS.PENDING_COVERAGE,
   'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId':
-    REASONS.CONTENT_EDIT,
-  'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.CONTENT_EDIT,
-  'DELETE /api/v1/organizations/:orgSlug/dependencies/:dependencyId': REASONS.CONTENT_EDIT,
-  'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.CONTENT_EDIT,
-  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId': REASONS.CONTENT_EDIT,
+    REASONS.PENDING_COVERAGE,
+  'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.PLAN_CONTENT,
+  'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
+  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId':
+    REASONS.PENDING_COVERAGE,
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/edit-lock': REASONS.EDIT_LOCK,
-  'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.CONTENT_EDIT,
+  'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.PENDING_COVERAGE,
   'GET /api/health': REASONS.INFRASTRUCTURE,
   'GET /api/health/ready': REASONS.INFRASTRUCTURE,
   'GET /api/v1/me': REASONS.READ,
@@ -165,52 +184,50 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'GET /api/v1/share/dependencies': REASONS.GUEST_READ,
   'GET /api/v1/share/plan': REASONS.GUEST_READ,
   'GET /api/v1/version': REASONS.INFRASTRUCTURE,
-  'PATCH /api/v1/organizations/:orgSlug/activities/:activityId': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/activities/:activityId/progress': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/assignments/:id': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId': REASONS.CONTENT_EDIT,
+  'PATCH /api/v1/organizations/:orgSlug/activities/:activityId': REASONS.PLAN_CONTENT,
+  'PATCH /api/v1/organizations/:orgSlug/activities/:activityId/progress': REASONS.PLAN_CONTENT,
+  'PATCH /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
+  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId': REASONS.PENDING_COVERAGE,
   'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId':
-    REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/clients/:clientId': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/dependencies/:dependencyId': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/plans/:planId': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/parents': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/positions': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/projects/:projectId': REASONS.CONTENT_EDIT,
-  'PATCH /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.CONTENT_EDIT,
+    REASONS.PENDING_COVERAGE,
+  'PATCH /api/v1/organizations/:orgSlug/clients/:clientId': REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/dependencies/:dependencyId': REASONS.PLAN_CONTENT,
+  'PATCH /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId': REASONS.PENDING_COVERAGE,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/positions': REASONS.PLAN_CONTENT,
+  'PATCH /api/v1/organizations/:orgSlug/projects/:projectId': REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.PLAN_CONTENT,
   'POST /api/v1/invitations/preview': REASONS.READ,
-  'POST /api/v1/organizations/:orgSlug/activities/:activityId/assignments': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/activities/:activityId/dissolve': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/activities/:activityId/notes': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/activities/:activityId/restore': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/calendars': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/clients': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/clients/:clientId/projects': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/cross-plan-dependencies': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/plans/:planId/activities': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines': REASONS.CONTENT_EDIT,
+  'POST /api/v1/organizations/:orgSlug/activities/:activityId/assignments': REASONS.PLAN_CONTENT,
+  'POST /api/v1/organizations/:orgSlug/activities/:activityId/notes': REASONS.PLAN_CONTENT,
+  'POST /api/v1/organizations/:orgSlug/calendars': REASONS.DURABLY_ATTRIBUTED,
+  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': REASONS.PENDING_COVERAGE,
+  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions': REASONS.PENDING_COVERAGE,
+  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': REASONS.PENDING_COVERAGE,
+  'POST /api/v1/organizations/:orgSlug/clients': REASONS.DURABLY_ATTRIBUTED,
+  'POST /api/v1/organizations/:orgSlug/clients/:clientId/projects': REASONS.DURABLY_ATTRIBUTED,
+  'POST /api/v1/organizations/:orgSlug/cross-plan-dependencies': REASONS.PLAN_CONTENT,
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/activities': REASONS.DURABLY_ATTRIBUTED,
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines': REASONS.PENDING_COVERAGE,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId/activate':
-    REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/plans/:planId/dependencies': REASONS.CONTENT_EDIT,
+    REASONS.PENDING_COVERAGE,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/edit-lock': REASONS.EDIT_LOCK,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/edit-lock/handoff': REASONS.EDIT_LOCK,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/edit-lock/heartbeat': REASONS.EDIT_LOCK,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/edit-lock/request': REASONS.EDIT_LOCK,
-  'POST /api/v1/organizations/:orgSlug/plans/:planId/notes': REASONS.CONTENT_EDIT,
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/notes': REASONS.PLAN_CONTENT,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/schedule/recalculate': REASONS.ENGINE_DERIVED,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/schedule/recalculate-programme':
     REASONS.ENGINE_DERIVED,
-  'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit': REASONS.IMPORT,
-  'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/dry-run': REASONS.IMPORT,
-  'POST /api/v1/organizations/:orgSlug/projects/:projectId/plans': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/resources': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive': REASONS.CONTENT_EDIT,
-  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive': REASONS.CONTENT_EDIT,
-  'PUT /api/v1/organizations/:orgSlug/activities/:activityId/steps': REASONS.CONTENT_EDIT,
+  'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit':
+    REASONS.PENDING_COVERAGE,
+  'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/dry-run':
+    REASONS.PLAN_CONTENT,
+  'POST /api/v1/organizations/:orgSlug/projects/:projectId/plans': REASONS.DURABLY_ATTRIBUTED,
+  'POST /api/v1/organizations/:orgSlug/resources': REASONS.DURABLY_ATTRIBUTED,
+  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive': REASONS.PENDING_COVERAGE,
+  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive': REASONS.PENDING_COVERAGE,
+  'PUT /api/v1/organizations/:orgSlug/activities/:activityId/steps': REASONS.PLAN_CONTENT,
 };
 
 const METHOD_NAMES = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD', 'SEARCH'];
@@ -340,5 +357,56 @@ describe('audit coverage census (ADR-0072)', () => {
       expect(AUDITED_ROUTES[`DELETE /api/v1/organizations/:orgSlug/${entity}`]).toBeDefined();
       expect(AUDITED_ROUTES[`POST /api/v1/organizations/:orgSlug/${entity}/restore`]).toBeDefined();
     }
+  });
+
+  it('audits every destructive act inside a plan', () => {
+    // The third positive assertion (ADR-0073 C3.1), and it exists for the reason the first one
+    // does: "who removed this?" is the question a planner actually asks, and a refactor that moved
+    // one of these into `UNAUDITED_ROUTES` under `PLAN_CONTENT` would pass every test above while
+    // silently removing the answer. Named by hand rather than derived, because the point is that
+    // somebody decided these specific acts must always be recoverable from the log.
+    const destructive = [
+      'DELETE /api/v1/organizations/:orgSlug/activities/:activityId',
+      'POST /api/v1/organizations/:orgSlug/activities/:activityId/restore',
+      'POST /api/v1/organizations/:orgSlug/activities/:activityId/dissolve',
+      'DELETE /api/v1/organizations/:orgSlug/dependencies/:dependencyId',
+    ];
+    for (const route of destructive) {
+      expect(AUDITED_ROUTES[route], `${route} must audit`).toBeDefined();
+    }
+  });
+
+  it('names a claiming slice for every route still awaiting coverage', () => {
+    // `PENDING_COVERAGE` is the one reason that is a queue rather than a decision, so it needs a
+    // shape the next slice cannot ignore: when C3.4 lands this list is empty and the constant goes
+    // with it. Asserted as a **snapshot** rather than a count, because the failure worth catching
+    // is a route quietly ARRIVING here — parked as "later" by whoever added it — not the expected
+    // shrinkage as slices land.
+    const pending = Object.entries(UNAUDITED_ROUTES)
+      .filter(([, reason]) => reason === REASONS.PENDING_COVERAGE)
+      .map(([route]) => route)
+      .sort();
+    expect(pending).toEqual(
+      [
+        // C3.2 — family E, the rules other work is judged by.
+        'PATCH /api/v1/organizations/:orgSlug/plans/:planId',
+        'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId',
+        'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions',
+        'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId',
+        'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions/:exceptionId',
+        'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines',
+        'POST /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId/activate',
+        'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId',
+        // C3.3 — family F, library governance.
+        'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId',
+        'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive',
+        'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive',
+        'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId',
+        'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive',
+        'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive',
+        // C3.4 — family G, provenance.
+        'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit',
+      ].sort(),
+    );
   });
 });

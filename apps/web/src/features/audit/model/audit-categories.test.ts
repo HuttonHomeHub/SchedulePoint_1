@@ -29,10 +29,10 @@ describe('audit categories', () => {
 
   it('never OFFERS a category with nothing in it', () => {
     // A chip that can only answer "no events" is the defect this whole milestone exists to stop,
-    // in the control meant to fix it. Two categories are declared but empty today —
-    // `plan-structure` and `settings` hold ADR-0073's coming actions, which is what makes adding
-    // one a compile error — so the rule is about what is OFFERED, not what is declared. This test
-    // failed on the first run for exactly that reason.
+    // in the control meant to fix it. `settings` is declared but empty today — it holds ADR-0073's
+    // coming C3.2 actions, which is what makes adding one a compile error — so the rule is about
+    // what is OFFERED, not what is declared. This test failed on the first run for exactly that
+    // reason. (`plan-structure` was the second such category until C3.1 populated it.)
     for (const surface of ['organization', 'self'] as const) {
       for (const category of auditCategoriesForSurface(surface)) {
         expect(auditActionsForCategories([category], surface).length).toBeGreaterThan(0);
@@ -42,12 +42,22 @@ describe('audit categories', () => {
 
   it('declares a home for every action the catalogue will add, offered or not', () => {
     // The declared set is deliberately wider than the offered one. If this shrank to only the
-    // populated categories, C3's first `plan.settings_changed` would have nowhere to go and the
+    // populated categories, C3.2's first `plan.settings_changed` would have nowhere to go and the
     // compile error that forces the decision would not fire.
-    expect(AUDIT_CATEGORIES).toContain('plan-structure');
     expect(AUDIT_CATEGORIES).toContain('settings');
-    expect(auditCategoriesForSurface('organization')).not.toContain('plan-structure');
+    expect(auditCategoriesForSurface('organization')).not.toContain('settings');
     expect(auditCategoriesForSurface('self')).not.toContain('settings');
+  });
+
+  it('OFFERS a category the moment its first action lands, with nobody editing the offering', () => {
+    // The other half of the rule, and the half C3.1 exercised for real: `plan-structure` was
+    // declared-but-hidden for the whole of C1, and appeared by itself when family D gave it six
+    // actions. Nothing in `auditCategoriesForSurface` was touched — the offering is DERIVED from
+    // the vocabulary, which is why a coverage slice cannot forget to reveal its own chip.
+    expect(auditActionsInCategory('plan-structure').length).toBeGreaterThan(0);
+    for (const surface of ['organization', 'self'] as const) {
+      expect(auditCategoriesForSurface(surface)).toContain('plan-structure');
+    }
   });
 
   it('accounts for the whole vocabulary — no action is unreachable by any chip', () => {

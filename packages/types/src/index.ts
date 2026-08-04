@@ -1972,6 +1972,24 @@ export const AUDIT_ACTIONS = [
   'project.restored',
   'plan.deleted',
   'plan.restored',
+  // — Destructive and structural acts inside a plan (ADR-0073 family D). One row per **user
+  //   action**, never per swept row: deleting a WBS summary with forty-one descendants is one
+  //   thing a person did, and forty-one rows would bury the fact rather than record it. The
+  //   counts ride the payload as flattened scalars instead.
+  //
+  //   `activity.created` is deliberately absent and stays absent (spec CQ-D): it fails BOTH tests
+  //   — `created_by`/`created_at` on the row is already a durable, permanent record of the act
+  //   (Test 1), and a new activity changes nothing outside itself until it is linked (Test 2).
+  //   `dependency.created` is here for exactly that second reason: a link re-dates everything
+  //   downstream of it, which is somebody else's work. The honest cost of the asymmetry — an
+  //   ADR-0048 undo of a delete is a re-create, so the log shows a deletion with no matching
+  //   restore — is `docs/TECH_DEBT.md` #92, not a reason to widen the catalogue.
+  'activity.deleted',
+  'activity.restored',
+  'activity.dissolved',
+  'activity.reparented',
+  'dependency.created',
+  'dependency.deleted',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -2052,6 +2070,15 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'project.restored': 'deletions',
   'plan.deleted': 'deletions',
   'plan.restored': 'deletions',
+  'activity.deleted': 'deletions',
+  'activity.restored': 'deletions',
+  'dependency.deleted': 'deletions',
+  // Not a deletion — a rearrangement. `activity.dissolved` removes a summary but PROMOTES its
+  // children rather than deleting them, so filing it under "what disappeared" would tell a reader
+  // looking for lost work that forty activities went away. Its subject is the shape of the plan.
+  'activity.dissolved': 'plan-structure',
+  'activity.reparented': 'plan-structure',
+  'dependency.created': 'plan-structure',
 };
 
 /**
@@ -2064,12 +2091,13 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
  * route for the same reason (plus a measured one: a filter that matches nothing is also the most
  * expensive query the table accepts).
  *
- * **A category with nothing in it yet is also withheld**, and that is not a detail. `plan-structure`
- * and `settings` are declared here because ADR-0073's catalogue puts nineteen coming actions in
- * them, and giving those actions a home now is what makes adding one a compile error rather than a
- * decision. But they hold **no action today**, so offering them would put two chips on screen that
- * can only ever answer "no events" — the precise defect this filter exists to fix, in the control
- * meant to fix it. They appear by themselves the moment their first action lands.
+ * **A category with nothing in it yet is also withheld**, and that is not a detail. Offering a chip
+ * that can only ever answer "no events" is the precise defect this filter exists to fix, in the
+ * control meant to fix it. `plan-structure` and `settings` were both declared-but-empty when C1
+ * shipped, for the compile-error discipline above; `plan-structure` gained its first actions with
+ * C3.1 and now offers itself, **without anyone editing this function** — which is the point of
+ * deriving the offering rather than listing it. `settings` still holds nothing and still stays
+ * hidden, until C3.2 lands its first action.
  *
  * Both rules are **derived** from {@link AUDIT_ACTION_CATEGORY} rather than listed, so neither
  * needs anyone to remember this function: the offering is a property of the vocabulary.

@@ -48,12 +48,15 @@ export function AuditLogScreen(): React.ReactElement {
       */}
       <p className="text-muted-foreground mt-1 text-sm">
         Who changed access and who deleted things, newest first — role changes, invitations, share
-        links, and deleted or restored clients, projects and plans.
+        links, deleted or restored clients, projects and plans, and, inside a plan, deleted or
+        restored activities, dissolved summaries, regrouped work and added or removed links.
       </p>
       <p className="text-muted-foreground mt-1 text-sm">
-        Edits inside a plan — creating, changing or deleting activities and links — are{' '}
-        <strong className="text-foreground font-medium">not recorded yet</strong>. Your own sign-ins
-        are on <strong className="text-foreground font-medium">My activity</strong>, not here.
+        Editing an activity&rsquo;s own fields — its name, dates, duration, lane or progress — is{' '}
+        <strong className="text-foreground font-medium">deliberately not recorded</strong>: it
+        changes nothing outside that activity, and the row already carries who last changed it. Your
+        own sign-ins are on <strong className="text-foreground font-medium">My activity</strong>,
+        not here.
       </p>
 
       {isPending ? (
@@ -105,7 +108,7 @@ function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
         showActor
         // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
         // log must never say when it means "this is outside what I record". Name the boundary.
-        emptyMessage="Nothing here yet. Building a plan does not appear in this log — only access changes and deletions of clients, projects and plans do."
+        emptyMessage="Nothing here yet. Editing an activity's own fields does not appear in this log — access changes, deletions and structural changes to a plan do."
         // A narrowed view that finds nothing is a different fact from a log with nothing in it, and
         // saying the second when the first is true is the defect this screen already shipped once.
         emptyFilteredMessage={

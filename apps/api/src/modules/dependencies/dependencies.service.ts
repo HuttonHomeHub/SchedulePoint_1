@@ -4,6 +4,7 @@ import { DEPENDENCY_CONFLICT_MESSAGES, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
   ForbiddenError,
@@ -14,6 +15,8 @@ import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-life
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { daysToMinutes } from '../activities/day-factor';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -67,6 +70,7 @@ export class DependenciesService {
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(DependenciesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -182,6 +186,7 @@ export class DependenciesService {
     orgSlug: string,
     planId: string,
     dto: CreateDependencyDto,
+    context?: RequestContext,
   ): Promise<WithLagDayFactor<DependencyWithEndpoints>> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:create', organization.id);
@@ -220,7 +225,7 @@ export class DependenciesService {
             reason: DEPENDENCY_CONFLICT.CYCLE_DETECTED,
           });
         }
-        return this.dependencies.create(
+        const created = await this.dependencies.create(
           {
             organizationId: plan.organizationId,
             planId: plan.id,
@@ -257,6 +262,38 @@ export class DependenciesService {
           },
           tx,
         );
+
+        /*
+         * A create that earns a row — the one exception to "a create is already durably
+         * attributed" (spec Test 1), because a link passes Test 2 instead: it re-dates everything
+         * downstream of it, which is other people's work.
+         *
+         * Both endpoint NAMES are recorded rather than one id, and in that order, because the
+         * direction is the fact ADR-0064 found planners most often get wrong — and an audit row
+         * that says only "a link was created" cannot settle the argument it exists to settle.
+         *
+         * Inside the same transaction as the insert, under the same advisory lock and after the
+         * same `assertHoldsPen`: a rolled-back create records nothing, and a 423 records nothing.
+         */
+        await this.audit.record(
+          {
+            action: 'dependency.created',
+            outcome: 'SUCCESS',
+            organizationId: organization.id,
+            subjectType: 'DEPENDENCY',
+            subjectId: created.id,
+            subjectLabel: `${predecessor.name} → ${successor.name}`,
+            after: {
+              predecessorName: predecessor.name,
+              successorName: successor.name,
+              type: created.type,
+              lagMinutes: created.lagMinutes,
+            },
+            ...auditActor(principal, context),
+          },
+          tx,
+        );
+        return created;
       });
       this.logger.info(
         {
@@ -328,7 +365,12 @@ export class DependenciesService {
     return this.withLagDayFactor(updated);
   }
 
-  async remove(principal: Principal, orgSlug: string, dependencyId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    dependencyId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:delete', organization.id);
 
@@ -336,9 +378,36 @@ export class DependenciesService {
     if (!existing) throw new NotFoundError('Dependency not found.');
     await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
 
-    await this.prisma.$transaction((tx) =>
-      this.lifecycle.cascadeSoftDelete(tx, 'dependency', dependencyId, principal.userId),
-    );
+    await this.prisma.$transaction(async (tx) => {
+      const cascade = await this.lifecycle.cascadeSoftDelete(
+        tx,
+        'dependency',
+        dependencyId,
+        principal.userId,
+      );
+      // The link that disappeared, named by its endpoints in direction order — the same shape as
+      // the create, so the two read as a pair rather than as two unrelated facts about an id
+      // nothing can now resolve.
+      await this.audit.record(
+        {
+          action: 'dependency.deleted',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'DEPENDENCY',
+          subjectId: dependencyId,
+          subjectLabel: `${existing.predecessor.name} → ${existing.successor.name}`,
+          before: {
+            predecessorName: existing.predecessor.name,
+            successorName: existing.successor.name,
+            type: existing.type,
+            lagMinutes: existing.lagMinutes,
+            deleteBatchId: cascade.batchId,
+          },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+    });
     this.logger.info(
       { organizationId: organization.id, dependencyId, userId: principal.userId },
       'dependency deleted',

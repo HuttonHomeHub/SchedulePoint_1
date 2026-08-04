@@ -48,6 +48,14 @@ const TITLES: Record<AuditAction, string> = {
   'project.restored': 'Project restored',
   'plan.deleted': 'Plan deleted',
   'plan.restored': 'Plan restored',
+  'activity.deleted': 'Activity deleted',
+  'activity.restored': 'Activity restored',
+  // "Summary dissolved", not "Summary deleted": the grouping went, the work stayed. A reader
+  // scanning for lost work must not stop on this row.
+  'activity.dissolved': 'Summary dissolved',
+  'activity.reparented': 'Activities regrouped',
+  'dependency.created': 'Link added',
+  'dependency.deleted': 'Link removed',
 };
 
 function field(side: Record<string, unknown> | undefined, key: string): string | null {
@@ -106,7 +114,40 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
     case 'client.restored':
     case 'project.deleted':
     case 'project.restored':
-      return null;
+      return cascadeDetail(changes);
+    case 'activity.deleted':
+    case 'activity.restored': {
+      // The cascade size FIRST, because that is the fact a reader is checking: deleting a WBS
+      // summary takes its whole subtree, and "1 activity" versus "41 activities, 63 links" is the
+      // difference between a tidy-up and an incident.
+      const cascade = cascadeDetail(changes);
+      const plan = field(changes?.before, 'planName');
+      const parts = [cascade, plan === null ? null : `in ${plan}`].filter((p) => p !== null);
+      return parts.length === 0 ? null : parts.join(' · ');
+    }
+    case 'activity.dissolved': {
+      const promoted = count(changes?.before, 'promotedChildCount');
+      // Named as a promotion rather than a count of children, because "kept" is the whole point of
+      // the action and the reason it is not a deletion.
+      return promoted === null ? null : `${plural(promoted, 'activity', 'activities')} kept`;
+    }
+    case 'activity.reparented': {
+      const moved = count(changes?.after, 'movedCount');
+      if (moved === null) return null;
+      const where = reparentDestination(changes);
+      return `${plural(moved, 'activity', 'activities')} ${where}`;
+    }
+    case 'dependency.created':
+    case 'dependency.deleted': {
+      // The direction, spelled out. It is the fact planners most often get wrong (ADR-0064), and
+      // the row exists to settle exactly that argument.
+      const from =
+        field(changes?.after, 'predecessorName') ?? field(changes?.before, 'predecessorName');
+      const to = field(changes?.after, 'successorName') ?? field(changes?.before, 'successorName');
+      if (from === null || to === null) return null;
+      const type = field(changes?.after, 'type') ?? field(changes?.before, 'type');
+      return type === null ? `${from} → ${to}` : `${from} → ${to} (${type})`;
+    }
     case 'auth.signed_up':
     case 'auth.signed_in':
     case 'auth.sign_in_failed':
@@ -116,6 +157,53 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       // them): who, from where and whether it worked are first-class columns.
       return null;
   }
+}
+
+/** A numeric field from one side of the payload. Separate from {@link field} because a count of
+ *  zero is a real answer and `field`'s string test would drop it. */
+function count(side: Record<string, unknown> | undefined, key: string): number | null {
+  const value = side?.[key];
+  return typeof value === 'number' ? value : null;
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${String(n)} ${n === 1 ? one : many}`;
+}
+
+/**
+ * What a cascade swept, in words — shared by the four hierarchy actions and the two activity ones,
+ * because they carry the same flattened count fields and two renderings of the same numbers would
+ * eventually disagree.
+ *
+ * Zero counts are omitted rather than printed: "0 links" is noise on the common case of deleting a
+ * single unlinked activity. An action that swept nothing but itself renders no detail at all, which
+ * is correct — the columns already say what it was.
+ */
+function cascadeDetail(changes: AuditChanges | null): string | null {
+  const side = changes?.before ?? changes?.after;
+  const parts = [
+    ['activityCount', 'activity', 'activities'],
+    ['dependencyCount', 'link', 'links'],
+    ['planCount', 'plan', 'plans'],
+    ['projectCount', 'project', 'projects'],
+  ]
+    .map(([key, one, many]) => {
+      const n = count(side, key as string);
+      return n === null || n === 0 ? null : plural(n, one as string, many as string);
+    })
+    .filter((part) => part !== null);
+  return parts.length === 0 ? null : parts.join(', ');
+}
+
+/** Where a reparent batch sent its activities — three distinct readings, never a guess. */
+function reparentDestination(changes: AuditChanges | null): string {
+  const parent = field(changes?.after, 'parentName');
+  if (parent !== null) return `moved under ${parent}`;
+  const parents = count(changes?.after, 'parentCount');
+  // More than one destination in the batch: saying "moved to the top level" would be false, and
+  // saying nothing would leave the sentence unfinished.
+  if (parents !== null && parents > 1) return `moved to ${String(parents)} different groups`;
+  return 'moved to the top level';
 }
 
 /** The expiry date in the reader's own locale. Date only — the hour a link dies is not a fact

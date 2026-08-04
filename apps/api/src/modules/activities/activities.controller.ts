@@ -26,6 +26,7 @@ import type { ProgressWarning } from '@repo/types';
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ResourceEnvelope } from '../../common/dto/resource-envelope';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -146,8 +147,9 @@ export class ActivitiesController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, activityId);
+    await this.service.remove(principal, orgSlug, activityId, context);
   }
 
   @Post(':activityId/dissolve')
@@ -175,8 +177,14 @@ export class ActivitiesController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<DissolveSummaryResponseDto> {
-    const { promoted } = await this.service.dissolveSummary(principal, orgSlug, activityId);
+    const { promoted } = await this.service.dissolveSummary(
+      principal,
+      orgSlug,
+      activityId,
+      context,
+    );
     return { promoted };
   }
 
@@ -191,8 +199,14 @@ export class ActivitiesController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<ActivityResponseDto> {
-    const { activity, canReadCost } = await this.service.restore(principal, orgSlug, activityId);
+    const { activity, canReadCost } = await this.service.restore(
+      principal,
+      orgSlug,
+      activityId,
+      context,
+    );
     return ActivityResponseDto.from(activity, canReadCost);
   }
 }

@@ -155,6 +155,7 @@ export class ClientsService {
           id: clientId,
           name: existing.name,
           deleteBatchId: cascade.batchId,
+          counts: cascade.counts,
           principal,
           context,
         }),
@@ -187,7 +188,7 @@ export class ClientsService {
     if (!existing.deletedAt) return existing; // already active — restore is a no-op
 
     await this.prisma.$transaction(async (tx) => {
-      await this.lifecycle.restoreBatch(tx, 'client', clientId, principal.userId);
+      const counts = await this.lifecycle.restoreBatch(tx, 'client', clientId, principal.userId);
       // `existing.deleteBatchId` is read before the transaction, and that is safe here in a way
       // it is NOT in MembersService.changeRole: `restoreBatch` re-reads the root inside the
       // transaction and throws unless it is still soft-deleted, so a stale read cannot survive
@@ -199,8 +200,8 @@ export class ClientsService {
           organizationId: organization.id,
           id: clientId,
           name: existing.name,
-
           deleteBatchId: existing.deleteBatchId,
+          counts,
           principal,
           context,
         }),

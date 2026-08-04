@@ -227,6 +227,121 @@ factor; only the first was worth paying for today.
 The parity path is unchanged and measured to be so, which is the property that lets the server half
 ship unflagged.
 
+### Measured, C3.0 (2026-08-04) — the row rate, before a single producer shipped
+
+ADR-0072 gated this rung on an estimate nobody had made. §2.4 made one; this is the check, and it
+ran **before** any producer existed — deliberately, because an append-only table cannot be cleaned,
+so narrowing the catalogue is cheap now and impossible later.
+
+Counted from the seed catalogue's own `SeedSpec`s rather than from persisted rows
+(`scripts/measure-audit-row-rate.mjs`). That is the ADR-0066 rule applied to a measurement: the
+specs are the source of truth for what the catalogue builds, and every family D–G operation maps to
+exactly one spec element, so counting rows back out of a database would have required the producers
+this measurement exists to gate.
+
+| Shape                                 |     `dependency.created` rows |
+| ------------------------------------- | ----------------------------: |
+| Fixture + capability tiers (18 plans) | 254 total — **14.1 per plan** |
+| Scale generator, 500 activities       |       800 (1.60 per activity) |
+| Scale generator, 2,000 activities     | **3,200** (1.60 per activity) |
+
+§2.4 estimated ~2,500 link creates for a 2,000-activity programme. Measured: **3,200 — a ratio of
+1.28×**, against a narrowing gate of 5×. **The catalogue ships unchanged.**
+
+Two things worth stating rather than leaving implicit. `dependency.created` **dominates the included
+catalogue** at 1.6 rows per activity — everything else is tens per plan — so it is the action to
+watch if the gate is ever re-run. And this measures the **included** classes only: the excluded ones
+scale with interactions rather than with the size of the programme, which is the difference §2.4's
+argument rests on and the reason no static artefact could count them.
+
+### Built, C3.1 (2026-08-04) — family D, and two places the spec's shape was wrong
+
+The first coverage slice: `activity.deleted` / `.restored` / `.dissolved` / `.reparented` and
+`dependency.created` / `.deleted`, each produced inside the existing transaction, after the existing
+`assertHoldsPen`, with the census's six routes moved and a new positive assertion — "audits every
+destructive act inside a plan" — beside the permission-change and hierarchy ones.
+
+**It also fixes §0.1(1), which had never worked.** The M1 spec promised family C would record
+`changes = { deleteBatchId, counts: CascadeCounts }`. The shipped allow-list named no counts and the
+producer passed none — and it could not have worked if it had, because the redactor's `normalise`
+reduces any non-scalar to a type marker **by design** (the allow-list vets the top-level key and
+cannot vouch for a sub-tree). So a delete of 412 activities recorded the batch id and not the size.
+Counts are now **flattened scalars**, one field per level, on family C and family D alike. Old rows
+are not backfilled and cannot be: the table refuses `UPDATE`.
+
+**Two departures from the feature spec's shape, both because the spec was wrong about a case the
+API permits:**
+
+1. `activity.reparented` gains **`parentCount`**. The spec's `{ movedCount, parentName }` encodes
+   "moved to the top level" as an absent `parentName` — but a batch may name a **different**
+   destination per row, and that would render identically. Absence a reader cannot distinguish from
+   a fact is the defect this whole milestone exists to remove, so the count makes all three cases
+   determined.
+2. `activity.dissolved` is filed under **`plan-structure`, not `deletions`**, though it soft-deletes
+   a row. A dissolve removes the grouping and **keeps the work**; filing it under "what disappeared"
+   would tell a reader looking for lost work that a phase's forty activities went away.
+
+**What the census gained, and what it still cannot do.** `CONTENT_EDIT` splits into
+`DURABLY_ATTRIBUTED` and `PLAN_CONTENT` — both **permanent**, both a decision — plus a third,
+`PENDING_COVERAGE`, which the spec did not anticipate and which is honestly a _queue_: fifteen
+routes C3.2–C3.4 will claim. A new assertion pins that list as a **snapshot**, so the failure it
+catches is a route quietly _arriving_ there — parked as "later" by whoever added it — rather than
+the expected shrinkage as slices land. When C3.4 lands the list is empty and the constant is
+deleted. Note also what this ADR's own implementation plan got wrong about ADR-0072's census: its
+six assertions force a route **to be** audited, and nothing in them forbids auditing one, so
+`ENGINE_DERIVED` remains a documented rule and not a gate.
+
+**The CPM engine is not imported, and the recalc parity gate is untouched.** The producers write one
+row per user action beside writes that already happened; `computeSchedule`'s input is unchanged.
+
+### Measured, C3.1 (2026-08-04) — the index does not ship, and NOT for the reason the plan gave
+
+C3.1's last step was "re-measure the filtered organisation read; add
+`idx_audit_events_org_action_occurred` **only** if it wins." It does not, and what the measurement
+actually says is more useful than the verdict.
+
+Postgres 17, 1,000,000 rows over two years, seeded from the vocabulary **as it stands after C3.1** —
+family D weighted the way C3.0 measured it, so `dependency.created` dominates. Split across three
+organisations, one of which (467k rows) has never used share links or invitations, which is the
+realistic zero-match: a large partition and a chip that can only answer "no events" **for this
+tenant**. `EXPLAIN (ANALYZE, BUFFERS)` on the real keyset query, warm.
+
+| Read (organisation route, `LIMIT 50`)                | No index (shipped) | With the candidate index |
+| ---------------------------------------------------- | -----------------: | -----------------------: |
+| Unfiltered page                                      |            0.36 ms |                unchanged |
+| **Plan structure** chip (3 actions, all populated)   |            0.37 ms |                unchanged |
+| **Deletions** chip (9 actions)                       |            0.40 ms |                unchanged |
+| **Access** chip (9 actions, 3.5% of rows)            |            0.26 ms |                unchanged |
+| Two actions + `DENIED` (rare, present)               |              86 ms |                    91 ms |
+| **9-action chip, zero match on a 467k-row tenant**   |         **341 ms** |               **326 ms** |
+| _Same, single action_                                |             341 ms |             **0.081 ms** |
+| _Same, 9 actions, `count(*)` with **no** `ORDER BY`_ |                  — |             **0.116 ms** |
+
+Index cost: **80 MB** on a 450 MB table.
+
+**The index wins only for a query shape the client never sends.** One action: 341 ms → 0.081 ms, a
+4,000× improvement — which is what C1's projection measured and why the plan expected it to ship.
+But the filter is **category**-based, and a category expands to **three or nine** actions before it
+reaches the wire. With an `IN` list of that width Postgres will not use the index at all — not even
+with `enable_seqscan = off` — because serving `ORDER BY occurred_at DESC, id DESC LIMIT 50` from N
+separate index ranges would need a merge it declines to plan. It falls back to walking the
+organisation partition in date order, which is the same 341 ms the unindexed table costs.
+
+**The last row is the diagnosis.** Drop the `ORDER BY` and the same nine-action zero-match answers
+in **0.116 ms** from the same index. So the predicate is not expensive and the index is not wrong:
+the cost is the **pagination ordering combined with** a multi-value filter. Adding 80 MB to buy
+nothing on every read the product actually issues would have been a measurable regression in storage
+and write cost for a placebo.
+
+**What this means for C3.2–C3.4.** The gate stays per-slice, but the question changes: it is no
+longer "does an action index help?" — measured, not for a category chip — but "does the ordered read
+need a different shape?" The two candidates, neither taken now because neither is warranted at the
+volumes C3.0 measured: resolve the matching id set from a `(organization_id, action)` index and
+order that (two cheap steps instead of one expensive one), or expose single-action filtering so the
+fast path becomes reachable. Both are constant-factor moves on a read that is **sub-millisecond for
+every populated chip**; only the zero-match case on a very large tenant is slow, and it is slow in a
+way this index does not fix.
+
 ## Alternatives considered
 
 - **Fan failed sign-ins out to the organisations the matched member belongs to.** Rejected: the

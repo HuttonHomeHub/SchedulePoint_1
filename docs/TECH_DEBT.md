@@ -808,6 +808,35 @@ is the ADR-0058 rule finding two of its own instances in the file that cites it.
 
 ---
 
+### 92. An undone delete leaves a deletion with no matching restore
+
+**Found:** 2026-08-04, writing ADR-0073 C3.1. Named in the feature spec (CQ-D / §2.5) as the honest
+cost of a decision rather than discovered afterwards.
+
+`activity.deleted` and `activity.restored` are a pair, and a reader's question — "what happened to
+the Northgate piling activity?" — is answerable because both halves are recorded. **Undo does not
+produce the second half.** ADR-0048's undo of a delete is a **re-create** (M1–M3: a new row, a new
+id), and `activity.created` is deliberately absent from the catalogue because a create is already
+durably attributed by `created_by`/`created_at`. So a planner who deletes an activity and
+immediately presses Undo leaves a `activity.deleted` row, a live activity, and nothing in the log
+tying the two together.
+
+Dependencies do **not** have this problem: their undo re-creates too, but `dependency.created` IS in
+the catalogue (it earns its row on the blast-radius test), so the pair closes.
+
+**Why it is not patched by auditing creates.** That would add a row per created activity — the
+largest single class in the excluded catalogue, and the one whose exclusion makes the whole
+coverage rung affordable (ADR-0073 §2.4). Recording thousands of rows to close one gap of
+interpretation is the wrong trade, and it would be irreversible: the table refuses `DELETE`.
+
+**The fix when it is taken:** ADR-0048 **M4** — the optional id-stable restore endpoint, reusing
+the existing soft-delete `delete_batch_id`. Undo then calls **restore** rather than create, the
+existing `activity.restored` producer fires with the original id, and the pair closes with no new
+audit action and no new rows on the common path. Until then the screens say what they record and
+the log is not wrong, only incomplete in a way a reader cannot see.
+
+---
+
 ---
 
 ## Closed numbers
@@ -842,4 +871,4 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 92.**
+**Next free number: 93.**

@@ -248,6 +248,7 @@ export class PlansService {
           name: existing.name,
           status: existing.status,
           deleteBatchId: result.batchId,
+          counts: result.counts,
           principal,
           context,
         }),
@@ -276,7 +277,7 @@ export class PlansService {
     // The lifecycle enforces the top-down invariant: restoring a plan whose
     // parent project is still soft-deleted raises PARENT_DELETED (→ 409).
     await this.prisma.$transaction(async (tx) => {
-      await this.lifecycle.restoreBatch(tx, 'plan', planId, principal.userId);
+      const counts = await this.lifecycle.restoreBatch(tx, 'plan', planId, principal.userId);
       // `existing.deleteBatchId` is read before the transaction, and that is safe here in a way
       // it is NOT in MembersService.changeRole: `restoreBatch` re-reads the root inside the
       // transaction and throws unless it is still soft-deleted, so a stale read cannot survive
@@ -290,6 +291,7 @@ export class PlansService {
           name: existing.name,
           status: existing.status,
           deleteBatchId: existing.deleteBatchId,
+          counts,
           principal,
           context,
         }),

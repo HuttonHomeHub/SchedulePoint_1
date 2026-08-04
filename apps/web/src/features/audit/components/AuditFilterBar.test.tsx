@@ -34,13 +34,20 @@ describe('AuditFilterBar (ADR-0073 C1)', () => {
     });
 
     it('offers no chip that could only ever return nothing', () => {
-      // `plan-structure` and `settings` are declared for ADR-0073's coming actions but hold none
-      // today. A chip that can only answer "no events" is the defect this bar exists to remove.
+      // `settings` is declared for ADR-0073 C3.2's coming actions but holds none today. A chip
+      // that can only answer "no events" is the defect this bar exists to remove.
       setup();
-      expect(screen.queryByRole('button', { name: 'Plan structure' })).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: 'Settings & calendars' }),
       ).not.toBeInTheDocument();
+    });
+
+    it('offers Plan structure now that C3.1 has populated it', () => {
+      // The paired assertion, and the one that would have caught a coverage slice landing its
+      // actions without its chip. Six family-D actions live here; the bar is derived from the
+      // vocabulary, so this needed no edit to the bar itself.
+      setup();
+      expect(screen.getByRole('button', { name: 'Plan structure' })).toBeInTheDocument();
     });
   });
 
