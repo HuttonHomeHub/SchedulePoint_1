@@ -346,6 +346,143 @@ describe.skipIf(!hasDatabase)('Audit log (e2e)', () => {
     });
   });
 
+  describe('filtering (ADR-0073 C1)', () => {
+    /** Give the org a known spread: two deletes, a restore, and the auth rows sign-up produced. */
+    async function seedMixedEvents(admin: Agent): Promise<void> {
+      const client = await admin.agent
+        .post('/api/v1/organizations/acme/clients')
+        .send({ name: 'Northgate' })
+        .expect(201)
+        .then((r) => r.body.data as { id: string });
+      await admin.agent.delete(`/api/v1/organizations/acme/clients/${client.id}`).expect(204);
+      await admin.agent.post(`/api/v1/organizations/acme/clients/${client.id}/restore`).expect(200);
+    }
+
+    const filtered = (agent: Agent['agent'], qs: string, expected = 200) =>
+      agent
+        .get(`/api/v1/organizations/acme/audit-events?${qs}`)
+        .expect(expected)
+        .then((r) => (r.body as { data?: AuditRow[] }).data ?? []);
+
+    it('returns the same page as before when no filter is sent', async () => {
+      const { admin } = await setupOrg();
+      await seedMixedEvents(admin);
+
+      const unfiltered = await orgLog(admin.agent);
+      const explicitlyEmpty = await filtered(admin.agent, 'limit=20');
+      expect(explicitlyEmpty.map((r) => r.id)).toEqual(unfiltered.map((r) => r.id));
+    });
+
+    it('narrows to one action', async () => {
+      const { admin } = await setupOrg();
+      await seedMixedEvents(admin);
+
+      const rows = await filtered(admin.agent, 'action=client.deleted');
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.action === 'client.deleted')).toBe(true);
+    });
+
+    it('unions repeated actions rather than intersecting them', async () => {
+      const { admin } = await setupOrg();
+      await seedMixedEvents(admin);
+
+      const rows = await filtered(admin.agent, 'action=client.deleted&action=client.restored');
+      expect(new Set(rows.map((r) => r.action))).toEqual(
+        new Set(['client.deleted', 'client.restored']),
+      );
+    });
+
+    it('narrows by outcome', async () => {
+      const { admin } = await setupOrg();
+      await seedMixedEvents(admin);
+
+      const rows = await filtered(admin.agent, 'outcome=SUCCESS');
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.outcome === 'SUCCESS')).toBe(true);
+    });
+
+    it('narrows by date range, and excludes what falls outside it', async () => {
+      const { admin } = await setupOrg();
+      await seedMixedEvents(admin);
+
+      const all = await orgLog(admin.agent);
+      expect(all.length).toBeGreaterThan(0);
+
+      const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      expect(await filtered(admin.agent, `from=${encodeURIComponent(future)}`)).toEqual([]);
+
+      const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const since = await filtered(admin.agent, `from=${encodeURIComponent(past)}`);
+      expect(since.map((r) => r.id)).toEqual(all.map((r) => r.id));
+    });
+
+    it('honours the page size WITH a filter that excludes most rows', async () => {
+      // The regression that a post-filter would cause: `take: limit + 1` counts rows the caller
+      // never sees, so a filtered page comes back short while `hasMore` claims otherwise. Only
+      // visible on a selective filter, which is to say the useful kind.
+      const { admin } = await setupOrg();
+      await seedMixedEvents(admin);
+
+      const res = await admin.agent
+        .get('/api/v1/organizations/acme/audit-events?action=client.deleted&limit=1')
+        .expect(200);
+      const body = res.body as { data: AuditRow[]; meta: { hasMore: boolean } };
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0]!.action).toBe('client.deleted');
+      expect(body.meta.hasMore).toBe(false);
+    });
+
+    it('422s an unknown action instead of answering with an empty page', async () => {
+      const { admin } = await setupOrg();
+      await filtered(admin.agent, 'action=plan.exploded', 422);
+    });
+
+    it('422s an unknown outcome, a malformed instant, and an inverted range', async () => {
+      const { admin } = await setupOrg();
+      await filtered(admin.agent, 'outcome=MAYBE', 422);
+      await filtered(admin.agent, 'from=yesterday', 422);
+      await filtered(
+        admin.agent,
+        `from=${encodeURIComponent('2026-08-04T00:00:00.000Z')}&to=${encodeURIComponent('2026-08-01T00:00:00.000Z')}`,
+        422,
+      );
+    });
+
+    it('422s an auth.* action on the organisation route — unanswerable, and the slowest query there is', async () => {
+      // Those rows carry no organisation, so the filter could only ever return an empty page; and
+      // proving that absence means walking the whole organisation partition (measured 681–954 ms
+      // at 1M rows). The one place it IS answerable is /me, asserted immediately below.
+      const { admin } = await setupOrg();
+      await filtered(admin.agent, 'action=auth.signed_in', 422);
+      await filtered(admin.agent, 'action=plan.deleted&action=auth.sign_in_failed', 422);
+    });
+
+    it('applies the same filter on /me, scoped to the caller', async () => {
+      const { planner } = await setupOrg();
+
+      const rows = await planner.agent
+        .get('/api/v1/me/audit-events?action=auth.signed_up')
+        .expect(200)
+        .then((r) => (r.body as { data: AuditRow[] }).data);
+
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => r.action === 'auth.signed_up')).toBe(true);
+      expect(rows.every((r) => r.actorLabel === 'planner@example.com')).toBe(true);
+    });
+
+    it('cannot widen past the organisation scope', async () => {
+      // The tenant boundary is spread last in the WHERE, so no filter combination reaches another
+      // org's rows. Asserted against a real second organisation rather than argued from the code.
+      const { admin } = await setupOrg();
+      const outsider = await signUp('outsider@example.com');
+      await outsider.agent.post('/api/v1/organizations').send({ name: 'Beta' }).expect(201);
+
+      const rows = await filtered(admin.agent, 'action=organization.created');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.subjectLabel).toBe('Acme');
+    });
+  });
+
   describe('what the read surface withholds', () => {
     it('never returns ipAddress or userAgent, even though they are recorded', async () => {
       const { admin } = await setupOrg();

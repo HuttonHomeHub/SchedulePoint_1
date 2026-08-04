@@ -7,7 +7,20 @@ import type { Principal } from '../../common/auth/principal';
 import { ForbiddenError } from '../../common/errors/domain-errors';
 import { OrganizationsService } from '../organizations/organizations.service';
 
-import { AuditRepository } from './audit.repository';
+import { type AuditEventFilter, AuditRepository } from './audit.repository';
+import { ListAuditEventsQueryDto } from './dto/list-audit-events-query.dto';
+
+/**
+ * Narrow the validated query to the repository's filter shape.
+ *
+ * One function, used by both reads, so the two feeds cannot drift about what a filter means — the
+ * ADR-0065 "two implementations would drift, and the drift would be invisible" rule, which applies
+ * with particular force here: only someone running the same filter on both screens would ever see
+ * it, and the answer that is wrong looks exactly like an answer that is right.
+ */
+function filterFrom(query: ListAuditEventsQueryDto): AuditEventFilter {
+  return { actions: query.action, outcomes: query.outcome, from: query.from, to: query.to };
+}
 
 /**
  * Reading the audit log (ADR-0072).
@@ -35,7 +48,7 @@ export class AuditReadService {
   async listForOrganization(
     principal: Principal,
     orgSlug: string,
-    query: { limit: number; cursor?: string },
+    query: ListAuditEventsQueryDto,
   ): Promise<{ items: AuditEvent[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     if (!principal.can('audit:read', organization.id)) {
@@ -50,6 +63,7 @@ export class AuditReadService {
       organization.id,
       query.limit,
       query.cursor,
+      filterFrom(query),
     );
     return { items: events, meta: { nextCursor, hasMore: nextCursor !== null } };
   }
@@ -66,12 +80,13 @@ export class AuditReadService {
    */
   async listForSelf(
     principal: Principal,
-    query: { limit: number; cursor?: string },
+    query: ListAuditEventsQueryDto,
   ): Promise<{ items: AuditEvent[]; meta: PageMeta }> {
     const { events, nextCursor } = await this.repository.listForActor(
       principal.userId,
       query.limit,
       query.cursor,
+      filterFrom(query),
     );
     return { items: events, meta: { nextCursor, hasMore: nextCursor !== null } };
   }

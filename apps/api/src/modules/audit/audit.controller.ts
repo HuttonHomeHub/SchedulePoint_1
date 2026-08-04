@@ -7,15 +7,17 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 import { AuditReadService } from './audit-read.service';
 import { AuditEventResponseDto } from './dto/audit-event-response.dto';
+import { ListAuditEventsQueryDto } from './dto/list-audit-events-query.dto';
+import { ListOrganizationAuditEventsQueryDto } from './dto/list-organization-audit-events-query.dto';
 
 /**
  * An organisation's audit log (ADR-0072) — Org Admin only.
@@ -39,10 +41,16 @@ export class OrganizationAuditController {
   })
   @ApiOkResponse({ type: AuditEventResponseDto, isArray: true })
   @ApiForbiddenResponse({ description: 'Missing audit:read (Org Admin only).' })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'An unknown action or outcome, an `auth.*` action (those rows carry no organisation), more ' +
+      'than 20 actions, a malformed instant, or `to` before `from`. A filter value that cannot ' +
+      'match is refused rather than answered with an empty page.',
+  })
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ListOrganizationAuditEventsQueryDto,
   ): Promise<Paginated<AuditEventResponseDto>> {
     const { items, meta } = await this.service.listForOrganization(principal, orgSlug, query);
     return new Paginated(
@@ -73,9 +81,14 @@ export class SelfAuditController {
     summary: 'List your own audit events, newest first (no permission required; cursor-paginated).',
   })
   @ApiOkResponse({ type: AuditEventResponseDto, isArray: true })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'An unknown action or outcome, more than 20 actions, a malformed instant, or `to` before ' +
+      '`from`. A filter value that cannot match is refused rather than answered with an empty page.',
+  })
   async list(
     @CurrentUser() principal: Principal,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ListAuditEventsQueryDto,
   ): Promise<Paginated<AuditEventResponseDto>> {
     const { items, meta } = await this.service.listForSelf(principal, query);
     return new Paginated(

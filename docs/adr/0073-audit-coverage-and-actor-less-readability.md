@@ -112,6 +112,40 @@ record (ADR-0060 M0's rule, which this epic already applied to M1's writes). The
 producer merges, every reader's feed changes — flag or no flag — and the coverage milestone has no
 web surface of its own to put behind one. Its only client change is 19 entries in exhaustive maps.
 
+### Measured, C1 (2026-08-04) — why no index ships with the filter, and what changes that
+
+Postgres 17, 1,000,000 seeded rows over two years, ~909k of them in one organisation, drawn from the
+real 20-action vocabulary. `EXPLAIN (ANALYZE, BUFFERS)` on the actual keyset query, warm:
+
+| Read                                   | No index (shipped) | With `(organization_id, action, occurred_at DESC, id DESC)` |
+| -------------------------------------- | -----------------: | ----------------------------------------------------------: |
+| Unfiltered page                        |            0.35 ms |                                                     0.05 ms |
+| One action                             |       1.6 – 2.3 ms |                                                     0.11 ms |
+| Five actions                           |            0.14 ms |                                                           — |
+| One action + a narrow past date window |             3.0 ms |                                                           — |
+| Rare outcome (`FAILURE`, 1 in 389)     |        6.8 – 38 ms |                                           22.9 ms (no help) |
+| **A combination that matches nothing** |   **681 – 954 ms** |                                                   **43 ms** |
+
+Index cost: **76 MB** on a 406 MB table (+19%).
+
+Two things follow, and the second is not what the plan expected.
+
+**The plan is right that C1 ships without the index — now for a measured reason.** Every ordinary
+filtered read is between 0.1 ms and 3 ms unindexed. The cliff is the zero-match case, where Postgres
+must walk the whole organisation partition to prove an absence: ~5–7 µs per row scanned, so the cost
+is `organisation_rows × ~6 µs`. ADR-0072's own volume argument puts a busy tenant at **thousands of
+rows a year** on the M1+M3 vocabulary — three orders of magnitude below where this bites. C3 is
+exactly what closes that gap, which is why the index decision belongs to C3, per slice, on a fresh
+measurement.
+
+**The cheapest route to the worst case was a filter we had documented as useless.** `auth.*` rows
+carry no organisation, so naming one on the organisation route can never match — and "never matches"
+is precisely the shape that costs 954 ms. The first version of the query DTO put that fact in a
+description and accepted the request. It is now **refused (422)** on the organisation route, which is
+the same rule the rest of the DTO already applied to unknown values, applied to the one case we had
+written down instead of enforced. The refusal is derived from the action's `auth.` prefix rather than
+a hand-listed set, so a sixth authentication event is covered without anyone remembering the file.
+
 ## Alternatives considered
 
 - **Fan failed sign-ins out to the organisations the matched member belongs to.** Rejected: the

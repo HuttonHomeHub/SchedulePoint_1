@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type AuditEvent, Prisma } from '@prisma/client';
+import type { AuditAction, AuditOutcome } from '@repo/types';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -7,6 +8,52 @@ import { PrismaService } from '../../prisma/prisma.service';
 export interface AuditEventPage {
   events: AuditEvent[];
   nextCursor: string | null;
+}
+
+/**
+ * The optional narrowing both reads accept (ADR-0073 Decision 4). Every field absent ⇒ the
+ * unfiltered page, byte-identical to the pre-filter behaviour.
+ *
+ * Validated at the DTO; this shape is what survives it, so the repository builds a `where` from
+ * values it can trust rather than re-checking them.
+ */
+export interface AuditEventFilter {
+  // Explicitly `| undefined` rather than merely optional: `exactOptionalPropertyTypes` is on, and
+  // the caller builds this by reading four optional DTO fields straight through. Requiring it to
+  // omit each absent key instead would be four conditional spreads for no expressive gain — "the
+  // key is absent" and "the filter is absent" mean the same thing to `whereFrom`.
+  actions?: AuditAction[] | undefined;
+  outcomes?: AuditOutcome[] | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+}
+
+/**
+ * Translate the filter into Prisma `where` fragments.
+ *
+ * **These go into the WHERE, never a post-filter over a fetched page.** Filtering after the query
+ * would silently break pagination: `take: limit + 1` would count rows the caller never sees, so a
+ * page could come back short — or empty — while `hasMore` claimed otherwise, and the bug would only
+ * appear on selective filters, which is to say the useful ones.
+ */
+function whereFrom(filter: AuditEventFilter | undefined): Prisma.AuditEventWhereInput {
+  if (!filter) return {};
+
+  const occurredAt =
+    filter.from !== undefined || filter.to !== undefined
+      ? {
+          // Both bounds inclusive: the DTO documents them that way, and an exclusive upper bound
+          // would drop the newest event whenever a caller pastes an exact timestamp from a row.
+          ...(filter.from !== undefined ? { gte: new Date(filter.from) } : {}),
+          ...(filter.to !== undefined ? { lte: new Date(filter.to) } : {}),
+        }
+      : undefined;
+
+  return {
+    ...(filter.actions?.length ? { action: { in: filter.actions } } : {}),
+    ...(filter.outcomes?.length ? { outcome: { in: filter.outcomes } } : {}),
+    ...(occurredAt ? { occurredAt } : {}),
+  };
 }
 
 /**
@@ -40,8 +87,12 @@ export class AuditRepository {
     organizationId: string,
     limit: number,
     cursor?: string,
+    filter?: AuditEventFilter,
   ): Promise<AuditEventPage> {
-    return this.page({ organizationId }, limit, cursor);
+    // The org scope is spread LAST so no caller-supplied fragment can displace it. `whereFrom`
+    // only ever emits `action`/`outcome`/`occurredAt`, but the ordering makes the tenant boundary
+    // hold structurally rather than by that fact staying true.
+    return this.page({ ...whereFrom(filter), organizationId }, limit, cursor);
   }
 
   /**
@@ -52,8 +103,13 @@ export class AuditRepository {
    * that uses this takes no user id of any kind, so there is no value a caller could tamper with
    * to read somebody else's history.
    */
-  async listForActor(actorUserId: string, limit: number, cursor?: string): Promise<AuditEventPage> {
-    return this.page({ actorUserId }, limit, cursor);
+  async listForActor(
+    actorUserId: string,
+    limit: number,
+    cursor?: string,
+    filter?: AuditEventFilter,
+  ): Promise<AuditEventPage> {
+    return this.page({ ...whereFrom(filter), actorUserId }, limit, cursor);
   }
 
   private async page(
