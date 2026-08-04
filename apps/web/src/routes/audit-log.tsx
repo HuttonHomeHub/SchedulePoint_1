@@ -38,21 +38,20 @@ export function AuditLogScreen(): React.ReactElement {
     <div className="mx-auto w-full max-w-6xl flex-1 p-6">
       <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
       {/*
-        Say what is recorded, not what an audit log sounds like it records. The first sentence
-        this screen shipped with promised "permission changes, deletions and sign-ins for this
-        organisation" — and a sign-in can NEVER appear here: authentication happens before an
-        organisation is known, so those rows carry no `organizationId` and this read filters on
-        exactly that column. A planner read that line, went looking for their work, found silence,
-        and reasonably concluded the feature was broken. Naming the boundary is the fix; see the
-        empty state below, which had the same problem from the other side.
-      */}
-      {/*
-        Stated as a RULE, not as an inventory. The first version listed the actions it covered, and
-        by the time the coverage rung landed it named family D and none of E, F or G — so a reader
-        asking "where did the December baseline go?" had no reason to believe this log knew. An
-        itemised list is a promise that goes stale every time the vocabulary grows, which on this
+        Say what is recorded, not what an audit log sounds like it records — and say it as a RULE
+        rather than an inventory. This sentence has now been wrong twice, in opposite directions.
+        First it promised "permission changes, deletions and sign-ins for this organisation", and a
+        sign-in can NEVER appear here: authentication happens before an organisation is known, so
+        those rows carry no `organizationId` and this read filters on exactly that column. A planner
+        read that line, went looking, found silence, and reasonably concluded the feature was
+        broken. Then it listed what it DID cover — and by the time the coverage rung landed it named
+        family D and none of E, F or G, so a reader asking "where did the December baseline go?" had
+        no reason to believe this log knew.
+
+        An itemised list is a promise that goes stale every time the vocabulary grows, which on this
         feature is every milestone. The two tests that decide coverage (ADR-0073) fit in a sentence;
-        the list never will.
+        the list never will. See the empty state below, which had the first problem from the other
+        side.
       */}
       <p className="text-muted-foreground mt-1 text-sm">
         Newest first: everything that{' '}
