@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearDomainData } from './audit-reset';
 
 /**
  * Attribution of a failed sign-in, end to end (ADR-0073 C2).
@@ -62,23 +62,12 @@ describe.skipIf(!hasDatabase)('Failed sign-in attribution (e2e)', () => {
     await app?.close();
   });
 
-  // The same ordering `audit.e2e-spec.ts` uses, and for the same reason: audit rows hold an
-  // ON DELETE RESTRICT FK to their organisation, and org members hold one to their user. A
-  // narrower teardown passes on an empty database and fails against leftovers from any other
-  // suite — which is exactly how this file first ran.
+  // The shared sweep, not a local list: audit rows hold an ON DELETE RESTRICT FK to their
+  // organisation and org members hold one to their user, so a narrower teardown passes on an empty
+  // database and fails against leftovers from any other suite — which is exactly how this file
+  // first ran, and how the three audit specs later collided with each other.
   beforeEach(async () => {
-    await prisma.invitation.deleteMany();
-    await prisma.planShare.deleteMany();
-    await prisma.plan.deleteMany();
-    await prisma.calendarException.deleteMany();
-    await prisma.calendar.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.client.deleteMany();
-    await prisma.orgMember.deleteMany();
-    await clearAuditEvents(prisma);
-    await prisma.organization.deleteMany();
-    await prisma.verification.deleteMany();
-    await prisma.user.deleteMany();
+    await clearDomainData(prisma);
   });
 
   const server = () => app.getHttpServer();

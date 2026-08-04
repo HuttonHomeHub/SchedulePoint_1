@@ -340,6 +340,26 @@ export class CalendarsService {
               context,
             });
           }
+          // A tier move is a SECOND fact about the same request, so it is a second row rather
+          // than a field on the first — the `invitation.accepted` + `member.joined` precedent
+          // from M1. One `correlation_id` ties them, which is what makes "these happened
+          // together" recoverable without collapsing two different questions into one action.
+          if (target !== null) {
+            await this.audit.record(
+              {
+                action: 'calendar.scope_changed',
+                outcome: 'SUCCESS',
+                organizationId: organization.id,
+                subjectType: 'CALENDAR',
+                subjectId: calendarId,
+                subjectLabel: patch.name ?? existing.name,
+                before: { name: existing.name, scope: existing.scope },
+                after: { name: patch.name ?? existing.name, scope: target.scope },
+                ...auditActor(principal, context),
+              },
+              tx,
+            );
+          }
         }
         return rows;
       });
@@ -401,6 +421,7 @@ export class CalendarsService {
     calendarId: string,
     archived: boolean,
     version: number,
+    context?: RequestContext,
   ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
@@ -411,15 +432,38 @@ export class CalendarsService {
       this.assertCan(principal, 'calendar:manage_org', organization.id);
     }
 
-    const changed = await this.calendars.setArchivedIfVersionMatches(
-      calendarId,
-      version,
-      archived ? new Date() : null,
-      principal.userId,
-    );
-    if (changed === 0) {
-      throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
-    }
+    // Wrapped in a transaction ONLY so the audit row shares the write's fate (ADR-0073 family F).
+    // The archive itself needs no lock and takes none — that is the whole point of ADR-0053 §4,
+    // and it stays true: this adds an insert beside the update, not a guard around it.
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await this.calendars.setArchivedIfVersionMatches(
+        calendarId,
+        version,
+        archived ? new Date() : null,
+        principal.userId,
+        tx,
+      );
+      if (changed === 0) {
+        throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
+      }
+      // Archiving is not deleting: the row stays valid, every existing binding keeps scheduling
+      // identically, and only NEW usages are refused. Nothing visibly breaks and nobody is told —
+      // which is precisely the shape a log has to carry, because the effect surfaces days later
+      // as "why can I not pick that calendar any more?".
+      await this.audit.record(
+        {
+          action: archived ? 'calendar.archived' : 'calendar.unarchived',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'CALENDAR',
+          subjectId: calendarId,
+          subjectLabel: existing.name,
+          after: { name: existing.name, scope: existing.scope },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+    });
 
     this.logger.info(
       {
@@ -433,7 +477,12 @@ export class CalendarsService {
     );
   }
 
-  async remove(principal: Principal, orgSlug: string, calendarId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    calendarId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:delete', organization.id);
 
@@ -472,7 +521,26 @@ export class CalendarsService {
           resources: resourceCount,
         });
       }
-      await this.calendars.softDeleteWithExceptions(calendarId, principal.userId, tx);
+      const batchId = await this.calendars.softDeleteWithExceptions(
+        calendarId,
+        principal.userId,
+        tx,
+      );
+      // `scope` is recorded because a shared-library calendar going away is a different event
+      // from a project one, and after the delete the row is the only place that survives.
+      await this.audit.record(
+        {
+          action: 'calendar.deleted',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'CALENDAR',
+          subjectId: calendarId,
+          subjectLabel: existing.name,
+          before: { name: existing.name, scope: existing.scope, deleteBatchId: batchId },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
     this.logger.info(
       { organizationId: organization.id, calendarId, userId: principal.userId },

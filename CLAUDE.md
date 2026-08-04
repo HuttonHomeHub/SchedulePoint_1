@@ -1244,6 +1244,19 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   row exists to carry — and all three exception routes fold into that one action, because an
   exception **is** working time. `baseline.captured` is the catalogue's only audited **create**, on
   the same test: a baseline is the standard every later variance is measured against.
+  **C3.3** adds family F — library governance over ADR-0053 — and its sharp case is **archive**,
+  which looks least like it needs a log and needs one most: an archived calendar or resource keeps
+  scheduling **identically**, keeps every existing binding live, takes no lock and no cascade, and
+  refuses only a **new** usage — so nothing breaks, nobody is told, and the whole effect surfaces
+  days later as somebody asking why they can no longer pick something they used last month. Archive
+  and unarchive are **two actions rather than one with a boolean**, because a reader filters on
+  "what was retired?" and not "what had its flag written?"; a **tier move is a second row on the
+  same request** (the first route in the census mapping to two actions), sharing a `correlation_id`
+  so "these happened together" is recoverable without collapsing two questions into one; and a
+  GROUP delete writes **one row carrying `resourceCount`**, never one per descendant. The two
+  archive paths gained a transaction so the row shares the write's fate — an insert **beside** the
+  update, not a lock around it, which is the ADR-0053 §4 property left intact. The web copy says
+  **"Calendar retired"**, because the screen has to make the distinction the model makes.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

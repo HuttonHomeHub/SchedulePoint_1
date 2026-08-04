@@ -379,6 +379,55 @@ changed about the rules?").
 `softDeleteWithSnapshot` now returns its batch id so the delete row can carry it, which is the same
 thread every other deletion in the log names. **The CPM engine is not imported.**
 
+### Built, C3.3 (2026-08-04) — family F, and why archive is the sharp case
+
+Seven actions over the two shared libraries (ADR-0053): `calendar.deleted` / `.archived` /
+`.unarchived` / `.scope_changed`, and `resource.deleted` / `.archived` / `.unarchived`. A calendar
+or a resource in the shared library is used by work its owner does not own, so what the library
+offers is the blast-radius test in its plainest form.
+
+**Archiving is the case that most needs the log, and it is the one that looks least like it does.**
+ADR-0053 §4 made archive deliberately orthogonal to soft delete: the row stays valid, every
+existing binding keeps scheduling **identically**, no lock is taken, no cascade runs, and only a
+_new_ usage is refused. So nothing breaks, nothing is announced, and the whole effect of the change
+surfaces days later as somebody asking why they can no longer pick a calendar they used last month.
+That is a change with no other durable record of who made it or when — which is Test 1 and Test 2
+passing at once on an action that a reader skimming the route list would file under "harmless".
+It is pinned by a fifth positive census assertion for exactly that reason: a later refactor moving
+these to `PLAN_CONTENT` with a plausible sentence would pass every exhaustive test above it.
+
+**Archive and unarchive are two actions, not one action with a boolean.** They are the same
+controller method with a flag, and it was tempting to record `library.archive_changed` with
+`{ archived: true }`. A reader filtering the feed asks "what was retired?", not "what had its
+archived flag written?", and one action would make that question unanswerable without reading every
+payload. The same reasoning keeps `calendar.scope_changed` out of `deletions`: a tier move is a
+statement about who may use this from now on, which is a settings question.
+
+**A tier move is a second row on the same request, not a field on the first.** The calendar PATCH
+can edit the working week _and_ narrow the scope in one call, and those are two different facts a
+reader looks for on two different days. They share a `correlation_id` — the `invitation.accepted` +
+`member.joined` precedent from M1 — which is what makes "these happened together" recoverable
+without collapsing two questions into one action. It is also the census's first route mapping to
+**two** actions, so that list is now `readonly AuditAction[]` in substance as well as in type.
+
+**A GROUP delete writes one row carrying `resourceCount`, never one per descendant** — the rule
+family D applies to a WBS summary, for the same reason: the delete is one thing a person did, and
+2,000 rows would bury that rather than record it. `calendar.deleted` records `scope`, because a
+shared-library calendar going away is a different event from a project one and after the delete the
+audit row is the only place that distinction survives.
+
+**Two archive paths gained a transaction, and it is worth being precise about what that does not
+mean.** `setArchived` on both services now wraps its version-gated update and the audit insert in
+one `$transaction`, so the row shares the write's fate. It adds an insert beside the update — it
+does **not** add a lock, a cascade or an in-use count, which is ADR-0053 §4's whole point and stays
+true. `softDeleteWithExceptions` and `softDelete` return their batch ids for the same reason
+`softDeleteWithSnapshot` did in C3.2.
+
+The web copy says **"Calendar retired"** rather than "archived", because the screen has to make the
+distinction the model makes: nothing was deleted and nothing stopped working. **The CPM engine is
+not imported**, and the recalc parity gate is untouched — an archived calendar schedules exactly as
+it did the moment before.
+
 ## Alternatives considered
 
 - **Fan failed sign-ins out to the organisations the matched member belongs to.** Rejected: the

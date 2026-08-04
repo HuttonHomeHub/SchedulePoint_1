@@ -2005,6 +2005,18 @@ export const AUDIT_ACTIONS = [
   'baseline.captured',
   'baseline.activated',
   'baseline.deleted',
+  // — Library governance (ADR-0073 family F, over ADR-0053). A calendar or resource in the shared
+  //   library is used by work its owner does not own, so retiring one, moving its tier, or
+  //   deleting it changes what other people can build with. Archive is the sharp case: an
+  //   archived row keeps scheduling identically and refuses only NEW usages, so nothing visibly
+  //   breaks and nobody is told — which is exactly when a log earns its place.
+  'calendar.deleted',
+  'calendar.archived',
+  'calendar.unarchived',
+  'calendar.scope_changed',
+  'resource.deleted',
+  'resource.archived',
+  'resource.unarchived',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -2103,6 +2115,16 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   // …and its DELETE belongs with the other deletions, because that is the question a reader asks
   // about it ("where did the December baseline go?"), not "what changed about the rules".
   'baseline.deleted': 'deletions',
+  'calendar.deleted': 'deletions',
+  'resource.deleted': 'deletions',
+  // Archiving is deliberately NOT a deletion (ADR-0053 §4) — the row stays valid and every
+  // existing reference keeps working — so filing it under "what disappeared" would answer the
+  // wrong question. A tier move is the same class of fact: who may use this, from now on.
+  'calendar.archived': 'settings',
+  'calendar.unarchived': 'settings',
+  'calendar.scope_changed': 'settings',
+  'resource.archived': 'settings',
+  'resource.unarchived': 'settings',
 };
 
 /**

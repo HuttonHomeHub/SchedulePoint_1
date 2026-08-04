@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearDomainData } from './audit-reset';
 
 /**
  * End-to-end tests for the audit log (ADR-0072).
@@ -63,21 +63,7 @@ describe.skipIf(!hasDatabase)('Audit log (e2e)', () => {
   });
 
   beforeEach(async () => {
-    await prisma.invitation.deleteMany();
-    // Share links hold a RESTRICT FK to their plan, so they go first — the same composition that
-    // made `clearAuditEvents` necessary, one table along.
-    await prisma.planShare.deleteMany();
-    await prisma.plan.deleteMany();
-    await prisma.calendarException.deleteMany();
-    await prisma.calendar.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.client.deleteMany();
-    await prisma.orgMember.deleteMany();
-    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
-    await clearAuditEvents(prisma);
-    await prisma.organization.deleteMany();
-    await prisma.verification.deleteMany();
-    await prisma.user.deleteMany();
+    await clearDomainData(prisma);
   });
 
   const server = () => app.getHttpServer();

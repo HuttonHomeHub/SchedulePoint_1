@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearDomainData } from './audit-reset';
 
 /**
  * ADR-0073 C3 — the mutation-coverage producers, against a real database.
@@ -67,29 +67,7 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
   });
 
   beforeEach(async () => {
-    await prisma.crossPlanDependency.deleteMany();
-    await prisma.activityDependency.deleteMany();
-    await prisma.activity.deleteMany();
-    // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go
-    // before `plan`, deepest first. Family E captures them, which is why this spec needs the
-    // sweep its siblings did not.
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baseline.deleteMany();
-    await prisma.planLock.deleteMany();
-    await prisma.planShare.deleteMany();
-    await prisma.plan.deleteMany();
-    await prisma.calendarException.deleteMany();
-    await prisma.calendar.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.client.deleteMany();
-    await prisma.invitation.deleteMany();
-    await prisma.orgMember.deleteMany();
-    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
-    await clearAuditEvents(prisma);
-    await prisma.organization.deleteMany();
-    await prisma.verification.deleteMany();
-    await prisma.user.deleteMany();
+    await clearDomainData(prisma);
   });
 
   const server = () => app.getHttpServer();
@@ -105,7 +83,7 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
   }
 
   /** An admin org holding one client → project → plan, with the pen already taken. */
-  async function setup(): Promise<{ actor: Actor; planId: string }> {
+  async function setup(): Promise<{ actor: Actor; planId: string; projectId: string }> {
     const actor = await signUp('admin@example.com');
     await actor.agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
     const client = await actor.agent
@@ -116,8 +94,9 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
       .post(`/api/v1/organizations/acme/clients/${client.body.data.id as string}/projects`)
       .send({ name: 'Riverside' })
       .expect(201);
+    const projectId = project.body.data.id as string;
     const plan = await actor.agent
-      .post(`/api/v1/organizations/acme/projects/${project.body.data.id as string}/plans`)
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
       .send({ name: 'Baseline', plannedStart: '2026-01-01' })
       .expect(201);
     const planId = plan.body.data.id as string;
@@ -125,7 +104,7 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
       .post(`/api/v1/organizations/acme/plans/${planId}/edit-lock`)
       .send({})
       .expect(200);
-    return { actor, planId };
+    return { actor, planId, projectId };
   }
 
   async function addActivity(
@@ -573,6 +552,143 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
         .send({ name: 'Too early' })
         .expect(422);
       expect(await rows('baseline.captured')).toHaveLength(0);
+    });
+  });
+
+  describe('library governance (family F)', () => {
+    async function library(actor: Actor): Promise<{ id: string; version: number }> {
+      const res = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Site hours', workingWeekdays: 0b0111110 })
+        .expect(201);
+      return { id: res.body.data.id as string, version: res.body.data.version as number };
+    }
+
+    it('records a calendar archive and unarchive as their own pair, not as a delete', async () => {
+      const { actor } = await setup();
+      const cal = await library(actor);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/calendars/${cal.id}/archive`)
+        .send({ version: cal.version })
+        .expect(204);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/calendars/${cal.id}/unarchive`)
+        .send({ version: cal.version + 1 })
+        .expect(204);
+
+      // Archiving is orthogonal to deleting (ADR-0053 §4). A reader looking for what was removed
+      // must not find a retirement there, and vice versa.
+      expect(await rows('calendar.deleted')).toHaveLength(0);
+      // A new calendar lands in the SHARED library — ADR-0053's constant `DEFAULT ORG`, which is
+      // what let the tier ship with no data migration. Asserted rather than assumed, because the
+      // scope is the whole reason this field is on the row.
+      expect((await rows('calendar.archived'))[0]!.changes?.after).toMatchObject({
+        name: 'Site hours',
+        scope: 'ORG',
+      });
+      expect(await rows('calendar.unarchived')).toHaveLength(1);
+    });
+
+    it('records a calendar delete with the tier it was in', async () => {
+      const { actor } = await setup();
+      const cal = await library(actor);
+      await actor.agent.delete(`/api/v1/organizations/acme/calendars/${cal.id}`).expect(204);
+
+      const written = await rows('calendar.deleted');
+      expect(written).toHaveLength(1);
+      // The tier survives only here: after the delete there is nothing left to ask.
+      expect(written[0]!.changes?.before).toMatchObject({ name: 'Site hours', scope: 'ORG' });
+      expect(typeof written[0]!.changes?.before?.deleteBatchId).toBe('string');
+    });
+
+    it('records a tier move as its OWN row, beside the working-time row', async () => {
+      const { actor, projectId } = await setup();
+      const cal = await library(actor);
+      // Narrowing (shared → project), which is the direction with a guard on it — and the one a
+      // reader most needs explained, because it takes a calendar away from every other project.
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/calendars/${cal.id}`)
+        .send({
+          scope: 'PROJECT',
+          projectId,
+          workingWeekdays: 0b0111111,
+          version: cal.version,
+        })
+        .expect(200);
+
+      // Two facts, two rows, one request — the `invitation.accepted` + `member.joined` precedent.
+      // Collapsing them into one action would force a reader asking "who shared this calendar?"
+      // to know that the answer hides inside a working-time event.
+      const scope = await rows('calendar.scope_changed');
+      expect(scope).toHaveLength(1);
+      expect(scope[0]!.changes?.before).toMatchObject({ scope: 'ORG' });
+      expect(scope[0]!.changes?.after).toMatchObject({ scope: 'PROJECT' });
+      expect(await rows('calendar.working_time_changed')).toHaveLength(1);
+    });
+
+    it('writes NOTHING for a calendar delete refused as in-use', async () => {
+      const { actor, planId } = await setup();
+      const cal = await library(actor);
+      const plan = await actor.agent.get(`/api/v1/organizations/acme/plans/${planId}`).expect(200);
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ calendarId: cal.id, version: plan.body.data.version as number })
+        .expect(200);
+
+      await actor.agent.delete(`/api/v1/organizations/acme/calendars/${cal.id}`).expect(409);
+      expect(await rows('calendar.deleted')).toHaveLength(0);
+    });
+
+    it('records ONE row for a GROUP delete, carrying the size of the branch', async () => {
+      const { actor } = await setup();
+      const group = await actor.agent
+        .post('/api/v1/organizations/acme/resources')
+        .send({ name: 'Groundworks', kind: 'GROUP' })
+        .expect(201);
+      const groupId = group.body.data.id as string;
+      for (const name of ['Excavator', 'Dumper']) {
+        await actor.agent
+          .post('/api/v1/organizations/acme/resources')
+          .send({ name, kind: 'EQUIPMENT', parentId: groupId })
+          .expect(201);
+      }
+
+      await actor.agent.delete(`/api/v1/organizations/acme/resources/${groupId}`).expect(204);
+
+      // One row for the branch, never one per descendant — the same rule family D applies to a
+      // WBS summary, for the same reason.
+      const written = await rows('resource.deleted');
+      expect(written).toHaveLength(1);
+      expect(written[0]!.changes?.before).toMatchObject({
+        name: 'Groundworks',
+        kind: 'GROUP',
+        resourceCount: 3,
+      });
+    });
+
+    it('records a resource archive and unarchive', async () => {
+      const { actor } = await setup();
+      const res = await actor.agent
+        .post('/api/v1/organizations/acme/resources')
+        .send({ name: 'Crane', kind: 'EQUIPMENT' })
+        .expect(201);
+      const id = res.body.data.id as string;
+      const version = res.body.data.version as number;
+      await actor.agent
+        .post(`/api/v1/organizations/acme/resources/${id}/archive`)
+        .send({ version })
+        .expect(204);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/resources/${id}/unarchive`)
+        .send({ version: version + 1 })
+        .expect(204);
+
+      expect((await rows('resource.archived'))[0]!.changes?.after).toMatchObject({
+        name: 'Crane',
+        kind: 'EQUIPMENT',
+      });
+      expect(await rows('resource.unarchived')).toHaveLength(1);
+      expect(await rows('resource.deleted')).toHaveLength(0);
     });
   });
 

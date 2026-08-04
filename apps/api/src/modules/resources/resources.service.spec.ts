@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
@@ -126,6 +127,9 @@ describe('ResourcesService', () => {
       resources as unknown as ResourceRepository,
       calendars as unknown as CalendarRepository,
       prisma as unknown as PrismaService,
+      // The library-governance producers (ADR-0073 C3.3) are proven against a real table in the
+      // e2e suite; a fake here could only assert that a fake was called.
+      { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService,
       logger,
     );
   });

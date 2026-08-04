@@ -176,8 +176,9 @@ export class CalendarsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, calendarId);
+    await this.service.remove(principal, orgSlug, calendarId, context);
   }
 
   @Post(':calendarId/archive')
@@ -203,8 +204,9 @@ export class CalendarsController {
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Body() dto: ArchiveActionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.setArchived(principal, orgSlug, calendarId, true, dto.version);
+    await this.service.setArchived(principal, orgSlug, calendarId, true, dto.version, context);
   }
 
   @Post(':calendarId/unarchive')
@@ -227,8 +229,9 @@ export class CalendarsController {
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Body() dto: ArchiveActionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.setArchived(principal, orgSlug, calendarId, false, dto.version);
+    await this.service.setArchived(principal, orgSlug, calendarId, false, dto.version, context);
   }
 
   @Post(':calendarId/exceptions')

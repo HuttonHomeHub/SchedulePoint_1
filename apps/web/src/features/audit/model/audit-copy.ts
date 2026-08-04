@@ -63,6 +63,15 @@ const TITLES: Record<AuditAction, string> = {
   'baseline.captured': 'Baseline captured',
   'baseline.activated': 'Baseline activated',
   'baseline.deleted': 'Baseline deleted',
+  'calendar.deleted': 'Calendar deleted',
+  // "Retired", not "Archived": the word has to carry that the calendar still works for everything
+  // already using it and is only withheld from new choices. "Archived" reads as put away.
+  'calendar.archived': 'Calendar retired',
+  'calendar.unarchived': 'Calendar back in use',
+  'calendar.scope_changed': 'Calendar sharing changed',
+  'resource.deleted': 'Resource deleted',
+  'resource.archived': 'Resource retired',
+  'resource.unarchived': 'Resource back in use',
 };
 
 function field(side: Record<string, unknown> | undefined, key: string): string | null {
@@ -173,6 +182,37 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       const plan = field(changes?.after, 'planName') ?? field(changes?.before, 'planName');
       return plan === null ? null : `On ${plan}`;
     }
+    case 'calendar.deleted':
+    case 'calendar.archived':
+    case 'calendar.unarchived': {
+      const scope = field(changes?.after, 'scope') ?? field(changes?.before, 'scope');
+      // Which library it was in. A shared calendar going away affects every project in the
+      // organisation; a project one affects the project. The row is the only place that survives
+      // a deletion, so it is the only place a reader can find out which happened.
+      return scope === null ? null : (CALENDAR_SCOPES[scope] ?? scope);
+    }
+    case 'calendar.scope_changed': {
+      const from = field(changes?.before, 'scope');
+      const to = field(changes?.after, 'scope');
+      if (from === null || to === null) return null;
+      return `${CALENDAR_SCOPES[from] ?? from} → ${CALENDAR_SCOPES[to] ?? to}`;
+    }
+    case 'resource.deleted': {
+      const swept = count(changes?.before, 'resourceCount');
+      const kind = field(changes?.before, 'kind');
+      // The subtree size FIRST, because deleting a group takes everything under it and "1" versus
+      // "14 resources" is the difference between a tidy-up and an incident.
+      const parts = [
+        swept !== null && swept > 1 ? plural(swept, 'resource', 'resources') : null,
+        kind === null ? null : resourceKindName(kind),
+      ].filter((part) => part !== null);
+      return parts.length === 0 ? null : parts.join(' · ');
+    }
+    case 'resource.archived':
+    case 'resource.unarchived': {
+      const kind = field(changes?.after, 'kind');
+      return kind === null ? null : resourceKindName(kind);
+    }
     case 'auth.signed_up':
     case 'auth.signed_in':
     case 'auth.sign_in_failed':
@@ -265,6 +305,24 @@ const WORKING_TIME_KINDS: Record<string, string> = {
   hoursPerDay: 'Hours per day',
   exception: 'Dated exception',
 };
+
+/** Which library a calendar sits in. Named because "ORG" tells a reader nothing. */
+const CALENDAR_SCOPES: Record<string, string> = {
+  ORG: 'Shared library',
+  PROJECT: 'Project calendar',
+};
+
+/** A resource's kind, sentence-cased. `GROUP` is worth naming: it is why a delete swept a subtree. */
+const RESOURCE_KINDS: Record<string, string> = {
+  LABOUR: 'Labour',
+  EQUIPMENT: 'Equipment',
+  MATERIAL: 'Material',
+  GROUP: 'Group',
+};
+
+function resourceKindName(kind: string): string {
+  return RESOURCE_KINDS[kind] ?? kind;
+}
 
 const ROLE_NAMES: Record<string, string> = {
   ORG_ADMIN: 'Org Admin',

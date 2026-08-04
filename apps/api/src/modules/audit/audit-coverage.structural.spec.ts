@@ -74,7 +74,12 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   //   routes fold into ONE action with the calendar PATCH — an exception IS working time, and a
   //   reader asking why every date moved does not care which control produced the edit.
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId': ['plan.settings_changed'],
-  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId': ['calendar.working_time_changed'],
+  // TWO actions, one request: a PATCH that edits the working week AND moves the tier records both,
+  // sharing a correlation id (the `invitation.accepted` + `member.joined` precedent).
+  'PATCH /api/v1/organizations/:orgSlug/calendars/:calendarId': [
+    'calendar.working_time_changed',
+    'calendar.scope_changed',
+  ],
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/exceptions': [
     'calendar.working_time_changed',
   ],
@@ -89,6 +94,15 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
     'baseline.activated',
   ],
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId': ['baseline.deleted'],
+  // — ADR-0073 C3.3, family F: library governance (ADR-0053). Archiving is the sharp one — the row
+  //   keeps scheduling identically and refuses only NEW usages, so nothing visibly breaks and
+  //   nobody is told.
+  'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId': ['calendar.deleted'],
+  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': ['calendar.archived'],
+  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': ['calendar.unarchived'],
+  'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': ['resource.deleted'],
+  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive': ['resource.archived'],
+  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive': ['resource.unarchived'],
 };
 
 /**
@@ -145,11 +159,9 @@ type Reason = (typeof REASONS)[keyof typeof REASONS];
 /** Every route that records nothing, and why. */
 const UNAUDITED_ROUTES: Record<string, Reason> = {
   'DELETE /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
-  'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId': REASONS.PENDING_COVERAGE,
   'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/edit-lock': REASONS.EDIT_LOCK,
-  'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.PENDING_COVERAGE,
   'GET /api/health': REASONS.INFRASTRUCTURE,
   'GET /api/health/ready': REASONS.INFRASTRUCTURE,
   'GET /api/v1/me': REASONS.READ,
@@ -212,8 +224,6 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'POST /api/v1/organizations/:orgSlug/activities/:activityId/assignments': REASONS.PLAN_CONTENT,
   'POST /api/v1/organizations/:orgSlug/activities/:activityId/notes': REASONS.PLAN_CONTENT,
   'POST /api/v1/organizations/:orgSlug/calendars': REASONS.DURABLY_ATTRIBUTED,
-  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': REASONS.PENDING_COVERAGE,
-  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': REASONS.PENDING_COVERAGE,
   'POST /api/v1/organizations/:orgSlug/clients': REASONS.DURABLY_ATTRIBUTED,
   'POST /api/v1/organizations/:orgSlug/clients/:clientId/projects': REASONS.DURABLY_ATTRIBUTED,
   'POST /api/v1/organizations/:orgSlug/cross-plan-dependencies': REASONS.PLAN_CONTENT,
@@ -232,8 +242,6 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
     REASONS.PLAN_CONTENT,
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/plans': REASONS.DURABLY_ATTRIBUTED,
   'POST /api/v1/organizations/:orgSlug/resources': REASONS.DURABLY_ATTRIBUTED,
-  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive': REASONS.PENDING_COVERAGE,
-  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive': REASONS.PENDING_COVERAGE,
   'PUT /api/v1/organizations/:orgSlug/activities/:activityId/steps': REASONS.PLAN_CONTENT,
 };
 
@@ -402,6 +410,24 @@ describe('audit coverage census (ADR-0072)', () => {
     }
   });
 
+  it('audits every change to what the shared libraries offer', () => {
+    // The fifth positive assertion (ADR-0073 C3.3). Archive is the one that most needs it: it is
+    // not a delete, nothing breaks, and the only symptom is somebody asking days later why they
+    // can no longer pick a calendar. A refactor filing it under `PLAN_CONTENT` would pass every
+    // exhaustive test above.
+    const governance = [
+      'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId',
+      'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive',
+      'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive',
+      'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId',
+      'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive',
+      'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive',
+    ];
+    for (const route of governance) {
+      expect(AUDITED_ROUTES[route], `${route} must audit`).toBeDefined();
+    }
+  });
+
   it('names a claiming slice for every route still awaiting coverage', () => {
     // `PENDING_COVERAGE` is the one reason that is a queue rather than a decision, so it needs a
     // shape the next slice cannot ignore: when C3.4 lands this list is empty and the constant goes
@@ -414,13 +440,6 @@ describe('audit coverage census (ADR-0072)', () => {
       .sort();
     expect(pending).toEqual(
       [
-        // C3.3 — family F, library governance.
-        'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId',
-        'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive',
-        'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive',
-        'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId',
-        'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive',
-        'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive',
         // C3.4 — family G, provenance.
         'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit',
       ].sort(),

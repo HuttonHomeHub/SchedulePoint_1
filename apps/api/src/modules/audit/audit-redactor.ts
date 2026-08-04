@@ -122,6 +122,18 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   (ADR-0025), so the row that stopped being the standard is half the story.
   'baseline.activated': ['name', 'planName'],
   'baseline.deleted': ['name', 'planName', 'deleteBatchId'],
+  // — Library governance (ADR-0073 family F). `scope` is on the delete because a shared-library
+  //   calendar going away is a different event from a project one, and the row is the only place
+  //   that distinction survives the deletion.
+  'calendar.deleted': ['name', 'scope', 'deleteBatchId'],
+  'calendar.archived': ['name', 'scope'],
+  'calendar.unarchived': ['name', 'scope'],
+  'calendar.scope_changed': ['name', 'scope'],
+  //   `resourceCount` is the subtree a GROUP delete swept (ADR-0053 §3) — one row for the branch,
+  //   never one per descendant, the same rule family D applies to a WBS summary.
+  'resource.deleted': ['name', 'kind', 'deleteBatchId', 'resourceCount'],
+  'resource.archived': ['name', 'kind'],
+  'resource.unarchived': ['name', 'kind'],
 };
 
 /**
