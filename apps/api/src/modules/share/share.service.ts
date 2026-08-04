@@ -3,9 +3,12 @@ import type { PlanShare } from '@prisma/client';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import { generateOpaqueToken } from '../../common/tokens/token';
 import { AppConfigService } from '../../config/app-config.service';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 
@@ -43,6 +46,7 @@ export class ShareService {
     private readonly plans: PlanRepository,
     private readonly shares: PlanShareRepository,
     private readonly config: AppConfigService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(ShareService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -56,6 +60,7 @@ export class ShareService {
     orgSlug: string,
     planId: string,
     dto: { label?: string; expiresAt?: string },
+    context?: RequestContext,
   ): Promise<CreatedShareResult> {
     const plan = await this.resolvePlan(principal, orgSlug, planId);
 
@@ -80,6 +85,27 @@ export class ShareService {
       expiresAt,
       createdBy: principal.userId,
       updatedBy: principal.userId,
+    });
+
+    // Recorded BEFORE the URL is handed back, and deliberately not inside a transaction: the
+    // insert above is a single statement with none to join, so there is nothing to roll back
+    // (the `invitation.created` precedent). `record` still throws — a live guest link with no
+    // record of who minted it is precisely the gap the log exists to close, and at this point the
+    // caller has not yet seen the token.
+    //
+    // The allow-list is `{ planId, label, expiresAt }`. Neither `token` nor `tokenHash` is in
+    // scope for this payload: the raw token IS the credential and the hash is what the guard
+    // compares against, so either would turn the audit table into a key store readable by every
+    // Org Admin. `NEVER_RECORD` catches both words independently.
+    await this.audit.record({
+      action: 'share.created',
+      outcome: 'SUCCESS',
+      organizationId: plan.organizationId,
+      subjectType: 'PLAN_SHARE',
+      subjectId: share.id,
+      subjectLabel: share.label,
+      after: { planId: plan.id, label: share.label, expiresAt: share.expiresAt },
+      ...auditActor(principal, context),
     });
 
     // The raw token rides ONLY in the URL fragment (never the path/query), so it is never
@@ -114,6 +140,7 @@ export class ShareService {
     orgSlug: string,
     planId: string,
     shareId: string,
+    context?: RequestContext,
   ): Promise<void> {
     const plan = await this.resolvePlan(principal, orgSlug, planId);
     const share = await this.shares.findActiveByIdInOrg(shareId, plan.organizationId);
@@ -123,6 +150,19 @@ export class ShareService {
       throw new NotFoundError('Share link not found.');
     }
     await this.shares.setRevoked(shareId, plan.organizationId, principal.userId);
+    // `before` is the row read above, not the route parameter — the same rule as
+    // `member.role_changed`. The label is the operator's own note and is the only thing that
+    // makes one revoked link distinguishable from another in the log.
+    await this.audit.record({
+      action: 'share.revoked',
+      outcome: 'SUCCESS',
+      organizationId: plan.organizationId,
+      subjectType: 'PLAN_SHARE',
+      subjectId: share.id,
+      subjectLabel: share.label,
+      before: { planId: plan.id, label: share.label },
+      ...auditActor(principal, context),
+    });
     this.logger.info(
       { organizationId: plan.organizationId, planId: plan.id, shareId, userId: principal.userId },
       'plan share link revoked',

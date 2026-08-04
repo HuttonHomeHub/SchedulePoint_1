@@ -6,6 +6,7 @@ import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type { ClientRepository } from '../clients/client.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
@@ -82,6 +83,7 @@ describe('ProjectsService', () => {
     restoreBatch: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let audit: { record: ReturnType<typeof vi.fn> };
   let service: ProjectsService;
 
   beforeEach(() => {
@@ -102,12 +104,14 @@ describe('ProjectsService', () => {
     };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new ProjectsService(
       organizations as unknown as OrganizationsService,
       clients as unknown as ClientRepository,
       projects as unknown as ProjectRepository,
       lifecycle as unknown as HierarchyLifecycleService,
       prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
       logger,
     );
   });
@@ -205,6 +209,22 @@ describe('ProjectsService', () => {
         NotFoundError,
       );
       expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('audits the delete with the cascade batch id and NO status field', async () => {
+      // Status is a plan-only fact. The shared builder omits the key rather than writing null,
+      // which is what keeps a project row from claiming a property projects do not have.
+      projects.findActiveByIdInOrg.mockResolvedValue(project());
+
+      await service.remove(principalWith(ALL), 'acme', 'p1');
+
+      const [input] = audit.record.mock.calls[0] as [Record<string, unknown>];
+      expect(input.action).toBe('project.deleted');
+      expect(input.subjectType).toBe('PROJECT');
+      expect(input.before).not.toHaveProperty('status');
+      expect(input.before).toMatchObject({ deleteBatchId: 'b1' });
+      expect(audit.record.mock.calls[0]?.[1]).toBeDefined();
     });
   });
 

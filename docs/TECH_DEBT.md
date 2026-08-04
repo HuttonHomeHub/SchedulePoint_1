@@ -43,7 +43,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 13 | **TypeScript pinned to v5** | TypeScript 7 (the native compiler) removed `baseUrl` and `moduleResolution: node10` from tsconfig, which the shared presets rely on for the `@/` and `@repo/*` path aliases. The major is ignored in Dependabot. | Missing TypeScript 7 speed/features until migrated. | Migrate the tsconfig presets (drop `baseUrl`, move to `paths`/`bundler` resolution), verify nest/vite resolution, then un-ignore. |
 
-| 14 | **Append-only audit log missing** | No append-only audit-log framework exists yet (flagged in the A1 and C1 security reviews), so security-sensitive events are only in operational logs + row audit columns: (a) authentication events (sign-up/in/out); (a2) membership role changes / removals and invitation create/revoke/accept (who did what to which org, before→after); (b) Better Auth's rate-limit store is in-process memory — per-replica once scaled; (c) the `accounts` OAuth token columns are unencrypted at rest (harmless today — only email+password is enabled). | No tamper-evident audit trail for permission changes / deletions / auth; rate limits weaken under horizontal scaling; token columns unencrypted before OAuth ships. | Build an `AuditLog` model + service (SECURITY_STANDARDS.md) and write auth + membership/invitation events to it; back the rate-limit store with Redis (ADR-0010) before scaling out; add field-level encryption for OAuth token columns before enabling social providers. |
+| 14 | **Audit log: the two remaining halves** | (a) and (a2) are **closed** by ADR-0072 — authentication events and membership/invitation/organisation changes are recorded before→after in an append-only table, with hierarchy deletes/restores added beyond the original scope and a route census gating every future endpoint on an audit decision. What remains: **(b)** Better Auth's rate-limit store is in-process memory — per-replica once scaled (sibling of #49); **(c)** the `accounts` OAuth token columns are unencrypted at rest (harmless today — only email+password is enabled). | (b) a scraper gets N× the intended budget on scale-out; (c) a database read would expose OAuth tokens the day a social provider is enabled. | (b) back both throttler stores with the ADR-0010 Redis, with #49, before the API runs more than one replica; (c) encrypt the columns before enabling any OAuth provider. |
 
 | 15 | **OpenAPI accuracy gaps** | Repo-wide, from the B2 API review: (a) `201 Create` responses don't set a `Location` header (`docs/API.md` asks for one) — present in the reference template too; (b) the `@Api*Response` decorators declare the bare DTO, not the `{ data }`/`{ data, meta }` envelope the `TransformInterceptor` actually returns. | Generated OpenAPI is slightly inaccurate about response shape and `Location`. | Add a shared `@ApiDataResponse()`/`@ApiPaginatedResponse()` swagger helper and a `Location` header on creates; backport to the reference template so the two stay in step (ADR-0015). |
 
@@ -719,6 +719,122 @@ the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT`
 exists, else today's answer — so every caller is corrected at once rather than per-surface. The
 engine is not involved and the recalc parity gate is untouched.
 
+### 88. An email link scanner reaches the verification URL before the recipient
+
+**Found:** 2026-08-03, in the production log of the first real verification email (Theme B2), sent
+to a corporate Microsoft 365 mailbox.
+
+```
+HEAD /api/auth/verify-email?token=eyJ… 404 "-" "-" "2a01:111:f400:7e8b::100, …"
+GET  /api/auth/verify-email?token=eyJ… 302     (the recipient, seconds later)
+```
+
+Empty user-agent, empty referer, and an IPv6 address in Microsoft's range: Outlook Safe Links
+prefetching the link out of the mailbox. It used `HEAD`, Better Auth does not answer `HEAD` on that
+route, so it received a 404 and consumed nothing. **That was luck, not design.**
+
+**What it costs.** Scanners at other tenants prefetch with `GET`. One that does would follow the
+verification link on the recipient's behalf — marking the address verified before any human saw the
+message, which quietly removes the only thing a verification email proves, and (for a single-use
+token) can leave the real recipient a "link already used" dead end. This is a general hazard of
+emailed action links rather than anything this codebase introduced, and it applies equally to the
+**invitation accept URL**, which grants org membership.
+
+**Why it is not fixed now.** It has not bitten: `AUTH_REQUIRE_EMAIL_VERIFICATION` is still off, and
+the one real send was scanned harmlessly. Fixing it speculatively means designing an interstitial
+before knowing which tenants matter.
+
+**The fix when it is taken:** make the emailed URL land on a **web page with a confirm button**
+that POSTs the token, rather than a bare GET that acts. A scanner will fetch the page and stop,
+because it does not press buttons. That is one route and one small component, and it covers the
+invitation accept path at the same time. Better Auth's own resend endpoint is the recovery path
+until then.
+
+---
+
+### 89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
+
+**Found:** 2026-08-03, reading production request logs during the Theme B2 verification test.
+
+Every request arriving through Cloudflare → Nginx Proxy Manager → web → api carries:
+
+```
+"x-forwarded-proto": "http",  "x-forwarded-scheme": "https",  "cf-visitor": "{\"scheme\":\"https\"}"
+```
+
+Two of the three say HTTPS and the standard one says HTTP — it reflects the proxy's plaintext hop to
+the web container rather than the scheme the browser used. `docs/DEPLOYMENT.md` "Cloudflare & TLS"
+asserts this header arrives as `https`; it does not. Corrected in that document alongside this row.
+
+**What it costs today: nothing, and that is the trap.** Nothing currently derives behaviour from it
+— absolute URLs come from `BETTER_AUTH_URL`, and the `Secure` cookie flag comes from `NODE_ENV`, not
+the header. So the misconfiguration is invisible and will stay invisible until something reasonable
+reads the standard header and builds an `http://` link or drops a cookie, at which point the cause
+is three hops away from the symptom.
+
+**The fix — and this row was wrong about where it lives (corrected 2026-08-04).** It said "an
+operator change, not a code change". At least half of it is a **code** change, in our own image:
+
+```nginx
+# apps/web/nginx.conf, the /api/ location
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+That `server` block only ever `listen`s on plain `8080` — TLS is terminated upstream — so `$scheme`
+there is **unconditionally `http`**, and this line **overwrites** whatever the proxy sent, on every
+request. A perfectly-configured Nginx Proxy Manager host would have its correct `https` discarded
+here before the API ever saw it. That is also why the other two headers survive intact: nginx passes
+through what it is not told to override, and this is the only one we override.
+
+So the fix is both halves, and the code half must land first or the operator half is untestable:
+
+1. **Repo:** stop deriving the header from this container's own scheme. Preserve what arrived, and
+   fall back to `$scheme` only when nothing did (direct/dev access, where it is correct).
+2. **Operator:** confirm Nginx Proxy Manager sends it at all — Advanced → `proxy_set_header
+X-Forwarded-Proto $scheme;` on the HTTPS host, with Force SSL on.
+
+Still not urgent — nothing consumes the value (verified: no `req.protocol`/`req.secure` anywhere in
+`apps/api/src`), and the four candidates are all deliberately decoupled: cookie `Secure` comes from
+`NODE_ENV`, absolute URLs from `BETTER_AUTH_URL`, HTTPS redirection belongs at the edge, and
+rate-limit keying uses `X-Forwarded-For`, which is **appended** (`$proxy_add_x_forwarded_for`) rather
+than overwritten and is therefore correct today.
+
+**A related claim, also corrected:** `common/http/client-ip.ts` said Express's `trust proxy` was
+"deliberately NOT enabled on this app (checked, not assumed)". It is enabled in production —
+`app-setup.ts` sets it from `TRUSTED_PROXY_IPS`, which env validation makes mandatory there. The
+helper still earns its place (it answers `null` rather than a peer address, and does not vary by
+environment), but the stated reason was false. Both corrections came from planning this row, which
+is the ADR-0058 rule finding two of its own instances in the file that cites it.
+
+---
+
+### 91. A failed sign-in is recorded and readable by nobody
+
+**Found:** 2026-08-03, writing the ADR-0072 M1 journey.
+
+`auth.sign_in_failed` is the one audited event with **no organisation and no actor**: authentication
+happens before an organisation is known, and a failed attempt is by definition not attributable to a
+signed-in user (`classifyAuthEvent` returns `actorType: 'ANONYMOUS'`, `actorUserId: null`). Both
+read endpoints filter on exactly those two columns — `listForOrganization` on `organization_id`,
+`listForSelf` on `actor_user_id` — so the row lands in the table and then appears on no screen in
+the product.
+
+That is not a defect in either read; each is correctly scoped, and the attempted email is
+attacker-supplied text that must not be handed to whoever happens to own that address. It is a gap
+in **coverage**: repeated failed sign-ins against one account are the single most useful thing an
+audit log has to say, and today the only way to see them is `psql`.
+
+**What is owed:** a decision, then the surface. The scoping question is the whole of it — a failed
+attempt names an account but proves nothing about who made it, so "show it to the account's owner"
+leaks an attacker's timing to the victim and "show it to every Org Admin the account belongs to"
+resolves an organisation from a credential that did not authenticate. A plausible answer is a
+**third, deliberately narrow** read — attempts against an email that _is_ a member, exposed on the
+organisation feed with the actor left as "Not signed in" — but it is a security decision with its
+own reasoning, not a filter to widen.
+
+**Where it sits:** with the ADR-0072 M2 coverage question, which already has to decide what else the
+log records. Doing it there keeps one conversation about scope instead of two.
+
 ---
 
 ## Closed numbers
@@ -735,20 +851,21 @@ dangling.
 
 One line each. The story lives where the link points, not here.
 
-| #   | What it was                                                 | Closed     | Where the record is                                          |
-| --- | ----------------------------------------------------------- | ---------- | ------------------------------------------------------------ |
-| 29  | Released images not pulled — "shipped but not live"         | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.            |
-| 59  | The device-authoritative draw measurement was never made    | 2026-08-03 | Folded into **#75**, which waits on the same single run.     |
-| 77  | The demo Unit 300 file was a lossy rendering of the fixture | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                           |
-| 78  | Public activity/dependency API was day-denominated          | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs. |
-| 79  | A window-only calendar was rejected by the API              | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".   |
-| 80  | Intraday shift patterns had no write path                   | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.       |
-| 82  | Shift-editor epic — the non-blocking half of five gates     | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                     |
-| 87  | Import rejected a file with two activities of the same name | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).     |
-| 83¹ | A typed duration overwritten by the calendar factor landing | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.  |
+| #   | What it was                                                 | Closed     | Where the record is                                            |
+| --- | ----------------------------------------------------------- | ---------- | -------------------------------------------------------------- |
+| 29  | Released images not pulled — "shipped but not live"         | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.              |
+| 59  | The device-authoritative draw measurement was never made    | 2026-08-03 | Folded into **#75**, which waits on the same single run.       |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                             |
+| 78  | Public activity/dependency API was day-denominated          | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.   |
+| 79  | A window-only calendar was rejected by the API              | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".     |
+| 80  | Intraday shift patterns had no write path                   | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.         |
+| 82  | Shift-editor epic — the non-blocking half of five gates     | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                       |
+| 87  | Import rejected a file with two activities of the same name | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).       |
+| 90  | `idx_audit_events_actor_occurred` was never measured        | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)". |
+| 83¹ | A typed duration overwritten by the calendar factor landing | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.    |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 88.**
+**Next free number: 92.**

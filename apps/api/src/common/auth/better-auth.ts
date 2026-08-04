@@ -1,7 +1,16 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 
 import type { PrismaService } from '../../prisma/prisma.service';
+import { resolveClientIp } from '../http/client-ip';
+
+import {
+  classifyAuthEvent,
+  emailVerifiedEvent,
+  signedOutEvent,
+  type AuthAuditEvent,
+} from './auth-audit';
 
 /**
  * DI token for the configured Better Auth instance (ADR-0003, ADR-0016).
@@ -41,6 +50,45 @@ export interface CreateAuthOptions {
    * `SmtpMailService.sendEmailVerification` for why this one message is not swallowed.
    */
   sendVerificationEmail: (input: { to: string; verifyUrl: string }) => Promise<void>;
+  /**
+   * Record an authentication event (ADR-0072). A callback for the same reason as
+   * `sendVerificationEmail`: this factory stays a pure function of its options and never learns
+   * about Nest DI.
+   *
+   * It must **never reject** — the caller binds it to `AuditService.recordBestEffort`, whose whole
+   * job is to swallow. There is no transaction here to roll back, and refusing every sign-in
+   * because the audit table is unavailable would turn a logging fault into an outage.
+   */
+  recordAuthEvent: (
+    event: AuthAuditEvent,
+    request: { ipAddress: string | null; userAgent: string | null },
+  ) => Promise<void>;
+}
+
+/**
+ * Pull the request evidence off the hook's headers.
+ *
+ * The IP goes through the SAME `resolveClientIp` the rest of the app uses, over the same
+ * `TRUSTED_PROXY_IPS` list Better Auth's own rate limiter is configured with. Taking the leftmost
+ * `X-Forwarded-For` hop instead would be one line shorter and would record whatever the client
+ * chose to claim — on the one table where a forged value is worst.
+ *
+ * There is no socket here (the hook sees a `Headers`, not a Node request), so a direct-access
+ * request with no proxy header yields `null` rather than a peer address. An honestly empty column
+ * beats a guess.
+ */
+function requestEvidence(
+  headers: Headers | undefined,
+  trustedProxies: readonly string[],
+): { ipAddress: string | null; userAgent: string | null } {
+  return {
+    ipAddress: resolveClientIp(
+      headers?.get('x-forwarded-for') ?? undefined,
+      undefined,
+      trustedProxies,
+    ),
+    userAgent: headers?.get('user-agent') ?? null,
+  };
 }
 
 /**
@@ -85,6 +133,17 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       sendVerificationEmail: async ({ user, url }) => {
         await options.sendVerificationEmail({ to: user.email, verifyUrl: url });
       },
+      // The audit seam for `auth.email_verified` (ADR-0072). NOT `hooks.after`: `/verify-email`
+      // returns `{ status: true, user: null }` and, when a `callbackURL` is present — which is how
+      // the emailed link works — succeeds by THROWING a redirect. An after-hook would see no user
+      // and an error on the success path, and would silently record nothing while looking correct.
+      // This callback fires only on success and receives the user.
+      afterEmailVerification: async (user, request) => {
+        await options.recordAuthEvent(
+          emailVerifiedEvent({ id: user.id, email: user.email }),
+          requestEvidence(request?.headers, options.trustedProxies),
+        );
+      },
     },
     // Deny abusive traffic at the auth layer (Nest's ThrottlerGuard does not see
     // these routes — they are mounted as a raw Node handler). Better Auth applies
@@ -96,6 +155,49 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       enabled: options.isProduction,
       window: 60,
       max: 100,
+    },
+    hooks: {
+      /**
+       * `auth.signed_out` (ADR-0072) — recorded on the way IN.
+       *
+       * `/sign-out` reads the session cookie directly and never resolves a session onto the
+       * context, so an after-hook cannot say who signed out. Resolving it here, while the cookie
+       * is still valid, is the only way to name the actor. The row therefore means "a sign-out was
+       * requested by X"; the endpoint swallows its own delete-session error and always returns
+       * success, so that is not a distinction a reader could act on.
+       *
+       * The hook returns nothing, which leaves the request untouched — a `before` hook that
+       * returned a value would SHORT-CIRCUIT the endpoint, and signing out would stop working.
+       */
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/sign-out') return;
+        const session = await getSessionFromCtx(ctx).catch(() => null);
+        if (!session) return;
+        await options.recordAuthEvent(
+          signedOutEvent({ id: session.user.id, email: session.user.email }),
+          requestEvidence(ctx.headers, options.trustedProxies),
+        );
+      }),
+      /**
+       * `auth.signed_up`, `auth.signed_in` and `auth.sign_in_failed` (ADR-0072).
+       *
+       * Failures are visible here because `dispatchAuthEndpoint` catches an `APIError`, assigns it
+       * to `context.returned`, and still runs the after-hooks — which matters more than the
+       * successes: the row nobody can produce is the one showing somebody trying.
+       *
+       * `classifyAuthEvent` returns null for every other path, and there are many (`/get-session`
+       * fires on more or less every page load).
+       */
+      after: createAuthMiddleware(async (ctx) => {
+        const event = classifyAuthEvent({
+          path: ctx.path,
+          failed: ctx.context.returned instanceof Error,
+          newSession: ctx.context.newSession,
+          body: ctx.body,
+        });
+        if (!event) return;
+        await options.recordAuthEvent(event, requestEvidence(ctx.headers, options.trustedProxies));
+      }),
     },
     advanced: {
       cookiePrefix: 'schedulepoint',

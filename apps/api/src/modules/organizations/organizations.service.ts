@@ -4,8 +4,11 @@ import { STANDARD_CALENDAR_NAME, STANDARD_WEEKDAYS_MASK, WorkingWeekdays } from 
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import { OrganizationRole, type Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, NotFoundError } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 
 import type { CreateOrganizationDto } from './dto/create-organization.dto';
 import { OrgMemberRepository } from './org-member.repository';
@@ -32,6 +35,7 @@ export class OrganizationsService {
     private readonly organizations: OrganizationRepository,
     private readonly members: OrgMemberRepository,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(OrganizationsService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -40,7 +44,11 @@ export class OrganizationsService {
    * `organization:create` is a non-scoped capability (any authenticated user).
    * Retries with a numeric suffix if the derived slug collides under concurrency.
    */
-  async create(principal: Principal, dto: CreateOrganizationDto): Promise<ScopedOrganization> {
+  async create(
+    principal: Principal,
+    dto: CreateOrganizationDto,
+    context?: RequestContext,
+  ): Promise<ScopedOrganization> {
     const base = slugify(dto.name);
 
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
@@ -89,6 +97,36 @@ export class OrganizationsService {
               updatedBy: principal.userId,
             },
           });
+          // Two rows in the same transaction — creating an organisation also creates its first
+          // membership, and that grant is the more security-relevant of the two. Recording only
+          // the organisation would leave the Org Admin's arrival invisible.
+          const actor = auditActor(principal, context);
+          await this.audit.record(
+            {
+              action: 'organization.created',
+              outcome: 'SUCCESS',
+              organizationId: created.id,
+              subjectType: 'ORGANIZATION',
+              subjectId: created.id,
+              subjectLabel: created.name,
+              after: { name: created.name, slug: created.slug },
+              ...actor,
+            },
+            tx,
+          );
+          await this.audit.record(
+            {
+              action: 'member.joined',
+              outcome: 'SUCCESS',
+              organizationId: created.id,
+              subjectType: 'ORG_MEMBER',
+              subjectLabel: principal.email ?? principal.userId,
+              after: { role: OrganizationRole.ORG_ADMIN },
+              ...actor,
+            },
+            tx,
+          );
+
           return created;
         });
 

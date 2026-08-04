@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import type { AppConfigService } from '../../config/app-config.service';
+import type { AuditService } from '../audit/audit.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanRepository } from '../plans/plan.repository';
 
@@ -46,6 +47,7 @@ describe('ShareService', () => {
     setRevoked: ReturnType<typeof vi.fn>;
   };
   let config: { appUrl: string };
+  let audit: { record: ReturnType<typeof vi.fn> };
   let logger: Pick<PinoLogger, 'info' | 'warn'>;
   let service: ShareService;
   const member = principalWith(['plan:share']);
@@ -65,12 +67,14 @@ describe('ShareService', () => {
       setRevoked: vi.fn().mockResolvedValue(1),
     };
     config = { appUrl: 'https://app.example' };
+    audit = { record: vi.fn().mockResolvedValue(undefined) };
     logger = { info: vi.fn(), warn: vi.fn() };
     service = new ShareService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
       shares as unknown as PlanShareRepository,
       config as unknown as AppConfigService,
+      audit as unknown as AuditService,
       logger as unknown as PinoLogger,
     );
   });
@@ -103,6 +107,26 @@ describe('ShareService', () => {
       const created = shares.create.mock.calls[0]?.[0];
       expect(created.label).toBe('Client review');
       expect(created.expiresAt).toBeInstanceOf(Date);
+    });
+
+    it('records share.created — with the plan and expiry, and with NEITHER token form', async () => {
+      // ADR-0072 M3: minting a guest link is a permission change, and the one whose grantee has
+      // no account to attribute a read to. The producer must hand the audit layer the facts and
+      // nothing resembling the credential — the redactor is the second control, not the first.
+      const future = new Date(Date.now() + 86_400_000).toISOString();
+      const { url } = await service.create(member, ORG_SLUG, PLAN_ID, {
+        label: 'Client review',
+        expiresAt: future,
+      });
+      const event = audit.record.mock.calls[0]?.[0];
+      expect(event.action).toBe('share.created');
+      expect(event.outcome).toBe('SUCCESS');
+      expect(event.organizationId).toBe(ORG_ID);
+      expect(event.subjectType).toBe('PLAN_SHARE');
+      expect(event.after).toMatchObject({ planId: PLAN_ID, label: 'Client review' });
+      const raw = url.split('#')[1] ?? '';
+      expect(JSON.stringify(event)).not.toContain(raw);
+      expect(JSON.stringify(event)).not.toContain(shares.create.mock.calls[0]?.[0].tokenHash);
     });
 
     it('422s a non-future expiry (SHARE_EXPIRY_IN_PAST) before creating', async () => {
@@ -155,6 +179,23 @@ describe('ShareService', () => {
   });
 
   describe('revoke', () => {
+    it('records share.revoked from the row it read, not the route parameter', async () => {
+      shares.findActiveByIdInOrg.mockResolvedValue(shareRow({ label: 'For the QS' }));
+      await service.revoke(member, ORG_SLUG, PLAN_ID, SHARE_ID);
+      const event = audit.record.mock.calls[0]?.[0];
+      expect(event.action).toBe('share.revoked');
+      expect(event.subjectLabel).toBe('For the QS');
+      expect(event.before).toMatchObject({ planId: PLAN_ID, label: 'For the QS' });
+    });
+
+    it('records nothing when the link is not found — a 404 is not a revocation', async () => {
+      shares.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(service.revoke(member, ORG_SLUG, PLAN_ID, SHARE_ID)).rejects.toThrow(
+        NotFoundError,
+      );
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
     it('revokes a link and is idempotent (setRevoked drives immediacy)', async () => {
       await service.revoke(member, ORG_SLUG, PLAN_ID, SHARE_ID);
       expect(shares.setRevoked).toHaveBeenCalledWith(SHARE_ID, ORG_ID, USER_ID);

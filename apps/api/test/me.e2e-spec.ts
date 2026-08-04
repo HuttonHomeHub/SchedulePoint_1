@@ -7,6 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for authentication + the current-user endpoint. Boots the
  * real Nest app (global pipe, filter, interceptor, guards) with the real Better
@@ -57,6 +59,8 @@ describe.skipIf(!hasDatabase)('Auth & Me (e2e)', () => {
     await prisma.project.deleteMany();
     await prisma.client.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany(); // cascades sessions + accounts

@@ -9,17 +9,19 @@ import {
 import { Suspense, lazy } from 'react';
 
 import { Spinner } from '@/components/ui/spinner';
-import { GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
+import { AUDIT_LOG_ENABLED, GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { AcceptInviteScreen } from '@/routes/accept-invite';
+import { AuditLogScreen } from '@/routes/audit-log';
 import { AuthedLayout } from '@/routes/authed-layout';
 import { CalendarsScreen } from '@/routes/calendars';
 import { ClientDetailScreen } from '@/routes/client-detail';
 import { ClientsScreen } from '@/routes/clients';
 import { MembersScreen } from '@/routes/members';
+import { MyActivityScreen } from '@/routes/my-activity';
 import { OnboardingScreen } from '@/routes/onboarding';
 import { OrgHomeScreen } from '@/routes/org-home';
 import { PlanDetailScreen } from '@/routes/plan-detail';
@@ -123,6 +125,33 @@ const membersRoute = createRoute({
   path: '/orgs/$orgSlug/members',
   beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: MembersScreen,
+});
+
+/**
+ * The organisation's audit log (behind `AUDIT_LOG_ENABLED`; only added to the tree when on).
+ *
+ * Membership is checked in `beforeLoad` like every `:orgSlug` route; the `audit:read` permission is
+ * NOT — the screen says why a non-admin cannot read it, which is more use than a redirect that
+ * looks like the page does not exist.
+ */
+const auditLogRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/audit-log',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: AuditLogScreen,
+});
+
+/**
+ * The caller's own audit events (behind `AUDIT_LOG_ENABLED`).
+ *
+ * Deliberately NOT org-scoped: the events span every organisation the reader belongs to, and the
+ * five authentication ones belong to no organisation at all. Nesting it under `/orgs/$orgSlug`
+ * would put a slug in the URL that the query does not use and cannot honour.
+ */
+const myActivityRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/me/activity',
+  component: MyActivityScreen,
 });
 
 /** Clients list. */
@@ -271,6 +300,9 @@ const routeTree = rootRoute.addChildren([
     // Dark surface (ADR-0039): the resources route joins the tree only when the flag is on, so the
     // app is byte-identical when off (no route, no nav link, no row action).
     ...(RESOURCES_ENABLED ? [resourcesRoute] : []),
+    // Dark surface (ADR-0072): both audit routes join the tree only when the flag is on, so the
+    // app is byte-identical when off — no route, no nav entry, no query.
+    ...(AUDIT_LOG_ENABLED ? [auditLogRoute, myActivityRoute] : []),
   ]),
 ]);
 

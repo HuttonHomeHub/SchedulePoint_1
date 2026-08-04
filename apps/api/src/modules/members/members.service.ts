@@ -4,8 +4,11 @@ import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import {
   OrgMemberRepository,
   type OrgMemberWithUser,
@@ -28,6 +31,7 @@ export class MembersService {
     private readonly organizations: OrganizationsService,
     private readonly members: OrgMemberRepository,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(MembersService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -56,6 +60,7 @@ export class MembersService {
     orgSlug: string,
     memberId: string,
     dto: UpdateMemberRoleDto,
+    context?: RequestContext,
   ): Promise<OrgMemberWithUser> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'member:update_role', organization.id);
@@ -83,6 +88,28 @@ export class MembersService {
       if (changed === 0) {
         throw new ConflictError('This member was changed elsewhere. Refresh and try again.');
       }
+
+      // `before` is the POST-LOCK read above, never the existence check outside the transaction.
+      // That earlier read is taken before `lockOrganization` serialises anything, so a concurrent
+      // role change can land between the two — and the row would then record a prior role that was
+      // already gone, produced by a transaction that looks correctly serialised. This is the
+      // ADR-0063 `dissolve` defect, one module along.
+      //
+      // Inside the transaction, so a failed audit write rolls the role change back with it.
+      await this.audit.record(
+        {
+          action: 'member.role_changed',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'ORG_MEMBER',
+          subjectId: memberId,
+          subjectLabel: member.user.email,
+          before: { role: member.role },
+          after: { role: dto.role },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
 
     this.logger.info(
@@ -95,7 +122,12 @@ export class MembersService {
     return updated;
   }
 
-  async remove(principal: Principal, orgSlug: string, memberId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    memberId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'member:remove', organization.id);
 
@@ -115,6 +147,21 @@ export class MembersService {
       if (removed === 0) {
         throw new ConflictError('This member was changed elsewhere. Refresh and try again.');
       }
+
+      // Again the post-lock `member`, for the reason given in `changeRole`.
+      await this.audit.record(
+        {
+          action: 'member.removed',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'ORG_MEMBER',
+          subjectId: memberId,
+          subjectLabel: member.user.email,
+          before: { role: member.role },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
 
     this.logger.info(

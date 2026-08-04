@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationRole, Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type {
   OrgMemberRepository,
   OrgMemberWithUser,
@@ -48,6 +49,7 @@ describe('MembersService', () => {
     lockOrganization: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let audit: { record: ReturnType<typeof vi.fn>; recordBestEffort: ReturnType<typeof vi.fn> };
   let service: MembersService;
 
   beforeEach(() => {
@@ -61,11 +63,13 @@ describe('MembersService', () => {
       lockOrganization: vi.fn().mockResolvedValue(undefined),
     };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    audit = { record: vi.fn().mockResolvedValue(undefined), recordBestEffort: vi.fn() };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new MembersService(
       organizations as unknown as OrganizationsService,
       members as unknown as OrgMemberRepository,
       prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
       logger,
     );
   });
@@ -137,6 +141,77 @@ describe('MembersService', () => {
         }),
       ).rejects.toBeInstanceOf(NotFoundError);
     });
+
+    it('audits the POST-LOCK role as `before`, not the pre-transaction read', async () => {
+      // The trap this method is shaped around. Three reads happen: an existence check OUTSIDE the
+      // transaction, a re-read AFTER lockOrganization, and a final read for the response. Only the
+      // second is serialised, so only the second is a safe `before`. Here they deliberately
+      // DISAGREE — a concurrent change landed between them — and the row must record CONTRIBUTOR.
+      //
+      // Getting this wrong produces an audit trail that is silently, unfalsifiably wrong: the row
+      // looks correct, the transaction looks correctly serialised, and nothing on any screen says
+      // otherwise. Same shape as the ADR-0063 `dissolve` defect.
+      members.findActiveByIdInOrg
+        .mockResolvedValueOnce(member({ role: 'VIEWER' })) // stale: outside the lock
+        .mockResolvedValueOnce(member({ role: 'CONTRIBUTOR' })) // authoritative: inside it
+        .mockResolvedValueOnce(member({ role: 'PLANNER' }));
+      members.countActiveByRole.mockResolvedValue(2);
+      members.updateRoleIfVersionMatches.mockResolvedValue(1);
+
+      await service.changeRole(principalWith(['member:update_role']), 'acme', 'member-1', {
+        role: 'PLANNER',
+        version: 1,
+      });
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'member.role_changed',
+          before: { role: 'CONTRIBUTOR' },
+          after: { role: 'PLANNER' },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('records the audit row INSIDE the caller’s transaction', async () => {
+      // Passing no `tx` would still write a row, but the atomicity argument in AuditService.record
+      // would stop holding: a rolled-back role change could leave a row saying it happened.
+      const tx = { marker: 'tx' };
+      prisma.$transaction.mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
+      members.findActiveByIdInOrg.mockResolvedValue(member({ role: 'VIEWER' }));
+      members.countActiveByRole.mockResolvedValue(2);
+      members.updateRoleIfVersionMatches.mockResolvedValue(1);
+
+      await service.changeRole(principalWith(['member:update_role']), 'acme', 'member-1', {
+        role: 'PLANNER',
+        version: 1,
+      });
+
+      expect(audit.record).toHaveBeenCalledWith(expect.anything(), tx);
+    });
+
+    it('carries the request evidence through to the row', async () => {
+      members.findActiveByIdInOrg.mockResolvedValue(member({ role: 'VIEWER' }));
+      members.countActiveByRole.mockResolvedValue(2);
+      members.updateRoleIfVersionMatches.mockResolvedValue(1);
+
+      await service.changeRole(
+        principalWith(['member:update_role']),
+        'acme',
+        'member-1',
+        { role: 'PLANNER', version: 1 },
+        { ipAddress: '203.0.113.4', userAgent: 'Mozilla/5.0', correlationId: 'req_1' },
+      );
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ipAddress: '203.0.113.4',
+          userAgent: 'Mozilla/5.0',
+          correlationId: 'req_1',
+        }),
+        expect.anything(),
+      );
+    });
   });
 
   describe('remove', () => {
@@ -153,6 +228,35 @@ describe('MembersService', () => {
         service.remove(principalWith(['member:remove']), 'acme', 'member-1'),
       ).rejects.toBeInstanceOf(ConflictError);
       expect(members.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('audits the removal with the role the member actually held', async () => {
+      members.findActiveByIdInOrg
+        .mockResolvedValueOnce(member({ role: 'VIEWER' })) // stale
+        .mockResolvedValueOnce(member({ role: 'PLANNER' })); // post-lock
+
+      await service.remove(principalWith(['member:remove']), 'acme', 'member-1');
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'member.removed',
+          subjectId: 'member-1',
+          subjectLabel: 'bob@example.com',
+          before: { role: 'PLANNER' },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('does not audit a removal that never happened', async () => {
+      members.findActiveByIdInOrg.mockResolvedValue(member({ role: 'ORG_ADMIN' }));
+      members.countActiveByRole.mockResolvedValue(1);
+
+      await expect(
+        service.remove(principalWith(['member:remove']), 'acme', 'member-1'),
+      ).rejects.toBeInstanceOf(ConflictError);
+
+      expect(audit.record).not.toHaveBeenCalled();
     });
   });
 });

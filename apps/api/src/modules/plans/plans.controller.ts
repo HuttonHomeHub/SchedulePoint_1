@@ -23,6 +23,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { PlanResponseDto } from './dto/plan-response.dto';
@@ -79,8 +80,9 @@ export class PlansController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, planId);
+    await this.service.remove(principal, orgSlug, planId, context);
   }
 
   @Post(':planId/restore')
@@ -93,7 +95,8 @@ export class PlansController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<PlanResponseDto> {
-    return PlanResponseDto.from(await this.service.restore(principal, orgSlug, planId));
+    return PlanResponseDto.from(await this.service.restore(principal, orgSlug, planId, context));
   }
 }

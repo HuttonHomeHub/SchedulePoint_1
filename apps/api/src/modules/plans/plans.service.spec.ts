@@ -6,6 +6,7 @@ import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { ProjectRepository } from '../projects/project.repository';
@@ -104,6 +105,7 @@ describe('PlansService', () => {
     restoreBatch: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let audit: { record: ReturnType<typeof vi.fn> };
   let service: PlansService;
 
   beforeEach(() => {
@@ -133,6 +135,7 @@ describe('PlansService', () => {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new PlansService(
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
@@ -140,6 +143,7 @@ describe('PlansService', () => {
       calendars as unknown as CalendarRepository,
       lifecycle as unknown as HierarchyLifecycleService,
       prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
       logger,
     );
   });
@@ -345,6 +349,30 @@ describe('PlansService', () => {
         NotFoundError,
       );
       expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('audits the delete with the cascade’s OWN batch id, inside its transaction', async () => {
+      // The batch id is what makes forty vanished rows legible as one action. Taking it from the
+      // cascade's result rather than re-deriving it is the whole point: there is exactly one
+      // place that number is decided.
+      plans.findActiveByIdInOrg.mockResolvedValue(plan({ name: 'Baseline', status: 'ACTIVE' }));
+
+      await service.remove(principalWith(ALL), 'acme', 'pl1');
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'plan.deleted',
+          subjectType: 'PLAN',
+          subjectId: 'pl1',
+          subjectLabel: 'Baseline',
+          before: { name: 'Baseline', status: 'ACTIVE', deleteBatchId: 'b1' },
+        }),
+        expect.anything(),
+      );
+      // The second argument is the transaction client, not undefined: a failed audit write must
+      // roll the cascade back with it.
+      expect(audit.record.mock.calls[0]?.[1]).toBeDefined();
     });
   });
 
@@ -366,6 +394,25 @@ describe('PlansService', () => {
       plans.findByIdInOrg.mockResolvedValue(plan({ deletedAt: null }));
       await service.restore(principalWith(ALL), 'acme', 'pl1');
       expect(lifecycle.restoreBatch).not.toHaveBeenCalled();
+      // A no-op is not an event. Recording one would fill the log with rows for nothing having
+      // happened, which is how a reader stops trusting it.
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('audits the restore in the `after` direction, carrying the batch it came from', async () => {
+      plans.findByIdInOrg.mockResolvedValue(
+        plan({ deletedAt: new Date(), deleteBatchId: 'b9', name: 'Baseline' }),
+      );
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+
+      await service.restore(principalWith(ALL), 'acme', 'pl1');
+
+      const [input] = audit.record.mock.calls[0] as [Record<string, unknown>];
+      expect(input.action).toBe('plan.restored');
+      // `after`, not `before`: a restored row's name is what it now IS again. Putting the same
+      // facts on both sides would assert a change that did not happen.
+      expect(input.after).toEqual({ name: 'Baseline', status: 'DRAFT', deleteBatchId: 'b9' });
+      expect(input.before).toBeUndefined();
     });
 
     it('404s when the plan is unknown in this org', async () => {

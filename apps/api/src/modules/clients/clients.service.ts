@@ -4,12 +4,15 @@ import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { OrganizationsService } from '../organizations/organizations.service';
 
 import { ClientRepository } from './client.repository';
@@ -29,6 +32,7 @@ export class ClientsService {
     private readonly clients: ClientRepository,
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(ClientsService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -121,17 +125,43 @@ export class ClientsService {
     return updated;
   }
 
-  async remove(principal: Principal, orgSlug: string, clientId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    clientId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'client:delete', organization.id);
 
-    if (!(await this.clients.findActiveByIdInOrg(clientId, organization.id))) {
-      throw new NotFoundError('Client not found.');
-    }
+    const existing = await this.clients.findActiveByIdInOrg(clientId, organization.id);
+    if (!existing) throw new NotFoundError('Client not found.');
 
-    const result = await this.prisma.$transaction((tx) =>
-      this.lifecycle.cascadeSoftDelete(tx, 'client', clientId, principal.userId),
-    );
+    const result = await this.prisma.$transaction(async (tx) => {
+      const cascade = await this.lifecycle.cascadeSoftDelete(
+        tx,
+        'client',
+        clientId,
+        principal.userId,
+      );
+      // Inside the cascade's own transaction, and carrying its batch id: a reader seeing forty
+      // rows vanish needs to know that was one action and not forty. A failed audit write rolls
+      // the whole cascade back, which is the trade ADR-0072 chose deliberately.
+      await this.audit.record(
+        hierarchyAuditEvent({
+          entity: 'client',
+          kind: 'deleted',
+          organizationId: organization.id,
+          id: clientId,
+          name: existing.name,
+          deleteBatchId: cascade.batchId,
+          principal,
+          context,
+        }),
+        tx,
+      );
+      return cascade;
+    });
     this.logger.info(
       {
         organizationId: organization.id,
@@ -143,7 +173,12 @@ export class ClientsService {
     );
   }
 
-  async restore(principal: Principal, orgSlug: string, clientId: string): Promise<Client> {
+  async restore(
+    principal: Principal,
+    orgSlug: string,
+    clientId: string,
+    context?: RequestContext,
+  ): Promise<Client> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'client:restore', organization.id);
 
@@ -151,9 +186,27 @@ export class ClientsService {
     if (!existing) throw new NotFoundError('Client not found.');
     if (!existing.deletedAt) return existing; // already active — restore is a no-op
 
-    await this.prisma.$transaction((tx) =>
-      this.lifecycle.restoreBatch(tx, 'client', clientId, principal.userId),
-    );
+    await this.prisma.$transaction(async (tx) => {
+      await this.lifecycle.restoreBatch(tx, 'client', clientId, principal.userId);
+      // `existing.deleteBatchId` is read before the transaction, and that is safe here in a way
+      // it is NOT in MembersService.changeRole: `restoreBatch` re-reads the root inside the
+      // transaction and throws unless it is still soft-deleted, so a stale read cannot survive
+      // to be recorded — the audit row is never written for a restore that did not happen.
+      await this.audit.record(
+        hierarchyAuditEvent({
+          entity: 'client',
+          kind: 'restored',
+          organizationId: organization.id,
+          id: clientId,
+          name: existing.name,
+
+          deleteBatchId: existing.deleteBatchId,
+          principal,
+          context,
+        }),
+        tx,
+      );
+    });
     this.logger.info(
       { organizationId: organization.id, clientId, userId: principal.userId },
       'client restored (cascade)',

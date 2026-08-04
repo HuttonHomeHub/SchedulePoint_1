@@ -584,6 +584,36 @@ security controls are the write-time rejects above, applied server-side whatever
 case-insensitive substring match bounded by the org filter; there is deliberately no index for it (see
 `docs/TECH_DEBT.md` for the measured `pg_trgm` escalation).
 
+### The audit log (ADR-0072)
+
+Two read endpoints over the append-only `audit_events` table. There is no write endpoint and there
+never will be — events are recorded by the actions that cause them, inside those actions'
+transactions, and the table's triggers refuse `UPDATE`, `DELETE` and `TRUNCATE`.
+
+| Method | Path                                    | Notes                                                                                                                                                          |
+| ------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/organizations/:orgSlug/audit-events` | **NEW** — the organisation's events, newest first, cursor-paginated. `audit:read` (**Org Admin only**). A non-member 404s before the permission check can 403. |
+| GET    | `/api/v1/me/audit-events`               | **NEW** — the caller's OWN events, across every organisation plus the org-less authentication rows. **No permission and no user id** — see below.              |
+
+**`/me/audit-events` takes no user id.** Not an optional one, not a defaulted one: the actor comes
+from the session, so there is no parameter a caller could change to read somebody else's history.
+That is why the route needs no permission — anti-IDOR by construction rather than by a guard, and it
+is what lets a Viewer or Contributor read their own sign-in history without an Org Admin's help.
+
+Ordering is `occurred_at DESC, id DESC` and the cursor is keyset over that pair. `id` breaks the tie
+because two events can share a millisecond, and a cursor on time alone would skip or repeat a row at
+a page boundary.
+
+**`ipAddress` and `userAgent` are recorded and not returned.** They are evidence for an
+investigation, but the ordinary reader here is an Org Admin looking at a membership history, and a
+colleague's home IP on that screen is a privacy cost with no matching benefit. Exposing them is a
+decision with its own scope; `@repo/types`' `AuditEvent` has no such fields, so the response DTO's
+`implements` enforces it rather than describing it.
+
+`changes` is an allow-listed, redacted `{ before, after }` — **both sides always present**, so a
+reader can tell "set from nothing" from "unchanged" without knowing the action's semantics — or
+`null` for the five authentication actions, whose allow-list is deliberately empty.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

@@ -8,6 +8,8 @@ import { configureHttpApp } from '../src/app-setup';
 import type { OrganizationRole } from '../src/common/auth/principal';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for the schedule-interchange dry-run endpoint (ADR-0050, C2, Task 1.4). Covers a
  * Planner parsing a valid XER (200 + counts), a file with repairs (200 + reported repairs), an
@@ -324,6 +326,8 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();

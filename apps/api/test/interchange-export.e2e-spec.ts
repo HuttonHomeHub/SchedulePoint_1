@@ -9,6 +9,8 @@ import { configureHttpApp } from '../src/app-setup';
 import type { OrganizationRole } from '../src/common/auth/principal';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * End-to-end tests for the schedule-interchange EXPORT endpoint (ADR-0050 M4a). A plan is seeded by
  * COMMITTING an XER through the import endpoint (reusing the import-side path), then exported and the bytes
@@ -168,6 +170,8 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
     await prisma.client.deleteMany();
     await prisma.invitation.deleteMany();
     await prisma.orgMember.deleteMany();
+    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();

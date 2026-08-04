@@ -13,6 +13,7 @@ import type { MailService } from '../../common/mail/mail.service';
 import { hashToken } from '../../common/tokens/token';
 import type { AppConfigService } from '../../config/app-config.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type { OrgMemberRepository } from '../organizations/org-member.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
@@ -71,6 +72,7 @@ describe('InvitationsService', () => {
   };
   let mail: { sendInvitation: ReturnType<typeof vi.fn> };
   let config: { appUrl: string; requireEmailVerification: boolean };
+  let audit: { record: ReturnType<typeof vi.fn> };
   let service: InvitationsService;
 
   beforeEach(() => {
@@ -91,6 +93,7 @@ describe('InvitationsService', () => {
     };
     mail = { sendInvitation: vi.fn().mockResolvedValue(undefined) };
     config = { appUrl: 'https://app.example', requireEmailVerification: false };
+    audit = { record: vi.fn().mockResolvedValue(undefined) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new InvitationsService(
       organizations as unknown as OrganizationsService,
@@ -99,6 +102,7 @@ describe('InvitationsService', () => {
       prisma as unknown as PrismaService,
       mail as unknown as MailService,
       config as unknown as AppConfigService,
+      audit as unknown as AuditService,
       logger,
     );
   });
@@ -149,6 +153,34 @@ describe('InvitationsService', () => {
           role: 'VIEWER',
         }),
       ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('records the invitation BEFORE the email goes out', async () => {
+      // Ordering matters because `record` throws. Auditing after the send would mean a failed
+      // audit leaves an email in someone's inbox for an invitation with no record of who issued
+      // it — and an email cannot be un-sent, so there is no recovering that ordering.
+      prisma.user.findUnique.mockResolvedValue(null);
+      invitations.create.mockResolvedValue(invitation());
+
+      await service.create(principalWith(['member:invite']), 'acme', {
+        email: 'invitee@example.com',
+        role: 'PLANNER',
+      });
+
+      // Vitest stamps every call with a global sequence number, which orders the two mocks
+      // against each other without a shared side-effecting implementation.
+      const [auditedAt] = audit.record.mock.invocationCallOrder;
+      const [mailedAt] = mail.sendInvitation.mock.invocationCallOrder;
+      expect(auditedAt).toBeLessThan(mailedAt as number);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'invitation.created',
+          subjectId: 'inv-1',
+          subjectLabel: 'invitee@example.com',
+          after: expect.objectContaining({ email: 'invitee@example.com', role: 'PLANNER' }),
+        }),
+      );
     });
   });
 
@@ -172,6 +204,32 @@ describe('InvitationsService', () => {
         expect.objectContaining({ status: 'ACCEPTED', acceptedByUserId: USER_ID }),
         expect.anything(),
       );
+    });
+
+    it('records BOTH the acceptance and the join, in the transaction', async () => {
+      // Two rows for one act, because two different questions get asked of them: what happened to
+      // this invitation, and how did this person get access. A reader auditing membership should
+      // not have to know that a join can only arrive via an invitation to find it — and the day a
+      // self-serve join or SSO exists, that assumption is wrong for the older rows too.
+      invitations.findActiveByTokenHash.mockResolvedValue(
+        invitation({ tokenHash: hashToken(token) }),
+      );
+      prisma.user.findUnique.mockResolvedValue({ id: USER_ID, email: 'invitee@example.com' });
+      members.findActiveByOrgAndUser.mockResolvedValue(null);
+
+      await service.accept(invitee, token);
+
+      const actions = audit.record.mock.calls.map((call) => (call[0] as { action: string }).action);
+      expect(actions).toEqual(['invitation.accepted', 'member.joined']);
+      for (const call of audit.record.mock.calls) {
+        expect(call[1]).toBeDefined();
+      }
+    });
+
+    it('records nothing when the invitation is rejected', async () => {
+      invitations.findActiveByTokenHash.mockResolvedValue(invitation({ status: 'REVOKED' }));
+      await expect(service.accept(invitee, token)).rejects.toBeInstanceOf(GoneError);
+      expect(audit.record).not.toHaveBeenCalled();
     });
 
     it('404s for an unknown token', async () => {
@@ -239,6 +297,22 @@ describe('InvitationsService', () => {
       await expect(
         service.revoke(principalWith(['invitation:revoke']), 'acme', 'inv-1'),
       ).rejects.toBeInstanceOf(ConflictError);
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('audits a revocation with the status it moved from and to', async () => {
+      invitations.findActiveByIdInOrg.mockResolvedValue(invitation({ status: 'PENDING' }));
+
+      await service.revoke(principalWith(['invitation:revoke']), 'acme', 'inv-1');
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'invitation.revoked',
+          subjectId: 'inv-1',
+          before: expect.objectContaining({ status: 'PENDING' }),
+          after: expect.objectContaining({ status: 'REVOKED' }),
+        }),
+      );
     });
   });
 });

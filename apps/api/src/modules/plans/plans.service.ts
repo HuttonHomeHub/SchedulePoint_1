@@ -4,6 +4,7 @@ import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import {
   HIERARCHY_CONFLICT,
@@ -11,6 +12,8 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -38,6 +41,7 @@ export class PlansService {
     private readonly calendars: CalendarRepository,
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(PlansService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -218,24 +222,50 @@ export class PlansService {
     return updated;
   }
 
-  async remove(principal: Principal, orgSlug: string, planId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'plan:delete', organization.id);
 
-    if (!(await this.plans.findActiveByIdInOrg(planId, organization.id))) {
-      throw new NotFoundError('Plan not found.');
-    }
+    const existing = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!existing) throw new NotFoundError('Plan not found.');
 
-    await this.prisma.$transaction((tx) =>
-      this.lifecycle.cascadeSoftDelete(tx, 'plan', planId, principal.userId),
-    );
+    await this.prisma.$transaction(async (tx) => {
+      const result = await this.lifecycle.cascadeSoftDelete(tx, 'plan', planId, principal.userId);
+      // Inside the cascade's own transaction, and carrying its batch id: a reader seeing forty
+      // rows vanish needs to know that was one action and not forty. A failed audit write rolls
+      // the whole cascade back, which is the trade ADR-0072 chose deliberately.
+      await this.audit.record(
+        hierarchyAuditEvent({
+          entity: 'plan',
+          kind: 'deleted',
+          organizationId: organization.id,
+          id: planId,
+          name: existing.name,
+          status: existing.status,
+          deleteBatchId: result.batchId,
+          principal,
+          context,
+        }),
+        tx,
+      );
+    });
     this.logger.info(
       { organizationId: organization.id, planId, userId: principal.userId },
       'plan deleted',
     );
   }
 
-  async restore(principal: Principal, orgSlug: string, planId: string): Promise<Plan> {
+  async restore(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    context?: RequestContext,
+  ): Promise<Plan> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'plan:restore', organization.id);
 
@@ -245,9 +275,27 @@ export class PlansService {
 
     // The lifecycle enforces the top-down invariant: restoring a plan whose
     // parent project is still soft-deleted raises PARENT_DELETED (→ 409).
-    await this.prisma.$transaction((tx) =>
-      this.lifecycle.restoreBatch(tx, 'plan', planId, principal.userId),
-    );
+    await this.prisma.$transaction(async (tx) => {
+      await this.lifecycle.restoreBatch(tx, 'plan', planId, principal.userId);
+      // `existing.deleteBatchId` is read before the transaction, and that is safe here in a way
+      // it is NOT in MembersService.changeRole: `restoreBatch` re-reads the root inside the
+      // transaction and throws unless it is still soft-deleted, so a stale read cannot survive
+      // to be recorded — the audit row is never written for a restore that did not happen.
+      await this.audit.record(
+        hierarchyAuditEvent({
+          entity: 'plan',
+          kind: 'restored',
+          organizationId: organization.id,
+          id: planId,
+          name: existing.name,
+          status: existing.status,
+          deleteBatchId: existing.deleteBatchId,
+          principal,
+          context,
+        }),
+        tx,
+      );
+    });
     this.logger.info(
       { organizationId: organization.id, planId, userId: principal.userId },
       'plan restored',

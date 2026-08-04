@@ -211,6 +211,14 @@ you; without it, invitations to external clients will land in spam.
 - Ensure the proxy forwards `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto`
   (Nginx Proxy Manager's "Websockets support" + default forwarding is fine); the
   web container already sets these when proxying to the API.
+- **Check `X-Forwarded-Proto` rather than assuming it.** On the reference
+  deployment it arrives as `http` — reflecting the proxy's plaintext hop to the
+  web container, not the browser's scheme — while `X-Forwarded-Scheme` and
+  Cloudflare's `CF-Visitor` both correctly say `https`. Nothing consumes it today
+  (absolute URLs come from `BETTER_AUTH_URL`, and the `Secure` cookie flag from
+  `NODE_ENV`), so it is currently harmless and therefore easy to miss. Add
+  `proxy_set_header X-Forwarded-Proto $scheme;` to the HTTPS host so it is right
+  before something starts trusting it. See `docs/TECH_DEBT.md` #89.
 
 ### Common pitfall: `403 Invalid origin` on sign-up/sign-in
 

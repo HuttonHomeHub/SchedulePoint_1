@@ -24,6 +24,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
@@ -57,8 +58,9 @@ export class OrgInvitationsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Body() dto: CreateInvitationDto,
+    @RequestContext() context: RequestContext,
   ): Promise<CreatedInvitationDto> {
-    const { invitation, acceptUrl } = await this.service.create(principal, orgSlug, dto);
+    const { invitation, acceptUrl } = await this.service.create(principal, orgSlug, dto, context);
     return CreatedInvitationDto.fromWithUrl(invitation, acceptUrl);
   }
 
@@ -86,7 +88,8 @@ export class OrgInvitationsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('invitationId', ParseUuidPipe) invitationId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.revoke(principal, orgSlug, invitationId);
+    await this.service.revoke(principal, orgSlug, invitationId, context);
   }
 }

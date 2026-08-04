@@ -371,6 +371,17 @@ jobs:
       - name: Web end-to-end tests (canvas authoring flow)
         run: pnpm --filter @repo/web test:e2e:authoring-flow
 
+      # Flag-ON audit log journey (playwright.audit.config.ts) with VITE_AUDIT_LOG on (ADR-0072).
+      # The audit log is a claim about writes that happened somewhere else, so a mocked fetch cannot
+      # be wrong about a row it invented. Against a real API and database this proves the producers
+      # fire inside the transactions that succeeded (six real actions, six findable rows), that a
+      # role change's `before` is the membership's real prior value and not the request DTO, that
+      # `audit:read` is refused with a 403 in the non-admin's own session rather than by the hidden
+      # nav link, and that the `/me` feed is scoped by ACTOR — the teammate is the SUBJECT of the
+      # role change and must not see it. Runs after the prior suites tear down their servers.
+      - name: Web end-to-end tests (audit log flag on)
+        run: pnpm --filter @repo/web test:e2e:audit
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -396,6 +407,7 @@ jobs:
             apps/web/playwright-report-designed-ui/
             apps/web/playwright-report-designed-chrome/
             apps/web/playwright-report-gantt/
+            apps/web/playwright-report-audit/
           if-no-files-found: ignore
           retention-days: 7
 

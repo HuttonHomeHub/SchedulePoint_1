@@ -25,6 +25,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
@@ -113,8 +114,9 @@ export class ClientsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('clientId', ParseUuidPipe) clientId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, clientId);
+    await this.service.remove(principal, orgSlug, clientId, context);
   }
 
   @Post(':clientId/restore')
@@ -127,7 +129,10 @@ export class ClientsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('clientId', ParseUuidPipe) clientId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<ClientResponseDto> {
-    return ClientResponseDto.from(await this.service.restore(principal, orgSlug, clientId));
+    return ClientResponseDto.from(
+      await this.service.restore(principal, orgSlug, clientId, context),
+    );
   }
 }
