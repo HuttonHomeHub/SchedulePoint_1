@@ -779,29 +779,6 @@ the value.
 
 ---
 
-### 90. `idx_audit_events_actor_occurred` was never measured
-
-**Found:** 2026-08-03, landing ADR-0072 M1.
-
-ADR-0072's own Consequences section says the third index — the one the `/me/audit-events` read
-needs — "**was not in the measured set. It is flagged as unmeasured and must be measured before it
-lands.**" It has landed, and it has not been measured.
-
-The reasoning for shipping it anyway is sound and is not the same as measuring it: a self-scoped
-query without an index on `(actor_user_id, occurred_at DESC, id DESC)` is a sequential scan of a
-table that only grows, and the alternative was to ship the self-read without the index it obviously
-needs. But the ADR set a bar and the bar was not met — recording that is the point of this row.
-
-**What is owed:** the same `EXPLAIN (ANALYZE, BUFFERS)` treatment the other two partial indexes got,
-at a realistic row count, confirming (i) the index is used for the `/me` keyset page, (ii) the
-organisation read still uses its own partial index rather than this one, and (iii) the write cost of
-a third index on an insert-only table is what it was assumed to be.
-
-**Where it sits:** it composes with the growth measurement ADR-0072 already gates coverage widening
-on. Both want the same seeded table, so they are one afternoon rather than two.
-
----
-
 ### 91. A failed sign-in is recorded and readable by nobody
 
 **Found:** 2026-08-03, writing the ADR-0072 M1 journey.
@@ -845,17 +822,18 @@ dangling.
 
 One line each. The story lives where the link points, not here.
 
-| #   | What it was                                                 | Closed     | Where the record is                                          |
-| --- | ----------------------------------------------------------- | ---------- | ------------------------------------------------------------ |
-| 29  | Released images not pulled — "shipped but not live"         | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.            |
-| 59  | The device-authoritative draw measurement was never made    | 2026-08-03 | Folded into **#75**, which waits on the same single run.     |
-| 77  | The demo Unit 300 file was a lossy rendering of the fixture | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                           |
-| 78  | Public activity/dependency API was day-denominated          | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs. |
-| 79  | A window-only calendar was rejected by the API              | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".   |
-| 80  | Intraday shift patterns had no write path                   | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.       |
-| 82  | Shift-editor epic — the non-blocking half of five gates     | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                     |
-| 87  | Import rejected a file with two activities of the same name | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).     |
-| 83¹ | A typed duration overwritten by the calendar factor landing | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.  |
+| #   | What it was                                                 | Closed     | Where the record is                                            |
+| --- | ----------------------------------------------------------- | ---------- | -------------------------------------------------------------- |
+| 29  | Released images not pulled — "shipped but not live"         | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.              |
+| 59  | The device-authoritative draw measurement was never made    | 2026-08-03 | Folded into **#75**, which waits on the same single run.       |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                             |
+| 78  | Public activity/dependency API was day-denominated          | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.   |
+| 79  | A window-only calendar was rejected by the API              | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".     |
+| 80  | Intraday shift patterns had no write path                   | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.         |
+| 82  | Shift-editor epic — the non-blocking half of five gates     | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                       |
+| 87  | Import rejected a file with two activities of the same name | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).       |
+| 90  | `idx_audit_events_actor_occurred` was never measured        | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)". |
+| 83¹ | A typed duration overwritten by the calendar factor landing | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.    |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded

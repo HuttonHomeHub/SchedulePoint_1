@@ -64,6 +64,9 @@ describe.skipIf(!hasDatabase)('Audit log (e2e)', () => {
 
   beforeEach(async () => {
     await prisma.invitation.deleteMany();
+    // Share links hold a RESTRICT FK to their plan, so they go first — the same composition that
+    // made `clearAuditEvents` necessary, one table along.
+    await prisma.planShare.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
@@ -178,6 +181,62 @@ describe.skipIf(!hasDatabase)('Audit log (e2e)', () => {
       // semantics, and the redactor normalises to that shape whatever the producer supplied.
       expect(restored.changes?.after).toMatchObject({ name: 'Northgate' });
       expect(restored.changes?.before).toEqual({});
+    });
+
+    it('records a share link being minted and revoked, and NEVER its token', async () => {
+      // ADR-0072 M3 / TECH_DEBT #14: a guest link authorises reads of plan data by someone with
+      // no account, so it is the widest permission change the product offers. The token assertion
+      // is read from the TABLE, not the response: the redactor and the producer are two separate
+      // controls and only the stored row proves both held.
+      const { admin } = await setupOrg();
+      const client = await admin.agent
+        .post('/api/v1/organizations/acme/clients')
+        .send({ name: 'Northgate' })
+        .expect(201)
+        .then((r) => r.body.data as { id: string });
+      const project = await admin.agent
+        .post(`/api/v1/organizations/acme/clients/${client.id}/projects`)
+        .send({ name: 'Riverside' })
+        .expect(201)
+        .then((r) => r.body.data as { id: string });
+      const plan = await admin.agent
+        .post(`/api/v1/organizations/acme/projects/${project.id}/plans`)
+        .send({ name: 'Programme', plannedStart: '2026-01-05' })
+        .expect(201)
+        .then((r) => r.body.data as { id: string });
+
+      const share = await admin.agent
+        .post(`/api/v1/organizations/acme/plans/${plan.id}/shares`)
+        .send({ label: 'For the QS' })
+        .expect(201)
+        .then((r) => r.body.data as { url: string; share: { id: string } });
+      const rawToken = share.url.split('#')[1]!;
+
+      await admin.agent
+        .delete(`/api/v1/organizations/acme/plans/${plan.id}/shares/${share.share.id}`)
+        .expect(204);
+
+      const rows = await orgLog(admin.agent);
+      const created = rows.find((r) => r.action === 'share.created')!;
+      const revoked = rows.find((r) => r.action === 'share.revoked')!;
+
+      expect(created.subjectType).toBe('PLAN_SHARE');
+      expect(created.subjectId).toBe(share.share.id);
+      expect(created.changes?.after).toMatchObject({ planId: plan.id, label: 'For the QS' });
+      // No expiry was asked for, and the row says so rather than staying silent — a link that
+      // never dies is the fact a reader most needs.
+      expect(created.changes?.after?.expiresAt).toBeNull();
+      expect(revoked.changes?.before).toMatchObject({ planId: plan.id, label: 'For the QS' });
+
+      // The credential, in both forms, against the STORED rows.
+      const stored = await prisma.auditEvent.findMany({
+        where: { action: { in: ['share.created', 'share.revoked'] } },
+      });
+      expect(stored).toHaveLength(2);
+      const hash = (await prisma.planShare.findFirstOrThrow({ where: { id: share.share.id } }))
+        .tokenHash;
+      expect(JSON.stringify(stored)).not.toContain(rawToken);
+      expect(JSON.stringify(stored)).not.toContain(hash);
     });
 
     it('records a FAILED sign-in as ANONYMOUS with the attempted address', async () => {

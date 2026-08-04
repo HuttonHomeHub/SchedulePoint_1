@@ -96,6 +96,24 @@ describe('the allow-list is exhaustive', () => {
     }
   });
 
+  it('strips a share token and its hash even when a producer hands them over', () => {
+    // The share actions are the ones where a leak would be worst: the raw token IS the credential
+    // and the hash is what `ShareTokenGuard` compares against, so either in this table would turn
+    // an Org-Admin-readable log into a key store. Two independent controls have to hold — the
+    // allow-list does not name them, and `NEVER_RECORD` catches both words — so this asserts the
+    // OUTCOME rather than either mechanism.
+    const changes = redactChanges('share.created', undefined, {
+      planId: 'plan-1',
+      label: 'For the QS',
+      expiresAt: null,
+      token: 'sp_share_deadbeef',
+      tokenHash: 'a'.repeat(64),
+    });
+    expect(changes?.after).toEqual({ planId: 'plan-1', label: 'For the QS', expiresAt: null });
+    expect(JSON.stringify(changes)).not.toContain('sp_share_');
+    expect(JSON.stringify(changes)).not.toContain('a'.repeat(64));
+  });
+
   it('no allow-list names a field the never-record ban would strip', () => {
     // If these ever disagree, the allow-list is lying about what it records — the field would be
     // named here and silently absent from every row.

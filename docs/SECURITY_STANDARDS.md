@@ -117,10 +117,10 @@ store only a hash**.
 The standard, and what is actually built:
 
 - **Append-only audit log** for security- and sensitive events: authentication,
-  permission changes (membership roles, invitations, organisation creation) and
-  hierarchy deletions/restores — who, what, when, and before→after where relevant.
-  Eighteen actions from a closed vocabulary; a new one is a compile error until
-  someone decides what it may record.
+  permission changes (membership roles, invitations, organisation creation, guest
+  share links) and hierarchy deletions/restores — who, what, when, and before→after
+  where relevant. Twenty actions from a closed vocabulary; a new one is a compile
+  error until someone decides what it may record.
 - Audit entries are **never mutated or deleted** and are separate from operational
   logs. **No secrets or full PII** in payloads: `changes` is an **allow-list** keyed
   by action, not a deny-list, so a field is invisible until a person names it, and a

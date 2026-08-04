@@ -29,6 +29,8 @@ const TITLES: Record<AuditAction, string> = {
   'invitation.revoked': 'Invitation revoked',
   'invitation.accepted': 'Invitation accepted',
   'organization.created': 'Organisation created',
+  'share.created': 'Share link created',
+  'share.revoked': 'Share link revoked',
   'auth.signed_up': 'Account created',
   'auth.signed_in': 'Signed in',
   'auth.sign_in_failed': 'Sign-in failed',
@@ -74,6 +76,21 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       return null;
     case 'organization.created':
       return field(changes?.after, 'slug');
+    case 'share.created': {
+      // The expiry is the fact a reader is looking for: a guest link with no expiry is a standing
+      // grant to anyone who ever held the URL, and "no expiry" is a louder sentence than an absent
+      // line. `expiresAt` is always in the payload — the allow-list names it and the redactor
+      // normalises null — so an ABSENT key means an old row, which is different from "never".
+      if (changes?.after === undefined || !('expiresAt' in changes.after)) return null;
+      const expiresAt = field(changes.after, 'expiresAt');
+      return expiresAt === null
+        ? 'No expiry'
+        : `Expires ${EXPIRY_FORMAT.format(new Date(expiresAt))}`;
+    }
+    case 'share.revoked':
+      // Nothing to add: the subject column carries the operator's label, and a revocation has no
+      // before/after worth a sentence — it happened, and the link is dead.
+      return null;
     case 'plan.deleted':
     case 'plan.restored': {
       const status = field(changes?.before, 'status') ?? field(changes?.after, 'status');
@@ -94,6 +111,10 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       return null;
   }
 }
+
+/** The expiry date in the reader's own locale. Date only — the hour a link dies is not a fact
+ *  anyone acts on, and a full timestamp crowds the row. */
+const EXPIRY_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 
 const ROLE_NAMES: Record<string, string> = {
   ORG_ADMIN: 'Org Admin',

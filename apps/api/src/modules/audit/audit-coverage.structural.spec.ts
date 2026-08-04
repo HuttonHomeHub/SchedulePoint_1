@@ -46,6 +46,8 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'POST /api/v1/organizations/:orgSlug/clients/:clientId/restore': ['client.restored'],
   'POST /api/v1/organizations/:orgSlug/invitations': ['invitation.created'],
   'POST /api/v1/organizations/:orgSlug/plans/:planId/restore': ['plan.restored'],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/shares': ['share.created'],
+  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/shares/:shareId': ['share.revoked'],
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/restore': ['project.restored'],
 };
 
@@ -77,12 +79,6 @@ const REASONS = {
    * A row saying "the schedule was recomputed" adds noise, not evidence.
    */
   ENGINE_DERIVED: 'engine-derived',
-  /**
-   * Minting or revoking a share link IS a permission change and belongs in the log. It is out of
-   * M1 only because the guest role is its own auth boundary (ADR-0051) with its own actor kind,
-   * and giving it one honestly needs the GUEST actor type wired end to end.
-   */
-  SHARE_GRANT: 'share-grant-m2-candidate',
   /** An import creates a plan; `plan.created` is not in the M1 vocabulary. */
   IMPORT: 'import-creates-plan',
   /** A session-less guest read (ADR-0051). No member principal, and nothing is changed. */
@@ -105,7 +101,6 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.CONTENT_EDIT,
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/baselines/:baselineId': REASONS.CONTENT_EDIT,
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/edit-lock': REASONS.EDIT_LOCK,
-  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/shares/:shareId': REASONS.SHARE_GRANT,
   'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.CONTENT_EDIT,
   'GET /api/health': REASONS.INFRASTRUCTURE,
   'GET /api/health/ready': REASONS.INFRASTRUCTURE,
@@ -195,7 +190,6 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'POST /api/v1/organizations/:orgSlug/plans/:planId/schedule/recalculate': REASONS.ENGINE_DERIVED,
   'POST /api/v1/organizations/:orgSlug/plans/:planId/schedule/recalculate-programme':
     REASONS.ENGINE_DERIVED,
-  'POST /api/v1/organizations/:orgSlug/plans/:planId/shares': REASONS.SHARE_GRANT,
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit': REASONS.IMPORT,
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/dry-run': REASONS.IMPORT,
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/plans': REASONS.CONTENT_EDIT,
@@ -316,6 +310,11 @@ describe('audit coverage census (ADR-0072)', () => {
       'POST /api/v1/organizations/:orgSlug/invitations',
       'DELETE /api/v1/organizations/:orgSlug/invitations/:invitationId',
       'POST /api/v1/invitations/accept',
+      // Minting a guest link grants a read of plan data to somebody with no account at all, and
+      // revoking it is the only way that grant ever ends. It is the widest permission change the
+      // product offers and the one whose subject can never be asked what they saw.
+      'POST /api/v1/organizations/:orgSlug/plans/:planId/shares',
+      'DELETE /api/v1/organizations/:orgSlug/plans/:planId/shares/:shareId',
     ];
     for (const route of permissionChanging) {
       expect(AUDITED_ROUTES[route], `${route} must audit`).toBeDefined();

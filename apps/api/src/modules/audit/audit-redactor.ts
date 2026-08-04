@@ -28,6 +28,13 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   'invitation.revoked': ['email', 'role', 'status'],
   'invitation.accepted': ['email', 'role', 'status'],
   'organization.created': ['name', 'slug'],
+  // — Guest share links. `planId` and `expiresAt` say what was exposed and for how long; `label`
+  //   is the operator's own note. The TOKEN and its HASH are absent, and that is not a matter of
+  //   taste: the raw token IS the credential, and the hash is what the guard compares against, so
+  //   either one in this table turns a read surface into a key store. `NEVER_RECORD` catches both
+  //   words independently, which is exactly the second chance it exists to give.
+  'share.created': ['planId', 'label', 'expiresAt'],
+  'share.revoked': ['planId', 'label'],
   // — Authentication. Deliberately empty: the interesting facts (who, from where, did it work)
   //   are first-class columns, and ANY field payload here would be attacker-influenced input
   //   from a sign-in form. There is no `changes` shape that improves an auth row and several

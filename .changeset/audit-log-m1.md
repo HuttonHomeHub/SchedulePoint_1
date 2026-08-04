@@ -6,10 +6,18 @@
 
 Add the append-only audit log (ADR-0072), closing `docs/TECH_DEBT.md` #14(a)/(a2).
 
-Eighteen events are recorded into a table the database itself refuses to update or delete —
+Twenty events are recorded into a table the database itself refuses to update or delete —
 membership role changes and removals, invitations created, revoked and accepted, organisations
-created, five authentication events, and hierarchy deletes and restores carrying the cascade's own
-batch id, so one user action reads as one row rather than forty.
+created, guest share links minted and revoked, five authentication events, and hierarchy deletes
+and restores carrying the cascade's own batch id, so one user action reads as one row rather than
+forty.
+
+A share link is the widest permission change the product offers — it grants a read of plan data to
+somebody with no account, and revocation is the only way that grant ever ends — so it is recorded
+with the plan it exposed and how long for. Neither the raw token nor its hash goes anywhere near
+the payload: the token IS the credential and the hash is what the guard compares against, so either
+would turn an Org-Admin-readable log into a key store. The allow-list does not name them and the
+substring ban catches both words, and a test asserts the outcome against the stored row.
 
 Membership and hierarchy events are written **inside the caller's transaction**: an action that
 cannot be recorded does not happen. Authentication events invert that deliberately — there is no

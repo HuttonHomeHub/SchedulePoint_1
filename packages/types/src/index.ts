@@ -1949,6 +1949,12 @@ export const AUDIT_ACTIONS = [
   'invitation.revoked',
   'invitation.accepted',
   'organization.created',
+  // — Guest share links (ADR-0051). Minting one authorises data egress **outside** the tenant
+  //   boundary to someone holding a bearer token and no account, which is a permission change in
+  //   every sense that matters — and the one whose subject cannot be asked what happened, because
+  //   a guest has no identity to attribute a read to.
+  'share.created',
+  'share.revoked',
   // — Authentication (TECH_DEBT #14 a). Captured in Better Auth's own hook chain rather than a
   //   Nest service, because the auth handler is mounted as a raw Node handler outside Nest's DI.
   //   These rows carry NO organisation: authentication happens before one is known.

@@ -436,18 +436,73 @@ the transactions that succeeded, that a role change's `before` is the membership
 link, and that `/me` is scoped by **actor** — the teammate is the _subject_ of the role change and
 must not see it.
 
+## M3: share links, and the storage measured (2026-08-03)
+
+**`share.created` / `share.revoked` land**, taking the coverage census to 14 audited routes and the
+vocabulary to 20 actions. They were the highest-value remaining events by some distance: minting a
+guest link grants a read of plan data to somebody with **no account at all**, revocation is the only
+way that grant ever ends, and the grantee is the one subject in the system who can never be asked
+what they saw. The `SHARE_GRANT` reason is retired from `UNAUDITED_ROUTES` and both routes join the
+census's **positive** assertion — the one that fails if a future refactor moves a permission change
+back out with a plausible-sounding excuse.
+
+The payload is `{ planId, label, expiresAt }`. **Neither token form is in it**, and two independent
+controls hold that: the allow-list does not name them, and `NEVER_RECORD`'s substring ban catches
+`token` and `hash` separately. A unit test asserts the outcome (verified to fail only when _both_
+controls are broken) and the e2e reads the assertion off the **stored rows** rather than the
+response, because the producer and the redactor are different code and only the table proves both.
+`expiresAt: null` is recorded rather than omitted — a link that never dies is the fact a reader most
+needs, and silence reads as "unknown".
+
+### Storage measured (2026-08-03) — closing TECH_DEBT #90, answering the growth question
+
+The ADR said `idx_audit_events_actor_occurred` "must be measured before it lands". It landed
+unmeasured (recorded honestly as debt); this is the measurement. Postgres 17, 1,000,005 seeded rows,
+`EXPLAIN (ANALYZE, BUFFERS)`:
+
+| What                                                 | Result                                                                            |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Table at 1M rows                                     | **565 MB** total — 371 MB heap, 193 MB indexes (**~592 B/row**)                   |
+| Organisation read, first page                        | **0.24 ms**, Index Scan `idx_audit_events_org_occurred`, 53 buffers               |
+| `/me` read, first page                               | **0.19 ms**, Index Scan `idx_audit_events_actor_occurred`                         |
+| `/me` read, deep keyset page                         | **0.18 ms**, same index — **both** keyset columns in the Index Cond, not a filter |
+| One `INSERT` (3 indexes, on the hot membership path) | **1.19 ms**, of which 0.70 ms is the `organization_id` FK trigger                 |
+| Index sizes at 1M rows                               | pkey 38 MB · actor 75 MB · org 80 MB                                              |
+
+So: the self-read index **is** used and earns its 75 MB — without it the `/me` page is a sequential
+scan of the whole table, and the keyset predicate is served by the index rather than re-checked per
+row, which is the property that keeps page 200 as cheap as page 1.
+
+**On partitioning (plan Task 4.2): not warranted, and the number that would change that is the
+operator's.** At ~592 B/row the table costs about **0.6 GB per million events**, and both reads are
+sub-millisecond there — three orders of magnitude inside any request budget. The M1+M3 vocabulary
+records permission changes and deletes, not mutations, so a busy tenant produces thousands of rows a
+year, not millions. Partitioning would therefore buy nothing today and would cost a **table rewrite**
+(the partition key must join the primary key) plus a partition-creating mechanism that does not exist
+— and a missing partition makes every `INSERT` fail, which on the fail-closed domain path is an
+**outage of every audited action**, not a degraded log.
+
+The one input this cannot supply is the live row count. The operator can get it with
+`SELECT count(*), pg_size_pretty(pg_total_relation_size('audit_events')) FROM audit_events;` — revisit
+when that count approaches **10 million**, which is where the index working set stops fitting
+comfortably in a small host's page cache. Retention, when it comes, is `DETACH PARTITION` and
+**never** `DELETE`: the trigger refuses `DELETE` by design, which makes partitioning the mechanism
+rather than an optimisation.
+
 ### Still outstanding
 
-- **`idx_audit_events_actor_occurred` remains unmeasured.** The ADR said it "must be measured before
-  it lands"; it has landed with the self-read, on the reasoning that a `/me` query without it is a
-  sequential scan of the whole table. The measurement is owed, not waived —
-  `docs/TECH_DEBT.md` #90.
 - **A failed sign-in is recorded and readable by nobody.** It carries neither an organisation nor an
   actor, and both reads filter on exactly those columns — so the most useful thing an audit log has
   to say is, today, reachable only from `psql`. Neither read is wrong; the gap is coverage, and
   closing it is a security decision about scope rather than a filter to widen
   (`docs/TECH_DEBT.md` #91).
-- Coverage widening stays gated on the growth measurement, unchanged.
+- **Mutation events (plan Task 4.3) stay out.** They are two to three orders of magnitude above what
+  the log records today, and the measurement above says the question is volume rather than
+  performance: 0.6 GB per million rows is affordable, but "every activity edit" changes the arrival
+  rate by a factor nobody has estimated. That estimate, not the index plan, is what gates the rung.
+- **The `action` filter and its composite index (Task 4.4) are not built**, so the index it would
+  need is not added. Adding an index for a filter that does not exist is the instinct that row
+  deliberately warns against.
 
 **`VITE_AUDIT_LOG` flipped default-on 2026-08-03**, on the product owner's decision, once the gate
 pass and the journey were green. The flag-off parity suites are **kept, not weakened** — that is the

@@ -15,6 +15,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreateShareDto } from './dto/create-share.dto';
@@ -57,8 +58,9 @@ export class ShareController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Body() dto: CreateShareDto,
+    @RequestContext() context: RequestContext,
   ): Promise<CreatedShareDto> {
-    const { share, url } = await this.service.create(principal, orgSlug, planId, dto);
+    const { share, url } = await this.service.create(principal, orgSlug, planId, dto, context);
     return CreatedShareDto.fromWithUrl(share, url);
   }
 
@@ -97,7 +99,8 @@ export class ShareController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Param('shareId', ParseUuidPipe) shareId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.revoke(principal, orgSlug, planId, shareId);
+    await this.service.revoke(principal, orgSlug, planId, shareId, context);
   }
 }
