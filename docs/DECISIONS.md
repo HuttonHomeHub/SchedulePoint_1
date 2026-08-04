@@ -10,6 +10,98 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-04 — Reconciliation pass at the ADR-0073 epic boundary
+
+**What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the audit-log
+epic's boundary, and fold every finding rather than filing them as debt. Documentation-only; no
+application code changed.
+
+**What it found.** More, and worse, than the two passes before it — and the pattern is that the
+documents nobody opens rot fastest.
+
+- **Every headline count was wrong**, in a banner that had said "recounted 2026-08-01" three days
+  earlier. Modules 19→20, models 25→27, migrations 42→47 (and the same file's layout tree said 41,
+  disagreeing with its own banner), ADRs 70→73, suites 19→23, seeded plans 36→37. One epic shipped
+  in between. The lesson is written into the runbook: **a count is a measurement with a timestamp**,
+  and the date is the claim, not the word "recounted".
+- **`apps/web/README.md` was never opened by any previous pass.** It said "**Status: foundation
+  only. No application features are implemented yet**" beside 748 source files and 27 feature
+  modules; it credited **shadcn/ui**; and its structure block listed **`lib/telemetry`**. Those last
+  two are, by name, the exact examples ADR-0058 cites as what the pass exists to catch — sitting
+  undisturbed in the file the checklist did not name. The runbook's §1 file list now names it, along
+  with three others it had also missed.
+- **ADR-0006's shadcn/ui + Radix clause was never adopted**, and no ADR said so. A reader following
+  the register would have copied in primitives the codebase deliberately hand-rolls on the APG. The
+  decision body is left intact (`CLAUDE.md` §6 — never rewrite an ADR); the correction is carried on
+  its **status line**, which is the existing amendment convention (ADR-0023/0024).
+- **Three of `CLAUDE.md` §17's stated limitations were false.** There _is_ an append-only audit log
+  (ADR-0072/0073, shipped the day before). There _are_ data-export paths — XER/MSPDI via
+  `GET …/export/:format`, plus CSV/PNG/PDF and the printed programme. The mail port is _not_ a
+  logging stub — `SmtpMailService` ships and is selected whenever `MAIL_SMTP_URL` is set. A section
+  headed "Known limitations" listing capabilities the product has is worse than no section: it is
+  the direct cause of building a thing twice.
+- **Hosting was settled on 2026-08-01 and four documents still called it open** — `CLAUDE.md` §1 and
+  §17, `README.md`, and `DEPLOYMENT.md`, whose banner also called itself "the process the foundation
+  supports" while running every release to a live host. This is the mirror of the usual failure: a
+  **settled decision reading as work owed**. Both directions cost the same.
+- **`ROADMAP.md` was silent on ADR-0067 through ADR-0073** — seven ADRs, five flag flips, the whole
+  audit epic. That is the 2026-07-31 pass's finding recurring one epic later, which is itself the
+  finding: noticing a class of drift does not prevent the next instance. **`ARCHITECTURE.md` never
+  mentioned the audit log** at all, though an append-only table defended by `ENABLE ALWAYS` triggers
+  is a structural property of the system; it now has its own §7 subsection.
+- **Four agents were wrong in the way the runbook warns is worst.** `ui-architect` prescribed
+  shadcn/ui; `backend-performance-reviewer` told reviewers to demand work be offloaded to a BullMQ
+  that does not exist; `database-architect` and `test-engineer` pointed at the reference template and
+  two spec files ADR-0057 **deleted**. An agent asserting a stale invariant is worse than one
+  asserting none, because it is confident.
+- **Five debt rows described expired premises.** #8 "CSP not finalised" actually means the web app
+  serves **no `Content-Security-Policy` header at all** — the highest-value unclaimed security
+  control in the repo, understated by its own title for a year. #37 listed the canvas WBS summary bar
+  as outstanding five days after ADR-0063 shipped it — **in a different shape**, so the remediation
+  column was stale by being _answered differently_, not by being done. #12 described a private-repo
+  risk this public repo does not carry, framed for a template it is not. #1 and #7 still described
+  the foundation stage.
+- **This runbook had drifted about its own drift control** — the banner said the last pass was
+  2026-07-28, its own table said 2026-07-31.
+
+**Consequences.** The counts, the four false claims and the register corrections are folded here.
+Two items are handed on rather than fixed in a documentation pass: the **missing CSP** (#8, rewritten
+to say what is actually absent and how to ship it report-only first) and **cross-browser coverage**
+(#1, rewritten to name the two or three journeys worth running on another engine rather than all 24).
+
+**Step 7 found two blocking defects, and they are the best argument the runbook has.** The audit
+epic was not eligible for step 7 — six specialists had already reviewed it in C4.1 — so the pass
+targeted **PR #225** (SMTP transport, the verification loop, compose credential wiring), which landed
+standalone with no review pass and no entry in this log, and which introduced the application's first
+outbound network transport. Security and devops, working independently, found the same first defect.
+
+1. **The verification token was written to the log on the default path.** `LoggingMailService` logged
+   the full `verifyUrl` at `info`, and it is selected whenever `MAIL_SMTP_URL` is unset — which its
+   docblock called "i.e. development" and which is in fact the state of a **production** host whose
+   operator has not configured SMTP, i.e. the running deployment (#16). Better Auth mints a token on
+   every sign-up regardless of `AUTH_REQUIRE_EMAIL_VERIFICATION`, and Pino's redact list covers fixed
+   `req.*` paths and would never have masked a hand-built field. So a live, single-use token that
+   marks an address verified — the exact proof of mailbox ownership invitation-accept trusts
+   (ADR-0016 §5) — went into a retained, shipped log stream. **Fixed:** the stub now takes
+   `isProduction` and withholds the link there, naming the misconfiguration instead. The regression
+   test was verified to fail against the old code first. Note the shape: the invitation path had
+   _always_ withheld its `acceptUrl`. One correct pattern, applied to a control and not its
+   neighbour — the ADR-0064/ADR-0067 finding, again.
+
+2. **"A verification failure fails the sign-up" was false**, in three places that asserted it — the
+   adapter's docblock, `better-auth.ts`'s port contract, and `docs/DEPLOYMENT.md`. Better Auth calls
+   the port through `runInBackgroundOrAwait`, which catches and logs without rethrowing, in both
+   branches, with no option this app can set to change it. **Corrected rather than redesigned:** the
+   throw is right at that seam and is kept, the claims built on it are withdrawn, and the
+   operator-signal gap is #94. Why it survived is the part worth recording — the only test drives the
+   adapter _directly_, so it proves the throw and structurally cannot see the layer that swallows it.
+   A guarantee tested one level below where it is claimed is not tested.
+
+Restructuring the sign-up so a failure genuinely aborts is a design change and goes through
+`docs/PROCESS.md`, not through this pass.
+
+---
+
 ### 2026-08-03 — The deprecated day float field is removed, not carried
 
 **What was decided.** `relativeFloat` (days) is deleted from the float-paths response, one release

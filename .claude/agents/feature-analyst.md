@@ -34,8 +34,8 @@ outline.
 
 ## SchedulePoint context — what you are specifying against
 
-The application is substantially built: 19 API modules, a CPM/GPM engine whose
-conformance matrix is closed (ADR-0034), a canvas-first plan workspace, and 57
+The application is substantially built: 20 API modules, a CPM/GPM engine whose
+conformance matrix is closed (ADR-0034), a canvas-first plan workspace, and 73
 ADRs. Assume a capability exists until you have checked; the register and this
 manual have both been wrong in that direction before.
 

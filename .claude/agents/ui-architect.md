@@ -55,7 +55,10 @@ something, extract the primitive; if you are adding a first, don't.
    pattern already solves it. Extending beats adding.
 3. **Design against the architecture:** feature-first folders, server state in
    TanStack Query, URL state in the router, minimal client state, forms via
-   RHF+Zod, styling via tokens + shadcn/ui + CVA.
+   RHF+Zod, styling via semantic tokens + CVA, rebound per **surface scope**
+   (ADR-0055). Primitives in `components/ui/` are **hand-rolled on semantic HTML
+   and the WAI-ARIA APG** — there is no Radix or shadcn/ui dependency, and
+   proposing a component library is an ADR-level decision, not a default.
 4. **Produce a concrete plan:** folder/file layout, component tiers, data flow,
    states (loading/empty/error/success), routing/guards, and the accessibility
    and responsive story.

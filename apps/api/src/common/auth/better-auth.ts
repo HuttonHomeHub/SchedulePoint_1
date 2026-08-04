@@ -49,8 +49,11 @@ export interface CreateAuthOptions {
    * this factory stays a pure function of its options and never learns about Nest DI or a transport
    * — the same reason the rest of the app talks to the port instead of the auth library.
    *
-   * Rejecting fails the sign-up, which the SMTP adapter does deliberately; see
-   * `SmtpMailService.sendEmailVerification` for why this one message is not swallowed.
+   * The SMTP adapter deliberately rejects rather than swallowing — but **rejecting does not fail
+   * the sign-up**, because Better Auth calls this through `runInBackgroundOrAwait`, which catches
+   * and logs without rethrowing. Delivery is best-effort in practice. See
+   * `SmtpMailService.sendEmailVerification` for the verified detail and `docs/TECH_DEBT.md` #94
+   * for what is left. This comment claimed the opposite until 2026-08-04.
    */
   sendVerificationEmail: (input: { to: string; verifyUrl: string }) => Promise<void>;
   /**

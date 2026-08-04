@@ -62,17 +62,26 @@ export class SmtpMailService extends MailService {
   }
 
   /**
-   * Verification, and the one place this adapter lets an error **propagate**.
+   * Verification. This method lets its error **propagate**, unlike `sendInvitation` which swallows
+   * — but read the next paragraph before relying on that, because propagating is not the same as
+   * failing the sign-up, and this docblock claimed it was.
    *
-   * `sendInvitation` swallows, because an Org Admin can read the accept URL off the screen and pass
-   * it on. There is no such fallback here: the verify URL exists only in the email. Swallowing would
-   * hand someone an account that — with `AUTH_REQUIRE_EMAIL_VERIFICATION` on — they cannot use, with
-   * no error and nothing on screen explaining why, which is a worse outcome than a sign-up that
-   * fails and can be retried.
+   * **The rejection does NOT fail the sign-up.** Better Auth invokes `sendVerificationEmail` via
+   * `ctx.context.runInBackgroundOrAwait(...)` (`api/routes/sign-up.mjs`), whose default
+   * implementation wraps the await in `try { … } catch (e) { logger.error(…) }` and never
+   * rethrows, in either branch. No option this app can set changes that — the alternative branch
+   * needs `advanced.backgroundTasks.handler`, which also only `.catch()`es. So the sign-up commits
+   * and returns success whether or not the message was delivered. The 2026-08-04 reconciliation
+   * pass verified this against the installed `better-auth@1.6.25`; the previous text here, in
+   * `better-auth.ts`, and in `docs/DEPLOYMENT.md` all asserted the opposite, and had been believed
+   * because the only test drives this method directly and so cannot see the layer above it.
    *
-   * Throwing surfaces through Better Auth's own handler, so the caller learns immediately. Better
-   * Auth also exposes a resend endpoint, so a user who slips through a transient outage is not
-   * permanently stranded — but that is the recovery path, not the primary one.
+   * The reasoning for throwing still stands and the throw is kept: it is right at this seam, and it
+   * becomes true the moment the caller stops swallowing. What is untrue is the guarantee built on
+   * it. Delivery is **best-effort in practice**, and the operator-facing consequence — a broken
+   * relay producing silently unverifiable accounts, visible only as an unstructured `[better-auth]`
+   * line outside the Pino pipeline — is `docs/TECH_DEBT.md` #94. Better Auth's resend endpoint is
+   * the user-facing recovery path.
    */
   async sendEmailVerification(email: EmailVerificationEmail): Promise<void> {
     // Never log `verifyUrl` — it carries the token, and logs are retained and shipped.

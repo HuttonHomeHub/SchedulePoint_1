@@ -4,8 +4,13 @@
 > Backed by [ADR-0058](adr/0058-drift-control-and-the-reconciliation-pass.md),
 > which records why it exists and why several of the steps are automated.
 >
-> **Last full pass: 2026-07-28.** Record each pass in
-> [`DECISIONS.md`](DECISIONS.md) and update that date.
+> **Last full pass: 2026-08-04.** Record each pass in
+> [`DECISIONS.md`](DECISIONS.md), add a row to [Passes run](#passes-run), and
+> update that date. **All three, in the same commit** — this line said
+> `2026-07-28` while the table below recorded a pass on `2026-07-31`, so the
+> drift-control document had drifted about its own drift control. Anyone reading
+> only the banner would have thought the pass was four days more overdue than it
+> was; anyone reading only the table would have thought the opposite.
 
 ## Why this exists
 
@@ -65,11 +70,25 @@ ls apps/api/src/modules | wc -l                      # feature modules
 grep -c '^model ' apps/api/prisma/schema.prisma      # Prisma models
 ls apps/api/prisma/migrations | grep -c '^2'         # migrations
 ls docs/adr/[0-9]*.md | wc -l                        # ADRs
-ls apps/web/e2e* -d | wc -l                          # Playwright suites
+ls -d apps/web/e2e* | wc -l                          # Playwright suites (base + flag-scoped)
+ls apps/web/src/features | wc -l                     # web feature modules
+ls apps/api/test/*.e2e-spec.ts | wc -l               # Supertest e2e specs
+find apps/web/src -type f | wc -l                    # web source files
+pnpm check:playbook                                  # prints the seeded-plan count
 ```
 
-`CLAUDE.md`, `README.md`, `docs/ARCHITECTURE.md` and `apps/api/README.md` all
-quote several of these.
+`CLAUDE.md`, `README.md`, `docs/ARCHITECTURE.md`, `docs/DATABASE.md`,
+`docs/TESTING.md`, `docs/BACKEND_ARCHITECTURE.md`,
+`docs/FRONTEND_ARCHITECTURE.md`, `apps/api/README.md`, `apps/web/README.md` and
+`.claude/agents/feature-analyst.md` all quote several of these. The last four
+were added to this list on 2026-08-04, because the pass before it swept only the
+first four and left the rest stale — including a web README claiming the client
+was "foundation only".
+
+**Write the date you counted, next to the numbers**, and treat the date rather
+than the word "recounted" as the claim. `CLAUDE.md`'s banner said "recounted
+2026-08-01" and every one of its six numbers was wrong by 2026-08-04: one epic
+had shipped in between. A count is a measurement with a timestamp, not a fact.
 
 ### 2. Check the dependency claims
 
@@ -145,9 +164,10 @@ pass is worth running. Update the date at the top of this file.
 
 ## Passes run
 
-| Date       | Trigger                       | What it found                                                                                                                                                                                                                                                                                   |
-| ---------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-31 | ADR-0066 epic boundary (M5.5) | `CLAUDE.md` had **no ADR-0066 entry at all** — five milestones with nothing in the operating manual; the repo-layout tree omitted all three new workspace packages; `docs/ARCHITECTURE.md` and `docs/ROADMAP.md` were silent on the epic. Found by grepping for the ADR number, not by reading. |
+| Date       | Trigger                       | What it found                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-04 | ADR-0073 epic boundary (C4)   | **Every one of the six headline counts was wrong**, three days after a banner claiming they were recounted. `apps/web/README.md` said "**foundation only. No application features are implemented yet**" beside 748 source files, and claimed both shadcn/ui and a `lib/telemetry` that has never existed — the two failures ADR-0058 was written about, sitting in the one file no previous pass had opened. **ADR-0006's shadcn/Radix clause was never adopted** and nothing said so, so the register instructed a reader to copy in primitives the codebase deliberately hand-rolls. Three `CLAUDE.md` §17 claims were false: no audit log (shipped), no data-export path (three of them), and a "logging stub" mail port (a real SMTP adapter). **Hosting was settled on 2026-08-01 and four documents still called it the open question.** `ROADMAP.md` was silent on ADR-0067–0073 — the same failure as the row below, one epic later. `ARCHITECTURE.md` never mentioned the audit log. Two agents asserted absent libraries as invariants and two pointed at files ADR-0057 deleted. Debt rows #1/#7/#8/#12/#37 described expired premises — #8's "CSP not finalised" meant **no CSP header at all**, and #37 listed a canvas feature that had shipped five days earlier in a different shape. And this file's own banner disagreed with its own table. **Step 7 earned its keep:** pointed at PR #225 — the app's first outbound transport, merged with no review pass — security and devops independently found that the mail stub logged a **live email-verification token** on the default no-SMTP path, which is the running deployment; and that the "a verification failure fails the sign-up" guarantee asserted in three places **does not hold**, because Better Auth swallows the rejection. Both folded; the second's operator-signal gap is #94. |
+| 2026-07-31 | ADR-0066 epic boundary (M5.5) | `CLAUDE.md` had **no ADR-0066 entry at all** — five milestones with nothing in the operating manual; the repo-layout tree omitted all three new workspace packages; `docs/ARCHITECTURE.md` and `docs/ROADMAP.md` were silent on the epic. Found by grepping for the ADR number, not by reading.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 Older passes are recorded in the ADRs and commits they produced (ADR-0058 was
 written after four of them); this table starts where the epic-boundary rule did.

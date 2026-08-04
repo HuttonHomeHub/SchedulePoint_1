@@ -1,9 +1,16 @@
 # Deployment & Release
 
-> **Status:** the release pipeline (versioning + image publishing) is defined;
-> the concrete hosting platform is an open decision (see
-> [TECH_DEBT.md](TECH_DEBT.md)). This document describes the process the
-> foundation supports.
+> **Status:** in use, end to end. The release pipeline (versioning, tagging,
+> image publishing) runs on every merged changeset, and the images are
+> **deployed**: the product owner runs the Docker Compose stack with the
+> ADR-0047 Watchtower `autodeploy` profile enabled, so a moved `:latest` is
+> pulled and the containers recreated on that host, with the API self-migrating
+> on recreate (ADR-0018). **That is the hosting decision**, settled 2026-08-01 —
+> see [TECH_DEBT.md](TECH_DEBT.md) #5, which records what would make it worth
+> revisiting. This banner called the platform "an open decision" and this
+> document "the process the foundation supports" until the 2026-08-04
+> reconciliation pass; both readings understate what is running. Anything
+> released default-on is live for a real user.
 
 ## Release flow (overview)
 
@@ -110,8 +117,9 @@ image serves any hostname (`VITE_API_URL` is not consumed by the app).
 ### Required configuration
 
 Set these on the **api** container (via your secret manager, not the compose
-defaults). With `NODE_ENV=production` the API enforces its startup guards, so
-all three below are mandatory:
+defaults). With `NODE_ENV=production` the API enforces its startup guards. The
+rows below are marked individually — **not all of them are mandatory**; this
+sentence said "all three" and was written when the table had three rows:
 
 | Variable                          | Value for `https://schedulepoint.example`                                                                          | Why                                                                                                                               |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -140,10 +148,16 @@ Three properties worth knowing before you turn it on:
   the accept URL is also returned in the create response and shown in the admin UI — so an
   Org Admin can always hand it over another way. The email is a convenience over an existing
   path, never the only route through.
-- **A verification failure DOES fail the sign-up**, deliberately — the opposite rule. The
-  verify URL exists only in that email; nobody can read it off a screen. Swallowing the error
-  would hand someone an account they cannot use, with nothing saying why, which is worse than
-  a sign-up they can retry. (Better Auth's resend endpoint is the recovery path.)
+- **A verification failure does NOT fail the sign-up** — this bullet said it did, until the
+  2026-08-04 reconciliation pass read the library. The adapter throws deliberately, and the
+  intent was right: the verify URL exists only in that email, so an undelivered message hands
+  someone an account they cannot use with nothing saying why. But Better Auth invokes
+  `sendVerificationEmail` through `runInBackgroundOrAwait`, which catches and logs the rejection
+  and never rethrows, so the sign-up returns success regardless. **Plan for delivery being
+  best-effort:** confirm a real message arrives before you set
+  `AUTH_REQUIRE_EMAIL_VERIFICATION=true`, and watch for `Failed to run background task` in the
+  API log — today that unstructured line is the only signal of a broken relay
+  (`docs/TECH_DEBT.md` #94). Better Auth's resend endpoint is the user-facing recovery path.
 
 #### What the application actually sends
 
@@ -177,7 +191,7 @@ two of its details cost an hour the first time.
 
 ```bash
 MAIL_SMTP_URL=smtps://resend:re_YourApiKeyHere@smtp.resend.com:465
-MAIL_FROM=SchedulePoint <no-reply@yourdomain.com>
+MAIL_FROM="SchedulePoint <no-reply@yourdomain.com>"
 ```
 
 `smtps://` selects implicit TLS on 465. The sender address belongs to the **verified root

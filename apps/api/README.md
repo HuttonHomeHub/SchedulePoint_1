@@ -4,8 +4,8 @@ The SchedulePoint REST API: **NestJS 11 + TypeScript**, **Prisma** ORM over **Po
 authentication via **Better Auth**, and an **OpenAPI** contract generated with
 `@nestjs/swagger`.
 
-> **Status:** built and shipping. 19 feature modules under `src/modules/`, 25
-> Prisma models across 41 migrations, 28 Supertest e2e specs, and a CPM/GPM
+> **Status:** built and shipping. 20 feature modules under `src/modules/`, 27
+> Prisma models across 47 migrations, 32 Supertest e2e specs, and a CPM/GPM
 > scheduling engine whose conformance matrix is closed (ADR-0034).
 > Authentication is wired (Better Auth, cookie sessions) and every route denies
 > by default. Build features to the implementation standard in
@@ -24,11 +24,11 @@ src/
   prisma/             # PrismaService + module
   health/             # Liveness/readiness probes (@nestjs/terminus)
   version/            # Build/version endpoint
-  modules/            # 19 feature modules — see docs/REFERENCE_FEATURE.md for the exemplars
+  modules/            # 20 feature modules — see docs/REFERENCE_FEATURE.md for the exemplars
 prisma/
-  schema.prisma       # Datasource, generator, 25 models
-  migrations/         # 41 SQL migrations
-test/                 # 28 Supertest end-to-end specs (*.e2e-spec.ts)
+  schema.prisma       # Datasource, generator, 27 models
+  migrations/         # 47 SQL migrations
+test/                 # 32 Supertest end-to-end specs (*.e2e-spec.ts)
 ```
 
 ## Scripts

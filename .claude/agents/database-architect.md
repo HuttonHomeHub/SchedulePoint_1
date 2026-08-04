@@ -17,7 +17,10 @@ performant. Data outlives code — model carefully.
 ## Authoritative context (read first)
 
 `docs/DATABASE.md` (standards + philosophy), `docs/BACKEND_ARCHITECTURE.md`,
-`apps/api/prisma/schema.prisma`, and the reference model as the template.
+and `apps/api/prisma/schema.prisma` itself. **There is no reference model to copy**
+— ADR-0057 deleted the template; the schema's 27 real models are the standard.
+For the canonical shape read `Client`; for a polymorphic parent with a
+fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
 
 ## SchedulePoint invariants — conventions this schema already commits to
 

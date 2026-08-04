@@ -39,7 +39,11 @@ import { SmtpMailService } from './smtp-mail.service';
         // this is a type narrowing rather than a second policy — the app refuses to boot otherwise.
         return smtpUrl !== undefined && from !== undefined
           ? new SmtpMailService(from, smtpUrl, smtpLogger)
-          : new LoggingMailService(stubLogger);
+          : // The stub is told whether it is running in production, because "no transport is
+            // configured" and "this is a developer's laptop" are NOT the same condition — the stub
+            // is what runs on a production host whose operator has not set `MAIL_SMTP_URL` yet, and
+            // that is the state of a real deployment today (`docs/TECH_DEBT.md` #16).
+            new LoggingMailService(stubLogger, config.isProduction);
       },
     },
   ],
