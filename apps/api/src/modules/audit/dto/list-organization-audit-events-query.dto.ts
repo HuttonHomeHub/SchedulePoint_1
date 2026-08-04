@@ -3,7 +3,11 @@ import { AUDIT_ACTIONS, type AuditAction } from '@repo/types';
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsIn, IsOptional, Validate } from 'class-validator';
 
-import { AUDIT_FILTER_MAX_ACTIONS, ListAuditEventsQueryDto } from './list-audit-events-query.dto';
+import {
+  AUDIT_FILTER_MAX_ACTIONS,
+  ListAuditEventsQueryDto,
+  toArray,
+} from './list-audit-events-query.dto';
 import { NotAnOrganizationlessAction } from './not-an-organizationless-action.validator';
 
 /**
@@ -40,9 +44,7 @@ export class ListOrganizationAuditEventsQueryDto extends ListAuditEventsQueryDto
     example: ['member.role_changed', 'plan.deleted'],
   })
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    value === undefined || Array.isArray(value) ? value : [value],
-  )
+  @Transform(({ value }: { value: unknown }) => toArray(value))
   @ArrayMaxSize(AUDIT_FILTER_MAX_ACTIONS)
   @IsIn(AUDIT_ACTIONS, {
     each: true,

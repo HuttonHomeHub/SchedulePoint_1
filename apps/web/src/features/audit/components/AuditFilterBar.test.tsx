@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AUDIT_OUTCOME_LABELS } from '../model/audit-copy';
 import { EMPTY_AUDIT_FILTER, type AuditFilterState } from '../model/audit-filter';
 
 import { AuditFilterBar } from './AuditFilterBar';
@@ -75,7 +76,10 @@ describe('AuditFilterBar (ADR-0073 C1)', () => {
       // Otherwise the only route back to "any outcome" is Clear filters, which also throws away
       // the categories and dates the reader still wants.
       const { onChange } = setup({ ...EMPTY_AUDIT_FILTER, outcome: 'DENIED' });
-      fireEvent.click(screen.getByRole('radio', { name: 'Refused' }));
+      // Named from the shared copy table rather than spelled out, because this test spelled it out
+      // and then outlived the word: the review renamed "Refused" to "Denied" to match the row badge
+      // and only the full suite noticed.
+      fireEvent.click(screen.getByRole('radio', { name: AUDIT_OUTCOME_LABELS.DENIED }));
       expect(onChange).toHaveBeenCalledWith({ outcome: '' });
     });
 

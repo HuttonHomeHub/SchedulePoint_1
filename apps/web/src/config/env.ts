@@ -39,14 +39,16 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * Its current consumer is {@link AUDIT_FILTERS_ENABLED} (ADR-0073 C1), which is what the docblock
- * below anticipated: the previous consumer, {@link AUDIT_LOG_ENABLED}, moved to
- * {@link flagDefaultOn} on 2026-08-03, and the note kept here said the next flag would need this
- * helper on day one. Covered by `env.test.ts`, including the case-sensitivity that makes `"TRUE"`
- * read as off.
+ * **It has no consumer right now**, and that is the normal resting state of this helper rather than
+ * a sign it is dead: every flag passes through it for the length of one epic and then leaves.
+ * {@link AUDIT_LOG_ENABLED} moved to {@link flagDefaultOn} on 2026-08-03,
+ * {@link AUDIT_FILTERS_ENABLED} took its place and moved on 2026-08-04, and the next flag will need
+ * it on day one. Covered by `env.test.ts` regardless of consumers, including the case-sensitivity
+ * that makes `"TRUE"` read as off — so it cannot rot unnoticed between epics.
  *
- * (The sentence this replaces had been corrupted by an earlier edit into two spliced halves
- * naming five long-closed debt items — noticed only when the last consumer went away.)
+ * Do not delete it as dead code, and do not describe a specific consumer here: a named consumer is
+ * a fact with a short half-life, and the last one to be written down was corrupted by a later edit
+ * into two spliced halves naming five long-closed debt items, noticed only when it went away.
  */
 export function flagDefaultOff(value: string | undefined): boolean {
   return value === 'true' || value === '1';
@@ -1250,15 +1252,16 @@ export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);
  * range on both audit screens, with the chosen filter in the URL so a narrowed view survives a
  * reload and can be pasted to a colleague.
  *
- * **OFF by default until C1.5**, and its flip is a hard precondition for the coverage milestone
- * rather than a preference. The producers that milestone adds are server-side, and a `VITE_`
- * constant is a client build-time value that cannot gate a server-side record (the ADR-0060 M0
- * rule). So the day the first coverage producer merges, every reader's feed gains two to three
- * orders of magnitude more rows — flag or no flag. If the filter were still off at that moment the
- * log would be unusable for everyone, with no rollback that helps.
+ * **ON by default since 2026-08-04 (C1.5)**, and the flip is a hard precondition for the coverage
+ * milestone rather than a preference. The producers that milestone adds are server-side, and a
+ * `VITE_` constant is a client build-time value that cannot gate a server-side record (the ADR-0060
+ * M0 rule). So the day the first coverage producer merges, every reader's feed gains two to three
+ * orders of magnitude more rows — flag or no flag. Had the filter still been off at that moment the
+ * log would have been unusable for everyone, with no rollback that helps.
  *
- * Flag-off is byte-for-byte the current screens: no bar renders and the client sends no filter
- * parameter at all, so the request is the one it sends today. Pinned by the parity suites, which
- * are **kept** after the flip rather than weakened — that is the rollback contract (ADR-0053 M6).
+ * Rollback: set `VITE_AUDIT_FILTERS=false` and rebuild the web image. Flag-off is byte-for-byte the
+ * prior screens — no bar renders and the client sends no filter parameter at all, so the request is
+ * the one it sent before. Pinned by `audit-filter.parity.test.tsx`, which is **kept** after the flip
+ * rather than weakened: that suite is the rollback contract (ADR-0053 M6), not scaffolding.
  */
-export const AUDIT_FILTERS_ENABLED = flagDefaultOff(import.meta.env.VITE_AUDIT_FILTERS);
+export const AUDIT_FILTERS_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_FILTERS);

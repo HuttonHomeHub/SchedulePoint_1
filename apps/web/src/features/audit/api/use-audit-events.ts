@@ -1,5 +1,5 @@
 import type { AuditEvent, PageMeta } from '@repo/types';
-import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/react-query';
+import { infiniteQueryOptions, keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 
 import type { AuditQueryFilter } from '../model/audit-filter';
 
@@ -73,6 +73,10 @@ export function organizationAuditQueryOptions(orgSlug: string, filter?: AuditQue
   return infiniteQueryOptions({
     queryKey: auditKeys.organization(orgSlug, filter),
     staleTime: 0,
+    // Keep the rows on screen while a newly-filtered page settles. Without it every chip click
+    // discards the table and collapses it to a spinner, because the filter is part of the query
+    // key — the `use-calendars.ts` precedent, and `docs/UX_STANDARDS.md`'s "no layout shift".
+    placeholderData: keepPreviousData,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       fetchPage(`/organizations/${orgSlug}/audit-events`, pageParam, filter),
@@ -85,6 +89,7 @@ export function selfAuditQueryOptions(filter?: AuditQueryFilter) {
   return infiniteQueryOptions({
     queryKey: auditKeys.self(filter),
     staleTime: 0,
+    placeholderData: keepPreviousData,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => fetchPage('/me/audit-events', pageParam, filter),
     getNextPageParam: (last: AuditPage) => last.nextCursor ?? undefined,

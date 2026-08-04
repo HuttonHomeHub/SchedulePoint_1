@@ -12,13 +12,26 @@ import { FromIsBeforeTo } from './from-is-before-to.validator';
  * most of a 20-word vocabulary is not narrowing anything, and an unbounded `IN` list lets a
  * request build an arbitrary predicate out of a param that is supposed to be a convenience.
  *
- * Twenty is deliberately above today's vocabulary size and will stay above the ADR-0073 catalogue's
- * largest single category, so no legitimate UI selection can hit it.
+ * Twenty is **exactly** today's vocabulary size, not above it — the docblock claimed otherwise and
+ * two reviewers caught it independently. The consequence is worth stating rather than hiding: a
+ * caller can currently name every action in one request, which costs about what no filter costs
+ * (an `IN` over the whole vocabulary matches everything), so this is a bound on predicate size
+ * rather than a bound on work. What the cap really protects is the ADR-0073 catalogue's largest
+ * single category, which is nine today and stays well under twenty — so no chip selection the UI
+ * can produce will ever hit it.
  */
 export const AUDIT_FILTER_MAX_ACTIONS = 20;
 
-/** Repeatable params arrive as a string when sent once and an array when sent more than once. */
-function toArray(value: unknown): unknown {
+/**
+ * Repeatable params arrive as a string when sent once and an array when sent more than once.
+ *
+ * Exported so the organisation subclass reuses it rather than reimplementing the same three lines —
+ * the "two implementations drift, and the drift is invisible" rule (ADR-0065) applied to a helper
+ * small enough that copying it looks harmless. This is the API's **first** repeatable array query
+ * param; there is no prior idiom in the repo to match, which the first version of this file claimed
+ * there was.
+ */
+export function toArray(value: unknown): unknown {
   if (value === undefined) return undefined;
   return Array.isArray(value) ? value : [value];
 }

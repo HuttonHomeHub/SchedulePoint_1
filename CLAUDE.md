@@ -1150,6 +1150,39 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   implementation plan for ADR-0073 states the opposite; if that protection is wanted it has to be
   written. Coverage widening is ADR-0073.
 
+- **ADR-0073** _(Accepted per-milestone; C1 landed, `VITE_AUDIT_FILTERS` **default-on** 2026-08-04)_
+  — Which mutations earn an audit event, and who may read an actor-less one. ADR-0072 met a real
+  reader within hours: they created and deleted activities, opened the log, found nothing, and asked
+  why — then said sign-ins were missing too. Neither observation was a fault, and both were the
+  **screen's**. What first contact exposed is one failure in three costumes — **the log records
+  things nobody can find**: a failed sign-in carries neither `organization_id` nor an actor, so both
+  reads filter it out and the single most useful row an audit log has is reachable only from `psql`;
+  there is no filter on either side, so seven event kinds arrive in one undifferentiated stream; and
+  88 mutating routes sit in `UNAUDITED_ROUTES`. The load-bearing decision is that coverage is
+  **derived from two tests — durability and blast radius — not from a list of opinions** about which
+  endpoints are interesting, so a route added later is classified by the same rule rather than by
+  whoever is reviewing. Content edits are **permanently excluded**, not deferred again. And the
+  ordering is a hard gate rather than a preference: **the filter precedes the coverage**, because a
+  `VITE_` constant is a client build-time value and cannot gate a server-side producer (the ADR-0060
+  M0 rule) — so the day the first coverage producer merges every reader's feed gains two to three
+  orders of magnitude more rows, flag or no flag, and a log with no filter at that moment is
+  unusable for everyone with no rollback that helps.
+  **C1 also found what the gates could not.** The index question was **measured** rather than
+  asserted, and the measurement changed a decision: at 1M rows a zero-match filter combination costs
+  681–954 ms against 0.35 ms unfiltered, because with no index on `action` Postgres walks the whole
+  organisation partition to prove an absence — so the cheapest way for a caller to reach the worst
+  case in the system was the one combination already established to be incapable of returning a row.
+  That combination (`auth.*` on the organisation route) is now a **422, not a documented no-op**;
+  documenting it and accepting the request anyway was the first draft, and is TECH_DEBT #19 in a new
+  costume. Two reviewers independently caught a docblock claiming a cap sat above the vocabulary
+  when it sits exactly on it, and the accessibility gate caught the live region announcing
+  **"Showing 0 events" for both empty states** — "nothing recorded yet" and "nothing matches what
+  you asked for" are different facts, honoured in the visible copy and collapsed in the one channel
+  a screen-reader user has, which is the distinction the whole milestone exists to make. **The CPM
+  engine is not imported and the recalc parity gate is untouched.** Filing ADR-0071 is part of this
+  ADR's own record: choosing a number surfaced that ADR-0071 had never been filed despite being
+  cited by shipped code, and it was filed rather than routed around.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

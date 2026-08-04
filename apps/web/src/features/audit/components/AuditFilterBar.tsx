@@ -11,6 +11,7 @@ import {
 } from '../model/audit-filter';
 
 import { Button } from '@/components/ui/button';
+import { TextField } from '@/components/ui/form';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ToggleChip } from '@/components/ui/toggle-chip';
 
@@ -98,39 +99,36 @@ export function AuditFilterBar({
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="audit-filter-from" className="text-muted-foreground text-xs">
-          From
-        </label>
-        <input
-          id="audit-filter-from"
-          type="date"
-          value={value.from}
-          max={value.to === '' ? undefined : value.to}
-          onChange={(event) => {
-            onChange({ from: event.target.value });
-          }}
-          className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-        />
-      </div>
+      {/*
+        `TextField`, not a hand-assembled label + input. The first version of this file wrote both
+        by hand — the idiom TECH_DEBT #42 records being written 33 times before the primitives
+        existed — and got the token wrong on the way: it used `bg-background` where the `Input`
+        primitive uses `bg-field`. Those are different tokens, rebound separately per surface scope
+        (ADR-0055), so the hand-rolled version would have painted the wrong colour the moment this
+        bar sat inside a chrome or panel surface, with nothing to catch it: both are semantic
+        tokens, so the colour-literal lint rule sees nothing wrong.
+      */}
+      <TextField
+        label="From"
+        type="date"
+        value={value.from}
+        max={value.to === '' ? undefined : value.to}
+        onChange={(event) => {
+          onChange({ from: event.target.value });
+        }}
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="audit-filter-to" className="text-muted-foreground text-xs">
-          To
-        </label>
-        <input
-          id="audit-filter-to"
-          type="date"
-          value={value.to}
-          // The native bounds stop an inverted range being *composed* rather than reporting it
-          // after the fact. The API refuses one regardless — this is the courtesy, not the guard.
-          min={value.from === '' ? undefined : value.from}
-          onChange={(event) => {
-            onChange({ to: event.target.value });
-          }}
-          className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-        />
-      </div>
+      <TextField
+        label="To"
+        type="date"
+        value={value.to}
+        // The native bounds stop an inverted range being *composed* rather than reporting it after
+        // the fact. The API refuses one regardless — this is the courtesy, not the guard.
+        min={value.from === '' ? undefined : value.from}
+        onChange={(event) => {
+          onChange({ to: event.target.value });
+        }}
+      />
 
       <Button
         type="button"

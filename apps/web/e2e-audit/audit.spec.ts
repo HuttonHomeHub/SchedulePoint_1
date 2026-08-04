@@ -22,6 +22,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  *    and did not perform it, so it must be absent from their own feed while the admin's sign-up —
  *    an event carrying no organisation at all — is present in the admin's.
  *
+ * 5. **The filter narrows the SERVER's result set** (ADR-0073 C1), survives a reload from the URL,
+ *    and distinguishes "no events match this filter" from "nothing recorded yet" — the distinction
+ *    this milestone exists to make, and the one a mocked fetch cannot be wrong about.
+ *
  * Two isolated browser contexts (two accounts). Chromium only (TECH_DEBT #25a).
  */
 
@@ -120,6 +124,60 @@ test('the audit log records real actions and only an Org Admin can read them', a
   // The screen is accessible (WCAG 2.2 AA, the rules axe can decide).
   const results = await new AxeBuilder({ page: admin }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(results.violations).toEqual([]);
+
+  // ------------------------------------------------- 5. The filter (ADR-0073 C1), against real rows
+  // Three things here need a real API and real history. A category chip has to narrow the SERVER's
+  // result set rather than hide rows the client already had; the filter has to survive a reload,
+  // because deep-linking a narrowed view is the reason it lives in the URL; and a filter matching
+  // nothing has to say so in different words from a log with nothing in it — the distinction this
+  // whole milestone exists to make, and the one a mocked fetch cannot be wrong about.
+  await expect(admin.getByRole('button', { name: 'Deletions' })).toBeVisible();
+  // Sign-ins carries no organisation, so the organisation screen must not offer it — and the API
+  // refuses the action outright if anything ever sends it.
+  await expect(admin.getByRole('button', { name: 'Sign-ins' })).toHaveCount(0);
+
+  await admin.getByRole('button', { name: 'Deletions' }).click();
+  await expect(auditRow(admin, 'Client deleted')).toBeVisible();
+  await expect(admin.getByText('Role changed', { exact: true })).toHaveCount(0);
+  await expect(admin.getByText('Organisation created', { exact: true })).toHaveCount(0);
+
+  // Deep-linkable: the choice is in the URL and a reload reproduces the same narrowed view.
+  expect(new URL(admin.url()).searchParams.get('categories')).toBe('deletions');
+  await admin.reload();
+  await expect(admin.getByRole('button', { name: 'Deletions' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(auditRow(admin, 'Client deleted')).toBeVisible();
+  await expect(admin.getByText('Role changed', { exact: true })).toHaveCount(0);
+
+  // A range that predates the organisation matches nothing — and says THAT, not "nothing recorded
+  // yet", which would tell an Org Admin their log was empty when it is full.
+  await admin.getByLabel('From').fill('2020-01-01');
+  await admin.getByLabel('To').fill('2020-01-02');
+
+  // The sentence appears TWICE by design — once on screen and once in the live region — so both
+  // are asserted rather than disambiguated away. The announcement is the half that regressed: it
+  // said "Showing 0 events" for this state and for a genuinely empty log alike, which is the one
+  // distinction this milestone exists to make.
+  await expect(
+    admin.locator('p:not([aria-live])', { hasText: /No events match this filter/ }),
+  ).toBeVisible();
+  await expect(admin.locator('p[aria-live="polite"]')).toHaveText(/No events match this filter/);
+  await expect(admin.getByText(/Nothing here yet/)).toHaveCount(0);
+
+  // The way out is INSIDE the empty state, not only in the bar above it — an empty state that
+  // describes a dead end without offering the exit is prose, not a way out.
+  await expect(admin.getByRole('button', { name: /Clear filters/ })).toHaveCount(2);
+
+  // Clearing restores everything, in one action.
+  await admin
+    .getByRole('button', { name: /Clear filters/ })
+    .last()
+    .click();
+  await expect(auditRow(admin, 'Role changed')).toBeVisible();
+  await expect(auditRow(admin, 'Organisation created')).toBeVisible();
+  expect(new URL(admin.url()).searchParams.get('categories')).toBeNull();
 
   // 4a. The admin's OWN feed carries the org-less authentication row — the one no organisation
   // log can ever show, because signing up happens before an organisation is known.

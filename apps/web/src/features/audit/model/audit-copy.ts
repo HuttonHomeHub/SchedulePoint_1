@@ -177,6 +177,11 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
 /** How each outcome reads in the filter. `DENIED` is a refusal; `FAILURE` is an error. */
 export const AUDIT_OUTCOME_LABELS: Record<AuditOutcome, string> = {
   SUCCESS: 'Succeeded',
-  DENIED: 'Refused',
+  // "Denied", not "Refused" — matching the word the row badge has always used
+  // (`AuditEventList`). The first draft said "Refused", which is arguably the better word for a
+  // permission check but disagreed with the rows the control filters: a reader who picked
+  // "Refused" and scanned the results for confirmation would find a word the control never used.
+  // One word, and the incumbent wins, because changing it would rewrite copy people already read.
+  DENIED: 'Denied',
   FAILURE: 'Failed',
 };

@@ -61,7 +61,7 @@ export default defineConfig({
             // ordinary hierarchy and members screens, so no canvas layer is involved and the
             // fewer flags a journey needs the fewer reasons it has to fail for something it is
             // not about.
-            env: { VITE_AUDIT_LOG: 'true' },
+            env: { VITE_AUDIT_LOG: 'true', VITE_AUDIT_FILTERS: 'true' },
           },
         ],
       }),

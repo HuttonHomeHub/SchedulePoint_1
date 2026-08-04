@@ -1,3 +1,7 @@
+// `AuditSurface` is re-exported so consumers of this model keep one import; the type itself lives
+// in `@repo/types` beside the vocabulary it belongs to.
+export type { AuditSurface } from '@repo/types';
+
 import {
   AUDIT_CATEGORIES,
   AUDIT_OUTCOMES,
@@ -5,10 +9,8 @@ import {
   type AuditAction,
   type AuditCategory,
   type AuditOutcome,
+  type AuditSurface,
 } from '@repo/types';
-
-/** Which read the filter is for. Decides the categories offered and what may go on the wire. */
-export type AuditSurface = 'organization' | 'self';
 
 /**
  * The filter as the URL carries it — **all strings**, because `useUrlFilterState` is typed

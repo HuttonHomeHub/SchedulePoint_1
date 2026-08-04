@@ -614,6 +614,37 @@ decision with its own scope; `@repo/types`' `AuditEvent` has no such fields, so 
 reader can tell "set from nothing" from "unchanged" without knowing the action's semantics — or
 `null` for the five authentication actions, whose allow-list is deliberately empty.
 
+#### Filtering the audit reads (ADR-0073)
+
+Both endpoints accept the same optional narrowing. **Omitting every parameter returns exactly the
+page they returned before it existed**, which is what lets the client ship the controls behind a
+flag without changing the request.
+
+| Param     | Shape                                          | Notes                                                                       |
+| --------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `action`  | repeatable; up to 20; each an `AuditAction`    | Union, not intersection. Repeat the param: `?action=plan.deleted&action=…`. |
+| `outcome` | repeatable; `SUCCESS` \| `DENIED` \| `FAILURE` | Union.                                                                      |
+| `from`    | ISO-8601 instant                               | **Inclusive** lower bound on `occurred_at`.                                 |
+| `to`      | ISO-8601 instant                               | **Inclusive** upper bound, and must not precede `from`.                     |
+
+**An unmatchable value is a 422 naming it — never a 200 with an empty page.** An unknown action or
+outcome, more than 20 actions, a malformed instant and an inverted range are all rejected. A filter
+that silently matches nothing is the `order` lesson (TECH_DEBT #19) in the one context where it is
+worse than usual: an audit log answering "no events" to a misspelled filter reads as evidence that
+nothing happened.
+
+**`auth.*` actions are refused on the organisation route (422).** Those rows carry no
+`organization_id` — authentication happens before an organisation is known — and that read filters
+on exactly that column, so the filter could only ever return an empty page. It is also, measured,
+the most expensive query the table accepts: with no index on `action`, proving the absence means
+walking the whole organisation partition (681–954 ms at 1M rows, against 0.35 ms for the unfiltered
+page). Read your own sign-in history on `/me/audit-events`, which is the one place those rows are
+answerable.
+
+Filters go into the `WHERE`, never a post-filter over a fetched page, so `limit` is honoured with a
+filter that excludes most rows. **No index ships with the filter**; the composite is a per-slice
+decision for the coverage milestone, on a fresh measurement (ADR-0073 "Measured, C1").
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

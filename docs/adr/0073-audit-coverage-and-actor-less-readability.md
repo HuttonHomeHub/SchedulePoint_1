@@ -1,6 +1,7 @@
 # ADR-0073: Which mutations earn an audit event, and who may read an actor-less one
 
-- **Status:** **Accepted** (per-milestone: C1 filter, C2 attribution, C3 coverage, C4 enablement)
+- **Status:** **Accepted** (per-milestone: C1 filter — **landed**, `VITE_AUDIT_FILTERS` default-on
+  2026-08-04; C2 attribution, C3 coverage, C4 enablement — outstanding)
 - **Date:** 2026-08-04
 - **Deciders:** Product Owner (CQ-A subject-only readability; CQ-B the 19-action catalogue and the
   permanent exclusion of content edits; CQ-C the reorder); feature-analyst (design)

@@ -59,6 +59,13 @@ export function MyActivityScreen(): React.ReactElement {
               ? 'No events match this filter. Clear it to see everything recorded about you.'
               : undefined
           }
+          onClearFilter={
+            narrowed
+              ? () => {
+                  setFilter({ categories: '', outcome: '', from: '', to: '' });
+                }
+              : undefined
+          }
         />
       </div>
     </div>

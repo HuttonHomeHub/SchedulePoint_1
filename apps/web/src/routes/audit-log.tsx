@@ -113,6 +113,13 @@ function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
             ? 'No events match this filter. Clear it to see everything this log records.'
             : undefined
         }
+        onClearFilter={
+          narrowed
+            ? () => {
+                setFilter({ categories: '', outcome: '', from: '', to: '' });
+              }
+            : undefined
+        }
       />
     </div>
   );

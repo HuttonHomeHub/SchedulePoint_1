@@ -2002,6 +2002,13 @@ export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
  * than a breaking API change, and a category regrouped later cannot silently alter what a saved
  * URL means to the server.
  */
+/**
+ * Which of the two audit reads a question is being asked of. Named once here rather than spelled
+ * out at each use: the two functions below and the web's filter model all branch on it, and a
+ * union repeated in four places is a union that can be repeated wrongly in a fifth.
+ */
+export type AuditSurface = 'organization' | 'self';
+
 export const AUDIT_CATEGORIES = [
   'access',
   'deletions',
@@ -2067,9 +2074,7 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
  * Both rules are **derived** from {@link AUDIT_ACTION_CATEGORY} rather than listed, so neither
  * needs anyone to remember this function: the offering is a property of the vocabulary.
  */
-export function auditCategoriesForSurface(
-  surface: 'organization' | 'self',
-): readonly AuditCategory[] {
+export function auditCategoriesForSurface(surface: AuditSurface): readonly AuditCategory[] {
   return AUDIT_CATEGORIES.filter(
     (category) => auditActionsForCategories([category], surface).length > 0,
   );
@@ -2094,7 +2099,7 @@ export function auditActionsInCategory(category: AuditCategory): readonly AuditA
  */
 export function auditActionsForCategories(
   categories: readonly AuditCategory[],
-  surface: 'organization' | 'self',
+  surface: AuditSurface,
 ): readonly AuditAction[] {
   const actions = categories.flatMap((category) => [...auditActionsInCategory(category)]);
   return surface === 'self' ? actions : actions.filter((action) => !action.startsWith('auth.'));
