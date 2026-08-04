@@ -20,8 +20,9 @@ Two reads: `GET …/organizations/:slug/audit-events` for an Org Admin, and `GET
 for anyone. The self route takes no user id at all, so there is nothing to tamper with and no
 permission to hold — an ordinary member can see their own sign-in history without asking.
 
-Two screens behind `VITE_AUDIT_LOG` (default off): **Audit log** in the organisation nav for an Org
-Admin, and **My activity** in the account menu for everyone. Both render from one list component,
+Two screens behind `VITE_AUDIT_LOG` (**on by default**; set it to `false` to roll back to the prior
+product exactly — there is no write path here to leave behind): **Audit log** in the organisation
+nav for an Org Admin, and **My activity** in the account menu for everyone. Both render from one list component,
 so the two views cannot drift about how an event reads. A caller without `audit:read` is told so
 rather than shown an empty table — "no events" and "you may not see these" are the one distinction
 an audit log must never blur.

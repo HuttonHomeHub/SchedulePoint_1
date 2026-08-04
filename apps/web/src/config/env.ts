@@ -39,8 +39,8 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * opts in with `"true"`/`"1"`. Every flag in this file starts here, and moves to
  * {@link flagDefaultOn} in its own enablement task once its gates are green.
  *
- * It currently has **no consumer** — {@link FLOAT_PATHS_ENABLED}, the last one, moved to
- * {@link flagDefaultOn} on 2026-08-02 — and that is the healthy state, which is why it is kept
+ * It currently has **no consumer** — {@link AUDIT_LOG_ENABLED}, the last one, moved to
+ * {@link flagDefaultOn} on 2026-08-03 — and that is the healthy state, which is why it is kept
  * rather than deleted: every flag in this file started here, and the next one needs it on day one.
  * Covered by `env.test.ts`, including the case-sensitivity that makes `"TRUE"` read as off.
  *
@@ -1208,23 +1208,25 @@ export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNM
 export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATHS);
 
 /**
- * **The audit log** (`VITE_AUDIT_LOG`, default **OFF**) — the web surface for ADR-0072, and the
- * closing half of `docs/TECH_DEBT.md` #14.
+ * **The audit log** (`VITE_AUDIT_LOG`) — the web surface for ADR-0072, and the closing half of
+ * `docs/TECH_DEBT.md` #14. **ON by default** (2026-08-03).
  *
  * The API records eighteen events across membership, invitations, the organisation, authentication
  * and hierarchy deletes/restores, into an append-only table, and exposes two reads. Until this flag
- * flips, **nothing in the product can see any of it** — which is the shape this repository keeps
- * finding (ADR-0067's shift patterns, ADR-0070's sub-day durations): a capability that is stored,
- * enforced and exported, and that no screen can reach.
+ * flipped, **nothing in the product could see any of it** — the shape this repository keeps finding
+ * (ADR-0067's shift patterns, ADR-0070's sub-day durations): a capability that is stored, enforced
+ * and exported, and that no screen can reach.
  *
- * Flag ON adds two screens and one nav entry:
+ * Flag ON adds two screens, one nav entry and one account-menu item:
  *
  * - **Audit log** (`/orgs/$orgSlug/audit-log`), Org Admin only. The nav entry is hidden for every
  *   other role, and that is a courtesy rather than the control — the API answers 403 regardless,
  *   and a non-member gets 404 before it (anti-enumeration).
- * - **My activity** (`/me/activity`), for anyone. It takes NO user id: the actor comes from the
- *   session, so there is no parameter to tamper with and no permission to hold. That is why an
- *   ordinary member can read their own sign-in history without an Org Admin handing it over.
+ * - **My activity** (`/me/activity`), for anyone, from the account menu. It takes NO user id: the
+ *   actor comes from the session, so there is no parameter to tamper with and no permission to
+ *   hold. That is why an ordinary member can read their own sign-in history without an Org Admin
+ *   handing it over — and why it sits in the account menu rather than the organisation nav, since
+ *   it spans every organisation the reader belongs to and carries the org-less auth rows too.
  *
  * Both render the same `AuditEventList`, differing only in scope and in whether the actor column is
  * shown (on `/me` every row is the same person). Two tables would drift about how a role change
@@ -1240,4 +1242,4 @@ export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATH
  * producers first: the log is being written long before anyone can read it, so the first screen
  * shows real history rather than an empty table.
  */
-export const AUDIT_LOG_ENABLED = flagDefaultOff(import.meta.env.VITE_AUDIT_LOG);
+export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);

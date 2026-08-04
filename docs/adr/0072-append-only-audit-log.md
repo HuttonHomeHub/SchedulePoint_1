@@ -448,9 +448,11 @@ must not see it.
   closing it is a security decision about scope rather than a filter to widen
   (`docs/TECH_DEBT.md` #91).
 - Coverage widening stays gated on the growth measurement, unchanged.
-- **`VITE_AUDIT_LOG` ships default off.** The product owner runs the ADR-0047 Watchtower profile, so
-  anything default-on reaches a real host on the next release; the flip is a decision to put, not to
-  take.
+
+**`VITE_AUDIT_LOG` flipped default-on 2026-08-03**, on the product owner's decision, once the gate
+pass and the journey were green. The flag-off parity suites are **kept, not weakened** — that is the
+rollback contract (the ADR-0053 M6 rule), and flag-off is byte-for-byte the prior product because
+there is no write path here to leave behind.
 
 ## References
 
