@@ -26,6 +26,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
@@ -172,8 +173,9 @@ export class ResourcesController {
     @Param('orgSlug') orgSlug: string,
     @Param('resourceId', ParseUuidPipe) resourceId: string,
     @Body() dto: ArchiveActionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.setArchived(principal, orgSlug, resourceId, true, dto.version);
+    await this.service.setArchived(principal, orgSlug, resourceId, true, dto.version, context);
   }
 
   @Post(':resourceId/unarchive')
@@ -194,8 +196,9 @@ export class ResourcesController {
     @Param('orgSlug') orgSlug: string,
     @Param('resourceId', ParseUuidPipe) resourceId: string,
     @Body() dto: ArchiveActionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.setArchived(principal, orgSlug, resourceId, false, dto.version);
+    await this.service.setArchived(principal, orgSlug, resourceId, false, dto.version, context);
   }
 
   @Delete(':resourceId')
@@ -210,7 +213,8 @@ export class ResourcesController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, resourceId);
+    await this.service.remove(principal, orgSlug, resourceId, context);
   }
 }

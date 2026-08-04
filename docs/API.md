@@ -614,6 +614,97 @@ decision with its own scope; `@repo/types`' `AuditEvent` has no such fields, so 
 reader can tell "set from nothing" from "unchanged" without knowing the action's semantics — or
 `null` for the five authentication actions, whose allow-list is deliberately empty.
 
+#### What earns an event (ADR-0073 C3)
+
+There is no write endpoint, so the vocabulary is the contract. A mutating route records an event
+if it passes **either** of two tests, and **no** route records one by default:
+
+- **Durability** — does the product otherwise keep a durable record that this happened, and who did
+  it? A create or an ordinary update does (`created_by` / `updated_by`); a **delete or restore** is
+  the act that erases its own trace, and a **bulk import** produces hundreds of rows with no
+  per-row story. The latter two record.
+- **Blast radius** — does this change the rules by which **other people's** work is evaluated? A
+  plan's data date, a shared calendar's working time, a library object's availability, and a logic
+  **link** all do; an activity's own duration, name, lane or progress does not.
+
+Two consequences a client can rely on. **Editing an activity's own fields is never recorded** —
+permanently, not pending — so a screen must not describe that as "not yet". And an action that
+sweeps many rows writes **one** event carrying scalar counts, never one per swept row: a delete of a
+WBS summary with forty descendants and sixty links is one `activity.deleted` with
+`activityCount` / `dependencyCount` and the shared `deleteBatchId`. The same shape now applies to
+`client.*` / `project.*` / `plan.*`, which previously carried the batch id and not the size.
+
+One event is written **outside** its write's transaction, and only one: `interchange.imported`. The
+import's phase 2 hard-deletes the created plan if the recalculation fails, and `audit_events` is
+append-only — so a row written with the graph could outlive its subject and permanently claim an
+import that was rolled back. It is written once the import is durable instead. Every other event in
+families D–G shares its write's transaction and disappears with it.
+
+Refused mutations record **nothing** in families D–G — no `DENIED` row for a 423 from the edit-lock
+or a 409 from an optimistic-lock retry, both of which mean "two people were working at once". A
+`DENIED` row is written only where an _attempt_ is itself signal: a refused permission change.
+
+#### Filtering the audit reads (ADR-0073)
+
+Both endpoints accept the same optional narrowing. **Omitting every parameter returns exactly the
+page they returned before it existed**, which is what lets the client ship the controls behind a
+flag without changing the request.
+
+| Param     | Shape                                                        | Notes                                                                       |
+| --------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `action`  | repeatable; up to the vocabulary size; each an `AuditAction` | Union, not intersection. Repeat the param: `?action=plan.deleted&action=…`. |
+| `outcome` | repeatable; `SUCCESS` \| `DENIED` \| `FAILURE`               | Union.                                                                      |
+| `from`    | ISO-8601 instant                                             | **Inclusive** lower bound on `occurred_at`.                                 |
+| `to`      | ISO-8601 instant                                             | **Inclusive** upper bound, and must not precede `from`.                     |
+
+**An unmatchable value is a 422 naming it — never a 200 with an empty page.** An unknown action or
+outcome, more actions than the vocabulary holds, a malformed instant and an inverted range are all
+rejected. (The action cap is **derived from the vocabulary**, not a literal: it shipped as a
+hand-written `20` and fell behind the moment the coverage rung grew the catalogue, so an ordinary
+two-category selection started 422ing. A bound computed from `AUDIT_ACTIONS` cannot drift.) A filter
+that silently matches nothing is the `order` lesson (TECH_DEBT #19) in the one context where it is
+worse than usual: an audit log answering "no events" to a misspelled filter reads as evidence that
+nothing happened.
+
+**`auth.*` actions are refused on the organisation route (422).** Those rows carry no
+`organization_id` — authentication happens before an organisation is known — and that read filters
+on exactly that column, so the filter could only ever return an empty page. It is also, measured,
+the most expensive query the table accepts: with no index on `action`, proving the absence means
+walking the whole organisation partition (681–954 ms at 1M rows, against 0.35 ms for the unfiltered
+page). Read your own sign-in history on `/me/audit-events`, which is the one place those rows are
+answerable.
+
+#### Widening `/me` to attempts against you (ADR-0073 C2)
+
+`GET /api/v1/me/audit-events?include=attempts` additionally returns **failed sign-ins against your
+own email address** — `auth.sign_in_failed` rows, which carry neither an organisation nor an actor
+and are therefore returned by no other endpoint to anybody.
+
+| Param     | Shape                  | Notes                                                            |
+| --------- | ---------------------- | ---------------------------------------------------------------- |
+| `include` | repeatable; `attempts` | Omit for exactly the response this route gave before it existed. |
+
+An unknown projection is a **422**, on the same rule as the filter values above.
+
+**How the row becomes yours.** The attempted address is resolved to a user id at **write time**,
+into `subject_id`. It is not matched at read time: addresses get reassigned, so a read-time join
+would silently move one person's history into another person's account as the mapping changed.
+
+Three consequences worth knowing before relying on this:
+
+- **It is forward-only.** The table refuses `UPDATE` at the database (ADR-0072), so attempts
+  recorded before this shipped cannot be attributed and will never appear.
+- **An attempt against an address nobody registered is invisible here**, because there is no
+  account to attribute it to. That is not a gap to fix — there is no subject.
+- **It is not an existence oracle.** The lookup runs on both branches and changes nothing the
+  caller can observe about the sign-in; the answer surfaces only in that account holder's own feed.
+
+The organisation log never returns these rows whatever is asked of it.
+
+Filters go into the `WHERE`, never a post-filter over a fetched page, so `limit` is honoured with a
+filter that excludes most rows. **No index ships with the filter**; the composite is a per-slice
+decision for the coverage milestone, on a fresh measurement (ADR-0073 "Measured, C1").
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

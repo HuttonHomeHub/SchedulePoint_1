@@ -5,6 +5,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
   ForbiddenError,
@@ -14,6 +15,8 @@ import {
 import { normaliseSearchTerm, type ArchivedFilter } from '../../common/query/library-filters';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { ProjectRepository } from '../projects/project.repository';
 import { ResourceRepository } from '../resources/resource.repository';
@@ -32,6 +35,7 @@ import type { CreateCalendarDto } from './dto/create-calendar.dto';
 import type { UpdateCalendarExceptionDto } from './dto/update-calendar-exception.dto';
 import type { UpdateCalendarDto } from './dto/update-calendar.dto';
 import { resolveHoursPerDayMinutes } from './hours-per-day';
+import { workingTimeChangeKind, type WorkingTimeChangeKind } from './working-time-change';
 
 /** Machine-readable conflict reasons carried in a {@link ConflictError}'s `details`. */
 export const CALENDAR_CONFLICT = {
@@ -98,6 +102,7 @@ export class CalendarsService {
     private readonly projects: ProjectRepository,
     private readonly resources: ResourceRepository,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(CalendarsService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -251,6 +256,7 @@ export class CalendarsService {
     orgSlug: string,
     calendarId: string,
     dto: UpdateCalendarDto,
+    context?: RequestContext,
   ): Promise<CalendarWithExceptions> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
@@ -309,13 +315,53 @@ export class CalendarsService {
           await acquireCalendarWriteLock(tx, calendarId);
           await this.assertNarrowingAllowed(calendarId, target.projectId, tx);
         }
-        return this.calendars.updateIfVersionMatches(
+        const rows = await this.calendars.updateIfVersionMatches(
           calendarId,
           dto.version,
           patch,
           principal.userId,
           tx,
         );
+        // A shared calendar's working time re-dates every plan on it — work owned by people who
+        // did not make the change and are not told (ADR-0073 family E, Test 2). Emitted only when
+        // the WORKING TIME moved: a rename or a description edit leaves this alone, and a scope
+        // change is its own action in C3.3.
+        //
+        // Recorded only if the version-gated write actually landed; `rows === 0` throws below.
+        if (rows > 0) {
+          const kind = workingTimeChangeKind(dto);
+          if (kind) {
+            await this.recordWorkingTimeChange(tx, {
+              organizationId: organization.id,
+              calendarId,
+              name: patch.name ?? existing.name,
+              changedWhat: kind,
+              principal,
+              context,
+            });
+          }
+          // A tier move is a SECOND fact about the same request, so it is a second row rather
+          // than a field on the first — the `invitation.accepted` + `member.joined` precedent
+          // from M1. One `correlation_id` ties them, which is what makes "these happened
+          // together" recoverable without collapsing two different questions into one action.
+          if (target !== null) {
+            await this.audit.record(
+              {
+                action: 'calendar.scope_changed',
+                outcome: 'SUCCESS',
+                organizationId: organization.id,
+                subjectType: 'CALENDAR',
+                subjectId: calendarId,
+                subjectLabel: patch.name ?? existing.name,
+                before: { name: existing.name, scope: existing.scope },
+                after: { name: patch.name ?? existing.name, scope: target.scope },
+                ...auditActor(principal, context),
+              },
+              tx,
+            );
+          }
+        }
+        return rows;
       });
       if (changed === 0) {
         throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
@@ -375,6 +421,7 @@ export class CalendarsService {
     calendarId: string,
     archived: boolean,
     version: number,
+    context?: RequestContext,
   ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
@@ -385,15 +432,38 @@ export class CalendarsService {
       this.assertCan(principal, 'calendar:manage_org', organization.id);
     }
 
-    const changed = await this.calendars.setArchivedIfVersionMatches(
-      calendarId,
-      version,
-      archived ? new Date() : null,
-      principal.userId,
-    );
-    if (changed === 0) {
-      throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
-    }
+    // Wrapped in a transaction ONLY so the audit row shares the write's fate (ADR-0073 family F).
+    // The archive itself needs no lock and takes none — that is the whole point of ADR-0053 §4,
+    // and it stays true: this adds an insert beside the update, not a guard around it.
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await this.calendars.setArchivedIfVersionMatches(
+        calendarId,
+        version,
+        archived ? new Date() : null,
+        principal.userId,
+        tx,
+      );
+      if (changed === 0) {
+        throw new ConflictError('This calendar was changed elsewhere. Refresh and try again.');
+      }
+      // Archiving is not deleting: the row stays valid, every existing binding keeps scheduling
+      // identically, and only NEW usages are refused. Nothing visibly breaks and nobody is told —
+      // which is precisely the shape a log has to carry, because the effect surfaces days later
+      // as "why can I not pick that calendar any more?".
+      await this.audit.record(
+        {
+          action: archived ? 'calendar.archived' : 'calendar.unarchived',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'CALENDAR',
+          subjectId: calendarId,
+          subjectLabel: existing.name,
+          after: { name: existing.name, scope: existing.scope },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+    });
 
     this.logger.info(
       {
@@ -407,7 +477,12 @@ export class CalendarsService {
     );
   }
 
-  async remove(principal: Principal, orgSlug: string, calendarId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    calendarId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:delete', organization.id);
 
@@ -446,7 +521,26 @@ export class CalendarsService {
           resources: resourceCount,
         });
       }
-      await this.calendars.softDeleteWithExceptions(calendarId, principal.userId, tx);
+      const batchId = await this.calendars.softDeleteWithExceptions(
+        calendarId,
+        principal.userId,
+        tx,
+      );
+      // `scope` is recorded because a shared-library calendar going away is a different event
+      // from a project one, and after the delete the row is the only place that survives.
+      await this.audit.record(
+        {
+          action: 'calendar.deleted',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'CALENDAR',
+          subjectId: calendarId,
+          subjectLabel: existing.name,
+          before: { name: existing.name, scope: existing.scope, deleteBatchId: batchId },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
     this.logger.info(
       { organizationId: organization.id, calendarId, userId: principal.userId },
@@ -459,6 +553,7 @@ export class CalendarsService {
     orgSlug: string,
     calendarId: string,
     dto: CreateCalendarExceptionDto,
+    context?: RequestContext,
   ): Promise<CalendarExceptionWithWindows> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
@@ -502,6 +597,18 @@ export class CalendarsService {
           tx,
         );
         await this.calendars.touchVersion(calendar.id, principal.userId, tx);
+        // An exception IS working time (feature spec §2.2), so all three exception routes fold
+        // into the same action rather than earning three of their own. What a reader needs is
+        // "the working time on this calendar changed, and here is when" — not the shape of the
+        // edit, which is a content history and is `updated_by`'s job.
+        await this.recordWorkingTimeChange(tx, {
+          organizationId: organization.id,
+          calendarId: calendar.id,
+          name: calendar.name,
+          changedWhat: 'exception',
+          principal,
+          context,
+        });
         return created;
       }),
     );
@@ -535,6 +642,7 @@ export class CalendarsService {
     calendarId: string,
     exceptionId: string,
     dto: UpdateCalendarExceptionDto,
+    context?: RequestContext,
   ): Promise<CalendarExceptionWithWindows> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
@@ -590,6 +698,14 @@ export class CalendarsService {
           });
         }
         await this.calendars.touchVersion(calendar.id, principal.userId, tx);
+        await this.recordWorkingTimeChange(tx, {
+          organizationId: organization.id,
+          calendarId: calendar.id,
+          name: calendar.name,
+          changedWhat: 'exception',
+          principal,
+          context,
+        });
         return this.calendars.findExceptionWithWindows(exceptionId, tx);
       }),
     );
@@ -612,6 +728,7 @@ export class CalendarsService {
     orgSlug: string,
     calendarId: string,
     exceptionId: string,
+    context?: RequestContext,
   ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'calendar:update', organization.id);
@@ -629,6 +746,14 @@ export class CalendarsService {
     await this.prisma.$transaction(async (tx) => {
       await this.calendars.softDeleteException(exceptionId, principal.userId, tx);
       await this.calendars.touchVersion(calendarId, principal.userId, tx);
+      await this.recordWorkingTimeChange(tx, {
+        organizationId: organization.id,
+        calendarId,
+        name: calendar.name,
+        changedWhat: 'exception',
+        principal,
+        context,
+      });
     });
     this.logger.info(
       {
@@ -638,6 +763,40 @@ export class CalendarsService {
         userId: principal.userId,
       },
       'calendar exception removed',
+    );
+  }
+
+  /**
+   * ONE producer for the four routes that change a calendar's working time (ADR-0073 family E).
+   *
+   * Shared rather than inlined for the ADR-0065 reason: four copies of the same row shape would
+   * drift, and the drift would be invisible — each route looks right on its own, and only somebody
+   * comparing a shift edit against an exception edit would notice one carries a field the other
+   * does not.
+   */
+  private async recordWorkingTimeChange(
+    tx: Prisma.TransactionClient,
+    params: {
+      organizationId: string;
+      calendarId: string;
+      name: string;
+      changedWhat: WorkingTimeChangeKind;
+      principal: Principal;
+      context: RequestContext | undefined;
+    },
+  ): Promise<void> {
+    await this.audit.record(
+      {
+        action: 'calendar.working_time_changed',
+        outcome: 'SUCCESS',
+        organizationId: params.organizationId,
+        subjectType: 'CALENDAR',
+        subjectId: params.calendarId,
+        subjectLabel: params.name,
+        after: { name: params.name, changedWhat: params.changedWhat },
+        ...auditActor(params.principal, params.context),
+      },
+      tx,
     );
   }
 

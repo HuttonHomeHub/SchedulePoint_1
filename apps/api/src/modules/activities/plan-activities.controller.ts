@@ -25,6 +25,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
@@ -154,12 +155,14 @@ export class PlanActivitiesController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Body() dto: UpdateParentsDto,
+    @RequestContext() context: RequestContext,
   ): Promise<ActivityResponseDto[]> {
     const { items, canReadCost } = await this.service.updateParents(
       principal,
       orgSlug,
       planId,
       dto,
+      context,
     );
     return items.map((activity) => ActivityResponseDto.from(activity, canReadCost));
   }

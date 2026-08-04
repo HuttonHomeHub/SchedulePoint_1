@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { ProjectRepository } from '../projects/project.repository';
 import type { ResourceRepository } from '../resources/resource.repository';
@@ -145,12 +146,16 @@ describe('CalendarsService', () => {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    // The working-time producers (ADR-0073 C3.2) are proven against a real table in the e2e
+    // suite; a fake here could only assert that a fake was called.
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new CalendarsService(
       organizations as unknown as OrganizationsService,
       calendars as unknown as CalendarRepository,
       projects as unknown as ProjectRepository,
       resources as unknown as ResourceRepository,
       prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
       logger,
     );
   });

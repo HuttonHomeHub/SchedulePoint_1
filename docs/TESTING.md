@@ -108,6 +108,23 @@ deploy`). Each spec sets up and tears down its own data; no cross-test coupling.
   Tailwind utilities, so `<Surface>` stays the only route in. Reach for this
   shape when a rule's violation would look like a tidy-up in review.
 
+  The audit log has three of them, and the reason each exists is worth copying:
+  - `audit-coverage.structural.spec.ts` — the **route census**. Every HTTP route,
+    read by reflecting the live Nest module graph, is either audited or excused
+    with a **named reason**; a route in neither list fails. Its six positive
+    assertions go further and force particular routes to _be_ audited, because the
+    exhaustive halves cannot: a later refactor could reclassify a delete as
+    "plan content" with a plausible sentence and pass everything else. Every reason
+    is a decision somebody made — there is deliberately no "decide later" bucket,
+    and a test asserts the one that existed has not come back.
+  - `audit-vocabulary.structural.spec.ts` — the action vocabulary and its
+    exhaustively-keyed maps.
+  - `audit-producer-seams.structural.spec.ts` — which `AuditService` method each
+    producer may call. `record()` fails its caller; `recordBestEffort()` swallows.
+    Choosing wrongly is invisible until the audit table refuses an insert, which
+    no test can make it do — so this reads the call sites instead, which is the
+    part that is actually decidable.
+
 ## End-to-end (Playwright)
 
 The default suite lives in `apps/web/e2e/`. **Each feature flag also has its own

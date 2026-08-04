@@ -26,11 +26,33 @@ export function AuditEventList({
   caption,
   showActor,
   emptyMessage,
+  emptyFilteredMessage,
+  onClearFilter,
+  describedById,
 }: {
   query: UseInfiniteQueryResult<{ pages: AuditPage[] }>;
   caption: string;
   showActor: boolean;
   emptyMessage: string;
+  /**
+   * Shown instead of {@link emptyMessage} when a filter is narrowing the view.
+   *
+   * The two must never collapse into one sentence. "Nothing here yet" and "nothing matches what
+   * you asked for" are different facts, and telling a reader the first when the second is true is
+   * the defect ADR-0072 met on its first day — absence a reader cannot distinguish from silence.
+   * Absent (or undefined) means the screen has no filter, which is the flag-off path.
+   */
+  emptyFilteredMessage?: string | undefined;
+  /**
+   * Clears the filter, rendered as a button **inside** the filtered empty state.
+   *
+   * `docs/UX_STANDARDS.md`: an empty state is "encouraging and actionable, not a dead end". Telling
+   * a reader to clear the filter while the only control that can is back above the table is prose,
+   * not a way out — the `CalendarsTable` precedent puts the button in the region itself.
+   */
+  onClearFilter?: (() => void) | undefined;
+  /** Id of prose qualifying what these rows mean — see `DataTable`'s own docblock. */
+  describedById?: string | undefined;
 }): React.ReactElement {
   const events = query.data?.pages.flatMap((page) => page.events) ?? [];
 
@@ -87,6 +109,7 @@ export function AuditEventList({
     <div className="flex flex-col gap-3">
       <DataTable
         caption={caption}
+        describedById={describedById}
         columns={columns}
         query={{
           isPending: query.isPending,
@@ -98,9 +121,20 @@ export function AuditEventList({
         loadingLabel="Loading events…"
         errorLabel="Couldn’t load the audit log. Please try again."
         empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            {emptyMessage}
-          </div>
+          emptyFilteredMessage === undefined ? (
+            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+              {emptyMessage}
+            </div>
+          ) : (
+            <div className="border-border rounded-lg border border-dashed p-8 text-center">
+              <p className="text-muted-foreground text-sm">{emptyFilteredMessage}</p>
+              {onClearFilter === undefined ? null : (
+                <Button variant="outline" size="sm" className="mt-3" onClick={onClearFilter}>
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          )
         }
       />
 
@@ -128,10 +162,22 @@ export function AuditEventList({
         </div>
       ) : null}
 
-      {/* Announced, not merely rendered: a reader who pressed "Load more" has no other signal that
-          rows arrived, because the new ones are below the fold by definition (WCAG 4.1.3). */}
+      {/*
+        Announced, not merely rendered: a reader who pressed "Load more" has no other signal that
+        rows arrived, because the new ones are below the fold by definition (WCAG 4.1.3).
+
+        **An empty result announces WHICH empty it is.** This said "Showing 0 events" for both — the
+        same six words whether the log is genuinely empty or a filter matched nothing. That is the
+        one distinction this whole milestone exists to make, honoured on screen and collapsed in the
+        live region, for exactly the audience 4.1.3 protects. The sentence the sighted reader gets
+        is now the sentence the announcement carries.
+      */}
       <p aria-live="polite" className="sr-only">
-        {query.isPending ? '' : `Showing ${String(events.length)} events`}
+        {query.isPending
+          ? ''
+          : events.length === 0
+            ? (emptyFilteredMessage ?? emptyMessage)
+            : `Showing ${String(events.length)} event${events.length === 1 ? '' : 's'}`}
       </p>
     </div>
   );

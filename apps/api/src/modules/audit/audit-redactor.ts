@@ -1,5 +1,7 @@
 import type { AuditAction, AuditChanges } from '@repo/types';
 
+import { PLAN_GOVERNANCE_FIELDS } from '../plans/plan-governance-fields';
+
 /**
  * The 8 KB bound `ck_audit_events_changes_size` enforces. Kept a little under it so the JSON
  * envelope (`{"before":…,"after":…}`) plus the truncation marker cannot push a payload the
@@ -46,12 +48,107 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   'auth.email_verified': [],
   // — Hierarchy soft deletes/restores. `deleteBatchId` is the thread that ties a cascade
   //   together, so a reader can see one action removed forty things rather than forty actions.
-  'client.deleted': ['name', 'deleteBatchId'],
-  'client.restored': ['name', 'deleteBatchId'],
-  'project.deleted': ['name', 'deleteBatchId'],
-  'project.restored': ['name', 'deleteBatchId'],
-  'plan.deleted': ['name', 'status', 'deleteBatchId'],
-  'plan.restored': ['name', 'status', 'deleteBatchId'],
+  //
+  //   The counts are **flattened scalars**, one field per level, and that shape is forced rather
+  //   than chosen. The M1 spec promised `counts: CascadeCounts`; a nested object cannot work here,
+  //   because `normalise()` reduces any non-scalar to a type marker by design — the allow-list
+  //   vets the top-level key and cannot vouch for a sub-tree. So the promised shape would have
+  //   recorded `[object]` and the shipped producer passed no counts at all, which is why a delete
+  //   of 412 activities recorded the batch id and not the size (spec §0.1(1), fixed here). Rows
+  //   written before this are NOT backfilled and cannot be: the table refuses `UPDATE`.
+  'client.deleted': [
+    'name',
+    'deleteBatchId',
+    'projectCount',
+    'planCount',
+    'activityCount',
+    'dependencyCount',
+  ],
+  'client.restored': [
+    'name',
+    'deleteBatchId',
+    'projectCount',
+    'planCount',
+    'activityCount',
+    'dependencyCount',
+  ],
+  'project.deleted': ['name', 'deleteBatchId', 'planCount', 'activityCount', 'dependencyCount'],
+  'project.restored': ['name', 'deleteBatchId', 'planCount', 'activityCount', 'dependencyCount'],
+  'plan.deleted': ['name', 'status', 'deleteBatchId', 'activityCount', 'dependencyCount'],
+  'plan.restored': ['name', 'status', 'deleteBatchId', 'activityCount', 'dependencyCount'],
+  // — Destructive and structural acts inside a plan (ADR-0073 family D). Same flattened-count
+  //   shape as above, for the same reason.
+  //
+  //   `planName` is on the delete and not the restore deliberately: a reader looking at "who
+  //   removed this" needs to know WHICH plan lost it, and by the time they read the row the
+  //   activity may be gone from every list they could look it up in.
+  'activity.deleted': [
+    'name',
+    'code',
+    'type',
+    'planName',
+    'deleteBatchId',
+    'activityCount',
+    'dependencyCount',
+  ],
+  'activity.restored': ['name', 'code', 'deleteBatchId', 'activityCount'],
+  'activity.dissolved': ['name', 'promotedChildCount'],
+  // `parentCount` disambiguates a case the API permits and the feature spec's shape did not
+  // cover: a batch may name a different destination per row, and `{ movedCount, parentName }`
+  // alone would render that identically to "moved to top level". One destination named, one
+  // destination unnamed (top level) and several destinations are now three distinct readings.
+  'activity.reparented': ['movedCount', 'parentCount', 'parentName'],
+  // The DIRECTION is the fact ADR-0064 found planners most often get wrong, so both endpoint
+  // names are recorded rather than one id. `lagMinutes` over `lagDays`: after ADR-0068 a day is a
+  // per-calendar quantity, and the audit row has no calendar to interpret one against.
+  'dependency.created': ['predecessorName', 'successorName', 'type', 'lagMinutes'],
+  'dependency.deleted': ['predecessorName', 'successorName', 'type', 'lagMinutes', 'deleteBatchId'],
+  // — The rules other people's work is judged by (ADR-0073 family E).
+  //
+  //   `plan.settings_changed` is the ONE action whose allow-list is not a hand-written line: it is
+  //   the governance field set itself, imported rather than restated, so a field added to that set
+  //   is recordable without anyone editing this file — and, more importantly, a field REMOVED from
+  //   it stops being recordable in the same commit. Two copies would drift silently: the producer
+  //   would pass a value the allow-list quietly dropped, and the row would say the field did not
+  //   change.
+  'plan.settings_changed': ['planName', ...PLAN_GOVERNANCE_FIELDS],
+  //   The shift rows themselves are deliberately absent. They are not scalar, so `normalise` would
+  //   reduce them to a type marker anyway — but the reason to withhold them is the reader's, not
+  //   the redactor's: "the working week changed" is the fact somebody needs when every date on a
+  //   plan moved, and a JSON dump of seven days' windows buries it. `changedWhat` names the kind.
+  'calendar.working_time_changed': ['name', 'changedWhat'],
+  'baseline.captured': ['name', 'planName'],
+  //   Both sides, because activation is a MOVE: exactly one baseline is active per plan
+  //   (ADR-0025), so the row that stopped being the standard is half the story.
+  'baseline.activated': ['name', 'planName'],
+  'baseline.deleted': ['name', 'planName', 'deleteBatchId'],
+  // — Library governance (ADR-0073 family F). `scope` is on the delete because a shared-library
+  //   calendar going away is a different event from a project one, and the row is the only place
+  //   that distinction survives the deletion.
+  'calendar.deleted': ['name', 'scope', 'deleteBatchId'],
+  'calendar.archived': ['name', 'scope'],
+  'calendar.unarchived': ['name', 'scope'],
+  'calendar.scope_changed': ['name', 'scope'],
+  //   `resourceCount` is the subtree a GROUP delete swept (ADR-0053 §3) — one row for the branch,
+  //   never one per descendant, the same rule family D applies to a WBS summary.
+  'resource.deleted': ['name', 'kind', 'deleteBatchId', 'resourceCount'],
+  'resource.archived': ['name', 'kind'],
+  'resource.unarchived': ['name', 'kind'],
+  // — Provenance (ADR-0073 family G). `sourceFilename` is the reader's whole route back to the
+  //   file: an import is otherwise indistinguishable from somebody having typed 500 activities.
+  //   The counts are the size of what arrived; `findingCount` says the report was not clean,
+  //   without reproducing it — a report is a document, and the redactor would flatten it to a
+  //   type marker anyway (the family C lesson).
+  'interchange.imported': [
+    'planName',
+    'format',
+    'sourceFilename',
+    'activityCount',
+    'dependencyCount',
+    'calendarCount',
+    'resourceCount',
+    'findingCount',
+  ],
 };
 
 /**
@@ -142,8 +239,10 @@ export function redactChanges(
   if (Buffer.byteLength(JSON.stringify(changes), 'utf8') <= CHANGES_BUDGET_BYTES) return changes;
 
   // Defensive, and honestly unreachable for today's vocabulary: every value is capped at
-  // FIELD_CHAR_CAP and no action allows more than three fields, so the largest payload this can
-  // build is roughly 2 KB against a 7 KB budget. It is kept rather than deleted because the
+  // FIELD_CHAR_CAP, the widest action allows seven fields, and all but two of those seven are
+  // integer counts — so the largest payload this can build is a few kB against a 7 kB budget. The
+  // headroom is thinner than it was before C3.1 widened the lists, which is precisely why the
+  // branch is worth keeping. It is kept rather than deleted because the
   // allow-lists grow on every coverage rung, and the alternative to this branch is not a smaller
   // payload — it is a 500 from `ck_audit_events_changes_size` at the moment someone performs the
   // action, i.e. a LOST audit row. `truncated` is set so a reader is told the record is partial

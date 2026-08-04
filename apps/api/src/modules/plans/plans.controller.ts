@@ -67,8 +67,11 @@ export class PlansController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Body() dto: UpdatePlanDto,
+    @RequestContext() context: RequestContext,
   ): Promise<PlanResponseDto> {
-    return PlanResponseDto.from(await this.service.update(principal, orgSlug, planId, dto));
+    return PlanResponseDto.from(
+      await this.service.update(principal, orgSlug, planId, dto, context),
+    );
   }
 
   @Delete(':planId')

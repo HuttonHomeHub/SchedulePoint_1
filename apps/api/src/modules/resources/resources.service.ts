@@ -8,6 +8,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { Permission, Principal } from '../../common/auth/principal';
 import { acquireResourceWriteLocks } from '../../common/db/resource-advisory-lock';
 import { acquireResourceTreeWriteLock } from '../../common/db/resource-tree-advisory-lock';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
   ForbiddenError,
@@ -16,6 +17,8 @@ import {
 } from '../../common/errors/domain-errors';
 import { normaliseSearchTerm, type ArchivedFilter } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -60,6 +63,7 @@ export class ResourcesService {
     private readonly resources: ResourceRepository,
     private readonly calendars: CalendarRepository,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(ResourcesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -352,6 +356,7 @@ export class ResourcesService {
     resourceId: string,
     archived: boolean,
     version: number,
+    context?: RequestContext,
   ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:update', organization.id);
@@ -359,15 +364,37 @@ export class ResourcesService {
     const existing = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
     if (!existing) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
 
-    const changed = await this.resources.setArchivedIfVersionMatches(
-      resourceId,
-      version,
-      archived ? new Date() : null,
-      principal.userId,
-    );
-    if (changed === 0) {
-      throw new ConflictError('This resource was changed elsewhere. Refresh and try again.');
-    }
+    // A transaction ONLY so the audit row shares the write's fate (ADR-0073 family F). The
+    // archive itself still takes no lock, no cascade and no in-use count — that is ADR-0053 §4's
+    // whole point, and this adds an insert beside the update rather than a guard around it.
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await this.resources.setArchivedIfVersionMatches(
+        resourceId,
+        version,
+        archived ? new Date() : null,
+        principal.userId,
+        tx,
+      );
+      if (changed === 0) {
+        throw new ConflictError('This resource was changed elsewhere. Refresh and try again.');
+      }
+      // Archiving is orthogonal to deleting: every existing assignment stays live and levels
+      // identically, and only a NEW assignment is refused. Nothing breaks and nobody is told,
+      // which is why the log is the only place the change is recoverable from.
+      await this.audit.record(
+        {
+          action: archived ? 'resource.archived' : 'resource.unarchived',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'RESOURCE',
+          subjectId: resourceId,
+          subjectLabel: existing.name,
+          after: { name: existing.name, kind: existing.kind },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+    });
 
     this.logger.info(
       {
@@ -381,7 +408,12 @@ export class ResourcesService {
     );
   }
 
-  async remove(principal: Principal, orgSlug: string, resourceId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    resourceId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:delete', organization.id);
 
@@ -432,14 +464,38 @@ export class ResourcesService {
           subtreeSize: subtreeIds.length,
         });
       }
+      let batchId: string;
       if (isGroup) {
         // ONE batch id across the branch (the ADR-0038 subtree-cascade precedent): the branch is
         // the restore unit, so a future restore reactivates exactly what was deleted together.
-        await this.resources.softDeleteMany(subtreeIds, randomUUID(), principal.userId, tx);
+        batchId = randomUUID();
+        await this.resources.softDeleteMany(subtreeIds, batchId, principal.userId, tx);
       } else {
         // A leaf is its own batch — today's exact single-row path, left untouched.
-        await this.resources.softDelete(resourceId, principal.userId, tx);
+        batchId = await this.resources.softDelete(resourceId, principal.userId, tx);
       }
+
+      // ONE row for the branch, carrying its size — never one per descendant. The same rule
+      // family D applies to a WBS summary, for the same reason: a GROUP delete is one thing a
+      // person did, and 2,000 rows would bury that rather than record it.
+      await this.audit.record(
+        {
+          action: 'resource.deleted',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'RESOURCE',
+          subjectId: resourceId,
+          subjectLabel: existing.name,
+          before: {
+            name: existing.name,
+            kind: existing.kind,
+            deleteBatchId: batchId,
+            resourceCount: subtreeIds.length,
+          },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
     this.logger.info(
       {

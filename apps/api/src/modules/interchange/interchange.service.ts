@@ -16,6 +16,7 @@ import { packLanes } from '@repo/layout';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
   ForbiddenError,
@@ -25,6 +26,8 @@ import {
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
 import {
   CalendarRepository,
   type ImportCalendarBatchInput,
@@ -128,6 +131,7 @@ export class InterchangeService {
     private readonly assignments: ResourceAssignmentRepository,
     private readonly schedule: ScheduleService,
     private readonly editLock: PlanEditLockService,
+    private readonly audit: AuditService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(InterchangeService.name) private readonly logger: PinoLogger,
   ) {}
@@ -205,6 +209,7 @@ export class InterchangeService {
     projectId: string,
     file: UploadedInterchangeFile | undefined,
     options: InterchangeImportOptions = {},
+    context?: RequestContext,
   ): Promise<{ planId: string; report: InterchangeReport }> {
     const { organization, project } = await this.resolveTarget(principal, orgSlug, projectId);
     const { graph, report } = this.parse(file, organization.id, projectId, principal, options);
@@ -288,6 +293,51 @@ export class InterchangeService {
       );
       throw error;
     }
+
+    // The provenance row (ADR-0073 C3.4, family G), written HERE and not inside phase 1.
+    //
+    // The implementation plan said "inside the commit transaction", and that is wrong for this
+    // producer specifically. `audit_events` is append-only in the database (ADR-0072) — the
+    // application role cannot delete a row it wrote. Phase 2's compensation HARD-DELETES the plan
+    // when the recalculation fails, so a row written in phase 1 would outlive its subject and
+    // permanently assert an import of a plan that does not exist and never did. Every other
+    // producer in C3 can sit in its write's transaction because a rollback removes both; this one
+    // cannot, because only one of the two is retractable.
+    //
+    // So it is written at the point of no return: after phase 2 has made the import durable, and
+    // before phase 3, which is best-effort and cannot un-import anything. The residual risk is the
+    // opposite one — this write failing after a successful import, leaving no row. That is
+    // silence rather than a false claim, which is the right way round for an audit log.
+    //
+    // Which is why this is `recordBestEffort` and not `record`. The first version called `record`,
+    // whose whole contract is to fail its caller — and with the plan already durably created, that
+    // would have turned a successful import into a 500, inviting a retry that creates a SECOND
+    // plan, and skipped both the lane packing and the pen release on the way out. The paragraph
+    // above described the right trade and the call underneath it made the opposite one.
+    await this.audit.recordBestEffort({
+      action: 'interchange.imported',
+      outcome: 'SUCCESS',
+      organizationId: organization.id,
+      subjectType: 'PLAN',
+      subjectId: planId,
+      subjectLabel: graph.plan.name,
+      after: {
+        planName: graph.plan.name,
+        format: report.detectedFormat,
+        // The reader's whole route back to the file. Display-only here as everywhere else — it is
+        // never a path, and the upload itself is not retained.
+        sourceFilename: report.sourceFilename,
+        activityCount: graph.activities.length,
+        dependencyCount: graph.dependencies.length,
+        calendarCount: graph.calendars.length,
+        resourceCount: graph.resources.length,
+        // Scalar, deliberately: the report is a document, and `normalise()` would reduce it to a
+        // type marker anyway. A count says "this import was not clean, go and read the report"
+        // without pretending the row IS the report.
+        findingCount: report.approximations.length + report.repairs.length + report.drops.length,
+      },
+      ...auditActor(principal, context),
+    });
 
     // Phase 3 — lay the imported programme out in lanes (ADR-0069).
     //

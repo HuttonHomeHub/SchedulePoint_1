@@ -295,11 +295,15 @@ export class ResourceRepository {
     id: string,
     actorId: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<void> {
+  ): Promise<string> {
+    // The batch id is returned rather than discarded so the caller's audit row can name it
+    // (ADR-0073 C3.3) — the same thread the group path already had to mint explicitly.
+    const batchId = randomUUID();
     await db.resource.updateMany({
       where: { id, deletedAt: null },
-      data: { deletedAt: new Date(), deleteBatchId: randomUUID(), updatedBy: actorId },
+      data: { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId },
     });
+    return batchId;
   }
 
   /**

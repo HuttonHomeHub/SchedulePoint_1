@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  attributeFailedSignIn,
   classifyAuthEvent,
   emailVerifiedEvent,
   signedOutEvent,
   type AuthHookFacts,
 } from './auth-audit';
+import { normalizeEmail } from './normalize-email';
 
 const USER = { id: 'u_1', email: 'planner@example.com' };
 
@@ -113,5 +115,103 @@ describe('the two events with their own seams', () => {
       actorType: 'USER',
       actorLabel: 'planner@example.com',
     });
+  });
+});
+
+describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
+  const failed = (subjectLabel: string | null) => ({
+    action: 'auth.sign_in_failed' as const,
+    outcome: 'FAILURE' as const,
+    actorType: 'ANONYMOUS' as const,
+    actorUserId: null,
+    actorLabel: null,
+    subjectType: 'USER' as const,
+    subjectId: null,
+    subjectLabel,
+  });
+
+  it('fills subjectId when the attempted address belongs to a real account', async () => {
+    // The whole point of C2: without this the row has neither an actor nor an organisation, so
+    // both read endpoints filter it out and nobody can see they were targeted.
+    const event = await attributeFailedSignIn(
+      failed('victim@example.com'),
+      () => Promise.resolve('u_victim'),
+      normalizeEmail,
+    );
+
+    expect(event.subjectId).toBe('u_victim');
+    // Still ANONYMOUS: the claim was not proven, and `ck_audit_events_actor_shape` rejects an
+    // ANONYMOUS row carrying an ACTOR id. A subject is not an actor.
+    expect(event.actorType).toBe('ANONYMOUS');
+    expect(event.actorUserId).toBeNull();
+  });
+
+  it('normalises before looking up, so a mixed-case attempt still attributes', async () => {
+    // The recorded label is the raw request; the stored user is lowercased. Verified against the
+    // real handler in `test/auth-attribution.e2e-spec.ts` — this pins the consequence.
+    const seen: string[] = [];
+    await attributeFailedSignIn(
+      failed('Victim@Example.COM'),
+      (email) => {
+        seen.push(email);
+        return Promise.resolve(null);
+      },
+      normalizeEmail,
+    );
+
+    expect(seen).toEqual(['victim@example.com']);
+  });
+
+  it('leaves the row unattributed when nobody owns the address', async () => {
+    const event = await attributeFailedSignIn(
+      failed('nobody@example.com'),
+      () => Promise.resolve(null),
+      normalizeEmail,
+    );
+    expect(event.subjectId).toBeNull();
+  });
+
+  it('does not look up at all when there is no address to look up', async () => {
+    let called = false;
+    const event = await attributeFailedSignIn(
+      failed(null),
+      () => {
+        called = true;
+        return Promise.resolve('u_1');
+      },
+      normalizeEmail,
+    );
+
+    expect(called).toBe(false);
+    expect(event.subjectId).toBeNull();
+  });
+
+  it('leaves every other event untouched, without looking anything up', async () => {
+    let called = false;
+    const signedIn = signedOutEvent(USER);
+    const event = await attributeFailedSignIn(
+      signedIn,
+      () => {
+        called = true;
+        return Promise.resolve('u_other');
+      },
+      normalizeEmail,
+    );
+
+    expect(called).toBe(false);
+    expect(event).toEqual(signedIn);
+  });
+
+  it('records the row unattributed rather than letting a lookup fault reach the sign-in', async () => {
+    // Fail-OPEN on purpose, and not the fail-closed shape its siblings use: the alternative to an
+    // unattributed audit row here is a refused sign-in.
+    const event = await attributeFailedSignIn(
+      failed('victim@example.com'),
+      () => Promise.reject(new Error('the database is unavailable')),
+      normalizeEmail,
+    );
+
+    expect(event.subjectId).toBeNull();
+    expect(event.subjectLabel).toBe('victim@example.com');
   });
 });

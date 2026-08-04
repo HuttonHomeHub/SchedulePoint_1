@@ -14,6 +14,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { DependenciesService } from './dependencies.service';
@@ -79,7 +80,8 @@ export class DependenciesController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('dependencyId', ParseUuidPipe) dependencyId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, dependencyId);
+    await this.service.remove(principal, orgSlug, dependencyId, context);
   }
 }

@@ -33,6 +33,17 @@ a product idea that has not yet earned a roadmap line:
 - `M` **Notifications.** Plan changes, pen hand-off requests, and import
   completion currently surface only in-app. Needs the mail transport (below)
   first.
+- `L` **Per-activity plan revision history.** "Who changed this duration?" is
+  unanswerable and will stay that way, because the audit log deliberately and
+  **permanently** excludes ordinary content edits (ADR-0073 §3): an activity's
+  own name, dates, duration, lane or progress changes nothing outside that
+  activity, and it is the one class that scales with **interactions** rather
+  than with the size of the programme — a planner dragging bars for an afternoon
+  generates arbitrarily many, which is the cheapest way to make an audit log
+  unreadable. Named here so the gap is not re-litigated as audit coverage: it is
+  a **different feature**, with a different table, a different retention story
+  and a different read model (a per-activity timeline, not an organisation
+  feed). Worth building on evidence that planners ask for it, not before.
 
 ## Platform foundations not yet built
 

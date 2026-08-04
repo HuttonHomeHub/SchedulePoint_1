@@ -11,6 +11,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
+import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
   ForbiddenError,
@@ -23,6 +24,9 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { auditActor } from '../audit/audit-actor';
+import { AuditService } from '../audit/audit.service';
+import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -96,6 +100,7 @@ export class ActivitiesService {
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -770,11 +775,12 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: UpdateParentsDto,
+    context?: RequestContext,
   ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
-    await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
+    const plan = await this.loadActivePlan(planId, organization.id); // 404 if foreign/deleted
     await this.editLock.assertHoldsPen(principal, planId, organization.id);
 
     const rows = dto.parents.map((p) => ({ ...p, parentId: p.parentId ?? null }));
@@ -836,6 +842,50 @@ export class ActivitiesService {
           'This plan changed since you opened it — nothing was moved. Refresh and try again.',
         );
       }
+
+      /*
+       * ONE row for the batch — the reparent is the user's single act, however many activities it
+       * moved. The subject is the PLAN, not an activity: there is no one activity this happened
+       * to.
+       *
+       * `parentCount` is here and NOT in the feature spec's shape, because the shape the spec
+       * gives (`{ movedCount, parentName }`, absent name = top level) is ambiguous on a case the
+       * API genuinely permits: a batch may name different destinations per row, and that would
+       * read as "moved to top level" — absence a reader cannot distinguish from a fact, which is
+       * the defect this whole milestone exists to remove. With the count, all three cases are
+       * determined: one destination named, one destination unnamed (top level), or several.
+       *
+       * The destination's name is read here rather than folded into `findPlanWbsTree`'s
+       * projection: that read runs over every activity in the plan on every reparent, and this is
+       * at most one primary-key lookup.
+       */
+      const destinations = new Set(rows.map((r) => r.parentId));
+      const soleParentId = destinations.size === 1 ? ([...destinations][0] ?? null) : null;
+      const parent =
+        soleParentId === null
+          ? null
+          : await tx.activity.findFirst({
+              where: { id: soleParentId, organizationId: organization.id },
+              select: { name: true },
+            });
+
+      await this.audit.record(
+        {
+          action: 'activity.reparented',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'PLAN',
+          subjectId: planId,
+          subjectLabel: plan.name,
+          after: {
+            movedCount: rows.length,
+            parentCount: destinations.size,
+            ...(parent ? { parentName: parent.name } : {}),
+          },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
     });
 
     this.logger.info(
@@ -1025,17 +1075,52 @@ export class ActivitiesService {
     return field === null ? null : parseCalendarDate(field);
   }
 
-  async remove(principal: Principal, orgSlug: string, activityId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    activityId: string,
+    context?: RequestContext,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:delete', organization.id);
 
     const existing = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!existing) throw new NotFoundError('Activity not found.');
     await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
+    // Read for the audit row only, and BEFORE the transaction on purpose: the plan cannot change
+    // under an activity, so there is nothing here for the cascade's own lock to protect.
+    const plan = await this.plans.findActiveByIdInOrg(existing.planId, organization.id);
 
-    await this.prisma.$transaction((tx) =>
-      this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId),
-    );
+    await this.prisma.$transaction(async (tx) => {
+      const cascade = await this.lifecycle.cascadeSoftDelete(
+        tx,
+        'activity',
+        activityId,
+        principal.userId,
+      );
+      // ONE row for the whole subtree, inside the cascade's own transaction. Deleting a WBS
+      // summary sweeps its descendants and their links (ADR-0038); forty-one rows would bury the
+      // fact that a person did one thing, so the counts ride the payload instead — taken from the
+      // cascade's RETURN VALUE, so they are what happened rather than a later re-count. A failed
+      // audit write rolls the delete back, which is the trade ADR-0072 chose deliberately.
+      await this.audit.record(
+        hierarchyAuditEvent({
+          entity: 'activity',
+          kind: 'deleted',
+          organizationId: organization.id,
+          id: activityId,
+          name: existing.name,
+          code: existing.code,
+          type: existing.type,
+          ...(plan ? { planName: plan.name } : {}),
+          deleteBatchId: cascade.batchId,
+          counts: cascade.counts,
+          principal,
+          context,
+        }),
+        tx,
+      );
+    });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },
       'activity deleted',
@@ -1065,6 +1150,7 @@ export class ActivitiesService {
     principal: Principal,
     orgSlug: string,
     activityId: string,
+    context?: RequestContext,
   ): Promise<DissolveSummaryResult> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:delete', organization.id);
@@ -1118,6 +1204,24 @@ export class ActivitiesService {
       // The summary is childless now, so the cascade has nothing left to take with it.
       await this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId);
 
+      // ONE row, and deliberately NOT `activity.deleted` — a dissolve removes the grouping and
+      // KEEPS the work, so recording it as a deletion would tell somebody looking for lost work
+      // that a phase's forty activities went away. `promotedChildCount` is the number that makes
+      // the difference legible, and it is the count of rows this transaction actually moved.
+      await this.audit.record(
+        {
+          action: 'activity.dissolved',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'ACTIVITY',
+          subjectId: activityId,
+          subjectLabel: existing.name,
+          before: { name: existing.name, promotedChildCount: rows.length },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+
       // Re-read the promoted rows so the response carries their NEW versions. A client cannot
       // derive them: it did not know which activities were children, and `updateMany` reports only
       // a count. Without this the caller's only correct move after a dissolve is a full refetch,
@@ -1147,6 +1251,7 @@ export class ActivitiesService {
     principal: Principal,
     orgSlug: string,
     activityId: string,
+    context?: RequestContext,
   ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:restore', organization.id);
@@ -1159,9 +1264,32 @@ export class ActivitiesService {
 
     // The lifecycle enforces the top-down invariant: restoring an activity whose
     // parent plan is still soft-deleted raises PARENT_DELETED (→ 409).
-    await this.prisma.$transaction((tx) =>
-      this.lifecycle.restoreBatch(tx, 'activity', activityId, principal.userId),
-    );
+    await this.prisma.$transaction(async (tx) => {
+      const counts = await this.lifecycle.restoreBatch(
+        tx,
+        'activity',
+        activityId,
+        principal.userId,
+      );
+      // `existing.deleteBatchId` is read before the transaction, and that is safe for the reason
+      // the hierarchy producers give: `restoreBatch` re-reads the root inside the transaction and
+      // throws unless it is still soft-deleted, so a stale read cannot survive to be recorded.
+      await this.audit.record(
+        hierarchyAuditEvent({
+          entity: 'activity',
+          kind: 'restored',
+          organizationId: organization.id,
+          id: activityId,
+          name: existing.name,
+          code: existing.code,
+          deleteBatchId: existing.deleteBatchId,
+          counts,
+          principal,
+          context,
+        }),
+        tx,
+      );
+    });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },
       'activity restored',

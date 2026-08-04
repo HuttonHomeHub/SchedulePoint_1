@@ -34,3 +34,45 @@ export async function clearAuditEvents(prisma: PrismaClient): Promise<void> {
     );
   }
 }
+
+/**
+ * Clear every domain table an audit spec can reach, deepest FK first.
+ *
+ * **One list, because two drifted.** The two audit specs each kept their own sweep, and the audit
+ * log's own coverage is what made them collide: as C3 widened, one spec created activities,
+ * baselines and resources that the other's `plan.deleteMany()` then tripped over — a failure whose
+ * message names a foreign key and says nothing about the spec that actually left the rows behind,
+ * and which surfaces or hides depending on the order the runner happens to pick. Sharing the list
+ * is the ADR-0065 rule applied to test scaffolding: a second copy would drift again, and the drift
+ * would be invisible until an unrelated change reordered the files.
+ *
+ * Soft deletes are why a passing test still leaves rows: the API's DELETE marks `deleted_at` and
+ * the row stays, so a spec that "cleaned up through the API" has cleaned up nothing this needs.
+ */
+export async function clearDomainData(prisma: PrismaClient): Promise<void> {
+  await prisma.crossPlanDependency.deleteMany();
+  await prisma.activityDependency.deleteMany();
+  await prisma.activity.deleteMany();
+  // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go before
+  // `plan`, deepest first.
+  await prisma.baselineAssignment.deleteMany();
+  await prisma.baselineActivity.deleteMany();
+  await prisma.baseline.deleteMany();
+  await prisma.planLock.deleteMany();
+  // Share links hold a RESTRICT FK to their plan.
+  await prisma.planShare.deleteMany();
+  await prisma.plan.deleteMany();
+  await prisma.resourceAssignment.deleteMany();
+  await prisma.resource.deleteMany();
+  await prisma.calendarException.deleteMany();
+  await prisma.calendar.deleteMany();
+  await prisma.project.deleteMany();
+  await prisma.client.deleteMany();
+  await prisma.invitation.deleteMany();
+  await prisma.orgMember.deleteMany();
+  // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
+  await clearAuditEvents(prisma);
+  await prisma.organization.deleteMany();
+  await prisma.verification.deleteMany();
+  await prisma.user.deleteMany();
+}

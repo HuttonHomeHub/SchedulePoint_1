@@ -10,6 +10,7 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanRepository } from '../plans/plan.repository';
@@ -162,7 +163,14 @@ describe('BaselinesService', () => {
     };
     // The tx handle exposes $executeRaw (the plan advisory lock used by capture).
     prisma = {
-      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+      // `plan.findFirst` is the audit row's label lookup (ADR-0073 C3.2) — it runs inside the
+      // same transaction as the write it describes.
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
+        cb({
+          $executeRaw: vi.fn(),
+          plan: { findFirst: vi.fn().mockResolvedValue({ name: 'Baseline plan' }) },
+        }),
+      ),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new BaselinesService(
@@ -172,6 +180,8 @@ describe('BaselinesService', () => {
       // The capture-time day factor (ADR-0068 §5). Empty ⇒ the 24-hour constant.
       { findHoursPerDayMinutes: () => Promise.resolve(new Map()) } as unknown as CalendarRepository,
       prisma as unknown as PrismaService,
+      // Proven against a real table in the e2e suite; a fake here could only assert a fake ran.
+      { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService,
       logger,
     );
   });

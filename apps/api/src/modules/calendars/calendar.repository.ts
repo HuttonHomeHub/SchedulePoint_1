@@ -653,13 +653,17 @@ export class CalendarRepository {
     id: string,
     actorId: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<void> {
-    const stamp = { deletedAt: new Date(), deleteBatchId: randomUUID(), updatedBy: actorId };
+  ): Promise<string> {
+    const batchId = randomUUID();
+    const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
     await db.calendarException.updateMany({
       where: { calendarId: id, deletedAt: null },
       data: stamp,
     });
     await db.calendar.updateMany({ where: { id, deletedAt: null }, data: stamp });
+    // Returned so the caller's audit row can name the batch (ADR-0073 C3.3) — the thread that
+    // ties the calendar to the exceptions that went with it.
+    return batchId;
   }
 
   /** Create a dated exception with its replacement windows (explicit, or derived from `isWorking`). */

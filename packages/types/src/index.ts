@@ -1972,6 +1972,57 @@ export const AUDIT_ACTIONS = [
   'project.restored',
   'plan.deleted',
   'plan.restored',
+  // — Destructive and structural acts inside a plan (ADR-0073 family D). One row per **user
+  //   action**, never per swept row: deleting a WBS summary with forty-one descendants is one
+  //   thing a person did, and forty-one rows would bury the fact rather than record it. The
+  //   counts ride the payload as flattened scalars instead.
+  //
+  //   `activity.created` is deliberately absent and stays absent (spec CQ-D): it fails BOTH tests
+  //   — `created_by`/`created_at` on the row is already a durable, permanent record of the act
+  //   (Test 1), and a new activity changes nothing outside itself until it is linked (Test 2).
+  //   `dependency.created` is here for exactly that second reason: a link re-dates everything
+  //   downstream of it, which is somebody else's work. The honest cost of the asymmetry — an
+  //   ADR-0048 undo of a delete is a re-create, so the log shows a deletion with no matching
+  //   restore — is `docs/TECH_DEBT.md` #92, not a reason to widen the catalogue.
+  'activity.deleted',
+  'activity.restored',
+  'activity.dissolved',
+  'activity.reparented',
+  'dependency.created',
+  'dependency.deleted',
+  // — The rules other people's work is judged by (ADR-0073 family E). These are UPDATES, and they
+  //   earn their row on the second test rather than the first: a plan's data date or a shared
+  //   calendar's working time re-dates work that other people own, so `updated_by` on the row
+  //   being edited records who typed it and nothing at all about the blast radius.
+  //
+  //   `plan.settings_changed` is emitted only when a **governance** field actually changed value;
+  //   a PATCH that touches only the name or description writes nothing, because a rename changes
+  //   how nothing computes.
+  'plan.settings_changed',
+  'calendar.working_time_changed',
+  //   A baseline is the committed programme every later variance is measured against, so capturing
+  //   or activating one changes what "late" means for the whole plan.
+  'baseline.captured',
+  'baseline.activated',
+  'baseline.deleted',
+  // — Library governance (ADR-0073 family F, over ADR-0053). A calendar or resource in the shared
+  //   library is used by work its owner does not own, so retiring one, moving its tier, or
+  //   deleting it changes what other people can build with. Archive is the sharp case: an
+  //   archived row keeps scheduling identically and refuses only NEW usages, so nothing visibly
+  //   breaks and nobody is told — which is exactly when a log earns its place.
+  'calendar.deleted',
+  'calendar.archived',
+  'calendar.unarchived',
+  'calendar.scope_changed',
+  'resource.deleted',
+  'resource.archived',
+  'resource.unarchived',
+  // — Provenance (ADR-0073 family G). The catalogue's only import. A plan created by hand is a
+  //   sequence of choices somebody made and can account for; a plan created by an import arrived
+  //   whole, from a file, with hundreds of activities and possibly rows added to the shared
+  //   libraries. "Where did this programme come from, and which file was it?" is a question the
+  //   product otherwise cannot answer at all once the upload is gone.
+  'interchange.imported',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -1987,6 +2038,157 @@ export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
  */
 export const AUDIT_OUTCOMES = ['SUCCESS', 'DENIED', 'FAILURE'] as const;
 export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
+
+/**
+ * Which of the two audit reads a question is being asked of. Named once here rather than spelled
+ * out at each use: the two functions below and the web's filter model all branch on it, and a
+ * union repeated in four places is a union that can be repeated wrongly in a fifth.
+ */
+export const AUDIT_SURFACES = ['organization', 'self'] as const;
+export type AuditSurface = (typeof AUDIT_SURFACES)[number];
+
+/**
+ * The groups a reader filters by (ADR-0073 C1).
+ *
+ * A category is a **question somebody asks**, not a tidy-up of the action list: "who changed
+ * access?", "what was deleted?", "who has been signing in?". A filter offering twenty machine
+ * names would make the reader translate their question into our vocabulary before they could ask
+ * it, which is the same tax the unfiltered stream already charges.
+ *
+ * **Categories are a reading aid and never travel on the wire.** The API takes actions only — the
+ * client expands a chosen category into its action list before building the request. That keeps
+ * one vocabulary on the boundary, so a category renamed for legibility is a copy change rather
+ * than a breaking API change, and a category regrouped later cannot silently alter what a saved
+ * URL means to the server.
+ */
+export const AUDIT_CATEGORIES = [
+  'access',
+  'deletions',
+  'plan-structure',
+  'settings',
+  'sign-ins',
+] as const;
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+/**
+ * Which category each action belongs to — **exhaustively keyed**, so adding an action without
+ * deciding which question it answers is a compile error. The fourth map in the system with that
+ * discipline (the redactor's allow-list, the census, and the web's copy map are the others), and
+ * for the same reason: a silent default here would put a new event in a group nobody chose.
+ */
+export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
+  // Who can do what, and who was let in or out.
+  'member.joined': 'access',
+  'member.removed': 'access',
+  'member.role_changed': 'access',
+  'invitation.created': 'access',
+  'invitation.revoked': 'access',
+  'invitation.accepted': 'access',
+  'organization.created': 'access',
+  // A share link authorises a read by somebody with no account, which is an access change in
+  // every sense that matters — so it belongs here rather than in a category of its own.
+  'share.created': 'access',
+  'share.revoked': 'access',
+  // Authentication. These rows carry no organisation, which is why the category is withheld from
+  // the organisation surface rather than merely returning nothing there.
+  'auth.signed_up': 'sign-ins',
+  'auth.signed_in': 'sign-ins',
+  'auth.sign_in_failed': 'sign-ins',
+  'auth.signed_out': 'sign-ins',
+  'auth.email_verified': 'sign-ins',
+  // What disappeared, and what came back. A restore sits beside its delete deliberately: a reader
+  // asking "what happened to the Northgate job?" wants both halves in one answer.
+  'client.deleted': 'deletions',
+  'client.restored': 'deletions',
+  'project.deleted': 'deletions',
+  'project.restored': 'deletions',
+  'plan.deleted': 'deletions',
+  'plan.restored': 'deletions',
+  'activity.deleted': 'deletions',
+  'activity.restored': 'deletions',
+  'dependency.deleted': 'deletions',
+  // Not a deletion — a rearrangement. `activity.dissolved` removes a summary but PROMOTES its
+  // children rather than deleting them, so filing it under "what disappeared" would tell a reader
+  // looking for lost work that forty activities went away. Its subject is the shape of the plan.
+  'activity.dissolved': 'plan-structure',
+  'activity.reparented': 'plan-structure',
+  'dependency.created': 'plan-structure',
+  // The rules the work is judged by. A baseline CAPTURE or ACTIVATION belongs here rather than in
+  // deletions for the same reason a data-date move does: it changes the standard, not the content.
+  'plan.settings_changed': 'settings',
+  'calendar.working_time_changed': 'settings',
+  'baseline.captured': 'settings',
+  'baseline.activated': 'settings',
+  // …and its DELETE belongs with the other deletions, because that is the question a reader asks
+  // about it ("where did the December baseline go?"), not "what changed about the rules".
+  'baseline.deleted': 'deletions',
+  'calendar.deleted': 'deletions',
+  'resource.deleted': 'deletions',
+  // Archiving is deliberately NOT a deletion (ADR-0053 §4) — the row stays valid and every
+  // existing reference keeps working — so filing it under "what disappeared" would answer the
+  // wrong question. A tier move is the same class of fact: who may use this, from now on.
+  'calendar.archived': 'settings',
+  'calendar.unarchived': 'settings',
+  'calendar.scope_changed': 'settings',
+  'resource.archived': 'settings',
+  'resource.unarchived': 'settings',
+  // An import is the one CREATE that is also a structural fact: it is how a whole plan's shape
+  // arrived. It sits with the other answers to "why does this plan look like this?" rather than
+  // with settings, which are about the rules a plan is judged by.
+  'interchange.imported': 'plan-structure',
+};
+
+/**
+ * The categories a surface may offer.
+ *
+ * The organisation log **cannot** offer `sign-ins`: an `auth.*` row carries no `organizationId`
+ * and that read filters on exactly that column, so the choice could only ever return nothing.
+ * Offering it would be the defect ADR-0072 met on its first day wearing a filter's clothes —
+ * absence a reader cannot distinguish from silence — and the API refuses those actions on that
+ * route for the same reason (plus a measured one: a filter that matches nothing is also the most
+ * expensive query the table accepts).
+ *
+ * **A category with nothing in it yet is also withheld**, and that is not a detail. Offering a chip
+ * that can only ever answer "no events" is the precise defect this filter exists to fix, in the
+ * control meant to fix it. `plan-structure` and `settings` were both declared-but-empty when C1
+ * shipped, for the compile-error discipline above; `plan-structure` gained its first actions with
+ * C3.1 and `settings` with C3.2, each appearing **without anyone editing this function** — which is
+ * the point of deriving the offering rather than listing it. Every declared category now holds at
+ * least one action; the rule stays because the next one declared will not.
+ *
+ * Both rules are **derived** from {@link AUDIT_ACTION_CATEGORY} rather than listed, so neither
+ * needs anyone to remember this function: the offering is a property of the vocabulary.
+ */
+export function auditCategoriesForSurface(surface: AuditSurface): readonly AuditCategory[] {
+  return AUDIT_CATEGORIES.filter(
+    (category) => auditActionsForCategories([category], surface).length > 0,
+  );
+}
+
+/** Every action in a category, in vocabulary order. */
+export function auditActionsInCategory(category: AuditCategory): readonly AuditAction[] {
+  return AUDIT_ACTIONS.filter((action) => AUDIT_ACTION_CATEGORY[action] === category);
+}
+
+/**
+ * Expand chosen categories into the `action` list to send — **for a given surface**.
+ *
+ * The surface argument is not decoration. Withholding the `sign-ins` chip from the organisation
+ * screen stops a reader picking an unanswerable filter, but it would not stop a category that
+ * merely *contained* an `auth.*` action from smuggling one into the request, which the API refuses
+ * with a 422. Filtering at the point of expansion makes that unreachable by construction rather
+ * than by the two lists happening to agree — and they are maintained in different places.
+ *
+ * An empty selection returns an empty list, which the caller sends as no `action` parameter at
+ * all: "no category chosen" means every action, not none.
+ */
+export function auditActionsForCategories(
+  categories: readonly AuditCategory[],
+  surface: AuditSurface,
+): readonly AuditAction[] {
+  const actions = categories.flatMap((category) => [...auditActionsInCategory(category)]);
+  return surface === 'self' ? actions : actions.filter((action) => !action.startsWith('auth.'));
+}
 
 /** One recorded event, as the read endpoints return it. */
 export interface AuditEvent {

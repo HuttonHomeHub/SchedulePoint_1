@@ -15,6 +15,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
@@ -73,7 +74,10 @@ export class PlanDependenciesController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
     @Body() dto: CreateDependencyDto,
+    @RequestContext() context: RequestContext,
   ): Promise<DependencyResponseDto> {
-    return DependencyResponseDto.from(await this.service.create(principal, orgSlug, planId, dto));
+    return DependencyResponseDto.from(
+      await this.service.create(principal, orgSlug, planId, dto, context),
+    );
   }
 }

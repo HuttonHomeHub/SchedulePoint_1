@@ -12,6 +12,7 @@ import {
 } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -177,6 +178,9 @@ describe('ActivitiesService', () => {
   // driving assignment, so the triad is inert and every prior activity test stays byte-identical.
   let txDrivingFindFirst: ReturnType<typeof vi.fn>;
   let txDrivingUpdateMany: ReturnType<typeof vi.fn>;
+  // The destination summary's name, read inside the reparent transaction for the audit row
+  // (ADR-0073 C3.1). Named so a test can assert the batch looked one up at all.
+  let txParentFindFirst: ReturnType<typeof vi.fn>;
   // Hoisted so a test can assert WHICH advisory locks a write path took. Both the plan write lock
   // (ADR-0038 parent-tree serialisation) and the calendar scope guard's lock go through
   // `tx.$executeRaw` as tagged templates, distinguishable by their namespace argument.
@@ -218,12 +222,14 @@ describe('ActivitiesService', () => {
     txDrivingFindFirst = vi.fn().mockResolvedValue(null);
     txDrivingUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     txExecuteRaw = vi.fn();
+    txParentFindFirst = vi.fn().mockResolvedValue({ name: 'Phase 1' });
     prisma = {
       // The post-transaction re-read of the rows a batch write moved.
       activity: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,
+          activity: { findFirst: txParentFindFirst },
           resourceAssignment: {
             findFirst: txDrivingFindFirst,
             updateMany: txDrivingUpdateMany,
@@ -245,6 +251,11 @@ describe('ActivitiesService', () => {
       findHoursPerDayMinutes: vi.fn().mockResolvedValue(new Map()),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    // The audit producers (ADR-0073 C3.1) are proven end to end against a real table by
+    // `audit-coverage.e2e-spec.ts` — a fake here could only assert that a fake was called. This
+    // stub exists so the unit specs can keep asserting the scheduling behaviour they were written
+    // for.
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new ActivitiesService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
@@ -253,6 +264,7 @@ describe('ActivitiesService', () => {
       lifecycle as unknown as HierarchyLifecycleService,
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
       logger,
     );
   });

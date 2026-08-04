@@ -1110,6 +1110,182 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   shape — a correct pattern applied to one control and not its neighbour, invisible to every gate
   that does not run the real thing.
 
+- **ADR-0071** _(Accepted; M1–M3 landed, `VITE_ASSIGNMENT_LAG` **default-on** 2026-08-02; **filed
+  2026-08-04**)_ — Per-assignment lag, and what it costs the levelling and Earned-Value parity
+  arguments. `engine/resource-histogram.ts` had taken a per-assignment `lagMinutes` since the
+  ADR-0044 rung-5 slice and **nothing in SchedulePoint could store one** — the ADR-0067/ADR-0070
+  shape again, one field along. An unsigned, activity-calendar-framed, constant-defaulted column
+  shifts the effective span to `[start + lag, finish)`; the levelling parity argument **changes**,
+  and the ADR says so in those words rather than asserting it still holds (Gate A / Gate B split
+  amending ADR-0041 §7); Earned Value gains a per-component PV phasing model, described as one
+  rather than smuggled in (extending ADR-0042/0044); the engine's own guard is a **typed error and
+  a 422, not a 500**; and interchange takes a shape now and a parser only once a real export has
+  been read.
+  **This entry, and the ADR's own filing, are the drift finding.** The document lived at
+  `docs/specs/assignment-lag/adr-0071-draft-per-assignment-lag.md` for its whole epic — maintained
+  through M6 and the flag flip — and was never moved into `docs/adr/` on approval, so a decision
+  cited **by number** in `docs/DATABASE.md`, `docs/TECH_DEBT.md`, three other ADRs, two migrations
+  and `packages/types` was absent from the register. The audit-log spec **found it** while choosing
+  its own number, recorded the collision correctly, and routed around it. Noticing drift and
+  stepping over it leaves the register exactly as wrong as not noticing — ADR-0058's rule needs the
+  second half.
+
+- **ADR-0072** _(Accepted; M1–M3 landed, `VITE_AUDIT_LOG` **default-on** 2026-08-03)_ — The
+  append-only audit log, closing TECH_DEBT #14. Row attribution plus structured logs are not an
+  audit trail: `updated_by` says who touched a row last and nothing about who was **refused**, and
+  a log line is not evidence. The record is a single `audit_events` table made append-only **in the
+  database** — `BEFORE UPDATE OR DELETE` and `BEFORE TRUNCATE` triggers, `ENABLE ALWAYS`, so the
+  application role cannot bypass them — which makes the honest claim tamper-**resistant**, not
+  tamper-proof, and the ADR says so. Payloads pass an **allow-list per action** (a `NEVER_RECORD`
+  substring ban catches `token`/`hash` independently), and a **route census** derived by reflecting
+  the live Nest tree fails if a route that changes who can do what stops being audited. M1 covers
+  membership, invitations, organisations, the five `auth.*` events and hierarchy delete/restore;
+  M3 adds share links and **measures** the storage (1M rows: ~592 B/row, both reads sub-millisecond)
+  to answer the partitioning question with data rather than instinct. **The CPM engine is not
+  imported**, and auditing the recalculation is forbidden — a recalculation is deterministic from
+  inputs that are themselves auditable, so a row saying "the schedule was recomputed" is noise, not
+  evidence. Note the census's actual shape before relying on it: its six assertions force a route
+  **to be** audited (and force every route to be classified, once, one way), but **nothing forbids
+  auditing one** — so `ENGINE_DERIVED` is a rule with a documented reason, not a gate. The
+  implementation plan for ADR-0073 states the opposite; if that protection is wanted it has to be
+  written. Coverage widening is ADR-0073.
+
+- **ADR-0073** _(Accepted per-milestone; C1 landed, `VITE_AUDIT_FILTERS` **default-on** 2026-08-04)_
+  — Which mutations earn an audit event, and who may read an actor-less one. ADR-0072 met a real
+  reader within hours: they created and deleted activities, opened the log, found nothing, and asked
+  why — then said sign-ins were missing too. Neither observation was a fault, and both were the
+  **screen's**. What first contact exposed is one failure in three costumes — **the log records
+  things nobody can find**: a failed sign-in carries neither `organization_id` nor an actor, so both
+  reads filter it out and the single most useful row an audit log has is reachable only from `psql`;
+  there is no filter on either side, so seven event kinds arrive in one undifferentiated stream; and
+  88 mutating routes sit in `UNAUDITED_ROUTES`. The load-bearing decision is that coverage is
+  **derived from two tests — durability and blast radius — not from a list of opinions** about which
+  endpoints are interesting, so a route added later is classified by the same rule rather than by
+  whoever is reviewing. Content edits are **permanently excluded**, not deferred again. And the
+  ordering is a hard gate rather than a preference: **the filter precedes the coverage**, because a
+  `VITE_` constant is a client build-time value and cannot gate a server-side producer (the ADR-0060
+  M0 rule) — so the day the first coverage producer merges every reader's feed gains two to three
+  orders of magnitude more rows, flag or no flag, and a log with no filter at that moment is
+  unusable for everyone with no rollback that helps.
+  **C1 also found what the gates could not.** The index question was **measured** rather than
+  asserted, and the measurement changed a decision: at 1M rows a zero-match filter combination costs
+  681–954 ms against 0.35 ms unfiltered, because with no index on `action` Postgres walks the whole
+  organisation partition to prove an absence — so the cheapest way for a caller to reach the worst
+  case in the system was the one combination already established to be incapable of returning a row.
+  That combination (`auth.*` on the organisation route) is now a **422, not a documented no-op**;
+  documenting it and accepting the request anyway was the first draft, and is TECH_DEBT #19 in a new
+  costume. Two reviewers independently caught a docblock claiming a cap sat above the vocabulary
+  when it sits exactly on it, and the accessibility gate caught the live region announcing
+  **"Showing 0 events" for both empty states** — "nothing recorded yet" and "nothing matches what
+  you asked for" are different facts, honoured in the visible copy and collapsed in the one channel
+  a screen-reader user has, which is the distinction the whole milestone exists to make. **The CPM
+  engine is not imported and the recalc parity gate is untouched.** Filing ADR-0071 is part of this
+  ADR's own record: choosing a number surfaced that ADR-0071 had never been filed despite being
+  cited by shipped code, and it was filed rather than routed around.
+  **C2 (`VITE_AUDIT_SELF_SECURITY` default-on 2026-08-04)** makes a failed sign-in readable by the
+  account it named, closing TECH_DEBT #91. The attempted address is resolved to a user id at **write
+  time** into `subject_id` — not at read time, because addresses get reassigned and a read-time join
+  would silently move one person's history into another's — and surfaced by an **opt-in projection**
+  (`?include=attempts`) whose absence is byte-identical, which is what lets the web half sit behind a
+  flag with no server flag. Attribution is **forward-only**: the table refuses `UPDATE`, so earlier
+  rows can never be attributed, and that is stated rather than worked around. C2.1 **observed** three
+  things instead of assuming them — the stored label keeps the caller's casing while the user row is
+  lowercased (so the normaliser is `toLowerCase()` and **nothing else**; trimming would attribute a
+  probe to an account that input could never have reached), a malformed body still writes a row, and
+  Better Auth's rate limiter is 3-per-10s per IP but stored **in process memory**, so the bound is
+  per-replica and horizontal scaling silently multiplies it. C2.3's measurement again contradicted
+  the plan: the plan said the remedy was two merged keyset queries **rather than** an index, but the
+  existing actor index is partial on `actor_user_id IS NOT NULL` and therefore **structurally cannot**
+  serve rows where that column is null — 49–52 ms sequential scan against 7.1 ms indexed, for 576 kB
+  on a 145 MB table, so the index ships and the merge is recorded as the remaining constant-factor
+  move.
+  **The C2.5 gates earned their place, and one of them corrected the author.** Security found nothing
+  blocking. Accessibility passed the markup but caught that the safety caveat was reachable only by
+  reading serially — a landmark-navigating reader lands _inside_ the table region, so the note is now
+  `aria-describedby`-linked to it. UX found the copy **wrong in substance**: it opened "someone tried
+  to sign in as you", when the commonest cause of the row is the reader's own mistyped or stale
+  password, on the one screen framed around a security concern. It now says so first. UX also caught
+  that the milestone had shipped with **only its rollback contract tested** — the parity suite proved
+  what the screen does not do, and nothing proved an attempt row reached the reader with the column
+  and sentence that make it legible; that suite now exists. The journey found two more: an assertion
+  scoped to the document rather than the row passed on the prose alone, and **My activity sits
+  outside any organisation**, so the nav link the test clicked is not rendered there at all.
+  **C3 is the coverage itself, and C3.0 measured before a producer shipped.** ADR-0072 gated the
+  rung on an estimate nobody had made; the check counts from the seed catalogue's own `SeedSpec`s
+  rather than from persisted rows, because an append-only table cannot be cleaned — narrowing the
+  catalogue is cheap before a producer exists and impossible after. Measured **3,200 link creates
+  for a 2,000-activity programme against an estimate of 2,500 (1.28×)**, inside a 5× gate; the
+  catalogue ships unchanged. **C3.1** lands family D — an activity deleted, restored, dissolved or
+  regrouped, and a link added or removed — each inside the existing transaction after the existing
+  `assertHoldsPen`, and each **one row per user action, never per swept row**: deleting a summary
+  with forty-one descendants records one event carrying scalar counts. It also fixes a promise that
+  had never worked (spec §0.1): family C's cascade counts were specified as a nested
+  `CascadeCounts` and could not have been recorded, because the redactor reduces any non-scalar to a
+  type marker **by design** — so a delete of 412 activities said only that a batch happened. Two
+  departures from the spec's own shape, both because the spec was wrong about a case the API
+  permits: `activity.reparented` gains `parentCount` (a batch may name a different destination per
+  row, which `{ movedCount, parentName }` would render identically to "moved to the top level" —
+  absence a reader cannot distinguish from a fact, the defect this milestone exists to remove), and
+  `activity.dissolved` is filed under **plan-structure, not deletions**, because a dissolve keeps
+  the work. The census's `CONTENT_EDIT` splits into two **permanent** reasons plus a third,
+  `PENDING_COVERAGE`, that is honestly a queue — pinned as a snapshot so the failure caught is a
+  route quietly _arriving_ there, and emptied when C3.4 lands. **The CPM engine is not imported and
+  the recalc parity gate is untouched.**
+  **C3.2** adds family E — the rules other people's work is judged by. These are **updates**, which
+  the durability test says do not earn a row; they are here on the blast-radius test, and a fourth
+  positive census assertion now pins that, because a reader applying Test 1 alone would move them
+  back with a plausible reason and remove the only explanation the log offers for "everything moved
+  overnight". The plan's governance field set is **one `const`** that the redactor's allow-list
+  **spreads** rather than restating, so a field removed from the set stops being recordable in the
+  same commit; the producer diffs by **value**, because the settings dialog resends the whole form
+  and a presence check would record fifteen changes each time a planner moved one. A calendar row
+  names the **kind** of working-time edit and not the rows — the hours are non-scalar, but the
+  reason to withhold them is the reader's, since a dump of seven days' windows buries the fact the
+  row exists to carry — and all three exception routes fold into that one action, because an
+  exception **is** working time. `baseline.captured` is the catalogue's only audited **create**, on
+  the same test: a baseline is the standard every later variance is measured against.
+  **C3.3** adds family F — library governance over ADR-0053 — and its sharp case is **archive**,
+  which looks least like it needs a log and needs one most: an archived calendar or resource keeps
+  scheduling **identically**, keeps every existing binding live, takes no lock and no cascade, and
+  refuses only a **new** usage — so nothing breaks, nobody is told, and the whole effect surfaces
+  days later as somebody asking why they can no longer pick something they used last month. Archive
+  and unarchive are **two actions rather than one with a boolean**, because a reader filters on
+  "what was retired?" and not "what had its flag written?"; a **tier move is a second row on the
+  same request** (the first route in the census mapping to two actions), sharing a `correlation_id`
+  so "these happened together" is recoverable without collapsing two questions into one; and a
+  GROUP delete writes **one row carrying `resourceCount`**, never one per descendant. The two
+  archive paths gained a transaction so the row shares the write's fate — an insert **beside** the
+  update, not a lock around it, which is the ADR-0053 §4 property left intact. The web copy says
+  **"Calendar retired"**, because the screen has to make the distinction the model makes.
+  **C3.4** closes the coverage with family G — `interchange.imported`, the catalogue's only import.
+  An imported plan arrived **whole**, from a file that is not retained, so once the tab is closed
+  nothing distinguishes it from a plan somebody typed. Its producer is **the one that cannot sit in
+  its write's transaction**, and the plan said it should: `audit_events` is append-only in the
+  database, and the import's phase 2 **hard-deletes** the plan when the recalculation fails — so a
+  row written with the graph would outlive its subject and permanently claim an import that was
+  rolled back. It is written at the point of no return instead, which inverts the residual risk to
+  a **missing** row rather than a false one: silence, which is the right way round. The payload
+  names the file, the format and the size; `findingCount` is a scalar, because the report is a
+  document and a count says "go and read it" without pretending to be it. This slice also **deletes
+  `PENDING_COVERAGE`** — the one census reason that was a queue rather than a decision — and
+  replaces it with an assertion that every reason is a decision somebody made, so the next route is
+  classified by the two tests rather than deferred with a note.
+  **C4 is the gate pass, and it earned its place for the fourth epic running.** Six specialists over
+  the combined diff: security and backend-performance passed with nothing blocking (both re-derived
+  the epic's own measurements from the final code rather than trusting them); the other four blocked
+  on **six defects that had passed a human read**. The largest is the epic's own rule landing on
+  itself — the action-filter cap shipped in C1 as the literal `20` with a paragraph explaining why no
+  chip selection could reach it, and C3's nineteen new actions made **Deletions + Access 21**, so two
+  chips offered side by side returned **422**. It is now derived from `AUDIT_ACTIONS` and cannot fall
+  behind again. Next: the one producer written **outside** a transaction called `record()`, which
+  fails its caller — so a successful import would have returned 500, invited a retry that creates a
+  second plan, and skipped the pen release, under a comment describing the opposite trade. And the
+  organisation log's own "what this records" sentence listed family D and none of E, F or G, in the
+  milestone that added them; it now states the **rule** rather than an inventory, because an
+  inventory goes stale every time the vocabulary grows. **Four of the six are one correct pattern
+  applied to a control and not its neighbour** — the ADR-0064/ADR-0067 shape again. Every fix carries
+  a regression test verified to fail first; six non-blocking findings are `docs/TECH_DEBT.md` #93.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

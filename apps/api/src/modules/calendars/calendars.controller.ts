@@ -26,6 +26,7 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
@@ -150,9 +151,10 @@ export class CalendarsController {
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Body() dto: UpdateCalendarDto,
+    @RequestContext() context: RequestContext,
   ): Promise<CalendarDetailResponseDto> {
     return CalendarDetailResponseDto.fromDetail(
-      await this.service.update(principal, orgSlug, calendarId, dto),
+      await this.service.update(principal, orgSlug, calendarId, dto, context),
     );
   }
 
@@ -174,8 +176,9 @@ export class CalendarsController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, calendarId);
+    await this.service.remove(principal, orgSlug, calendarId, context);
   }
 
   @Post(':calendarId/archive')
@@ -201,8 +204,9 @@ export class CalendarsController {
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Body() dto: ArchiveActionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.setArchived(principal, orgSlug, calendarId, true, dto.version);
+    await this.service.setArchived(principal, orgSlug, calendarId, true, dto.version, context);
   }
 
   @Post(':calendarId/unarchive')
@@ -225,8 +229,9 @@ export class CalendarsController {
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Body() dto: ArchiveActionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.setArchived(principal, orgSlug, calendarId, false, dto.version);
+    await this.service.setArchived(principal, orgSlug, calendarId, false, dto.version, context);
   }
 
   @Post(':calendarId/exceptions')
@@ -241,9 +246,10 @@ export class CalendarsController {
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Body() dto: CreateCalendarExceptionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<CalendarExceptionResponseDto> {
     return CalendarExceptionResponseDto.from(
-      await this.service.addException(principal, orgSlug, calendarId, dto),
+      await this.service.addException(principal, orgSlug, calendarId, dto, context),
     );
   }
 
@@ -275,9 +281,10 @@ export class CalendarsController {
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Param('exceptionId', ParseUuidPipe) exceptionId: string,
     @Body() dto: UpdateCalendarExceptionDto,
+    @RequestContext() context: RequestContext,
   ): Promise<CalendarExceptionResponseDto> {
     return CalendarExceptionResponseDto.from(
-      await this.service.updateException(principal, orgSlug, calendarId, exceptionId, dto),
+      await this.service.updateException(principal, orgSlug, calendarId, exceptionId, dto, context),
     );
   }
 
@@ -291,7 +298,8 @@ export class CalendarsController {
     @Param('orgSlug') orgSlug: string,
     @Param('calendarId', ParseUuidPipe) calendarId: string,
     @Param('exceptionId', ParseUuidPipe) exceptionId: string,
+    @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.removeException(principal, orgSlug, calendarId, exceptionId);
+    await this.service.removeException(principal, orgSlug, calendarId, exceptionId, context);
   }
 }

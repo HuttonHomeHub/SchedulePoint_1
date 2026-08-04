@@ -808,32 +808,70 @@ is the ADR-0058 rule finding two of its own instances in the file that cites it.
 
 ---
 
-### 91. A failed sign-in is recorded and readable by nobody
+### 92. An undone delete leaves a deletion with no matching restore
 
-**Found:** 2026-08-03, writing the ADR-0072 M1 journey.
+**Found:** 2026-08-04, writing ADR-0073 C3.1. Named in the feature spec (CQ-D / §2.5) as the honest
+cost of a decision rather than discovered afterwards.
 
-`auth.sign_in_failed` is the one audited event with **no organisation and no actor**: authentication
-happens before an organisation is known, and a failed attempt is by definition not attributable to a
-signed-in user (`classifyAuthEvent` returns `actorType: 'ANONYMOUS'`, `actorUserId: null`). Both
-read endpoints filter on exactly those two columns — `listForOrganization` on `organization_id`,
-`listForSelf` on `actor_user_id` — so the row lands in the table and then appears on no screen in
-the product.
+`activity.deleted` and `activity.restored` are a pair, and a reader's question — "what happened to
+the Northgate piling activity?" — is answerable because both halves are recorded. **Undo does not
+produce the second half.** ADR-0048's undo of a delete is a **re-create** (M1–M3: a new row, a new
+id), and `activity.created` is deliberately absent from the catalogue because a create is already
+durably attributed by `created_by`/`created_at`. So a planner who deletes an activity and
+immediately presses Undo leaves a `activity.deleted` row, a live activity, and nothing in the log
+tying the two together.
 
-That is not a defect in either read; each is correctly scoped, and the attempted email is
-attacker-supplied text that must not be handed to whoever happens to own that address. It is a gap
-in **coverage**: repeated failed sign-ins against one account are the single most useful thing an
-audit log has to say, and today the only way to see them is `psql`.
+Dependencies do **not** have this problem: their undo re-creates too, but `dependency.created` IS in
+the catalogue (it earns its row on the blast-radius test), so the pair closes.
 
-**What is owed:** a decision, then the surface. The scoping question is the whole of it — a failed
-attempt names an account but proves nothing about who made it, so "show it to the account's owner"
-leaks an attacker's timing to the victim and "show it to every Org Admin the account belongs to"
-resolves an organisation from a credential that did not authenticate. A plausible answer is a
-**third, deliberately narrow** read — attempts against an email that _is_ a member, exposed on the
-organisation feed with the actor left as "Not signed in" — but it is a security decision with its
-own reasoning, not a filter to widen.
+**Why it is not patched by auditing creates.** That would add a row per created activity — the
+largest single class in the excluded catalogue, and the one whose exclusion makes the whole
+coverage rung affordable (ADR-0073 §2.4). Recording thousands of rows to close one gap of
+interpretation is the wrong trade, and it would be irreversible: the table refuses `DELETE`.
 
-**Where it sits:** with the ADR-0072 M2 coverage question, which already has to decide what else the
-log records. Doing it there keeps one conversation about scope instead of two.
+**The fix when it is taken:** ADR-0048 **M4** — the optional id-stable restore endpoint, reusing
+the existing soft-delete `delete_batch_id`. Undo then calls **restore** rather than create, the
+existing `activity.restored` producer fires with the original id, and the pair closes with no new
+audit action and no new rows on the common path. Until then the screens say what they record and
+the log is not wrong, only incomplete in a way a reader cannot see.
+
+---
+
+### 93. The audit epic's non-blocking review findings (ADR-0073 C4.1)
+
+**Found:** 2026-08-04, from six specialist reviews over the combined C1–C3.4 diff. The six blocking
+findings were folded with regression tests; these are the remainder, recorded rather than rushed.
+
+(a) **Two producers read one extra row inside a held lock** to label their audit event —
+`baselines.service.ts` (`activate`, `remove`) looks up the plan's name inside the plan-advisory-lock
+transaction, and `activities.service.ts` (`updateParents`) looks up the destination parent's name.
+Each is one indexed primary-key lookup, sub-millisecond, and each producer is a single call rather
+than a loop — so this is a shape to watch, not a cost to pay down now. It becomes real if any of
+those actions is ever driven from a batch.
+
+(b) **`AuditEventList` has seven inline-typed props and no named `Props` interface**, unlike
+`AuditFilterBarProps` beside it. Predates the epic; worth extracting the next time the file is
+touched.
+
+(c) **Counts render without locale grouping** — `plural()` uses `String(n)`, so a 2,400-row cascade
+reads "2400 activities" while the dates in the same file go through `Intl.DateTimeFormat`. Not an
+established pattern for plain counts elsewhere in the app either, so this is a consistency question
+rather than a defect.
+
+(d) **`DataTable`'s `describedById` contract holds only for the populated table** — the empty state
+returns the message without the `role="region"` wrapper, so the My-activity safety caveat is
+reachable by serial reading but not by landmark navigation when there is nothing to show. Harmless
+today (there is no region to land inside), but the contract is undocumented and a future change to
+the empty-state markup could silently regress the populated case's fix.
+
+(e) **Directional facts use a bare `→` glyph** — "Planner → Contributor", predecessor → successor,
+calendar scope from → to. It is real text, so 1.4.1 is satisfied, but glyph pronunciation varies by
+screen reader and the dependency-direction line is the one ADR-0064 names as the defect this row
+exists to prevent. A textual equivalent (`"X to Y"`, or an `sr-only` sibling) would settle it.
+
+(f) **`AUDIT_CATEGORY_LABELS.settings` reads "Settings & calendars"** but the category now also
+holds baseline and library-governance events, so a reader looking for "why did my baseline
+disappear" may not think to try it. The label predates the widened scope.
 
 ---
 
@@ -862,10 +900,11 @@ One line each. The story lives where the link points, not here.
 | 82  | Shift-editor epic — the non-blocking half of five gates     | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                       |
 | 87  | Import rejected a file with two activities of the same name | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).       |
 | 90  | `idx_audit_events_actor_occurred` was never measured        | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)". |
+| 91  | A failed sign-in was recorded and readable by nobody        | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`. |
 | 83¹ | A typed duration overwritten by the calendar factor landing | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.    |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 92.**
+**Next free number: 94.**

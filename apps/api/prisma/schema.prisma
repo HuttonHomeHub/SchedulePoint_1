@@ -2666,5 +2666,11 @@ model AuditEvent {
   //       org read's exact cursor order, in one index.
   //   * idx_audit_events_actor_occurred (actor_user_id, occurred_at DESC, id DESC)
   //       WHERE actor_user_id IS NOT NULL — the per-principal self-read.
+  //   * idx_audit_events_subject_occurred (subject_id, occurred_at DESC, id DESC)
+  //       WHERE actor_user_id IS NULL AND subject_id IS NOT NULL — the `include=attempts`
+  //       widening (ADR-0073 C2.3). It is the complement of the one above, deliberately: the
+  //       actor index EXCLUDES exactly the rows this one covers, which is why the widened read
+  //       needed a second index rather than a wider one. Measured before it was written; the
+  //       numbers are in the migration.
   @@map("audit_events")
 }

@@ -1,7 +1,7 @@
 # Implementation Plan: Per-assignment lag across all three resource surfaces
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
-- **Draft ADR:** [`./adr-0071-draft-per-assignment-lag.md`](./adr-0071-draft-per-assignment-lag.md)
+- **ADR:** [`../../adr/0071-per-assignment-lag.md`](../../adr/0071-per-assignment-lag.md)
 - **Status:** Draft — awaiting approval
 - **Owner:** _(to be assigned)_
 
