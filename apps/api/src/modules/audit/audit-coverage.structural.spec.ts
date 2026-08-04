@@ -1,6 +1,20 @@
 import type { Type } from '@nestjs/common';
 import type { AuditAction } from '@repo/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// `vi.hoisted` runs BEFORE the imports below, which is the only place this can go: importing
+// `AppModule` evaluates `ConfigModule.forRoot({ validate })`, and that validator throws on a
+// missing `DATABASE_URL` at module-evaluation time — before any `beforeAll` could run.
+//
+// This spec reads decorator metadata and never opens a connection, so a placeholder is honest
+// rather than a workaround. It is here because the omission cost a CI round: a developer machine
+// has `apps/api/.env`, CI does not, so the suite passed locally and the run exited non-zero in CI
+// on an unhandled rejection while reporting every test as passed. `??=` so a real environment
+// (the e2e config, a developer running one file) still wins.
+vi.hoisted(() => {
+  process.env.DATABASE_URL ??= 'postgresql://census:census@localhost:5432/census?schema=public';
+  process.env.BETTER_AUTH_SECRET ??= 'structural-census-secret-at-least-32-chars';
+});
 
 import { AppModule } from '../../app.module';
 
