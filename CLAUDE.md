@@ -1182,6 +1182,34 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   engine is not imported and the recalc parity gate is untouched.** Filing ADR-0071 is part of this
   ADR's own record: choosing a number surfaced that ADR-0071 had never been filed despite being
   cited by shipped code, and it was filed rather than routed around.
+  **C2 (`VITE_AUDIT_SELF_SECURITY` default-on 2026-08-04)** makes a failed sign-in readable by the
+  account it named, closing TECH_DEBT #91. The attempted address is resolved to a user id at **write
+  time** into `subject_id` — not at read time, because addresses get reassigned and a read-time join
+  would silently move one person's history into another's — and surfaced by an **opt-in projection**
+  (`?include=attempts`) whose absence is byte-identical, which is what lets the web half sit behind a
+  flag with no server flag. Attribution is **forward-only**: the table refuses `UPDATE`, so earlier
+  rows can never be attributed, and that is stated rather than worked around. C2.1 **observed** three
+  things instead of assuming them — the stored label keeps the caller's casing while the user row is
+  lowercased (so the normaliser is `toLowerCase()` and **nothing else**; trimming would attribute a
+  probe to an account that input could never have reached), a malformed body still writes a row, and
+  Better Auth's rate limiter is 3-per-10s per IP but stored **in process memory**, so the bound is
+  per-replica and horizontal scaling silently multiplies it. C2.3's measurement again contradicted
+  the plan: the plan said the remedy was two merged keyset queries **rather than** an index, but the
+  existing actor index is partial on `actor_user_id IS NOT NULL` and therefore **structurally cannot**
+  serve rows where that column is null — 49–52 ms sequential scan against 7.1 ms indexed, for 576 kB
+  on a 145 MB table, so the index ships and the merge is recorded as the remaining constant-factor
+  move.
+  **The C2.5 gates earned their place, and one of them corrected the author.** Security found nothing
+  blocking. Accessibility passed the markup but caught that the safety caveat was reachable only by
+  reading serially — a landmark-navigating reader lands _inside_ the table region, so the note is now
+  `aria-describedby`-linked to it. UX found the copy **wrong in substance**: it opened "someone tried
+  to sign in as you", when the commonest cause of the row is the reader's own mistyped or stale
+  password, on the one screen framed around a security concern. It now says so first. UX also caught
+  that the milestone had shipped with **only its rollback contract tested** — the parity suite proved
+  what the screen does not do, and nothing proved an attempt row reached the reader with the column
+  and sentence that make it legible; that suite now exists. The journey found two more: an assertion
+  scoped to the document rather than the row passed on the prose alone, and **My activity sits
+  outside any organisation**, so the nav link the test clicked is not rendered there at all.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

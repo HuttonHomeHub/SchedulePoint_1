@@ -108,4 +108,5 @@ interface ImportMetaEnv {
   readonly VITE_AUDIT_LOG?: string;
   /** ADR-0073 C1 — narrow the audit log by category, outcome and date range. Default off. */
   readonly VITE_AUDIT_FILTERS?: string;
+  readonly VITE_AUDIT_SELF_SECURITY?: string;
 }

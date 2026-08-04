@@ -147,6 +147,86 @@ the same rule the rest of the DTO already applied to unknown values, applied to 
 written down instead of enforced. The refusal is derived from the action's `auth.` prefix rather than
 a hand-listed set, so a sixth authentication event is covered without anyone remembering the file.
 
+### Observed, C2.1 (2026-08-04) — what the failed sign-in path actually gives us
+
+Three questions the C2 attribution design turns on, answered against `better-auth@1.6.25`'s source
+and against the real handler (`apps/api/test/auth-attribution.e2e-spec.ts`) rather than
+assumed. All three expectations held; the value is that two of them are now **pinned by a test**
+rather than by a sentence in a plan.
+
+**1. The recorded label is the address exactly as typed, and the stored one is lowercased.**
+`internalAdapter.findUserByEmail` looks up `email.toLowerCase()` with **no trimming**, and
+`/sign-up/email` stores `email.toLowerCase()`. The audit row, however, is written from `ctx.body` —
+the raw request — so an attempt against `Victim@Example.COM` records that string verbatim while the
+user row holds `victim@example.com`.
+
+So the C2.2 normaliser is `toLowerCase()` **and nothing else**. Trimming would be a defect, not a
+kindness: `" jane@x.com"` is an address Better Auth would never have matched, so trimming it into a
+match would attribute a probe to a user whose account was never actually reachable by that input —
+telling someone they were targeted when they were not, on the one screen where that claim carries
+weight.
+
+**2. A malformed body still produces a row, carrying no label.** The after-hook survives the
+endpoint's **schema** rejection, not merely a handler `APIError`: a body with no `email` at all, and
+one with a non-string `email`, each write exactly one `auth.sign_in_failed` row with
+`subject_label NULL` and no coercion. The hostile-body case is therefore real and already handled —
+`attemptedEmail` returns `null` for anything that is not a non-empty string.
+
+**3. An attempt against an unregistered address still produces a row, and nothing can attribute it.**
+That is the honest answer rather than a gap: no such user exists. C2.3's read must not assume every
+attempt row has a subject, and the `/me` surface must not imply that an unattributed attempt is
+absent — it is invisible to `/me` by construction, and that is a limit worth stating rather than a
+bug to fix.
+
+**The rate limiter, verified rather than trusted.** `rateLimit.enabled` is `isProduction`, so it is
+**off in dev and test** and on in production. Better Auth's own defaults then apply a stricter
+per-path rule ahead of the app's `window: 60, max: 100`: `getDefaultSpecialRules()` caps any path
+starting `/sign-in` at **3 requests per 10 seconds per IP**. The existing docblock's claim of
+"stricter per-path limits" is therefore accurate.
+
+What that docblock does **not** say, and what matters for the flooding argument, is the store:
+`storage: options.rateLimit?.storage || (options.secondaryStorage ? 'secondary-storage' : 'memory')`
+— and this app configures no `secondaryStorage`, so the counter lives **in process memory**. The
+bound is per-replica and resets on restart. Today's deployment is a single API container
+(`docs/DEPLOYMENT.md`), so 3-per-10s is the real figure; the moment a second replica exists it
+becomes `N × 3`, silently. C2's flooding paragraph is therefore "bounded, per process" rather than
+"bounded", and horizontal scaling acquires a prerequisite nobody would otherwise connect to the
+audit log.
+
+### Measured, C2.3 (2026-08-04) — the widened read DOES need an index, and the plan expected otherwise
+
+Postgres 17, 1,000,000 rows: 990,000 attributed rows across 500 actors (~2,000 each) and 10,000
+actor-less failed sign-ins, 2,000 of them naming one subject. `EXPLAIN (ANALYZE, BUFFERS)` on the
+real keyset query, warm:
+
+| Read                                         |                                  Plan |         Time |
+| -------------------------------------------- | ------------------------------------: | -----------: |
+| `include` absent (the parity path)           |                            Index Scan |  **0.20 ms** |
+| `include=attempts`, no new index             | Parallel Seq Scan, 996k rows filtered | **49–52 ms** |
+| `include=attempts`, with the candidate       |    BitmapOr over both partial indexes |   **7.1 ms** |
+| `include=attempts`, subject with no attempts |           BitmapOr (second leg empty) |   **7.6 ms** |
+
+Index size: **576 kB** on a 145 MB table (**+0.4%**).
+
+**The index ships, and the plan's stated escalation was the wrong one.** The plan wrote that the
+documented remedy was "two keyset queries merged in the repository, **not** a wider index". That
+reasoning came from C1, where the candidate cost 76 MB for a smaller gain and was rejected. It does
+not transfer, and the reason is structural rather than a matter of degree: `idx_audit_events_actor_
+occurred` is **partial on `actor_user_id IS NOT NULL`**, so it excludes precisely the rows the second
+disjunct selects. There is no version of the existing index that could serve this. The new one is
+partial over the ~1% of rows that are actor-less, which is why it costs three orders of magnitude
+less than C1's candidate — 576 kB against 76 MB.
+
+What the index does **not** buy is parity: 7 ms is still 35× the 0.2 ms unwidened read, because an
+`OR` forces a bitmap heap scan and a top-N sort rather than walking one already-ordered index. The
+plan's two-keyset-queries idea is the remedy for **that**, and it is recorded in the migration as the
+next move rather than taken now — it is more code for a difference nobody can perceive at 7 ms. The
+distinction worth keeping is that the index removes a cliff and the merge would remove a constant
+factor; only the first was worth paying for today.
+
+The parity path is unchanged and measured to be so, which is the property that lets the server half
+ship unflagged.
+
 ## Alternatives considered
 
 - **Fan failed sign-ins out to the organisations the matched member belongs to.** Rejected: the

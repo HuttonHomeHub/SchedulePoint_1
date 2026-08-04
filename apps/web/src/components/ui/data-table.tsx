@@ -36,6 +36,7 @@ export function DataTable<T>({
   empty,
   loadingLabel,
   errorLabel = 'Couldn’t load this list. Please try again.',
+  describedById,
 }: {
   caption: string;
   columns: Column<T>[];
@@ -50,6 +51,15 @@ export function DataTable<T>({
   empty: React.ReactNode;
   loadingLabel: string;
   errorLabel?: string;
+  /**
+   * Id of prose that qualifies what the rows mean, associated with the scroll region.
+   *
+   * Reading order alone is not enough: this region is focusable and carries `role="region"`, so a
+   * screen-reader user navigating by landmark lands *inside* the table having skipped whatever sits
+   * above it. Where that prose is a safety caveat — "this does not mean they got in" — being
+   * reachable only by reading serially is the wrong contract.
+   */
+  describedById?: string | undefined;
 }): React.ReactElement {
   if (query.isPending) {
     return (
@@ -79,8 +89,14 @@ export function DataTable<T>({
     // Focusable + labelled so a keyboard-only user can scroll a wide table
     // (WCAG 2.1.1); the caption names the region. A scroll container with a
     // `region` role is the recommended pattern here — the lint rule doesn't model it.
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-    <div className="overflow-x-auto" role="region" aria-label={caption} tabIndex={0}>
+    <div
+      className="overflow-x-auto"
+      role="region"
+      aria-label={caption}
+      {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+    >
       <table className="w-full text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>

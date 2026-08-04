@@ -133,6 +133,54 @@ export function classifyAuthEvent(facts: AuthHookFacts): AuthAuditEvent | null {
 }
 
 /**
+ * Resolve an address to a user id. Bound in `AuthModule` to a single indexed `users` read.
+ *
+ * **It must never reject** — the same contract as `recordAuthEvent`, for the same reason: this runs
+ * on the sign-in path, and turning a lookup fault into a refused sign-in would make an audit
+ * nicety an outage. {@link attributeFailedSignIn} guards it anyway; see there.
+ */
+export type FindUserIdByEmail = (email: string) => Promise<string | null>;
+
+/**
+ * Fill `subjectId` on a failed sign-in when the attempted address belongs to a real account
+ * (ADR-0073 C2.2). Every other event passes through untouched.
+ *
+ * This is what makes a failed sign-in **readable by the person it was aimed at**: both read
+ * endpoints filter on `actor_user_id` / `organization_id`, and this row has neither, so without a
+ * subject it is reachable only from `psql` (TECH_DEBT #91).
+ *
+ * **Forward-only, permanently.** Rows written before this existed cannot be attributed later: the
+ * table refuses `UPDATE` at the database (ADR-0072), by design. Nor should a read-time join on the
+ * label be added to "fix" them — it would re-derive history from whatever the address maps to
+ * *today*, so a reassigned or corrected address would silently reattribute somebody else's probe.
+ * The discontinuity is the honest shape.
+ *
+ * **The lookup runs on both branches and changes no response.** Whether the address exists or not,
+ * the same query executes and the sign-in's own reply is untouched — so this cannot be read as an
+ * account-existence oracle. The only place the answer surfaces is that account holder's own feed.
+ */
+export async function attributeFailedSignIn(
+  event: AuthAuditEvent,
+  findUserIdByEmail: FindUserIdByEmail,
+  normalize: (email: string) => string,
+): Promise<AuthAuditEvent> {
+  if (event.action !== 'auth.sign_in_failed' || event.subjectLabel === null) return event;
+
+  try {
+    const subjectId = await findUserIdByEmail(normalize(event.subjectLabel));
+    // A miss is the common and correct outcome — most probes name an address nobody registered —
+    // so an unattributed row is evidence, not a failure to attribute.
+    return subjectId === null ? event : { ...event, subjectId };
+  } catch {
+    // Deliberately fail-open, and NOT the fail-closed shape its siblings use. A reader who finds
+    // only the behaviour will want to "fix" this: don't. The alternative to an unattributed audit
+    // row here is a refused sign-in. The port is contracted never to reject and logs its own
+    // faults; this is the second line, not the first.
+    return event;
+  }
+}
+
+/**
  * The sign-out event, built from the session resolved in a **`before`** hook.
  *
  * Recorded on the way in rather than on the way out, because by the time the endpoint returns the

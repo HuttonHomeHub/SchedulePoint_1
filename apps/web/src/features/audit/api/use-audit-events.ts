@@ -31,7 +31,8 @@ export const auditKeys = {
   all: ['audit-events'] as const,
   organization: (orgSlug: string, filter?: AuditQueryFilter) =>
     [...auditKeys.all, 'organization', orgSlug, filterKey(filter)] as const,
-  self: (filter?: AuditQueryFilter) => [...auditKeys.all, 'self', filterKey(filter)] as const,
+  self: (filter?: AuditQueryFilter, includeAttempts = false) =>
+    [...auditKeys.all, 'self', filterKey(filter), includeAttempts] as const,
 };
 
 interface AuditPage {
@@ -43,6 +44,7 @@ async function fetchPage(
   path: string,
   cursor: string | undefined,
   filter: AuditQueryFilter | undefined,
+  includeAttempts = false,
 ): Promise<AuditPage> {
   const query = [`limit=${String(PAGE_SIZE)}`];
   if (cursor !== undefined && cursor !== '') query.push(`cursor=${encodeURIComponent(cursor)}`);
@@ -52,6 +54,10 @@ async function fetchPage(
   for (const outcome of filter?.outcome ?? []) query.push(`outcome=${encodeURIComponent(outcome)}`);
   if (filter?.from !== undefined) query.push(`from=${encodeURIComponent(filter.from)}`);
   if (filter?.to !== undefined) query.push(`to=${encodeURIComponent(filter.to)}`);
+  // The projection is a separate axis from the filter: it widens WHICH rows are yours rather than
+  // narrowing which of yours you see. Absent, the request is byte-for-byte the one this hook sent
+  // before `include` existed — the same parity property the filter has.
+  if (includeAttempts) query.push('include=attempts');
   const { data, meta } = await apiFetchEnvelope<AuditEvent[], PageMeta>(
     `${path}?${query.join('&')}`,
   );
@@ -84,14 +90,20 @@ export function organizationAuditQueryOptions(orgSlug: string, filter?: AuditQue
   });
 }
 
-/** The caller's own events, across every organisation, plus the org-less authentication rows. */
-export function selfAuditQueryOptions(filter?: AuditQueryFilter) {
+/**
+ * The caller's own events, across every organisation, plus the org-less authentication rows.
+ *
+ * `includeAttempts` additionally asks for failed sign-ins against the reader's address (ADR-0073
+ * C2). It is part of the **query key**, for the same reason the filter is: the two results are
+ * different sets, and continuing one's cursor into the other would interleave them.
+ */
+export function selfAuditQueryOptions(filter?: AuditQueryFilter, includeAttempts = false) {
   return infiniteQueryOptions({
-    queryKey: auditKeys.self(filter),
+    queryKey: auditKeys.self(filter, includeAttempts),
     staleTime: 0,
     placeholderData: keepPreviousData,
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => fetchPage('/me/audit-events', pageParam, filter),
+    queryFn: ({ pageParam }) => fetchPage('/me/audit-events', pageParam, filter, includeAttempts),
     getNextPageParam: (last: AuditPage) => last.nextCursor ?? undefined,
   });
 }
@@ -100,6 +112,6 @@ export function useOrganizationAuditEvents(orgSlug: string, filter?: AuditQueryF
   return useInfiniteQuery(organizationAuditQueryOptions(orgSlug, filter));
 }
 
-export function useSelfAuditEvents(filter?: AuditQueryFilter) {
-  return useInfiniteQuery(selfAuditQueryOptions(filter));
+export function useSelfAuditEvents(filter?: AuditQueryFilter, includeAttempts = false) {
+  return useInfiniteQuery(selfAuditQueryOptions(filter, includeAttempts));
 }

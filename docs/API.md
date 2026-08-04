@@ -641,6 +641,33 @@ walking the whole organisation partition (681–954 ms at 1M rows, against 0.35 
 page). Read your own sign-in history on `/me/audit-events`, which is the one place those rows are
 answerable.
 
+#### Widening `/me` to attempts against you (ADR-0073 C2)
+
+`GET /api/v1/me/audit-events?include=attempts` additionally returns **failed sign-ins against your
+own email address** — `auth.sign_in_failed` rows, which carry neither an organisation nor an actor
+and are therefore returned by no other endpoint to anybody.
+
+| Param     | Shape                  | Notes                                                            |
+| --------- | ---------------------- | ---------------------------------------------------------------- |
+| `include` | repeatable; `attempts` | Omit for exactly the response this route gave before it existed. |
+
+An unknown projection is a **422**, on the same rule as the filter values above.
+
+**How the row becomes yours.** The attempted address is resolved to a user id at **write time**,
+into `subject_id`. It is not matched at read time: addresses get reassigned, so a read-time join
+would silently move one person's history into another person's account as the mapping changed.
+
+Three consequences worth knowing before relying on this:
+
+- **It is forward-only.** The table refuses `UPDATE` at the database (ADR-0072), so attempts
+  recorded before this shipped cannot be attributed and will never appear.
+- **An attempt against an address nobody registered is invisible here**, because there is no
+  account to attribute it to. That is not a gap to fix — there is no subject.
+- **It is not an existence oracle.** The lookup runs on both branches and changes nothing the
+  caller can observe about the sign-in; the answer surfaces only in that account holder's own feed.
+
+The organisation log never returns these rows whatever is asked of it.
+
 Filters go into the `WHERE`, never a post-filter over a fetched page, so `limit` is honoured with a
 filter that excludes most rows. **No index ships with the filter**; the composite is a per-slice
 decision for the coverage milestone, on a fresh measurement (ADR-0073 "Measured, C1").

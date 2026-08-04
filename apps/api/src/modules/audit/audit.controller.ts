@@ -16,8 +16,8 @@ import { Paginated } from '../../common/dto/paginated';
 
 import { AuditReadService } from './audit-read.service';
 import { AuditEventResponseDto } from './dto/audit-event-response.dto';
-import { ListAuditEventsQueryDto } from './dto/list-audit-events-query.dto';
 import { ListOrganizationAuditEventsQueryDto } from './dto/list-organization-audit-events-query.dto';
+import { ListSelfAuditEventsQueryDto } from './dto/list-self-audit-events-query.dto';
 
 /**
  * An organisation's audit log (ADR-0072) — Org Admin only.
@@ -79,6 +79,11 @@ export class SelfAuditController {
   @Get()
   @ApiOperation({
     summary: 'List your own audit events, newest first (no permission required; cursor-paginated).',
+    description:
+      'Your own actions across every organisation, plus the org-less authentication rows. Add ' +
+      '`include=attempts` to also see failed sign-ins against your email address — actor-less ' +
+      'rows that no other endpoint returns to anybody. Omit it and the response is exactly what ' +
+      'it was before that parameter existed.',
   })
   @ApiOkResponse({ type: AuditEventResponseDto, isArray: true })
   @ApiUnprocessableEntityResponse({
@@ -88,7 +93,7 @@ export class SelfAuditController {
   })
   async list(
     @CurrentUser() principal: Principal,
-    @Query() query: ListAuditEventsQueryDto,
+    @Query() query: ListSelfAuditEventsQueryDto,
   ): Promise<Paginated<AuditEventResponseDto>> {
     const { items, meta } = await this.service.listForSelf(principal, query);
     return new Paginated(

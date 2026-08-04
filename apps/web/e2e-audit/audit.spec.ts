@@ -26,7 +26,13 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  *    and distinguishes "no events match this filter" from "nothing recorded yet" — the distinction
  *    this milestone exists to make, and the one a mocked fetch cannot be wrong about.
  *
- * Two isolated browser contexts (two accounts). Chromium only (TECH_DEBT #25a).
+ * 6. **A failed sign-in reaches the account it was aimed at** (ADR-0073 C2). The attempt is made
+ *    from a third context in a DIFFERENT letter case, so it only attributes if the normaliser is
+ *    applied; it then has to appear on that account's own feed and on no organisation log. Every
+ *    link in that chain — Better Auth's after-hook firing outside Nest's pipeline, the write-time
+ *    lookup, the opt-in projection — is invisible to a mocked fetch.
+ *
+ * Three isolated browser contexts. Chromium only (TECH_DEBT #25a).
  */
 
 /** The organisation nav in the header — scoped so its links don't clash with breadcrumbs. */
@@ -179,6 +185,22 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await expect(auditRow(admin, 'Organisation created')).toBeVisible();
   expect(new URL(admin.url()).searchParams.get('categories')).toBeNull();
 
+  // ------------------------------------------- 6. Somebody else fails to sign in AS the admin
+  // A third context, because the attempt must come from a session that is not the admin's. This is
+  // the only place the whole C2 chain can be exercised: Better Auth's after-hook fires outside
+  // Nest's pipeline, the attribution is a write-time lookup, and the read is an opt-in projection.
+  // A mocked fetch can be wrong about every link in that chain and still look right.
+  const attackerContext = await browser.newContext();
+  const attacker = await attackerContext.newPage();
+  await attacker.goto('/sign-in');
+  // Deliberately the admin's address in a DIFFERENT case: the recorded label keeps the raw casing
+  // while the stored user is lowercased, so this only attributes if the normaliser is applied.
+  await attacker.getByLabel('Email').fill(adminEmail.toUpperCase());
+  await attacker.getByLabel('Password').fill('not-the-right-password');
+  await attacker.getByRole('button', { name: /sign in/i }).click();
+  await expect(attacker).toHaveURL(/\/sign-in/);
+  await attackerContext.close();
+
   // 4a. The admin's OWN feed carries the org-less authentication row — the one no organisation
   // log can ever show, because signing up happens before an organisation is known.
   await admin.getByRole('button', { name: /Account:/ }).click();
@@ -186,6 +208,28 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await expect(admin.getByRole('heading', { name: 'My activity', level: 1 })).toBeVisible();
   await expect(auditRow(admin, 'Account created')).toBeVisible();
   await expect(auditRow(admin, 'Role changed')).toBeVisible();
+
+  // The C2 payoff: the failed attempt is on the admin's own feed, attributed to them despite being
+  // made by nobody, and the screen says what it does and does not prove.
+  const attemptRow = auditRow(admin, 'Sign-in failed');
+  await expect(attemptRow).toBeVisible();
+  await expect(attemptRow.getByText('Not signed in')).toBeVisible();
+  await expect(admin.getByText(/does not mean anyone got in/)).toBeVisible();
+
+  // The screen carrying that row is accessible too. The org log was already scanned above; this
+  // one now renders a column and a row shape that exist nowhere else in the product, so scanning
+  // only the sibling would leave the new markup unproven (CLAUDE.md §13).
+  const selfResults = await new AxeBuilder({ page: admin })
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(selfResults.violations).toEqual([]);
+
+  // It is NOT on the organisation log, whatever is asked of it — the row carries no organisation.
+  // Navigated by URL, not by the nav link: My activity sits OUTSIDE any organisation (it spans all
+  // of them), so the Organisation navigation is not rendered here at all.
+  await admin.goto(`/orgs/${orgSlug}/audit-log`);
+  await expect(admin.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
+  await expect(auditRow(admin, 'Sign-in failed')).toHaveCount(0);
   await adminContext.close();
 
   // ---------------------------------------------- 3. The teammate is refused, by the API not the UI

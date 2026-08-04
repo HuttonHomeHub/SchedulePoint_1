@@ -28,6 +28,7 @@ export function AuditEventList({
   emptyMessage,
   emptyFilteredMessage,
   onClearFilter,
+  describedById,
 }: {
   query: UseInfiniteQueryResult<{ pages: AuditPage[] }>;
   caption: string;
@@ -50,6 +51,8 @@ export function AuditEventList({
    * not a way out — the `CalendarsTable` precedent puts the button in the region itself.
    */
   onClearFilter?: (() => void) | undefined;
+  /** Id of prose qualifying what these rows mean — see `DataTable`'s own docblock. */
+  describedById?: string | undefined;
 }): React.ReactElement {
   const events = query.data?.pages.flatMap((page) => page.events) ?? [];
 
@@ -106,6 +109,7 @@ export function AuditEventList({
     <div className="flex flex-col gap-3">
       <DataTable
         caption={caption}
+        describedById={describedById}
         columns={columns}
         query={{
           isPending: query.isPending,

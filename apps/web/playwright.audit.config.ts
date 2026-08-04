@@ -20,6 +20,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
+  // Above Playwright's 30 s default. This is one long journey rather than many short tests — by
+  // design, because each step depends on rows the previous one wrote — and C2 roughly doubled it:
+  // a third browser context, a real failed sign-in, and a second axe scan. It timed out at 30 s
+  // with nothing wrong, which is the least useful kind of red.
+  timeout: 90_000,
   reporter: process.env.CI
     ? [['github'], ['html', { open: 'never', outputFolder: 'playwright-report-audit' }]]
     : 'list',
@@ -61,7 +66,11 @@ export default defineConfig({
             // ordinary hierarchy and members screens, so no canvas layer is involved and the
             // fewer flags a journey needs the fewer reasons it has to fail for something it is
             // not about.
-            env: { VITE_AUDIT_LOG: 'true', VITE_AUDIT_FILTERS: 'true' },
+            env: {
+              VITE_AUDIT_LOG: 'true',
+              VITE_AUDIT_FILTERS: 'true',
+              VITE_AUDIT_SELF_SECURITY: 'true',
+            },
           },
         ],
       }),

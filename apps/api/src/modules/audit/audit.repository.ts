@@ -108,8 +108,24 @@ export class AuditRepository {
     limit: number,
     cursor?: string,
     filter?: AuditEventFilter,
+    includeAttempts = false,
   ): Promise<AuditEventPage> {
-    return this.page({ ...whereFrom(filter), actorUserId }, limit, cursor);
+    // Absent `includeAttempts`, this is byte-for-byte the query it has always been — which is the
+    // whole parity argument for C2.3, and why the widening needs no flag on the server.
+    if (!includeAttempts) return this.page({ ...whereFrom(filter), actorUserId }, limit, cursor);
+
+    // "Mine, plus the actor-less rows aimed at me." The second disjunct is deliberately narrower
+    // than `subjectId = me`: without the `actorUserId: null` clause it would also match every row
+    // where somebody else acted ON this user — a role change an Org Admin made, say — and those
+    // are the admin's actions, readable in the organisation log, not this person's own history.
+    return this.page(
+      {
+        ...whereFrom(filter),
+        OR: [{ actorUserId }, { actorUserId: null, subjectId: actorUserId }],
+      },
+      limit,
+      cursor,
+    );
   }
 
   private async page(

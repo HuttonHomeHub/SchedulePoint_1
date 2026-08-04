@@ -42,8 +42,8 @@ export function flagDefaultOn(value: string | undefined): boolean {
  * **It has no consumer right now**, and that is the normal resting state of this helper rather than
  * a sign it is dead: every flag passes through it for the length of one epic and then leaves.
  * {@link AUDIT_LOG_ENABLED} moved to {@link flagDefaultOn} on 2026-08-03,
- * {@link AUDIT_FILTERS_ENABLED} took its place and moved on 2026-08-04, and the next flag will need
- * it on day one. Covered by `env.test.ts` regardless of consumers, including the case-sensitivity
+ * {@link AUDIT_FILTERS_ENABLED} took its place and moved on 2026-08-04,
+ * {@link AUDIT_SELF_SECURITY_ENABLED} the same day, and the next flag will need it on day one. Covered by `env.test.ts` regardless of consumers, including the case-sensitivity
  * that makes `"TRUE"` read as off — so it cannot rot unnoticed between epics.
  *
  * Do not delete it as dead code, and do not describe a specific consumer here: a named consumer is
@@ -1265,3 +1265,27 @@ export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);
  * rather than weakened: that suite is the rollback contract (ADR-0053 M6), not scaffolding.
  */
 export const AUDIT_FILTERS_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_FILTERS);
+
+/**
+ * Failed sign-ins against the reader's own address, on **My activity** (ADR-0073 C2).
+ *
+ * The single most useful row an audit log has to offer — somebody trying to get into your account —
+ * has until now been readable by nobody: it carries no organisation and no actor, and both reads
+ * filter on exactly those columns, so it was reachable only from `psql` (TECH_DEBT #91). C2.2
+ * attributes it to the account it named; this flag turns on the surface that shows it.
+ *
+ * **ON by default since 2026-08-04 (C2.5).** Only the client half is flagged, and it cannot be
+ * otherwise: the write-time attribution is a server-side record and a `VITE_` constant is a client
+ * build-time value (the ADR-0060 M0 rule). The server's own parity is structural instead — absent
+ * `include=attempts` the widened read's `where` is exactly what it always was, measured at 0.20 ms
+ * and unchanged.
+ *
+ * Rollback: set `VITE_AUDIT_SELF_SECURITY=false` and rebuild the web image. Flag-off, this screen
+ * sends no `include` parameter at all and shows no actor column, so it is byte-for-byte what it
+ * was. Pinned by `audit-self-security.parity.test.tsx`, which is **kept** rather than weakened —
+ * that suite is the rollback contract (ADR-0053 M6). Its sibling
+ * `audit-self-security.flag-on.test.tsx` pins the other half, and exists because this milestone
+ * first shipped with only the rollback covered: nothing proved an attempt row reached the reader
+ * with the column and the sentence that make it legible.
+ */
+export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_SELF_SECURITY);

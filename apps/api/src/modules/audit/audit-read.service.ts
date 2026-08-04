@@ -9,6 +9,7 @@ import { OrganizationsService } from '../organizations/organizations.service';
 
 import { type AuditEventFilter, AuditRepository } from './audit.repository';
 import { ListAuditEventsQueryDto } from './dto/list-audit-events-query.dto';
+import { ListSelfAuditEventsQueryDto } from './dto/list-self-audit-events-query.dto';
 
 /**
  * Narrow the validated query to the repository's filter shape.
@@ -80,13 +81,17 @@ export class AuditReadService {
    */
   async listForSelf(
     principal: Principal,
-    query: ListAuditEventsQueryDto,
+    query: ListSelfAuditEventsQueryDto,
   ): Promise<{ items: AuditEvent[]; meta: PageMeta }> {
     const { events, nextCursor } = await this.repository.listForActor(
       principal.userId,
       query.limit,
       query.cursor,
       filterFrom(query),
+      // Still no permission check, and widening does not introduce one: the subject id is the
+      // caller's own, from the session, so `include=attempts` can only ever widen the feed to rows
+      // aimed at the caller. There is nothing here for a caller to point at somebody else.
+      query.include?.includes('attempts') ?? false,
     );
     return { items: events, meta: { nextCursor, hasMore: nextCursor !== null } };
   }

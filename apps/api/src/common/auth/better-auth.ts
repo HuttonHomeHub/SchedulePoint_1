@@ -6,11 +6,14 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import { resolveClientIp } from '../http/client-ip';
 
 import {
+  attributeFailedSignIn,
   classifyAuthEvent,
   emailVerifiedEvent,
   signedOutEvent,
   type AuthAuditEvent,
+  type FindUserIdByEmail,
 } from './auth-audit';
+import { normalizeEmail } from './normalize-email';
 
 /**
  * DI token for the configured Better Auth instance (ADR-0003, ADR-0016).
@@ -63,6 +66,15 @@ export interface CreateAuthOptions {
     event: AuthAuditEvent,
     request: { ipAddress: string | null; userAgent: string | null },
   ) => Promise<void>;
+  /**
+   * Resolve an attempted address to a user id, so a failed sign-in is readable by the account it
+   * was aimed at (ADR-0073 C2.2). A callback for the same reason as the two above: this factory
+   * stays a pure function of its options.
+   *
+   * Like `recordAuthEvent` it **must never reject** — it runs on the sign-in path, where a lookup
+   * fault must not become a refused sign-in.
+   */
+  findUserIdByEmail: FindUserIdByEmail;
 }
 
 /**
@@ -196,7 +208,17 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
           body: ctx.body,
         });
         if (!event) return;
-        await options.recordAuthEvent(event, requestEvidence(ctx.headers, options.trustedProxies));
+        // Attribution runs BEFORE the record, because the table is append-only: there is no later
+        // pass that could fill `subject_id` in (ADR-0073 C2.2).
+        const attributed = await attributeFailedSignIn(
+          event,
+          options.findUserIdByEmail,
+          normalizeEmail,
+        );
+        await options.recordAuthEvent(
+          attributed,
+          requestEvidence(ctx.headers, options.trustedProxies),
+        );
       }),
     },
     advanced: {
