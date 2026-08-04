@@ -1294,6 +1294,59 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   applied to a control and not its neighbour** — the ADR-0064/ADR-0067 shape again. Every fix carries
   a regression test verified to fail first; six non-blocking findings are `docs/TECH_DEBT.md` #93.
 
+- **ADR-0074** _(Accepted per-milestone; M0 accepted with the ADR)_ — Account recovery,
+  verification enforcement, and the web origin's first Content-Security-Policy. SchedulePoint had
+  **no password reset at all**, and not as a missing screen — as a **server refusal**: `createAuth()`
+  configures no `sendResetPassword`, so Better Auth throws `RESET_PASSWORD_DISABLED`. No
+  change-password, no session-less resend, no account surface to host them (`/me` is `@Get()` only).
+  The only route back into a locked account ran through an operator with database access. Found the
+  ADR-0058 way — the product owner asked whether login/admin was complete and the answer came from
+  grepping `apps/web/src`, which returns **zero** matches for
+  `forgetPassword|resetPassword|changePassword`.
+  **Two blocking findings outrank every screen in the epic, and both are one configuration key in
+  this app's wiring rather than a library defect.** Reset tokens would be stored **cleartext** —
+  `processIdentifier` returns the identifier unchanged when no `verification` key is configured, and
+  there is none, so the row would hold the literal `reset-password:<token>` for an hour, failing the
+  bar `common/tokens/token.ts` set for this repo's own tokens (ADR-0016/0051: "a database leak never
+  exposes a usable token"). And a completed reset would **leave every session alive**
+  (`revokeSessionsOnPasswordReset` unset), which is the whole failure a reset exists to close. The
+  ordering between them is load-bearing rather than tidy: hashing must merge **before** the endpoint
+  is enabled, which makes the cleartext window **empty** and not merely short.
+  **The load-bearing decision, and the precedent this ADR exists to set: _a client surface whose gate
+  is a server-side condition is branched on runtime evidence, never on a `VITE_` constant_** — the
+  generalisation of ADR-0060's M0 rule. `AUTH_REQUIRE_EMAIL_VERIFICATION` arms **three latent dead
+  ends** at once (sign-up returns no session because `requireEmailVerification` **overrides**
+  `autoSignIn`, and the client reports success then bounces with no message; sign-in 403s and
+  re-sends nothing because only `sendOnSignUp` is set; invitation-accept instructs the user to verify
+  with no way to do so). Those three ship **unflagged**, because a build-time constant cannot know
+  which world the server is in — so a flag would be _actively worse than none_, stranding every new
+  sign-up on a flag-off bundle against a flag-on server. Where the gate really is a product decision,
+  two flags split by prerequisite (`VITE_ACCOUNT_SETTINGS`, no server dependency;
+  `VITE_PASSWORD_RESET`, blocked on the mail work) — with the routes and the sign-in **link** in one
+  flag, because a link to a conditionally-registered route is a link to nothing and **typecheck
+  cannot catch it** (`...(FLAG ? [route] : [])` widens to include the route in both branches).
+  The CSP is **derived from what the code loads**, not templated: no external origins at all, `blob:`
+  load-bearing for `img-src` because the print surface renders a live object-URL `<img>`, `data:`
+  deliberately absent. The inline theme-boot script **moves to a static file rather than being pinned
+  by hash**, because a hash mismatch **fails closed and silently** — before first paint, in enforce
+  mode only, on the deployed origin only, across two files with no compiler relationship. The mode is
+  an **operator variable**, since hard-coding it makes rollback a release; `NGINX_ENVSUBST_FILTER=^CSP_`
+  is essential or envsubst eats nginx's own `$scheme`/`$host`. `Permissions-Policy` is **enumerated,
+  never blanket-denied** — `clipboard-write` is a controlled feature and two Copy buttons depend on
+  it. **HSTS is excluded deliberately**: the container only listens on plain 8080 and cannot know the
+  browser's scheme (TECH_DEBT #89), and HSTS is sticky.
+  Three credential events earn audit rows — and the route census **structurally cannot see them in
+  either direction** (`audit-coverage.structural.spec.ts:45-47`), so nothing would have failed a PR
+  omitting them, which is the argument for doing them now. `auth.password_reset_requested` is itself
+  an enumeration oracle and takes the ADR-0073 C2.2 attribution pattern with self-projection only.
+  The existing user base is migrated by **backfilling only accounts that already hold a membership**
+  — enforcement's value is prospective, and the membership predicate structurally excludes the one
+  risky case a blanket backfill would grant (a squatted address holding a _pending_ invitation) —
+  with the real count measured against the deployed database, never estimated. **The CPM engine is
+  not imported and no migration runs**, so the ADR-0034 parity gate is untouched by construction —
+  in its honest form: there is nothing to hold parity _for_. Supersedes nothing; builds on
+  ADR-0003/0012/0016/0051/0060/0072/0073.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
