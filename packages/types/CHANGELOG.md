@@ -1,5 +1,119 @@
 # @repo/types
 
+## 0.25.0
+
+### Minor Changes
+
+- [#231](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/231) [`746220c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/746220c412ebd4f28370f0b41c131b6f8792b962) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix: filtering the audit log by two categories at once no longer fails
+
+  Choosing **Deletions** and **Access** together — or Deletions and Settings — was rejected by the
+  API. The limit on how many event kinds one request may name was written down as a number when the
+  log had twenty of them; the log now has thirty-nine, and two ordinary chips came to more than the
+  old limit allowed. The limit is now worked out from the list of events itself, so it cannot fall
+  behind again.
+
+  Also from the same review pass:
+
+  - An import that succeeded could return an error if its own log entry failed to save — and leave the
+    plan locked for editing. The entry is now written on a best-effort basis, matching what the code
+    around it already said it did: a missing line in the log, never a failed import.
+  - The audit log's description of what it records had fallen a milestone behind what it actually
+    records — it named deletions inside a plan but not scheduling settings, baselines, calendar and
+    resource changes, or imports. It now describes the rule rather than listing examples.
+  - "Clear filters" looked unavailable while still reacting to the mouse.
+  - The filter row is no longer boxed, matching every other filtered list in the app.
+  - The Outcome control is no longer announced twice by a screen reader.
+
+- [#231](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/231) [`746220c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/746220c412ebd4f28370f0b41c131b6f8792b962) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: record changes to the rules a plan is judged by in the audit log
+
+  Five new audit events (ADR-0073 C3.2, family E): a plan's scheduling settings changed, a calendar's
+  working time changed, and a baseline captured, activated or deleted.
+
+  These are **updates**, which the log deliberately does not record in general — they earn a row
+  because they change how _other people's_ work is evaluated. Moving a plan's data date, editing a
+  shared calendar's working week, or activating a baseline re-dates or re-measures work owned by
+  people who did not make the change and are not told.
+
+  A plan row is emitted **only when a governance field actually moved**, and names the fields: a
+  rename writes nothing, and resending the settings form unchanged writes nothing. A calendar row
+  names _which kind_ of working time changed — the working week, the hours-per-day factor, or a dated
+  exception — rather than dumping the hours, so the fact a reader needs is not buried. All three
+  exception routes fold into the one action, because an exception is working time.
+
+- [#231](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/231) [`746220c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/746220c412ebd4f28370f0b41c131b6f8792b962) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: record where an imported programme came from in the audit log
+
+  Importing a schedule now writes an audit event naming the file, the format, how many activities and
+  links arrived, and how many findings the import report raised.
+
+  A plan somebody built is a sequence of choices with a person behind each one. An imported plan
+  arrived whole, from a file, and the file is not kept — so a week later nothing distinguishes five
+  hundred imported activities from five hundred typed ones, and "where did this programme come from?"
+  had no answer at all. Now it does, with a name and a time against it.
+
+  A dry-run records nothing: it reads a file and changes nothing. A failed import records nothing
+  either — including one that gets as far as creating the plan and is then rolled back.
+
+  This completes the audit log's mutation coverage. Every route in the API is now either audited or
+  explicitly and permanently excluded for a stated reason; there is no longer any route parked as
+  "we'll decide later".
+
+- [#231](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/231) [`746220c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/746220c412ebd4f28370f0b41c131b6f8792b962) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: record what the shared calendar and resource libraries offer in the audit log
+
+  Seven new events (ADR-0073 C3.3): a calendar deleted, retired, restored to use or moved between the
+  shared and project tiers, and a resource deleted, retired or restored.
+
+  **Retiring is the change this exists for.** An archived calendar or resource keeps scheduling
+  exactly as it did, keeps every plan and assignment already using it, and refuses only a _new_ use.
+  Nothing breaks and nobody is told — so the first anybody hears of it is a colleague asking why they
+  can no longer pick something they used last month. That question now has an answer with a name and
+  a time against it.
+
+  Retiring and restoring are separate events rather than one with a flag, because the question a
+  reader asks is "what was retired?". A single edit that changes a calendar's working week _and_ its
+  tier records both, linked together, so neither fact hides inside the other. Deleting a resource
+  group records one event carrying how many resources went with it, not one per resource.
+
+  The web copy says "retired" rather than "archived" throughout, because nothing was deleted.
+
+- [#231](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/231) [`746220c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/746220c412ebd4f28370f0b41c131b6f8792b962) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Narrow the audit log by category, outcome and date — behind `VITE_AUDIT_FILTERS` (default off).
+
+  Seven distinct kinds of event arrived in one undifferentiated reverse-chronological stream. Both
+  audit screens now carry a filter bar: category chips, an outcome choice and a date range, with the
+  result in the URL so a narrowed view survives a reload and can be pasted to a colleague.
+
+  Categories are questions a reader arrives with — Access, Deletions, Sign-ins — not the twenty
+  machine names underneath. They never travel on the wire: the client expands the chosen ones into
+  actions before building the request, so the API keeps one vocabulary and a category renamed for
+  legibility is a copy change rather than a breaking API change.
+
+  Which chips appear is derived from the vocabulary rather than listed. The organisation screen cannot
+  offer Sign-ins (those rows carry no organisation, so the choice could only ever return nothing), and
+  a category holding no actions yet stays off screen until its first action lands. A chip that can only
+  answer "no events" is the defect this filter exists to remove.
+
+  A narrowed view that finds nothing now says so, in different words from a log with nothing in it.
+
+  Flag-off is byte-for-byte the current screens — no bar, and no filter parameter even with a filter
+  sitting in the URL from a flag-on build.
+
+- [#231](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/231) [`746220c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/746220c412ebd4f28370f0b41c131b6f8792b962) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat: record deletions and structural changes inside a plan in the audit log
+
+  The audit log now answers "who removed this?" for work inside a plan, not only for clients,
+  projects and plans themselves. Six new events (ADR-0073 C3.1, family D): an activity deleted or
+  restored, a WBS summary dissolved, activities regrouped, and a logic link added or removed.
+
+  Each is **one row per action, not per swept row** — deleting a summary with forty-one descendants
+  records one event carrying the counts, so a reader can see that one person did one thing. A link
+  records its **direction** by name, which is the fact planners most often need settled. Nothing is
+  written when the write is refused by the edit-lock or rolled back.
+
+  Also fixes a promise the log had never kept: a cascade delete of a client, project or plan recorded
+  its batch id and not its **size**. All four levels now carry scalar counts.
+
+  Editing an activity's own fields stays deliberately unrecorded — it changes nothing outside that
+  activity, and the row already carries who last changed it. Both audit screens now say so instead of
+  saying "not recorded yet".
+
 ## 0.24.0
 
 ### Minor Changes
