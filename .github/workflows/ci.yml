@@ -400,6 +400,18 @@ jobs:
       - name: Web end-to-end tests (email verification enforced)
         run: pnpm --filter @repo/web test:e2e:account-verify
 
+      # The CSP gate. Unlike every step above it, this one builds the app and serves `dist/` through
+      # `vite preview`, because the policy applies to the deployed artefact and the dev server is
+      # the wrong one — it serves unbundled modules and injects an inline react-refresh preamble
+      # that `script-src 'self'` would report as a violation production can never have.
+      #
+      # It exists because the policy was derived by reading our source and validated by a person
+      # watching a console, and neither method sees what a DEPENDENCY does at runtime — which is
+      # what the first real violation on the deployed origin turned out to be (Zod probing for
+      # `eval`). Last step, since it is the only one paying for a production build.
+      - name: Web end-to-end tests (Content-Security-Policy)
+        run: pnpm --filter @repo/web test:e2e:csp
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -408,6 +420,7 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/web/playwright-report-account/
+            apps/web/playwright-report-csp/
             apps/web/playwright-report-account-verify/
             apps/web/playwright-report-edit/
             apps/web/playwright-report-workspace/

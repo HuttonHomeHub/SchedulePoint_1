@@ -12,6 +12,16 @@ const { version: appVersion } = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
+// Same-origin API proxy, shared by the dev server and `vite preview`. In the deployed image nginx
+// does this (`location /api/`), so both local servers have to stand in for it or cookies and CSP's
+// `connect-src 'self'` would behave differently locally than in production.
+const API_PROXY = {
+  '/api': {
+    target: process.env.VITE_API_URL ?? 'http://localhost:3000',
+    changeOrigin: true,
+  },
+};
+
 // Vite configuration for the SchedulePoint web client.
 // Tailwind CSS v4 is wired in via its first-party Vite plugin (no PostCSS config needed).
 export default defineConfig({
@@ -43,12 +53,16 @@ export default defineConfig({
   server: {
     port: 5173,
     // Proxy API calls to the NestJS backend during local development.
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL ?? 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
+    proxy: API_PROXY,
+  },
+  // `vite preview` serves the BUILT bundle, and the CSP gate (`e2e-csp`) must run against that
+  // rather than the dev server: the policy applies to the deployed artefact, and dev injects an
+  // inline react-refresh preamble that `script-src 'self'` would report as a violation which can
+  // never occur in production. Preview has its own proxy config — it does not inherit `server`'s —
+  // so the same object is shared here, standing in for nginx's `location /api/`.
+  preview: {
+    port: 4173,
+    proxy: API_PROXY,
   },
   build: {
     outDir: 'dist',
