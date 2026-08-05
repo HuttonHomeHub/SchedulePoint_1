@@ -187,8 +187,24 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
     // Give the read-only canvas its own polite live region (its selection/announcements), independent of
     // the app-shell announcer that this session-less view never mounts.
     <AnnouncerProvider>
-      <div className="flex min-h-dvh flex-col">
-        <header className="border-border bg-card flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-3">
+      {/*
+       * `h-dvh`, not `min-h-dvh` — and `min-h-0` on the main. Both are load-bearing, and getting
+       * them wrong is why this view shipped with a **one-pixel-tall canvas**: measured at 1886×1
+       * against the member workspace's 1597×736, so the plan loaded, the toolbar and legend
+       * rendered, and the diagram was an empty box.
+       *
+       * `TsldPanel fill` is `h-full` over a `flex-1` canvas container (TsldPanel.tsx:1662,1774).
+       * A percentage height needs a DEFINITE parent height: `min-h-dvh` leaves the column's height
+       * `auto`, so `h-full` resolves to `auto` and the canvas has no space to claim. The member
+       * workspace threads `min-h-0 flex-1` through every level from a definite-height app shell,
+       * which is why the same component fills there — the panel's contract is its container's, and
+       * this view was the only host that did not honour it.
+       *
+       * `min-h-0` is the other half: a flex item's default `min-height: auto` refuses to shrink
+       * below its content, so the canvas could not size down to the space actually available.
+       */}
+      <div className="flex h-dvh flex-col">
+        <header className="border-border bg-card flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-3">
           <h1 className="text-base font-semibold">{plan.name}</h1>
           <Badge variant="neutral">{STATUS_LABELS[plan.status]}</Badge>
           <span className="text-muted-foreground text-sm">Read-only shared view</span>
@@ -202,7 +218,7 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
           </dl>
         </header>
 
-        <main className="flex-1 p-4">
+        <main className="min-h-0 flex-1 p-4">
           {activities.length === 0 ? (
             <div className="border-border text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
               This plan has no activities yet.
