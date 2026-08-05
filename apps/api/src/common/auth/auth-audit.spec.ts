@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  attributeFailedSignIn,
+  attributeAttemptedAddress,
   classifyAuthEvent,
   emailVerifiedEvent,
+  passwordResetCompletedEvent,
   signedOutEvent,
   type AuthHookFacts,
 } from './auth-audit';
@@ -12,7 +13,14 @@ import { normalizeEmail } from './normalize-email';
 const USER = { id: 'u_1', email: 'planner@example.com' };
 
 function facts(overrides: Partial<AuthHookFacts> = {}): AuthHookFacts {
-  return { path: '/get-session', failed: false, newSession: null, body: undefined, ...overrides };
+  return {
+    path: '/get-session',
+    failed: false,
+    newSession: null,
+    returned: undefined,
+    body: undefined,
+    ...overrides,
+  };
 }
 
 describe('classifyAuthEvent', () => {
@@ -133,7 +141,7 @@ describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
   it('fills subjectId when the attempted address belongs to a real account', async () => {
     // The whole point of C2: without this the row has neither an actor nor an organisation, so
     // both read endpoints filter it out and nobody can see they were targeted.
-    const event = await attributeFailedSignIn(
+    const event = await attributeAttemptedAddress(
       failed('victim@example.com'),
       () => Promise.resolve('u_victim'),
       normalizeEmail,
@@ -150,7 +158,7 @@ describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
     // The recorded label is the raw request; the stored user is lowercased. Verified against the
     // real handler in `test/auth-attribution.e2e-spec.ts` — this pins the consequence.
     const seen: string[] = [];
-    await attributeFailedSignIn(
+    await attributeAttemptedAddress(
       failed('Victim@Example.COM'),
       (email) => {
         seen.push(email);
@@ -163,7 +171,7 @@ describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
   });
 
   it('leaves the row unattributed when nobody owns the address', async () => {
-    const event = await attributeFailedSignIn(
+    const event = await attributeAttemptedAddress(
       failed('nobody@example.com'),
       () => Promise.resolve(null),
       normalizeEmail,
@@ -173,7 +181,7 @@ describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
 
   it('does not look up at all when there is no address to look up', async () => {
     let called = false;
-    const event = await attributeFailedSignIn(
+    const event = await attributeAttemptedAddress(
       failed(null),
       () => {
         called = true;
@@ -189,7 +197,7 @@ describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
   it('leaves every other event untouched, without looking anything up', async () => {
     let called = false;
     const signedIn = signedOutEvent(USER);
-    const event = await attributeFailedSignIn(
+    const event = await attributeAttemptedAddress(
       signedIn,
       () => {
         called = true;
@@ -205,7 +213,7 @@ describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
   it('records the row unattributed rather than letting a lookup fault reach the sign-in', async () => {
     // Fail-OPEN on purpose, and not the fail-closed shape its siblings use: the alternative to an
     // unattributed audit row here is a refused sign-in.
-    const event = await attributeFailedSignIn(
+    const event = await attributeAttemptedAddress(
       failed('victim@example.com'),
       () => Promise.reject(new Error('the database is unavailable')),
       normalizeEmail,
@@ -213,5 +221,116 @@ describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
 
     expect(event.subjectId).toBeNull();
     expect(event.subjectLabel).toBe('victim@example.com');
+  });
+});
+
+/**
+ * The credential events (ADR-0074).
+ *
+ * Each assertion below corresponds to something that was **observed against a running instance**
+ * before the producer was written, not inferred from the two routes that already worked. The
+ * `newSession`/`returned` split in particular is the whole reason `/change-password` needed its own
+ * treatment: reusing the sign-in pattern would have recorded nothing on every successful change,
+ * silently, which is the failure this file's docblock exists to warn about.
+ */
+describe('classifyAuthEvent — credential changes', () => {
+  it('records a successful password change from `returned`, not `newSession`', () => {
+    // The observed shape: `{ token: null, user: {...} }` with `newSession` null, because the
+    // endpoint mints no session unless `revokeOtherSessions` was asked for.
+    const event = classifyAuthEvent(
+      facts({ path: '/change-password', newSession: null, returned: { token: null, user: USER } }),
+    );
+
+    expect(event).toEqual({
+      action: 'auth.password_changed',
+      outcome: 'SUCCESS',
+      actorType: 'USER',
+      actorUserId: 'u_1',
+      actorLabel: 'planner@example.com',
+      subjectType: 'USER',
+      subjectId: 'u_1',
+      subjectLabel: 'planner@example.com',
+    });
+  });
+
+  it('records nothing when the current password was wrong', () => {
+    // A rejected change says only that a signed-in user mistyped; the session already proves who
+    // they are. The blast-radius test catches the successful change, not the fumbled one.
+    expect(
+      classifyAuthEvent(facts({ path: '/change-password', failed: true, returned: undefined })),
+    ).toBeNull();
+  });
+
+  it('records nothing rather than a half-built row when the user cannot be read', () => {
+    // Defensive: `returned` is `unknown` by contract and shaped differently per endpoint. A row
+    // with no actor would violate `ck_audit_events_actor_shape` and be lost anyway.
+    expect(
+      classifyAuthEvent(facts({ path: '/change-password', returned: { token: null } })),
+    ).toBeNull();
+  });
+
+  it('records a reset request as ANONYMOUS with the attempted address', () => {
+    const event = classifyAuthEvent(
+      facts({ path: '/request-password-reset', body: { email: 'Victim@Example.COM' } }),
+    );
+
+    expect(event).toEqual({
+      action: 'auth.password_reset_requested',
+      // SUCCESS: the request was accepted. Whether it named a real account is deliberately not
+      // asserted by this row — that is the oracle the endpoint itself avoids.
+      outcome: 'SUCCESS',
+      actorType: 'ANONYMOUS',
+      actorUserId: null,
+      actorLabel: null,
+      subjectType: 'USER',
+      subjectId: null,
+      // The caller's casing, preserved: the normaliser runs at lookup time, not at record time
+      // (ADR-0073 C2.1).
+      subjectLabel: 'Victim@Example.COM',
+    });
+  });
+
+  it('records the same row for an address nobody owns', () => {
+    // The endpoint answers identically for both, so the row must not be the place the difference
+    // leaks. Only `subjectId` differs, and only its own account holder can read that.
+    const known = classifyAuthEvent(
+      facts({ path: '/request-password-reset', body: { email: 'known@example.com' } }),
+    );
+    const unknown = classifyAuthEvent(
+      facts({ path: '/request-password-reset', body: { email: 'nobody@example.com' } }),
+    );
+
+    expect({ ...known, subjectLabel: null }).toEqual({ ...unknown, subjectLabel: null });
+  });
+
+  it('attributes a reset request to the account it named', async () => {
+    const event = await attributeAttemptedAddress(
+      classifyAuthEvent(
+        facts({ path: '/request-password-reset', body: { email: 'Victim@Example.COM' } }),
+      ) as NonNullable<ReturnType<typeof classifyAuthEvent>>,
+      (email) => Promise.resolve(email === 'victim@example.com' ? 'u_victim' : null),
+      normalizeEmail,
+    );
+
+    // Without this the row has no actor and no organisation, so neither read endpoint can reach it
+    // and the single most useful thing it records is visible only from `psql` (TECH_DEBT #91).
+    expect(event.subjectId).toBe('u_victim');
+  });
+});
+
+describe('passwordResetCompletedEvent', () => {
+  it('names the user as both actor and subject', () => {
+    // The actor is the user even though the request carried no session: completing a reset proves
+    // control of the mailbox, which is the whole basis on which the new password was accepted.
+    expect(passwordResetCompletedEvent(USER)).toEqual({
+      action: 'auth.password_reset_completed',
+      outcome: 'SUCCESS',
+      actorType: 'USER',
+      actorUserId: 'u_1',
+      actorLabel: 'planner@example.com',
+      subjectType: 'USER',
+      subjectId: 'u_1',
+      subjectLabel: 'planner@example.com',
+    });
   });
 });

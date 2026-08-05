@@ -46,6 +46,13 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   'auth.sign_in_failed': [],
   'auth.signed_out': [],
   'auth.email_verified': [],
+  // Empty for the same reason as the five above, and here it is load-bearing rather than merely
+  // consistent: everything these three could carry — a password, a token, a reset URL — is either
+  // a credential or useless. The `NEVER_RECORD` substring ban would catch `token`/`hash` anyway;
+  // an empty allow-list means nothing can reach the payload to be caught (ADR-0074).
+  'auth.password_changed': [],
+  'auth.password_reset_requested': [],
+  'auth.password_reset_completed': [],
   // — Hierarchy soft deletes/restores. `deleteBatchId` is the thread that ties a cascade
   //   together, so a reader can see one action removed forty things rather than forty actions.
   //

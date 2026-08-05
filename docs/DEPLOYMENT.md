@@ -148,6 +148,14 @@ Three properties worth knowing before you turn it on:
   the accept URL is also returned in the create response and shown in the admin UI — so an
   Org Admin can always hand it over another way. The email is a convenience over an existing
   path, never the only route through.
+- **`MAIL_SMTP_URL` is now load-bearing for account _recovery_, not only for verification**
+  (ADR-0074). Since password reset exists, a host with no transport configured has no
+  self-service way back into a locked account: the reset link exists only in the email, and
+  the logging stub deliberately withholds it in production because it can set a password.
+  The request still answers `200` — it must, or it becomes an account-existence oracle — so
+  **the only signal is a `WARN` naming the missing configuration**, which since ADR-0074 M0
+  arrives in the structured Pino stream rather than as bare `[Better Auth]:` stdout text
+  (`docs/TECH_DEBT.md` #94, cheap half paid).
 - **A verification failure does NOT fail the sign-up** — this bullet said it did, until the
   2026-08-04 reconciliation pass read the library. The adapter throws deliberately, and the
   intent was right: the verify URL exists only in that email, so an undelivered message hands
@@ -211,6 +219,20 @@ logging stub, so the verify link is written to the API's log and nowhere else, a
 account is unusable. **In production the API refuses to boot** on that combination rather than
 letting you find out from a user who cannot sign in. So the order is: set `MAIL_SMTP_URL` +
 `MAIL_FROM`, confirm a real message arrives, then flip the switch.
+
+#### Password reset: one precondition that fails silently if you miss it
+
+`CORS_ORIGINS` **must contain the browser origin the reset link lands on.** Better Auth
+validates `/request-password-reset`'s `redirectTo` against `trustedOrigins`, which is bound to
+`CORS_ORIGINS` — so an app origin missing from that list makes **every** reset fail with an
+origin error and nothing on screen to explain it. The row above already says `CORS_ORIGINS`
+must equal the browser origin for sign-in to work; this is the second thing that breaks, and it
+breaks less visibly.
+
+The rejection itself is tested (`apps/api/test/password-reset.e2e-spec.ts`) so the failure mode
+is at least a known one. Note the origin check is now explicitly on in every environment —
+Better Auth defaults it **off** under `isTest()`, which meant the suite had been proving a
+weaker posture than production ships (ADR-0074).
 
 Put the credential in your secret store, not in `docker-compose.yml`. Deliverability (SPF,
 DKIM, DMARC on the sending domain) is a provider-side task this application does not do for

@@ -42,6 +42,12 @@ const TITLES: Record<AuditAction, string> = {
   'auth.sign_in_failed': 'Sign-in failed',
   'auth.signed_out': 'Signed out',
   'auth.email_verified': 'Email verified',
+  // Credential changes (ADR-0074). "Password reset requested" is deliberately not "Password
+  // reset" — nothing changed yet, and conflating the two would make the row that says somebody
+  // is probing your address read as one saying they got in.
+  'auth.password_changed': 'Password changed',
+  'auth.password_reset_requested': 'Password reset requested',
+  'auth.password_reset_completed': 'Password reset completed',
   'client.deleted': 'Client deleted',
   'client.restored': 'Client restored',
   'project.deleted': 'Project deleted',
@@ -236,8 +242,13 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
     case 'auth.sign_in_failed':
     case 'auth.signed_out':
     case 'auth.email_verified':
+    case 'auth.password_changed':
+    case 'auth.password_reset_requested':
+    case 'auth.password_reset_completed':
       // The auth actions record no fields at all by design (the API's allow-list is empty for
-      // them): who, from where and whether it worked are first-class columns.
+      // them): who, from where and whether it worked are first-class columns. For the three
+      // credential actions it is load-bearing rather than incidental — everything they could
+      // carry is a secret.
       return null;
   }
 }

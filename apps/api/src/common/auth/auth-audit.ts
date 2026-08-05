@@ -29,6 +29,26 @@ import type { AuditAction, AuditActorType, AuditOutcome } from '@repo/types';
  * observable — which matters more than the successes, because the row nobody can produce is the
  * one showing somebody trying.
  *
+ * **The credential events (ADR-0074) repeat the lesson a third time.** Each of the three was driven
+ * against a real running instance before its producer was written, rather than assumed from the two
+ * that already worked, and each needed something different:
+ *
+ * - `/change-password` fires the after-hook and reports failure correctly — but sets **no new
+ *   session**, so `newSession?.user` is null on the success path. The user is in
+ *   `context.returned` instead (`{ token, user }`). Reusing the sign-in pattern here would have
+ *   recorded nothing on every successful password change.
+ * - `/request-password-reset` answers `{ status: true, message: 'If this email exists…' }`
+ *   **identically** for a known and an unknown address, so `failed` is always false and there is no
+ *   user anywhere. It takes the attempted address off the body and the ADR-0073 C2.2 attribution
+ *   shape — which is also what keeps the row from becoming the enumeration oracle the endpoint
+ *   itself so carefully is not.
+ * - `/reset-password` returns `{ status: true }` and nothing else. The after-hook cannot name whose
+ *   password changed, so the event is built from `emailAndPassword.onPasswordReset`, which fires on
+ *   success with the user in hand — the same shape as `afterEmailVerification`, for the same
+ *   reason.
+ *
+ * Three routes, three different seams, and the naive reading was wrong for all three.
+ *
  * This module is pure so the classification can be tested without an auth instance, an HTTP
  * request or a database: the seam that is hardest to exercise end to end is the one whose rules
  * most need to be checkable.
@@ -60,8 +80,27 @@ export interface AuthHookFacts {
   failed: boolean;
   /** Set by `setNewSession` on a successful sign-in/sign-up. */
   newSession: { user: AuthAuditUser } | null;
+  /**
+   * The value the endpoint returned, for routes that carry the user there rather than in a new
+   * session. `/change-password` is the one that needs it (ADR-0074): it succeeds without minting a
+   * session, so `newSession` is null and `{ token, user }` is the only place the user appears.
+   */
+  returned: unknown;
   /** The request body, for the attempted address on a failed sign-in. Untrusted. */
   body: unknown;
+}
+
+/**
+ * Pull a user off `context.returned`. Defensive because `returned` is `unknown` by contract and
+ * shaped differently per endpoint — a wrong guess here would throw inside a hook that must never
+ * break the request it is observing.
+ */
+function returnedUser(returned: unknown): AuthAuditUser | null {
+  if (typeof returned !== 'object' || returned === null) return null;
+  const user = (returned as { user?: unknown }).user;
+  if (typeof user !== 'object' || user === null) return null;
+  const { id, email } = user as { id?: unknown; email?: unknown };
+  return typeof id === 'string' && typeof email === 'string' ? { id, email } : null;
 }
 
 /**
@@ -127,6 +166,39 @@ export function classifyAuthEvent(facts: AuthHookFacts): AuthAuditEvent | null {
         subjectLabel: attemptedEmail(facts.body),
       };
 
+    case '/change-password': {
+      // A failed change is a wrong current password. It is NOT recorded, for the same reason a
+      // failed sign-up is not: the session already proves who the caller is, so a rejected attempt
+      // says only that somebody mistyped. The blast-radius test catches the *successful* change.
+      if (facts.failed) return null;
+      // `newSession` is null here even on success — the endpoint mints no session unless
+      // `revokeOtherSessions` was sent — so the user comes off `returned`. Reusing the sign-in
+      // pattern would silently record nothing on every password change; verified against a running
+      // instance before this line was written.
+      const changed = returnedUser(facts.returned);
+      return changed ? forUser('auth.password_changed', changed) : null;
+    }
+
+    case '/request-password-reset':
+      // Never `failed`: the endpoint answers `{ status: true, message: 'If this email exists…' }`
+      // for a known and an unknown address alike, and there is no user on the context in either
+      // case. So this is built entirely from the attempted address — the same shape as a failed
+      // sign-in, and for the same reason. `attributeFailedSignIn` fills `subjectId` when the
+      // address is real, which is what makes the row readable by the account it named and by
+      // nobody else (ADR-0073 C2.2).
+      return {
+        action: 'auth.password_reset_requested',
+        // SUCCESS, not FAILURE: the request was accepted. Whether it named a real account is not
+        // something this row asserts, and must not be — that is the oracle the endpoint avoids.
+        outcome: 'SUCCESS',
+        actorType: 'ANONYMOUS',
+        actorUserId: null,
+        actorLabel: null,
+        subjectType: 'USER',
+        subjectId: null,
+        subjectLabel: attemptedEmail(facts.body),
+      };
+
     default:
       return null;
   }
@@ -142,7 +214,22 @@ export function classifyAuthEvent(facts: AuthHookFacts): AuthAuditEvent | null {
 export type FindUserIdByEmail = (email: string) => Promise<string | null>;
 
 /**
- * Fill `subjectId` on a failed sign-in when the attempted address belongs to a real account
+ * The events whose `subjectLabel` is an **attempted, attacker-supplied address** rather than a
+ * proven identity, and which therefore need attribution to become readable at all.
+ *
+ * Both are ANONYMOUS rows carrying no organisation, so neither read endpoint can reach them without
+ * a `subjectId` — they would be visible only from `psql`. `auth.password_reset_requested` joined
+ * the set with ADR-0074 for exactly the reason `auth.sign_in_failed` is in it: an unrequested one
+ * is the signal that somebody is probing an address, and the person who needs to see it is the
+ * account holder.
+ */
+const ATTEMPTED_ADDRESS_ACTIONS = new Set<AuditAction>([
+  'auth.sign_in_failed',
+  'auth.password_reset_requested',
+]);
+
+/**
+ * Fill `subjectId` on an attempted-address event when the address belongs to a real account
  * (ADR-0073 C2.2). Every other event passes through untouched.
  *
  * This is what makes a failed sign-in **readable by the person it was aimed at**: both read
@@ -159,12 +246,12 @@ export type FindUserIdByEmail = (email: string) => Promise<string | null>;
  * the same query executes and the sign-in's own reply is untouched — so this cannot be read as an
  * account-existence oracle. The only place the answer surfaces is that account holder's own feed.
  */
-export async function attributeFailedSignIn(
+export async function attributeAttemptedAddress(
   event: AuthAuditEvent,
   findUserIdByEmail: FindUserIdByEmail,
   normalize: (email: string) => string,
 ): Promise<AuthAuditEvent> {
-  if (event.action !== 'auth.sign_in_failed' || event.subjectLabel === null) return event;
+  if (!ATTEMPTED_ADDRESS_ACTIONS.has(event.action) || event.subjectLabel === null) return event;
 
   try {
     const subjectId = await findUserIdByEmail(normalize(event.subjectLabel));
@@ -201,4 +288,20 @@ export function signedOutEvent(user: AuthAuditUser): AuthAuditEvent {
  */
 export function emailVerifiedEvent(user: AuthAuditUser): AuthAuditEvent {
   return forUser('auth.email_verified', user);
+}
+
+/**
+ * The completed-reset event, built from `emailAndPassword.onPasswordReset` (ADR-0074).
+ *
+ * **Not `hooks.after`,** and this was driven rather than assumed: `/reset-password` returns
+ * `{ status: true }` and nothing else, so the after-hook fires with no user anywhere on the context
+ * and cannot say whose password changed. `onPasswordReset` fires on the success path with the user
+ * in hand — the same shape as `afterEmailVerification`, and the third route in this file to need
+ * its own seam.
+ *
+ * The actor is the user, even though the request carried no session: completing a reset proves
+ * control of the mailbox, which is the whole basis on which the new password was accepted.
+ */
+export function passwordResetCompletedEvent(user: AuthAuditUser): AuthAuditEvent {
+  return forUser('auth.password_reset_completed', user);
 }

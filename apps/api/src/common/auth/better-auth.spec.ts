@@ -34,6 +34,7 @@ describe('createAuth security options', () => {
     sendPasswordReset: () => Promise.resolve(),
     recordAuthEvent: () => Promise.resolve(),
     findUserIdByEmail: () => Promise.resolve(null),
+    log: () => {},
   };
 
   it('revokes every session on a completed password reset (B2)', () => {
@@ -42,14 +43,35 @@ describe('createAuth security options', () => {
     expect(auth.options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
   });
 
+  it('routes the auth library’s own logging into the injected sink (TECH_DEBT #94)', () => {
+    // Unconfigured, Better Auth writes `[Better Auth]:` lines to stdout with ANSI colour — outside
+    // Pino, outside correlation IDs, outside redaction. That is where a swallowed mail-send failure
+    // went, which is the whole reason a broken relay produced silently unusable accounts.
+    const lines: { level: string; message: string }[] = [];
+    const auth = createAuth(prisma, {
+      ...options,
+      log: (level, message) => lines.push({ level, message }),
+    });
+
+    // Colours off, because the destination is JSON and escape codes would survive into the store.
+    expect(auth.options.logger?.disableColors).toBe(true);
+
+    auth.options.logger?.log?.('error', 'a transport failure');
+    expect(lines).toEqual([{ level: 'error', message: 'a transport failure' }]);
+  });
+
   it('hashes verification identifiers at rest, with this app’s own hasher (B1)', async () => {
     const auth = createAuth(prisma, options);
 
     const storeIdentifier = auth.options.verification?.storeIdentifier;
     // Not `'plain'`, not absent, and not the string shorthand — an object carrying a hash function.
-    expect(typeof storeIdentifier).toBe('object');
+    // Asserted as a runtime narrowing rather than a cast, so the test fails loudly if the option's
+    // shape ever changes instead of throwing an opaque `undefined is not a function`.
+    if (typeof storeIdentifier !== 'object' || !('hash' in storeIdentifier)) {
+      throw new Error(`verification.storeIdentifier is not a hasher: ${String(storeIdentifier)}`);
+    }
 
-    const hash = (storeIdentifier as { hash: (identifier: string) => Promise<string> }).hash;
+    const { hash } = storeIdentifier;
     const identifier = 'reset-password:a-token-that-must-never-be-stored-raw';
 
     // The identity that matters: what gets stored is what `common/tokens/token.ts` would store.

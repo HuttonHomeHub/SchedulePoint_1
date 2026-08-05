@@ -900,14 +900,22 @@ user sees a normal sign-up and an account they cannot use; the operator sees not
 the resend endpoint recovers a user who hits it — but nobody knows to resend, because nothing says
 anything went wrong.
 
-**Remediation:** wire Better Auth's own logger into Pino (`betterAuth({ logger })`) so the swallowed
-error joins the structured stream and can be alerted on. That is the cheap, correct move and it is
-independent of the harder question — whether to send the verification message from application code
-_before_ handing off to Better Auth, so a failure can genuinely abort the request. That second option
-is a design change and needs the delivery process (`docs/PROCESS.md`), not a debt row. Either way,
-add an API e2e that drives `/api/auth/sign-up/email` with a failing `MailService` and asserts the
-real HTTP outcome — the existing unit test calls the adapter directly and structurally cannot see the
-layer that swallows.
+**Remediation — the cheap half is PAID (2026-08-05, ADR-0074 M0-T6).** `betterAuth({ logger })` is
+now wired to Pino via a `log` callback on `CreateAuthOptions`, with `disableColors` set because the
+destination is JSON rather than a terminal. The swallowed error joins the structured stream with the
+correlation id and the redaction rules, and can be alerted on. Pinned by a unit test on the options
+object, since a dropped `logger` key would fail nothing else.
+
+**Scope widened while paying it:** ADR-0074 makes `sendResetPassword` a second caller of the same
+swallowing path, so the same invisibility now applies to **account recovery** and not only to
+verification. That raises the consequence — an unverifiable account is an annoyance, an
+unrecoverable one is a lockout — without changing the mechanism.
+
+**What is still open (the hard half):** whether to send the message from application code _before_
+handing off to Better Auth, so a failure can genuinely abort the request. That is a design change
+and needs the delivery process (`docs/PROCESS.md`), not a debt row. Also still open: an API e2e that
+drives `/api/auth/sign-up/email` with a failing `MailService` and asserts the real HTTP outcome — the
+unit tests call the adapter directly and structurally cannot see the layer that swallows.
 
 ### 95. `apps/api`'s Vite configs are ESM in a CommonJS package, and a future Vite major will stop loading them
 

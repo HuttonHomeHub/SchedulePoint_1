@@ -38,11 +38,13 @@ const NEW_PASSWORD = 'a-different-horse-entirely';
 class CapturingMailService extends MailService {
   readonly resetUrls: string[] = [];
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async sendInvitation(_email: InvitationEmail): Promise<void> {}
+  sendInvitation(_email: InvitationEmail): Promise<void> {
+    return Promise.resolve();
+  }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async sendEmailVerification(_email: EmailVerificationEmail): Promise<void> {}
+  sendEmailVerification(_email: EmailVerificationEmail): Promise<void> {
+    return Promise.resolve();
+  }
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async sendPasswordReset(email: PasswordResetEmail): Promise<void> {
@@ -208,6 +210,88 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
 
       expect(res.body).toEqual({ status: true });
       expect(res.headers['set-cookie']).toBeUndefined();
+    });
+  });
+
+  describe('audit coverage (ADR-0074 §5)', () => {
+    // Nothing gates these. `audit-coverage.structural.spec.ts:45-47` records that the route census
+    // structurally cannot see Better Auth's routes, in either direction — so no PR omitting these
+    // producers would have failed. That is the argument for asserting them here rather than the
+    // argument for skipping them.
+    const rows = (action: string) => prisma.auditEvent.findMany({ where: { action } });
+
+    it('records a password change against the user who made it', async () => {
+      const agent = await signUp('locked-out@example.com');
+
+      await agent
+        .post('/api/auth/change-password')
+        .set('Origin', ORIGIN)
+        .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD })
+        .expect(200);
+
+      const [row] = await rows('auth.password_changed');
+      expect(row?.actorType).toBe('USER');
+      expect(row?.actorLabel).toBe('locked-out@example.com');
+    });
+
+    it('records nothing when the current password was wrong', async () => {
+      const agent = await signUp('locked-out@example.com');
+
+      await agent
+        .post('/api/auth/change-password')
+        .set('Origin', ORIGIN)
+        .send({ currentPassword: 'not-the-right-one', newPassword: NEW_PASSWORD })
+        .expect(400);
+
+      expect(await rows('auth.password_changed')).toHaveLength(0);
+    });
+
+    it('records a reset request for a known and an unknown address alike', async () => {
+      // The row exists either way — an unrequested reset is the signal an account holder gets that
+      // somebody is probing their address, and a probe at an address nobody owns is still worth
+      // seeing. Only `subjectId` differs, and only its own holder can read that.
+      await signUp('locked-out@example.com');
+
+      await requestReset('locked-out@example.com').expect(200);
+      await requestReset('nobody@example.com').expect(200);
+
+      const requests = await rows('auth.password_reset_requested');
+      expect(requests).toHaveLength(2);
+      expect(requests.every((r) => r.actorType === 'ANONYMOUS')).toBe(true);
+      expect(requests.filter((r) => r.subjectId !== null)).toHaveLength(1);
+      // No organisation, so the organisation feed cannot reach it — the same shape as a failed
+      // sign-in, and the reason `?include=attempts` exists.
+      expect(requests.every((r) => r.organizationId === null)).toBe(true);
+    });
+
+    it('records a completed reset naming whose password changed', async () => {
+      // The row the after-hook could not have written: `/reset-password` returns `{ status: true }`
+      // and nothing else, so this comes from `onPasswordReset` instead.
+      await signUp('locked-out@example.com');
+      await requestReset('locked-out@example.com').expect(200);
+
+      await resetPassword(tokenFromLastEmail()).expect(200);
+
+      const [row] = await rows('auth.password_reset_completed');
+      expect(row?.actorType).toBe('USER');
+      expect(row?.actorLabel).toBe('locked-out@example.com');
+    });
+
+    it('never puts a token or a URL in a recorded payload', async () => {
+      await signUp('locked-out@example.com');
+      await requestReset('locked-out@example.com').expect(200);
+      const token = tokenFromLastEmail();
+      await resetPassword(token).expect(200);
+
+      const credentialRows = await prisma.auditEvent.findMany({
+        where: { action: { startsWith: 'auth.password' } },
+      });
+      expect(credentialRows.length).toBeGreaterThan(0);
+      for (const row of credentialRows) {
+        const serialised = JSON.stringify(row);
+        expect(serialised).not.toContain(token);
+        expect(serialised).not.toContain(NEW_PASSWORD);
+      }
     });
   });
 

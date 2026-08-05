@@ -7,9 +7,10 @@ import { resolveClientIp } from '../http/client-ip';
 import { hashToken } from '../tokens/token';
 
 import {
-  attributeFailedSignIn,
+  attributeAttemptedAddress,
   classifyAuthEvent,
   emailVerifiedEvent,
+  passwordResetCompletedEvent,
   signedOutEvent,
   type AuthAuditEvent,
   type FindUserIdByEmail,
@@ -89,6 +90,19 @@ export interface CreateAuthOptions {
    * fault must not become a refused sign-in.
    */
   findUserIdByEmail: FindUserIdByEmail;
+  /**
+   * Forward one of the auth library's own log lines into the application's structured stream
+   * (`docs/TECH_DEBT.md` #94). A callback for the same reason as the three above.
+   *
+   * **What this buys, precisely.** Better Auth invokes `sendVerificationEmail` and
+   * `sendResetPassword` through `runInBackgroundOrAwait`, which catches a rejection and hands it to
+   * its **own** logger without rethrowing. Unconfigured, that logger writes a bare
+   * `[Better Auth]:` line to stdout — outside Pino, outside the correlation ID, outside redaction —
+   * so a broken relay produced silently unverifiable accounts and, since ADR-0074, silently
+   * unrecoverable ones. Routing it here is the cheap half of #94; the hard half (knowing a send
+   * failed *before* the handoff) is unchanged and still open.
+   */
+  log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, args: unknown[]) => void;
 }
 
 /**
@@ -133,6 +147,20 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
     baseURL: options.baseURL,
     basePath: '/api/auth',
     trustedOrigins: options.trustedOrigins,
+    /**
+     * Route the library's own logging into Pino (`docs/TECH_DEBT.md` #94, ADR-0074 M0).
+     *
+     * `disableColors` because the destination is JSON, not a terminal: without it the message
+     * arrives wrapped in ANSI escapes that survive into the log store. The level is left at Better
+     * Auth's own default (`warn`) rather than widened — the line this exists to capture is an
+     * `error`, and dropping to `debug` would add per-request chatter to a stream that is retained.
+     */
+    logger: {
+      disableColors: true,
+      log: (level, message, ...args) => {
+        options.log(level, message, args);
+      },
+    },
     emailAndPassword: {
       enabled: true,
       // Matches the shared password rule in the feature spec (≥ 12 chars).
@@ -152,6 +180,21 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
        */
       sendResetPassword: async ({ user, url }) => {
         await options.sendPasswordReset({ to: user.email, resetUrl: url });
+      },
+      /**
+       * The audit seam for `auth.password_reset_completed` (ADR-0074). NOT `hooks.after`, for the
+       * same reason `afterEmailVerification` is not: `/reset-password` returns `{ status: true }`
+       * and nothing else, so an after-hook fires with no user on the context and would record
+       * nothing while looking correct. Verified against a running instance, not assumed.
+       *
+       * It fires **before** the session revocation below, which is the right order: the row
+       * describes the reset, and the revocation is its consequence.
+       */
+      onPasswordReset: async ({ user }, request) => {
+        await options.recordAuthEvent(
+          passwordResetCompletedEvent({ id: user.id, email: user.email }),
+          requestEvidence(request?.headers, options.trustedProxies),
+        );
       },
       /**
        * **A completed reset ends every other session** (ADR-0074 B2).
@@ -266,12 +309,15 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
           path: ctx.path,
           failed: ctx.context.returned instanceof Error,
           newSession: ctx.context.newSession,
+          // `/change-password` succeeds without minting a session, so its user is here and not in
+          // `newSession` (ADR-0074).
+          returned: ctx.context.returned,
           body: ctx.body,
         });
         if (!event) return;
         // Attribution runs BEFORE the record, because the table is append-only: there is no later
         // pass that could fill `subject_id` in (ADR-0073 C2.2).
-        const attributed = await attributeFailedSignIn(
+        const attributed = await attributeAttemptedAddress(
           event,
           options.findUserIdByEmail,
           normalizeEmail,

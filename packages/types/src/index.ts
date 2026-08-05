@@ -1963,6 +1963,18 @@ export const AUDIT_ACTIONS = [
   'auth.sign_in_failed',
   'auth.signed_out',
   'auth.email_verified',
+  // — Credential changes (ADR-0074). Same family and the same blast-radius test as the five above:
+  //   a password change is the same class of fact as a sign-in. `password_reset_requested` is
+  //   recorded even though nothing changed yet, because an unrequested one is the signal an
+  //   account holder gets that somebody is probing their address — so it takes the ADR-0073 C2.2
+  //   attribution shape and is readable ONLY by the account it named.
+  //
+  //   Note what does NOT gate these: the route census structurally cannot see Better Auth's
+  //   routes (`audit-coverage.structural.spec.ts:45-47`), so nothing would have failed a PR that
+  //   omitted them. They are here because the tests say they belong, not because a gate insisted.
+  'auth.password_changed',
+  'auth.password_reset_requested',
+  'auth.password_reset_completed',
   // — Hierarchy soft deletes and restores. Not named in #14, but "who deleted this plan, and
   //   when" is the question users actually ask. Deletes only: creates and updates are a far
   //   larger surface and wait on the M3 growth measurement.
@@ -2096,6 +2108,9 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'auth.sign_in_failed': 'sign-ins',
   'auth.signed_out': 'sign-ins',
   'auth.email_verified': 'sign-ins',
+  'auth.password_changed': 'sign-ins',
+  'auth.password_reset_requested': 'sign-ins',
+  'auth.password_reset_completed': 'sign-ins',
   // What disappeared, and what came back. A restore sits beside its delete deliberately: a reader
   // asking "what happened to the Northgate job?" wants both halves in one answer.
   'client.deleted': 'deletions',
