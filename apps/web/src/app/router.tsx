@@ -9,12 +9,18 @@ import {
 import { Suspense, lazy } from 'react';
 
 import { Spinner } from '@/components/ui/spinner';
-import { AUDIT_LOG_ENABLED, GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
+import {
+  ACCOUNT_SETTINGS_ENABLED,
+  AUDIT_LOG_ENABLED,
+  GUEST_SHARE_LINKS_ENABLED,
+  RESOURCES_ENABLED,
+} from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { AcceptInviteScreen } from '@/routes/accept-invite';
+import { AccountScreen } from '@/routes/account';
 import { AuditLogScreen } from '@/routes/audit-log';
 import { AuthedLayout } from '@/routes/authed-layout';
 import { CalendarsScreen } from '@/routes/calendars';
@@ -153,6 +159,13 @@ const myActivityRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/me/activity',
   component: MyActivityScreen,
+});
+
+/** The reader's own account (ADR-0074 M3) — no org in the path, because nothing on it is scoped. */
+const accountRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/account',
+  component: AccountScreen,
 });
 
 /** Clients list. */
@@ -331,6 +344,9 @@ const routeTree = rootRoute.addChildren([
     // Dark surface (ADR-0072): both audit routes join the tree only when the flag is on, so the
     // app is byte-identical when off — no route, no nav entry, no query.
     ...(AUDIT_LOG_ENABLED ? [auditLogRoute, myActivityRoute] : []),
+    // Dark surface (ADR-0074 M3): the account route joins the tree only when the flag is on, so
+    // the app is byte-identical when off — no route and no menu entry.
+    ...(ACCOUNT_SETTINGS_ENABLED ? [accountRoute] : []),
   ]),
 ]);
 

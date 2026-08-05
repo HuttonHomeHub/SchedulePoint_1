@@ -1289,3 +1289,25 @@ export const AUDIT_FILTERS_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_FI
  * with the column and the sentence that make it legible.
  */
 export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_SELF_SECURITY);
+
+/**
+ * The `/account` screen: change your password, see and resend your address verification
+ * (ADR-0074 M3). **OFF by default** until the M5 gate pass.
+ *
+ * **This flag is legitimate, and its sibling `VITE_PASSWORD_RESET` is a different kind of gate.**
+ * Everything behind this one already works against today's server: `sendVerificationEmail` is
+ * configured, and `/change-password` has always been reachable — there was simply no screen. So
+ * the flag gates a **product decision** (is this surface ready?), not a server capability.
+ *
+ * Contrast the M2 work, which ships **unflagged**: those surfaces branch on whether the server has
+ * `AUTH_REQUIRE_EMAIL_VERIFICATION` on, and a `VITE_` constant is baked into the bundle long before
+ * an operator sets that (the ADR-0060 M0 rule). A flag there would strand a flag-off bundle against
+ * a flag-on server — worse than none. **A client surface whose gate is a server-side condition is
+ * branched on runtime evidence; a client surface whose gate is a product decision takes a flag.**
+ *
+ * Rollback: set `VITE_ACCOUNT_SETTINGS=false` and rebuild the web image. Flag-off, no `/account`
+ * route is registered and the account menu has no entry for it, so the app is byte-for-byte what it
+ * was. Pinned by `account-settings.parity.test.tsx`, kept rather than weakened — that suite is the
+ * rollback contract (ADR-0053 M6).
+ */
+export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACCOUNT_SETTINGS);

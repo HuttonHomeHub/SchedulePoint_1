@@ -1,9 +1,18 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Building2, Check, ChevronDown, Monitor, Moon, ScrollText, Sun } from 'lucide-react';
+import {
+  Building2,
+  Check,
+  ChevronDown,
+  Monitor,
+  Moon,
+  ScrollText,
+  Sun,
+  UserCog,
+} from 'lucide-react';
 import { useId } from 'react';
 
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
-import { AUDIT_LOG_ENABLED } from '@/config/env';
+import { ACCOUNT_SETTINGS_ENABLED, AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { useTheme, type Theme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
@@ -91,6 +100,19 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
           >
             {email}
           </p>
+        ) : null}
+        {/* Directly above My activity, and above the theme group: both are the reader's own,
+            and this menu is already the account's — there is nowhere else the account screen
+            could live without inventing a settings IA the product does not have. ADR-0074 M3. */}
+        {ACCOUNT_SETTINGS_ENABLED ? (
+          <MenuItem
+            onSelect={() => {
+              void navigate({ to: '/account' });
+            }}
+          >
+            <UserCog aria-hidden="true" className="size-4" />
+            Your account
+          </MenuItem>
         ) : null}
         {/* `/me/activity` is not org-scoped — it spans every organisation the reader belongs to and
             includes the org-less authentication rows — so the organisation nav is the wrong home

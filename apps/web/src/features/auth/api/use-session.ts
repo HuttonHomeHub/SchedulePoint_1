@@ -182,6 +182,47 @@ export function useSendVerificationEmail() {
   });
 }
 
+/**
+ * Better Auth's code for "the current password you gave is wrong", returned as a 400 from
+ * `/change-password`. Used to attach the failure to the **current-password field** rather than
+ * dropping it in a form-level banner beside three inputs, only one of which the reader can fix
+ * (the ADR-0060 M6 finding, one control along).
+ */
+export const INVALID_PASSWORD = 'INVALID_PASSWORD';
+
+/**
+ * Change your own password (ADR-0074 M3).
+ *
+ * **Always revokes the other sessions**, with no checkbox (spec CQ-2). The reason someone changes
+ * a password is usually that they think somebody else may know it, and a checkbox defaulted either
+ * way is a question about session management asked at the worst possible moment. The consequence
+ * is stated on screen **before** submit instead, which is the honest half of that trade.
+ *
+ * Deliberately the only new `authClient` consumer: every auth call in the app goes through this
+ * module, so there is one place to look when the library's shape changes.
+ */
+export function useChangePassword() {
+  const queryClient = useQueryClient();
+  return useMutation<void, AuthError, { currentPassword: string; newPassword: string }>({
+    mutationFn: async ({ currentPassword, newPassword }): Promise<void> => {
+      const { error } = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
+      if (error) {
+        throw new AuthError(
+          messageFrom(error, 'Could not change your password. Try again.'),
+          codeFrom(error),
+        );
+      }
+    },
+    // This session survives (the library keeps the caller's own), but the server has just
+    // re-issued its token, so re-read rather than assume the cached one is still the truth.
+    onSuccess: () => queryClient.fetchQuery(sessionQueryOptions),
+  });
+}
+
 /** Sign out and clear all cached data. */
 export function useSignOut() {
   const queryClient = useQueryClient();

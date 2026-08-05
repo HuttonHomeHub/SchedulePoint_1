@@ -19,3 +19,29 @@ export const signUpSchema = z.object({
 });
 
 export type SignUpValues = z.infer<typeof signUpSchema>;
+
+/**
+ * Change your own password from `/account` (ADR-0074 M3).
+ *
+ * Three rules, and each is here because the server would otherwise say it late or not at all:
+ * the new password must clear the same 12-character floor as sign-up, the confirmation must
+ * match (a client-only concern — the endpoint takes one value), and the new password must
+ * **differ from the current one**, which the server accepts silently. Confirming a change that
+ * changed nothing is the shape a person reads as "it did not work".
+ */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Enter your current password'),
+    newPassword: z.string().min(12, 'New password must be at least 12 characters'),
+    confirmPassword: z.string().min(1, 'Confirm your new password'),
+  })
+  .refine((values) => values.newPassword === values.confirmPassword, {
+    message: 'The two passwords do not match',
+    path: ['confirmPassword'],
+  })
+  .refine((values) => values.newPassword !== values.currentPassword, {
+    message: 'Choose a password you are not already using',
+    path: ['newPassword'],
+  });
+
+export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
