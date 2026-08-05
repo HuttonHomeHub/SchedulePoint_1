@@ -156,24 +156,50 @@ Three properties worth knowing before you turn it on:
   **the only signal is a `WARN` naming the missing configuration**, which since ADR-0074 M0
   arrives in the structured Pino stream rather than as bare `[Better Auth]:` stdout text
   (`docs/TECH_DEBT.md` #94, cheap half paid).
-- **A verification failure does NOT fail the sign-up** — this bullet said it did, until the
-  2026-08-04 reconciliation pass read the library. The adapter throws deliberately, and the
-  intent was right: the verify URL exists only in that email, so an undelivered message hands
-  someone an account they cannot use with nothing saying why. But Better Auth invokes
-  `sendVerificationEmail` through `runInBackgroundOrAwait`, which catches and logs the rejection
-  and never rethrows, so the sign-up returns success regardless. **Plan for delivery being
-  best-effort:** confirm a real message arrives before you set
-  `AUTH_REQUIRE_EMAIL_VERIFICATION=true`, and watch for `Failed to run background task` in the
-  API log — today that unstructured line is the only signal of a broken relay
-  (`docs/TECH_DEBT.md` #94). Better Auth's resend endpoint is the user-facing recovery path.
+- **A verification failure does NOT fail the sign-up, and it never will** — delivery is
+  best-effort by decision, not by accident (**ADR-0075**). Better Auth invokes
+  `sendVerificationEmail` through `runInBackgroundOrAwait`, which catches and never rethrows, so
+  the sign-up returns success regardless; no configuration changes that. Making the application
+  send first, so a failure could abort, was designed and **rejected** — under
+  `AUTH_REQUIRE_EMAIL_VERIFICATION` an address that already exists gets a synthetic success with
+  no send, so a delivery-failure signal would tell a stranger which addresses hold accounts.
+
+  **Alert on this, and not on what this bullet used to say:**
+
+  ```
+  event = "mail.send_failed"
+  ```
+
+  Every mail failure carries it, with a `message` field naming which one
+  (`invitation` / `email_verification` / `password_reset`), the recipient, and the error —
+  structured, in the Pino stream, with the correlation id, and never containing a URL or token.
+
+  Until 2026-08-05 this bullet told you to watch for Better Auth's `Failed to run background
+task`. **That line can no longer be produced by a mail failure**: the SMTP adapter catches
+  first (ADR-0074 M5-T1, so that a transport error on the session-less
+  `/send-verification-email` route cannot become an existence oracle), so the promise Better Auth
+  awaits resolves and its `catch` is never reached. An alert built exactly as previously
+  instructed would have stayed silent through a total relay outage. It also said "the adapter
+  throws deliberately", which stopped being true the same day.
+
+  Better Auth's resend endpoint remains the user-facing recovery path.
 
 #### What the application actually sends
 
-Two messages, and no others: the **organisation invitation** and the **email-verification
-link**. There is no password-reset flow (nothing in the web UI, no `sendResetPassword`
-configured), no digest and no notification email — so configuring mail does not silently
-open a channel you have not read about here. If a user forgets their password today the
-only route back is an operator resetting it in the database.
+**Three** messages, and no others: the **organisation invitation**, the **email-verification
+link**, and the **password-reset link**. No digest and no notification email — so configuring
+mail does not silently open a channel you have not read about here.
+
+This section said "two messages… there is no password-reset flow… the only route back is an
+operator resetting it in the database" until 2026-08-05. Password reset shipped with ADR-0074
+and is **default-on** (`VITE_PASSWORD_RESET`); `sendResetPassword` is configured, the web UI has
+both the request and the confirm screens, and a completed reset revokes every other session. The
+file contradicted itself 47 lines further down, where the Resend example already assumed reset
+mail was being sent.
+
+The practical consequence for you: reset is now the route back for a locked-out user, so a broken
+relay is more serious than this page implied — it is the difference between an inconvenience and
+an account nobody can recover without database access.
 
 #### Worked example: Resend
 
@@ -217,8 +243,25 @@ mailbox ownership rather than an email-address match (ADR-0016 §5). It is a sep
 from configuring mail, and it needs mail first: with no transport the only adapter left is the
 logging stub, so the verify link is written to the API's log and nowhere else, and every new
 account is unusable. **In production the API refuses to boot** on that combination rather than
-letting you find out from a user who cannot sign in. So the order is: set `MAIL_SMTP_URL` +
-`MAIL_FROM`, confirm a real message arrives, then flip the switch.
+letting you find out from a user who cannot sign in.
+
+**The order is load-bearing, and step 3 is the one people skip:**
+
+1. Set `MAIL_SMTP_URL` and `MAIL_FROM`, and restart.
+2. Confirm the API logged no `event: "mail.send_failed"` on first use.
+3. **Complete a real sign-up to a real mailbox and follow the link through to a signed-in
+   session.** Not "an email arrived" — the whole chain. A key with read-only permission
+   authenticates at boot and fails at send time; a verified-domain mistake delivers to your own
+   address and nothing else; and the redirect back is its own failure mode (ADR-0074 M5 found two
+   product defects on exactly this path, both invisible to every unit test because they only
+   appear when a browser follows a real emailed link).
+4. Only then set `AUTH_REQUIRE_EMAIL_VERIFICATION=true`.
+
+**Why it cannot be reordered:** flipping the switch first arms three dead ends at once — sign-up
+returns no session and the client reports success then bounces, sign-in 403s and re-sends
+nothing, and invitation-accept tells the user to verify with no way to do so. And because
+delivery is best-effort by design (ADR-0075), a broken relay at that point produces accounts that
+look created and cannot be used, with the only signal in your logs.
 
 #### Password reset: one precondition that fails silently if you miss it
 

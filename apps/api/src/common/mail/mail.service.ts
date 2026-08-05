@@ -49,10 +49,21 @@ export abstract class MailService {
    * Send the address-verification link.
    *
    * **Unlike an invitation, this message has no in-app fallback.** An Org Admin can always read an
-   * invitation's accept URL off the screen and pass it on by another route, which is what makes
-   * swallowing a failed invitation send safe. Nobody can do that here — the URL exists only in the
-   * email. The recovery path is Better Auth's own resend endpoint, and that asymmetry is the reason
-   * the two adapters treat failure differently rather than sharing one rule.
+   * invitation's accept URL off the screen and pass it on by another route. Nobody can do that
+   * here — the URL exists only in the email. The recovery path is Better Auth's own resend endpoint.
+   *
+   * **That asymmetry is about RECOVERY, not about error handling, and this docblock said otherwise
+   * until 2026-08-05.** It claimed the asymmetry "is the reason the two adapters treat failure
+   * differently rather than sharing one rule". They do not treat it differently: all three messages
+   * are swallowed and logged (`SmtpMailService`), and have been since ADR-0074 M5-T1 inverted this
+   * one. What survives is that an undelivered verification is *worse* than an undelivered
+   * invitation even though the code path is identical — which is a reason to watch the logs, not a
+   * reason for the adapter to behave differently.
+   *
+   * The swallow sits at the **adapter** rather than at the call sites because two of the three
+   * callers are Better Auth's, reached through `runInBackgroundOrAwait`, which would swallow it
+   * anyway — depending on that library internal rather than holding the property here is how a
+   * rejection became an existence oracle on `/send-verification-email` once already. See ADR-0075.
    */
   abstract sendEmailVerification(email: EmailVerificationEmail): Promise<void>;
 

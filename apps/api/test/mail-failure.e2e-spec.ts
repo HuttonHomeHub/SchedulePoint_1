@@ -32,19 +32,32 @@ import { clearDomainData } from './audit-reset';
  * we wish happened) it would be red on arrival and deleted within a week, which is ADR-0058's
  * "a gate that fails on day one gets deleted rather than fixed".
  *
- * The two cases are NOT the same defect wearing two hats, and the distinction is the whole point:
+ * **Neither path may report the failure to its caller, and the first version of this docblock said
+ * otherwise.** It read: "Sign-up hiding the failure is a defect. The caller is the person who owns
+ * the address, there is no enumeration concern." That is **false under enforcement**, and the error
+ * is preserved here rather than quietly overwritten because it is the reason ADR-0075 exists.
  *
- * - **Sign-up** hiding the failure is a **defect**. The caller is the person who owns the address,
- *   there is no enumeration concern, and they end up holding an account they cannot use with the
- *   product reporting success.
- * - **Reset request** hiding the failure is **correct and must stay** — the endpoint answers
- *   identically for a known and an unknown address, so any caller-visible difference is an
- *   enumeration oracle (`MailService.sendPasswordReset`'s docblock). The fix for reset can only ever
- *   be operator-facing, which is why the cheap half of #94 (Better Auth's logger into Pino) is the
- *   whole remedy on that side and a design change is not.
+ * `sign-up.mjs:162,169-207`: with `requireEmailVerification`, an address that **already exists**
+ * gets a synthetic `200` carrying a fabricated user id and **no send at all** — and Better Auth
+ * hashes the submitted password anyway, purely to equalise the timing. That is a deliberate
+ * anti-enumeration control, and it inverts the argument: surface a delivery failure and, during an
+ * outage, an **error** means "that address was free" while a **200** means "that address is taken".
+ * The abort is inadmissible unless the duplicate branch also sends, which defeats its own purpose.
  *
- * Anyone who "fixes" the second case by surfacing the error to the caller has reintroduced the
- * oracle ADR-0074 was careful to close. The assertion below says so at the point of temptation.
+ * So the two paths reach the same destination by different routes:
+ *
+ * - **Reset request** — uniform by construction, and the uniformity is the point
+ *   (`MailService.sendPasswordReset`'s docblock).
+ * - **Sign-up** — uniform by a control that is easy to miss, because the branch that makes it
+ *   uniform is the one that does nothing.
+ *
+ * The remedy on both is therefore **operator-facing only**: `event: 'mail.send_failed'` in the Pino
+ * stream (ADR-0075). Anyone who "fixes" either case by surfacing the error to the caller has
+ * reintroduced an oracle. The `stays uniform …` cases below say so at the two points of temptation.
+ *
+ * The claim was asserted in three places before anyone checked `sign-up.mjs` — this docblock, a
+ * commit message, and `docs/TECH_DEBT.md` #94. Repetition is not verification; that is ADR-0058's
+ * rule, and it was broken by the same person who had just applied it two commits earlier.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';
@@ -171,6 +184,48 @@ describe.skipIf(!hasDatabase)('A broken mail transport (e2e)', () => {
       // which is the loop #94 describes: nothing on the path from here says an email failed to send,
       // so nobody knows to use the resend endpoint that would recover them.
       expect(signIn.status).toBe(403);
+    });
+  });
+
+  describe('the sign-up guarantee that decides the design (ADR-0075)', () => {
+    /**
+     * **A guarantee, not a characterisation** — the only case in this file asserting something that
+     * must never change, and it reads as unrelated to a broken relay until you see what it forbids.
+     *
+     * Under enforcement, Better Auth answers a sign-up for an address that ALREADY EXISTS with a
+     * synthetic 200 carrying a fabricated user id, and sends nothing (`sign-up.mjs:162,169-207`). It
+     * hashes the submitted password regardless, purely so the timing matches. That is what makes
+     * "abort the sign-up when the send fails" inadmissible: during an outage the error would mean
+     * "that address was free" and the 200 would mean "that address is taken" — an enumeration oracle
+     * on an unauthenticated endpoint, created by the very change meant to help the caller.
+     *
+     * Nothing tested this. The property lives entirely in a library file this repo does not own, and
+     * a `better-auth` upgrade that changed it would move a security boundary with no failing test.
+     */
+    it('answers a duplicate address exactly like a new one, and sends nothing', async () => {
+      const email = `taken-${Date.now()}@example.test`;
+      const first = await request(server())
+        .post('/api/auth/sign-up/email')
+        .set('Origin', ORIGIN)
+        .send({ name: 'Someone', email, password: PASSWORD });
+      expect(first.status).toBe(200);
+      expect(mail.verificationAttempts).toBe(1);
+
+      const second = await request(server())
+        .post('/api/auth/sign-up/email')
+        .set('Origin', ORIGIN)
+        .send({ name: 'Someone Else', email, password: PASSWORD });
+
+      // Same status, same shape — and NOT because the second attempt also mailed. It mailed nothing,
+      // which is precisely why a delivery-failure signal would tell the caller these two cases apart.
+      expect(second.status).toBe(first.status);
+      expect(Object.keys(second.body as object).sort()).toEqual(
+        Object.keys(first.body as object).sort(),
+      );
+      expect(mail.verificationAttempts).toBe(1);
+
+      // No second account, despite the 200 the caller just received.
+      expect(await prisma.user.count({ where: { email } })).toBe(1);
     });
   });
 
