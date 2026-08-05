@@ -47,16 +47,57 @@ function messageFrom(error: unknown, fallback: string): string {
   return typeof message === 'string' && message.trim() ? message : fallback;
 }
 
+/**
+ * An auth failure that carries the library's machine-readable `code` alongside the message
+ * (ADR-0074).
+ *
+ * The code is what lets a screen branch. Matching on the message string would work today and break
+ * on any wording change in a dependency — and the branch it guards is the difference between "check
+ * your password" and "your address is not verified, here is how to fix that", which is not a
+ * distinction to leave resting on prose.
+ */
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | undefined,
+  ) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+function codeFrom(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * Better Auth's code for "this account exists but its address is unverified", returned as a 403
+ * from `/sign-in/email` when `AUTH_REQUIRE_EMAIL_VERIFICATION` is on (`sign-in.mjs:312-324`).
+ *
+ * **Nothing on the client can predict whether the server has that switch on** — it is an operator
+ * env var read at API boot, and a `VITE_` constant is baked into the bundle long before. That is
+ * why the branch is a runtime check on this code rather than a build-time flag (ADR-0074 §2).
+ */
+export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED';
+
 /** Sign in with email + password, then refresh the session. */
 export function useSignIn() {
   const queryClient = useQueryClient();
-  return useMutation({
+  // The error type is pinned to `AuthError` so callers can read `.code` — react-query would
+  // otherwise widen it to `Error` and the `EMAIL_NOT_VERIFIED` branch would not compile.
+  return useMutation<void, AuthError, SignInValues>({
     mutationFn: async (values: SignInValues): Promise<void> => {
       const { error } = await authClient.signIn.email({
         email: values.email,
         password: values.password,
       });
-      if (error) throw new Error(messageFrom(error, 'Could not sign in. Check your details.'));
+      if (error) {
+        throw new AuthError(
+          messageFrom(error, 'Could not sign in. Check your details.'),
+          codeFrom(error),
+        );
+      }
     },
     // Fetch the session fresh before the caller navigates: the `_authed` guard
     // reads it via `ensureQueryData`, which returns cached data without
@@ -68,21 +109,76 @@ export function useSignIn() {
   });
 }
 
-/** Create an account (auto-signed-in), then refresh the session. */
+/** What a completed sign-up tells the caller. See {@link useSignUp} for why this is not `void`. */
+export interface SignUpOutcome {
+  /**
+   * False when the server created the account but issued **no session** — which it does whenever
+   * `AUTH_REQUIRE_EMAIL_VERIFICATION` is on. The caller must route to `/verify-email` instead of
+   * into the app.
+   */
+  signedIn: boolean;
+}
+
+/**
+ * Create an account, then refresh the session.
+ *
+ * **Returns an outcome rather than `void`, and that is the whole fix** (ADR-0074 M2-T4). This
+ * previously inspected only `error`, so with verification enforced it reported success, the screen
+ * navigated to `/`, the `_authed` guard found no session and bounced to `/sign-in` **with no
+ * explanation whatsoever**. The cause: `sign-up.mjs:162-163` derives `shouldSkipAutoSignIn` from
+ * `requireEmailVerification`, which **overrides** this app's `autoSignIn: true`, and the route
+ * returns `{ token: null, user }`.
+ *
+ * A latent dead end that switches itself on when an operator sets an env var — which is exactly why
+ * no build-time flag could have gated the fix, and why it ships unflagged.
+ */
 export function useSignUp() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (values: SignUpValues): Promise<void> => {
-      const { error } = await authClient.signUp.email({
+    mutationFn: async (values: SignUpValues): Promise<SignUpOutcome> => {
+      const { data, error } = await authClient.signUp.email({
         name: values.name,
         email: values.email,
         password: values.password,
       });
-      if (error) throw new Error(messageFrom(error, 'Could not create your account.'));
+      if (error) {
+        throw new AuthError(messageFrom(error, 'Could not create your account.'), codeFrom(error));
+      }
+      // `token` is the session token. Absent or null ⇒ the account exists but nobody is signed in.
+      return { signedIn: Boolean(data?.token) };
     },
     // See useSignIn: fetch so the session cache holds the new user before the
     // post-sign-up navigation runs (the guard reads cache without revalidating).
     onSuccess: () => queryClient.fetchQuery(sessionQueryOptions),
+  });
+}
+
+/**
+ * Send (or re-send) the address-verification email (ADR-0074).
+ *
+ * **Session-less by design.** The people who need it most cannot sign in — that is the state it
+ * exists to resolve — so it takes the address as an argument rather than reading one from a
+ * session that does not exist.
+ *
+ * The endpoint answers identically for an unknown address, an already-verified one and a real
+ * pending one, and enforces a 500 ms floor to hide the timing difference
+ * (`email-verification.mjs:98-117`). **The UI must not undo that**: one "check your email" state,
+ * whatever the truth, with no branch a caller could read as an existence oracle.
+ */
+export function useSendVerificationEmail() {
+  return useMutation({
+    mutationFn: async (email: string): Promise<void> => {
+      const { error } = await authClient.sendVerificationEmail({
+        email,
+        callbackURL: '/verify-email?verified=1',
+      });
+      if (error) {
+        throw new AuthError(
+          messageFrom(error, 'Could not send the email. Try again in a moment.'),
+          codeFrom(error),
+        );
+      }
+    },
   });
 }
 

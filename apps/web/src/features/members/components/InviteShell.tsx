@@ -1,12 +1,15 @@
-import { Card } from '@/components/ui/card';
+import { AuthShell } from '@/components/layout/auth-shell';
 
 /**
- * Centered card layout for the public invitation-accept flow — the single
- * `main` landmark for the page. A polite live region announces the outcome to
- * screen-reader users as the invitation resolves (loading → not-found /
- * wrong-account / ready-to-join), which is the page's key decision point
- * (WCAG SC 4.1.3). Mirrors {@link AuthShell} so every public screen owns exactly
- * one `main`.
+ * The invitation-accept flow's page shell.
+ *
+ * **Delegates to {@link AuthShell}** (ADR-0074 M2-T1). It used to be a near-copy that had already
+ * drifted on width and on whether it announced anything, and three new public screens were about
+ * to make that five callers on two implementations — the ADR-0062 shape, where each looks right
+ * alone and only a reader who opens the same thing two ways ever sees one is a version behind.
+ *
+ * Kept as a named wrapper rather than replaced at every call site: the name carries the fact that
+ * this flow's children own their own `CardHeader`, which is what the title-less variant is for.
  */
 export function InviteShell({
   children,
@@ -16,12 +19,8 @@ export function InviteShell({
   busy?: boolean;
 }): React.ReactElement {
   return (
-    <main
-      className="flex min-h-dvh items-center justify-center p-4"
-      aria-live="polite"
-      aria-busy={busy}
-    >
-      <Card className="w-full max-w-md">{children}</Card>
-    </main>
+    <AuthShell size="md" busy={busy}>
+      {children}
+    </AuthShell>
   );
 }

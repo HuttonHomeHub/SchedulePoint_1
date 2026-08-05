@@ -8,7 +8,7 @@ import { InviteShell } from './InviteShell';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import { useSession } from '@/features/auth';
+import { ResendVerificationButton, useSession } from '@/features/auth';
 
 /** Invitee-facing accept flow: preview the invite, then accept as the right user. */
 export function AcceptInvitationCard({ token }: { token: string }): React.ReactElement {
@@ -80,6 +80,33 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
           <Link to="/sign-up" className={buttonVariants({ variant: 'outline' })}>
             Create an account
           </Link>
+        </CardContent>
+      </InviteShell>
+    );
+  }
+
+  // The fourth first-class refusal, alongside not-found / not-pending / wrong-account (ADR-0074
+  // M2-T6). The card has always held `emailVerified` and never read it, so when the server's
+  // matching 403 fires (`invitations.service.ts:218-220`) it lands in the generic error paragraph
+  // below with no way forward. Checking it here turns a dead end into an instruction — and the 403
+  // remains as the server's authoritative second word if the two ever disagree.
+  //
+  // **Not reachable today**: the server guard is itself gated on `requireEmailVerification`, which
+  // is off by default. It is a latent dead end that arms itself the moment an operator sets the env
+  // var, which is precisely why it is fixed unflagged rather than deferred.
+  if (!user.emailVerified) {
+    return (
+      <InviteShell>
+        <CardHeader>
+          <CardTitle>Confirm your email address first</CardTitle>
+          <CardDescription>
+            Before you can join {invite.organizationName}, open the link we emailed to{' '}
+            <strong>{user.email}</strong>. Come back to this page afterwards — the invitation is
+            still waiting.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResendVerificationButton email={user.email} />
         </CardContent>
       </InviteShell>
     );

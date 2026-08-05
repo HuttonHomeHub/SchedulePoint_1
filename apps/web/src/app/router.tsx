@@ -30,6 +30,7 @@ import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
 import { ResourcesScreen } from '@/routes/resources';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
+import { VerifyEmailScreen } from '@/routes/verify-email';
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -270,6 +271,31 @@ const shareGuestRoute = createRoute({
   ),
 });
 
+/**
+ * Public address-verification landing route (ADR-0074).
+ *
+ * **Registered unconditionally, and that is the decision.** The three surfaces that link here are
+ * unflagged runtime branches on what the server did, so gating this route behind a `VITE_` constant
+ * would strand every one of them the moment an operator sets `AUTH_REQUIRE_EMAIL_VERIFICATION` —
+ * and `...(FLAG ? [route] : [])` widens the tree type to include the route in **both** branches, so
+ * typecheck cannot catch the resulting link to nothing.
+ *
+ * `validateSearch` is deliberately permissive: Better Auth composes the failure redirect itself, so
+ * an unrecognised param must be carried, not rejected.
+ */
+const verifyEmailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/verify-email',
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { email?: string; verified?: string; error?: string } => ({
+    ...(typeof search.email === 'string' ? { email: search.email } : {}),
+    ...(typeof search.verified === 'string' ? { verified: search.verified } : {}),
+    ...(typeof search.error === 'string' ? { error: search.error } : {}),
+  }),
+  component: VerifyEmailScreen,
+});
+
 /** Public invitation-accept route (keyed by the token in the URL). */
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -283,6 +309,8 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
   acceptInviteRoute,
+  // Unconditional by design — see the route's own docblock. Three unflagged surfaces link here.
+  verifyEmailRoute,
   // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
   // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
   ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
