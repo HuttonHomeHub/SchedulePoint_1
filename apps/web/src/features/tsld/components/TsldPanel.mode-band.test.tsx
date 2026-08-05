@@ -260,8 +260,12 @@ describe('TsldPanel — the link confirmation names the direction and undoes it 
 
     // The direction is the whole point of the sentence — "linked" without it is what the planner
     // could not verify in the driving session that opened this epic.
-    const band = await screen.findByTestId('canvas-mode-band');
-    expect(band).toHaveTextContent('Linked “Set out” → “Reinforce” (FS).');
+    // `findByTestId` is the WRONG wait here and it flaked in CI: the band is already on screen
+    // saying "Linking FS — click the predecessor", so the query resolves on the first tick and the
+    // text assertion then runs synchronously — before `onLink`'s promise has flushed. The thing to
+    // wait for is the SENTENCE, not the element, so the wait must wrap the assertion.
+    const band = screen.getByTestId('canvas-mode-band');
+    await waitFor(() => expect(band).toHaveTextContent('Linked “Set out” → “Reinforce” (FS).'));
 
     fireEvent.click(within(band).getByRole('button', { name: 'Undo' }));
     expect(onUndoLastEdit).toHaveBeenCalledOnce();
@@ -279,7 +283,11 @@ describe('TsldPanel — the link confirmation names the direction and undoes it 
     fireEvent.keyDown(listbox, { key: 'Enter' });
     fireEvent.keyDown(listbox, { key: 'ArrowDown' });
     fireEvent.keyDown(listbox, { key: 'Enter' });
-    expect(await screen.findByTestId('canvas-mode-band')).toHaveTextContent('Linked “Set out”');
+    // Same wrong-wait as above — it had simply not lost the race yet. Fixed in step with it, since
+    // a flake fixed on one of two identical call sites is a flake that comes back.
+    await waitFor(() =>
+      expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent('Linked “Set out”'),
+    );
 
     fireEvent.keyDown(window, { key: 'Escape' }); // disarm
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
