@@ -49,7 +49,23 @@ RUN pnpm --filter @repo/types build \
 
 # --- Runtime: static files served by nginx -----------------------------------
 FROM nginx:1.31-alpine AS runtime
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# A TEMPLATE, not a final config: the nginx image's own
+# /docker-entrypoint.d/20-envsubst-on-templates.sh renders it at container start. That is what
+# makes the CSP mode an operator variable rather than a code edit — flipping report-only to
+# enforce, or rolling back, is an env change instead of a release (ADR-0074 §4).
+COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+
+# **Essential, not tidy.** Unrestricted, envsubst would replace nginx's OWN variables — $scheme,
+# $host, $remote_addr, $proxy_add_x_forwarded_for, $uri — with empty strings, silently producing a
+# config that forwards no Host and no client IP and whose SPA fallback stops resolving. The filter
+# limits substitution to CSP_-prefixed names.
+ENV NGINX_ENVSUBST_FILTER="^CSP_"
+
+# Report-only by default: a deployment observes before it enforces. Enforcing is a deliberate,
+# separately-approved step (ADR-0074 M5) — set CSP_HEADER_NAME=Content-Security-Policy.
+ENV CSP_HEADER_NAME="Content-Security-Policy-Report-Only"
+ENV CSP_POLICY="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

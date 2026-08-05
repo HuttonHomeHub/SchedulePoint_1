@@ -75,7 +75,14 @@
 - **Output encoding / XSS:** the API returns JSON (no HTML rendering); the SPA
   escapes by default and must never inject unsanitised HTML
   (`dangerouslySetInnerHTML` is disallowed without sanitisation). Strict
-  security headers via Helmet (API) and nginx (web), including a tight CSP.
+  security headers via Helmet (API) and nginx (web), including a tight CSP —
+  shipped report-only by ADR-0074 and derived from what the code loads rather
+  than from a template. Two deliberate exclusions worth not "fixing" later:
+  **Permissions-Policy is enumerated, never blanket-denied** (`clipboard-write`
+  is a controlled feature and two Copy buttons depend on it), and **HSTS is not
+  set at the web container** — it listens only on plain 8080 and cannot know the
+  browser's scheme (`docs/TECH_DEBT.md` #89), and HSTS is sticky, so it belongs
+  at the edge terminator where the TLS is.
 
 ## SQL injection
 

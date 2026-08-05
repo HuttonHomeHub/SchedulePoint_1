@@ -252,9 +252,39 @@ you; without it, invitations to external clients will land in spam.
   web container, not the browser's scheme — while `X-Forwarded-Scheme` and
   Cloudflare's `CF-Visitor` both correctly say `https`. Nothing consumes it today
   (absolute URLs come from `BETTER_AUTH_URL`, and the `Secure` cookie flag from
-  `NODE_ENV`), so it is currently harmless and therefore easy to miss. Add
-  `proxy_set_header X-Forwarded-Proto $scheme;` to the HTTPS host so it is right
-  before something starts trusting it. See `docs/TECH_DEBT.md` #89.
+  `NODE_ENV`), so it is currently harmless and therefore easy to miss.
+  **The repo half is now fixed** (ADR-0074 M1): `apps/web/nginx.conf` no longer overwrites the
+  header with this container's own unconditionally-`http` `$scheme` — an arriving value is
+  preserved and `$scheme` is only the fallback. **The operator half is still yours, and without it
+  nothing changes**, because with no header arriving the fallback reproduces the old behaviour
+  exactly. In Nginx Proxy Manager: the HTTPS host → Advanced →
+  `proxy_set_header X-Forwarded-Proto $scheme;`, with Force SSL on. See `docs/TECH_DEBT.md` #89.
+
+### Content-Security-Policy
+
+The web container serves a CSP (ADR-0074, `docs/TECH_DEBT.md` #8). **Both the header name and the
+policy are environment variables read by nginx at container start**, not values baked into the
+image — so switching between observing and enforcing, in either direction, is a restart rather than
+a release. A rollback that needed a new image would be slower than the incident it was fixing.
+
+```bash
+CSP_HEADER_NAME=Content-Security-Policy-Report-Only   # default: observe
+CSP_HEADER_NAME=Content-Security-Policy               # enforce
+```
+
+**Ship report-only first and actually look.** There is no `report-to` sink — violations appear in
+the browser console, which for a single-operator deployment is a real verification tool and avoids
+adding a public unauthenticated endpoint. Walk every route with the console open before enforcing:
+sign-in/up, accept-invite, the share guest view, the plan workspace, the Gantt, canvas PNG/PDF
+export, the printed programme, the library screens, the audit log — and both **Copy** buttons.
+
+Two things worth knowing if you edit the policy:
+
+- `img-src` needs `blob:`. The printed programme renders a live object-URL `<img>`; dropping it
+  breaks printing and image export, and only there.
+- `style-src 'self'` is deliberately strict and is **inferred from the source**, not verified in a
+  browser. If the report-only window shows style violations, relax **`style-src` only** — never
+  `script-src`, which needs no relaxation at all now the theme-boot script is a served file.
 
 ### Common pitfall: `403 Invalid origin` on sign-up/sign-in
 

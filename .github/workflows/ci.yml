@@ -436,6 +436,47 @@ jobs:
       - name: Smoke-test the web app
         run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null http://localhost:8080/
 
+      # The nginx config is an envsubst TEMPLATE (ADR-0074 §4), so these assertions are about the
+      # RENDERED config rather than the file in git — and the failure they exist to catch is the
+      # quiet one: an unfiltered envsubst run replaces nginx's own `$host`/`$scheme` with empty
+      # strings, producing a container that still boots and still serves the SPA while forwarding
+      # no Host and no client IP to the API. `curl -o /dev/null` above would not notice.
+      - name: Verify the rendered nginx config and its security headers
+        run: |
+          set -euo pipefail
+
+          # 1. envsubst substituted the CSP variables...
+          headers=$(curl -fsS -D - -o /dev/null http://localhost:8080/)
+          echo "$headers" | grep -qi 'content-security-policy-report-only:' \
+            || { echo 'CSP report-only header missing'; echo "$headers"; exit 1; }
+          echo "$headers" | grep -qi "img-src 'self' blob:" \
+            || { echo 'CSP is present but not the expected policy'; echo "$headers"; exit 1; }
+          echo "$headers" | grep -qi 'permissions-policy:.*camera=()' \
+            || { echo 'Permissions-Policy missing'; exit 1; }
+          # clipboard-write must NOT be denied: two Copy buttons depend on it.
+          ! echo "$headers" | grep -qi 'permissions-policy:.*clipboard' \
+            || { echo 'Permissions-Policy denies clipboard — this breaks the Copy buttons'; exit 1; }
+          echo "$headers" | grep -qi 'cross-origin-opener-policy:' || { echo 'COOP missing'; exit 1; }
+
+          # 2. ...and did NOT eat nginx's own variables. `$host`/`$scheme` survive as literals in
+          #    the rendered file; an empty value here is the comprehensively-wrong config.
+          rendered=$(docker compose -f docker-compose.yml -f docker-compose.ci.yml \
+            exec -T web cat /etc/nginx/conf.d/default.conf)
+          echo "$rendered" | grep -q 'proxy_set_header Host \$host;' \
+            || { echo 'envsubst ate $host — check NGINX_ENVSUBST_FILTER'; exit 1; }
+          echo "$rendered" | grep -q '\$proxy_add_x_forwarded_for' \
+            || { echo 'envsubst ate $proxy_add_x_forwarded_for'; exit 1; }
+          echo "$rendered" | grep -q "'' *\$scheme;" \
+            || { echo 'envsubst ate the X-Forwarded-Proto fallback map'; exit 1; }
+
+          # 3. The theme-boot script is served and is NOT immutably cached (it is not
+          #    fingerprinted, so an immutable cache would strand a change forever).
+          boot=$(curl -fsS -D - -o /dev/null http://localhost:8080/theme-boot.js)
+          echo "$boot" | grep -qi 'cache-control:.*max-age=300' \
+            || { echo 'theme-boot.js is missing its short cache header'; echo "$boot"; exit 1; }
+          ! echo "$boot" | grep -qi 'immutable' \
+            || { echo 'theme-boot.js must not be immutably cached'; exit 1; }
+
       - name: Dump container logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color
