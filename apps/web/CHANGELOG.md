@@ -1,5 +1,147 @@
 # @repo/web
 
+## 0.70.0
+
+### Minor Changes
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The web origin now serves a Content-Security-Policy (report-only), plus the sibling headers it was
+  missing.
+
+  The policy is derived from what the code actually loads rather than from a template: no external
+  origins at all, so everything is `'self'` except `blob:` on `img-src`, which the printed programme
+  needs for its live object-URL image. The inline theme-boot script moved to `public/theme-boot.js`,
+  so `script-src` needs no relaxation — no `'unsafe-inline'` and no hash to keep in sync.
+
+  `nginx.conf` becomes an envsubst template so **the CSP mode is an operator variable**:
+  `CSP_HEADER_NAME=Content-Security-Policy` enforces, and the default report-only value observes.
+  Either direction is a container restart rather than a release, which matters most when the change
+  being made is a rollback.
+
+  Also adds COOP, CORP and an **enumerated** Permissions-Policy — deliberately not a blanket deny,
+  because `clipboard-write` is a controlled feature and the two Copy buttons depend on it. HSTS stays
+  excluded: this container listens only on plain 8080 and cannot know the browser's scheme, and HSTS
+  is sticky, so it belongs at the edge.
+
+  And `X-Forwarded-Proto` is no longer overwritten with this container's own unconditionally-`http`
+  scheme (TECH_DEBT [#89](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/89), code half). The operator half — actually sending the header from the proxy —
+  is still required, and without it nothing changes.
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Close the three email-verification dead ends and add the `/verify-email` landing screen
+  (ADR-0074 M2).
+
+  With `AUTH_REQUIRE_EMAIL_VERIFICATION` enabled on the API, sign-up returned no session and the
+  client reported success then bounced the new member to sign-in with no explanation; sign-in
+  answered 403 with the library's raw message and no way forward; and the invitation-accept card
+  held `emailVerified` without ever reading it. All three now branch on **runtime evidence the
+  server provides** — which is why they ship unflagged: a `VITE_` constant is baked into the bundle
+  long before an operator sets that env var, so a flag would strand every new sign-up on a flag-off
+  bundle against a flag-on server.
+
+  `/verify-email` is a landing screen (it never holds or spends a token) registered unconditionally,
+  and a spent link is framed as "used — here is a fresh one" rather than as a failure, because a
+  mail scanner following the link can burn it before the person clicks it. `AuthShell` and
+  `InviteShell` converge on one shell that mounts the shared announcer, so a public screen can
+  announce at all. Both auth submits move from native `disabled` to `aria-disabled` plus a submit
+  guard, so focus is not thrown to `<body>` and back on every attempt.
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the `/account` screen behind `VITE_ACCOUNT_SETTINGS` (ADR-0074 M3, default off).
+
+  A signed-in member can now change their password and see whether their address is verified, with a
+  resend if it is not. Both endpoints have always been reachable — there was simply no screen — so
+  this flag gates a **product decision**, unlike the M2 work, whose gate is a server-side condition
+  and therefore ships unflagged.
+
+  Changing a password always signs the other sessions out, with no checkbox: the reason someone
+  changes a password is usually that they think somebody else may know it, so a checkbox defaulted
+  either way asks a session-management question at the worst possible moment. The screen says so
+  before submit instead. A wrong current password is attached to that field rather than dropped in a
+  banner above three inputs, only one of which is wrong.
+
+  Deliberately not a settings information architecture — theme stays in the account menu, and the
+  screen is the smallest surface that hosts the two things a person needed and had nowhere to do.
+
+  Flag-off is byte-for-byte the prior product: no route is registered and the account menu has no
+  entry, pinned by `account-settings.parity.test.tsx`.
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the signed-out password-reset flow behind `VITE_PASSWORD_RESET` (ADR-0074 M4, default off).
+
+  A signed-out user can now ask for a reset link and set a new password unaided. Until now the only
+  route back into a locked account ran through an operator with database access.
+
+  `/forgot-password` shows **one** submitted state whatever the truth, and never promises delivery:
+  the endpoint answers identically for a known and an unknown address and even performs a dummy
+  lookup so the timing matches, so a UI that branched would hand back the enumeration oracle the
+  library closed. "Reset is not available on this installation" is kept clearly distinct from "no
+  such account" — it is a fact about the deployment, not about the address just typed.
+
+  `/reset-password` captures the emailed token into component state and strips it from the URL with
+  `replace: true`, so a live token does not persist in history or ride along in a later referrer.
+  Success ends at a "Sign in" link rather than a navigation into the app, because the reset endpoint
+  issues no session. Both screens are `noindex`, via a hook extracted from the guest-share view so
+  the two cannot drift on the unmount cleanup.
+
+  Both routes **and the sign-in link** are gated on the one constant. That is load-bearing:
+  `pnpm typecheck` cannot catch a link to a conditionally-registered route, so splitting them across
+  changes is how the link becomes a link to nothing. Flag-off is byte-for-byte the prior product,
+  pinned by `password-reset.parity.test.tsx`.
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Turn on the account screens (ADR-0074 M5).
+
+  `VITE_ACCOUNT_SETTINGS` and `VITE_PASSWORD_RESET` are now default-on, so **Your account** appears in
+  the account menu — change your password, see whether your address is verified, resend the link — and
+  a signed-out person who has forgotten their password can ask for a reset from the sign-in screen
+  instead of needing an operator with database access.
+
+  Changing your password always signs you out everywhere else, and so does completing a reset; the
+  consequence is stated on screen before you submit rather than after.
+
+  Both flags remain rollbacks: set either to `false` and rebuild, and the app is byte-for-byte what it
+  was — the parity suites pin that.
+
+### Patch Changes
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fold the ADR-0074 M5 gate pass — six specialist reviews over the combined epic diff, and the
+  flag-on recovery journey.
+
+  The sharpest finding is a **server-side enumeration oracle**: Better Auth's anonymous
+  `/send-verification-email` equalises timing to 500 ms and mints a throwaway token for the
+  unknown-address branch so the work matches — and then rethrows a transport error, which
+  `better-call` turns into a bare 500. A caller submitting a candidate address therefore got a
+  distinguishable answer for "exists, unverified, and delivery just failed". `SmtpMailService` now
+  swallows and logs, matching `sendInvitation`; the reset send does the same, holding the property
+  rather than depending on a library internal for it.
+
+  The rest are client-side: the same outcome was announced twice through two live regions in four
+  components; focus was dropped to `<body>` whenever a form was replaced by its outcome; the sign-in
+  `EMAIL_NOT_VERIFIED` state had no way back to the form; the invitation-accept flow lost the status
+  announcement the old `InviteShell` carried; and `/verify-email` named "that link has been used" as
+  the cause — the one cause that cannot produce that state, since a second visit to an
+  already-verified address takes the library's success branch.
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Stop blocking every invitee from accepting an invitation (ADR-0074 M5).
+
+  The accept screen refused anyone whose address was unverified — but unless a deployment enforces
+  verification, **no** address is verified, so it refused everyone, telling them to confirm an address
+  the server did not require and hiding Accept behind it.
+
+  The invitation preview now reports whether this server actually enforces verification, and the
+  screen refuses only when it does. The client had no other way to know, and guessing was the defect.
+
+- [#234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/234) [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix two dead ends on the email-verification path, both reachable only when an operator sets
+  `AUTH_REQUIRE_EMAIL_VERIFICATION` (ADR-0074 M5).
+
+  Following a verification link left the reader on the "we sent you a link" screen even though the
+  address had just been verified: the router JSON-parses search params, so `?verified=1` arrived as
+  the number `1` and the route discarded it. And the **first** verification email — the one sign-up
+  sends — carried no return destination, so it verified the address and then bounced the new member to
+  the sign-in screen with nothing said about why. Both send paths now point at the confirmation screen
+  through one shared constant.
+
+  Found by the flag-on journey (`test:e2e:account-verify`), which is now wired into CI.
+
+- Updated dependencies [[`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184), [`4013dcd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4013dcd462eef2862fe51ae679de5b29b4ead184)]:
+  - @repo/types@0.26.0
+
 ## 0.69.1
 
 ### Patch Changes
