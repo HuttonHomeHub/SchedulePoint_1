@@ -41,6 +41,7 @@
     "test:e2e:audit": "playwright test --config playwright.audit.config.ts --pass-with-no-tests",
     "test:e2e:account": "playwright test --config playwright.account.config.ts --pass-with-no-tests",
     "test:e2e:account-verify": "playwright test --config playwright.account-verify.config.ts --pass-with-no-tests",
+    "test:e2e:csp": "playwright test --config playwright.csp.config.ts --pass-with-no-tests",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {

@@ -241,6 +241,39 @@ a live `<img src={URL.createObjectURL(blob)}>`. `data:` is **not** needed: jsPDF
 from source, not browser-verified** — that is precisely what the report-only window exists to
 falsify.
 
+**What the report-only window found became a gate — the epic's own premise, one layer down.** The
+window did its job: on the deployed origin it reported a `script-src` violation with `blockedURI:
+eval`, from Zod 4's `allowsEval()` probe (`new Function('')` in a `try`/`catch`, swallowed, so
+validation had always worked — the browser reports the _attempt_). `'unsafe-eval'` was rejected out
+of hand: it re-opens string-to-code execution across the whole origin to buy JIT speed on a few
+login forms. Zod ships a `jitless` flag for exactly this, so `config/zod-jitless.ts` sets it, first
+import in `main.tsx` because the probe's answer is memoised on first use.
+
+The finding matters more than the fix. **The policy above was derived by reading `apps/web/src`, and
+validated by a person walking routes with a console open — and neither method can see what a
+_dependency_ does at runtime.** Zod's probe is not in our source at all. Every other invariant in
+this repository has a computed gate (ADR-0058); this one had vigilance, and vigilance found it once,
+in production, after release.
+
+So `apps/web/e2e-csp/` (`test:e2e:csp`, its own CI step) serves the **real** policy — parsed out of
+`docker-compose.yml`, never restated, because a gate testing a policy nobody serves proves nothing —
+records every `securitypolicyviolation`, and fails with the directive and source file rather than a
+count. Two decisions in it are load-bearing. It runs against the **production build** (`pnpm build`
+
+- `vite preview`, with `preview.proxy` standing in for nginx's `location /api/`), because the dev
+  server is the wrong artefact in both directions: it serves unbundled modules, so a dependency's
+  compiled behaviour is not what runs, and it injects an **inline** react-refresh preamble that
+  `script-src 'self'` would report as a violation production can never have — a permanently red gate,
+  which is how gates get deleted rather than fixed. And it was **verified red first**: removing the
+  `zod-jitless` import reproduces the exact production shape. A gate never seen red is an assertion
+  about itself.
+
+It is deliberately partial, and says so in its own docblock: it walks the signed-out surfaces and
+the authenticated shell, not the canvas export or the printed programme (the two surfaces `img-src
+blob:` exists for), and `upgrade-insecure-requests` is ignored under report-only **by
+specification**, so that directive stays untested until the flip. A gate that overstates its
+coverage is worse than none.
+
 **The header belongs in `apps/web/nginx.conf`, not in the API's Helmet.** They cover different
 origins and neither substitutes for the other: nginx serves the document a browser applies a policy
 to; Helmet's default governs JSON bodies and dev-only Swagger. **The API's Helmet configuration is
@@ -453,7 +486,7 @@ Each milestone Accepts when it lands, in the ADR-0035 style, so a reader can tel
 | **M3** — `/account`                       | **Accepted** 2026-08-05 | `VITE_ACCOUNT_SETTINGS` **default-on**. No server prerequisite — `/change-password` was always reachable and there was simply no screen. Rollback is the env var plus a rebuild; `account-settings.parity.test.tsx` is the contract.                                                                                        |
 | **M4** — password reset                   | **Accepted** 2026-08-05 | `VITE_PASSWORD_RESET` **default-on**, held until the product owner confirmed `MAIL_SMTP_URL` is set and sending. Without a transport the screen's enumeration-safe copy makes a silent delivery failure indistinguishable from success — which is why this flag's prerequisite was a **deployment fact**, not a code state. |
 | **M5** — enablement                       | **Accepted** 2026-08-05 | Five specialist gates folded; two further defects found by the journey and fixed (see "Expected", above); both flag-on suites wired into CI.                                                                                                                                                                                |
-| **M5-T2** — CSP to enforce                | **Pending — operator**  | Needs an observed clean report-only window across every route with the console open. Not code.                                                                                                                                                                                                                              |
+| **M5-T2** — CSP to enforce                | **Pending — operator**  | Needs an observed clean report-only window across every route with the console open. The automated gate (`test:e2e:csp`) covers the signed-out surfaces and the authenticated shell; canvas export, the printed programme and `upgrade-insecure-requests` still need a human with a console. Not code.                      |
 | **M5-T6/T7/T8** — verification enforced   | **Pending — operator**  | Ordered: a bundle carrying M2 **and** the M5 fixes must be live first, then count unverified accounts, then backfill the ones already holding a membership, then set `AUTH_REQUIRE_EMAIL_VERIFICATION=true`. Enforcing against an older bundle re-arms the three dead ends M2 closed. `TECH_DEBT` #16.                      |
 
 ## References

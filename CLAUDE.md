@@ -1353,6 +1353,22 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   never blanket-denied** — `clipboard-write` is a controlled feature and two Copy buttons depend on
   it. **HSTS is excluded deliberately**: the container only listens on plain 8080 and cannot know the
   browser's scheme (TECH_DEBT #89), and HSTS is sticky.
+  **The report-only window did its job, and what it found became a gate.** It reported a real
+  `script-src`/`eval` violation on the deployed origin — Zod 4's `allowsEval()` probe, a swallowed
+  `new Function('')` whose _attempt_ the browser still reports (`config/zod-jitless.ts` now sets
+  Zod's own `jitless` flag; `'unsafe-eval'` was rejected, since it re-opens string-to-code across the
+  origin to buy JIT speed on a few login forms). The finding outranks the fix: the policy was
+  **derived by reading `apps/web/src` and validated by a person watching a console**, and **neither
+  method can see what a _dependency_ does at runtime** — Zod's probe is not in our source at all.
+  Every other invariant here has a computed gate (ADR-0058); this one had vigilance, which caught it
+  once, in production, after release. So `apps/web/e2e-csp/` (`test:e2e:csp`, its own CI step) serves
+  the **real** policy — parsed out of `docker-compose.yml`, never restated — over the **production
+  build**, because the dev server is the wrong artefact twice over: it serves unbundled modules, and
+  its inline react-refresh preamble would report a violation production can never have, i.e. a
+  permanently red gate, which is how gates get deleted rather than fixed. It was **verified red
+  first** (remove the `zod-jitless` import and the exact production shape reappears), and it states
+  what it does **not** cover — canvas export, the printed programme, and `upgrade-insecure-requests`,
+  which report-only ignores by specification.
   Three credential events earn audit rows — and the route census **structurally cannot see them in
   either direction** (`audit-coverage.structural.spec.ts:45-47`), so nothing would have failed a PR
   omitting them, which is the argument for doing them now. `auth.password_reset_requested` is itself
