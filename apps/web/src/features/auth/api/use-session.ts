@@ -109,6 +109,19 @@ export function useSignIn() {
   });
 }
 
+/**
+ * Where Better Auth's `GET /verify-email` handler sends the reader once it has verified the token.
+ *
+ * **One constant because there are two senders.** Sign-up sends the first verification email and
+ * `useSendVerificationEmail` sends every later one; each passes this to the library, which composes
+ * it into the emailed URL. Two literals would eventually differ, and the difference would be
+ * invisible — each link works, and only someone who followed both would see that one confirms and
+ * the other does not.
+ *
+ * The `verified=1` param is what `/verify-email` reads to render its success state.
+ */
+const VERIFIED_CALLBACK_URL = '/verify-email?verified=1';
+
 /** What a completed sign-up tells the caller. See {@link useSignUp} for why this is not `void`. */
 export interface SignUpOutcome {
   /**
@@ -131,6 +144,14 @@ export interface SignUpOutcome {
  *
  * A latent dead end that switches itself on when an operator sets an env var — which is exactly why
  * no build-time flag could have gated the fix, and why it ships unflagged.
+ *
+ * **`callbackURL` is the other half of the same dead end.** Sign-up is what sends the *first*
+ * verification email, and `sign-up.mjs:244` defaults its `callbackURL` to `/` when the caller sends
+ * none — so the link in that email verified the address correctly and then landed the reader on the
+ * app root, where the `_authed` guard bounced them to `/sign-in` with nothing said. Sending the same
+ * destination the resend sends (`useSendVerificationEmail`) makes both links end on the screen that
+ * confirms it worked. The value is consumed only to compose that URL; `sign-up.mjs:149` discards it
+ * from the created user.
  */
 export function useSignUp() {
   const queryClient = useQueryClient();
@@ -140,6 +161,7 @@ export function useSignUp() {
         name: values.name,
         email: values.email,
         password: values.password,
+        callbackURL: VERIFIED_CALLBACK_URL,
       });
       if (error) {
         throw new AuthError(messageFrom(error, 'Could not create your account.'), codeFrom(error));
@@ -170,7 +192,7 @@ export function useSendVerificationEmail() {
     mutationFn: async (email: string): Promise<void> => {
       const { error } = await authClient.sendVerificationEmail({
         email,
-        callbackURL: '/verify-email?verified=1',
+        callbackURL: VERIFIED_CALLBACK_URL,
       });
       if (error) {
         throw new AuthError(

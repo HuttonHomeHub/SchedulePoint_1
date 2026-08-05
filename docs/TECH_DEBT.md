@@ -970,6 +970,34 @@ checking one at a time against the API e2e suite. Alternatively rename the three
 `.mts`, which is the smaller change and fixes exactly what the warning names. Do it before the Vite
 major that flips the default, not after.
 
+### 96. The router JSON-parses every search param, so a foreign one can arrive as the wrong type
+
+**Found:** 2026-08-05, by the ADR-0074 M5 flag-on verification journey — the only test in the
+repository that follows a real emailed link through a real redirect.
+
+TanStack Router's default `parseSearch` is `parseSearchWith(JSON.parse)`
+(`@tanstack/router-core/searchParams.js`): it attempts to JSON-parse **every** value. `?verified=1`
+therefore reaches `validateSearch` as the **number** `1`, and `/verify-email`'s
+`typeof search.verified === 'string'` test dropped it — so a verification that had actually
+succeeded rendered the "still waiting" screen. Every screen test mocks `useSearch` and hands the
+component a literal, so none of them crosses the parser and the whole suite stayed green.
+
+`readForeignParam` in `apps/web/src/app/router.tsx` now normalises the three ADR-0074 routes'
+params, and `router-search.test.ts` composes the real parser with the real validator.
+
+**What is left, and why it is a row rather than a fix.** That helper repairs only values whose
+`String()` reproduces the source — `1`, `true`, a small integer. A token composed entirely of digits
+is already `1.2345678901234567e+31` before any validator runs and **cannot** be recovered; the test
+pins that limit rather than implying a defence that does not exist. Astronomically unlikely from
+Better Auth's generator, and the failure would be a reset link that reports an invalid token with no
+way for the reader to act on it.
+
+The real remedy is a router-level `parseSearch` that leaves values as strings, with each route
+coercing what it wants. That is a change to **every** route's search handling — the library screens'
+typed URL params (ADR-0053 M6) and the Gantt's `?view=` among them — so it needs its own pass with
+the flag-on journeys run, not a drive-by. Routes outside ADR-0074 are **not** normalised today, and
+that is the other half of the row: `/accept-invite?token=` has the same latent shape.
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this

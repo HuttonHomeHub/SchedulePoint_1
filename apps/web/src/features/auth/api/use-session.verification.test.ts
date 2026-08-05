@@ -86,6 +86,28 @@ describe('useSignUp — the enforcement branch', () => {
 
     expect(outcome).toEqual({ signedIn: false });
   });
+
+  it('points the FIRST verification email at the landing route, like every later one', async () => {
+    // The other half of the same dead end (ADR-0074 M5). `sign-up.mjs:244` defaults `callbackURL`
+    // to `/` when the caller sends none, so the very first verification link verified the address
+    // and then dropped the reader on the app root — where the `_authed` guard bounced them to
+    // `/sign-in` saying nothing. Only the flag-on journey could see it: with the switch off,
+    // sign-up returns a session and nobody follows the link at all.
+    vi.mocked(authClient.signUp.email).mockResolvedValue({ data: { token: null }, error: null });
+    vi.mocked(apiFetch).mockResolvedValue(null);
+    const { wrapper } = harness();
+
+    const { result } = renderHook(() => useSignUp(), { wrapper });
+    await result.current.mutateAsync({
+      name: 'Ada',
+      email: 'a@b.com',
+      password: 'correct-horse-battery',
+    });
+
+    expect(authClient.signUp.email).toHaveBeenCalledWith(
+      expect.objectContaining({ callbackURL: '/verify-email?verified=1' }),
+    );
+  });
 });
 
 describe('useSignIn — EMAIL_NOT_VERIFIED', () => {

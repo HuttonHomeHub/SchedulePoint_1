@@ -49,6 +49,35 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => <Outlet />,
 });
 
+/**
+ * Read a search param **another system** put in the URL, as the string it was written as.
+ *
+ * TanStack Router's default `parseSearch` is `parseSearchWith(JSON.parse)` — it attempts to
+ * JSON-parse **every** value — so a param that happens to be valid JSON never reaches a validator
+ * as a string. `?verified=1` arrives as the **number** `1`; `?x=true` arrives as a boolean. A
+ * validator written as `typeof search.x === 'string' ? … : {}` therefore drops it silently, with
+ * no error and a screen that renders its "nothing here" state as though the param were absent.
+ *
+ * That is not hypothetical: it is what `?verified=1` did (ADR-0074 M5). The unit suite was green
+ * throughout, because it feeds `useSearch` a literal and never crosses the router — only the
+ * flag-on journey, following a real emailed link through a real redirect, could see it.
+ *
+ * It matters wherever the value is composed **outside this app** — Better Auth writes the
+ * verification and reset redirects itself — because we do not get to choose the shape.
+ *
+ * **What it does not fix**, because the damage happens before it runs: a value whose `String()`
+ * does not reproduce the source is already lost. A 32-digit token parses to
+ * `1.2345678901234567e+31` and re-stringifies to *that*, not to the token. The only real remedy is
+ * a router-level `parseSearch` that leaves values alone, which changes every route's search
+ * handling — `docs/TECH_DEBT.md` #96. Pinned by `router-search.test.ts` so the limit is visible
+ * rather than assumed away.
+ */
+function readForeignParam(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return undefined;
+}
+
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sign-in',
@@ -301,18 +330,23 @@ const shareGuestRoute = createRoute({
 const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/forgot-password',
-  validateSearch: (search: Record<string, unknown>): { email?: string } =>
-    typeof search.email === 'string' ? { email: search.email } : {},
+  validateSearch: (search: Record<string, unknown>): { email?: string } => {
+    const email = readForeignParam(search.email);
+    return email ? { email } : {};
+  },
   component: ForgotPasswordScreen,
 });
 
 const resetPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reset-password',
-  validateSearch: (search: Record<string, unknown>): { token?: string; error?: string } => ({
-    ...(typeof search.token === 'string' ? { token: search.token } : {}),
-    ...(typeof search.error === 'string' ? { error: search.error } : {}),
-  }),
+  // Both params are composed by Better Auth's own redirect, so they go through `readForeignParam`
+  // — see its docblock for the rule and for what dropping one costs.
+  validateSearch: (search: Record<string, unknown>): { token?: string; error?: string } => {
+    const token = readForeignParam(search.token);
+    const error = readForeignParam(search.error);
+    return { ...(token ? { token } : {}), ...(error ? { error } : {}) };
+  },
   component: ResetPasswordScreen,
 });
 
@@ -325,19 +359,26 @@ const resetPasswordRoute = createRoute({
  * and `...(FLAG ? [route] : [])` widens the tree type to include the route in **both** branches, so
  * typecheck cannot catch the resulting link to nothing.
  *
- * `validateSearch` is deliberately permissive: Better Auth composes the failure redirect itself, so
- * an unrecognised param must be carried, not rejected.
+ * `validateSearch` is deliberately permissive: Better Auth composes the success and failure
+ * redirects itself, so an unrecognised param must be carried, not rejected — and every one of them
+ * goes through `readForeignParam`, because `?verified=1` is the exact value the router's JSON
+ * parsing turns into a number and a `typeof === 'string'` test then throws away.
  */
 const verifyEmailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/verify-email',
   validateSearch: (
     search: Record<string, unknown>,
-  ): { email?: string; verified?: string; error?: string } => ({
-    ...(typeof search.email === 'string' ? { email: search.email } : {}),
-    ...(typeof search.verified === 'string' ? { verified: search.verified } : {}),
-    ...(typeof search.error === 'string' ? { error: search.error } : {}),
-  }),
+  ): { email?: string; verified?: string; error?: string } => {
+    const email = readForeignParam(search.email);
+    const verified = readForeignParam(search.verified);
+    const error = readForeignParam(search.error);
+    return {
+      ...(email ? { email } : {}),
+      ...(verified ? { verified } : {}),
+      ...(error ? { error } : {}),
+    };
+  },
   component: VerifyEmailScreen,
 });
 

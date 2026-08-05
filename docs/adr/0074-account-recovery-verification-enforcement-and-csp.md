@@ -414,6 +414,30 @@ of those the same shape — one correct pattern applied to a control and not its
 epic ships four new forms and touches two existing ones. The gate pass is budgeted as work, not as a
 formality.
 
+**And it did, from the journey rather than from a reviewer.** `e2e-account/verification.spec.ts` —
+the only test that follows a real emailed link, through a real redirect, against a server with
+`AUTH_REQUIRE_EMAIL_VERIFICATION` actually on — was red on landing, and the cause was **two product
+defects, not a fault in the harness**. That distinction had to be established rather than assumed:
+the HTTP chain was driven end to end first (sign-up, resend, the emailed URL, the proxy) and proved
+correct, `302 → /verify-email?verified=1`, before anything was changed.
+
+1. **The router never delivered `?verified=1`.** TanStack Router's default `parseSearch` is
+   `parseSearchWith(JSON.parse)`, so the param arrives as the **number** `1` and the route's
+   `typeof search.verified === 'string'` test discarded it. A verification that had genuinely
+   succeeded rendered the "still waiting" screen. Every screen test in the repository mocks
+   `useSearch` and hands the component a literal, so none of them crosses the parser — the unit
+   suite was green throughout, and `router-search.test.ts` now composes the real parser with the
+   real validator, which is the only shape that could have caught it (`docs/TECH_DEBT.md` #96
+   records what the fix does **not** cover, and why).
+2. **Sign-up sent no `callbackURL`.** `sign-up.mjs:244` defaults it to `/`, so the **first**
+   verification email — the one every new member actually receives — verified the address and then
+   dropped the reader on the app root, where the `_authed` guard bounced them to `/sign-in` with
+   nothing said. That is the _same dead end_ M2 was written to close, one send path along: the
+   resend was fixed and its sibling was not. Both now pass one shared constant.
+
+Neither is reachable with the switch off, which is why the CI step exists and why it was not
+weakened to go green.
+
 ## References
 
 - Spec and plan: [`docs/specs/account-security/`](../specs/account-security/feature-spec.md)
