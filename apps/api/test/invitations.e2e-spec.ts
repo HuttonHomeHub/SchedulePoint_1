@@ -104,6 +104,12 @@ describe.skipIf(!hasDatabase)('Invitations API (e2e)', () => {
       role: 'PLANNER',
       email: 'invitee@example.com',
       status: 'PENDING',
+      // The server reports its own `AUTH_REQUIRE_EMAIL_VERIFICATION` (ADR-0074 M5). It is off in
+      // this harness, exactly as on the running deployment — and it has to be **present and
+      // false**, not absent: the client branches on it, and `undefined` would read as "not
+      // enforced" by luck rather than by contract. Asserting the value is what stops the field
+      // being dropped from the DTO without anything failing.
+      requiresEmailVerification: false,
     });
   });
 

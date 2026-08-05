@@ -51,8 +51,15 @@ Each of these has an **accepted ADR** and no implementation — see
 [ARCHITECTURE.md](ARCHITECTURE.md) §10. They are listed here because the
 decision is made; only the work is outstanding.
 
-- `M` **Mail transport** (`common/mail/` is a logging stub). Invitation emails
-  are logged, not sent — the first user-visible thing that needs this.
+> **Mail transport was on this list and is not a foundation gap any more.**
+> `SmtpMailService` ships and is selected whenever `MAIL_SMTP_URL` is set;
+> `LoggingMailService` is the fallback, not the implementation. The row said
+> "`common/mail/` is a logging stub" until 2026-08-05, which is the reading that
+> leads someone to build a second mail path — ADR-0058's failure, in the file
+> that decides what gets built next. What remains is operational rather than
+> structural: knowing that a send **failed** after Better Auth's handoff
+> (`docs/TECH_DEBT.md` #94).
+
 - `M` **Background processing** — BullMQ + Redis (ADR-0009). The candidate first
   consumer is schedule interchange import, which is synchronous today.
 - `M` **Caching** — Redis, cache-aside (ADR-0010). Measure first: no read path

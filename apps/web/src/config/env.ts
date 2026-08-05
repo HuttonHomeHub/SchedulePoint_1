@@ -1292,7 +1292,8 @@ export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AU
 
 /**
  * The `/account` screen: change your password, see and resend your address verification
- * (ADR-0074 M3). **OFF by default** until the M5 gate pass.
+ * (ADR-0074 M3). **ON by default** since 2026-08-05, once the M5 gate pass and both flag-on
+ * journeys were green.
  *
  * **This flag is legitimate, and its sibling `VITE_PASSWORD_RESET` is a different kind of gate.**
  * Everything behind this one already works against today's server: `sendVerificationEmail` is
@@ -1310,13 +1311,22 @@ export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AU
  * was. Pinned by `account-settings.parity.test.tsx`, kept rather than weakened — that suite is the
  * rollback contract (ADR-0053 M6).
  */
-export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACCOUNT_SETTINGS);
+export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACCOUNT_SETTINGS);
 
 /**
  * The signed-out password-reset flow: `/forgot-password`, `/reset-password`, and the
- * **"Forgot your password?" link on sign-in** (ADR-0074 M4). **OFF by default** until the M5 gate
- * pass, and gated on M0's server work being deployed — without `sendResetPassword` configured the
- * endpoint throws `RESET_PASSWORD_DISABLED`, so the screens would exist and refuse.
+ * **"Forgot your password?" link on sign-in** (ADR-0074 M4). **ON by default** since 2026-08-05.
+ *
+ * **Its prerequisite was a deployment fact, not a code state, and that is why it flipped second.**
+ * `sendResetPassword` is configured in `createAuth()`, so the endpoint no longer throws
+ * `RESET_PASSWORD_DISABLED` — but a reset link that is composed and then not delivered is *worse*
+ * than a missing screen: the enumeration-safe copy says "if that address has an account we've sent
+ * a link" whatever happened, so a silent transport failure is indistinguishable from success to the
+ * one person who needs it to work. The flip was therefore held until the product owner confirmed
+ * `MAIL_SMTP_URL`/`MAIL_FROM` are set and sending on the deployed host (2026-08-05). Where that is
+ * not true, `SmtpMailService` is not selected at all and mail is only logged — see
+ * `common/mail/mail.service.ts` and `docs/TECH_DEBT.md` #94, which is the half of this still open:
+ * a send that fails *after* the handoff is invisible to the person waiting for it.
  *
  * **The link and both routes share this one constant, and splitting them is the failure this
  * comment exists to prevent.** A "Forgot your password?" link pointing at a conditionally-registered
@@ -1329,4 +1339,4 @@ export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACCO
  * registered and sign-in carries no link, so the app is byte-for-byte what it was. Pinned by
  * `password-reset.parity.test.tsx`, kept rather than weakened (ADR-0053 M6).
  */
-export const PASSWORD_RESET_ENABLED = flagDefaultOff(import.meta.env.VITE_PASSWORD_RESET);
+export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWORD_RESET);

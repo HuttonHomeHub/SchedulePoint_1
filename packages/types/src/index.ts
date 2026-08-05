@@ -100,6 +100,21 @@ export interface InvitationPreview {
   email: string;
   status: InvitationStatus;
   expiresAt: string;
+  /**
+   * Whether **this server** will refuse an accept from an account whose address is unverified —
+   * i.e. `AUTH_REQUIRE_EMAIL_VERIFICATION` (ADR-0074 M2/M5).
+   *
+   * **It is here because the client has no other way to know, and guessing broke the flow.** The
+   * accept card first shipped refusing on `!user.emailVerified` alone; with enforcement **off**
+   * every account is unverified, so the card told every invitee to confirm an address the server
+   * did not care about and hid the Accept button behind it. That is ADR-0074's own rule broken by
+   * ADR-0074: `emailVerified === false` is a client-side inference, not evidence of what the server
+   * would do. Only the server knows, so the server says.
+   *
+   * Not a secret: it is a deployment policy the same server already discloses to anyone who
+   * attempts a sign-in, and the reader holding this token is being asked to act on it.
+   */
+  requiresEmailVerification: boolean;
 }
 
 /** A member of an organisation, with their public profile and role. */

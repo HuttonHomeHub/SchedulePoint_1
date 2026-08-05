@@ -89,12 +89,28 @@ and components. Deleting a feature should mean deleting one folder.
 
 ## Routing strategy (ADR-0005)
 
-- **File-based routes** under `routes/`. Nested **layout routes** model the app
-  shell once: `_authed/` renders the mounted-once chrome band + Project Explorer
-  rail, and children render into its single workspace region (ADR-0029).
+- **Code-based routes**, defined with `createRoute` in `app/router.tsx` and
+  assembled into one `routeTree`. `routes/` holds the **screen components** those
+  routes render, not the route definitions — this line said "file-based routes
+  under `routes/`" until 2026-08-05, which is a different TanStack Router mode
+  and would send a reader looking for a generated route tree that does not exist.
+  The single tree is also what makes a **conditionally-registered** route legible
+  (`...(FLAG ? [route] : [])`, ADR-0074), and it is why the flag structure has to
+  be the gate: that spread widens the registered-route union to contain the route
+  in **both** branches, so `pnpm typecheck` cannot catch a link to a route the
+  build did not register. Nested **layout routes** model the app shell once:
+  `_authed` renders the mounted-once chrome band + Project Explorer rail, and
+  children render into its single workspace region (ADR-0029).
 - **Typed params & search.** Path params and search params are validated with
   schemas; filters/pagination/sort live in typed search params (shareable,
-  reload-safe). The shared helper is `hooks/use-url-filter-state.ts`
+  reload-safe). **`validateSearch` does not receive raw strings.** The router's
+  default `parseSearch` is `parseSearchWith(JSON.parse)`, so any value that is
+  valid JSON arrives parsed — `?verified=1` is the **number** `1`, `?x=true` a
+  boolean — and a validator written as `typeof search.x === 'string' ? … : {}`
+  drops it silently, with no error and a screen that renders its empty state. For
+  params **another system** composes (Better Auth writes the verification and
+  reset redirects), route through `readForeignParam` in `app/router.tsx`; see its
+  docblock for what that cannot repair, and `docs/TECH_DEBT.md` #96. The shared helper is `hooks/use-url-filter-state.ts`
   (`useUrlFilterState`): it reads a screen's filters out of the URL, writes them
   back with `replace: true` (so typing in a search box never pushes one history
   entry per keystroke), and **omits any value equal to its default**, so an

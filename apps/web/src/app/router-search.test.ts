@@ -4,8 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { router } from './router';
 
 // `/reset-password` joins the tree only when `VITE_PASSWORD_RESET` is on (ADR-0074 M4), and the
-// route is where its `token` is read. `/verify-email` is registered either way, so pinning this on
-// changes nothing about the assertions below it.
+// route is where its `token` is read. The flag is default-ON since 2026-08-05, so this mock is a
+// no-op today and pinned deliberately: these assertions are about the route's validator, and they
+// must not start passing or failing because somebody changed a default elsewhere.
+// `/verify-email` is registered either way.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   PASSWORD_RESET_ENABLED: true,
@@ -35,7 +37,7 @@ function validate(path: string, search: string): Record<string, unknown> {
     }
   ).validateSearch;
   if (!validateSearch) throw new Error(`Route ${path} has no validateSearch`);
-  return validateSearch(defaultParseSearch(search) as Record<string, unknown>);
+  return validateSearch(defaultParseSearch(search));
 }
 
 describe('/verify-email search params', () => {

@@ -28,7 +28,9 @@ function resolvedOutcome(
   if (invite.status !== 'PENDING') return 'This invitation is no longer valid.';
   const user = session.data?.user;
   if (!user) return `Sign in as ${invite.email} to accept this invitation.`;
-  if (!user.emailVerified) return 'Confirm your email address before joining.';
+  if (invite.requiresEmailVerification && !user.emailVerified) {
+    return 'Confirm your email address before joining.';
+  }
   if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
     return `This invitation is for ${invite.email}, not ${user.email}.`;
   }
@@ -131,10 +133,18 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
   // below with no way forward. Checking it here turns a dead end into an instruction — and the 403
   // remains as the server's authoritative second word if the two ever disagree.
   //
-  // **Not reachable today**: the server guard is itself gated on `requireEmailVerification`, which
-  // is off by default. It is a latent dead end that arms itself the moment an operator sets the env
-  // var, which is precisely why it is fixed unflagged rather than deferred.
-  if (!user.emailVerified) {
+  // **Both halves of the condition are load-bearing, and shipping only the second one was a live
+  // defect** (ADR-0074 M5). This first read `!user.emailVerified` alone, under a comment claiming
+  // it was "not reachable today, because the server guard is gated on `requireEmailVerification`"
+  // — which describes the *server's* condition, not the one written here. With enforcement OFF
+  // **every** account is unverified, so the card refused **every invitee**, telling them to confirm
+  // an address the server did not care about and hiding the Accept behind it. The base journey
+  // caught it; no unit test could, because they all supply a verified fixture user.
+  //
+  // `requiresEmailVerification` comes from the preview response — the server reporting its own
+  // setting — because that is the only runtime evidence available. Inferring it client-side is what
+  // ADR-0074 exists to forbid, and this is that rule broken by the ADR that states it.
+  if (invite.requiresEmailVerification && !user.emailVerified) {
     return (
       <InviteShell>
         <CardHeader>

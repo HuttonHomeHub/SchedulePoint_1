@@ -193,6 +193,19 @@ export class InvitationsService {
     return invitation;
   }
 
+  /**
+   * Whether {@link accept} will refuse an unverified account — i.e. the same
+   * `AUTH_REQUIRE_EMAIL_VERIFICATION` the guard at the bottom of `accept()` reads.
+   *
+   * Exposed so the preview response can carry it (ADR-0074 M5). It lives here rather than being
+   * read from `AppConfigService` in the controller because **this is the condition `accept()`
+   * enforces**, and the two must not be able to disagree: a client told "verification is not
+   * required" and then refused is the defect this exists to close, inverted.
+   */
+  get requiresEmailVerification(): boolean {
+    return this.config.requireEmailVerification;
+  }
+
   async accept(
     principal: Principal,
     token: string,

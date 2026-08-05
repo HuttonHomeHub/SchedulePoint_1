@@ -1294,7 +1294,8 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   applied to a control and not its neighbour** — the ADR-0064/ADR-0067 shape again. Every fix carries
   a regression test verified to fail first; six non-blocking findings are `docs/TECH_DEBT.md` #93.
 
-- **ADR-0074** _(Accepted per-milestone; M0 accepted with the ADR)_ — Account recovery,
+- **ADR-0074** _(Accepted; M0–M5 landed, `VITE_ACCOUNT_SETTINGS` + `VITE_PASSWORD_RESET`
+  **default-on** 2026-08-05)_ — Account recovery,
   verification enforcement, and the web origin's first Content-Security-Policy. SchedulePoint had
   **no password reset at all**, and not as a missing screen — as a **server refusal**: `createAuth()`
   configures no `sendResetPassword`, so Better Auth throws `RESET_PASSWORD_DISABLED`. No
@@ -1325,6 +1326,23 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   `VITE_PASSWORD_RESET`, blocked on the mail work) — with the routes and the sign-in **link** in one
   flag, because a link to a conditionally-registered route is a link to nothing and **typecheck
   cannot catch it** (`...(FLAG ? [route] : [])` widens to include the route in both branches).
+  Both flipped **default-on** 2026-08-05; the split earned its keep, because
+  `VITE_PASSWORD_RESET`'s prerequisite turned out to be a **deployment fact** — mail confirmed
+  sending on the host — rather than a code state, and reset's enumeration-safe copy makes a silent
+  delivery failure indistinguishable from success to the one person who needs it to work.
+  **M5 is the epic's own premise landing on itself, and it arrived from the journey rather than a
+  reviewer.** Five specialist gates folded first; then `e2e-account/verification.spec.ts` — the only
+  test that follows a real emailed link, through a real redirect, against a server with the switch
+  actually on — failed, and the cause was **two more product defects**, established by driving the
+  whole HTTP chain and proving it correct before changing anything. TanStack Router's default
+  `parseSearch` is `parseSearchWith(JSON.parse)`, so `?verified=1` reached the route as the **number**
+  `1` and a `typeof === 'string'` test discarded it: a verification that had succeeded rendered the
+  "still waiting" screen, with the unit suite green throughout because every screen test mocks
+  `useSearch` and never crosses the parser (`docs/TECH_DEBT.md` #96). And sign-up sent no
+  `callbackURL`, so the **first** verification email — the one every new member receives — verified
+  the address and dropped the reader on `/`, where the guard bounced them to `/sign-in` saying
+  nothing: the same dead end M2 exists to close, one send path along, the resend fixed and its
+  sibling not.
   The CSP is **derived from what the code loads**, not templated: no external origins at all, `blob:`
   load-bearing for `img-src` because the print surface renders a live object-URL `<img>`, `data:`
   deliberately absent. The inline theme-boot script **moves to a static file rather than being pinned
@@ -1372,7 +1390,13 @@ A lighter-weight running log of smaller decisions is in
   `MAIL_SMTP_URL` is configured; the logging implementation is the **fallback**
   when it is not, so on a stock dev environment mail is still only logged. This
   bullet called the port "a logging stub" until the 2026-08-04 pass, which is
-  the read that leads to building a second mail path.
+  the read that leads to building a second mail path — and `docs/BACKLOG.md`
+  still listed "Mail transport" as an unbuilt foundation until 2026-08-05, in
+  the one file that decides what gets built next. **The deployed host has a real
+  transport configured and sending** (product owner, 2026-08-05), which is what
+  unblocked `VITE_PASSWORD_RESET`. What is still missing is knowing a send
+  **failed**: Better Auth swallows the rejection after handoff, so a broken
+  relay produces silently unrecoverable accounts (`docs/TECH_DEBT.md` #94).
 - **Every deletion is a soft delete.** There is no hard-delete or
   data-erasure path: `deleted_at` is set, the row stays, and the recycle bin
   restores it. Plan for that when reasoning about retention or a

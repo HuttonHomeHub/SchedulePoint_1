@@ -1,7 +1,9 @@
 # ADR-0074: Account recovery, verification enforcement, and the web origin's first Content-Security-Policy
 
-- **Status:** Accepted per-milestone; M0 accepted with this document
-- **Date:** 2026-08-04
+- **Status:** **Accepted** — M0–M5 landed. `VITE_ACCOUNT_SETTINGS` and `VITE_PASSWORD_RESET`
+  **default-on** 2026-08-05. Two operator steps remain and are deliberately not code: the CSP flip
+  to enforce, and `AUTH_REQUIRE_EMAIL_VERIFICATION`. See the ledger below.
+- **Date:** 2026-08-04 (accepted per-milestone through 2026-08-05)
 - **Deciders:** Product owner; security-reviewer (the CSP derivation and the recovery threat
   model); ui-architect (route shape, the verification-pending state, flag structure);
   feature-analyst (delivery shape, milestone ordering, the runtime-evidence rule)
@@ -437,6 +439,22 @@ correct, `302 → /verify-email?verified=1`, before anything was changed.
 
 Neither is reachable with the switch off, which is why the CI step exists and why it was not
 weakened to go green.
+
+## Acceptance ledger
+
+Each milestone Accepts when it lands, in the ADR-0035 style, so a reader can tell what is decided
+**and shipped** from what is decided and pending. The last column is the honest half.
+
+| Milestone                                 | Status                  | What it means today                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M0** — server foundations               | **Accepted** 2026-08-04 | B1 (identifier hashed at rest) and B2 (reset revokes other sessions) are in `createAuth()`; `sendResetPassword` wired; three `auth.*` audit actions; Better Auth's logger routed into Pino. Hashing merged **before** the endpoint existed, so the cleartext window is empty rather than short.                             |
+| **M1** — CSP + sibling headers            | **Accepted** 2026-08-05 | `nginx.conf` is an envsubst template. Ships **report-only** by default in both compose files, per the product owner's 2026-08-05 decision. `CSP_HEADER_NAME` is the operator's variable — the flip to enforce needs no release. `TECH_DEBT` #8 stays open for exactly that step.                                            |
+| **M2** — the three verification dead ends | **Accepted** 2026-08-05 | Ships **unflagged**, and that is the decision, not an omission: each is a runtime branch on a server switch, so a `VITE_` constant would strand a flag-off bundle against a flag-on server. Proven by `e2e-account/verification.spec.ts`, the only place they are reachable.                                                |
+| **M3** — `/account`                       | **Accepted** 2026-08-05 | `VITE_ACCOUNT_SETTINGS` **default-on**. No server prerequisite — `/change-password` was always reachable and there was simply no screen. Rollback is the env var plus a rebuild; `account-settings.parity.test.tsx` is the contract.                                                                                        |
+| **M4** — password reset                   | **Accepted** 2026-08-05 | `VITE_PASSWORD_RESET` **default-on**, held until the product owner confirmed `MAIL_SMTP_URL` is set and sending. Without a transport the screen's enumeration-safe copy makes a silent delivery failure indistinguishable from success — which is why this flag's prerequisite was a **deployment fact**, not a code state. |
+| **M5** — enablement                       | **Accepted** 2026-08-05 | Five specialist gates folded; two further defects found by the journey and fixed (see "Expected", above); both flag-on suites wired into CI.                                                                                                                                                                                |
+| **M5-T2** — CSP to enforce                | **Pending — operator**  | Needs an observed clean report-only window across every route with the console open. Not code.                                                                                                                                                                                                                              |
+| **M5-T6/T7/T8** — verification enforced   | **Pending — operator**  | Ordered: a bundle carrying M2 **and** the M5 fixes must be live first, then count unverified accounts, then backfill the ones already holding a membership, then set `AUTH_REQUIRE_EMAIL_VERIFICATION=true`. Enforcing against an older bundle re-arms the three dead ends M2 closed. `TECH_DEBT` #16.                      |
 
 ## References
 

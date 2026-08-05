@@ -37,7 +37,10 @@ export class InvitationsController {
   @ApiOkResponse({ type: InvitationPreviewDto })
   @ApiNotFoundResponse({ description: 'No invitation matches the token.' })
   async preview(@Body() dto: InvitationTokenDto): Promise<InvitationPreviewDto> {
-    return InvitationPreviewDto.from(await this.service.preview(dto.token));
+    return InvitationPreviewDto.from(
+      await this.service.preview(dto.token),
+      this.service.requiresEmailVerification,
+    );
   }
 
   @Post('accept')

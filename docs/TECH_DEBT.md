@@ -47,7 +47,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 15 | **OpenAPI accuracy gaps** | Repo-wide, from the B2 API review: (a) `201 Create` responses don't set a `Location` header (`docs/API.md` asks for one) — present in the reference template too; (b) the `@Api*Response` decorators declare the bare DTO, not the `{ data }`/`{ data, meta }` envelope the `TransformInterceptor` actually returns. | Generated OpenAPI is slightly inaccurate about response shape and `Location`. | Add a shared `@ApiDataResponse()`/`@ApiPaginatedResponse()` swagger helper and a `Location` header on creates; backport to the reference template so the two stay in step (ADR-0015). |
 
-| 16 | **Email verification is built but not switched on** | The verification-email loop now exists (Theme B2: `emailVerification` in `better-auth.ts` → the `MailService` port → the SMTP adapter), so `AUTH_REQUIRE_EMAIL_VERIFICATION=true` is a switch an operator can turn on rather than one that would strand every new account. It is still `false` on the running deployment. Until it is on, invitation acceptance grants org membership on an email-**match** that only proves mailbox ownership when verification is enforced (ADR-0016 §5). | An adversary who registers an account for a matching address **and** holds the one-time invite token could accept; account-squatting can also block the real invitee's sign-up. Alpha-only, deliberately accepted. | Set `MAIL_SMTP_URL` + `MAIL_FROM`, confirm a real message arrives, then set `AUTH_REQUIRE_EMAIL_VERIFICATION=true` (docs/DEPLOYMENT.md “Turning verification on”). No code change is needed — the accept-time `emailVerified` gate and Better Auth enforcement are already wired to that flag, and in production the API refuses to boot with the flag on and no transport. Consider a stricter per-route throttle on `POST /invitations/preview` \| `/accept` at the same time. |
+| 16 | **Email verification is built but not switched on** | The verification-email loop now exists (Theme B2: `emailVerification` in `better-auth.ts` → the `MailService` port → the SMTP adapter), so `AUTH_REQUIRE_EMAIL_VERIFICATION=true` is a switch an operator can turn on rather than one that would strand every new account. It is still `false` on the running deployment. Until it is on, invitation acceptance grants org membership on an email-**match** that only proves mailbox ownership when verification is enforced (ADR-0016 §5). | An adversary who registers an account for a matching address **and** holds the one-time invite token could accept; account-squatting can also block the real invitee's sign-up. Alpha-only, deliberately accepted. **Mail is confirmed working on the deployed host (product owner, 2026-08-05)**, so the first half of this row is paid. What is left is one **ordering** condition, and it is a hard one: the switch must not be turned on until a **web bundle carrying ADR-0074 M2 is live**. M2's three fixes are unflagged runtime branches — a `VITE_` constant cannot gate a server switch (the ADR-0060 M0 rule) — so enforcing verification against an older bundle re-arms exactly the three dead ends M2 closed. That bundle also needs the M5 fixes, without which a verification link that _works_ still lands the reader on the pending screen. Then set `AUTH_REQUIRE_EMAIL_VERIFICATION=true` (docs/DEPLOYMENT.md "Turning verification on"), after counting existing unverified accounts and backfilling the ones already holding a membership (ADR-0074 M5-T6/T7 — enforcement's value is prospective, and the membership predicate structurally excludes a squatted address holding a _pending_ invitation). No code change is needed. Consider a stricter per-route throttle on `POST /invitations/preview` \| `/accept` at the same time. |
 
 | 17 | **Members UI a11y polish (non-blocking)** | From the C3 accessibility review, after the blocking contrast/focus/live-region fixes: (a) controls use the native `disabled` attribute while a mutation is pending, so keyboard focus drops to `<body>`; (b) the `Dialog` `description` isn't linked via `aria-describedby`; (c) modal initial focus lands on the ✕ close button rather than the first field; (d) no `aria-live` success confirmation for role change / removal / link-copy; (e) light `muted-foreground` (4.73:1) and the sm remove button (36px vs. preferred 44px touch target) are within-spec but tight. | Minor friction for keyboard/AT users; all currently meet AA. | Prefer `aria-disabled` + pointer-events guard over native `disabled` on pending controls; add `aria-describedby` to `Dialog`; set an explicit initial-focus target; add a shared polite toast for success; revisit the tight tokens/targets when the notifications component lands. |
 
@@ -997,6 +997,38 @@ coercing what it wants. That is a change to **every** route's search handling �
 typed URL params (ADR-0053 M6) and the Gantt's `?view=` among them — so it needs its own pass with
 the flag-on journeys run, not a drive-by. Routes outside ADR-0074 are **not** normalised today, and
 that is the other half of the row: `/accept-invite?token=` has the same latent shape.
+
+### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
+
+**Found:** 2026-08-05, by the five specialist gates over the M0–M5 diff. Each was raised as
+non-blocking by its reviewer and is recorded rather than rushed, per the ADR-0064/0073 precedent.
+
+- **(a) `AUDIT_ACTION_CATEGORY` files the three new password actions under `sign-ins`**
+  (api-reviewer). `auth.password_reset_requested`, `auth.password_reset_completed` and
+  `auth.password_changed` are credential-lifecycle events, not sign-ins, so the audit log's
+  **Access** chip returns them together with successful and failed authentications. Not wrong
+  enough to block — they are genuinely access-adjacent and a reader filtering for "Access" would
+  expect to see them — but a reader asking "who changed a password this month?" cannot ask it. The
+  fix is a fourth category, which touches ADR-0073 C1's chip vocabulary and its derived cap, so it
+  belongs with the next audit slice rather than bolted on here.
+- **(b) The inline text-link `className` is repeated across five auth screens**
+  (component-reviewer). `text-primary font-medium underline-offset-4 hover:underline` appears in
+  `sign-in`, `sign-up`, `verify-email`, `forgot-password` and `reset-password`. It is the
+  one-off-styling smell `docs/COMPONENT_LIBRARY.md` warns about — five copies of a decision nobody
+  will remember to change together. It wants a `Link` variant in `components/ui/`, not a sixth copy.
+- **(c) `password-reset.parity.test.tsx` overstates itself, and one of its assertions is vacuous**
+  (test-engineer). Its docblock calls the suite "the only gate" on the flag structure, which was
+  true when written and is not now — `router-search.test.ts` and the flag-on journey both cross it.
+  And its `redirectTo` origin assertion checks the value against `window.location.origin`, which is
+  what produced it: it cannot fail. Both are documentation defects in a test rather than missing
+  coverage, which is why they are here and not in the fix.
+
+**Risk:** none is user-visible. (a) makes one audit question unaskable; (b) is a maintenance cost
+that compounds with the next auth screen; (c) is a test that reads as stronger than it is, which is
+the failure mode this register exists to name.
+
+**Remediation:** (a) with the next audit-coverage slice, (b) with the next auth screen or a
+design-system pass, (c) whenever that file is next touched — it is a comment and one assertion.
 
 ## Closed numbers
 
