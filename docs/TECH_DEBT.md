@@ -952,9 +952,14 @@ swallowing path, so the same invisibility now applies to **account recovery** an
 verification. That raises the consequence — an unverifiable account is an annoyance, an
 unrecoverable one is a lockout — without changing the mechanism.
 
-**What is still open (the hard half):** whether to send the message from application code _before_
-handing off to Better Auth, so a failure can genuinely abort the request. That is a design change
-and needs the delivery process (`docs/PROCESS.md`), not a debt row.
+**The hard half is CLOSED as a decision not to build it (ADR-0075, 2026-08-05).** Sending from
+application code before handing off would create an **enumeration oracle**: under enforcement a
+sign-up for an address that already exists returns a synthetic 200 with no send, so a
+delivery-failure signal would make "that address was free" distinguishable from "that address is
+taken" on an unauthenticated endpoint. Delivery stays best-effort; the signal is operator-facing —
+`event: 'mail.send_failed'`, plus a warn-only boot handshake, plus a `/verify-email` screen that no
+longer claims a message was sent. The residual risk (a message lost after a successful boot) is
+recorded in the ADR rather than implied away.
 
 **The missing e2e is PAID (2026-08-05).** `apps/api/test/mail-failure.e2e-spec.ts` drives the real
 endpoints against a real Postgres with a `MailService` that rejects, closing the gap this row named:

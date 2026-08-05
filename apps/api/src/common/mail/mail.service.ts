@@ -82,4 +82,31 @@ export abstract class MailService {
    * this milestone.
    */
   abstract sendPasswordReset(email: PasswordResetEmail): Promise<void>;
+
+  /**
+   * Prove at start-up that the configured transport is reachable and accepts our credentials
+   * (ADR-0075 M1). Resolves when the handshake succeeds; rejects otherwise, including on timeout.
+   *
+   * **Optional by design.** Making it required would force every test double in the repository to
+   * implement a method it does not care about, dragging mail concerns into suites that are about
+   * something else. The caller feature-detects, and the logging stub simply does not have one —
+   * "no transport is configured" is not a failure to report.
+   *
+   * **What a success does NOT prove**, and this list is the point of the method rather than a
+   * caveat on it:
+   *
+   * - **That we may send.** A credential can authenticate and still lack send permission — the
+   *   exact Resend case `docs/DEPLOYMENT.md` documents, where a read-only API key passes here and
+   *   fails at the first real message.
+   * - **That mail arrives.** An asynchronous bounce, a silent spam classification and an
+   *   unverified sending domain are all invisible to a handshake.
+   * - **That it will still work.** It is one observation at boot; a relay that breaks an hour later
+   *   is exactly the case `event: 'mail.send_failed'` exists for.
+   *
+   * So this narrows the window rather than closing it: it converts the most common
+   * misconfiguration — wrong host, wrong port, wrong password, unreachable network — from "the
+   * first user cannot sign in" into a line in the deploy log. The remaining cases are why the
+   * pre-flip checklist still ends with "complete a real sign-up to a real mailbox".
+   */
+  verifyTransport?(): Promise<void>;
 }

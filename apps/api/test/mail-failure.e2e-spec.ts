@@ -26,11 +26,16 @@ import { clearDomainData } from './audit-reset';
  * layer that swallows".
  *
  * It is deliberately a **characterisation** suite: it pins today's behaviour, including the parts
- * that are wrong. That is its value. The open half of #94 is a design change — sending from
- * application code before handing off, so a failure can abort the request — and that change needs
- * something that fails the moment the behaviour moves. Written the other way round (asserting what
- * we wish happened) it would be red on arrival and deleted within a week, which is ADR-0058's
- * "a gate that fails on day one gets deleted rather than fixed".
+ * that are wrong. That is its value. Written the other way round — asserting what we wish happened —
+ * it would be red on arrival and deleted within a week, which is ADR-0058's "a gate that fails on
+ * day one gets deleted rather than fixed".
+ *
+ * **The design change it was written to gate was considered and DECLINED (ADR-0075).** Sending from
+ * application code before handing off, so a failure could abort the request, is not deferred work:
+ * it would create the enumeration oracle described below. So these assertions are not a snapshot of
+ * something on its way out — they are the accepted behaviour, and the fact that **not one of them
+ * changed** across the milestone that "fixed" #94 is the most precise statement of what that fix
+ * was: an operator signal, and no movement in what any caller can observe.
  *
  * **Neither path may report the failure to its caller, and the first version of this docblock said
  * otherwise.** It read: "Sign-up hiding the failure is a defect. The caller is the person who owns

@@ -35,6 +35,27 @@ import { ResendVerificationButton } from '@/features/auth';
  * - **neither** — the account exists and is waiting. With `?email=` we can offer the resend
  *   directly; without one we have to ask, because a signed-out arrival has no session to read.
  */
+/**
+ * The waiting state's copy (ADR-0075 M2). It said **"We sent you a link to confirm your address"**,
+ * which is a claim about delivery this application cannot make: a send failure never reaches the
+ * request (`runInBackgroundOrAwait` swallows it), so this screen renders identically whether the
+ * message went out or the relay refused it. Somebody staring at an empty inbox was being told, flatly,
+ * that it had been sent.
+ *
+ * It now asserts **intent** — what should happen — and names the third step. That last part is the
+ * one worth keeping: if the transport is down, **Resend does not help either**, and a screen offering
+ * only Resend sends the reader round a loop that cannot terminate. Naming a human is the only exit
+ * from a total mail outage, and it costs nothing in the ordinary case where the mail simply landed
+ * in spam.
+ *
+ * Showing the address is not decoration: the commonest cause of a missing message is a typo at
+ * sign-up, and it is not otherwise visible anywhere on this screen.
+ */
+export function pendingDescription(email: string | undefined): string {
+  const target = email ?? 'your address';
+  return `A link to confirm ${target} should arrive in the next few minutes. Open it to finish setting up your account. If nothing arrives, check your spam folder and send a new link — and if that does not work either, ask whoever set up your organisation, since it may be a problem at our end rather than yours.`;
+}
+
 export function VerifyEmailScreen(): React.ReactElement {
   const search = useSearch({ strict: false });
   const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
@@ -60,7 +81,7 @@ export function VerifyEmailScreen(): React.ReactElement {
       description={
         failed
           ? 'Verification links expire, and a copied one is easy to truncate. Send yourself a fresh one — it replaces any earlier link.'
-          : 'We sent you a link to confirm your address. Open it to finish setting up your account.'
+          : pendingDescription(email)
       }
     >
       <ResendVerificationButton email={email} />

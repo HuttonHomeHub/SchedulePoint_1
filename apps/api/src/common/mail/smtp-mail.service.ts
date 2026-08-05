@@ -33,6 +33,16 @@ export const MAIL_SEND_FAILED = 'mail.send_failed';
 export type MailFailureKind = 'invitation' | 'email_verification' | 'password_reset';
 
 /**
+ * How long the boot-time handshake may take before it is called unreachable (ADR-0075 M1).
+ *
+ * Five seconds is a deploy-time budget, not a request one: it runs once, off the bootstrap
+ * lifecycle, and never blocks readiness — so the only thing it costs is that much of a container
+ * start in the worst case. Long enough for a cold TLS handshake to a distant relay; short enough
+ * that a black-holed port does not make a restart look hung.
+ */
+export const VERIFY_TIMEOUT_MS = 5_000;
+
+/**
  * SMTP adapter for {@link MailService} — the first real transport (TECH_DEBT: mail transport,
  * Theme B). Selected by {@link MailModule} only when `MAIL_SMTP_URL` is configured; absent, the
  * logging stub stays in place and behaviour is byte-for-byte today's.
@@ -53,6 +63,37 @@ export class SmtpMailService extends MailService {
   ) {
     super();
     this.transporter = createTransport(smtpUrl);
+  }
+
+  /**
+   * One bounded SMTP handshake (ADR-0075 M1). See {@link MailService.verifyTransport} for what a
+   * success does not prove — that list is load-bearing and is not repeated here.
+   *
+   * **The timeout is ours, raced, rather than the transport's own setting.** Nodemailer exposes
+   * connection/greeting/socket timeouts, but they are three separate options whose defaults differ
+   * by transport and any of which a `MAIL_SMTP_URL` query parameter can override — so trusting them
+   * means the boot delay is set by whoever wrote the connection string. A relay that accepts the TCP
+   * connection and then never speaks is the realistic hang, and it is precisely the case a
+   * connection timeout does not cover. `Promise.race` gives one number this file controls.
+   */
+  override async verifyTransport(): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        this.transporter.verify(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`SMTP verification timed out after ${VERIFY_TIMEOUT_MS} ms`)),
+            VERIFY_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      // Without this the pending timer keeps the event loop alive for its full duration on the
+      // success path — which in a test run is a hang, and in production delays nothing but is
+      // untidy. `finally` covers the throw path too.
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   /**

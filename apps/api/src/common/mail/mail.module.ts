@@ -4,6 +4,7 @@ import { getLoggerToken, PinoLogger } from 'nestjs-pino';
 import { AppConfigService } from '../../config/app-config.service';
 
 import { LoggingMailService } from './logging-mail.service';
+import { MailBootstrapService } from './mail-bootstrap.service';
 import { MailService } from './mail.service';
 import { SmtpMailService } from './smtp-mail.service';
 
@@ -46,6 +47,10 @@ import { SmtpMailService } from './smtp-mail.service';
             new LoggingMailService(stubLogger, config.isProduction);
       },
     },
+    // Runs the boot-time reachability check (ADR-0075 M1). Not exported — nothing injects it; it
+    // exists for its lifecycle hook, and exporting it would invite a caller that then has to reason
+    // about when the check has run.
+    MailBootstrapService,
   ],
   exports: [MailService],
 })

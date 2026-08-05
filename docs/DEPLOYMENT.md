@@ -184,6 +184,29 @@ task`. **That line can no longer be produced by a mail failure**: the SMTP adapt
 
   Better Auth's resend endpoint remains the user-facing recovery path.
 
+#### The boot-time transport check
+
+When `MAIL_SMTP_URL` is set, the API performs **one bounded SMTP handshake at start-up** and logs
+`event: "mail.transport_verified"` or `event: "mail.transport_unreachable"`, with the **host and
+port only** — never the credential inside the URL. It is capped at 5 seconds.
+
+**It never fails the boot, and it is deliberately not part of `/health/ready`.** Your host
+recreates containers unattended on a released image (ADR-0047), so a relay that is briefly
+unreachable at 03:00 would otherwise take the API down and keep it down until somebody noticed;
+and putting it in readiness would turn a mail outage into a restart loop. Mail is not on the
+critical path of scheduling — the API is.
+
+**What a success does not prove**, which is why step 3 of the checklist below still exists:
+
+- **Not that we may send.** A credential can authenticate and lack send permission — exactly the
+  read-only Resend key described above, which passes this check and fails the first real message.
+- **Not that mail arrives.** Asynchronous bounces, spam classification and an unverified sending
+  domain are invisible to a handshake.
+- **Not that it will keep working.** It is one observation at boot; a relay that breaks an hour
+  later shows up as `event: "mail.send_failed"` and nowhere else.
+
+See ADR-0075.
+
 #### What the application actually sends
 
 **Three** messages, and no others: the **organisation invitation**, the **email-verification
