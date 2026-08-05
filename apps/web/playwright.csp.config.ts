@@ -13,14 +13,13 @@ import { defineConfig, devices } from '@playwright/test';
  * production — a permanently red gate for a defect that does not exist, which is how gates get
  * deleted rather than fixed (ADR-0058).
  *
- * So: `pnpm build` then `vite preview`, with `preview.proxy` standing in for nginx's
+ * So: `vite build` then `vite preview`, with `preview.proxy` standing in for nginx's
  * `location /api/` (see `vite.config.ts`). The spec supplies the header itself, report-only, read
  * from `docker-compose.yml` rather than restated — a gate testing a policy nobody serves proves
  * nothing.
  *
- * The build is why the timeout is 300 s: `pnpm build` is `tsc --noEmit && vite build`, and a
- * webServer timing out mid-compile reports as "the server never came up", which is the least useful
- * diagnostic available.
+ * The build is why the timeout is 300 s: a webServer timing out mid-compile reports as "the server
+ * never came up", which is the least useful diagnostic available.
  *
  * No `VITE_` flags are set. That is deliberate — the gate must see the bundle a release ships, and
  * the flags this epic added are default-on in `config/env.ts`. Chromium only (TECH_DEBT #25a).
@@ -80,7 +79,16 @@ export default defineConfig({
             },
           },
           {
-            command: 'pnpm build && pnpm preview',
+            // `vite build`, NOT `pnpm build` — the latter is `tsc --noEmit && vite build`, and the
+            // typecheck is both redundant and actively wrong here. Redundant: the `quality` job
+            // already runs `pnpm typecheck` through Turbo. Wrong: Turbo builds every workspace
+            // package first, and the e2e job builds only three, so `apps/web`'s tsc — which covers
+            // `scripts/scale-scene.ts` and its `@repo/seed` import — cannot resolve that package's
+            // `dist/` and exits non-zero before a bundle is ever produced. A local checkout hides
+            // it, because every package's `dist/` is already lying there (the same trap the CI
+            // workflow's "Build shared packages" comment records). This suite needs the bundle, so
+            // it asks for the bundle.
+            command: 'pnpm exec vite build && pnpm preview',
             url: `http://localhost:${WEB_PORT}`,
             // Never reuse either: a preview server already running is serving a `dist/` built from
             // some earlier state of the tree, and a CSP gate that passes against yesterday's bundle
