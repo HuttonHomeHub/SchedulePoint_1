@@ -302,16 +302,34 @@ export function useResetPassword() {
   });
 }
 
-/** Sign out and clear all cached data. */
+/**
+ * Sign out and clear all cached data.
+ *
+ * **Clear, then seed — never invalidate.** Invalidating the session key forces an immediate refetch
+ * of `GET /me` with no cookie, so the console logs a 401 on every sign-out. `sessionQueryOptions`
+ * catches that 401 and resolves to `null`, so nothing breaks — but the browser reports the failed
+ * request at the network layer, where no `try`/`catch` can reach it, and it is asking the server a
+ * question we have just authoritatively answered.
+ *
+ * Every OTHER cached query is dropped, because after a sign-out the cached orgs, plans and
+ * activities belong to somebody who is no longer here — this docblock has always claimed as much
+ * while only the session key was ever touched.
+ *
+ * **The session key is excluded from that sweep, and a blunt `clear()` is wrong for the same
+ * reason the invalidate was.** The guard mounts an observer on this query; removing its data leaves
+ * that observer with none, and an observer with no data fetches — reinstating the 401 through a
+ * different door. Seeding the value and leaving it in place is what keeps the request from ever
+ * being made.
+ */
 export function useSignOut() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (): Promise<void> => {
       await authClient.signOut();
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       queryClient.setQueryData(sessionKeys.session, null);
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.session });
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
     },
   });
 }

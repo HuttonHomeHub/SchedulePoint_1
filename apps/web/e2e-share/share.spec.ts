@@ -89,6 +89,31 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   expect(guestUrl.hash).toBe(`#${token}`);
   expect(guestPage.url()).toContain('#');
 
+  // The canvas has REAL HEIGHT. Every other assertion in this file reads the parallel focusable DOM
+  // layer ADR-0026 D7 builds for assistive tech — `getByRole('option')` finds a bar there whether or
+  // not a single pixel was painted. This view shipped with a canvas measured at **1886 × 1**: the
+  // header, toolbar and legend all rendered, the listbox held every activity, and a reader saw an
+  // empty box. `TsldPanel fill` is `h-full` over a `flex-1` container, and the guest view's
+  // `min-h-dvh` column gave that percentage nothing definite to resolve against.
+  //
+  // So this asserts the one thing the a11y layer cannot stand in for. The floor is deliberately well
+  // below the ~807 px measured here and well above the 240 px `min-h-[240px]` fallback the collapsed
+  // container lands on, so it catches the collapse without pinning an exact viewport-dependent size.
+  const canvasHeight = await guestPage.evaluate(
+    () => document.querySelector('canvas')?.getBoundingClientRect().height ?? 0,
+  );
+  expect(canvasHeight).toBeGreaterThan(400);
+
+  // A refresh of a LIVE link still shows the plan. This is not padding: step (4) below reloads this
+  // same page and asserts the "no longer available" copy — which is exactly what a token lost on
+  // reload would also produce. Without this assertion, a regression that dropped the fragment would
+  // make that check pass for the wrong reason, and the suite would go on reporting green while the
+  // guest surface was broken for everyone who pressed F5.
+  await guestPage.reload();
+  await expect(guestPage.getByRole('heading', { name: 'Guest Plan', level: 1 })).toBeVisible();
+  await expect(guestDiagram.getByRole('option', { name: /Excavate/ })).toBeVisible();
+  expect(new URL(guestPage.url()).hash).toBe(`#${token}`);
+
   // The guest view itself is accessible.
   expect(
     (await new AxeBuilder({ page: guestPage }).withTags(['wcag2a', 'wcag2aa']).analyze())
