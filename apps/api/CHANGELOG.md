@@ -1,5 +1,39 @@
 # @repo/api
 
+## 0.44.1
+
+### Patch Changes
+
+- [#240](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/240) [`dbee13e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dbee13e87830124873c1b39c0a17e62d34cca15c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **Waiting to verify your email now reads honestly.** The screen said "We sent you a link to confirm
+  your address" — a claim the app cannot actually make, because a failed send never reaches the page.
+  Somebody staring at an empty inbox was being told flatly that it had been sent. It now says a link
+  _should_ arrive, shows the address it went to (a typo at sign-up is the commonest reason nothing
+  turns up), and — if a new link does not help either — says to ask whoever set up your organisation,
+  because at that point the problem is at our end and resending will not fix it.
+
+  **For anyone running SchedulePoint themselves:** the API now checks the mail server is reachable
+  once at start-up and logs `mail.transport_verified` or `mail.transport_unreachable`, with the host
+  and port and never the password. It will not stop the API starting if the mail server is down — a
+  relay blip overnight should not take the whole application with it — and it is deliberately not part
+  of the health check. It cannot tell you everything: a key that can log in but not send, or mail that
+  is accepted and then bounced, still only show up when a message is actually sent. Completing one
+  real sign-up to a real mailbox remains the check that matters.
+
+- [#240](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/240) [`dbee13e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dbee13e87830124873c1b39c0a17e62d34cca15c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **If you run this yourself, the term to alert on for mail failures has changed.** Every failed
+  send now logs `event: "mail.send_failed"`, with a field naming which message it was (invitation,
+  email verification or password reset), the recipient, and the error — never a URL or token.
+
+  This matters because the previously documented signal could not fire. `docs/DEPLOYMENT.md` told
+  you to watch for Better Auth's `Failed to run background task`; a change one day earlier made the
+  mail adapter handle its own errors, so that line stopped being reachable from a mail failure. An
+  alert set up exactly as documented would have stayed quiet through a complete mail outage. The
+  deployment guide is corrected, along with a section that still claimed there was no password-reset
+  flow.
+
+  Nothing changes for people using the app. Delivery of these messages remains best-effort by
+  design: a sign-up still succeeds even if its verification email cannot be sent, so the log is the
+  place a broken mail server shows up.
+
 ## 0.44.0
 
 ### Minor Changes
