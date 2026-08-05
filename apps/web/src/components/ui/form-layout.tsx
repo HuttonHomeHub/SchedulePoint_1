@@ -49,6 +49,17 @@ export interface FormSectionProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    */
   description?: string;
   /**
+   * The heading level for {@link title}. **Defaults to 3, which is right inside a dialog** — the
+   * `Dialog` title is an `h2`, so a section under it is an `h3` and the sequence is unbroken.
+   *
+   * On a **page**, whose own title is the `h1`, that same default skips a level (axe `heading-order`,
+   * caught by the ADR-0074 M5-T1 gate pass on `/account`). Pass `2` there. It is a prop rather than
+   * a guess from context because a component cannot see its ancestors' heading levels, and inferring
+   * one from `useContext` would be a rule that silently breaks the first time a section is nested
+   * somewhere new.
+   */
+  headingLevel?: 2 | 3;
+  /**
    * A status for the group as a whole — a count, a badge, "Not set". Rendered right-aligned on the
    * title row. This is what lets a reader skip a section honestly: a group that says "Not set" has
    * told them what is inside it.
@@ -79,6 +90,7 @@ export function FormSection({
   title,
   description,
   aside,
+  headingLevel = 3,
   className,
   children,
   ...rest
@@ -92,6 +104,7 @@ export function FormSection({
     );
   }
   const base = useId();
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const titleId = `${base}-title`;
   const descriptionId = `${base}-description`;
 
@@ -108,12 +121,12 @@ export function FormSection({
         {...rest}
       >
         <div className="flex items-baseline justify-between gap-3">
-          <h3
+          <Heading
             id={titleId}
             className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
           >
             {title}
-          </h3>
+          </Heading>
           {aside ? <span className="text-muted-foreground text-right text-xs">{aside}</span> : null}
         </div>
         {description ? (

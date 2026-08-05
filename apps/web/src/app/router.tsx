@@ -9,17 +9,25 @@ import {
 import { Suspense, lazy } from 'react';
 
 import { Spinner } from '@/components/ui/spinner';
-import { AUDIT_LOG_ENABLED, GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
+import {
+  ACCOUNT_SETTINGS_ENABLED,
+  AUDIT_LOG_ENABLED,
+  GUEST_SHARE_LINKS_ENABLED,
+  PASSWORD_RESET_ENABLED,
+  RESOURCES_ENABLED,
+} from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { AcceptInviteScreen } from '@/routes/accept-invite';
+import { AccountScreen } from '@/routes/account';
 import { AuditLogScreen } from '@/routes/audit-log';
 import { AuthedLayout } from '@/routes/authed-layout';
 import { CalendarsScreen } from '@/routes/calendars';
 import { ClientDetailScreen } from '@/routes/client-detail';
 import { ClientsScreen } from '@/routes/clients';
+import { ForgotPasswordScreen } from '@/routes/forgot-password';
 import { MembersScreen } from '@/routes/members';
 import { MyActivityScreen } from '@/routes/my-activity';
 import { OnboardingScreen } from '@/routes/onboarding';
@@ -27,9 +35,11 @@ import { OrgHomeScreen } from '@/routes/org-home';
 import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
 import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
+import { ResetPasswordScreen } from '@/routes/reset-password';
 import { ResourcesScreen } from '@/routes/resources';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
+import { VerifyEmailScreen } from '@/routes/verify-email';
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -38,6 +48,35 @@ export interface RouterContext {
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => <Outlet />,
 });
+
+/**
+ * Read a search param **another system** put in the URL, as the string it was written as.
+ *
+ * TanStack Router's default `parseSearch` is `parseSearchWith(JSON.parse)` — it attempts to
+ * JSON-parse **every** value — so a param that happens to be valid JSON never reaches a validator
+ * as a string. `?verified=1` arrives as the **number** `1`; `?x=true` arrives as a boolean. A
+ * validator written as `typeof search.x === 'string' ? … : {}` therefore drops it silently, with
+ * no error and a screen that renders its "nothing here" state as though the param were absent.
+ *
+ * That is not hypothetical: it is what `?verified=1` did (ADR-0074 M5). The unit suite was green
+ * throughout, because it feeds `useSearch` a literal and never crosses the router — only the
+ * flag-on journey, following a real emailed link through a real redirect, could see it.
+ *
+ * It matters wherever the value is composed **outside this app** — Better Auth writes the
+ * verification and reset redirects itself — because we do not get to choose the shape.
+ *
+ * **What it does not fix**, because the damage happens before it runs: a value whose `String()`
+ * does not reproduce the source is already lost. A 32-digit token parses to
+ * `1.2345678901234567e+31` and re-stringifies to *that*, not to the token. The only real remedy is
+ * a router-level `parseSearch` that leaves values alone, which changes every route's search
+ * handling — `docs/TECH_DEBT.md` #96. Pinned by `router-search.test.ts` so the limit is visible
+ * rather than assumed away.
+ */
+function readForeignParam(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return undefined;
+}
 
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -152,6 +191,13 @@ const myActivityRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/me/activity',
   component: MyActivityScreen,
+});
+
+/** The reader's own account (ADR-0074 M3) — no org in the path, because nothing on it is scoped. */
+const accountRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/account',
+  component: AccountScreen,
 });
 
 /** Clients list. */
@@ -270,6 +316,72 @@ const shareGuestRoute = createRoute({
   ),
 });
 
+/**
+ * The two public password-reset routes (ADR-0074 M4).
+ *
+ * Both are registered — and the sign-in link rendered — behind the SAME `PASSWORD_RESET_ENABLED`
+ * constant. Splitting them is the stranding failure the flag's docblock describes: a link to a
+ * conditionally-registered route compiles in both branches, so typecheck cannot catch it.
+ *
+ * `validateSearch` is permissive on both. Better Auth composes the `?token=` / `?error=` redirect
+ * itself, a mail client may mangle the query, and a hand-edited URL must degrade to a state rather
+ * than throw — the house rule already stated twice above.
+ */
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forgot-password',
+  validateSearch: (search: Record<string, unknown>): { email?: string } => {
+    const email = readForeignParam(search.email);
+    return email ? { email } : {};
+  },
+  component: ForgotPasswordScreen,
+});
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  // Both params are composed by Better Auth's own redirect, so they go through `readForeignParam`
+  // — see its docblock for the rule and for what dropping one costs.
+  validateSearch: (search: Record<string, unknown>): { token?: string; error?: string } => {
+    const token = readForeignParam(search.token);
+    const error = readForeignParam(search.error);
+    return { ...(token ? { token } : {}), ...(error ? { error } : {}) };
+  },
+  component: ResetPasswordScreen,
+});
+
+/**
+ * Public address-verification landing route (ADR-0074).
+ *
+ * **Registered unconditionally, and that is the decision.** The three surfaces that link here are
+ * unflagged runtime branches on what the server did, so gating this route behind a `VITE_` constant
+ * would strand every one of them the moment an operator sets `AUTH_REQUIRE_EMAIL_VERIFICATION` —
+ * and `...(FLAG ? [route] : [])` widens the tree type to include the route in **both** branches, so
+ * typecheck cannot catch the resulting link to nothing.
+ *
+ * `validateSearch` is deliberately permissive: Better Auth composes the success and failure
+ * redirects itself, so an unrecognised param must be carried, not rejected — and every one of them
+ * goes through `readForeignParam`, because `?verified=1` is the exact value the router's JSON
+ * parsing turns into a number and a `typeof === 'string'` test then throws away.
+ */
+const verifyEmailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/verify-email',
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { email?: string; verified?: string; error?: string } => {
+    const email = readForeignParam(search.email);
+    const verified = readForeignParam(search.verified);
+    const error = readForeignParam(search.error);
+    return {
+      ...(email ? { email } : {}),
+      ...(verified ? { verified } : {}),
+      ...(error ? { error } : {}),
+    };
+  },
+  component: VerifyEmailScreen,
+});
+
 /** Public invitation-accept route (keyed by the token in the URL). */
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -283,6 +395,11 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   signUpRoute,
   acceptInviteRoute,
+  // Unconditional by design — see the route's own docblock. Three unflagged surfaces link here.
+  verifyEmailRoute,
+  // Dark surface (ADR-0074 M4): both reset routes join the tree only when the flag is on — and the
+  // sign-in link is gated on the same constant, which is what stops it becoming a link to nothing.
+  ...(PASSWORD_RESET_ENABLED ? [forgotPasswordRoute, resetPasswordRoute] : []),
   // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
   // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
   ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
@@ -303,6 +420,9 @@ const routeTree = rootRoute.addChildren([
     // Dark surface (ADR-0072): both audit routes join the tree only when the flag is on, so the
     // app is byte-identical when off — no route, no nav entry, no query.
     ...(AUDIT_LOG_ENABLED ? [auditLogRoute, myActivityRoute] : []),
+    // Dark surface (ADR-0074 M3): the account route joins the tree only when the flag is on, so
+    // the app is byte-identical when off — no route and no menu entry.
+    ...(ACCOUNT_SETTINGS_ENABLED ? [accountRoute] : []),
   ]),
 ]);
 

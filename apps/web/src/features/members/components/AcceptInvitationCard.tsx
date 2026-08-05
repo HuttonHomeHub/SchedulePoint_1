@@ -1,14 +1,41 @@
 import { Link, useRouter } from '@tanstack/react-router';
+import { useEffect } from 'react';
 
 import { useAcceptInvitation, useInvitationPreview } from '../api/use-invitations';
 import { ROLE_LABELS } from '../schemas/invite-schemas';
 
 import { InviteShell } from './InviteShell';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import { useSession } from '@/features/auth';
+import { ResendVerificationButton, useSession } from '@/features/auth';
+
+/**
+ * The one-sentence summary of how an invitation resolved, or `null` while it is still resolving.
+ *
+ * Kept beside the component and derived from the same two queries the render branches on, so the
+ * announcement and the screen cannot disagree about which state this is.
+ */
+function resolvedOutcome(
+  preview: ReturnType<typeof useInvitationPreview>,
+  session: ReturnType<typeof useSession>,
+): string | null {
+  if (preview.isPending || session.isPending) return null;
+  if (preview.isError || !preview.data) return 'Invitation not found.';
+  const invite = preview.data;
+  if (invite.status !== 'PENDING') return 'This invitation is no longer valid.';
+  const user = session.data?.user;
+  if (!user) return `Sign in as ${invite.email} to accept this invitation.`;
+  if (invite.requiresEmailVerification && !user.emailVerified) {
+    return 'Confirm your email address before joining.';
+  }
+  if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
+    return `This invitation is for ${invite.email}, not ${user.email}.`;
+  }
+  return `You have been invited to join ${invite.organizationName}.`;
+}
 
 /** Invitee-facing accept flow: preview the invite, then accept as the right user. */
 export function AcceptInvitationCard({ token }: { token: string }): React.ReactElement {
@@ -16,6 +43,21 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
   const preview = useInvitationPreview(token);
   const session = useSession();
   const accept = useAcceptInvitation();
+  const announce = useAnnounce();
+
+  // The invitation resolves asynchronously into one of five terminal states, and **which one it is
+  // IS the page**. `InviteShell` used to carry an `aria-live` on its own `main` for exactly this;
+  // the ADR-0074 M2-T1 convergence moved to the shared announcer and did not re-establish the
+  // announcement, so the resolution went silent — a regression the convergence's own "no
+  // behavioural difference" claim did not cover (M5-T1, UX review).
+  //
+  // Derived here, once, from the same conditions the branches below read, rather than announced
+  // inside each branch: a sixth state added later would otherwise be silent again, which is
+  // precisely how this one was lost.
+  const outcome = resolvedOutcome(preview, session);
+  useEffect(() => {
+    if (outcome !== null) announce(outcome);
+  }, [outcome, announce]);
 
   if (preview.isPending || session.isPending) {
     return (
@@ -80,6 +122,41 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
           <Link to="/sign-up" className={buttonVariants({ variant: 'outline' })}>
             Create an account
           </Link>
+        </CardContent>
+      </InviteShell>
+    );
+  }
+
+  // The fourth first-class refusal, alongside not-found / not-pending / wrong-account (ADR-0074
+  // M2-T6). The card has always held `emailVerified` and never read it, so when the server's
+  // matching 403 fires (`invitations.service.ts:218-220`) it lands in the generic error paragraph
+  // below with no way forward. Checking it here turns a dead end into an instruction — and the 403
+  // remains as the server's authoritative second word if the two ever disagree.
+  //
+  // **Both halves of the condition are load-bearing, and shipping only the second one was a live
+  // defect** (ADR-0074 M5). This first read `!user.emailVerified` alone, under a comment claiming
+  // it was "not reachable today, because the server guard is gated on `requireEmailVerification`"
+  // — which describes the *server's* condition, not the one written here. With enforcement OFF
+  // **every** account is unverified, so the card refused **every invitee**, telling them to confirm
+  // an address the server did not care about and hiding the Accept behind it. The base journey
+  // caught it; no unit test could, because they all supply a verified fixture user.
+  //
+  // `requiresEmailVerification` comes from the preview response — the server reporting its own
+  // setting — because that is the only runtime evidence available. Inferring it client-side is what
+  // ADR-0074 exists to forbid, and this is that rule broken by the ADR that states it.
+  if (invite.requiresEmailVerification && !user.emailVerified) {
+    return (
+      <InviteShell>
+        <CardHeader>
+          <CardTitle>Confirm your email address first</CardTitle>
+          <CardDescription>
+            Before you can join {invite.organizationName}, open the link we emailed to{' '}
+            <strong>{user.email}</strong>. Come back to this page afterwards — the invitation is
+            still waiting.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResendVerificationButton email={user.email} />
         </CardContent>
       </InviteShell>
     );

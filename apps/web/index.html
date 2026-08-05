@@ -5,22 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>SchedulePoint</title>
-    <script>
-      // Apply the persisted theme before first paint to avoid a flash of the
-      // wrong theme (see docs/FRONTEND_ARCHITECTURE.md → Theme management).
-      (function () {
-        try {
-          var stored = localStorage.getItem('schedulepoint-theme');
-          var system = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var corporate = stored === 'corporate';
-          var dark = !corporate && (stored === 'dark' || ((stored === 'system' || !stored) && system));
-          document.documentElement.classList.toggle('dark', dark);
-          document.documentElement.classList.toggle('corporate', corporate);
-        } catch (_) {
-          /* localStorage unavailable — fall back to light. */
-        }
-      })();
-    </script>
+    <!--
+      Applies the persisted theme before first paint. A served file rather than an inline script
+      so `script-src` needs no `'unsafe-inline'` and no `sha256-` hash (ADR-0074) — see
+      `public/theme-boot.js` for why the hash was rejected. Still parser-blocking, so the
+      anti-flash guarantee is unchanged.
+    -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body class="h-full">
     <div id="root"></div>

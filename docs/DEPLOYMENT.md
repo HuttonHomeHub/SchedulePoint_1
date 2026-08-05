@@ -148,6 +148,14 @@ Three properties worth knowing before you turn it on:
   the accept URL is also returned in the create response and shown in the admin UI — so an
   Org Admin can always hand it over another way. The email is a convenience over an existing
   path, never the only route through.
+- **`MAIL_SMTP_URL` is now load-bearing for account _recovery_, not only for verification**
+  (ADR-0074). Since password reset exists, a host with no transport configured has no
+  self-service way back into a locked account: the reset link exists only in the email, and
+  the logging stub deliberately withholds it in production because it can set a password.
+  The request still answers `200` — it must, or it becomes an account-existence oracle — so
+  **the only signal is a `WARN` naming the missing configuration**, which since ADR-0074 M0
+  arrives in the structured Pino stream rather than as bare `[Better Auth]:` stdout text
+  (`docs/TECH_DEBT.md` #94, cheap half paid).
 - **A verification failure does NOT fail the sign-up** — this bullet said it did, until the
   2026-08-04 reconciliation pass read the library. The adapter throws deliberately, and the
   intent was right: the verify URL exists only in that email, so an undelivered message hands
@@ -212,6 +220,20 @@ account is unusable. **In production the API refuses to boot** on that combinati
 letting you find out from a user who cannot sign in. So the order is: set `MAIL_SMTP_URL` +
 `MAIL_FROM`, confirm a real message arrives, then flip the switch.
 
+#### Password reset: one precondition that fails silently if you miss it
+
+`CORS_ORIGINS` **must contain the browser origin the reset link lands on.** Better Auth
+validates `/request-password-reset`'s `redirectTo` against `trustedOrigins`, which is bound to
+`CORS_ORIGINS` — so an app origin missing from that list makes **every** reset fail with an
+origin error and nothing on screen to explain it. The row above already says `CORS_ORIGINS`
+must equal the browser origin for sign-in to work; this is the second thing that breaks, and it
+breaks less visibly.
+
+The rejection itself is tested (`apps/api/test/password-reset.e2e-spec.ts`) so the failure mode
+is at least a known one. Note the origin check is now explicitly on in every environment —
+Better Auth defaults it **off** under `isTest()`, which meant the suite had been proving a
+weaker posture than production ships (ADR-0074).
+
 Put the credential in your secret store, not in `docker-compose.yml`. Deliverability (SPF,
 DKIM, DMARC on the sending domain) is a provider-side task this application does not do for
 you; without it, invitations to external clients will land in spam.
@@ -230,9 +252,39 @@ you; without it, invitations to external clients will land in spam.
   web container, not the browser's scheme — while `X-Forwarded-Scheme` and
   Cloudflare's `CF-Visitor` both correctly say `https`. Nothing consumes it today
   (absolute URLs come from `BETTER_AUTH_URL`, and the `Secure` cookie flag from
-  `NODE_ENV`), so it is currently harmless and therefore easy to miss. Add
-  `proxy_set_header X-Forwarded-Proto $scheme;` to the HTTPS host so it is right
-  before something starts trusting it. See `docs/TECH_DEBT.md` #89.
+  `NODE_ENV`), so it is currently harmless and therefore easy to miss.
+  **The repo half is now fixed** (ADR-0074 M1): `apps/web/nginx.conf` no longer overwrites the
+  header with this container's own unconditionally-`http` `$scheme` — an arriving value is
+  preserved and `$scheme` is only the fallback. **The operator half is still yours, and without it
+  nothing changes**, because with no header arriving the fallback reproduces the old behaviour
+  exactly. In Nginx Proxy Manager: the HTTPS host → Advanced →
+  `proxy_set_header X-Forwarded-Proto $scheme;`, with Force SSL on. See `docs/TECH_DEBT.md` #89.
+
+### Content-Security-Policy
+
+The web container serves a CSP (ADR-0074, `docs/TECH_DEBT.md` #8). **Both the header name and the
+policy are environment variables read by nginx at container start**, not values baked into the
+image — so switching between observing and enforcing, in either direction, is a restart rather than
+a release. A rollback that needed a new image would be slower than the incident it was fixing.
+
+```bash
+CSP_HEADER_NAME=Content-Security-Policy-Report-Only   # default: observe
+CSP_HEADER_NAME=Content-Security-Policy               # enforce
+```
+
+**Ship report-only first and actually look.** There is no `report-to` sink — violations appear in
+the browser console, which for a single-operator deployment is a real verification tool and avoids
+adding a public unauthenticated endpoint. Walk every route with the console open before enforcing:
+sign-in/up, accept-invite, the share guest view, the plan workspace, the Gantt, canvas PNG/PDF
+export, the printed programme, the library screens, the audit log — and both **Copy** buttons.
+
+Two things worth knowing if you edit the policy:
+
+- `img-src` needs `blob:`. The printed programme renders a live object-URL `<img>`; dropping it
+  breaks printing and image export, and only there.
+- `style-src 'self'` is deliberately strict and is **inferred from the source**, not verified in a
+  browser. If the report-only window shows style violations, relax **`style-src` only** — never
+  `script-src`, which needs no relaxation at all now the theme-boot script is a served file.
 
 ### Common pitfall: `403 Invalid origin` on sign-up/sign-in
 

@@ -107,6 +107,15 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    # Content-Security-Policy mode (ADR-0074 §4). Report-only by default so a deployment observes
+    # before it enforces; both the header NAME and the policy are operator variables, so flipping to
+    # enforce — or rolling back — is an env change rather than a new image through the release train.
+    #
+    #   CSP_HEADER_NAME=Content-Security-Policy    # enforce
+    #   CSP_HEADER_NAME=Content-Security-Policy-Report-Only   # observe (default)
+    environment:
+      CSP_HEADER_NAME: ${CSP_HEADER_NAME:-Content-Security-Policy-Report-Only}
+      CSP_POLICY: ${CSP_POLICY:-default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests}
     ports:
       - '8080:8080'
 

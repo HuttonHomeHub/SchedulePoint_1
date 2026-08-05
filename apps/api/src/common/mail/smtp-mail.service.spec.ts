@@ -79,17 +79,29 @@ describe('SmtpMailService', () => {
     expect(message.text).toContain('https://app.example.com/verify?token=tok_secret');
   });
 
-  it('THROWS when the verification send fails — the opposite of the invitation rule', async () => {
-    // The asymmetry, pinned. An invitation swallows because its accept URL is also on screen; the
-    // verify URL exists ONLY in this email. Swallowing would hand someone an account that, with
-    // AUTH_REQUIRE_EMAIL_VERIFICATION on, they cannot use — with no error and nothing explaining
-    // why. Failing the sign-up is recoverable; a silently unusable account is not.
+  it('RESOLVES when the verification send fails — a rejection here is an existence oracle', async () => {
+    // **The inversion of this assertion is the fix** (ADR-0074 M5-T1, security review). It asserted
+    // `rejects` until 2026-08-05, on reasoning that was correct about sign-up and silent about the
+    // route that actually matters.
+    //
+    // `/send-verification-email` can be called by anyone, with no session. Better Auth makes it
+    // uniform on purpose — a throwaway token minted for the unknown/verified branch so the CPU work
+    // matches, then a 500 ms floor so the timings do — and then ends that same block with
+    // `if (error) throw error`, which `better-call` turns into a bare 500. So a transport failure
+    // made "this address exists and is unverified" distinguishable from every other answer.
+    //
+    // The operator signal the throw used to buy is not lost: the failure is logged here, with
+    // context, inside the Pino stream, instead of falling through to `console.error`.
+    const logger = loggerDouble();
     sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'));
-    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', logger);
 
     await expect(
       service.sendEmailVerification({ to: 'new@example.com', verifyUrl: 'https://x/verify#t' }),
-    ).rejects.toThrow(/ECONNREFUSED/);
+    ).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalled();
+    // And still never the URL, even on the failure path.
+    expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('/verify#t');
   });
 
   it('never logs the verify URL on success — it carries the token', async () => {
@@ -101,5 +113,48 @@ describe('SmtpMailService', () => {
 
     const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
     expect(logged).not.toContain('tok_secret');
+  });
+
+  describe('password reset (ADR-0074)', () => {
+    const reset = {
+      to: 'locked-out@example.com',
+      resetUrl: 'https://app.example.com/api/auth/reset-password/tok_reset_secret',
+    };
+
+    it('sends the reset link, and says the password has not changed', async () => {
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+      await service.sendPasswordReset(reset);
+
+      const message = sendMail.mock.calls[0]?.[0] as Record<string, string>;
+      expect(message.to).toBe('locked-out@example.com');
+      expect(message.text).toContain(reset.resetUrl);
+      // The line that matters for an unrequested reset: it tells the recipient that ignoring the
+      // message is safe, which "you can ignore this" alone does not.
+      expect(message.text).toContain('has not been changed');
+    });
+
+    it('RESOLVES when the send fails, holding the uniform-answer property rather than borrowing it', async () => {
+      // Not currently an oracle — `runInBackgroundOrAwait` catches this before it reaches the
+      // response — but that safety is one line in a library this repo does not own, and its sibling
+      // above was safe by the same argument at one call site and unsafe at another. Held here
+      // instead of depended upon.
+      const logger = loggerDouble();
+      sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', logger);
+
+      await expect(service.sendPasswordReset(reset)).resolves.toBeUndefined();
+      expect(logger.error).toHaveBeenCalled();
+      expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('tok_reset_secret');
+    });
+
+    it('never logs the reset URL on success — it can set a password', async () => {
+      const logger = loggerDouble();
+      await new SmtpMailService('no-reply@example.com', 'smtps://h', logger).sendPasswordReset(
+        reset,
+      );
+
+      const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
+      expect(logged).not.toContain('tok_reset_secret');
+    });
   });
 });

@@ -4,11 +4,13 @@ import { createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 
 import type { PrismaService } from '../../prisma/prisma.service';
 import { resolveClientIp } from '../http/client-ip';
+import { hashToken } from '../tokens/token';
 
 import {
-  attributeFailedSignIn,
+  attributeAttemptedAddress,
   classifyAuthEvent,
   emailVerifiedEvent,
+  passwordResetCompletedEvent,
   signedOutEvent,
   type AuthAuditEvent,
   type FindUserIdByEmail,
@@ -57,6 +59,16 @@ export interface CreateAuthOptions {
    */
   sendVerificationEmail: (input: { to: string; verifyUrl: string }) => Promise<void>;
   /**
+   * Deliver the password-reset link (ADR-0074). A callback for the same reason as
+   * `sendVerificationEmail` — this factory stays a pure function of its options.
+   *
+   * **Configuring this is what makes reset exist at all.** Absent, Better Auth's
+   * `/request-password-reset` throws `RESET_PASSWORD_DISABLED` outright
+   * (`api/routes/password.mjs:51-57`), which is why the product had no recovery path rather than
+   * merely no screen for one.
+   */
+  sendPasswordReset: (input: { to: string; resetUrl: string }) => Promise<void>;
+  /**
    * Record an authentication event (ADR-0072). A callback for the same reason as
    * `sendVerificationEmail`: this factory stays a pure function of its options and never learns
    * about Nest DI.
@@ -78,6 +90,19 @@ export interface CreateAuthOptions {
    * fault must not become a refused sign-in.
    */
   findUserIdByEmail: FindUserIdByEmail;
+  /**
+   * Forward one of the auth library's own log lines into the application's structured stream
+   * (`docs/TECH_DEBT.md` #94). A callback for the same reason as the three above.
+   *
+   * **What this buys, precisely.** Better Auth invokes `sendVerificationEmail` and
+   * `sendResetPassword` through `runInBackgroundOrAwait`, which catches a rejection and hands it to
+   * its **own** logger without rethrowing. Unconfigured, that logger writes a bare
+   * `[Better Auth]:` line to stdout — outside Pino, outside the correlation ID, outside redaction —
+   * so a broken relay produced silently unverifiable accounts and, since ADR-0074, silently
+   * unrecoverable ones. Routing it here is the cheap half of #94; the hard half (knowing a send
+   * failed *before* the handoff) is unchanged and still open.
+   */
+  log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, args: unknown[]) => void;
 }
 
 /**
@@ -122,6 +147,20 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
     baseURL: options.baseURL,
     basePath: '/api/auth',
     trustedOrigins: options.trustedOrigins,
+    /**
+     * Route the library's own logging into Pino (`docs/TECH_DEBT.md` #94, ADR-0074 M0).
+     *
+     * `disableColors` because the destination is JSON, not a terminal: without it the message
+     * arrives wrapped in ANSI escapes that survive into the log store. The level is left at Better
+     * Auth's own default (`warn`) rather than widened — the line this exists to capture is an
+     * `error`, and dropping to `debug` would add per-request chatter to a stream that is retained.
+     */
+    logger: {
+      disableColors: true,
+      log: (level, message, ...args) => {
+        options.log(level, message, args);
+      },
+    },
     emailAndPassword: {
       enabled: true,
       // Matches the shared password rule in the feature spec (≥ 12 chars).
@@ -131,6 +170,68 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       // switch usable is `emailVerification` below (Theme B2).
       requireEmailVerification: options.requireEmailVerification,
       autoSignIn: true,
+      /**
+       * Account recovery (ADR-0074). Configuring this is what makes reset **exist**: without it
+       * `/request-password-reset` answers `RESET_PASSWORD_DISABLED`, which is why the product had
+       * no recovery path at all rather than merely no screen for one.
+       *
+       * Better Auth owns the token's minting, expiry and single-use; this app carries the URL, and
+       * (per the `verification` key below) stores only its hash.
+       */
+      sendResetPassword: async ({ user, url }) => {
+        await options.sendPasswordReset({ to: user.email, resetUrl: url });
+      },
+      /**
+       * The audit seam for `auth.password_reset_completed` (ADR-0074). NOT `hooks.after`, for the
+       * same reason `afterEmailVerification` is not: `/reset-password` returns `{ status: true }`
+       * and nothing else, so an after-hook fires with no user on the context and would record
+       * nothing while looking correct. Verified against a running instance, not assumed.
+       *
+       * It fires **before** the session revocation below, which is the right order: the row
+       * describes the reset, and the revocation is its consequence.
+       */
+      onPasswordReset: async ({ user }, request) => {
+        await options.recordAuthEvent(
+          passwordResetCompletedEvent({ id: user.id, email: user.email }),
+          requestEvidence(request?.headers, options.trustedProxies),
+        );
+      },
+      /**
+       * **A completed reset ends every other session** (ADR-0074 B2).
+       *
+       * `resetPassword` deletes the user's sessions only when this is truthy
+       * (`better-auth/dist/api/routes/password.mjs:172`); unset, a reset leaves them all alive.
+       * That is the wrong default for the commonest reason someone resets a password: a forgotten
+       * password is sometimes *caused by* a compromise, and a reset that leaves the compromise
+       * signed in has closed nothing.
+       *
+       * Note it costs the resetting browser nothing, because `/reset-password` issues no session
+       * either — it returns `{ status: true }` and the user signs in afterwards.
+       */
+      revokeSessionsOnPasswordReset: true,
+    },
+    /**
+     * **Verification identifiers are hashed at rest** (ADR-0074 B1).
+     *
+     * With no `verification` key configured, `processIdentifier` returns the identifier unchanged
+     * (`better-auth/dist/db/verification-token-storage.mjs:8-13`) — so a password-reset row would
+     * hold the literal `reset-password:<token>` in cleartext for the token's whole lifetime, and
+     * anyone who could read that table would hold a usable account-takeover credential.
+     *
+     * That is exactly the bar `common/tokens/token.ts` sets for this app's own opaque tokens
+     * (ADR-0016 invitations, ADR-0051 share links): "a database leak never exposes a usable token".
+     * It applies here for the same reason, so it reuses the **same hasher** rather than Better
+     * Auth's `'hashed'` shorthand — one hashing convention in the repository beats two that happen
+     * to agree today.
+     *
+     * This is deliberately configured **before** `sendResetPassword` exists, which is what makes
+     * the window in which a cleartext row could have been written empty rather than merely short.
+     */
+    verification: {
+      // The port is async (Better Auth's own hasher awaits WebCrypto); ours is synchronous, so it
+      // resolves immediately. `Promise.resolve` rather than an `async` arrow only to keep the
+      // no-await-in-async lint rule quiet about a function that never awaits.
+      storeIdentifier: { hash: (identifier: string) => Promise.resolve(hashToken(identifier)) },
     },
     /**
      * The verification loop (Theme B2). Until this existed the docblock above claimed the email
@@ -208,12 +309,15 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
           path: ctx.path,
           failed: ctx.context.returned instanceof Error,
           newSession: ctx.context.newSession,
+          // `/change-password` succeeds without minting a session, so its user is here and not in
+          // `newSession` (ADR-0074).
+          returned: ctx.context.returned,
           body: ctx.body,
         });
         if (!event) return;
         // Attribution runs BEFORE the record, because the table is append-only: there is no later
         // pass that could fill `subject_id` in (ADR-0073 C2.2).
-        const attributed = await attributeFailedSignIn(
+        const attributed = await attributeAttemptedAddress(
           event,
           options.findUserIdByEmail,
           normalizeEmail,
@@ -225,6 +329,22 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       }),
     },
     advanced: {
+      /**
+       * **Keep the origin check on under test.** Better Auth defaults `skipOriginCheck` to
+       * `isTest() ? true : false` (`context/create-context.mjs:210`), so without this line every
+       * e2e in this repository runs with the CSRF and redirect-target validation **switched off** —
+       * a different security posture from production, in the suite whose job is to prove the
+       * production one.
+       *
+       * That matters concretely for ADR-0074: `redirectTo` on `/request-password-reset` is
+       * validated against `trustedOrigins` (bound to `CORS_ORIGINS`), and an app origin missing
+       * from that list makes **every** reset fail with nothing on screen to explain it. Setting it
+       * explicitly is what makes that failure mode testable rather than a deployment surprise.
+       *
+       * Found while writing `test/password-reset.e2e-spec.ts`, when an attacker-controlled
+       * `redirectTo` returned 200.
+       */
+      disableOriginCheck: false,
       cookiePrefix: 'schedulepoint',
       useSecureCookies: options.isProduction,
       // Resolve the client IP for rate limiting only from X-Forwarded-For hops

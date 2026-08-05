@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
-import { type EmailVerificationEmail, type InvitationEmail, MailService } from './mail.service';
+import {
+  type EmailVerificationEmail,
+  type InvitationEmail,
+  MailService,
+  type PasswordResetEmail,
+} from './mail.service';
 
 /**
  * v1 stub adapter for {@link MailService}: it logs instead of sending. Onboarding
@@ -67,6 +72,34 @@ export class LoggingMailService extends MailService {
     this.logger.info(
       { to: email.to, verifyUrl: email.verifyUrl },
       'email-verification link (stub — not actually sent; follow this URL to verify locally)',
+    );
+  }
+
+  /**
+   * Password reset (ADR-0074). Same production guard as {@link sendEmailVerification} and for the
+   * same reason — locally the URL is the whole point of the stub, and in production it is a live
+   * credential in a retained log stream.
+   *
+   * If anything the guard matters **more** here. A verification link proves an address; a reset
+   * link changes a password. And this adapter is selected exactly when no transport is configured,
+   * which is the state in which a production operator most needs to be told their recovery path is
+   * inert rather than handed a URL to follow.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async sendPasswordReset(email: PasswordResetEmail): Promise<void> {
+    if (this.isProduction) {
+      this.logger.warn(
+        { to: email.to },
+        'password-reset link NOT sent and NOT logged: no MAIL_SMTP_URL is configured, so this ' +
+          'account cannot be recovered. Configure a transport (docs/DEPLOYMENT.md). The link is ' +
+          'deliberately withheld from production logs because it can set a new password.',
+      );
+      return;
+    }
+
+    this.logger.info(
+      { to: email.to, resetUrl: email.resetUrl },
+      'password-reset link (stub — not actually sent; follow this URL to reset locally)',
     );
   }
 }

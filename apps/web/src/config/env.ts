@@ -1289,3 +1289,54 @@ export const AUDIT_FILTERS_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_FI
  * with the column and the sentence that make it legible.
  */
 export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_SELF_SECURITY);
+
+/**
+ * The `/account` screen: change your password, see and resend your address verification
+ * (ADR-0074 M3). **ON by default** since 2026-08-05, once the M5 gate pass and both flag-on
+ * journeys were green.
+ *
+ * **This flag is legitimate, and its sibling `VITE_PASSWORD_RESET` is a different kind of gate.**
+ * Everything behind this one already works against today's server: `sendVerificationEmail` is
+ * configured, and `/change-password` has always been reachable — there was simply no screen. So
+ * the flag gates a **product decision** (is this surface ready?), not a server capability.
+ *
+ * Contrast the M2 work, which ships **unflagged**: those surfaces branch on whether the server has
+ * `AUTH_REQUIRE_EMAIL_VERIFICATION` on, and a `VITE_` constant is baked into the bundle long before
+ * an operator sets that (the ADR-0060 M0 rule). A flag there would strand a flag-off bundle against
+ * a flag-on server — worse than none. **A client surface whose gate is a server-side condition is
+ * branched on runtime evidence; a client surface whose gate is a product decision takes a flag.**
+ *
+ * Rollback: set `VITE_ACCOUNT_SETTINGS=false` and rebuild the web image. Flag-off, no `/account`
+ * route is registered and the account menu has no entry for it, so the app is byte-for-byte what it
+ * was. Pinned by `account-settings.parity.test.tsx`, kept rather than weakened — that suite is the
+ * rollback contract (ADR-0053 M6).
+ */
+export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACCOUNT_SETTINGS);
+
+/**
+ * The signed-out password-reset flow: `/forgot-password`, `/reset-password`, and the
+ * **"Forgot your password?" link on sign-in** (ADR-0074 M4). **ON by default** since 2026-08-05.
+ *
+ * **Its prerequisite was a deployment fact, not a code state, and that is why it flipped second.**
+ * `sendResetPassword` is configured in `createAuth()`, so the endpoint no longer throws
+ * `RESET_PASSWORD_DISABLED` — but a reset link that is composed and then not delivered is *worse*
+ * than a missing screen: the enumeration-safe copy says "if that address has an account we've sent
+ * a link" whatever happened, so a silent transport failure is indistinguishable from success to the
+ * one person who needs it to work. The flip was therefore held until the product owner confirmed
+ * `MAIL_SMTP_URL`/`MAIL_FROM` are set and sending on the deployed host (2026-08-05). Where that is
+ * not true, `SmtpMailService` is not selected at all and mail is only logged — see
+ * `common/mail/mail.service.ts` and `docs/TECH_DEBT.md` #94, which is the half of this still open:
+ * a send that fails *after* the handoff is invisible to the person waiting for it.
+ *
+ * **The link and both routes share this one constant, and splitting them is the failure this
+ * comment exists to prevent.** A "Forgot your password?" link pointing at a conditionally-registered
+ * route is a link to nothing, and **`pnpm typecheck` cannot catch it**: `...(FLAG ? [route] : [])`
+ * widens to `(typeof route)[]`, so the registered-route union contains the route in *both* branches
+ * and `<Link to="/forgot-password">` compiles either way. The flag structure is the gate; the
+ * parity suite pins the link's absence specifically.
+ *
+ * Rollback: set `VITE_PASSWORD_RESET=false` and rebuild the web image. Flag-off, neither route is
+ * registered and sign-in carries no link, so the app is byte-for-byte what it was. Pinned by
+ * `password-reset.parity.test.tsx`, kept rather than weakened (ADR-0053 M6).
+ */
+export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWORD_RESET);

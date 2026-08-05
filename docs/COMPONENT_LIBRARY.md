@@ -281,6 +281,28 @@ close, and the sign-out mutation's pending state disables the item so a second p
 fire a duplicate request. The theme is a **radio group** rather than a cycling button, because
 a cycle never tells the user what the other three options are.
 
+## Layout: `AuthShell` (`components/layout/auth-shell.tsx`)
+
+The centred card every **public** screen sits in — sign-in, sign-up, accept-invite, and the
+account-recovery screens (ADR-0074). It is the page's single `main` landmark, takes an optional
+`title`/`description` (omit them when the children own their heading, as the accept-invite card
+does), a `size` of `sm` for forms or `md` for the wider decision screens, and reflects `busy` as
+`aria-busy`.
+
+**It mounts `AnnouncerProvider`, and a public screen depends on that.** The app's provider lives
+inside the authed shell, so out here `useAnnounce()` would otherwise resolve to the context's
+no-op default and every "Check your email" / "That link has expired" would be announced to
+nobody — silently, which is the only way that defect ever ships. Mounting the **same** provider
+rather than hand-rolling a second live region is what keeps a component like
+`ResendVerificationButton` working identically on a public screen and an authed one without
+knowing where it is.
+
+`InviteShell` is a thin named wrapper over it (`size="md"`, no title) rather than a second
+implementation: it was a near-copy that had already drifted on width and on whether it announced
+anything, and three new public screens were about to make that five callers on two shells — the
+ADR-0062 shape, where each looks right alone and only a reader who opens the same thing two ways
+ever notices one is a version behind.
+
 ## Primitive: `Surface` (`components/ui/surface.tsx`)
 
 Marks a region as a **surface scope** (ADR-0055): the semantic token names keep their

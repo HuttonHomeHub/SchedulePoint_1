@@ -110,4 +110,8 @@ interface ImportMetaEnv {
   readonly VITE_AUDIT_FILTERS?: string;
   /** ADR-0073 C2 — show failed sign-ins aimed at your account on My activity. Default ON. */
   readonly VITE_AUDIT_SELF_SECURITY?: string;
+  /** ADR-0074 M3 — the `/account` screen: change your password, resend your verification. Default off. */
+  readonly VITE_ACCOUNT_SETTINGS?: string;
+  /** ADR-0074 M4 — the signed-out password-reset flow AND its sign-in link, together. Default off. */
+  readonly VITE_PASSWORD_RESET?: string;
 }

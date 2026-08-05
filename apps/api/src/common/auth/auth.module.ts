@@ -38,6 +38,8 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           // The auth library reaches mail through the port, never a transport — so which adapter
           // is bound stays `MailModule`'s decision and this wiring is the same in every environment.
           sendVerificationEmail: (input) => mail.sendEmailVerification(input),
+          // Same seam, same reason (ADR-0074). The library never learns which transport is bound.
+          sendPasswordReset: (input) => mail.sendPasswordReset(input),
           // `recordBestEffort`, not `record`: these fire outside any transaction, and refusing
           // every sign-in because the audit table is unavailable would turn a logging fault into
           // an outage. ADR-0072 names that gap rather than hiding it — auth rows are best-effort,
@@ -50,8 +52,19 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           //
           // The catch is HERE rather than in the caller because this is where a logger exists.
           // The port is contracted never to reject — running on the sign-in path, a lookup fault
-          // must not become a refused sign-in — and `attributeFailedSignIn` guards it a second
+          // must not become a refused sign-in — and `attributeAttemptedAddress` guards it a second
           // time in case that contract is ever broken by an edit to this line.
+          // The library's own log lines, into Pino (`docs/TECH_DEBT.md` #94, ADR-0074). Before
+          // this they went to stdout as bare `[Better Auth]:` text — outside the structured
+          // stream, outside correlation IDs, outside redaction — which is where a swallowed
+          // mail-send failure went to die.
+          log: (level, message, args) => {
+            const context = args.length > 0 ? { betterAuth: args } : {};
+            if (level === 'error') logger.error(context, message);
+            else if (level === 'warn') logger.warn(context, message);
+            else if (level === 'info') logger.info(context, message);
+            else logger.debug(context, message);
+          },
           findUserIdByEmail: async (email) => {
             try {
               const user = await prisma.user.findUnique({

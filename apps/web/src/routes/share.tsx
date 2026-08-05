@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { GuestPlanView, GuestUnavailable } from '@/features/share';
+import { useNoindex } from '@/hooks/use-noindex';
 
 /**
  * The PUBLIC External-Guest read-only plan view route (`/share`, ADR-0051 F-M4 Task 2).
@@ -21,17 +22,9 @@ export function ShareGuestScreen(): React.ReactElement {
     typeof window === 'undefined' ? '' : window.location.hash.replace(/^#/, '').trim(),
   );
 
-  // Belt-and-braces `noindex` on the client (the server also sends `X-Robots-Tag`); removed on unmount so
-  // it never leaks onto the authenticated app if the user navigates away within the SPA.
-  useEffect(() => {
-    const meta = document.createElement('meta');
-    meta.name = 'robots';
-    meta.content = 'noindex, nofollow';
-    document.head.appendChild(meta);
-    return () => {
-      document.head.removeChild(meta);
-    };
-  }, []);
+  // Belt-and-braces `noindex` on the client (the server also sends `X-Robots-Tag`); the shared hook
+  // removes it on unmount so it never leaks onto the authenticated app within the SPA.
+  useNoindex();
 
   if (token === '') return <GuestUnavailable />;
   return <GuestPlanView token={token} />;

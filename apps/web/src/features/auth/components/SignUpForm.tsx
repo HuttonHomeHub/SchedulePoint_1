@@ -1,14 +1,25 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { useSignUp } from '../api/use-session';
+import { useSignUp, type SignUpOutcome } from '../api/use-session';
 import { signUpSchema, type SignUpValues } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
 
-/** Create-account form. Calls `onSuccess` once the account is created and signed in. */
-export function SignUpForm({ onSuccess }: { onSuccess: () => void }): React.ReactElement {
+/**
+ * Create-account form.
+ *
+ * `onSuccess` receives the **outcome** and the address, not `void` (ADR-0074 M2-T4). With
+ * `AUTH_REQUIRE_EMAIL_VERIFICATION` on, the server creates the account and issues **no session**,
+ * so a caller that assumes it is now signed in navigates into the app and gets bounced straight
+ * back out with no explanation. The caller has to be able to tell the two apart.
+ */
+export function SignUpForm({
+  onSuccess,
+}: {
+  onSuccess: (outcome: SignUpOutcome, email: string) => void;
+}): React.ReactElement {
   const {
     register,
     handleSubmit,
@@ -17,7 +28,11 @@ export function SignUpForm({ onSuccess }: { onSuccess: () => void }): React.Reac
   const signUp = useSignUp();
 
   const onSubmit = handleSubmit((values) => {
-    signUp.mutate(values, { onSuccess });
+    signUp.mutate(values, {
+      onSuccess: (outcome) => {
+        onSuccess(outcome, values.email);
+      },
+    });
   });
 
   return (
@@ -49,7 +64,16 @@ export function SignUpForm({ onSuccess }: { onSuccess: () => void }): React.Reac
         error={errors.password?.message}
         {...register('password')}
       />
-      <Button type="submit" disabled={signUp.isPending} aria-busy={signUp.isPending}>
+      {/* See `SignInForm` — `aria-disabled` + a submit guard, never native `disabled`, so focus
+          survives the pending state (TECH_DEBT #17a). */}
+      <Button
+        type="submit"
+        aria-disabled={signUp.isPending}
+        aria-busy={signUp.isPending}
+        onClick={(event) => {
+          if (signUp.isPending) event.preventDefault();
+        }}
+      >
         {signUp.isPending ? 'Creating account…' : 'Create account'}
       </Button>
     </form>

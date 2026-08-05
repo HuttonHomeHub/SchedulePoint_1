@@ -286,8 +286,17 @@ one as though it were available; build it to the entry, then drop the marker.
 `ls apps/web/src/components/ui/` is the authoritative inventory.
 
 - **Buttons** — variants `primary | secondary | outline | ghost | destructive |
-link`; sizes `sm | md | lg | icon`. Show pending state (spinner + disabled +
-  `aria-busy`); icon buttons require `aria-label`. One primary action per view.
+link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
+  primary action per view.
+  **A control that blocks itself during its own mutation uses `aria-disabled`
+  plus a submit/click guard — never the native `disabled` attribute.** A native
+  disabled control is removed from the tab order the instant the request starts
+  and put back when it settles, so a keyboard user is thrown to `<body>` and
+  returned twice per action; the guard is what actually prevents the double
+  submit. This has now been re-learnt at ADR-0060 M6, ADR-0063 M6 and ADR-0074
+  M2 (`TECH_DEBT` #17a) — it is a rule, not a judgement call. Native `disabled`
+  remains correct for a control that is **statically** unavailable (no
+  permission, nothing selected), where nothing flips underneath the user.
 - **Forms & inputs** — label, optional description, error, and required
   indicator standardised via the `Form` primitive (ADR-0007). Consistent field
   heights (sizing scale); `aria-invalid` + linked error text; disabled/readonly
