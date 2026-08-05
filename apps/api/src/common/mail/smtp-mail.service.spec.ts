@@ -79,24 +79,29 @@ describe('SmtpMailService', () => {
     expect(message.text).toContain('https://app.example.com/verify?token=tok_secret');
   });
 
-  it('THROWS when the verification send fails — the opposite of the invitation rule', async () => {
-    // The asymmetry, pinned. An invitation swallows because its accept URL is also on screen; the
-    // verify URL exists ONLY in this email. Swallowing would discard the only signal that anything
-    // went wrong.
+  it('RESOLVES when the verification send fails — a rejection here is an existence oracle', async () => {
+    // **The inversion of this assertion is the fix** (ADR-0074 M5-T1, security review). It asserted
+    // `rejects` until 2026-08-05, on reasoning that was correct about sign-up and silent about the
+    // route that actually matters.
     //
-    // **Throwing does not fail the sign-up**, and this comment claimed it did until 2026-08-04:
-    // Better Auth calls the port through `runInBackgroundOrAwait`, which catches and logs without
-    // rethrowing. What the throw buys is that the failure reaches a logger with context rather than
-    // vanishing here — which is exactly why routing Better Auth's own logger into Pino
-    // (`docs/TECH_DEBT.md` #94) is part of ADR-0074's M0. This test pins the seam's behaviour, not
-    // a guarantee about the layer above it — a distinction that cost the previous version its
-    // accuracy, because a test one level below where a claim is made cannot see the claim.
+    // `/send-verification-email` can be called by anyone, with no session. Better Auth makes it
+    // uniform on purpose — a throwaway token minted for the unknown/verified branch so the CPU work
+    // matches, then a 500 ms floor so the timings do — and then ends that same block with
+    // `if (error) throw error`, which `better-call` turns into a bare 500. So a transport failure
+    // made "this address exists and is unverified" distinguishable from every other answer.
+    //
+    // The operator signal the throw used to buy is not lost: the failure is logged here, with
+    // context, inside the Pino stream, instead of falling through to `console.error`.
+    const logger = loggerDouble();
     sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'));
-    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', logger);
 
     await expect(
       service.sendEmailVerification({ to: 'new@example.com', verifyUrl: 'https://x/verify#t' }),
-    ).rejects.toThrow(/ECONNREFUSED/);
+    ).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalled();
+    // And still never the URL, even on the failure path.
+    expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('/verify#t');
   });
 
   it('never logs the verify URL on success — it carries the token', async () => {
@@ -128,11 +133,18 @@ describe('SmtpMailService', () => {
       expect(message.text).toContain('has not been changed');
     });
 
-    it('THROWS when the send fails, like verification and unlike an invitation', async () => {
+    it('RESOLVES when the send fails, holding the uniform-answer property rather than borrowing it', async () => {
+      // Not currently an oracle — `runInBackgroundOrAwait` catches this before it reaches the
+      // response — but that safety is one line in a library this repo does not own, and its sibling
+      // above was safe by the same argument at one call site and unsafe at another. Held here
+      // instead of depended upon.
+      const logger = loggerDouble();
       sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'));
-      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', logger);
 
-      await expect(service.sendPasswordReset(reset)).rejects.toThrow(/ECONNREFUSED/);
+      await expect(service.sendPasswordReset(reset)).resolves.toBeUndefined();
+      expect(logger.error).toHaveBeenCalled();
+      expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('tok_reset_secret');
     });
 
     it('never logs the reset URL on success — it can set a password', async () => {

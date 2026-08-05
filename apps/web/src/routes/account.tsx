@@ -26,8 +26,11 @@ export function AccountScreen(): React.ReactElement {
       </p>
 
       <div className="mt-6 flex flex-col gap-8">
+        {/* `headingLevel={2}`: this is a page, so its own `h1` is the level above. The default 3
+            is right inside a dialog and skips a level here (ADR-0074 M5-T1). */}
         <FormSection
           title="Email address"
+          headingLevel={2}
           description="Where we send verification and account emails."
         >
           {user === undefined ? (
@@ -57,7 +60,11 @@ export function AccountScreen(): React.ReactElement {
           )}
         </FormSection>
 
-        <FormSection title="Password" description="Choose something you do not use anywhere else.">
+        <FormSection
+          title="Password"
+          headingLevel={2}
+          description="Choose something you do not use anywhere else."
+        >
           <ChangePasswordForm />
         </FormSection>
       </div>

@@ -126,7 +126,7 @@ describe('the two events with their own seams', () => {
   });
 });
 
-describe('attributeFailedSignIn (ADR-0073 C2.2)', () => {
+describe('attributeAttemptedAddress (ADR-0073 C2.2)', () => {
   const failed = (subjectLabel: string | null) => ({
     action: 'auth.sign_in_failed' as const,
     outcome: 'FAILURE' as const,

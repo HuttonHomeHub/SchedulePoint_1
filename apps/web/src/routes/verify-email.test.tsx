@@ -57,14 +57,17 @@ describe('VerifyEmailScreen', () => {
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
   });
 
-  it('frames a spent link as "used", not as a failure — a mail scanner can burn it', () => {
+  it('names no cause it cannot know, and offers the way out on the same screen', () => {
     renderAt({ error: 'token_expired' });
-    expect(screen.getByRole('heading', { name: 'That link has been used' })).toBeInTheDocument();
-    // The whole point of the framing: the way out is offered on the same screen.
+    // NOT "that link has been used": the token is a stateless JWT and a second visit to an
+    // already-verified address takes the library's SUCCESS branch, so "used" is the one cause
+    // that cannot produce this state (ADR-0074 M5-T1, UX review). The reachable ones — expired,
+    // malformed, unknown user — are all fixed the same way, so the copy is cause-agnostic.
+    expect(screen.getByRole('heading', { name: 'That link did not work' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send another/i })).toBeInTheDocument();
   });
 
-  it('shows one outcome after a send, whatever the address was', async () => {
+  it('shows one outcome after a send, through exactly one live region', async () => {
     vi.mocked(authClient.sendVerificationEmail).mockResolvedValue({ error: null });
     renderAt({ email: 'ada@example.com' });
 
@@ -73,11 +76,17 @@ describe('VerifyEmailScreen', () => {
     // Deliberately hedged: the endpoint answers identically for an unknown address, an
     // already-verified one and a real pending one. A UI that distinguished them would hand back
     // the account-enumeration oracle the server just closed.
-    expect(await screen.findByText(/an email is on its way/i)).toBeInTheDocument();
-    // The shared announcer clears then re-sets on the next frame, so this settles asynchronously.
+    const outcome = await screen.findByRole('status');
+    expect(outcome).toHaveTextContent(/an email is on its way/i);
+
+    // **One** live region, not two. This paired the visible text with a `useAnnounce()` call, and
+    // both are live regions — so the sentence was read twice (ADR-0074 M5-T1). The shared announcer
+    // must therefore stay empty, and the visible element carries it.
     await waitFor(() => {
-      expect(screen.getByTestId('announcer')).toHaveTextContent(/an email is on its way/i);
+      expect(screen.getByTestId('announcer')).toBeEmptyDOMElement();
     });
+    // And it takes focus, because the button that was pressed is gone.
+    expect(document.activeElement).toBe(outcome);
   });
 
   it('surfaces a send failure in an alert and leaves the button available', async () => {

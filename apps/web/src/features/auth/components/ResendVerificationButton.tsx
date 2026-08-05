@@ -2,9 +2,9 @@ import { useState } from 'react';
 
 import { useSendVerificationEmail } from '../api/use-session';
 
-import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/form';
+import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
  * "Send me another verification email" — the one affordance the whole verification story turns on
@@ -19,9 +19,12 @@ import { TextField } from '@/components/ui/form';
  * `?email=` — a bookmark, a retyped URL — has no other way through, and a button that silently does
  * nothing is worse than a field.
  *
- * Announces through the shared {@link useAnnounce} region, which `AuthShell` mounts for public
- * screens and `AppShell` mounts for the authed ones — so this component works identically on both
- * without knowing where it is.
+ * **One announcement mechanism, not two** (ADR-0074 M5-T1). The outcome is carried by the rendered
+ * `role="status"` / `role="alert"` element and nothing else. Pairing that with a `useAnnounce()`
+ * call — which this did — has assistive tech read the same sentence twice, because both are live
+ * regions; and the visible element is the better of the two, since sighted users get the same
+ * persistent text rather than a message that has already gone. It also takes focus, because the
+ * button the reader just pressed is unmounted by the same render.
  */
 export function ResendVerificationButton({
   email,
@@ -31,7 +34,7 @@ export function ResendVerificationButton({
 }): React.ReactElement {
   const [typed, setTyped] = useState('');
   const send = useSendVerificationEmail();
-  const announce = useAnnounce();
+  const outcomeRef = useOutcomeFocus<HTMLParagraphElement>(send.isSuccess);
   const address = email ?? typed;
   const needsAddress = email === undefined;
 
@@ -43,22 +46,16 @@ export function ResendVerificationButton({
   function submit(event: React.FormEvent): void {
     event.preventDefault();
     if (blocked) return;
-    send.mutate(address, {
-      // One outcome for every case. The endpoint deliberately answers the same for an unknown
-      // address, an already-verified one and a real pending one; a UI that distinguished them
-      // would hand back the oracle the server just closed.
-      onSuccess: () => {
-        announce('If that address needs verifying, an email is on its way.');
-      },
-      onError: (error) => {
-        announce(error.message);
-      },
-    });
+    // One outcome for every case. The endpoint deliberately answers the same for an unknown
+    // address, an already-verified one and a real pending one; a UI that distinguished them would
+    // hand back the oracle the server just closed. Both outcomes are announced by the elements
+    // below, so there is nothing to pass here.
+    send.mutate(address);
   }
 
   if (send.isSuccess) {
     return (
-      <p className="text-muted-foreground text-sm">
+      <p role="status" tabIndex={-1} ref={outcomeRef} className="text-muted-foreground text-sm">
         If that address needs verifying, an email is on its way. It can take a minute to arrive —
         check your spam folder before trying again.
       </p>

@@ -20,9 +20,18 @@ import { ResendVerificationButton } from '@/features/auth';
  * The arrivals it serves:
  *
  * - **`?verified=1`** — it worked. Say so and offer the way in.
- * - **`?error=…`** — Better Auth redirects here with a reason when the token is invalid or spent.
- *   A mail scanner following links can burn the token before the human clicks it (TECH_DEBT #88),
- *   so this is framed as "that link has been used — here is a fresh one", never as a failure.
+ * - **`?error=…`** — Better Auth redirects here when it could not act on the token. **The
+ *   reachable reasons are expiry, a malformed token and an unknown user** — *not* "already used":
+ *   the token is a stateless JWT, and a second visit to an address that is already verified takes
+ *   the library's **success** branch and arrives with `?verified=1`
+ *   (`email-verification.mjs:285-286`). An earlier version of this screen said "That link has been
+ *   used", which named the one cause that cannot produce this state. The copy is now
+ *   cause-agnostic, matching `/reset-password`'s — the distinction is not actionable anyway, since
+ *   every reason is fixed by asking for a fresh link.
+ *
+ *   (The scanner hazard is real but is the *opposite* shape here: a scanner following a
+ *   verification link **verifies the address on the recipient's behalf** rather than burning the
+ *   link. That is TECH_DEBT #88's own subject; burning is the reset link's problem.)
  * - **neither** — the account exists and is waiting. With `?email=` we can offer the resend
  *   directly; without one we have to ask, because a signed-out arrival has no session to read.
  */
@@ -47,10 +56,10 @@ export function VerifyEmailScreen(): React.ReactElement {
 
   return (
     <AuthShell
-      title={failed ? 'That link has been used' : 'Verify your email'}
+      title={failed ? 'That link did not work' : 'Verify your email'}
       description={
         failed
-          ? 'Verification links can only be used once, and they expire. Send yourself a fresh one.'
+          ? 'Verification links expire, and a copied one is easy to truncate. Send yourself a fresh one — it replaces any earlier link.'
           : 'We sent you a link to confirm your address. Open it to finish setting up your account.'
       }
     >

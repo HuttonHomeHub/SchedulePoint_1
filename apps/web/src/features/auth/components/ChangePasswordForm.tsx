@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { INVALID_PASSWORD, useChangePassword } from '../api/use-session';
 import { changePasswordSchema, type ChangePasswordValues } from '../schemas/auth-schemas';
 
-import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
 
@@ -32,15 +31,16 @@ export function ChangePasswordForm(): React.ReactElement {
     formState: { errors },
   } = useForm<ChangePasswordValues>({ resolver: zodResolver(changePasswordSchema) });
   const changePassword = useChangePassword();
-  const announce = useAnnounce();
 
   const onSubmit = handleSubmit((values) => {
     changePassword.mutate(
       { currentPassword: values.currentPassword, newPassword: values.newPassword },
       {
+        // No `announce()` beside the `role="status"` below: both are live regions, so pairing them
+        // reads the same sentence twice (ADR-0074 M5-T1). The form is not replaced here, so the
+        // submit button keeps focus and there is nothing to move.
         onSuccess: () => {
           reset();
-          announce('Password changed. Your other sessions have been signed out.');
         },
         onError: (error) => {
           if (error.code === INVALID_PASSWORD) {

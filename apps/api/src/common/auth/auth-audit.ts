@@ -183,7 +183,7 @@ export function classifyAuthEvent(facts: AuthHookFacts): AuthAuditEvent | null {
       // Never `failed`: the endpoint answers `{ status: true, message: 'If this email exists…' }`
       // for a known and an unknown address alike, and there is no user on the context in either
       // case. So this is built entirely from the attempted address — the same shape as a failed
-      // sign-in, and for the same reason. `attributeFailedSignIn` fills `subjectId` when the
+      // sign-in, and for the same reason. `attributeAttemptedAddress` fills `subjectId` when the
       // address is real, which is what makes the row readable by the account it named and by
       // nobody else (ADR-0073 C2.2).
       return {
@@ -209,7 +209,7 @@ export function classifyAuthEvent(facts: AuthHookFacts): AuthAuditEvent | null {
  *
  * **It must never reject** — the same contract as `recordAuthEvent`, for the same reason: this runs
  * on the sign-in path, and turning a lookup fault into a refused sign-in would make an audit
- * nicety an outage. {@link attributeFailedSignIn} guards it anyway; see there.
+ * nicety an outage. {@link attributeAttemptedAddress} guards it anyway; see there.
  */
 export type FindUserIdByEmail = (email: string) => Promise<string | null>;
 

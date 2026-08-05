@@ -3,7 +3,13 @@ import { renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { EMAIL_NOT_VERIFIED, useSendVerificationEmail, useSignIn, useSignUp } from './use-session';
+import {
+  EMAIL_NOT_VERIFIED,
+  useChangePassword,
+  useSendVerificationEmail,
+  useSignIn,
+  useSignUp,
+} from './use-session';
 
 import { apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
@@ -20,6 +26,7 @@ vi.mock('@/lib/auth-client', () => ({
     signIn: { email: vi.fn() },
     signUp: { email: vi.fn() },
     sendVerificationEmail: vi.fn(),
+    changePassword: vi.fn(),
     signOut: vi.fn(),
   },
 }));
@@ -121,5 +128,27 @@ describe('useSendVerificationEmail', () => {
       email: 'a@b.com',
       callbackURL: '/verify-email?verified=1',
     });
+  });
+});
+
+describe('useChangePassword', () => {
+  it('always revokes the other sessions, and re-reads /me afterwards', async () => {
+    // The revocation is the ADR's stated guarantee. The refetch is the part nothing covered: the
+    // server re-issues this session's token on a successful change, so a cached session is stale
+    // the moment it returns — and deleting the `onSuccess` line failed no test in the repository
+    // (ADR-0074 M5-T1, test-engineer review).
+    vi.mocked(authClient.changePassword).mockResolvedValue({ error: null });
+    vi.mocked(apiFetch).mockResolvedValue(null);
+    const { wrapper } = harness();
+
+    const { result } = renderHook(() => useChangePassword(), { wrapper });
+    await result.current.mutateAsync({ currentPassword: 'old-one', newPassword: 'a-new-one' });
+
+    expect(authClient.changePassword).toHaveBeenCalledWith({
+      currentPassword: 'old-one',
+      newPassword: 'a-new-one',
+      revokeOtherSessions: true,
+    });
+    expect(apiFetch).toHaveBeenCalledWith('/me');
   });
 });

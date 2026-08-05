@@ -7,9 +7,9 @@ import {
   type RequestPasswordResetValues,
 } from '../schemas/auth-schemas';
 
-import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
  * Ask for a password-reset link (ADR-0074 M4).
@@ -38,19 +38,17 @@ export function RequestPasswordResetForm({
     defaultValues: { email: email ?? '' },
   });
   const request = useRequestPasswordReset();
-  const announce = useAnnounce();
+  const outcomeRef = useOutcomeFocus<HTMLDivElement>(request.isSuccess);
 
   const onSubmit = handleSubmit((values) => {
-    request.mutate(values.email, {
-      onSuccess: () => {
-        announce('If that address has an account, a reset link is on its way.');
-      },
-    });
+    // Announced by the `role="status"` block below and nowhere else: two live regions carrying the
+    // same sentence read it twice (ADR-0074 M5-T1).
+    request.mutate(values.email);
   });
 
   if (request.isSuccess) {
     return (
-      <div className="flex flex-col gap-2">
+      <div role="status" tabIndex={-1} ref={outcomeRef} className="flex flex-col gap-2">
         <p className="text-sm font-medium">Check your email</p>
         <p className="text-muted-foreground text-sm">
           If that address has an account, a reset link is on its way. The link works once and

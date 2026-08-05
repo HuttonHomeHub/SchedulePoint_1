@@ -42,7 +42,7 @@ import { AppModule } from '../../app.module';
  * corrected, because it is the ADR-0058 rule landing on the work that cites it: verify the claim,
  * do not trust the document.
  *
- * **The five authentication events are NOT in this census** and cannot be: Better Auth is mounted
+ * **The eight authentication events are NOT in this census** and cannot be: Better Auth is mounted
  * as a raw Node handler outside Nest (ADR-0003), so its endpoints have no controller metadata to
  * reflect over. Their coverage is proven by `auth-audit.spec.ts` and the e2e suite instead.
  */

@@ -382,6 +382,24 @@ jobs:
       - name: Web end-to-end tests (audit log flag on)
         run: pnpm --filter @repo/web test:e2e:audit
 
+      # ADR-0074 M5-T3. Two steps, because `AUTH_REQUIRE_EMAIL_VERIFICATION` is a server-boot
+      # value: one API process cannot be both enforcing and not, and the recovery half needs it
+      # OFF (an account that cannot sign in cannot reach `/account`). Both stand up an SMTP sink
+      # and drive the real `SmtpMailService` — the only place in the repo that adapter runs against
+      # a socket, and the only way to obtain a reset link at all, since it goes to the mailbox and
+      # the verification row now stores its identifier hashed.
+      - name: Web end-to-end tests (account recovery flags on)
+        run: pnpm --filter @repo/web test:e2e:account
+
+      # NOT wired yet, deliberately. `test:e2e:account-verify` (the three latent dead ends, with
+      # `AUTH_REQUIRE_EMAIL_VERIFICATION` actually on) exists and runs, but is **red locally**: the
+      # emailed verification link's success redirect does not land on `/verify-email`, so the
+      # journey stops at "Email verified". That is either a defect in how `callbackURL` is composed
+      # across two origins or a fault in this suite's own two-server configuration, and it has not
+      # been established which. Adding the step before knowing would make CI red on a question
+      # nobody has answered; the suite is committed so the next session starts from the failure
+      # rather than from nothing (ADR-0074 M5-T3, and `docs/TECH_DEBT.md`).
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -389,6 +407,8 @@ jobs:
           name: playwright-report
           path: |
             apps/web/playwright-report/
+            apps/web/playwright-report-account/
+            apps/web/playwright-report-account-verify/
             apps/web/playwright-report-edit/
             apps/web/playwright-report-workspace/
             apps/web/playwright-report-toolbar/

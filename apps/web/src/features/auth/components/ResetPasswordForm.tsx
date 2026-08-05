@@ -5,9 +5,9 @@ import { useForm } from 'react-hook-form';
 import { useResetPassword } from '../api/use-session';
 import { resetPasswordSchema, type ResetPasswordValues } from '../schemas/auth-schemas';
 
-import { useAnnounce } from '@/components/ui/announcer';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
  * Set a new password from an emailed token (ADR-0074 M4).
@@ -28,23 +28,19 @@ export function ResetPasswordForm({ token }: { token: string }): React.ReactElem
     formState: { errors },
   } = useForm<ResetPasswordValues>({ resolver: zodResolver(resetPasswordSchema) });
   const reset = useResetPassword();
-  const announce = useAnnounce();
+  const outcomeRef = useOutcomeFocus<HTMLDivElement>(reset.isSuccess);
 
   const onSubmit = handleSubmit((values) => {
-    reset.mutate(
-      { token, newPassword: values.newPassword },
-      {
-        onSuccess: () => {
-          announce('Password changed. You can sign in now.');
-        },
-      },
-    );
+    // Announced once, by the `role="status"` below. This previously also called `announce()` with a
+    // DIFFERENT sentence, so a screen-reader user heard two overlapping and non-matching claims
+    // about the same event (ADR-0074 M5-T1).
+    reset.mutate({ token, newPassword: values.newPassword });
   });
 
   if (reset.isSuccess) {
     return (
-      <div className="flex flex-col gap-4">
-        <p role="status" className="text-sm font-medium">
+      <div role="status" tabIndex={-1} ref={outcomeRef} className="flex flex-col gap-4">
+        <p className="text-sm font-medium">
           Password changed. Every other session has been signed out.
         </p>
         <Link to="/sign-in" className={buttonVariants()}>

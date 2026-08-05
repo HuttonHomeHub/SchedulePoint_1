@@ -67,58 +67,77 @@ export class SmtpMailService extends MailService {
   }
 
   /**
-   * Verification. This method lets its error **propagate**, unlike `sendInvitation` which swallows
-   * — but read the next paragraph before relying on that, because propagating is not the same as
-   * failing the sign-up, and this docblock claimed it was.
+   * Verification. **Swallows and logs, and that is an enumeration control rather than tidiness**
+   * (ADR-0074 M5-T1, security review). It used to throw.
    *
-   * **The rejection does NOT fail the sign-up.** Better Auth invokes `sendVerificationEmail` via
-   * `ctx.context.runInBackgroundOrAwait(...)` (`api/routes/sign-up.mjs`), whose default
-   * implementation wraps the await in `try { … } catch (e) { logger.error(…) }` and never
-   * rethrows, in either branch. No option this app can set changes that — the alternative branch
-   * needs `advanced.backgroundTasks.handler`, which also only `.catch()`es. So the sign-up commits
-   * and returns success whether or not the message was delivered. The 2026-08-04 reconciliation
-   * pass verified this against the installed `better-auth@1.6.25`; the previous text here, in
-   * `better-auth.ts`, and in `docs/DEPLOYMENT.md` all asserted the opposite, and had been believed
-   * because the only test drives this method directly and so cannot see the layer above it.
+   * **The throw was an account-existence oracle on a route anyone can call anonymously.** Better
+   * Auth's `/send-verification-email` goes to real trouble to be uniform: for an unknown or
+   * already-verified address it mints a **throwaway token** so the CPU work matches, then holds
+   * every response to a 500 ms floor so the timings match
+   * (`api/routes/email-verification.mjs:104-117`). And then, at the end of that same block,
+   * `if (error) throw error` — so a transport failure reaches `better-call`'s router, which turns a
+   * non-`APIError` into a bare **500**, distinguishable from the uniform 200 that every other
+   * branch returns. A caller submitting a candidate address gets 200 for "unknown", 200 for
+   * "already verified", and an error for "exists, unverified, and delivery to this recipient just
+   * failed" — which is precisely the oracle this epic exists to keep closed, handed back by the one
+   * branch that was never analysed.
    *
-   * The reasoning for throwing still stands and the throw is kept: it is right at this seam, and it
-   * becomes true the moment the caller stops swallowing. What is untrue is the guarantee built on
-   * it. Delivery is **best-effort in practice**, and the operator-facing consequence — a broken
-   * relay producing silently unverifiable accounts, visible only as an unstructured `[better-auth]`
-   * line outside the Pino pipeline — is `docs/TECH_DEBT.md` #94. Better Auth's resend endpoint is
-   * the user-facing recovery path.
+   * The sign-up call site was analysed and is safe (`runInBackgroundOrAwait`, `sign-up.mjs:246`),
+   * which is why the previous docblock's reasoning read as sound. It was sound about sign-up and
+   * silent about resend — the ADR-0064/0067 shape, one call site examined and its neighbour not.
+   *
+   * Swallowing costs the operator nothing they had: the error is logged **here**, with context, in
+   * the Pino stream — strictly better than the `console.error` fallthrough it previously took
+   * (`docs/TECH_DEBT.md` #94). The user-facing recovery path is unchanged: press resend again.
    */
   async sendEmailVerification(email: EmailVerificationEmail): Promise<void> {
-    // Never log `verifyUrl` — it carries the token, and logs are retained and shipped.
-    await this.transporter.sendMail({
-      from: this.from,
-      to: email.to,
-      subject: 'Confirm your email address for SchedulePoint',
-      text: verificationText(email),
-    });
-    this.logger.info({ to: email.to }, 'email-verification link sent');
+    try {
+      // Never log `verifyUrl` — it carries the token, and logs are retained and shipped.
+      await this.transporter.sendMail({
+        from: this.from,
+        to: email.to,
+        subject: 'Confirm your email address for SchedulePoint',
+        text: verificationText(email),
+      });
+      this.logger.info({ to: email.to }, 'email-verification link sent');
+    } catch (error) {
+      this.logger.error(
+        { err: error, to: email.to },
+        'email-verification email failed to send; the account exists but cannot be verified until a resend succeeds',
+      );
+    }
   }
 
   /**
-   * Password reset (ADR-0074). Lets its error **propagate**, matching
-   * {@link sendEmailVerification} — and with the same caveat: propagating is not failing the
-   * request. Better Auth calls `sendResetPassword` from inside `/request-password-reset`'s handler,
-   * which answers `{ status: true }` **uniformly** for a known and an unknown address to avoid a
-   * timing and content oracle. A rejection that changed the response would reintroduce the oracle
-   * the library deliberately closes, so it cannot be surfaced to the caller even in principle.
+   * Password reset (ADR-0074). Swallows and logs, matching {@link sendEmailVerification}.
    *
-   * The throw is still right at this seam — it is what routes the failure to a logger that carries
-   * correlation IDs — and the operator-facing gap that leaves is `docs/TECH_DEBT.md` #94.
+   * **This one is not currently an oracle, and it is swallowed anyway — deliberately.** Better Auth
+   * calls `sendResetPassword` through `runInBackgroundOrAwait` (`api/routes/password.mjs:82`), so a
+   * rejection here is already caught before it can reach the response, and
+   * `/request-password-reset` stays uniform for a known and an unknown address.
+   *
+   * That safety rests entirely on a **library internal**, one line in a file this repo does not
+   * own. Its sibling above was safe by the same reasoning at one call site and an oracle at
+   * another, and nothing in this codebase would have said so. Depending on the property rather
+   * than holding it is how that happened; holding it here costs one `try` and removes the
+   * dependency. The failure is logged with context in the Pino stream either way.
    */
   async sendPasswordReset(email: PasswordResetEmail): Promise<void> {
-    // Never log `resetUrl` — it is a live single-use credential, and logs are retained and shipped.
-    await this.transporter.sendMail({
-      from: this.from,
-      to: email.to,
-      subject: 'Reset your SchedulePoint password',
-      text: passwordResetText(email),
-    });
-    this.logger.info({ to: email.to }, 'password-reset link sent');
+    try {
+      // Never log `resetUrl` — it is a live single-use credential, and logs are retained/shipped.
+      await this.transporter.sendMail({
+        from: this.from,
+        to: email.to,
+        subject: 'Reset your SchedulePoint password',
+        text: passwordResetText(email),
+      });
+      this.logger.info({ to: email.to }, 'password-reset link sent');
+    } catch (error) {
+      this.logger.error(
+        { err: error, to: email.to },
+        'password-reset email failed to send; the caller was answered uniformly and cannot tell',
+      );
+    }
   }
 }
 

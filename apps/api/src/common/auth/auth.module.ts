@@ -52,7 +52,7 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           //
           // The catch is HERE rather than in the caller because this is where a logger exists.
           // The port is contracted never to reject — running on the sign-in path, a lookup fault
-          // must not become a refused sign-in — and `attributeFailedSignIn` guards it a second
+          // must not become a refused sign-in — and `attributeAttemptedAddress` guards it a second
           // time in case that contract is ever broken by an edit to this line.
           // The library's own log lines, into Pino (`docs/TECH_DEBT.md` #94, ADR-0074). Before
           // this they went to stdout as bare `[Better Auth]:` text — outside the structured
