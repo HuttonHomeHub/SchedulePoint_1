@@ -937,9 +937,28 @@ unrecoverable one is a lockout — without changing the mechanism.
 
 **What is still open (the hard half):** whether to send the message from application code _before_
 handing off to Better Auth, so a failure can genuinely abort the request. That is a design change
-and needs the delivery process (`docs/PROCESS.md`), not a debt row. Also still open: an API e2e that
-drives `/api/auth/sign-up/email` with a failing `MailService` and asserts the real HTTP outcome — the
-unit tests call the adapter directly and structurally cannot see the layer that swallows.
+and needs the delivery process (`docs/PROCESS.md`), not a debt row.
+
+**The missing e2e is PAID (2026-08-05).** `apps/api/test/mail-failure.e2e-spec.ts` drives the real
+endpoints against a real Postgres with a `MailService` that rejects, closing the gap this row named:
+the unit tests call the adapter directly and structurally cannot see the layer that swallows. Every
+claim above was written from **reading `better-auth`'s source**; all of them now hold when measured:
+sign-up answers **200** with the send having thrown, commits the `user` row, and returns **no**
+session (`requireEmailVerification` overrides `autoSignIn`), and the sign-in that follows — correct
+password — is **403**. So the person is told sign-up worked, cannot get in, and nothing on that path
+mentions email; the resend endpoint that would recover them is not something they know to look for.
+
+It is deliberately a **characterisation** suite: it pins today's behaviour including the parts that
+are wrong, so the design change above has something that fails the moment the behaviour moves.
+Written as the behaviour we want, it would be red on arrival and deleted within a week — ADR-0058's
+"a gate that fails on day one gets deleted rather than fixed".
+
+It also pins the half that must **not** change. The reset path's invisibility is **correct**: the
+endpoint answers identically for a known and an unknown address, so any caller-visible difference is
+an enumeration oracle, and the suite asserts `known.status === unknown.status` at the point where a
+future reader would be tempted to "fix" it. Sign-up and reset look like one defect and are not — the
+sign-up caller owns the address and there is no oracle to protect, which is why a design change is
+available there and operator-facing signal is the whole remedy here.
 
 ### 95. `apps/api`'s Vite configs are ESM in a CommonJS package, and a future Vite major will stop loading them
 
