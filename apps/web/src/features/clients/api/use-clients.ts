@@ -36,9 +36,15 @@ export function clientQueryOptions(orgSlug: string, clientId: string) {
   });
 }
 
-/** A single client — used by the client-detail screen (handles deep-links / 404). */
+/**
+ * A single client — used by the client-detail screen (handles deep-links / 404).
+ *
+ * Empty id ⇒ disabled, for the reason spelled out on {@link useProject}: the plan workspace chains
+ * `useClient(orgSlug, project.data?.clientId ?? '')` behind a project that is itself behind a plan,
+ * so the second link in that chain requested `…/clients/` and took a 404 on every load.
+ */
 export function useClient(orgSlug: string, clientId: string): UseQueryResult<ClientSummary> {
-  return useQuery(clientQueryOptions(orgSlug, clientId));
+  return useQuery({ ...clientQueryOptions(orgSlug, clientId), enabled: Boolean(clientId) });
 }
 
 export function useCreateClient(orgSlug: string) {
