@@ -1381,6 +1381,34 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   in its honest form: there is nothing to hold parity _for_. Supersedes nothing; builds on
   ADR-0003/0012/0016/0051/0060/0072/0073.
 
+- **ADR-0075** _(Accepted; M0–M3 landed 2026-08-05)_ — Mail delivery is best-effort, and the
+  failure belongs to the operator. Closes the open half of `docs/TECH_DEBT.md` #94 as a decision
+  **not to build**: sending from application code before handing off to Better Auth, so a failure
+  could abort the request, would create an **enumeration oracle** — under
+  `AUTH_REQUIRE_EMAIL_VERIFICATION` a sign-up for an address that already exists returns a
+  synthetic 200 with **no send** (`sign-up.mjs:162,169-207`, which hashes the password anyway to
+  equalise timing), so a delivery-failure signal would make "that address was free" distinguishable
+  from "that address is taken" on an unauthenticated endpoint. Also rejected: the wrapper, which
+  **bypasses Better Auth's rate limiter** (it runs at the router's `onRequest`, so `auth.api.*`
+  never reaches it) — a security regression bought to improve an error message. So the signal is
+  operator-facing: one alertable `event: 'mail.send_failed'` naming which of the three messages
+  failed; a **bounded, warn-only** boot handshake logging host and port and **never** the
+  credential inside `MAIL_SMTP_URL`; and a `/verify-email` screen that asserts intent rather than
+  delivery and offers an exit that is not another resend (if the transport is down, Resend fails
+  too). The boot check never fails the boot and is never part of `/health/ready` — the host
+  recreates containers unattended (ADR-0047), so a 03:00 relay blip would otherwise take the API
+  down and keep it down. **What it cannot prove is stated rather than implied**: a credential that
+  authenticates but cannot send, an asynchronous bounce, and a relay that breaks after boot.
+  The characterisation suite's assertions **do not change**, which is the clearest statement of
+  what the fix is. It also corrected an alert instruction in `docs/DEPLOYMENT.md` that **could not
+  fire** — operators were told to watch a Better Auth line that stopped being reachable when the
+  adapter began catching first (ADR-0074 M5-T1) — and the same file's claim that no password-reset
+  flow existed, which it contradicted 47 lines later. **The brief for this ADR was itself wrong**:
+  it asserted sign-up had no enumeration concern, in three artefacts, before anyone read
+  `sign-up.mjs`; the wrong version is preserved in the suite's docblock rather than replaced,
+  because ADR-0058's rule failing on a same-day assertion is more instructive than a clean file.
+  The CPM engine is not imported and no migration runs.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

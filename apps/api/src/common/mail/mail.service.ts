@@ -49,10 +49,21 @@ export abstract class MailService {
    * Send the address-verification link.
    *
    * **Unlike an invitation, this message has no in-app fallback.** An Org Admin can always read an
-   * invitation's accept URL off the screen and pass it on by another route, which is what makes
-   * swallowing a failed invitation send safe. Nobody can do that here — the URL exists only in the
-   * email. The recovery path is Better Auth's own resend endpoint, and that asymmetry is the reason
-   * the two adapters treat failure differently rather than sharing one rule.
+   * invitation's accept URL off the screen and pass it on by another route. Nobody can do that
+   * here — the URL exists only in the email. The recovery path is Better Auth's own resend endpoint.
+   *
+   * **That asymmetry is about RECOVERY, not about error handling, and this docblock said otherwise
+   * until 2026-08-05.** It claimed the asymmetry "is the reason the two adapters treat failure
+   * differently rather than sharing one rule". They do not treat it differently: all three messages
+   * are swallowed and logged (`SmtpMailService`), and have been since ADR-0074 M5-T1 inverted this
+   * one. What survives is that an undelivered verification is *worse* than an undelivered
+   * invitation even though the code path is identical — which is a reason to watch the logs, not a
+   * reason for the adapter to behave differently.
+   *
+   * The swallow sits at the **adapter** rather than at the call sites because two of the three
+   * callers are Better Auth's, reached through `runInBackgroundOrAwait`, which would swallow it
+   * anyway — depending on that library internal rather than holding the property here is how a
+   * rejection became an existence oracle on `/send-verification-email` once already. See ADR-0075.
    */
   abstract sendEmailVerification(email: EmailVerificationEmail): Promise<void>;
 
@@ -71,4 +82,31 @@ export abstract class MailService {
    * this milestone.
    */
   abstract sendPasswordReset(email: PasswordResetEmail): Promise<void>;
+
+  /**
+   * Prove at start-up that the configured transport is reachable and accepts our credentials
+   * (ADR-0075 M1). Resolves when the handshake succeeds; rejects otherwise, including on timeout.
+   *
+   * **Optional by design.** Making it required would force every test double in the repository to
+   * implement a method it does not care about, dragging mail concerns into suites that are about
+   * something else. The caller feature-detects, and the logging stub simply does not have one —
+   * "no transport is configured" is not a failure to report.
+   *
+   * **What a success does NOT prove**, and this list is the point of the method rather than a
+   * caveat on it:
+   *
+   * - **That we may send.** A credential can authenticate and still lack send permission — the
+   *   exact Resend case `docs/DEPLOYMENT.md` documents, where a read-only API key passes here and
+   *   fails at the first real message.
+   * - **That mail arrives.** An asynchronous bounce, a silent spam classification and an
+   *   unverified sending domain are all invisible to a handshake.
+   * - **That it will still work.** It is one observation at boot; a relay that breaks an hour later
+   *   is exactly the case `event: 'mail.send_failed'` exists for.
+   *
+   * So this narrows the window rather than closing it: it converts the most common
+   * misconfiguration — wrong host, wrong port, wrong password, unreachable network — from "the
+   * first user cannot sign in" into a line in the deploy log. The remaining cases are why the
+   * pre-flip checklist still ends with "complete a real sign-up to a real mailbox".
+   */
+  verifyTransport?(): Promise<void>;
 }

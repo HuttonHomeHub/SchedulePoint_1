@@ -1,11 +1,12 @@
 import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SmtpMailService } from './smtp-mail.service';
+import { MAIL_SEND_FAILED, SmtpMailService } from './smtp-mail.service';
 
 const sendMail = vi.fn();
 // Hoisted by Vitest above the import, so the adapter's `createTransport` call resolves to this.
-vi.mock('nodemailer', () => ({ createTransport: vi.fn(() => ({ sendMail })) }));
+const verify = vi.fn();
+vi.mock('nodemailer', () => ({ createTransport: vi.fn(() => ({ sendMail, verify })) }));
 
 function loggerDouble(): PinoLogger {
   return { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as PinoLogger;
@@ -23,6 +24,18 @@ describe('SmtpMailService', () => {
   beforeEach(() => {
     sendMail.mockReset().mockResolvedValue(undefined);
   });
+
+  /**
+   * The alertable shape, asserted on all three failure paths. An operator greps ONE term; if a
+   * record loses the field it stops being findable while still looking fine in a log viewer, which
+   * is exactly the failure mode `docs/DEPLOYMENT.md`'s old instruction had (ADR-0075).
+   */
+  const expectAlertable = (logger: ReturnType<typeof loggerDouble>, kind: string): void => {
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: MAIL_SEND_FAILED, message: kind }),
+      expect.any(String),
+    );
+  };
 
   it('sends the invitation with the configured sender and a usable accept URL', async () => {
     const service = new SmtpMailService(
@@ -52,6 +65,7 @@ describe('SmtpMailService', () => {
 
     await expect(service.sendInvitation(invitation)).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalled();
+    expectAlertable(logger, 'invitation');
   });
 
   it('never puts the accept URL in a log line, because it carries the one-time token', async () => {
@@ -100,6 +114,7 @@ describe('SmtpMailService', () => {
       service.sendEmailVerification({ to: 'new@example.com', verifyUrl: 'https://x/verify#t' }),
     ).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalled();
+    expectAlertable(logger, 'email_verification');
     // And still never the URL, even on the failure path.
     expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('/verify#t');
   });
@@ -144,6 +159,7 @@ describe('SmtpMailService', () => {
 
       await expect(service.sendPasswordReset(reset)).resolves.toBeUndefined();
       expect(logger.error).toHaveBeenCalled();
+      expectAlertable(logger, 'password_reset');
       expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('tok_reset_secret');
     });
 
@@ -156,5 +172,39 @@ describe('SmtpMailService', () => {
       const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
       expect(logged).not.toContain('tok_reset_secret');
     });
+  });
+});
+
+/**
+ * The boot-time handshake (ADR-0075 M1). What a success does NOT prove is documented on the port;
+ * these cover only the three outcomes this method itself has.
+ */
+describe('SmtpMailService.verifyTransport', () => {
+  it('resolves when the transport verifies', async () => {
+    verify.mockResolvedValue(true);
+    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+    await expect(service.verifyTransport()).resolves.toBeUndefined();
+  });
+
+  it('rejects when the transport refuses', async () => {
+    verify.mockRejectedValue(new Error('535 authentication failed'));
+    const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+    await expect(service.verifyTransport()).rejects.toThrow('535 authentication failed');
+  });
+
+  it('rejects on timeout when the relay connects and then never speaks', async () => {
+    // The realistic hang, and the one a connection timeout does not cover — which is why the bound
+    // is our own race rather than nodemailer's three separate timeout options.
+    vi.useFakeTimers();
+    try {
+      verify.mockReturnValue(new Promise(() => {}));
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', loggerDouble());
+      const pending = service.verifyTransport();
+      const assertion = expect(pending).rejects.toThrow(/timed out after 5000 ms/);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

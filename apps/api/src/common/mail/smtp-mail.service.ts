@@ -10,6 +10,39 @@ import {
 } from './mail.service';
 
 /**
+ * The one term an operator alerts on. Every mail failure carries it, whichever message failed, so a
+ * single grep finds all three and the alert survives a copy edit of the human-readable sentence.
+ *
+ * It exists because the previously documented signal **cannot fire**. `docs/DEPLOYMENT.md` told
+ * operators to watch for Better Auth's `Failed to run background task`, which is emitted by
+ * `runInBackgroundOrAwait` when the promise it awaits rejects — but ADR-0074 M5-T1 made this adapter
+ * catch first, so the promise resolves and that line is now unreachable from a mail failure. An
+ * alert built exactly as instructed would have stayed silent through a total relay outage. See
+ * ADR-0075 and `docs/TECH_DEBT.md` #94.
+ *
+ * A **constant, not a string literal at three call sites** — the whole value is that the three
+ * records agree, and three literals drift one edit at a time.
+ */
+export const MAIL_SEND_FAILED = 'mail.send_failed';
+
+/**
+ * Which message failed. Deliberately coarse: an operator wants "reset mail is broken" (users are
+ * locked out now) distinguished from "invitations are broken" (they have an in-app fallback), and
+ * nothing finer than that.
+ */
+export type MailFailureKind = 'invitation' | 'email_verification' | 'password_reset';
+
+/**
+ * How long the boot-time handshake may take before it is called unreachable (ADR-0075 M1).
+ *
+ * Five seconds is a deploy-time budget, not a request one: it runs once, off the bootstrap
+ * lifecycle, and never blocks readiness — so the only thing it costs is that much of a container
+ * start in the worst case. Long enough for a cold TLS handshake to a distant relay; short enough
+ * that a black-holed port does not make a restart look hung.
+ */
+export const VERIFY_TIMEOUT_MS = 5_000;
+
+/**
  * SMTP adapter for {@link MailService} — the first real transport (TECH_DEBT: mail transport,
  * Theme B). Selected by {@link MailModule} only when `MAIL_SMTP_URL` is configured; absent, the
  * logging stub stays in place and behaviour is byte-for-byte today's.
@@ -30,6 +63,37 @@ export class SmtpMailService extends MailService {
   ) {
     super();
     this.transporter = createTransport(smtpUrl);
+  }
+
+  /**
+   * One bounded SMTP handshake (ADR-0075 M1). See {@link MailService.verifyTransport} for what a
+   * success does not prove — that list is load-bearing and is not repeated here.
+   *
+   * **The timeout is ours, raced, rather than the transport's own setting.** Nodemailer exposes
+   * connection/greeting/socket timeouts, but they are three separate options whose defaults differ
+   * by transport and any of which a `MAIL_SMTP_URL` query parameter can override — so trusting them
+   * means the boot delay is set by whoever wrote the connection string. A relay that accepts the TCP
+   * connection and then never speaks is the realistic hang, and it is precisely the case a
+   * connection timeout does not cover. `Promise.race` gives one number this file controls.
+   */
+  override async verifyTransport(): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        this.transporter.verify(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`SMTP verification timed out after ${VERIFY_TIMEOUT_MS} ms`)),
+            VERIFY_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      // Without this the pending timer keeps the event loop alive for its full duration on the
+      // success path — which in a test run is a hang, and in production delays nothing but is
+      // untidy. `finally` covers the throw path too.
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   /**
@@ -60,7 +124,13 @@ export class SmtpMailService extends MailService {
     } catch (error) {
       // Never log `acceptUrl` — it carries the one-time token, and logs are retained and shipped.
       this.logger.error(
-        { err: error, to: email.to, organizationName: email.organizationName },
+        {
+          event: MAIL_SEND_FAILED,
+          message: 'invitation',
+          err: error,
+          to: email.to,
+          organizationName: email.organizationName,
+        },
         'invitation email failed to send; the invitation itself was created and its accept URL is available in the app',
       );
     }
@@ -102,7 +172,7 @@ export class SmtpMailService extends MailService {
       this.logger.info({ to: email.to }, 'email-verification link sent');
     } catch (error) {
       this.logger.error(
-        { err: error, to: email.to },
+        { event: MAIL_SEND_FAILED, message: 'email_verification', err: error, to: email.to },
         'email-verification email failed to send; the account exists but cannot be verified until a resend succeeds',
       );
     }
@@ -134,7 +204,7 @@ export class SmtpMailService extends MailService {
       this.logger.info({ to: email.to }, 'password-reset link sent');
     } catch (error) {
       this.logger.error(
-        { err: error, to: email.to },
+        { event: MAIL_SEND_FAILED, message: 'password_reset', err: error, to: email.to },
         'password-reset email failed to send; the caller was answered uniformly and cannot tell',
       );
     }

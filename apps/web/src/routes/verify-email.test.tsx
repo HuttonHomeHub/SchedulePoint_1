@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { VerifyEmailScreen } from './verify-email';
+import { pendingDescription, VerifyEmailScreen } from './verify-email';
 
 import { authClient } from '@/lib/auth-client';
 
@@ -118,5 +118,38 @@ describe('VerifyEmailScreen', () => {
     // A native `disabled` here would blur to `<body>` and hand focus back when the request
     // settles — the keyboard user loses their place twice per send (TECH_DEBT #17a).
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /sending/i }));
+  });
+});
+
+/**
+ * The waiting state stops asserting delivery (ADR-0075 M2). These are on the pure copy function
+ * rather than the rendered screen because every screen test here mocks `useSearch` and so never
+ * crosses the router's parser — the gap that hid `?verified=1` arriving as a number
+ * (`docs/TECH_DEBT.md` #96). Testing the string directly means the assertions are about the words.
+ */
+describe('pendingDescription', () => {
+  it('does not claim the message was sent', () => {
+    // The defect in one assertion. "We sent you a link" is unknowable here: a send failure never
+    // reaches the request, so this screen renders identically whether or not anything went out.
+    const copy = pendingDescription('planner@example.com');
+    expect(copy).not.toMatch(/we sent|we've sent|we have sent/i);
+    expect(copy).toMatch(/should arrive/i);
+  });
+
+  it('names the address, because a typo at sign-up is the commonest cause of silence', () => {
+    expect(pendingDescription('planner@example.com')).toContain('planner@example.com');
+  });
+
+  it('degrades to a generic phrase rather than a gap when no address is known', () => {
+    // `?email=` is absent on a signed-out arrival, and is also dropped when the router's JSON
+    // parsing mangles an all-digits local part (#96) — the guard upstream keeps it `undefined`.
+    const copy = pendingDescription(undefined);
+    expect(copy).toContain('your address');
+    expect(copy).not.toContain('undefined');
+  });
+
+  it('offers a way out that is not another resend', () => {
+    // If the transport is down, Resend fails too. A screen whose only advice is "resend" loops.
+    expect(pendingDescription('a@b.test')).toMatch(/ask whoever set up your organisation/i);
   });
 });
