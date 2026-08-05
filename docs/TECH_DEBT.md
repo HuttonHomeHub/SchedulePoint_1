@@ -911,8 +911,16 @@ and `docs/DEPLOYMENT.md`. **It does not.** Better Auth calls the port through
 default implementation is `try { await promise } catch (e) { logger.error(...) }` — it never rethrows,
 and the alternative `advanced.backgroundTasks.handler` branch only `.catch()`es, so no configuration
 this app can set changes it. The sign-up commits and returns success regardless of delivery. All
-three claims are now corrected; the throw is kept, because it is right at that seam and becomes true
-the moment the caller stops swallowing.
+three claims are now corrected.
+
+**The throw is gone too, and this row said otherwise until 2026-08-05.** It said "the throw is kept
+… and becomes true the moment the caller stops swallowing". ADR-0074 M5-T1 had **inverted** it one
+day later: `SmtpMailService.sendEmailVerification` now catches and logs, and its unit test asserts
+`resolves`. The reason is a route this row never considered — `/send-verification-email` takes no
+session, and Better Auth makes it uniform on purpose (a throwaway token for the unknown branch, a
+500 ms floor) and then ends with `if (error) throw error`, which `better-call` turns into a bare 500. A transport failure therefore made "this address exists and is unverified" distinguishable
+from every other answer. So the premise above has no throw left to become true, and the design
+question below could not have been settled the way the row assumed.
 
 **What is left is the operator signal.** With `AUTH_REQUIRE_EMAIL_VERIFICATION=true` and a broken
 relay, every sign-up succeeds, no email arrives, and the only trace is an unstructured
@@ -924,11 +932,20 @@ user sees a normal sign-up and an account they cannot use; the operator sees not
 the resend endpoint recovers a user who hits it — but nobody knows to resend, because nothing says
 anything went wrong.
 
-**Remediation — the cheap half is PAID (2026-08-05, ADR-0074 M0-T6).** `betterAuth({ logger })` is
-now wired to Pino via a `log` callback on `CreateAuthOptions`, with `disableColors` set because the
-destination is JSON rather than a terminal. The swallowed error joins the structured stream with the
-correlation id and the redaction rules, and can be alerted on. Pinned by a unit test on the options
-object, since a dropped `logger` key would fail nothing else.
+**Remediation — the cheap half is PAID (2026-08-05, ADR-0074 M0-T6), but not by the mechanism it
+credits.** `betterAuth({ logger })` is wired to Pino via a `log` callback on `CreateAuthOptions`,
+with `disableColors` set because the destination is JSON rather than a terminal. That work is real
+and pinned by a unit test. **For the mail case it is inert**: the adapter now catches first (see
+above), so the promise Better Auth awaits resolves, `runInBackgroundOrAwait` never reaches its
+`catch`, and no `Failed to run background task` line is produced. Routing a logger that emits
+nothing is not a signal.
+
+The operator signal is `SmtpMailService`'s **own** record, which since ADR-0075 carries
+`event: 'mail.send_failed'` and a `message` naming which of the three failed. That is better than
+what was documented — it has the address and the error, inside Pino with the correlation id and the
+redaction rules — and it was undocumented until ADR-0075. `docs/DEPLOYMENT.md` told operators to
+alert on the Better Auth string, i.e. on a line that a mail failure can no longer produce; an alert
+built exactly as instructed would have stayed silent through a total relay outage.
 
 **Scope widened while paying it:** ADR-0074 makes `sendResetPassword` a second caller of the same
 swallowing path, so the same invisibility now applies to **account recovery** and not only to
@@ -956,9 +973,21 @@ Written as the behaviour we want, it would be red on arrival and deleted within 
 It also pins the half that must **not** change. The reset path's invisibility is **correct**: the
 endpoint answers identically for a known and an unknown address, so any caller-visible difference is
 an enumeration oracle, and the suite asserts `known.status === unknown.status` at the point where a
-future reader would be tempted to "fix" it. Sign-up and reset look like one defect and are not — the
-sign-up caller owns the address and there is no oracle to protect, which is why a design change is
-available there and operator-facing signal is the whole remedy here.
+future reader would be tempted to "fix" it.
+
+**And the sign-up path is not the free case this row claimed either — corrected 2026-08-05, same
+day, by the ADR-0075 analysis.** The paragraph above originally read "the sign-up caller owns the
+address and there is no oracle to protect, which is why a design change is available there". That is
+false **once enforcement is on**. `sign-up.mjs:162,169-207`: with `requireEmailVerification`, an
+address that already exists gets a **synthetic 200 with a fabricated user id and no send**, and
+Better Auth hashes the password anyway purely to equalise the timing — it is a deliberate
+anti-enumeration control. So surfacing a delivery failure would mean, during an outage, that an
+error says "that address was free" and a 200 says "that address is taken". The abort is
+**inadmissible** unless the duplicate branch also sends, which defeats its own purpose.
+
+The two paths therefore reach the same answer by different routes: neither may report a delivery
+failure to its caller, and the remedy on both is operator-facing. That is ADR-0075, and it is why
+this row's "hard half" closed as a **decision not to build** rather than as work.
 
 ### 95. `apps/api`'s Vite configs are ESM in a CommonJS package, and a future Vite major will stop loading them
 
@@ -1081,4 +1110,4 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 94.**
+**Next free number: 98.**

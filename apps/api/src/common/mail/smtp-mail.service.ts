@@ -10,6 +10,29 @@ import {
 } from './mail.service';
 
 /**
+ * The one term an operator alerts on. Every mail failure carries it, whichever message failed, so a
+ * single grep finds all three and the alert survives a copy edit of the human-readable sentence.
+ *
+ * It exists because the previously documented signal **cannot fire**. `docs/DEPLOYMENT.md` told
+ * operators to watch for Better Auth's `Failed to run background task`, which is emitted by
+ * `runInBackgroundOrAwait` when the promise it awaits rejects — but ADR-0074 M5-T1 made this adapter
+ * catch first, so the promise resolves and that line is now unreachable from a mail failure. An
+ * alert built exactly as instructed would have stayed silent through a total relay outage. See
+ * ADR-0075 and `docs/TECH_DEBT.md` #94.
+ *
+ * A **constant, not a string literal at three call sites** — the whole value is that the three
+ * records agree, and three literals drift one edit at a time.
+ */
+export const MAIL_SEND_FAILED = 'mail.send_failed';
+
+/**
+ * Which message failed. Deliberately coarse: an operator wants "reset mail is broken" (users are
+ * locked out now) distinguished from "invitations are broken" (they have an in-app fallback), and
+ * nothing finer than that.
+ */
+export type MailFailureKind = 'invitation' | 'email_verification' | 'password_reset';
+
+/**
  * SMTP adapter for {@link MailService} — the first real transport (TECH_DEBT: mail transport,
  * Theme B). Selected by {@link MailModule} only when `MAIL_SMTP_URL` is configured; absent, the
  * logging stub stays in place and behaviour is byte-for-byte today's.
@@ -60,7 +83,13 @@ export class SmtpMailService extends MailService {
     } catch (error) {
       // Never log `acceptUrl` — it carries the one-time token, and logs are retained and shipped.
       this.logger.error(
-        { err: error, to: email.to, organizationName: email.organizationName },
+        {
+          event: MAIL_SEND_FAILED,
+          message: 'invitation',
+          err: error,
+          to: email.to,
+          organizationName: email.organizationName,
+        },
         'invitation email failed to send; the invitation itself was created and its accept URL is available in the app',
       );
     }
@@ -102,7 +131,7 @@ export class SmtpMailService extends MailService {
       this.logger.info({ to: email.to }, 'email-verification link sent');
     } catch (error) {
       this.logger.error(
-        { err: error, to: email.to },
+        { event: MAIL_SEND_FAILED, message: 'email_verification', err: error, to: email.to },
         'email-verification email failed to send; the account exists but cannot be verified until a resend succeeds',
       );
     }
@@ -134,7 +163,7 @@ export class SmtpMailService extends MailService {
       this.logger.info({ to: email.to }, 'password-reset link sent');
     } catch (error) {
       this.logger.error(
-        { err: error, to: email.to },
+        { event: MAIL_SEND_FAILED, message: 'password_reset', err: error, to: email.to },
         'password-reset email failed to send; the caller was answered uniformly and cannot tell',
       );
     }

@@ -1,7 +1,7 @@
 import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SmtpMailService } from './smtp-mail.service';
+import { MAIL_SEND_FAILED, SmtpMailService } from './smtp-mail.service';
 
 const sendMail = vi.fn();
 // Hoisted by Vitest above the import, so the adapter's `createTransport` call resolves to this.
@@ -23,6 +23,18 @@ describe('SmtpMailService', () => {
   beforeEach(() => {
     sendMail.mockReset().mockResolvedValue(undefined);
   });
+
+  /**
+   * The alertable shape, asserted on all three failure paths. An operator greps ONE term; if a
+   * record loses the field it stops being findable while still looking fine in a log viewer, which
+   * is exactly the failure mode `docs/DEPLOYMENT.md`'s old instruction had (ADR-0075).
+   */
+  const expectAlertable = (logger: ReturnType<typeof loggerDouble>, kind: string): void => {
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: MAIL_SEND_FAILED, message: kind }),
+      expect.any(String),
+    );
+  };
 
   it('sends the invitation with the configured sender and a usable accept URL', async () => {
     const service = new SmtpMailService(
@@ -52,6 +64,7 @@ describe('SmtpMailService', () => {
 
     await expect(service.sendInvitation(invitation)).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalled();
+    expectAlertable(logger, 'invitation');
   });
 
   it('never puts the accept URL in a log line, because it carries the one-time token', async () => {
@@ -100,6 +113,7 @@ describe('SmtpMailService', () => {
       service.sendEmailVerification({ to: 'new@example.com', verifyUrl: 'https://x/verify#t' }),
     ).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalled();
+    expectAlertable(logger, 'email_verification');
     // And still never the URL, even on the failure path.
     expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('/verify#t');
   });
@@ -144,6 +158,7 @@ describe('SmtpMailService', () => {
 
       await expect(service.sendPasswordReset(reset)).resolves.toBeUndefined();
       expect(logger.error).toHaveBeenCalled();
+      expectAlertable(logger, 'password_reset');
       expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('tok_reset_secret');
     });
 
