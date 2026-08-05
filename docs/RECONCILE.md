@@ -50,6 +50,8 @@ below assumes they are green.
 | `surface-seams.structural.test.ts`         | Application code reaching past a design-system seam.          |
 | `styles/token-contrast.test.ts`            | A colour pair below its WCAG ratio, across themes × surfaces. |
 | Flag-off parity suites                     | A flagged change altering the rollback path.                  |
+| `pnpm check:counts`                        | `CLAUDE.md`'s six stage-banner figures going stale.           |
+| `pnpm check:claims`                        | A citation into `better-auth`/`better-call` that has moved.   |
 
 **Prefer adding a gate to adding a checklist item.** A gate that computes runs
 every push; a checklist item runs when someone remembers. Every row above
@@ -85,10 +87,22 @@ were added to this list on 2026-08-04, because the pass before it swept only the
 first four and left the rest stale — including a web README claiming the client
 was "foundation only".
 
-**Write the date you counted, next to the numbers**, and treat the date rather
-than the word "recounted" as the claim. `CLAUDE.md`'s banner said "recounted
-2026-08-01" and every one of its six numbers was wrong by 2026-08-04: one epic
-had shipped in between. A count is a measurement with a timestamp, not a fact.
+**`CLAUDE.md`'s six banner figures are no longer your job — `pnpm check:counts`
+owns them** (ADR-0076). Run it; if it is red, fix the banner. This step now
+covers only the numbers quoted in the _other_ files above, which are not gated.
+
+The reason that changed is worth carrying: this section used to end "write the
+date you counted next to the numbers, and treat the date rather than the word
+'recounted' as the claim". That is correct advice which cannot work. The banner
+said "recounted 2026-08-04", and on 2026-08-05 five of its six figures were
+wrong again — because a reader who trusts a number does not check its date, and
+a reader who checks the date has already been misled once. Telling people to
+re-run `ls | wc -l` is the vigilance ADR-0058 exists to replace.
+
+**So the standing instruction for anything on this list is: if you find yourself
+writing "remember to re-check X", write a gate for X instead.** Six of the seven
+remaining figures above could be gated the same way; they are not yet, and that
+is a backlog item rather than a decision.
 
 ### 2. Check the dependency claims
 
@@ -110,6 +124,21 @@ manifest, not just the docs that quote them:
 ```bash
 grep -rn '"description"' --include=package.json . | grep -v node_modules
 ```
+
+**Claims about a library's _internals_ are a separate species, and they are now
+gated** (ADR-0076, `pnpm check:claims`). "Is Radix installed?" is answered by
+`package.json`. "Does `runInBackgroundOrAwait` rethrow?" is answered only by
+opening the file — and this repository makes 34 such file-and-line claims, several
+of which whole ADRs turn on. They were invisible to every check here: the package
+is installed, the doc reads as authoritative, and a minor bump silently moves every
+cited line.
+
+The gate pins each citation's package **version**, its path, its line range and an
+**anchor** taken from the code that was read, and refuses any citation absent from
+`scripts/dependency-claims.json`. Your job in this pass is therefore only the part
+it cannot do: **read the prose around a citation and ask whether it still describes
+what that code does.** The gate proves the line is where we said it was; only you
+can say the sentence beside it is true.
 
 ### 3. Reconcile accepted-but-unbuilt ADRs
 

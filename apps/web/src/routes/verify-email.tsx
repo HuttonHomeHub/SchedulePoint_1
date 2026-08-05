@@ -53,7 +53,7 @@ import { ResendVerificationButton } from '@/features/auth';
  */
 export function pendingDescription(email: string | undefined): string {
   const target = email ?? 'your address';
-  return `A link to confirm ${target} should arrive in the next few minutes. Open it to finish setting up your account. If nothing arrives, check your spam folder and send a new link — and if that does not work either, ask whoever set up your organisation, since it may be a problem at our end rather than yours.`;
+  return `A link to confirm ${target} should arrive in the next few minutes. Open it to finish setting up your account. If nothing arrives, check your spam folder and send a new link. If that does not work either, the problem is probably at our end rather than yours — try again shortly.`;
 }
 
 export function VerifyEmailScreen(): React.ReactElement {

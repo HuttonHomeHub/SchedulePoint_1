@@ -71,7 +71,7 @@ not get done.
 ##### Task M0-T1 — Add `event` / `message` to the three failure records (≈ one PR)
 
 - **Description:** in `SmtpMailService`, the three `catch` blocks gain
-  `event: 'mail.send_failed'` and `message: 'invitation' | 'email_verification' |
+  `event: 'mail.send_failed'` and `kind: 'invitation' | 'email_verification' |
 'password_reset'`. The human-readable second argument is unchanged. Nothing else moves —
   the swallow stays exactly where it is, which is the decision, not an oversight.
 - **Complexity:** S
@@ -215,7 +215,7 @@ API's own log, instead of from the first user who cannot sign in.
 
 - **Description:** a small `MailBootstrap` provider (or `OnApplicationBootstrap` on the
   existing module) that calls `verifyTransport()` when present, logging
-  `event: 'mail.transport_verified'` (info) or `event: 'mail.transport_unreachable'`
+  `event: 'mail.transport_verified'` (info) or `event: 'mail.transport_check_failed'`
   (error) with the host and port — **never the credential**, which is inside
   `MAIL_SMTP_URL` and must be parsed out or omitted entirely.
 - **Complexity:** M

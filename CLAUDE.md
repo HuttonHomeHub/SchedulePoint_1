@@ -20,14 +20,17 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, ~750 web
-> source files with 23 flag-scoped Playwright suites beside the base journey, and
-> 73 ADRs (recounted 2026-08-04 — every number here is `ls | wc -l`, not memory).
-> **Treat the date, not the word "recounted", as the claim**: the previous
-> recount was three days earlier and every one of these six numbers was already
-> wrong by the time it was read, because an epic shipped in between. If the date
-> is not today's, re-run the commands in
-> [`docs/RECONCILE.md`](docs/RECONCILE.md) §1 rather than quoting this line.
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 771 web
+> source files with 25 flag-scoped Playwright suites beside the base journey, and
+> 76 ADRs.
+> **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
+> re-derives every one of them and fails if this paragraph disagrees, so a stale
+> figure stops a build instead of misleading a reader (ADR-0076). It became a gate
+> because prose could not hold the line: this line said "recounted 2026-08-04" and
+> was wrong on 2026-08-05 — two ADRs, twenty-one source files and two suites out —
+> one day after a recount whose own wording warned the reader to distrust it.
+> Telling people to re-run `ls | wc -l` is exactly the vigilance ADR-0058 says to
+> replace with a check.
 > The CPM/GPM engine is real and its conformance matrix is closed (ADR-0034).
 > Read the code before assuming anything is missing — this banner said the
 > opposite for months after it stopped being true, which is exactly the failure
@@ -1409,6 +1412,32 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   because ADR-0058's rule failing on a same-day assertion is more instructive than a clean file.
   The CPM engine is not imported and no migration runs.
 
+- **ADR-0076** _(Accepted)_ — Wrong claims are a defect class, and three of them are computable.
+  Extends ADR-0058, and written because that ADR's rule (_verify the claim; do not trust the
+  document_) failed **three times in one session, in three distinguishable ways**. **Class 1, a
+  count nobody re-derived**: the stage banner's six figures were all wrong at the 2026-08-04
+  reconciliation pass, were corrected with a note telling the reader to re-run `ls | wc -l` if the
+  date was not today's, and five of six were wrong again **one day later** — advice that is correct
+  and cannot work, because a reader who trusts the number never checks the date. **Class 2, a claim
+  about a dependency's internals**: 34 file-and-line citations into `better-auth`/`better-call` that
+  whole decisions rest on (ADR-0074 hashes reset identifiers because `processIdentifier` returns
+  them unchanged; ADR-0075 rejects an abort design because sign-up answers a duplicate with a
+  synthetic 200), **none of that code in this repository and nothing here watching it** — a minor
+  bump moves every line while the prose keeps reading as authoritative. **Class 3, a claim the
+  author asserted and never checked**, which is not a documentation problem and happened twice in
+  one milestone: ADR-0075's brief asserted sign-up had no enumeration concern (false, and repeated
+  in three artefacts before anyone opened `sign-up.mjs`), and then that same ADR's **own risk
+  table** said mail had "no request-path cost" (false — four endpoints sat on a live SMTP round trip
+  bounded only by nodemailer's ten-minute socket default). Classes 1 and 2 become computed gates —
+  `pnpm check:counts` re-derives the banner, `pnpm check:claims` pins each citation's
+  **package@version + path + anchor** and refuses any citation absent from
+  `scripts/dependency-claims.json`, so **a Dependabot bump of either package fails CI**, which is
+  the intended cost: the bump is exactly when the citations need re-reading. All 34 were verified
+  accurate while seeding. Class 3 is **not computable** and gets a process rule instead, labelled as
+  the weak one (§19.9): a decision-bearing claim names the command, file or test that established
+  it, and **a claim inherited from the brief is checked like any other** — both Class 3 failures
+  entered through a brief. The CPM engine is not imported and no product behaviour changes.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -1526,6 +1555,22 @@ When operating in this repo, Claude Code should:
    a tooling one.
 8. **Use Conventional Commits** and add a changeset for user-visible change.
    Meet the Feature Completion Criteria (§21) before calling work done.
+9. **A claim that decides something must carry its evidence** (ADR-0076). When a
+   spec, ADR, plan, risk table or docblock asserts a fact about behaviour — a
+   cost, a guarantee, a failure mode, "there is no oracle here", "this is not on
+   the request path" — say what was **run or read** to establish it: the command,
+   the file and line, or the test. Not a pointer to another document.
+   - **The brief is not evidence.** A claim inherited from the task that started
+     the work gets checked like any other. Both recorded instances of this
+     failure entered through a brief and were repeated into three or four
+     artefacts before anyone opened the file that disproved them.
+   - **Claims about a dependency's internals are registered**, not just cited:
+     add the package, path, line range and an anchor to
+     `scripts/dependency-claims.json`. `pnpm check:claims` fails on a citation
+     that is not there, so this is a gate rather than a habit.
+   - This applies to the **decision-bearing** claims, not every sentence. A rule
+     that applies everywhere is followed nowhere, and both failures were in the
+     small set of statements that changed what got built.
 
 ## 20. Specialised agents
 

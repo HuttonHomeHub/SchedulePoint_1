@@ -43,6 +43,32 @@ export type MailFailureKind = 'invitation' | 'email_verification' | 'password_re
 export const VERIFY_TIMEOUT_MS = 5_000;
 
 /**
+ * How long a single message may take before the send is abandoned (ADR-0075 M4).
+ *
+ * **This exists because the milestone's own central claim was wrong.** The spec's risk table said
+ * "no request-path cost", and the ADR reasoned about mail as if it were off to one side. It is not:
+ * Better Auth's `runInBackgroundOrAwait` **awaits** the promise unless
+ * `advanced.backgroundTasks.handler` is configured, this application configures no such handler,
+ * and `InvitationsService` awaits its send directly in the request handler. So four endpoints —
+ * sign-up, request-password-reset, send-verification-email and invitation-create — sit on a live
+ * SMTP round trip, bounded only by nodemailer's defaults: **30 s greeting, 2 min connection,
+ * 10 min socket**. A black-holed relay port does not merely fail to deliver mail; it holds the
+ * request open for ten minutes and occupies a worker while it does.
+ *
+ * Ten seconds is chosen against what a healthy send costs rather than what a user will tolerate: a
+ * warm relay answers in well under a second, and a cold TLS handshake to a distant one in a couple.
+ * Anything past ten is a transport in trouble, and the correct response to a transport in trouble
+ * is the same as to one that refused outright — log `mail.send_failed` and let the caller through.
+ * The bound is generous enough that it should never fire in ordinary operation, which is the
+ * property that makes it safe to apply to all three messages uniformly.
+ *
+ * **It bounds the wait, not the send.** Nodemailer keeps working after we stop listening, so a
+ * message that was merely slow may still arrive. That asymmetry is deliberate: abandoning the wait
+ * is free and abandoning the delivery is not.
+ */
+export const SEND_TIMEOUT_MS = 10_000;
+
+/**
  * SMTP adapter for {@link MailService} — the first real transport (TECH_DEBT: mail transport,
  * Theme B). Selected by {@link MailModule} only when `MAIL_SMTP_URL` is configured; absent, the
  * logging stub stays in place and behaviour is byte-for-byte today's.
@@ -111,8 +137,7 @@ export class SmtpMailService extends MailService {
    */
   async sendInvitation(email: InvitationEmail): Promise<void> {
     try {
-      await this.transporter.sendMail({
-        from: this.from,
+      await this.send({
         to: email.to,
         subject: `You have been invited to ${email.organizationName} on SchedulePoint`,
         text: invitationText(email),
@@ -126,7 +151,7 @@ export class SmtpMailService extends MailService {
       this.logger.error(
         {
           event: MAIL_SEND_FAILED,
-          message: 'invitation',
+          kind: 'invitation',
           err: error,
           to: email.to,
           organizationName: email.organizationName,
@@ -163,8 +188,7 @@ export class SmtpMailService extends MailService {
   async sendEmailVerification(email: EmailVerificationEmail): Promise<void> {
     try {
       // Never log `verifyUrl` — it carries the token, and logs are retained and shipped.
-      await this.transporter.sendMail({
-        from: this.from,
+      await this.send({
         to: email.to,
         subject: 'Confirm your email address for SchedulePoint',
         text: verificationText(email),
@@ -172,7 +196,7 @@ export class SmtpMailService extends MailService {
       this.logger.info({ to: email.to }, 'email-verification link sent');
     } catch (error) {
       this.logger.error(
-        { event: MAIL_SEND_FAILED, message: 'email_verification', err: error, to: email.to },
+        { event: MAIL_SEND_FAILED, kind: 'email_verification', err: error, to: email.to },
         'email-verification email failed to send; the account exists but cannot be verified until a resend succeeds',
       );
     }
@@ -195,8 +219,7 @@ export class SmtpMailService extends MailService {
   async sendPasswordReset(email: PasswordResetEmail): Promise<void> {
     try {
       // Never log `resetUrl` — it is a live single-use credential, and logs are retained/shipped.
-      await this.transporter.sendMail({
-        from: this.from,
+      await this.send({
         to: email.to,
         subject: 'Reset your SchedulePoint password',
         text: passwordResetText(email),
@@ -204,9 +227,55 @@ export class SmtpMailService extends MailService {
       this.logger.info({ to: email.to }, 'password-reset link sent');
     } catch (error) {
       this.logger.error(
-        { event: MAIL_SEND_FAILED, message: 'password_reset', err: error, to: email.to },
+        { event: MAIL_SEND_FAILED, kind: 'password_reset', err: error, to: email.to },
         'password-reset email failed to send; the caller was answered uniformly and cannot tell',
       );
+    }
+  }
+
+  /**
+   * One message, with a bound this file controls (ADR-0075 M4). Every send goes through here; there
+   * is no second path, which is the property that makes the bound a fact rather than a convention.
+   *
+   * **On timeout the wait is abandoned, not the send.** Nodemailer's promise keeps running, so a
+   * `.catch()` is attached to it — without one, a rejection arriving after the race has settled is
+   * an *unhandled* rejection, and Node's default for that is to terminate the process. A bound
+   * added to keep a mail outage from hanging a request would then have converted the same outage
+   * into a crash loop, which is a strictly worse failure than the one it set out to fix.
+   *
+   * The abandoned send is logged separately (`abandoned: true`), because "we stopped waiting and it
+   * later failed anyway" and "it succeeded four minutes after we gave up" are different facts and
+   * an operator reading `mail.send_failed` deserves to know which happened.
+   */
+  private async send(message: { to: string; subject: string; text: string }): Promise<void> {
+    const pending = this.transporter.sendMail({ from: this.from, ...message });
+    let timedOut = false;
+    // Attached up-front, before anything can reject, so the rejection is handled whichever way the
+    // race settles. Attaching it inside the catch would be too late in principle and would also
+    // double-log the ordinary failure, which reaches the caller's own catch already.
+    pending.catch((late: unknown) => {
+      if (!timedOut) return;
+      this.logger.warn(
+        { event: MAIL_SEND_FAILED, abandoned: true, err: late, to: message.to },
+        'an abandoned send later failed; the caller was already answered',
+      );
+    });
+
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        pending,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            timedOut = true;
+            reject(new Error(`SMTP send timed out after ${SEND_TIMEOUT_MS} ms`));
+          }, SEND_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      // Same reason as `verifyTransport`: a live timer holds the event loop open for its full
+      // duration on the success path.
+      if (timer !== undefined) clearTimeout(timer);
     }
   }
 }

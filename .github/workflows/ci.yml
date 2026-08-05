@@ -79,6 +79,22 @@ jobs:
       - name: Check the surface contract
         run: pnpm check:surface-contract
 
+      # CLAUDE.md's stage banner states six counts. Every one of them was wrong at the last
+      # reconciliation pass, and the correction told the reader to re-run `ls | wc -l` if the
+      # recount date was not today's — advice that is correct and useless, because a reader who
+      # trusts the number never checks the date. It was wrong again one day later. A count is the
+      # most computable claim in the repository (ADR-0076).
+      - name: Check the stage-banner counts
+        run: pnpm check:counts
+
+      # Claims about a DEPENDENCY's internals — 34 file-and-line citations into `better-auth` and
+      # `better-call`, several of which whole ADRs rest on. A minor bump moves every one of them
+      # and nothing here was watching, so the prose would keep reading as authoritative while the
+      # decisions it justifies rested on nothing. Pins the verified version, the anchor at each
+      # cited line, and that no citation exists outside the register (ADR-0076).
+      - name: Check dependency-internal claims
+        run: pnpm check:claims
+
       - name: Unit tests
         run: pnpm test
 

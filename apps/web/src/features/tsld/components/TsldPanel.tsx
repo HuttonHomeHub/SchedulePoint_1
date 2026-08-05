@@ -290,7 +290,20 @@ export interface TsldPanelProps {
   todayFraction?: number | null | undefined;
   /** Fill the available height instead of the default fixed 480px box. When set, the canvas
    * container is `h-full` (with a min-height floor) so the diagram fills the workspace region —
-   * used by the canvas-first `PlanWorkspace` (ADR-0030). Default (unset) keeps today's boxed look. */
+   * used by the canvas-first `PlanWorkspace` (ADR-0030). Default (unset) keeps today's boxed look.
+   *
+   * **`fill` is a contract on the HOST, and a new host owes a measured test.** `h-full` is a
+   * percentage, so it resolves to nothing unless every ancestor up to the viewport has a
+   * **definite** height. A host that reaches for `min-h-dvh` — which leaves computed height `auto`
+   * — collapses the canvas to **1 px** while every other thing on the screen looks right: the
+   * header renders, the legend renders, and ADR-0026 D7's parallel focusable listbox still holds
+   * one option per activity, so `getByRole('option')` passes and the reader sees an empty box.
+   *
+   * That shipped, publicly, on the guest share view, and no unit or a11y assertion could have
+   * caught it — they all read the DOM layer, which is exactly what the canvas is not.
+   *
+   * So: a new `fill` host adds a browser assertion on the measured canvas height, in its own
+   * Playwright suite. `apps/web/e2e-share/share.spec.ts` is the worked example. */
   fill?: boolean;
   /** **Chromeless** (ADR-0031): drop the panel's own hint line, editing/view toolbars, legend and
    * shortcuts button, leaving just the canvas + parallel listbox + inline editing surfaces (create

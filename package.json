@@ -22,6 +22,8 @@
     "check:playbook": "node scripts/check-playbook.mjs",
     "check:build-contract": "node scripts/check-build-contract.mjs",
     "check:surface-contract": "node scripts/check-surface-contract.mjs",
+    "check:counts": "node scripts/check-counts.mjs",
+    "check:claims": "node scripts/check-claims.mjs",
     "test": "turbo run test",
     "test:coverage": "turbo run test:coverage",
     "test:e2e": "turbo run test:e2e",

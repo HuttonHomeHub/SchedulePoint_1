@@ -320,6 +320,14 @@ export function useResetPassword() {
  * that observer with none, and an observer with no data fetches — reinstating the 401 through a
  * different door. Seeding the value and leaving it in place is what keeps the request from ever
  * being made.
+ *
+ * **`onSettled`, not `onSuccess`** (ADR-0075 review, security). If the sign-out request itself
+ * fails — offline, a proxy error, the API restarting — `onSuccess` never runs and the previous
+ * user's organisations, plans and activities stay in the cache on a shared or borrowed machine,
+ * with the UI still showing them. Whether the server-side session survived is not knowable from
+ * here and is not the question: the person pressed Sign out, so the local copy goes either way.
+ * Clearing on a failure is safe in the other direction too, because the seeded `null` sends the
+ * guard to `/sign-in`, which is where somebody whose sign-out did not complete should be.
  */
 export function useSignOut() {
   const queryClient = useQueryClient();
@@ -327,7 +335,7 @@ export function useSignOut() {
     mutationFn: async (): Promise<void> => {
       await authClient.signOut();
     },
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.setQueryData(sessionKeys.session, null);
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
     },

@@ -104,6 +104,30 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   );
   expect(canvasHeight).toBeGreaterThan(400);
 
+  // …and the canvas still has height at 320 px. `h-dvh` is what makes it fill, and a DEFINITE
+  // viewport height is exactly what can start clipping once the header wraps on a narrow screen —
+  // so the fix's own mechanism is the thing to re-check at the small end, not assume.
+  //
+  // This assertion is deliberately narrower than the one first written here, and the reason is a
+  // finding rather than a compromise. The accessibility review reasoned from the CSS that nothing
+  // on this chain sets `overflow-hidden`, so the page would simply scroll and pass WCAG 1.4.10.
+  // The first version asserted that. It **failed**: `documentElement.scrollWidth` is 436 at a 320 px
+  // viewport, because the TSLD zoom-preset row (`flex items-center gap-1`, no `flex-wrap`) is 420 px
+  // wide and cannot shrink. That is a real 1.4.10 failure on a public unauthenticated surface — and
+  // it is **pre-existing**, not caused by the height fix; it was simply unobservable while the
+  // canvas was 1 px and nobody had measured. It is `docs/TECH_DEBT.md` #98, because fixing a shared
+  // canvas control's responsive behaviour cuts across ADR-0031's overflow tiers and needs the member
+  // workspace re-checked at the same widths — work this pass is not doing.
+  //
+  // So: assert what the height fix is responsible for, record what it revealed, and do not pretend
+  // the horizontal overflow is fixed by leaving a passing test that never looked.
+  await guestPage.setViewportSize({ width: 320, height: 720 });
+  const narrowCanvas = await guestPage.evaluate(
+    () => document.querySelector('canvas')?.getBoundingClientRect().height ?? 0,
+  );
+  expect(narrowCanvas, 'the canvas must not collapse when the header wraps').toBeGreaterThan(100);
+  await guestPage.setViewportSize({ width: 1280, height: 800 });
+
   // A refresh of a LIVE link still shows the plan. This is not padding: step (4) below reloads this
   // same page and asserts the "no longer available" copy — which is exactly what a token lost on
   // reload would also produce. Without this assertion, a regression that dropped the fragment would

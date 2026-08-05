@@ -1,7 +1,7 @@
 import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MAIL_SEND_FAILED, SmtpMailService } from './smtp-mail.service';
+import { MAIL_SEND_FAILED, SEND_TIMEOUT_MS, SmtpMailService } from './smtp-mail.service';
 
 const sendMail = vi.fn();
 // Hoisted by Vitest above the import, so the adapter's `createTransport` call resolves to this.
@@ -20,22 +20,22 @@ const invitation = {
   expiresAt: new Date('2026-09-01T00:00:00Z'),
 };
 
+/**
+ * The alertable shape, asserted on all three failure paths. An operator greps ONE term; if a
+ * record loses the field it stops being findable while still looking fine in a log viewer, which
+ * is exactly the failure mode `docs/DEPLOYMENT.md`'s old instruction had (ADR-0075).
+ */
+const expectAlertable = (logger: ReturnType<typeof loggerDouble>, kind: string): void => {
+  expect(logger.error).toHaveBeenCalledWith(
+    expect.objectContaining({ event: MAIL_SEND_FAILED, kind }),
+    expect.any(String),
+  );
+};
+
 describe('SmtpMailService', () => {
   beforeEach(() => {
     sendMail.mockReset().mockResolvedValue(undefined);
   });
-
-  /**
-   * The alertable shape, asserted on all three failure paths. An operator greps ONE term; if a
-   * record loses the field it stops being findable while still looking fine in a log viewer, which
-   * is exactly the failure mode `docs/DEPLOYMENT.md`'s old instruction had (ADR-0075).
-   */
-  const expectAlertable = (logger: ReturnType<typeof loggerDouble>, kind: string): void => {
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ event: MAIL_SEND_FAILED, message: kind }),
-      expect.any(String),
-    );
-  };
 
   it('sends the invitation with the configured sender and a usable accept URL', async () => {
     const service = new SmtpMailService(
@@ -78,6 +78,40 @@ describe('SmtpMailService', () => {
     const logged = JSON.stringify(vi.mocked(logger.error).mock.calls);
     expect(logged).not.toContain('tok_secret');
     expect(logged).not.toContain(invitation.acceptUrl);
+  });
+
+  it('logs the error object itself, extra fields and all — so those fields must not carry the body', async () => {
+    // The ADR-0075 security review asked whether a transport error could smuggle the message —
+    // and therefore a live token — into the log through `err`, since Pino's default serializer
+    // emits every enumerable own property, not just `message`/`stack`.
+    //
+    // **Checked rather than assumed, and the specific worry did not hold.** `nodemailer@9.0.3`
+    // builds send errors in `_formatError` (`lib/smtp-connection/index.js:932-957`) and attaches
+    // exactly `response`, `responseCode` and `command` — the SERVER's reply and the SMTP verb.
+    // The `raw` fields elsewhere in that package are message-composition inputs, not error fields.
+    //
+    // No redaction path was added for a field that does not exist. This test pins the property the
+    // question was really about: whatever a transport hangs off its error, the token must not be
+    // in it. It fails the day a transport starts echoing the payload back.
+    const hostile = Object.assign(new Error('550 rejected'), {
+      response: '550 5.7.1 rejected',
+      responseCode: 550,
+      command: 'DATA',
+    });
+    sendMail.mockRejectedValue(hostile);
+    const logger = loggerDouble();
+
+    await new SmtpMailService('no-reply@example.com', 'smtps://h', logger).sendInvitation(
+      invitation,
+    );
+
+    const record = vi.mocked(logger.error).mock.calls[0]?.[0] as { err: Error };
+    // Serialise the way Pino does — own enumerable properties, not `JSON.stringify`, which reduces
+    // an Error to `{}` and would make this assertion pass against anything at all.
+    const serialised = JSON.stringify({ ...record.err, message: record.err.message });
+    expect(serialised).toContain('550');
+    expect(serialised).not.toContain('tok_secret');
+    expect(serialised).not.toContain(invitation.acceptUrl);
   });
 
   it('sends the verification link with the configured sender', async () => {
@@ -172,6 +206,98 @@ describe('SmtpMailService', () => {
       const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
       expect(logged).not.toContain('tok_reset_secret');
     });
+  });
+});
+
+/**
+ * The per-message bound (ADR-0075 M4), and the reason it exists.
+ *
+ * The milestone shipped its risk table saying **"no request-path cost"**, and its ADR reasoned
+ * about mail as if it sat off to one side of the request. Both were wrong the same way:
+ * `runInBackgroundOrAwait` **awaits** unless `advanced.backgroundTasks.handler` is configured,
+ * nothing here configures one, and `InvitationsService` awaits its send in the handler outright.
+ * Four endpoints therefore sit on a live SMTP round trip whose only bound was nodemailer's own
+ * defaults — up to **ten minutes** on a socket that connects and then says nothing.
+ *
+ * These tests pin the two halves of the fix: the request is released, and the process survives the
+ * send that was abandoned.
+ */
+describe('SmtpMailService send bound', () => {
+  beforeEach(() => {
+    sendMail.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('gives up on a hung relay and reports it, instead of holding the request open', async () => {
+    vi.useFakeTimers();
+    try {
+      // A socket that accepts the connection and never speaks — the case nodemailer's *connection*
+      // timeout does not cover, and the reason the bound is ours rather than the transport's.
+      sendMail.mockReturnValue(new Promise(() => {}));
+      const logger = loggerDouble();
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', logger);
+
+      const pending = service.sendInvitation(invitation);
+      await vi.advanceTimersByTimeAsync(SEND_TIMEOUT_MS);
+
+      // RESOLVES, not rejects: the bound changes how long the caller waits, never what it is told.
+      await expect(pending).resolves.toBeUndefined();
+      expectAlertable(logger, 'invitation');
+      // Read `err` off the record rather than stringifying it — `JSON.stringify(new Error(…))` is
+      // `{}`, so a substring check over the serialised call list passes on ANY failure and would
+      // have proved nothing about the timeout at all.
+      const record = vi.mocked(logger.error).mock.calls[0]?.[0] as { err: Error };
+      expect(record.err.message).toMatch(/timed out after 10000 ms/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('handles a rejection that arrives AFTER the wait was abandoned', async () => {
+    // Without this, the fix would be worse than the defect. Node terminates the process on an
+    // unhandled rejection by default, so a relay that times out and *then* errors would turn a mail
+    // outage — the thing this whole ADR treats as survivable — into a crash loop.
+    vi.useFakeTimers();
+    try {
+      let failLate: (error: Error) => void = () => {};
+      sendMail.mockReturnValue(
+        new Promise((_resolve, reject) => {
+          failLate = reject;
+        }),
+      );
+      const logger = loggerDouble();
+      const service = new SmtpMailService('no-reply@example.com', 'smtps://h', logger);
+
+      const pending = service.sendInvitation(invitation);
+      await vi.advanceTimersByTimeAsync(SEND_TIMEOUT_MS);
+      await expect(pending).resolves.toBeUndefined();
+
+      failLate(new Error('421 service not available'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Handled — and recorded as the distinct fact it is: not "the send failed" but "the send we
+      // had already stopped waiting for failed".
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ event: MAIL_SEND_FAILED, abandoned: true }),
+        expect.any(String),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not report an ordinary failure as abandoned', async () => {
+    // The two records answer different questions, so a send that simply failed inside the bound
+    // must not also appear in the abandoned stream — an operator counting abandonments to judge
+    // whether the bound is too tight would otherwise be reading transport errors.
+    sendMail.mockRejectedValue(new Error('550 mailbox unavailable'));
+    const logger = loggerDouble();
+
+    await new SmtpMailService('no-reply@example.com', 'smtps://h', logger).sendInvitation(
+      invitation,
+    );
+
+    expect(logger.warn).not.toHaveBeenCalled();
+    expectAlertable(logger, 'invitation');
   });
 });
 

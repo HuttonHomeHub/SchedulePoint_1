@@ -32,13 +32,49 @@ handing off, so a failure could abort the request. This ADR answers it.
 
 **Delivery stays best-effort. The failure is surfaced to the operator, never to the caller.**
 
-1. Every mail failure logs `event: 'mail.send_failed'` with a `message` naming which of the three
+1. Every mail failure logs `event: 'mail.send_failed'` with a `kind` naming which of the three
    it was — one grep term, an exported constant, never a URL or token.
 2. A **bounded, warn-only** SMTP handshake runs once at bootstrap, logging
-   `mail.transport_verified` or `mail.transport_unreachable` with **host and port only**.
-3. `/verify-email` stops asserting that a message was sent, names the address, and offers an exit
+   `mail.transport_verified` or `mail.transport_check_failed` with **host and port only**.
+3. Every send is **bounded at 10 s** (`SEND_TIMEOUT_MS`), because mail turns out to be **on** the
+   request path — see the next section, which corrects this ADR's own first draft.
+4. `/verify-email` stops asserting that a message was sent, names the address, and offers an exit
    that is not another resend.
-4. The documents that were wrong are corrected, including the alert instruction that could not fire.
+5. The documents that were wrong are corrected, including the alert instruction that could not fire.
+
+## Mail is on the request path, and this ADR said it was not
+
+The spec's risk table read **"no request-path cost"**, and §"What the boot check does not prove"
+below closes with "mail is not on the critical path of scheduling". The second is true and about
+readiness. The first was **false**, and the review pass caught it:
+
+- `runInBackgroundOrAwait` does `else await promise` when no handler is configured
+  (`better-auth@1.6.25`, `dist/context/create-context.mjs:214-224`, the `await` on line 220)
+- `grep -rn "backgroundTasks" apps/api/src` returns **nothing** — no such handler is configured
+- `InvitationsService` (`invitations.service.ts:119`) awaits `sendInvitation` in the handler outright
+
+So `POST /api/auth/sign-up/email`, `/request-password-reset`, `/send-verification-email` and
+`POST …/invitations` all block on a live SMTP round trip. Its only bound was nodemailer's own
+defaults — **30 s greeting, 2 min connection, 10 min socket** — so the exact failure this ADR
+treats as survivable (a relay that accepts the connection and then says nothing) would hold a
+request open for ten minutes and occupy a worker for the duration.
+
+The remedy is the same shape as `verifyTransport`'s: one `Promise.race` this file controls, applied
+to all three messages through a single private `send()`. It bounds **the wait, not the send** —
+nodemailer keeps working, so a merely-slow message may still arrive — and it attaches a handler to
+the abandoned promise, without which a rejection arriving after the race would be _unhandled_ and
+Node would terminate the process. A bound added to stop a mail outage hanging a request would
+otherwise have converted that outage into a crash loop.
+
+**Nothing the caller sees changes.** The bound decides how long the wait is, never what the answer
+is: a timeout takes the same swallow-and-log path as a refusal, so every uniformity property above
+is untouched. What it does not fix is the **timing** difference on `/request-password-reset` — a
+known address awaits a send, an unknown one returns immediately — which the bound narrows from ten
+minutes to ten seconds without closing. That is `docs/TECH_DEBT.md` #99.
+
+This correction is recorded here rather than folded silently because the claim was **this ADR's
+own**, asserted in a risk table without being checked, in a document whose §"A note on how this was
+decided" is about exactly that failure. It is the second time in one milestone.
 
 ## Why not send before handing off
 

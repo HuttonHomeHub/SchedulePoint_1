@@ -229,7 +229,7 @@ arrives → the person concludes they mistyped their address or that the product
 An `error` line exists in the API log that nobody is watching.
 
 **Broken relay, proposed.** The relay never gets that far: the API refuses to come up
-clean, logging `mail.transport_unreachable` at boot with the host and the error, and the
+clean, logging `mail.transport_check_failed` at boot with the host and the error, and the
 operator sees it in the deploy they are already reviewing (ADR-0047 — every release on
 this host is reviewed by a person). If it breaks _after_ boot, each failed send logs
 `mail.send_failed` with a stable `event` field, and the screen the stranded person lands
@@ -304,7 +304,7 @@ _Default: unflagged._
 > **Acceptance criteria**
 >
 > - **Given** `MAIL_SMTP_URL` is set to an unreachable host, **when** the API boots,
->   **then** exactly one `error` log line is written with `event: 'mail.transport_unreachable'`,
+>   **then** exactly one `error` log line is written with `event: 'mail.transport_check_failed'`,
 >   the resolved host and port, and the underlying error — **and the process still starts**
 >   (Q2 default).
 > - **Given** `MAIL_SMTP_URL` is set and the relay answers, **when** the API boots, **then**
@@ -329,7 +329,7 @@ _Default: unflagged._
 >   existing `acceptUrl`/`verifyUrl`/`resetUrl` prohibition is unchanged and re-asserted by
 >   the existing tests.
 > - **Given** `docs/DEPLOYMENT.md`, **then** it names `mail.send_failed` and
->   `mail.transport_unreachable` and does **not** name `Failed to run background task`
+>   `mail.transport_check_failed` and does **not** name `Failed to run background task`
 >   (D2).
 
 > **US-3** — As a **person who has just signed up**, I want the screen not to tell me an
@@ -375,7 +375,7 @@ _Default: unflagged._
 **W-1 Boot-time transport check.** `MailModule` binds `SmtpMailService` (it already does,
 on `MAIL_SMTP_URL` alone) → on `onApplicationBootstrap`, if the bound adapter supports
 verification, call it with a bounded timeout → log `mail.transport_verified` (info) or
-`mail.transport_unreachable` (error) → return, never throw (Q2 default).
+`mail.transport_check_failed` (error) → return, never throw (Q2 default).
 
 **W-2 Runtime send failure.** Caller (Better Auth callback, or `InvitationsService`) →
 `MailService.send*` → `transporter.sendMail` rejects → adapter logs `event:
@@ -440,10 +440,24 @@ None new. No user input is added. `MAIL_SMTP_URL`/`MAIL_FROM`'s existing cross-f
 | Database       | **none** | No model, no migration, no index.                                                                                                                                                           |
 | API            | **none** | No endpoint, no DTO, no OpenAPI change, no version bump to the contract.                                                                                                                    |
 | Security       | **med**  | The whole design is constrained by two enumeration guarantees (reset — ADR-0074; session-less resend — ADR-0074 M5-T1) and by D8, which is a **new** finding. security-reviewer required.   |
-| Performance    | **none** | One SMTP handshake at boot, bounded. No request-path cost.                                                                                                                                  |
+| Performance    | **med**  | ~~One SMTP handshake at boot, bounded. No request-path cost.~~ **This row was wrong** — see the note below. Every send is on the request path, and M4 bounds it.                            |
 | Infrastructure | **low**  | No new service, no new env var under the recommendation. `docs/DEPLOYMENT.md` gains the alert terms.                                                                                        |
 | Observability  | **med**  | This _is_ the feature: two new boot events and a stable `event` discriminator on the failure records. `docs/OBSERVABILITY.md` may want the convention recorded.                             |
 | Testing        | **med**  | Unit (adapter log shape, verify path), API e2e (boot behaviour), web component (copy). The characterisation suite is the interesting one — see §4.8.                                        |
+
+> **The Performance row was false, and the review pass caught it.** "No request-path cost" was
+> written from the mental model that Better Auth sends mail in the background. It does not:
+> `runInBackgroundOrAwait` **awaits** unless `advanced.backgroundTasks.handler` is configured
+> (`better-auth@1.6.25`, `dist/context/create-context.mjs:220`), nothing in `apps/api/src`
+> configures one (`grep -rn "backgroundTasks"` → nothing), and `invitations.service.ts:119` awaits
+> its send in the handler outright. Four endpoints therefore block on a live SMTP round trip whose
+> only bound was nodemailer's defaults — up to **ten minutes** on a socket that connects and then
+> goes quiet.
+>
+> The row is corrected rather than deleted. It was asserted, in a table, in the same document that
+> established this epic's own rule about asserting things — and the wrong version is the useful
+> part of the record. The remedy is M4's `SEND_TIMEOUT_MS`; the residual is a timing difference on
+> `/request-password-reset`, `docs/TECH_DEBT.md` #99.
 
 ### Dependencies
 
@@ -513,7 +527,7 @@ sequenceDiagram
   BA->>CB: runInBackgroundOrAwait(sendVerificationEmail)
   CB->>M: sendEmailVerification({ to, verifyUrl })
   M--xM: transporter.sendMail rejects
-  M->>L: error { event: 'mail.send_failed', message: 'email_verification', to, err }
+  M->>L: error { event: 'mail.send_failed', kind: 'email_verification', to, err }
   M-->>CB: resolves (swallowed — the enumeration control, unchanged)
   CB-->>BA: resolves
   BA-->>U: 200 { token: null, user }
@@ -536,7 +550,7 @@ sequenceDiagram
     M->>L: info { event: 'mail.transport_verified', host }
   else unreachable / bad credential / timeout
     R--xM: error
-    M->>L: error { event: 'mail.transport_unreachable', host, err }
+    M->>L: error { event: 'mail.transport_check_failed', host, err }
   end
   Note over N: process starts either way (Q2 default)
 ```
@@ -759,7 +773,7 @@ weight:
 
 **The trigger that would revive Option C**, recorded so the decision is revisitable rather
 than permanent: a measured incidence of stranded accounts after enforcement is on — i.e.
-`mail.send_failed` with `message: 'email_verification'` appearing in production at all —
+`mail.send_failed` with `kind: 'email_verification'` appearing in production at all —
 or a single operator report of a user stranded by a per-recipient rejection. Both are
 observable **only once Option E part 1 exists**, which is the other reason to do it first.
 

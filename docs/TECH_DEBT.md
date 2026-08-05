@@ -941,7 +941,7 @@ above), so the promise Better Auth awaits resolves, `runInBackgroundOrAwait` nev
 nothing is not a signal.
 
 The operator signal is `SmtpMailService`'s **own** record, which since ADR-0075 carries
-`event: 'mail.send_failed'` and a `message` naming which of the three failed. That is better than
+`event: 'mail.send_failed'` and a `kind` naming which of the three failed. That is better than
 what was documented — it has the address and the error, inside Pino with the correlation id and the
 redaction rules — and it was undocumented until ADR-0075. `docs/DEPLOYMENT.md` told operators to
 alert on the Better Auth string, i.e. on a line that a mail failure can no longer produce; an alert
@@ -1115,4 +1115,95 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-**Next free number: 98.**
+### 98. The guest share view scrolls sideways at 320 px (WCAG 1.4.10)
+
+**Found:** 2026-08-05, by the ADR-0075 M3 accessibility gate — but not the way the finding was
+written. The reviewer reasoned from the CSS that nothing on the guest view's chain sets
+`overflow-hidden`, concluded the page would simply scroll vertically and pass, and **suggested a
+test to confirm it**. The test was written and **failed on its first run**. That sequence is the
+row's real subject: a correct-sounding chain of CSS reasoning, from a specialist, about a property
+that takes one browser measurement to settle.
+
+**Measured** (`apps/web/e2e-share`, Chromium, 320 × 720): `documentElement.scrollWidth` is **436**
+against a 320 px viewport. The overflowing node is the TSLD zoom-preset row —
+`flex items-center gap-1` with no `flex-wrap`, containing Day / Week / Month / Quarter / Year, the
+−/+ buttons and **Fit to plan** — which measures **420 px** and cannot shrink.
+
+**It is pre-existing, and that is the uncomfortable part.** The height fix in PR #238 did not cause
+it; it made it _observable_. While the canvas rendered at 1 px nobody scrolled this screen, and no
+gate looked. The share view has been publicly reachable since 2026-07-21.
+
+**Why it is not fixed here.** The offending row is `TsldViewControls`, shared with the member plan
+workspace, which has its own responsive story — ADR-0031's three prominence tiers and responsive
+overflow, plus ADR-0030's below-`md` single-pane toggle. Adding `flex-wrap` is a two-word change
+and might well be right, but it is a change to a shared control's layout at exactly the widths
+another ADR governs, and it needs the member workspace re-checked at 320 px in a browser rather
+than reasoned about — which is the mistake this row exists to record.
+
+**Remediation:** decide whether the guest view should get the member workspace's responsive
+treatment or its own reduced control set (a guest cannot edit, so several controls are arguably
+noise on a phone), then fix and re-enable the assertion in `apps/web/e2e-share/share.spec.ts`,
+which currently checks only that the canvas keeps its height at that width.
+
+**Risk:** moderate-frequency, low-severity. A recipient on a phone gets a horizontally scrolling
+page; nothing is unreachable, but 1.4.10 is a WCAG 2.2 AA criterion this project claims to meet
+(`CLAUDE.md` §13), so the claim is currently wrong for this surface.
+
+---
+
+### 99. `/request-password-reset` leaks account existence through timing
+
+**Found:** 2026-08-05, by the ADR-0075 M4 backend-performance and security gates independently.
+
+The endpoint is uniform in **everything the caller can read** — same status, same body, whether the
+address exists or not (ADR-0074, and the property `sendPasswordReset` holds rather than borrows).
+It is not uniform in **how long it takes**. Better Auth awaits the send
+(`runInBackgroundOrAwait` → `else await promise`, `better-auth@1.6.25`,
+`create-context.mjs:220`), so:
+
+| address | work done               | response time          |
+| ------- | ----------------------- | ---------------------- |
+| known   | token minted, mail sent | a real SMTP round trip |
+| unknown | nothing                 | immediate              |
+
+A caller with a stopwatch can therefore distinguish the two, which is the thing the uniform body
+exists to prevent. Note this is the **opposite** shape to `/send-verification-email`, where Better
+Auth mints a throwaway token and holds a 500 ms floor precisely to equalise the two branches
+(`email-verification.mjs:104-117`) — the machinery exists in the library, and this route does not
+use it.
+
+**ADR-0075 M4 narrowed it and did not close it.** `SEND_TIMEOUT_MS` bounds the known-address branch
+at 10 s, so the observable gap went from "up to ten minutes" to "up to ten seconds". A smaller
+worst case is not a smaller signal: a few hundred milliseconds is comfortably measurable over the
+network, and the gap is _reliable_ rather than noisy because it tracks a real network operation.
+
+**Options, in the order they should be considered:**
+
+1. **Configure `advanced.backgroundTasks.handler`.** One key. It moves every Better Auth send off
+   the request path, which closes this row **and** removes the request-path cost that made M4's
+   bound necessary at all. Needs care: the handler owns the rejection, so `mail.send_failed` must
+   still reach Pino, and the characterisation suite's four assertions must be re-run rather than
+   assumed — they are the record of what today's behaviour is.
+2. **A response floor**, mirroring what the library does for verification: hold every answer to a
+   fixed minimum. Cheap and self-contained, but it is a floor over a variable, so it only works if
+   the floor exceeds a slow send — which is exactly what a bad day removes.
+3. **Accept and document.** Defensible, but check the mitigation before leaning on it. The route's
+   limit is **3 per 60 s per IP** — its own rule, not the 3-per-10-s one that covers
+   `/sign-in`/`/sign-up`/`/change-password` (`index.mjs:370-383`) — and it is
+   `enabled: options.isProduction` (`better-auth.ts:271`), so it does not exist in development at
+   all. It is also per-replica in-process memory (#14(b)), so the real ceiling is 3 × replicas.
+   Three probes a minute still enumerates a targeted list; it does not enumerate a dictionary.
+
+Option 1 is the recommendation, and it is a small enough change that the reason it is not done here
+is scope rather than difficulty — it alters how every mail send in the application is dispatched,
+which deserves its own change and its own re-run of the characterisation suite.
+
+**Risk:** low-severity, low-frequency. It reveals whether an address has an account — the same fact
+a sign-up attempt reveals under a _non_-enforcing configuration — and reveals nothing about the
+account itself. It is recorded because the endpoint's whole design is the claim that it reveals
+nothing, and a claim that is true of the body and false of the clock is the kind of half-truth this
+register exists for.
+
+---
+
+**Next free number: 100.**

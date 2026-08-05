@@ -140,6 +140,33 @@ A feature is ready to implement only when:
 - [ ] Solution designed; ADR written if architecturally significant (Stage 4)
 - [ ] Work broken into tasks with complexity/risks/tests (Stage 5)
 - [ ] Critical questions answered; **the plan is approved**
+- [ ] **Every decision-bearing claim names its evidence** (ADR-0076) — see below
+
+### Decision-bearing claims carry their evidence
+
+When a spec, ADR, plan or risk table asserts a fact about behaviour — a cost, a
+guarantee, a failure mode, "there is no enumeration concern here", "this is not
+on the request path" — the artefact says **what was run or read** to establish
+it: the command, the file and line, or the test. A pointer to another document
+is not evidence; that is how a wrong claim gets laundered into a fact.
+
+**The brief is not evidence either.** A claim inherited from the request that
+started the work is checked like any other. This is not a hypothetical rule:
+
+- ADR-0075's brief asserted "sign-up has no enumeration concern, so a design
+  change is available there". It was **false**, and it had already been copied
+  into a test docblock, a commit message and a `TECH_DEBT` row before anybody
+  opened `sign-up.mjs`. Had it survived, the milestone would have shipped an
+  account-existence oracle on an unauthenticated endpoint.
+- One milestone later, that **same ADR's own risk table** said mail delivery has
+  "no request-path cost". Also false — four endpoints were sitting on a live
+  SMTP round trip bounded only by a ten-minute socket default.
+
+Both were plausible, both were in the small set of statements that changed what
+got built, and both passed review — because a reviewer reads a risk table as a
+summary of work already done, not as a claim to test. The rule is deliberately
+scoped to the decision-bearing claims: one that applies to every sentence is
+followed for none.
 
 ## Development standards (during implementation)
 

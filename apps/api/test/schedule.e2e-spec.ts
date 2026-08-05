@@ -61,6 +61,13 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await prisma.resource.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();
+    // Share links, for exactly the reason the baseline note above gives — and it bit the same way.
+    // `plan_shares.plan_id` is ON DELETE RESTRICT, the e2e database is shared with the Playwright
+    // run, and `apps/web/e2e-share` creates a share link and leaves it there. So a `plan.deleteMany()`
+    // here fails with `plan_shares_plan_id_fkey` in a scheduling spec that has never heard of
+    // sharing, and takes 145 unrelated tests down with it. Five other suites already delete these;
+    // this one was written before ADR-0051 and never caught up.
+    await prisma.planShare.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
