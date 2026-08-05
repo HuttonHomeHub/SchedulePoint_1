@@ -1311,3 +1311,22 @@ export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AU
  * rollback contract (ADR-0053 M6).
  */
 export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOff(import.meta.env.VITE_ACCOUNT_SETTINGS);
+
+/**
+ * The signed-out password-reset flow: `/forgot-password`, `/reset-password`, and the
+ * **"Forgot your password?" link on sign-in** (ADR-0074 M4). **OFF by default** until the M5 gate
+ * pass, and gated on M0's server work being deployed — without `sendResetPassword` configured the
+ * endpoint throws `RESET_PASSWORD_DISABLED`, so the screens would exist and refuse.
+ *
+ * **The link and both routes share this one constant, and splitting them is the failure this
+ * comment exists to prevent.** A "Forgot your password?" link pointing at a conditionally-registered
+ * route is a link to nothing, and **`pnpm typecheck` cannot catch it**: `...(FLAG ? [route] : [])`
+ * widens to `(typeof route)[]`, so the registered-route union contains the route in *both* branches
+ * and `<Link to="/forgot-password">` compiles either way. The flag structure is the gate; the
+ * parity suite pins the link's absence specifically.
+ *
+ * Rollback: set `VITE_PASSWORD_RESET=false` and rebuild the web image. Flag-off, neither route is
+ * registered and sign-in carries no link, so the app is byte-for-byte what it was. Pinned by
+ * `password-reset.parity.test.tsx`, kept rather than weakened (ADR-0053 M6).
+ */
+export const PASSWORD_RESET_ENABLED = flagDefaultOff(import.meta.env.VITE_PASSWORD_RESET);

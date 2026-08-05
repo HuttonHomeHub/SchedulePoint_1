@@ -45,3 +45,29 @@ export const changePasswordSchema = z
   });
 
 export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
+
+/** Ask for a reset link (ADR-0074 M4). One field, and the server answers identically either way. */
+export const requestPasswordResetSchema = z.object({
+  email: z.email('Enter a valid email address'),
+});
+
+export type RequestPasswordResetValues = z.infer<typeof requestPasswordResetSchema>;
+
+/**
+ * Set a new password from an emailed link (ADR-0074 M4).
+ *
+ * No current-password field, and that is the point of the flow: the person cannot supply one.
+ * The confirmation is client-only — the endpoint takes a single value — and exists because a typo
+ * in a password you cannot see locks you out of the account you just recovered.
+ */
+export const resetPasswordSchema = z
+  .object({
+    newPassword: z.string().min(12, 'Password must be at least 12 characters'),
+    confirmPassword: z.string().min(1, 'Confirm your new password'),
+  })
+  .refine((values) => values.newPassword === values.confirmPassword, {
+    message: 'The two passwords do not match',
+    path: ['confirmPassword'],
+  });
+
+export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;

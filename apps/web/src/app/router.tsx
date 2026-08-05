@@ -13,6 +13,7 @@ import {
   ACCOUNT_SETTINGS_ENABLED,
   AUDIT_LOG_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
+  PASSWORD_RESET_ENABLED,
   RESOURCES_ENABLED,
 } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
@@ -26,6 +27,7 @@ import { AuthedLayout } from '@/routes/authed-layout';
 import { CalendarsScreen } from '@/routes/calendars';
 import { ClientDetailScreen } from '@/routes/client-detail';
 import { ClientsScreen } from '@/routes/clients';
+import { ForgotPasswordScreen } from '@/routes/forgot-password';
 import { MembersScreen } from '@/routes/members';
 import { MyActivityScreen } from '@/routes/my-activity';
 import { OnboardingScreen } from '@/routes/onboarding';
@@ -33,6 +35,7 @@ import { OrgHomeScreen } from '@/routes/org-home';
 import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
 import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
+import { ResetPasswordScreen } from '@/routes/reset-password';
 import { ResourcesScreen } from '@/routes/resources';
 import { SignInScreen } from '@/routes/sign-in';
 import { SignUpScreen } from '@/routes/sign-up';
@@ -285,6 +288,35 @@ const shareGuestRoute = createRoute({
 });
 
 /**
+ * The two public password-reset routes (ADR-0074 M4).
+ *
+ * Both are registered — and the sign-in link rendered — behind the SAME `PASSWORD_RESET_ENABLED`
+ * constant. Splitting them is the stranding failure the flag's docblock describes: a link to a
+ * conditionally-registered route compiles in both branches, so typecheck cannot catch it.
+ *
+ * `validateSearch` is permissive on both. Better Auth composes the `?token=` / `?error=` redirect
+ * itself, a mail client may mangle the query, and a hand-edited URL must degrade to a state rather
+ * than throw — the house rule already stated twice above.
+ */
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forgot-password',
+  validateSearch: (search: Record<string, unknown>): { email?: string } =>
+    typeof search.email === 'string' ? { email: search.email } : {},
+  component: ForgotPasswordScreen,
+});
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  validateSearch: (search: Record<string, unknown>): { token?: string; error?: string } => ({
+    ...(typeof search.token === 'string' ? { token: search.token } : {}),
+    ...(typeof search.error === 'string' ? { error: search.error } : {}),
+  }),
+  component: ResetPasswordScreen,
+});
+
+/**
  * Public address-verification landing route (ADR-0074).
  *
  * **Registered unconditionally, and that is the decision.** The three surfaces that link here are
@@ -324,6 +356,9 @@ const routeTree = rootRoute.addChildren([
   acceptInviteRoute,
   // Unconditional by design — see the route's own docblock. Three unflagged surfaces link here.
   verifyEmailRoute,
+  // Dark surface (ADR-0074 M4): both reset routes join the tree only when the flag is on — and the
+  // sign-in link is gated on the same constant, which is what stops it becoming a link to nothing.
+  ...(PASSWORD_RESET_ENABLED ? [forgotPasswordRoute, resetPasswordRoute] : []),
   // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
   // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
   ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),

@@ -223,6 +223,63 @@ export function useChangePassword() {
   });
 }
 
+/**
+ * Better Auth's code when `sendResetPassword` is not configured on the server (`password.mjs:51-57`)
+ * — the whole reason SchedulePoint had no reset before ADR-0074 M0. Surfaced separately because
+ * "reset is not available here" and "no such account" must never read as the same sentence.
+ */
+export const RESET_PASSWORD_DISABLED = 'RESET_PASSWORD_DISABLED';
+
+/**
+ * Ask for a password-reset link (ADR-0074 M4).
+ *
+ * **The endpoint answers identically for a known and an unknown address, and the UI must not undo
+ * that.** `password.mjs:62-66` even performs a dummy verification lookup so the timing matches.
+ * There is one submitted state, and no branch a caller could read as an existence oracle — that is
+ * a requirement, not a copy preference.
+ *
+ * `redirectTo` is where the emailed link's handler sends the browser once it has checked the token.
+ * It is origin-checked server-side (`password.mjs:49`), which is why `disableOriginCheck: false`
+ * and a correct `CORS_ORIGINS` are M0 deployment preconditions rather than nice-to-haves.
+ */
+export function useRequestPasswordReset() {
+  return useMutation<void, AuthError, string>({
+    mutationFn: async (email: string): Promise<void> => {
+      const { error } = await authClient.requestPasswordReset({
+        email,
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        throw new AuthError(
+          messageFrom(error, 'Could not send the email. Try again in a moment.'),
+          codeFrom(error),
+        );
+      }
+    },
+  });
+}
+
+/**
+ * Set a new password from an emailed token (ADR-0074 M4).
+ *
+ * **Issues no session** — the server changes the password and stops there — so a caller must send
+ * the person to sign in rather than navigating into the app on their behalf. That is also the
+ * honest shape: proving you can read the mailbox is not the same as signing in.
+ */
+export function useResetPassword() {
+  return useMutation<void, AuthError, { token: string; newPassword: string }>({
+    mutationFn: async ({ token, newPassword }): Promise<void> => {
+      const { error } = await authClient.resetPassword({ token, newPassword });
+      if (error) {
+        throw new AuthError(
+          messageFrom(error, 'Could not set your new password. Try again.'),
+          codeFrom(error),
+        );
+      }
+    },
+  });
+}
+
 /** Sign out and clear all cached data. */
 export function useSignOut() {
   const queryClient = useQueryClient();

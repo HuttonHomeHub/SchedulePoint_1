@@ -750,6 +750,25 @@ because it does not press buttons. That is one route and one small component, an
 invitation accept path at the same time. Better Auth's own resend endpoint is the recovery path
 until then.
 
+**Extended 2026-08-05 (ADR-0074 M4-T4) — the password-reset link, which is a different shape and
+worse in one respect.** `GET /api/auth/reset-password/:token` does **not** consume the token: it
+checks it and **302-redirects with the raw token on the `Location` header** to
+`/reset-password?token=…`. So a scanner following it neither verifies anything nor burns the link
+— but every hop that logs response headers or request lines now holds a **live** reset token for
+the remainder of its hour. That compounds B1 (the token was, until this ADR, also stored cleartext
+at rest); with B1 merged the exposure is transport and logs rather than the database, but it is
+still a credential in a URL.
+
+**In this design's favour, and it is not a coincidence:** the emailed reset link lands on a _page_
+and the actual change is a **POST from our form** — structurally the shape the fix above asks for.
+The web half strips the token from the address bar on arrival (`replace: true`) so it does not
+persist in history or ride along in a later referrer. What remains unaddressed is the **redirect
+itself**, which is Better Auth's route and not ours to reshape without a fork.
+
+Neither advisory report was wrong; they addressed different halves — one the scanner consuming a
+token, the other the token travelling in a URL. The confirm-button interstitial for
+verify/invite stays this row's own, separate remediation.
+
 ---
 
 ### 89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
