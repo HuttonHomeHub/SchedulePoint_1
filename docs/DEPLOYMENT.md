@@ -170,6 +170,20 @@ Three properties worth knowing before you turn it on:
   event = "mail.send_failed"
   ```
 
+  > **Nothing is currently watching for it** (`docs/TECH_DEBT.md` #100). There is no log shipping
+  > and no alert evaluator — `docs/OBSERVABILITY.md` §"Monitoring & alerting" is explicitly a
+  > standard rather than a running system — so this record lands in `docker logs` on the host and
+  > goes no further. Until that changes, the honest reading of this section is "here is the term to
+  > grep for when you go looking", not "here is what will page you":
+  >
+  > ```bash
+  > docker compose logs api --since 24h | grep -F 'mail.send_failed'
+  > ```
+  >
+  > This caveat exists because the instruction above previously read as though a mechanism were in
+  > place. It was not, and a release note told the operator to "update your alerting" on the
+  > strength of it.
+
   Every mail failure carries it, with a `kind` field naming which one
   (`invitation` / `email_verification` / `password_reset`), the recipient, and the error —
   structured, in the Pino stream, with the correlation id, and never containing a URL or token.

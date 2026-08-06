@@ -1206,4 +1206,68 @@ register exists for.
 
 ---
 
-**Next free number: 100.**
+### 100. The operator-facing mail signal has no operator-facing channel
+
+**Found:** 2026-08-06, immediately after releasing ADR-0075, by the product owner asking how to
+action the release note's instruction to "update your mail alerting".
+
+**There is no alerting to update.** ADR-0075's entire remedy is that a mail failure is surfaced to
+the operator as a greppable log record (`event: "mail.send_failed"`), and its Consequences section
+opens with **"An operator can write an alert that fires"**
+(`docs/adr/0075-mail-delivery-is-best-effort.md:143`). That sentence is true and it is not the same
+as an alert existing. Verified rather than assumed:
+
+| Link in the chain         | State                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| The API emits the record  | ✅ `smtp-mail.service.ts`, structured, with correlation id and redaction                    |
+| `DEPLOYMENT.md` names it  | ✅ "Alert on this" — but it gives a **term**, not a mechanism                               |
+| Logs leave the host       | ❌ no shipping. `grep -rln "Loki\|Grafana\|Datadog\|Sentry\|promtail"` → docs only          |
+| Anything evaluates a rule | ❌ `docs/OBSERVABILITY.md:80` — "Monitoring & alerting — **standard, not yet implemented**" |
+| A human is notified       | ❌ nothing                                                                                  |
+
+So the record lands in `docker logs` on the host and stops there. The one place any doc shows an
+operator reading logs at all is `docs/DEVELOPMENT.md:44`, which is a **development** instruction.
+
+**This is the ADR's own premise not holding.** ADR-0075 chose operator-facing over caller-facing
+because delivery failure must not reach the caller (the enumeration argument, which is sound and
+unaffected). The unexamined half was whether "operator-facing" reaches an operator. It does not —
+it reaches a file. A signal nobody receives is the same amount of information as no signal, which
+is what that ADR set out to fix.
+
+**Two adjacent facts found while checking, both accurate as of 2026-08-06:**
+
+- **Neither compose file sets a `logging:` block**, so Docker's default `json-file` driver applies
+  with no `max-size` or `max-file`. On a long-lived host the API log grows unbounded, and the
+  grep this row is about gets slower the longer it goes unnoticed. `max-size: 10m` /
+  `max-file: 3` on `api` and `web` is the whole fix.
+- **`WATCHTOWER_NOTIFICATION_URL` already exists** in `docker-compose.release.yml`, defaulted
+  empty. A shoutrrr channel is therefore _half_ wired: setting it gives Watchtower deploy
+  notifications, and the same URL would serve a log watcher. It cannot serve this row by itself —
+  Watchtower reports on container updates, not on log contents.
+
+**Remediation, cheapest first.** All three are host-side operational work, not application code,
+which is why none of it is gated by CI:
+
+1. **A cron log-watcher.** ~15 lines: `docker compose logs api --since` over the interval, grep
+   `mail.send_failed` and `mail.transport_check_failed`, POST to a notification URL on a hit.
+   Add the `logging:` rotation block in the same change.
+2. **Real aggregation** — Promtail → Loki → Grafana, or a hosted service, with an alert rule on
+   the same terms. This is what `OBSERVABILITY.md` §"Monitoring & alerting" describes as the
+   eventual standard, and it would also close the metrics/tracing halves of ADR-0013.
+3. **Accept and document** — say plainly in `DEPLOYMENT.md` that mail failures are discoverable
+   only by looking, and that nobody is watching. Least work, and honest, which beats an "Alert on
+   this" instruction that reads as though a mechanism exists.
+
+**The notification channel must not be email.** The condition being reported is "mail is broken",
+so an emailed alert cannot send in exactly the case it exists for — and the deployed host's only
+configured transport is the SMTP relay. ntfy, a Discord/Slack webhook or Telegram all avoid the
+circularity; shoutrrr (already present for Watchtower) speaks all three.
+
+**Risk:** low-frequency, high-consequence. It needs a broken or misconfigured relay to bite. When
+it does, every affected sign-up, invitation and password reset fails silently, the caller is told
+nothing by design, and — this row's point — the operator is told nothing by accident. The window is
+open-ended rather than bounded by a poll interval, because there is no poll.
+
+---
+
+**Next free number: 101.**
