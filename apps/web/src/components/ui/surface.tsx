@@ -21,19 +21,25 @@ import { cn } from '@/lib/utils';
  * That is intended: an overlay belongs to the page, not to the surface that summoned it.
  */
 /**
- * `chrome` is the app's top band, `panel` the navigator rail, and `brand` the public screens'
- * panel (ADR-0077 §1).
+ * `chrome` is the app's top band, `panel` the navigator rail, `brand` the public screens' navy
+ * panel (ADR-0077 §1) and `auth` the card that panel is joined to (ADR-0077 M7).
  *
- * **`brand` is the odd one and the ADR says why**: it is **theme-invariant** — identical values in
- * Light, Dark and Corporate — because a signed-out visitor cannot choose a theme and something
- * else chooses one for them. It is the only scope whose fill is a decision about identity rather
- * than about position in the app.
+ * **`brand` and `auth` are the odd ones and the ADR says why**: both are **theme-invariant** —
+ * identical values in Light, Dark and Corporate — because a signed-out visitor cannot choose a
+ * theme and something else chooses one for them. They are the scopes whose fill is a decision
+ * about identity rather than about position in the app.
+ *
+ * `auth` exists because ADR-0077 §2's argument was originally applied to only half the screen.
+ * The panel was pinned to navy; the card beside it kept following the theme, so a Dark-mode
+ * visitor met a fixed navy panel joined to a dark card — one screen wearing two identities,
+ * neither of them chosen. Pinning the card needs a scope rather than a class because the page's
+ * own fill is theme-driven by construction: no page token can be theme-invariant.
  *
  * The bar for a fifth scope is written down in ADR-0077 §1. It is five conditions, and the load-
  * bearing one is that the region's fill must be chosen for a reason the page's fill structurally
  * cannot serve — otherwise it is a component with props, not a scope.
  */
-export type SurfaceTone = 'chrome' | 'panel' | 'brand';
+export type SurfaceTone = 'chrome' | 'panel' | 'brand' | 'auth';
 
 /**
  * Carries the enclosing tone for the nesting invariant ONLY, and is deliberately not exported.

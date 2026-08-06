@@ -200,12 +200,12 @@ export async function expectPublicLayout(
     await expect(tagline, `${label}: tagline at md+`).toBeVisible();
   }
 
-  // 7. …and a band is sized by its content, not by the leftover height of `min-h-dvh`.
-  //    **Measured**: the band's content is 76px; before `grid-rows-[auto_1fr]` it stretched to
-  //    226–265px on a 568px-tall phone — 47% of the screen — on every state short enough to leave
-  //    slack. The bound is 25% of the viewport rather than a pixel count, because what the reader
-  //    experiences is the *proportion* of their screen spent on decoration; at the two tightest
-  //    sizes in the sweep that is 142px (320×568) and 90px (640×360) against a 76px band.
+  // 7. …and a band is sized by its content, not by the leftover height of the screen.
+  //    **Measured**: the band's content is 76px; in the M4 layout it stretched to 226–265px on a
+  //    568px-tall phone — 47% of the screen — on every state short enough to leave slack. The bound
+  //    is 25% of the viewport rather than a pixel count, because what the reader experiences is the
+  //    *proportion* of their screen spent on decoration; at the two tightest sizes in the sweep that
+  //    is 142px (320×568) and 90px (640×360) against a 76px band.
   if (width < MD && aside) {
     const viewportHeight = await page.evaluate(() => window.innerHeight);
     expect(
@@ -213,6 +213,31 @@ export async function expectPublicLayout(
       `${label}: brand band is stretched, not content-sized`,
     ).toBeLessThanOrEqual(viewportHeight * 0.25);
   }
+
+  // 8. The card **floats** — M7's whole point, and the one thing a class name cannot tell you.
+  //    `w-full max-w-[900px]` inside `p-4` means a bounded card with ground visible either side at
+  //    every width in the sweep, not a full-bleed split. Measured as a box, so a later `max-w-none`
+  //    or a lost gutter fails here rather than being noticed by a reader.
+  const card = await page.locator('main').boundingBox();
+  expect(card, `${label}: card box`).not.toBeNull();
+  if (card) {
+    expect(card.width, `${label}: card wider than the old app's 900px`).toBeLessThanOrEqual(901);
+    expect(card.x, `${label}: card touches the left edge`).toBeGreaterThanOrEqual(1);
+    expect(card.x + card.width, `${label}: card touches the right edge`).toBeLessThanOrEqual(
+      innerWidth - 1,
+    );
+  }
+}
+
+/**
+ * The rendered height of the card, for the assertion that it does not change between screens.
+ *
+ * Returns `null` if the card is not laid out, which a caller should treat as a failure rather than
+ * a skip — a missing box means the page did not render, not that the invariant held.
+ */
+export async function cardHeight(page: Page): Promise<number | null> {
+  const box = await page.locator('main').boundingBox();
+  return box === null ? null : box.height;
 }
 
 /** The full rendered height of the document — what "the tallest state" means when it is measured. */

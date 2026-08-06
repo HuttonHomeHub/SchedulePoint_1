@@ -202,6 +202,49 @@
   --canvas: oklch(1 0 0);
   --canvas-band: oklch(0.975 0 0);
 
+  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
+     Theme-INVARIANT, like `brand` and for the same reason one step further out.
+     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
+     theme — the boot script picked Dark from their operating system, or
+     Corporate because a colleague signed in on this machine last month. That
+     argument was only ever applied to half the screen: the panel was pinned and
+     the card beside it still followed the theme, so a Dark-mode visitor met a
+     fixed navy panel joined to a dark card. One identity, chosen by nobody.
+     These values are the old app's, sampled from `static/css/main.css`
+     (#14213D navy, #fca311 amber) so the match is exact rather than close —
+     with TWO exceptions, and the exceptions are the point of having a gate.
+     The old app's amber focus ring is 2.02:1 on white and its field outline
+     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
+     are invisible to a person looking at the screen because a focus ring you
+     cannot see looks exactly like a focus ring you have not triggered. So
+     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
+     hue and chroma walked down in lightness to the first value that clears
+     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
+     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
+  --auth: oklch(1 0 0);
+  --auth-foreground: oklch(0.252 0.056 264);
+  --auth-muted: oklch(0.965 0.004 250);
+  --auth-muted-foreground: oklch(0.53 0.017 258);
+  --auth-border: oklch(0.914 0.008 255);
+  --auth-input: oklch(0.64 0.014 256);
+  --auth-accent: oklch(0.958 0.006 250);
+  --auth-accent-foreground: oklch(0.252 0.056 264);
+  --auth-primary: oklch(0.252 0.056 264);
+  --auth-primary-foreground: oklch(0.985 0 0);
+  --auth-field: oklch(0.962 0.005 252);
+  --auth-field-foreground: oklch(0.252 0.056 264);
+  --auth-field-muted-foreground: oklch(0.53 0.017 258);
+  --auth-destructive-text: oklch(0.505 0.213 27);
+  --auth-warning-text: oklch(0.52 0.13 70);
+  --auth-info-text: oklch(0.5 0.13 245);
+  --auth-ring: oklch(0.648 0.167 70);
+  /* The page the card floats on. A PAIR rather than a family member, the way
+     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
+     17-name vocabulary has no word for "the second stop". Values are the old
+     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
+  --ground: oklch(0.977 0.003 248);
+  --ground-end: oklch(0.845 0.028 249);
+
   /* Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5):
      day fainter (so it recedes), month mid-strength, year strongest (darker on this light
      ground, so it reads as the dominant boundary). Flag-off strokes still use --border alone
@@ -371,6 +414,49 @@
   --field-muted-foreground: oklch(0.708 0 0);
   --canvas: oklch(0.205 0 0);
   --canvas-band: oklch(0.24 0 0);
+
+  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
+     Theme-INVARIANT, like `brand` and for the same reason one step further out.
+     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
+     theme — the boot script picked Dark from their operating system, or
+     Corporate because a colleague signed in on this machine last month. That
+     argument was only ever applied to half the screen: the panel was pinned and
+     the card beside it still followed the theme, so a Dark-mode visitor met a
+     fixed navy panel joined to a dark card. One identity, chosen by nobody.
+     These values are the old app's, sampled from `static/css/main.css`
+     (#14213D navy, #fca311 amber) so the match is exact rather than close —
+     with TWO exceptions, and the exceptions are the point of having a gate.
+     The old app's amber focus ring is 2.02:1 on white and its field outline
+     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
+     are invisible to a person looking at the screen because a focus ring you
+     cannot see looks exactly like a focus ring you have not triggered. So
+     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
+     hue and chroma walked down in lightness to the first value that clears
+     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
+     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
+  --auth: oklch(1 0 0);
+  --auth-foreground: oklch(0.252 0.056 264);
+  --auth-muted: oklch(0.965 0.004 250);
+  --auth-muted-foreground: oklch(0.53 0.017 258);
+  --auth-border: oklch(0.914 0.008 255);
+  --auth-input: oklch(0.64 0.014 256);
+  --auth-accent: oklch(0.958 0.006 250);
+  --auth-accent-foreground: oklch(0.252 0.056 264);
+  --auth-primary: oklch(0.252 0.056 264);
+  --auth-primary-foreground: oklch(0.985 0 0);
+  --auth-field: oklch(0.962 0.005 252);
+  --auth-field-foreground: oklch(0.252 0.056 264);
+  --auth-field-muted-foreground: oklch(0.53 0.017 258);
+  --auth-destructive-text: oklch(0.505 0.213 27);
+  --auth-warning-text: oklch(0.52 0.13 70);
+  --auth-info-text: oklch(0.5 0.13 245);
+  --auth-ring: oklch(0.648 0.167 70);
+  /* The page the card floats on. A PAIR rather than a family member, the way
+     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
+     17-name vocabulary has no word for "the second stop". Values are the old
+     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
+  --ground: oklch(0.977 0.003 248);
+  --ground-end: oklch(0.845 0.028 249);
 
   /* Time-axis gridline tiers — day the faintest alpha step, month mid-strength, year the
      strongest. Same white-at-alpha family as --border so all three stay legible against the
@@ -574,6 +660,49 @@
   --canvas: oklch(1 0 0);
   --canvas-band: oklch(0.972 0.004 90);
 
+  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
+     Theme-INVARIANT, like `brand` and for the same reason one step further out.
+     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
+     theme — the boot script picked Dark from their operating system, or
+     Corporate because a colleague signed in on this machine last month. That
+     argument was only ever applied to half the screen: the panel was pinned and
+     the card beside it still followed the theme, so a Dark-mode visitor met a
+     fixed navy panel joined to a dark card. One identity, chosen by nobody.
+     These values are the old app's, sampled from `static/css/main.css`
+     (#14213D navy, #fca311 amber) so the match is exact rather than close —
+     with TWO exceptions, and the exceptions are the point of having a gate.
+     The old app's amber focus ring is 2.02:1 on white and its field outline
+     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
+     are invisible to a person looking at the screen because a focus ring you
+     cannot see looks exactly like a focus ring you have not triggered. So
+     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
+     hue and chroma walked down in lightness to the first value that clears
+     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
+     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
+  --auth: oklch(1 0 0);
+  --auth-foreground: oklch(0.252 0.056 264);
+  --auth-muted: oklch(0.965 0.004 250);
+  --auth-muted-foreground: oklch(0.53 0.017 258);
+  --auth-border: oklch(0.914 0.008 255);
+  --auth-input: oklch(0.64 0.014 256);
+  --auth-accent: oklch(0.958 0.006 250);
+  --auth-accent-foreground: oklch(0.252 0.056 264);
+  --auth-primary: oklch(0.252 0.056 264);
+  --auth-primary-foreground: oklch(0.985 0 0);
+  --auth-field: oklch(0.962 0.005 252);
+  --auth-field-foreground: oklch(0.252 0.056 264);
+  --auth-field-muted-foreground: oklch(0.53 0.017 258);
+  --auth-destructive-text: oklch(0.505 0.213 27);
+  --auth-warning-text: oklch(0.52 0.13 70);
+  --auth-info-text: oklch(0.5 0.13 245);
+  --auth-ring: oklch(0.648 0.167 70);
+  /* The page the card floats on. A PAIR rather than a family member, the way
+     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
+     17-name vocabulary has no word for "the second stop". Values are the old
+     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
+  --ground: oklch(0.977 0.003 248);
+  --ground-end: oklch(0.845 0.028 249);
+
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
   --canvas-grid-day: oklch(0.965 0 0);
@@ -659,6 +788,26 @@
   --warning-text: var(--brand-warning-text);
   --info-text: var(--brand-info-text);
   --ring: var(--brand-ring);
+}
+
+[data-surface='auth'] {
+  --background: var(--auth);
+  --foreground: var(--auth-foreground);
+  --muted: var(--auth-muted);
+  --muted-foreground: var(--auth-muted-foreground);
+  --border: var(--auth-border);
+  --input: var(--auth-input);
+  --accent: var(--auth-accent);
+  --accent-foreground: var(--auth-accent-foreground);
+  --primary: var(--auth-primary);
+  --primary-foreground: var(--auth-primary-foreground);
+  --field: var(--auth-field);
+  --field-foreground: var(--auth-field-foreground);
+  --field-muted-foreground: var(--auth-field-muted-foreground);
+  --destructive-text: var(--auth-destructive-text);
+  --warning-text: var(--auth-warning-text);
+  --info-text: var(--auth-info-text);
+  --ring: var(--auth-ring);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -881,6 +1030,11 @@
   --color-field: var(--field);
   --color-field-foreground: var(--field-foreground);
   --color-field-muted-foreground: var(--field-muted-foreground);
+  /* The public screens' ground. Exposed as a utility (unlike the surface families)
+     because a gradient is drawn BY the page, not rebound within a scope — the same
+     reason `--canvas` is here (ADR-0077 M7). */
+  --color-ground: var(--ground);
+  --color-ground-end: var(--ground-end);
   --color-canvas: var(--canvas);
   --color-canvas-band: var(--canvas-band);
   --color-canvas-grid-day: var(--canvas-grid-day);

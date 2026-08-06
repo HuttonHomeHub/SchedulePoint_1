@@ -50,7 +50,7 @@ describe('surface scope seams (structural)', () => {
     // The protection is HERE, in the regex — not in `ALLOWED`. Adding a family without adding it
     // to these three patterns leaves it entirely unguarded: any component could write
     // `var(--brand-primary)` and no test would notice (ADR-0077 §1).
-    expect(filesMatching(/--(chrome|panel|brand)\b/)).toEqual([...ALLOWED].sort());
+    expect(filesMatching(/--(chrome|panel|brand|auth)\b/)).toEqual([...ALLOWED].sort());
   });
 
   it('only the allowlisted files write a data-surface attribute', () => {
@@ -60,7 +60,7 @@ describe('surface scope seams (structural)', () => {
   });
 
   it('no component reaches for a surface family through var()', () => {
-    const offenders = filesMatching(/var\(--(chrome|panel|brand)-/).filter(
+    const offenders = filesMatching(/var\(--(chrome|panel|brand|auth)-/).filter(
       (file) => !ALLOWED.includes(file),
     );
     expect(offenders).toEqual([]);

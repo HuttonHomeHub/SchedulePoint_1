@@ -1438,7 +1438,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   it, and **a claim inherited from the brief is checked like any other** — both Class 3 failures
   entered through a brief. The CPM engine is not imported and no product behaviour changes.
 
-- **ADR-0077** _(Accepted; M0 landed 2026-08-06)_ — The public screens' brand surface: a fourth
+- **ADR-0077** _(Accepted; M0–M7 landed 2026-08-06)_ — The public screens' brand surface: a fourth
   scope, fixed dark in every theme, and what counts as a brand asset. The six pre-authentication
   routes are **the only part of SchedulePoint a stranger meets** — `/sign-in` is the front door,
   since `router.tsx:109` redirects every unauthenticated arrival to it and there is no landing
@@ -1477,6 +1477,29 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   fixed, and the widening immediately surfaced two load-bearing dependency citations that had sat in
   the tree unregistered (`nodemailer`'s `_formatError`, `zod`'s `allowsEval` probe). The register is
   now 40 claims across five packages; the residual basename blind spot is `docs/TECH_DEBT.md` #101.
+  **M7 restores the old app's login and finishes an argument the epic had only half-made** (§8). M6
+  shipped a full-bleed two-column split; the product owner asked for the previous Flask app's
+  **floating box** back, keeping the one thing the new design did better — a card that is the same
+  height on every screen, so it does not resize under the reader's cursor between Sign in and
+  Register. The measurements are the old app's, read from its stylesheets rather than matched by eye
+  (900px card, `135deg` gradient, 3px amber seam over the middle half of the panel's right edge), and
+  the photograph comes **back** — reversing §3, whose load-bearing objection (a photo is invisible to
+  the contrast gate) does not apply once the navy wash is a **token** and every word sits on the wash
+  rather than the image. The load-bearing decision is a **fifth surface scope, `auth`**: §2 pinned
+  the panel because a signed-out visitor never chose a theme, and that argument had been applied to
+  only half the screen — the card beside the pinned panel still followed the theme, so a Dark-mode
+  visitor met a fixed navy panel joined to a dark card, one screen wearing two identities. Now the
+  whole login is theme-invariant and the theme picks up after sign-in, where the reader chose it.
+  It costs nothing at the components: `Input`'s five tokens are all rebound names, so the fields
+  repaint with **no component change at all** — while `--card` deliberately is **not** one of the 17,
+  which is why `AuthShell` owns its own container rather than wrapping a `Card`. **And the computed
+  matrix caught what copying a design cannot**: adding `auth` failed 18 assertions on two real WCAG
+  1.4.11 failures in the _old app's own values_ — its amber focus ring is 2.02:1 on white and its
+  field outline 2.22:1 on the field fill. Neither is noticeable by looking, because a focus ring you
+  cannot see looks exactly like a focus ring you have not triggered; both are now derived down to
+  3.01–3.36:1 at the same hue. The old app's leading field icons are deliberately **not**
+  reproduced (§8.6) — that is an icon slot on the shared `Input` primitive, with every consumer in
+  the product downstream of it.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

@@ -1,57 +1,36 @@
 import { BrandPanel } from './brand-panel';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Surface } from '@/components/ui/surface';
 
 /**
- * Centred card layout for every **public** screen — sign-in, sign-up, accept-invite, and the
- * account-recovery screens ADR-0074 adds. The single `main` landmark for the page.
+ * The **floating card** every public screen is (ADR-0077 M7) — sign-in, sign-up, accept-invite and
+ * the three account-recovery screens. The single `main` landmark for the page.
  *
- * **It mounts {@link AnnouncerProvider}, and that is not optional.** The app's provider lives
- * inside the authed shell (`app-shell.tsx`), so out here `useAnnounce()` resolves to the
- * context's no-op default and every "Check your email" / "That link has expired" is announced to
- * nobody — silently, which is the only way this defect ever ships. Mounting the **same** provider
- * rather than hand-rolling a second live region means a public screen and an authed one announce
- * through one implementation; a bespoke `onAnnounce` prop would have been a second mechanism to
- * keep in step (the ADR-0062 shape).
+ * **It is a card on a ground, not a full-bleed split.** M4 shipped the two-column layout edge to
+ * edge; the product owner asked for the old app's floating box back, and they were right — a
+ * 900px card on a soft ground reads as a considered object, while an edge-to-edge split reads as
+ * a page that has not finished loading. The measurements are the old app's, not an approximation:
+ * `static/css/auth.css` in `HuttonHomeHub/SchedulePoint` sets `width: 900px; max-width: 95%` on a
+ * `linear-gradient(135deg, #f5f7fa, #c3cfe2)` body.
  *
- * **Why one shell and not two.** `InviteShell` was a near-copy that had already drifted on width
- * and on whether it announced anything. Three new callers were about to make that five callers on
- * two implementations, where each looks right alone and only a reader who opens the same thing two
- * ways ever notices one is a version behind.
+ * **`tone="auth"`, so the card renders identically in Light, Dark and Corporate.** ADR-0077 §2
+ * pinned the navy panel because a signed-out visitor never chose a theme — the boot script picked
+ * Dark from their operating system, or Corporate because a colleague signed in on this machine
+ * last month. That argument was applied to only half the screen: the card beside the pinned panel
+ * still followed the theme, so a Dark-mode visitor met a fixed navy panel joined to a dark card,
+ * one screen wearing two identities. Now the whole screen is one, and the theme picks up where it
+ * belongs — after sign-in, on the app the reader has actually chosen to configure.
  *
- * **One width, 448px** (ADR-0077 M2-T4). The convergence kept both prior widths behind a `size`
- * prop — 384px for the forms, 448px for the invitation — which preserved the drift it existed to
- * remove: a reader who signs in and then accepts an invitation watches the card change size for no
- * reason they can name. `docs/DESIGN_SYSTEM.md` calls 448px the width of a record form, and every
- * one of these screens is one. The prop is gone rather than defaulted, so there is nothing to set
- * back.
+ * **One height for all six screens, at `md` and up.** The old app's card was 466px on Forgot
+ * Password and 694px on Register, so moving between screens resized the box under the reader's
+ * cursor. A fixed height costs some space on the one-field screens and buys a box that never
+ * moves. It is `md:`-only on purpose: a fixed-height card on a 320px phone is how content gets
+ * clipped, and `e2e-public` measures exactly that.
  *
- * **Two columns at `md`+, one below** (ADR-0077 M4). The brand panel is a sibling of the card in a
- * grid, so the card's own contract — heading, description, children, `aria-busy` — is untouched
- * and every existing public-screen suite passes unchanged. Below `md` the grid collapses to a
- * single column and the panel becomes a band above the card, **by layout, not by a second
- * element**: rendering a phone copy and a desktop copy would put both in jsdom's accessibility
- * tree and quietly make every `getByText` on these screens ambiguous.
- *
- * **`grid-rows-[auto_1fr]` below `md` is the fix for a defect the browser suite measured**
- * (ADR-0077 M6-T1). With rows left implicit, both are `auto` and `align-content` resolves to
- * `normal`, which for a grid container **stretches**: every pixel of `min-h-dvh` beyond the two
- * rows' content is split evenly between them. The band's own content is **146px**, and on the seven
- * states whose content fits a 320×568 phone it was rendering at **226–265px — up to 47% of the
- * screen**, which is not a band above a card, it is a half-page of navy above a card. Pinning the
- * first row to `auto` and giving the second `1fr` sizes the band by its content and hands the rest
- * to the card, which then still centres in what is left. At `md` the columns take over and
- * `md:grid-rows-1` restores the single full-height row the split-screen needs.
- *
- * The defect is worth naming rather than just fixing: it was invisible to every unit test, because
- * jsdom has no layout, and to a reviewer reading the classes, because nothing in
- * `grid min-h-dvh md:grid-cols-2` says "stretch". It is exactly what
- * `docs/specs/public-screens-brand/implementation-plan.md` meant by "M4 must not be merged on a
- * reviewer's reading of the CSS".
- *
- * `min-h-dvh` is load-bearing and predates this: centring a tall card in a 360px-high landscape
- * viewport is where content gets clipped. It stays, and `auth-shell.test.tsx` asserts it.
+ * `overflow-y-auto` on the form column rather than the card, so a tall state scrolls its own
+ * content and the panel beside it stays put.
  */
 export function AuthShell({
   title,
@@ -70,15 +49,21 @@ export function AuthShell({
 
   return (
     <AnnouncerProvider>
-      <main
-        className="grid min-h-dvh grid-rows-[auto_1fr] md:grid-cols-2 md:grid-rows-1"
-        aria-busy={busy}
-      >
-        <BrandPanel />
-        <div className="flex items-center justify-center p-4 md:p-8">
-          <Card className="w-full max-w-md">
+      {/* The ground. Its two stops are a global token pair rather than surface-family members,
+          because a gradient needs two stops and the 17-name surface vocabulary has no word for
+          the second one — the same reason the canvas pair exists (ADR-0055). Naming the tokens
+          in prose here would trip the seam guard, which matches text and not just code. */}
+      <div className="from-ground to-ground-end grid min-h-dvh place-items-center bg-linear-to-br p-4">
+        <Surface
+          tone="auth"
+          as="main"
+          aria-busy={busy}
+          className="bg-background grid w-full max-w-[900px] overflow-hidden rounded-lg shadow-xl md:h-[40rem] md:grid-cols-2"
+        >
+          <BrandPanel />
+          <div className="flex flex-col justify-center overflow-y-auto p-2 md:p-4">
             {hasHeader ? (
-              <CardHeader>
+              <CardHeader className="text-center">
                 <CardTitle>{title}</CardTitle>
                 {description === undefined ? null : (
                   <CardDescription>{description}</CardDescription>
@@ -93,9 +78,9 @@ export function AuthShell({
             ) : (
               children
             )}
-          </Card>
-        </div>
-      </main>
+          </div>
+        </Surface>
+      </div>
     </AnnouncerProvider>
   );
 }

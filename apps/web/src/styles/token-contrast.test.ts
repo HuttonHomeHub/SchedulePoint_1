@@ -16,8 +16,8 @@ import { blockBody, declarations, hasBlock, THEME_SELECTORS, themeTokens } from 
  * checked the moment they add a value, without anyone remembering to extend this file.
  */
 
-type Scope = 'page' | 'chrome' | 'panel' | 'brand';
-const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand'];
+type Scope = 'page' | 'chrome' | 'panel' | 'brand' | 'auth';
+const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand', 'auth'];
 
 const FLAG_ATTRIBUTES = ['data-designed-chrome', 'data-canvas-visual-language'] as const;
 

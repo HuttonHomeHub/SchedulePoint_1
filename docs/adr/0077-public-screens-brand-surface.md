@@ -5,7 +5,8 @@
   the ADR count from `docs/adr/` and the file arriving alone turns CI red.
 - **Date:** 2026-08-06
 - **Deciders:** Product owner (the brand panel's theme behaviour, the motif over a photograph, the
-  defect scope, no "Remember me", the tagline, and CQ-1/CQ-2/CQ-3); feature-analyst; prior
+  defect scope, no "Remember me", the tagline, and CQ-1/CQ-2/CQ-3; then, at M7, the floating card,
+  the photograph's return, the fixed card height and the one-theme login); feature-analyst; prior
   ui-architect and ux-reviewer passes
 - **Spec:** [`../specs/public-screens-brand/feature-spec.md`](../specs/public-screens-brand/feature-spec.md)
   · **Plan:** [`../specs/public-screens-brand/implementation-plan.md`](../specs/public-screens-brand/implementation-plan.md)
@@ -111,6 +112,9 @@ allowlist is what must **not** grow; the regexes are what **must**.
 
 ### 2. The brand panel is dark navy in **every** theme, and this is deliberate
 
+> **Amended by §8 (M7).** The argument below is correct and was applied to only **half** the
+> screen. M7 extends it to the whole card via a fifth scope, `auth`.
+
 The panel's fill and inks are identical under `:root`, `.dark` and `.corporate`. It does not follow
 the theme; it does not lighten in Light; it does not take Corporate's amber.
 
@@ -140,6 +144,10 @@ in M3-T2) so this is a number in the test output rather than an impression.
 
 ### 3. The panel is filled with a token-drawn motif, and the repository carries no brand asset it cannot draw
 
+> **The photograph bullet below is REVERSED by §8 (M7)**, at the product owner's decision and on
+> a reading of the objection that turned out to be weaker than it looked. Everything else in this
+> section — the motif, the favicon, no `data:`, no CDN, no webfont, no `theme-color` — stands.
+
 **What the repository will carry:**
 
 - **An inline `<svg aria-hidden="true">` TSLD motif** — schematic bars on a lane grid with
@@ -158,7 +166,7 @@ in M3-T2) so this is a number in the test output rather than an impression.
 
 **What it will not carry, and why:**
 
-- **No raster photograph or illustration.** It cannot follow tokens, it cannot follow the surface
+- **No raster photograph or illustration** _(reversed in M7 — see §8)_. It cannot follow tokens, it cannot follow the surface
   scope, it is invisible to the contrast matrix, it is a real payload on the LCP path of the one
   route a stranger loads cold, and it needs an asset pipeline this repository does not have.
 - **No `data:` URI icon.** Blocked by `img-src 'self' blob:`.
@@ -349,11 +357,121 @@ does not obviously cover and the case that breaks everything at once.
 
 ---
 
+### 8. M7 — the floating card, the photograph, and one login theme
+
+_(Product-owner decision, 2026-08-06, after seeing M0–M6 live beside screenshots of the previous
+Flask app. Three choices were put and answered: bring the photograph back; keep the card the same
+height on every screen; keep this epic's behavioural fixes.)_
+
+M6 shipped a full-bleed two-column split. The product owner's reaction was specific and worth
+recording verbatim, because it is the whole brief: _"I really liked that the login box was floating
+and not a full page … the one thing I do like about our current design is that the actual login
+element is always the same height."_ So M7 restores the old app's **shape**, keeps this epic's
+**behaviour**, and takes one decision the old app never faced.
+
+**8.1 The card floats on a ground.** `w-full max-w-[900px]` on a `--ground` → `--ground-end`
+gradient, with `min-h-dvh place-items-center` on the ground behind it. The numbers are the old app's,
+read from `static/css/auth.css` and `static/css/main.css` in `HuttonHomeHub/SchedulePoint` rather
+than matched by eye: 900px, `max-width: 95%`, `linear-gradient(135deg, #f5f7fa, #c3cfe2)`, the 3px
+amber seam at `top: 25%; height: 50%` of the panel's right edge. `min-h-dvh` and **never** `h-dvh` —
+a card taller than a short landscape viewport must push the ground past one screen and scroll, and a
+fixed ground height clips it instead. `brand-panel.test.tsx` pins both halves.
+
+**8.2 The ground stops are a global pair, not family members.** `--ground` / `--ground-end` sit
+beside `--canvas` / `--canvas-band` for the same reason those do: **a gradient needs two stops and
+the 17-name surface vocabulary has no word for the second one.** They are exposed through
+`@theme inline` as ordinary utilities, unlike the surface families, because there is nothing to
+protect — no component can be confused about which surface it is on by using `bg-ground`.
+
+**8.3 A fifth scope, `auth`, and §1's bar is what admits it.** §2 pinned the panel because a
+signed-out visitor never chose a theme. That argument was applied to **half the screen**: the panel
+was theme-invariant and the card beside it still followed the theme, so a Dark-mode visitor met a
+fixed navy panel joined to a dark card — one screen wearing two identities, an inconsistency nobody
+chose. The product owner named it independently: _"login is product-specific and not something a
+dark mode would always apply to; user customisation after login is fine."_
+
+Against §1's five conditions: (1) descendants keep the semantic names — `Input`'s five tokens are all
+rebound names, so the fields repaint with **no component change at all**; (2) theme-invariance is
+exactly the reason `brand` qualified, and the page fill cannot express it; (3) the family is complete
+at 17 tokens in all three theme blocks and every pair is computed — see 8.5; (4) `AuthShell` is a
+real consumer on the day it lands; (5) it goes through `<Surface tone="auth">`, and both structural
+regexes were widened rather than the `ALLOWED` list.
+
+**Why the card could not simply use `chrome`, `panel` or `Card`.** `--card` is deliberately **not**
+one of the 17 rebound names, so no scope can repaint `Card`'s `bg-card` — which is why `AuthShell`
+owns its own container rather than wrapping one. `chrome` is near-white in Light and dark navy in
+Dark: binding the card there re-imports the theme dependence the scope exists to remove.
+
+**8.4 The photograph comes back, and §3's objection was weaker than it read.** §3 rejected a
+photograph on five grounds. Restating them against what actually shipped:
+
+| §3's objection                                          | Standing                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "It is invisible to the contrast matrix"                | **The load-bearing one, and it does not apply.** The photograph sits under a navy wash at 80–90% opacity, and every word on the panel sits on the **wash** — which is `--background` inside the scope, a token the matrix reads. At that opacity the image is a texture, not a picture. |
+| "It cannot follow tokens or the surface scope"          | True and irrelevant for the same reason: it carries nothing that needs to. The panel is `aria-hidden`, so there is no alt text either.                                                                                                                                                  |
+| "A real payload on the LCP path"                        | Real, and the reason `docs/BRAND_ASSETS.md` states a budget in hundreds of kilobytes rather than megabytes.                                                                                                                                                                             |
+| "Needs an asset pipeline this repository does not have" | It needs one file in `public/`. That is the pipeline.                                                                                                                                                                                                                                   |
+
+It is served **same-origin**, and that is not a preference: the deployed CSP is
+`img-src 'self' blob:` (`docker-compose.yml:81`), so the old app's hotlink to `images.unsplash.com`
+would be blocked outright on the real site. A **missing** file degrades correctly — the request 404s,
+nothing paints, the navy shows through, and the mark and tagline stay legible — which is what let the
+panel merge before the asset arrived.
+
+**8.5 Two of the old app's colours are DERIVED rather than sampled, and the gate is why.** Adding
+`auth` to `token-contrast.test.ts` failed **18 assertions** immediately, across three themes and both
+flag states, on two real defects: the old app's amber focus ring is **2.02:1** against the white card
+and its field outline **2.22:1** against the field fill — both WCAG 1.4.11 failures at 3:1. Neither
+is noticeable by looking, which is the point: _a focus ring you cannot see looks exactly like a focus
+ring you have not triggered_. Both were walked down in lightness at the same hue and chroma to the
+first value that clears the bar — ring **3.36:1** on the card and **3.01:1** on a field, outline the
+same. This is the fourth epic in which the computed matrix caught something a human read past, and
+the first in which the thing it caught was a decision to copy a design that was already wrong.
+
+**8.6 What M7 deliberately does not take from the old app.** The old screens filled each field with a
+leading icon (envelope, padlock, person). Reproducing that means an icon slot on the shared `Input`
+primitive — a design-system change with every consumer in the product downstream of it, on a
+component API that deserves its own review. It is **not** part of the look this milestone claims to
+have delivered, and saying so here is cheaper than a reader later concluding it was missed.
+
+**8.6b The layout suite found two more things, and one of them was in the suite itself.**
+
+- **A 34%-decoration landscape phone.** The large centred lockup that is right at `md`+ measured
+  **124px on a 640×360 viewport** — a third of the screen — against the 25% bound `e2e-public`
+  asserts. The mark now takes the row form at `text-lg` below `md` and the band is back to **76px**,
+  via responsive utilities rather than two elements: two copies behind `hidden`/`md:hidden` both land
+  in jsdom's accessibility tree and silently make every `getByText` on a public screen ambiguous.
+- **A test that could only pass six times.** The 100-character organisation-name test shipped in M6
+  with the name as a `const`. `organizations.service.ts:24,54-55` derives a slug from the name and
+  retries collisions with `-2`, `-3` … up to `MAX_SLUG_ATTEMPTS = 6`, so against a **persistent**
+  database the seventh run is refused and the failure presents as the onboarding heading never going
+  away — nothing like its cause. CI never sees it, because CI gets a fresh database every run, which
+  makes it exactly the trap that punishes the local-first workflow §19.7 asks for. The name now
+  carries a stamp at character 40, inside the slug's own truncation window; appended it would be cut
+  off before the slug was derived and change nothing.
+
+**Measured at the reflow floor, after the fixes** (320×568, tallest first): `/sign-up` 625px,
+`/verify-email` 583px, the other eight 568px — i.e. eight of ten states now fit one phone screen with
+no scroll, band 76px throughout. At 1440×900 all ten states measure a card of **exactly 640px**.
+
+**8.7 No flag, again, and the reason is stronger than §5's.** §5 argued the epic adds a family rather
+than re-valuing existing tokens, so flag-off parity is structural. M7 is the same shape one step
+further: it adds a fifth family and a global pair, changes no existing token's value, and touches two
+layout components. The mitigation is the commit boundary — the shell rewrite is one revertible
+commit — and the browser-measured layout suite, which now also pins the fixed card height across all
+ten URL-reachable states.
+
+---
+
 ## Consequences
 
 **Positive**
 
-- The product is recognisable before sign-in, identically, on every machine.
+- The product is recognisable before sign-in, identically, on every machine — and after M7 that is
+  true of the **whole** screen rather than the panel alone.
+- The login is the old app's, deliberately: a 900px card floating on its gradient, the navy
+  photographic panel, the amber seam. Restoring a shape people already trusted, on this repository's
+  gates, is cheaper than designing a replacement for it.
 - Six dead-end states, one stale heading, one native `disabled` and an unhandled 429 are gone — three
   of which are patterns this repository has now closed for the third or fourth time elsewhere.
 - The public screens enter the design system's own gates for the first time: the colour-literal lint
@@ -365,13 +483,21 @@ does not obviously cover and the case that breaks everything at once.
 
 **Negative / cost**
 
-- The token vocabulary grows by 17 × 3 = **51 declarations**, and every future surface-token change is
-  now four families to keep in step. This is the standing cost of the mechanism and it is real.
-- The contrast matrix grows by a third (3 themes × **4** scopes × 2 flag states).
+- The token vocabulary grows by 17 × 3 = **51 declarations** for `brand`, and again for `auth` at M7
+  — **102**, plus the two-token ground pair. Every future surface-token change is now five families
+  to keep in step. This is the standing cost of the mechanism and it is real.
+- The contrast matrix grows to 3 themes × **5** scopes × 2 flag states. It earned that cost
+  immediately: adding `auth` went red on 18 assertions covering two real WCAG 1.4.11 failures (§8.5).
+- **The login screen no longer follows the theme at all.** A reader who set Dark and signs out meets
+  a light card. That is the decision, not a defect — §8.3 — and it is recorded here so it is not
+  "fixed" by someone who meets it without the context.
 - No flag means a defect in M4 reaches users on the next release, on a host with autodeploy enabled.
   The mitigation is a commit boundary and the M6 measurement, not a switch.
-- A Dark-theme user gets a dark panel beside a dark card; the boundary is a border rather than a
-  contrast step. Reported as a number by the adjacent-surface check rather than argued.
+- ~~A Dark-theme user gets a dark panel beside a dark card; the boundary is a border rather than a
+  contrast step.~~ **Resolved by M7** (§8.3): the card is theme-invariant white, so the navy panel
+  always meets it as a contrast step. This cost was the symptom that produced the fifth scope.
+- The old app's leading field icons are **not** reproduced (§8.6). The screens read as the old app in
+  shape, colour and photograph; they do not match it field for field.
 
 **Neutral / follow-ups**
 
