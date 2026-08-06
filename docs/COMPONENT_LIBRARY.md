@@ -336,6 +336,25 @@ exist. `size: 'inherit'` (the default) takes the surrounding prose's size; `size
 hand-written copies of `text-primary font-medium underline-offset-4 hover:underline` across the
 public screens — and it adds the visible focus ring none of those copies had.
 
+## Layout: `BrandPanel` and `TsldMotif` (`components/layout/`)
+
+The dark navy panel beside the card on every public screen (ADR-0077). `BrandPanel` is a
+`<Surface tone="brand" as="aside">` carrying `BrandMark`, the motif and the verbatim tagline; it is
+`aria-hidden`, because the same three decorative facts on six screens should not be read aloud six
+times and nothing in it is information available nowhere else.
+
+**One `<aside>`, always rendered — only its proportion changes.** The obvious responsive shape is
+two copies behind `hidden md:flex` / `md:hidden`, and it would break thirty suites silently: jsdom
+has no CSS, so both land in the accessibility tree, `getByText` goes ambiguous and `getAllBy*`
+assertions keep passing while asserting nothing. `brand-panel.test.tsx` counts the lockup for that
+reason.
+
+`TsldMotif` is inline SVG, not an asset: `img-src 'self' blob:` has no `data:`, so both a file and a
+`data:` URI are fetches this origin pays for or refuses. Inline markup is neither, and it stays
+inside the design system's reach — the colour-literal lint rule and the contrast matrix can both see
+it. It draws from the **enclosing scope's** semantic names and never from `--chart-*`, which is not
+rebound per surface and would land near 1.4:1 on a fixed navy panel for Corporate users.
+
 ## Primitive: `Surface` (`components/ui/surface.tsx`)
 
 Marks a region as a **surface scope** (ADR-0055): the semantic token names keep their

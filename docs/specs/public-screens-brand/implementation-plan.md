@@ -621,7 +621,14 @@ one `git revert` — that is the mitigation standing in for a feature flag.
 > **Testing requirements:** unit for the once-only lockup; unit for `AuthShell`'s unchanged
 > contract; the M6 browser sweep before the milestone is called done.
 
-##### Task M4-T1 — `TsldMotif`
+##### Task M4-T1 — `TsldMotif` — ✅ **DONE 2026-08-06**
+
+- **Outcome:** five bars (under the cap), three finish-to-start links with arrowheads, day
+  gridlines, all from the enclosing scope's own semantic names — no `--chart-*`, no literal.
+  Inline SVG, so it is not an `img-src` fetch and the CSP cannot block it. The colour-literal lint
+  rule reaching this file was **verified by inserting `fill-[#14213D]` and watching it fail**, not
+  assumed. Links are drawn under the bars and orthogonally, matching the real painter's order and
+  ADR-0065's reason for refusing diagonals.
 
 - **Description:** an inline `<svg aria-hidden="true">` of 4–6 schematic bars on a lane grid with 3
   finish-to-start links and arrowheads — the product's own picture, drawn in tokens.
@@ -640,7 +647,15 @@ one `git revert` — that is the mitigation standing in for a feature flag.
   1. `components/layout/tsld-motif.tsx`, all strokes/fills from compiled utilities.
   2. Assert the lint rule covers it — deliberately insert a literal, confirm the failure, remove it.
 
-##### Task M4-T2 — `BrandPanel`
+##### Task M4-T2 — `BrandPanel` — ✅ **DONE 2026-08-06**
+
+- **Outcome:** `<Surface tone="brand" as="aside">` with `BrandMark` (which existed and no public
+  screen used), the motif, and the tagline verbatim. `aria-hidden`, because the same three
+  decorative facts on six screens should not be read aloud six times — and nothing in it is
+  information available nowhere else. `brand-panel.test.tsx` counts the lockup, which is the jsdom
+  trap the task names: two copies behind `hidden md:flex`/`md:hidden` would both land in the
+  accessibility tree and make every `getByText` on these screens ambiguous while `getAllBy*`
+  assertions kept passing.
 
 - **Description:** `<Surface tone="brand" as="aside">` carrying `BrandMark` (which exists at
   `components/layout/brand-mark.tsx` and **no public screen uses**), the verbatim tagline
@@ -663,7 +678,16 @@ one `git revert` — that is the mitigation standing in for a feature flag.
   2. Add a `DESIGN_SYSTEM.md` note that `brand` is the fourth scope and state **the bar for a fifth**
      (ADR-0077).
 
-##### Task M4-T3 — Two-column `AuthShell`
+##### Task M4-T3 — Two-column `AuthShell` — ✅ **DONE 2026-08-06**
+
+- **Outcome:** a two-column grid at `md`+, one column below, with the panel as a **layout** sibling
+  rather than a second element. `min-h-dvh` survives and is now asserted rather than assumed.
+  **Every public-screen suite passed unchanged** — 391 files / 3,840 tests — which is the extraction
+  proof this task asked for.
+  **One item of this task's description is already stale and it is my doing:** it lists `size` among
+  the props that must not change, but M2-T4 deleted that prop when it unified the card width. The
+  contract that had to hold — `title`, `description`, `busy`, `children`, one `main`, `aria-busy` on
+  it — did.
 
 - **Description:** grid at `md`+, single column below with the panel as a band above the card and the
   tagline dropped.

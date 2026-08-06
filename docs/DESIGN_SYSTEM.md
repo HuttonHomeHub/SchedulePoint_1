@@ -235,6 +235,17 @@ Three rules keep this honest:
   `var(--token)` rather than a value resolved once at `:root`. Drop it and every scope
   silently stops working, with no error and a diff that looks like a tidy-up. Pinned by test.
 
+**There are four scopes, and the bar for a fifth is written down.** `chrome` (the app's top band),
+`panel` (the navigator rail), the page (`:root`), and — since ADR-0077 — `brand`, the public
+screens' navy panel. `brand` is the odd one: it is **theme-invariant**, identical in Light, Dark and
+Corporate, because a signed-out visitor cannot choose a theme and `theme-boot.js` chooses one for
+them. Do not "fix" it to follow the theme.
+
+A scope is a whole parallel vocabulary that every future value change must be applied to once more,
+so **add one only when all five of ADR-0077 §1's conditions hold**. The load-bearing one: the
+region's fill must be chosen for a reason the page's fill structurally cannot serve. If descendants
+would have to know where they are, it is not a scope — it is a component with props.
+
 **A field is not a surface.** `--field` / `--field-foreground` /
 `--field-muted-foreground` are their own pair set, because an input inside the navy chrome
 is white: its ink and its placeholder belong to the field's colour system, not the band's.

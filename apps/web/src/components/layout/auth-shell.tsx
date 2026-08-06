@@ -1,3 +1,5 @@
+import { BrandPanel } from './brand-panel';
+
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -24,6 +26,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
  * reason they can name. `docs/DESIGN_SYSTEM.md` calls 448px the width of a record form, and every
  * one of these screens is one. The prop is gone rather than defaulted, so there is nothing to set
  * back.
+ *
+ * **Two columns at `md`+, one below** (ADR-0077 M4). The brand panel is a sibling of the card in a
+ * grid, so the card's own contract — heading, description, children, `aria-busy` — is untouched
+ * and every existing public-screen suite passes unchanged. Below `md` the grid collapses to a
+ * single column and the panel becomes a band above the card, **by layout, not by a second
+ * element**: rendering a phone copy and a desktop copy would put both in jsdom's accessibility
+ * tree and quietly make every `getByText` on these screens ambiguous.
+ *
+ * `min-h-dvh` is load-bearing and predates this: centring a tall card in a 360px-high landscape
+ * viewport is where content gets clipped. It stays, and `auth-shell.test.tsx` asserts it.
  */
 export function AuthShell({
   title,
@@ -42,23 +54,28 @@ export function AuthShell({
 
   return (
     <AnnouncerProvider>
-      <main className="flex min-h-dvh items-center justify-center p-4" aria-busy={busy}>
-        <Card className="w-full max-w-md">
-          {hasHeader ? (
-            <CardHeader>
-              <CardTitle>{title}</CardTitle>
-              {description === undefined ? null : <CardDescription>{description}</CardDescription>}
-            </CardHeader>
-          ) : null}
-          {/* Without a header the children ARE the card — they bring their own CardHeader — so
-              wrapping them in CardContent would double the padding. That is the shape the
-              accept-invite flow uses and the reason this branch exists. */}
-          {hasHeader ? (
-            <CardContent className="flex flex-col gap-6">{children}</CardContent>
-          ) : (
-            children
-          )}
-        </Card>
+      <main className="grid min-h-dvh md:grid-cols-2" aria-busy={busy}>
+        <BrandPanel />
+        <div className="flex items-center justify-center p-4 md:p-8">
+          <Card className="w-full max-w-md">
+            {hasHeader ? (
+              <CardHeader>
+                <CardTitle>{title}</CardTitle>
+                {description === undefined ? null : (
+                  <CardDescription>{description}</CardDescription>
+                )}
+              </CardHeader>
+            ) : null}
+            {/* Without a header the children ARE the card — they bring their own CardHeader — so
+                wrapping them in CardContent would double the padding. That is the shape the
+                accept-invite flow uses and the reason this branch exists. */}
+            {hasHeader ? (
+              <CardContent className="flex flex-col gap-6">{children}</CardContent>
+            ) : (
+              children
+            )}
+          </Card>
+        </div>
       </main>
     </AnnouncerProvider>
   );
