@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppConfigService } from '../../config/app-config.service';
 
 import {
-  MAIL_TRANSPORT_UNREACHABLE,
+  MAIL_TRANSPORT_CHECK_FAILED,
   MAIL_TRANSPORT_VERIFIED,
   MailBootstrapService,
   smtpEndpoint,
@@ -71,7 +71,7 @@ describe('MailBootstrapService', () => {
     ).resolves.toBeUndefined();
 
     expect(logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ event: MAIL_TRANSPORT_UNREACHABLE, host: 'smtp.resend.com' }),
+      expect.objectContaining({ event: MAIL_TRANSPORT_CHECK_FAILED, host: 'smtp.resend.com' }),
       expect.any(String),
     );
     // The failure path is the one where a careless `err` spread could carry the URL out with it.

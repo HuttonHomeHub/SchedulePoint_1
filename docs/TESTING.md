@@ -266,15 +266,24 @@ pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 cheaper than the one after it and than the CI round-trip it replaces, so a
 failure should surface at the earliest step that can see it.
 
-| #   | Run                                                         | When                                                                                 |
-| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                               |
-| 2   | `pnpm test`                                                 | always                                                                               |
-| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration               |
-| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives |
-| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite)) |
-| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                       |
-| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile           |
+| #   | Run                                                         | When                                                                                    |
+| --- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                  |
+| 2   | `pnpm test`                                                 | always                                                                                  |
+| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                  |
+| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives    |
+| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))    |
+| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                          |
+| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile              |
+| 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file         |
+| 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call` |
+
+Steps 7 and 8 are ADR-0076's gates and both run in milliseconds off the
+filesystem, so "always" is a fine answer for when to run them — the `When`
+column says what makes them likely to **fail**, not what makes them worth
+running. Step 8's failure on a dependency bump is deliberate: the bump is the
+moment 34 file-and-line citations need re-reading, and it is the only moment
+anybody would.
 
 `scripts/e2e-local.sh` brings up Postgres, creates the `app` role and `app_test`
 database **with the same credentials CI uses**, applies migrations, finds the
@@ -346,8 +355,17 @@ Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   cannot see the failure: the package already has a `dist/` from an earlier
   build, so the omission only appears on a clean machine — `@repo/layout`
   (ADR-0069) shipped that way and turned up as `Cannot find module` inside
-  `nest build`, minutes into CI, for a module that plainly exists. None of the
-  three checks needs a database.
+  `nest build`, minutes into CI, for a module that plainly exists.
+  `pnpm check:counts` re-derives `CLAUDE.md`'s six stage-banner figures from the
+  tree; it exists because every one of them was wrong at a reconciliation pass,
+  the correction told readers to re-run `ls | wc -l`, and five of six were wrong
+  again a day later (ADR-0076). `pnpm check:claims` pins the 34 file-and-line
+  citations this repository makes into `better-auth` and `better-call` — the
+  version each was verified against, an anchor from the code at each cited line,
+  and that no citation exists outside `scripts/dependency-claims.json`. Those
+  citations are load-bearing (ADR-0074 and ADR-0075 both turn on them) and a
+  minor bump moves every one while the prose keeps reading as authoritative.
+  **None of these checks needs a database.**
 - **e2e** — provisions a Postgres service, generates the Prisma client, applies
   migrations (`prisma migrate deploy`), checks for schema/migration drift, runs
   the API Supertest suite, then runs each Playwright suite as its own step

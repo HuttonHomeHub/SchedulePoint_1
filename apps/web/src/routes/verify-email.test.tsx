@@ -148,8 +148,18 @@ describe('pendingDescription', () => {
     expect(copy).not.toContain('undefined');
   });
 
-  it('offers a way out that is not another resend', () => {
-    // If the transport is down, Resend fails too. A screen whose only advice is "resend" loops.
-    expect(pendingDescription('a@b.test')).toMatch(/ask whoever set up your organisation/i);
+  it('says the fault may not be the reader’s, rather than leaving them to keep resending', () => {
+    // If the transport is down, Resend fails too, so a screen whose only advice is "resend" sends
+    // the reader round a loop that cannot terminate.
+    //
+    // **This assertion changed with the copy, and the reason matters.** It used to require the
+    // words "ask whoever set up your organisation" — naming a human as the exit. The ADR-0075 UX
+    // review pointed out that is a **dead end for a self-signup**, who has no such person; the
+    // sentence sent exactly the reader most likely to be stuck to nobody. The exit is now an
+    // honest statement that the failure is probably ours, which stops the resend loop by removing
+    // the implication that the reader is doing something wrong.
+    const copy = pendingDescription('a@b.test');
+    expect(copy).toMatch(/our end rather than yours/i);
+    expect(copy).not.toMatch(/ask whoever set up/i);
   });
 });

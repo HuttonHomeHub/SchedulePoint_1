@@ -1,0 +1,354 @@
+{
+  "verifiedAgainst": {
+    "better-auth": "1.6.25",
+    "better-call": "1.3.7"
+  },
+  "claims": [
+    {
+      "ref": "create-context.mjs:169-175",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "169-175",
+      "anchor": "storage: options.rateLimit?.storage || (options.secondaryStorage ? \"secondary-storage\" : \"",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "create-context.mjs:210",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "210",
+      "anchor": "skipOriginCheck: options.advanced?.disableOriginCheck !== void 0 ? options.advanced.disabl",
+      "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
+    },
+    {
+      "ref": "create-context.mjs:214-224",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "214-224",
+      "anchor": "if (promise instanceof Promise) options.advanced.backgroundTasks.handler(promise.catch((e)",
+      "citedBy": [
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "create-context.mjs:220",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "220",
+      "anchor": "} else await promise;",
+      "citedBy": [
+        "docs/TECH_DEBT.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "dispatch.mjs:117-126",
+      "package": "better-auth",
+      "path": "dist/api/dispatch.mjs",
+      "lines": "117-126",
+      "anchor": "if (shouldPublishLog(context.context.logger.level, \"debug\")) e.stack = e.errorStack;",
+      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
+    },
+    {
+      "ref": "dispatch.mjs:255-257",
+      "package": "better-auth",
+      "path": "dist/api/dispatch.mjs",
+      "lines": "255-257",
+      "anchor": "return shouldReturnResponse ? toResponse(result.response, {",
+      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
+    },
+    {
+      "ref": "email-verification.mjs:104-117",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "104-117",
+      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
+      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts", "docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "email-verification.mjs:119-121",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "119-121",
+      "anchor": "if (session?.user.email.toLowerCase() !== email.toLowerCase()) throw APIError.from(\"BAD_RE",
+      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
+    },
+    {
+      "ref": "email-verification.mjs:13-19",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "13-19",
+      "anchor": "async function createEmailVerificationToken(secret, email, updateTo, expiresIn = 3600, ext",
+      "citedBy": [
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:285-286",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "285-286",
+      "anchor": "if (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
+      "citedBy": ["apps/web/src/routes/verify-email.tsx"]
+    },
+    {
+      "ref": "email-verification.mjs:98-117",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "98-117",
+      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "index.mjs:168",
+      "package": "better-auth",
+      "path": "dist/api/index.mjs",
+      "lines": "168",
+      "anchor": "const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);",
+      "citedBy": [
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "index.mjs:370-383",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "370-383",
+      "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "index.mjs:370-384",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "370-384",
+      "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
+      "citedBy": ["docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"]
+    },
+    {
+      "ref": "internal-adapter.mjs:650-660",
+      "package": "better-auth",
+      "path": "dist/db/internal-adapter.mjs",
+      "lines": "650-660",
+      "anchor": "* return it. The first concurrent caller receives the latest row for the",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:168-171",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "168-171",
+      "anchor": "if (user) await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request",
+      "citedBy": [
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/account-security/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:172",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "172",
+      "anchor": "if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:173",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "173",
+      "anchor": "return ctx.json({ status: true });",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:49",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "49",
+      "anchor": "use: [originCheck((ctx) => ctx.body.redirectTo)]",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/account-security/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:51-57",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "51-57",
+      "anchor": "ctx.context.logger.error(\"Reset password isn't enabled.Please pass an emailAndPassword.sen",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "apps/api/test/password-reset.e2e-spec.ts",
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:60-72",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "60-72",
+      "anchor": "await ctx.context.internalAdapter.findVerificationValue(\"dummy-verification-token\");",
+      "citedBy": [
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:62-66",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "62-66",
+      "anchor": "await ctx.context.internalAdapter.findVerificationValue(\"dummy-verification-token\");",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "apps/web/src/features/auth/components/RequestPasswordResetForm.tsx"
+      ]
+    },
+    {
+      "ref": "password.mjs:82",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "82",
+      "anchor": "await ctx.context.runInBackgroundOrAwait(ctx.context.options.emailAndPassword.sendResetPas",
+      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts"]
+    },
+    {
+      "ref": "password.mjs:92-128",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "92-128",
+      "anchor": "if (!verification || verification.expiresAt < /* @__PURE__ */ new Date()) throw ctx.redire",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "sign-in.mjs:312-324",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-in.mjs",
+      "lines": "312-324",
+      "anchor": "const token = await createEmailVerificationToken(ctx.context.secret, user.user.email, void",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"
+      ]
+    },
+    {
+      "ref": "sign-up.mjs:149",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "149",
+      "anchor": "const { name, email, password, image, callbackURL: _callbackURL, rememberMe, ...rest } = b",
+      "citedBy": ["apps/web/src/features/auth/api/use-session.ts"]
+    },
+    {
+      "ref": "sign-up.mjs:162",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "162",
+      "anchor": "const shouldReturnGenericDuplicateResponse = ctx.context.options.emailAndPassword.requireE",
+      "citedBy": [
+        "apps/api/test/mail-failure.e2e-spec.ts",
+        "docs/TECH_DEBT.md",
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/account-security/implementation-plan.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md",
+        "docs/specs/mail-delivery-failure-visibility/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "sign-up.mjs:162-163",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "162-163",
+      "anchor": "const shouldReturnGenericDuplicateResponse = ctx.context.options.emailAndPassword.requireE",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "sign-up.mjs:244",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "244",
+      "anchor": "const callbackURL = body.callbackURL ? encodeURIComponent(body.callbackURL) : encodeURICom",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "apps/web/src/features/auth/api/use-session.verification.test.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"
+      ]
+    },
+    {
+      "ref": "sign-up.mjs:246",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "246",
+      "anchor": "if (ctx.context.options.emailVerification?.sendVerificationEmail) await ctx.context.runInB",
+      "citedBy": [
+        "apps/api/src/common/mail/smtp-mail.service.ts",
+        "docs/TECH_DEBT.md",
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "sign-up.mjs:252-254",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "252-254",
+      "anchor": "user: parseUserOutput(ctx.context.options, createdUser)",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.verification.test.ts",
+        "apps/web/src/routes/sign-up.tsx",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/account-security/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "to-response.mjs:127-131",
+      "package": "better-call",
+      "path": "dist/to-response.mjs",
+      "lines": "127-131",
+      "anchor": "if (isAPIError(data)) return toResponse(data.body, {",
+      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
+    },
+    {
+      "ref": "verification-token-storage.mjs:10-12",
+      "package": "better-auth",
+      "path": "dist/db/verification-token-storage.mjs",
+      "lines": "10-12",
+      "anchor": "if (typeof option === \"object\" && \"hash\" in option) return option.hash(identifier);",
+      "citedBy": ["docs/specs/account-security/implementation-plan.md"]
+    },
+    {
+      "ref": "verification-token-storage.mjs:8-13",
+      "package": "better-auth",
+      "path": "dist/db/verification-token-storage.mjs",
+      "lines": "8-13",
+      "anchor": "if (typeof option === \"object\" && \"hash\" in option) return option.hash(identifier);",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md"
+      ]
+    }
+  ]
+}

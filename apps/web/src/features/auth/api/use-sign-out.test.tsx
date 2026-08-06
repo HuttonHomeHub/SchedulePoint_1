@@ -71,4 +71,25 @@ describe('signing out', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(queryClient.getQueryData(['plans', 'acme'])).toBeUndefined();
   });
+
+  it('drops it even when the sign-out REQUEST fails', async () => {
+    // `onSuccess` would skip the whole clean-up here, leaving the previous person's plans in memory
+    // and on screen after they pressed Sign out — on the shared machine where that matters most.
+    // Whether the server-side session survived is unknowable from the client and is not the
+    // question: the intent was to leave.
+    const { authClient } = await import('@/lib/auth-client');
+    vi.mocked(authClient.signOut).mockRejectedValueOnce(new Error('Failed to fetch'));
+
+    const { queryClient, wrapper } = harness();
+    queryClient.setQueryData(sessionKeys.session, { user: { id: 'u1' } });
+    queryClient.setQueryData(['plans', 'acme'], [{ id: 'p1', name: 'Unit 300' }]);
+
+    const { result } = renderHook(() => useSignOut(), { wrapper });
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(queryClient.getQueryData(['plans', 'acme'])).toBeUndefined();
+    // …and the seeded `null` sends the guard to /sign-in, which is the right place to be.
+    expect(queryClient.getQueryData(sessionKeys.session)).toBeNull();
+  });
 });

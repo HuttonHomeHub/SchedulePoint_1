@@ -7,7 +7,7 @@ import { MailService } from './mail.service';
 
 /** Boot-time outcomes. Siblings of `mail.send_failed`, sharing its `mail.` prefix so one query finds the lot. */
 export const MAIL_TRANSPORT_VERIFIED = 'mail.transport_verified';
-export const MAIL_TRANSPORT_UNREACHABLE = 'mail.transport_unreachable';
+export const MAIL_TRANSPORT_CHECK_FAILED = 'mail.transport_check_failed';
 
 /**
  * Host and port for the log context — **never the credential**.
@@ -69,7 +69,7 @@ export class MailBootstrapService implements OnApplicationBootstrap {
       this.logger.info({ event: MAIL_TRANSPORT_VERIFIED, ...endpoint }, 'mail transport reachable');
     } catch (error) {
       this.logger.error(
-        { event: MAIL_TRANSPORT_UNREACHABLE, ...endpoint, err: error },
+        { event: MAIL_TRANSPORT_CHECK_FAILED, ...endpoint, err: error },
         'mail transport is NOT reachable — invitations, verification and password resets will not be delivered; the API has started anyway',
       );
     }

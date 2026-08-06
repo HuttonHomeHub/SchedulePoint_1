@@ -170,9 +170,15 @@ Three properties worth knowing before you turn it on:
   event = "mail.send_failed"
   ```
 
-  Every mail failure carries it, with a `message` field naming which one
+  Every mail failure carries it, with a `kind` field naming which one
   (`invitation` / `email_verification` / `password_reset`), the recipient, and the error —
   structured, in the Pino stream, with the correlation id, and never containing a URL or token.
+
+  A **second, quieter** record shares the term: `event: "mail.send_failed"` with
+  `abandoned: true`, logged at `warn`. That one means a send exceeded its 10-second bound, the
+  request was released, and the send _then_ failed anyway. If you are counting failures, filter it
+  out; if you are asking whether the bound is too tight, it is the record to count. A burst of
+  them means the relay is slow rather than broken.
 
   Until 2026-08-05 this bullet told you to watch for Better Auth's `Failed to run background
 task`. **That line can no longer be produced by a mail failure**: the SMTP adapter catches
@@ -187,7 +193,7 @@ task`. **That line can no longer be produced by a mail failure**: the SMTP adapt
 #### The boot-time transport check
 
 When `MAIL_SMTP_URL` is set, the API performs **one bounded SMTP handshake at start-up** and logs
-`event: "mail.transport_verified"` or `event: "mail.transport_unreachable"`, with the **host and
+`event: "mail.transport_verified"` or `event: "mail.transport_check_failed"`, with the **host and
 port only** — never the credential inside the URL. It is capped at 5 seconds.
 
 **It never fails the boot, and it is deliberately not part of `/health/ready`.** Your host
@@ -195,6 +201,25 @@ recreates containers unattended on a released image (ADR-0047), so a relay that 
 unreachable at 03:00 would otherwise take the API down and keep it down until somebody noticed;
 and putting it in readiness would turn a mail outage into a restart loop. Mail is not on the
 critical path of scheduling — the API is.
+
+**"Never fails the boot" is not "costs nothing".** It runs on `OnApplicationBootstrap`, which is
+before Nest begins listening, so an unreachable relay adds **up to 5 seconds** to start-up during
+which the port is not bound. That is invisible on a healthy host and worth knowing on a recreate
+you are watching: a container that seems to hang for five seconds and then comes up normally,
+right after a mail-server change, is this check timing out and not a fault.
+
+#### Every send is bounded at 10 seconds
+
+Mail **is** on the request path, which surprised this project's own design documents (ADR-0075
+§"Mail is on the request path"). Better Auth awaits the send unless a background handler is
+configured, and none is, so sign-up, password-reset requests, verification resends and invitation
+creation each wait for a real SMTP round trip. Nodemailer's own defaults would allow that wait to
+reach **ten minutes** on a socket that connects and then goes quiet, so the adapter caps it at ten
+seconds.
+
+Practically: a broken relay costs each affected request ten seconds and then answers normally. If
+you see request latency on those four endpoints step to ~10 s, look at `mail.send_failed` before
+looking at the database.
 
 **What a success does not prove**, which is why step 3 of the checklist below still exists:
 
@@ -271,9 +296,14 @@ letting you find out from a user who cannot sign in.
 **The order is load-bearing, and step 3 is the one people skip:**
 
 1. Set `MAIL_SMTP_URL` and `MAIL_FROM`, and restart.
-2. Confirm the API logged no `event: "mail.send_failed"` on first use.
+2. Confirm the restart logged `event: "mail.transport_check_failed"` **nowhere**, and
+   `event: "mail.transport_verified"` **once**. This is the boot handshake described above; it
+   proves the host, port and credential are reachable, and nothing more. Do **not** look for
+   `mail.send_failed` here — nothing has tried to send yet, so its absence at this point means
+   only that no message was attempted, which is exactly the false reassurance this step used to
+   give.
 3. **Complete a real sign-up to a real mailbox and follow the link through to a signed-in
-   session.** Not "an email arrived" — the whole chain. A key with read-only permission
+   session**, confirming no `event: "mail.send_failed"` appears while you do. Not "an email arrived" — the whole chain. A key with read-only permission
    authenticates at boot and fails at send time; a verified-domain mistake delivers to your own
    address and nothing else; and the redirect back is its own failure mode (ADR-0074 M5 found two
    product defects on exactly this path, both invisible to every unit test because they only
