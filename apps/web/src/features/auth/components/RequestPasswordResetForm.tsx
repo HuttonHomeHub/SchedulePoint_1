@@ -1,7 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { RESET_PASSWORD_DISABLED, useRequestPasswordReset } from '../api/use-session';
+import {
+  RESET_PASSWORD_DISABLED,
+  authErrorMessage,
+  useRequestPasswordReset,
+} from '../api/use-session';
 import {
   requestPasswordResetSchema,
   type RequestPasswordResetValues,
@@ -69,7 +73,7 @@ export function RequestPasswordResetForm({
         <p role="alert" className="text-destructive-text text-sm">
           {disabled
             ? 'Password reset is not available on this installation. Contact your administrator.'
-            : request.error.message}
+            : authErrorMessage(request.error, 'email')}
         </p>
       ) : null}
       <TextField

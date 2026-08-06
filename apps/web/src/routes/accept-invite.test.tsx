@@ -156,17 +156,33 @@ describe('accept-invite — the states that explain themselves', () => {
     expect(screen.getByText('Join Hutton Home Hub')).toBeInTheDocument();
   });
 
-  it('row 36: accepting — the button reports itself busy without vanishing', async () => {
-    renderScreen({ accept: () => new Promise(() => {}) });
+  it('row 36: accepting — the button keeps focus and refuses a second submit', async () => {
+    // ADR-0077 M1-T3. Written to fail against `disabled={accept.isPending}`: a native disabled
+    // control blurs to `<body>` the moment the request starts and flips back when it settles, so a
+    // keyboard reader loses their place twice per action (WCAG 2.4.3). `aria-disabled` keeps focus
+    // and does NOT prevent activation — the `onClick` guard is what does, which is why both halves
+    // are asserted here.
+    let accepts = 0;
+    renderScreen({
+      accept: () => {
+        accepts += 1;
+        return new Promise(() => {});
+      },
+    });
     const button = await screen.findByRole('button', { name: 'Accept and join' });
+    button.focus();
     button.click();
 
-    // `aria-busy` rather than a removed control, so a keyboard reader is not thrown to `<body>`
-    // mid-request (the `ScopeSaveBar` rule, ADR-0060 M6).
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Joining…' })).toBeInTheDocument(),
     );
-    expect(screen.getByRole('button', { name: 'Joining…' })).toHaveAttribute('aria-busy', 'true');
+    const busy = screen.getByRole('button', { name: 'Joining…' });
+    expect(busy).toHaveAttribute('aria-busy', 'true');
+    expect(busy).toHaveAttribute('aria-disabled', 'true');
+    expect(document.activeElement).toBe(busy);
+
+    busy.click();
+    expect(accepts).toBe(1);
   });
 
   it('row 37: accept failed — says so and leaves the button to try again', async () => {
@@ -179,46 +195,50 @@ describe('accept-invite — the states that explain themselves', () => {
   });
 });
 
-describe('accept-invite — the dead ends (M1-T1 turns these green)', () => {
-  it('row 28: no token — the route explains, without reaching the card', async () => {
-    // Deliberately asserts only the explanation. Pinning "and no controls" would make M1-T1's fix
-    // break a test that claims to describe correct behaviour — the `.fails` sibling below is the
-    // honest way to record a defect.
+describe('accept-invite — the states that were dead ends (ADR-0077 M1-T2)', () => {
+  // These four asserted `it.fails` when this suite was written at M0-T1: a title, a sentence and
+  // nothing to press, on screens reached from an email. M1-T2 gave each of them a control, and the
+  // assertions were un-`.fails`ed in the same commit — which is what `it.fails` is for.
+
+  it('row 28: no token — explains, and offers the way in', async () => {
     renderScreen({ token: null });
 
     expect(await screen.findByText('Invitation not found')).toBeInTheDocument();
-  });
-
-  it.fails('row 28: no token — should offer a way forward', async () => {
-    renderScreen({ token: null });
-
-    await screen.findByText('Invitation not found');
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     expect(operableControls().length).toBeGreaterThan(0);
   });
 
-  it.fails('row 30: invitation not found — should offer a way forward', async () => {
-    renderScreen({ preview: new Error('404') });
+  it('row 30: invitation not found — offers the way in', async () => {
+    renderScreen({ preview: new Error('404'), session: null });
 
     await screen.findByText('Invitation not found');
-    expect(operableControls().length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create an account' })).toBeInTheDocument();
   });
 
-  it.fails('row 31: invitation no longer valid — should offer a way forward', async () => {
-    renderScreen({ preview: invite({ status: 'ACCEPTED' }) });
+  it('row 31: invitation no longer valid — offers the way in', async () => {
+    renderScreen({ preview: invite({ status: 'ACCEPTED' }), session: null });
 
     await screen.findByText('This invitation is no longer valid');
     expect(operableControls().length).toBeGreaterThan(0);
   });
 
-  it.fails(
-    'row 34: wrong account — should offer the sign-out it tells the reader to perform',
-    async () => {
-      // The sharpest of the four: the copy says "Sign out and use the invited account" and there is
-      // no sign-out on the screen. An instruction with no control is a dead end wearing help's face.
-      renderScreen({ session: member({ email: 'grace@example.com' }) });
+  it('rows 30/31: a signed-in reader is sent into the app, not to a sign-in form', async () => {
+    // `/sign-in` has no already-signed-in guard, so offering it to somebody who is signed in is a
+    // control that is present and wrong — the same class of defect as none at all.
+    renderScreen({ preview: invite({ status: 'ACCEPTED' }) });
 
-      await screen.findByText('Wrong account');
-      expect(operableControls().length).toBeGreaterThan(0);
-    },
-  );
+    await screen.findByText('This invitation is no longer valid');
+    expect(screen.getByRole('link', { name: 'Go to SchedulePoint' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+  });
+
+  it('row 34: wrong account — offers the sign-out the copy asks for', async () => {
+    // The sharpest of the four: the copy said "Sign out and use the invited account" on a screen
+    // with no sign-out. An instruction with no control is a dead end wearing help's face.
+    renderScreen({ session: member({ email: 'grace@example.com' }) });
+
+    await screen.findByText('Wrong account');
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  });
 });

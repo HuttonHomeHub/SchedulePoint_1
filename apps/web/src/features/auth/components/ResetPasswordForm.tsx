@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 
-import { useResetPassword } from '../api/use-session';
+import { authErrorMessage, useResetPassword } from '../api/use-session';
 import { resetPasswordSchema, type ResetPasswordValues } from '../schemas/auth-schemas';
 
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -55,7 +55,7 @@ export function ResetPasswordForm({ token }: { token: string }): React.ReactElem
       <FormErrorSummary errors={errors} />
       {reset.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
-          {reset.error.message}
+          {authErrorMessage(reset.error)}
         </p>
       ) : null}
       <TextField

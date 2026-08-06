@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { EMAIL_NOT_VERIFIED, useSignIn } from '../api/use-session';
+import { EMAIL_NOT_VERIFIED, authErrorMessage, useSignIn } from '../api/use-session';
 import { signInSchema, type SignInValues } from '../schemas/auth-schemas';
 
 import { ResendVerificationButton } from './ResendVerificationButton';
@@ -59,7 +59,7 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
       <FormErrorSummary errors={errors} />
       {signIn.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
-          {signIn.error.message}
+          {authErrorMessage(signIn.error)}
         </p>
       ) : null}
       <TextField

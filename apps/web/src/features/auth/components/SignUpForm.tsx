@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { useSignUp, type SignUpOutcome } from '../api/use-session';
+import { authErrorMessage, useSignUp, type SignUpOutcome } from '../api/use-session';
 import { signUpSchema, type SignUpValues } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,7 @@ export function SignUpForm({
       <FormErrorSummary errors={errors} />
       {signUp.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
-          {signUp.error.message}
+          {authErrorMessage(signUp.error)}
         </p>
       ) : null}
       <TextField

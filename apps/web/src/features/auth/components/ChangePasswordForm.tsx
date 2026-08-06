@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { INVALID_PASSWORD, useChangePassword } from '../api/use-session';
+import { INVALID_PASSWORD, authErrorMessage, useChangePassword } from '../api/use-session';
 import { changePasswordSchema, type ChangePasswordValues } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
@@ -56,7 +56,7 @@ export function ChangePasswordForm(): React.ReactElement {
   // a network drop — so it keeps the form-level alert. The narrowing is what makes that honest.
   const formLevelError =
     changePassword.isError && changePassword.error.code !== INVALID_PASSWORD
-      ? changePassword.error.message
+      ? authErrorMessage(changePassword.error)
       : undefined;
 
   return (

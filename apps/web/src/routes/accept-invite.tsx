@@ -1,7 +1,7 @@
 import { useSearch } from '@tanstack/react-router';
 
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AcceptInvitationCard, InviteShell } from '@/features/members';
+import { AcceptInvitationCard, InviteExitLinks, InviteShell } from '@/features/members';
 
 /** Public route for accepting an invitation from an email/share link. */
 export function AcceptInviteScreen(): React.ReactElement {
@@ -17,6 +17,7 @@ export function AcceptInviteScreen(): React.ReactElement {
           <CardTitle>Invitation not found</CardTitle>
           <CardDescription>This link is missing its invitation token.</CardDescription>
         </CardHeader>
+        <InviteExitLinks />
       </InviteShell>
     );
   }

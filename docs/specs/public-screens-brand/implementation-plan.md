@@ -209,7 +209,16 @@ milestone with the shortest path to value and it should ship on its own.
 > `role="status"`; the form returns beside it, not as a second announcement.
 > **Testing requirements:** unit per state; the four `accept-invite` assertions from M0-T1 flip green.
 
-##### Task M1-T1 — `ResendVerificationButton`: the confirmation stops replacing the control
+##### Task M1-T1 — `ResendVerificationButton`: the confirmation stops replacing the control — ✅ **DONE 2026-08-06**
+
+- **Outcome:** the `role="status"` confirmation now renders **above** the retained form. Focus still
+  moves to it once (it is the new information whether or not the control survived), there is still
+  exactly **one** live region, and editing the address in the `needsAddress` branch clears the
+  mutation so a confirmation about a different address cannot stand over a changed field. The
+  `useOutcomeFocus` docblock, which described this component as one of "four forms" that unmount
+  their own submit, was corrected in the same commit — a docblock describing behaviour that has been
+  fixed is how the ADR-0066 exporter defect stayed alive. New suite:
+  `ResendVerificationButton.test.tsx` (5 tests, all failing against the prior version).
 
 - **Description:** `ResendVerificationButton.tsx:56-63` returns only a `<p role="status">` on
   success; the `<form>` and its button (`:65-87`) are unmounted, and `send.isSuccess` never clears,
@@ -233,7 +242,22 @@ milestone with the shortest path to value and it should ship on its own.
      being removed. A docblock describing behaviour that has been corrected is exactly how the
      ADR-0066 exporter defect stayed alive.
 
-##### Task M1-T2 — `accept-invite`: four refusals gain a control; wrong-account gains Sign out
+##### Task M1-T2 — `accept-invite`: four refusals gain a control; wrong-account gains Sign out — ✅ **DONE 2026-08-06**
+
+- **Outcome:** one shared `InviteExitLinks` for no-token / not-found / not-pending, and a **Sign
+  out** button on wrong-account wired to `useSignOut`. The four `it.fails` assertions from M0-T1
+  were un-`.fails`ed in the same commit, which is what `it.fails` is for.
+  **One deliberate departure from step 1**, recorded rather than folded silently: the exit is
+  **session-aware**. The step said "a `Sign in` link and a `Create an account` link" unconditionally,
+  but `/sign-in` has no already-signed-in guard (`app/router.tsx:101-113` guards `_authed`, not the
+  public routes), so a signed-in reader would be handed a login form they do not need — a control
+  that is present and wrong, which is the same class of defect as no control at all. Signed in they
+  get **Go to SchedulePoint**; signed out, the pair. While the session resolves the pair renders,
+  which is right for the overwhelmingly common case (an emailed link in a fresh browser) and swaps
+  rather than dead-ends otherwise. The wrong-account copy changed with it: "Sign out and **come back
+  to this page as** {email}" rather than "use the invited account", because signing out here keeps
+  the reader on the invitation (the sign-out drops every cached query except the seeded `null`
+  session, so the preview refetches into the signed-out branch).
 
 - **Description:** `AcceptInvitationCard.tsx:72-83` (not found), `:89-100` (not pending),
   `:165-177` (wrong account) and `routes/accept-invite.tsx:14-22` (no token) render a title and a
@@ -256,7 +280,13 @@ milestone with the shortest path to value and it should ship on its own.
   2. Wrong account → a **Sign out** button wired to `useSignOut`, plus the copy change (M2-T4).
   3. Re-read `resolvedOutcome` and confirm each new control's state still announces.
 
-##### Task M1-T3 — B3: `aria-disabled` on Accept and join
+##### Task M1-T3 — B3: `aria-disabled` on Accept and join — ✅ **DONE 2026-08-06**
+
+- **Outcome:** `aria-disabled` + `aria-busy` + an `onClick` early return. The regression test asserts
+  **both halves** — focus stays on the button through the pending state, and a second activation
+  fires no second mutation — because `aria-disabled` alone does not prevent activation and shipping
+  only the first half would be a double-submit bug. **Verified red first** by restoring
+  `disabled={accept.isPending}`.
 
 - **Description:** `AcceptInvitationCard.tsx:192` — `disabled={accept.isPending}`. A native disabled
   control blurs to `<body>` when the request starts and flips back when it settles, so a keyboard
@@ -288,7 +318,19 @@ milestone with the shortest path to value and it should ship on its own.
 > **Testing requirements:** unit per screen; one browser-level test that a real 429 response
 > produces the state.
 
-##### Task M1-T4 — `AuthError` carries `status`; a 429 state exists
+##### Task M1-T4 — `AuthError` carries `status`; a 429 state exists — ✅ **DONE 2026-08-06**
+
+- **Outcome:** `AuthError` gains `status`, fed by a `statusFrom()` sibling to `codeFrom()` and
+  threaded through **all six** construction sites; `useSignUp` and `useSendVerificationEmail` had
+  their mutation error type pinned to `AuthError` to make that reachable (react-query widens it to
+  `Error` otherwise). One `isRateLimited()` predicate and one `authErrorMessage(error, scope)` so six
+  screens cannot drift on what 429 means or how it reads. Copy is the plan's, and a test asserts the
+  attempts sentence **contains no digit** — the window is on `X-Retry-After`, which
+  `@better-fetch/fetch` discards, so a countdown would be a figure nobody read.
+  `use-session.rate-limit.test.ts` covers each of the six hooks separately rather than one of them:
+  "all six were threaded" is a claim until a test says so per hook, and one-control-and-not-its-
+  neighbour is this repo's most repeated defect shape. The browser-level `page.route` fulfilment is
+  M6, since the limiter is `enabled: options.isProduction` and no test API can produce a real 429.
 
 - **Description:** `AuthError` (`features/auth/api/use-session.ts:59-67`) records `message` and
   `code` only. Better Auth's 429 body carries **no `code`**, so every screen falls through to the
