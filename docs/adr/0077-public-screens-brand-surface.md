@@ -290,6 +290,63 @@ in use (`CLAUDE.md` §17).
   every suite that signs in more than three times in ten seconds flaky by design. A Playwright
   `page.route` fulfilment tests our handling of a 429 without asking the server to produce one.
 
+### 7. The enablement measurement is part of the decision, and it found four defects
+
+`apps/web/e2e-public` (M6-T1) measures the six public routes in a real browser rather than reasoning
+about them: **ten URL-reachable states × six viewports × three themes**, plus three invitation states
+driven against a real API with a 100-character organisation name, plus a `page.route`-fulfilled 429.
+It is a **layout** gate — it deliberately leaves contrast to the computed token matrix, cross-browser
+to nothing (Chromium-first, `CLAUDE.md` §17), and mail to `e2e-account` — and its closing docblock
+lists what it does not cover, because "33 states verified in a browser" would be false and this file
+is the only place a reader could find that out.
+
+**It was not verified red with a synthetic `min-width`, as the plan asked. It went red four times on
+real defects before it went green**, which is the stronger version of the same evidence:
+
+1. **The brand band was stretched, not sized.** With the grid's rows left implicit both are `auto`
+   and `align-content` resolves to `normal`, i.e. **stretch**: every pixel of `min-h-dvh` beyond the
+   content was split between them. Measured: the band's own content is **76px**; on the seven states
+   short enough to leave slack at 320×568 it rendered at **226–265px, up to 47% of the screen**.
+   Fixed with `grid-rows-[auto_1fr] md:grid-rows-1`.
+2. **The tagline rendered at every width**, against this epic's own approved acceptance criterion
+   (spec §2.1 US-1: "given a viewport < `md` … the tagline is not rendered"). The code and the
+   criterion had disagreed since M4 and nothing gated it, because jsdom has no breakpoints.
+3. **`/verify-email` overflowed at the WCAG 1.4.10 floor** — `scrollWidth` 334 against 320 — because
+   `Button`'s `whitespace-nowrap` (there so a toolbar control never wraps mid-label) applied to a
+   31-character label on a full-width form submit. Fixed by letting that one button wrap, not by
+   shortening the label: "another" is what tells a reader who is here a second time that this is not
+   the same link again.
+4. **The invitation screen overflowed at 327** because an email address is a single unbreakable
+   token and a grid column is sized by min-content. The first fix — `break-words` on `CardTitle` and
+   `CardDescription` — **did not move the measurement by a pixel**, and the reason is the whole
+   lesson: CSS Text 3 excludes the soft-wrap opportunities `overflow-wrap: break-word` introduces
+   from min-content intrinsic sizing. `anywhere` includes them. `break-word` fixes a word spilling
+   out of a box whose width is already decided, and does nothing when the word is what decided it —
+   a distinction invisible to anyone reading the class name.
+
+Defect 1 was raised independently by the UX gate, from the CSS, as _"unverified and likely"_; the
+measurement is what turned it into a number. The plan's own words were that M4 "must not be merged on
+a reviewer's reading of the CSS", and four of these four say why.
+
+The gate pass also folded three blocking findings the suite could not see: `ServerError` moved focus
+off a still-mounted field (WCAG 2.4.3 — the hook it called exists for recovering focus when the
+control has been _unmounted_, which is never true of a form-level error); the alert-box treatment was
+hand-copied byte-for-byte into two primitives, which is the defect `textLinkVariants` was added in
+this same epic to remove; and the reset confirmation announced only _"every other session has been
+signed out"_, never _"your password has been changed"_ — focus moves into the live region and a
+screen reader reads the focused element, not a sibling `<h1>` that changed at the same moment. Six
+further findings are `docs/TECH_DEBT.md` **#102**.
+
+**And running the e2e half found a live regression this epic had shipped four milestones earlier.**
+M2 renamed the sign-up button "Create account" → "Create an account" as part of the vocabulary pass;
+**29 locators across 26 Playwright suites** match it as `/create account/i`, which the new label does
+not contain. Every flag-on journey in the repository signs up as its first action, so the entire e2e
+job would have gone red on CI — not on an assertion, but on a 120-second timeout at line one, which
+is the least legible failure available. Nothing caught it because M2 changed no test that runs
+without a browser, and `CLAUDE.md` §19.7's rule — run the e2e half locally when you touch a flag-on
+journey — reads as being about journeys you _edit_. A copy change to a shared control is the case it
+does not obviously cover and the case that breaks everything at once.
+
 ---
 
 ## Consequences

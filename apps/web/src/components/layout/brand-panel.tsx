@@ -47,7 +47,13 @@ export function BrandPanel(): React.ReactElement {
           chart somebody forgot to label. */}
       <TsldMotif className="mx-auto hidden w-full max-w-sm md:block" />
 
-      <p className="text-muted-foreground max-w-xs text-sm leading-relaxed md:text-base">
+      {/* `hidden md:block`, like the motif, because the acceptance criterion says so (spec §2.1
+          US-1: "given a viewport < `md` … the tagline is not rendered") and because the measurement
+          says why. Below `md` this panel is a **band above the card**, and a band's job is to say
+          whose product this is — the tagline is a claim, and a claim costs vertical space on the
+          one screen where the reader came to do something. It shipped visible at every width until
+          the M6 browser sweep; nothing else could have caught it, since jsdom has no breakpoints. */}
+      <p className="text-muted-foreground hidden max-w-xs text-sm leading-relaxed md:block md:text-base">
         {BRAND_TAGLINE}
       </p>
     </Surface>

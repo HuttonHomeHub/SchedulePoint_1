@@ -69,7 +69,7 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await admin.getByLabel('Full name').fill('Audit Admin');
   await admin.getByLabel('Email').fill(adminEmail);
   await admin.getByLabel('Password').fill('correct-horse-battery');
-  await admin.getByRole('button', { name: /create account/i }).click();
+  await admin.getByRole('button', { name: /create an account/i }).click();
 
   await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
   await admin.getByLabel('Organisation name').fill(orgName);
@@ -92,7 +92,7 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await mate.getByLabel('Full name').fill('Audit Mate');
   await mate.getByLabel('Email').fill(mateEmail);
   await mate.getByLabel('Password').fill('correct-horse-battery');
-  await mate.getByRole('button', { name: /create account/i }).click();
+  await mate.getByRole('button', { name: /create an account/i }).click();
   await expect(mate.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
   await mate.goto(acceptUrl);
   await mate.getByRole('button', { name: /accept and join/i }).click();

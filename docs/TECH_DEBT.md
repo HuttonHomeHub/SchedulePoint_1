@@ -1304,4 +1304,54 @@ version, and a version bump fails CI) is unaffected by either.
 
 ---
 
-**Next free number: 102.**
+## 102. The public screens' deferred review findings (ADR-0077 M6-T2)
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-06 (ADR-0077 M6-T2)
+
+Six non-blocking findings from the five specialist gates over the ADR-0077 diff, recorded rather than
+rushed. Each is real; none blocks the epic.
+
+1. **`/sign-in?redirect=` is not validated as a same-origin relative path.** `router.tsx`'s
+   `readForeignParam` accepts any string and `sign-in.tsx` hands it to `router.history.push`. Today
+   this cannot navigate off-origin, but **only because `pushState` throws a `SecurityError` for a
+   cross-origin `href`** — a property of the History API, not of this code. Swapping to
+   `window.location.href`, an `<a href>`, or a server-side redirect would turn it into a real open
+   redirect with no diff to the reading file. Pre-existing, not introduced by this epic. Fix: a
+   `/^\/(?!\/)/` check in `signInRoute`'s `validateSearch`.
+2. **`/accept-invite` does not strip its `?token=` from the URL**, while `/reset-password` — the
+   sibling this epic touched — captures its token into state and immediately `replace`s it away. An
+   invitation token is a live capability grant, and it sits in the address bar and in browser history
+   for the life of the tab. `Referrer-Policy: strict-origin-when-cross-origin` stops it leaking
+   cross-origin. Pre-existing; the inconsistency is what makes it worth a row.
+3. **No route-level code splitting.** `app/router.tsx` eagerly imports every screen except
+   `ShareGuestScreen`, so a first-time visitor to `/sign-in` downloads 1.23 MB / **353 kB gzip** —
+   the whole authed app, canvas, Gantt, audit log and all — against the ~200 kB initial-JS target in
+   `CLAUDE.md` §15. **Measured** at HEAD against the epic's base commit; this epic added ~2.1 kB gzip
+   in total, so it is not the cause. It is on the list because this epic's own framing (the coldest
+   page in the product, LCP-sensitive) is what makes it newly relevant.
+4. **`GET /me` now fires on the token-less `/accept-invite` branch**, which previously made no request
+   at all: `InviteExitLinks` calls `useSession()` so it can offer a signed-in reader "Go to
+   SchedulePoint" instead of a sign-in form they do not need. A deliberate trade, one small same-origin
+   request, on one degenerate state — but it is the single place in the diff where a request-free
+   public screen gained a request.
+5. **No regression test pins "the brand panel contains nothing focusable."** It is true today by
+   inspection of its three children, not by construction; the day somebody adds a "Learn more" link
+   inside the `aria-hidden` panel it becomes a hidden-but-reachable focus stop (WCAG 4.1.2/2.4.3) and
+   nothing fails.
+6. **`useDocumentTitle`'s docblock claims a title change is "the first thing a screen reader
+   announces on navigation."** That is unreliable for **client-side** route changes unless paired
+   with a focus move, and none of the six public routes move focus on navigation — an app-wide SPA
+   gap, not one this epic introduced. The hook is correct and worth having; the sentence overstates
+   what it delivers, which is exactly the ADR-0076 §19.9 failure applied to this epic's own artefact.
+
+**Why not now:** (1) and (2) are hardening on pre-existing behaviour with no live exploit; (3) is an
+architecture-sized change that wants its own measurement and its own decision; (4)–(6) are small and
+independent. Doing them inside the enablement milestone would mean shipping six unreviewed changes
+in the pass whose purpose is review.
+
+**Risk:** low individually. (1) is the one that changes character if the navigation mechanism is ever
+swapped, which is why it is written down rather than remembered.
+
+---
+
+**Next free number: 103.**

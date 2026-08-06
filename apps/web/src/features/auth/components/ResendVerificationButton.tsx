@@ -85,7 +85,20 @@ export function ResendVerificationButton({
           }}
         />
       ) : null}
-      <Button type="submit" aria-disabled={blocked} aria-busy={send.isPending}>
+      {/* `whitespace-normal` overrides the primitive's `whitespace-nowrap`, which exists so a
+          toolbar control never wraps mid-label. This is a full-width form submit, not a toolbar
+          control, and its label is the longest on any public screen: **measured** at 320×568 it
+          forced `documentElement.scrollWidth` to 334 against a 320px viewport — a WCAG 1.4.10
+          reflow failure on the one screen a reader reaches when their verification email has not
+          arrived (ADR-0077 M6-T1, the TECH_DEBT #98 defect class). Wrapping rather than shortening,
+          because "another" is what tells a reader who is here for the second time that this is not
+          the same link again. */}
+      <Button
+        type="submit"
+        aria-disabled={blocked}
+        aria-busy={send.isPending}
+        className="whitespace-normal"
+      >
         {send.isPending ? 'Sending…' : 'Send another verification email'}
       </Button>
     </form>

@@ -115,8 +115,12 @@ describe('ResetPasswordScreen — submitting', () => {
 
     // The heading is part of the state (ADR-0077 M2-T3): it used to stay "Choose a new password"
     // over a body that had already told the reader the password was different.
+    // **The announced region carries the outcome itself**, not only its consequence (ADR-0077
+    // M6-T2). Focus moves in here, and a screen reader reads the focused element — the `<h1>`
+    // beside it is never announced, so "your password has been changed" has to be in this string
+    // or it is spoken to nobody.
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Every other session has been signed out',
+      'Your password has been changed, and every other session has been signed out.',
     );
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Password changed');
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();

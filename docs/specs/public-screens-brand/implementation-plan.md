@@ -814,6 +814,38 @@ defects in every one of the last six epics.
   class this repository keeps naming.
 - **Testing:** verify the suite **red first** — set a fixed `min-width` on the card, confirm the
   320 px assertion fails, remove it. A gate never seen failing is not a gate.
+
+> **Outcome (2026-08-06): landed, and it changed four things about the product.**
+>
+> The suite is `apps/web/playwright.public.config.ts` + `apps/web/e2e-public/` (`support.ts` +
+> `public-screens.spec.ts`), `pnpm --filter @repo/web test:e2e:public`, its own CI step. 21 tests:
+> ten URL-reachable states × six viewports × three themes, three invitation states against a real
+> API with a 100-character organisation name, one fulfilled 429, one recorded measurement.
+>
+> **Step 8's "verified red first" was satisfied by four real defects, not a synthetic `min-width`.**
+> In order: (1) the brand band was **stretched by implicit grid `align-content`** — content height
+> 76px, rendering at **226–265px on a 568px phone, up to 47% of the screen** — fixed with
+> `grid-rows-[auto_1fr] md:grid-rows-1`; (2) the **tagline rendered at every width**, contradicting
+> this plan's own §2.1 US-1 (step 4's last bullet was right and the code was wrong — an earlier draft
+> of this suite had recorded the _plan_ as wrong, which would have written the defect into the gate);
+> (3) `/verify-email` overflowed at **334 against 320** because `Button`'s `whitespace-nowrap` met a
+> 31-character label on a full-width submit; (4) the invitation screen overflowed at **327** because
+> an email address is one unbreakable token and a grid column is sized by min-content — and the
+> obvious fix, `break-words`, **did not move it by a pixel**, because CSS Text 3 excludes
+> `overflow-wrap: break-word`'s soft-wrap opportunities from min-content sizing. `wrap-anywhere`
+> includes them.
+>
+> **Two corrections to this task's own text**, recorded rather than quietly followed:
+> step 4's "the brand lockup appears exactly once in the **accessibility tree**" was written before
+> M4 decided the panel is `aria-hidden`. The suite asserts the honest pair — one `<aside>` in the
+> DOM, **zero** `complementary` roles — which is a test of the decision rather than a restatement of
+> the markup. And step 5's states #32–#35 are covered as three: signed-out, wrong-account and
+> ready-to-accept, which are the three an invitation actually reaches with a real org name.
+>
+> **Measured and recorded** (step 6): the tallest state at 320×568 is **`/sign-up` at 591px** — not
+> `/verify-email` pending, which the step guessed. Every other state fits the viewport exactly.
+> Before the band fix the same table read 661px. The band is now a constant 76px on all ten.
+
 - **Development steps:**
   1. `playwright.public.config.ts`, `apps/web/e2e-public/`, `"test:e2e:public"` in
      `apps/web/package.json`, its own CI step (the ADR-0067/0070 pattern).
@@ -853,6 +885,45 @@ headers: { 'X-Retry-After': '10' } }` on the sign-in endpoint; assert the thrott
 - **Risks:** the pass finds a defect in the brand panel that needs a token value change → M3's family
   is the only place values live, so the fix is one file and re-runs one matrix.
 - **Testing:** every fix carries a regression test **verified red against the pre-fix code**.
+
+> **Outcome (2026-08-06): five specialists ran; three blocked, on findings a human read had passed.**
+>
+> **security** and **performance** passed. Performance **measured** the epic at **+2.1 kB gzip**
+> total (JS +1.3, CSS +0.32, document +0.49) against the base commit — the ADR's ground for rejecting
+> a photograph (200–600 kB) holds by a wide margin.
+>
+> Blocking, all folded with a regression test verified red against the pre-fix code:
+>
+> 1. **`ServerError` moved focus off a still-mounted field** (accessibility, WCAG 2.4.3). It called
+>    `useOutcomeFocus`, whose whole purpose is recovering focus when the control the reader was using
+>    has been **unmounted** — never true of a form-level error. At `/sign-in`, Enter in the password
+>    field submits _without_ moving focus, so a wrong password took the reader off the field they had
+>    just typed into and parked them on an inert div, from which Tab goes forward to Email. Removed;
+>    `role="alert"` reaches a screen reader regardless of focus, so nothing was bought with it.
+> 2. **The alert-box treatment was hand-copied byte-for-byte** into `ServerError` and
+>    `FormErrorSummary` (component) — the exact defect `textLinkVariants` was added _in this epic_ to
+>    remove. Extracted to `components/ui/alert-box.tsx`, with a test asserting the two render the
+>    same class string so they cannot drift.
+> 3. **The reset confirmation announced only its consequence** (UX). Focus moves into the
+>    `role="status"` region, and a screen reader reads the focused element — not a sibling `<h1>`
+>    that changed at the same moment with no navigation event. So "Password changed" was
+>    sighted-only while "Every other session has been signed out" was what got spoken. The sentence
+>    now leads with the outcome.
+>
+> UX's other two blocking items were the grid stretch and the tagline, both **measured and fixed in
+> M6-T1** above. Two UX suggestions folded here: the wrong-account **Sign out** took the primary
+> button treatment (it is the only action on that screen and shipped as `outline`), and its
+> instruction stopped overclaiming that signing out resumes the flow "as" the invited address.
+> Six non-blocking findings are `docs/TECH_DEBT.md` **#102**.
+>
+> **The gate pass also caught a regression M2 shipped and nobody ran.** Renaming the sign-up button
+> to "Create an account" broke `/create account/i` in **29 locators across 26 suites** — every
+> flag-on journey signs up as its first action, so the whole e2e job would have timed out at line
+> one on CI. Fixed here, and re-verified by running `e2e-account`, `e2e-account-verify` and
+> `e2e-csp` (which serves the production bundle) locally. `CLAUDE.md` §19.7 exists for exactly this
+> and was read as applying to journeys one _edits_; a copy change to a shared control is the case
+> that breaks all of them at once.
+
 - **Development steps:**
   1. **accessibility-reviewer** — WCAG 2.2 AA over 33 states; focus order through the two-column
      layout; the `aria-hidden` panel; the `ServerError` focus/announcement pairing.

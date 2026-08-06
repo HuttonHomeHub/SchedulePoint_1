@@ -64,10 +64,18 @@ export function ResetPasswordScreen(): React.ReactElement {
   if (reset.isSuccess) {
     return (
       <AuthShell title="Password changed">
-        {/* The revocation claim is the reader's confirmation that the lockout is over, so it is
-            carried by the live region rather than by the heading alone. */}
+        {/* **The sentence carries the outcome, not just its consequence** (ADR-0077 M6-T2, UX
+            review). The heading says "Password changed" and the body used to say only "Every other
+            session has been signed out." — but focus moves *into this region*, and a screen reader
+            announces the focused element, not a sibling `<h1>` that happened to change at the same
+            moment with no navigation event to trigger it. So the single most important fact on the
+            screen was sighted-only, while a secondary detail was what got spoken. Leading with it
+            here fixes that without a visually-hidden duplicate of the heading, which would then be
+            read twice by anyone who navigates by headings. */}
         <div role="status" tabIndex={-1} ref={outcomeRef} className="flex flex-col gap-4">
-          <p className="text-muted-foreground text-sm">Every other session has been signed out.</p>
+          <p className="text-muted-foreground text-sm">
+            Your password has been changed, and every other session has been signed out.
+          </p>
           <Link to="/sign-in" className={buttonVariants()}>
             Sign in
           </Link>

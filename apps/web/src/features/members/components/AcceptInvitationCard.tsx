@@ -172,9 +172,13 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
       <InviteShell>
         <CardHeader>
           <CardTitle>Wrong account</CardTitle>
+          {/* "Sign out and come back to this page as {email}" overclaimed (ADR-0077 M6-T2, UX
+              review): signing out returns to *this* invitation in its signed-out branch, where the
+              reader still has to choose Sign in or Create an account and type that address in
+              themselves. Nothing resumes "as" anybody. */}
           <CardDescription>
             You&rsquo;re signed in as {user.email}, but this invitation is for {invite.email}. Sign
-            out and come back to this page as {invite.email}.
+            out, then sign in as {invite.email} to accept it.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -182,9 +186,13 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
               with, on a page reached from an email (ADR-0077 M1-T2). Signing out drops every cached
               query except the seeded `null` session, so the invitation preview refetches and this
               card re-renders in its signed-out branch — the reader stays on the invitation rather
-              than being sent anywhere. */}
+              than being sent anywhere.
+
+              It is the **only** action on this screen, so it takes the primary treatment — it
+              shipped as `variant="outline"` while every other single-action terminal state in this
+              epic used the solid button, which read as "here is the secondary option" with no
+              primary anywhere (ADR-0077 M6-T2, UX review). */}
           <Button
-            variant="outline"
             aria-disabled={signOut.isPending}
             aria-busy={signOut.isPending}
             onClick={() => {

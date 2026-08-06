@@ -1,0 +1,216 @@
+import { expect, test } from '@playwright/test';
+
+import {
+  contentHeight,
+  expectPublicLayout,
+  expectTheme,
+  invitePath,
+  onboard,
+  pinTheme,
+  THEMES,
+  URL_STATES,
+  VIEWPORTS,
+} from './support';
+
+/**
+ * **The public screens, measured** (ADR-0077 M6-T1).
+ *
+ * The precedent is `docs/TECH_DEBT.md` **#98** and it is the whole reason this file exists: a
+ * specialist read the guest view's CSS, reasoned correctly from it that the page would pass WCAG
+ * 1.4.10, **suggested a test to confirm it**, and the test failed on its first run —
+ * `documentElement.scrollWidth` was 436 against a 320 px viewport. The gap between "this CSS should
+ * reflow" and "this page reflows" is the gap this suite closes for the six routes a stranger meets.
+ *
+ * Nothing here drives a feature. Every assertion is a number the browser produced.
+ */
+
+test.describe('every URL-reachable public state holds its layout', () => {
+  for (const theme of THEMES) {
+    for (const viewport of VIEWPORTS) {
+      test(`${theme} — ${viewport.name}`, async ({ page }) => {
+        await pinTheme(page, theme);
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+        for (const state of URL_STATES) {
+          const label = `${theme} ${viewport.name} ${state.path}`;
+          await page.goto(state.path);
+          // Wait on the heading rather than on `networkidle`: `/accept-invite?token=…` renders a
+          // spinner first and resolves into one of five screens, and measuring the spinner would
+          // measure a state no reader ever lands on.
+          await expect(
+            page.getByRole('heading', { level: 1, name: state.heading, exact: true }),
+            `${label}: heading`,
+          ).toBeVisible();
+          await expectTheme(page, theme);
+          await expectPublicLayout(page, label, { primary: state.primary, width: viewport.width });
+        }
+      });
+    }
+  }
+});
+
+test.describe('the states carrying an unbounded server-supplied string', () => {
+  /**
+   * 100 characters, the longest organisation name the API accepts short of its 120-char ceiling
+   * (`create-organization.dto.ts:11`). This is the only place on any public screen where a string
+   * somebody else chose sets the width of the largest element on the page — the invitation heading
+   * is `Join {organizationName}` inside an `<h1>`.
+   */
+  const LONG_ORG =
+    'Northgate Regeneration Framework Delivery Partnership (Phase Two Enabling Works) Limited Liability C';
+
+  test('a 100-character organisation name wraps rather than overflowing', async ({ page }) => {
+    expect(LONG_ORG).toHaveLength(100);
+    const stamp = Date.now();
+    const owner = `public-owner-${stamp}@example.com`;
+    const invitee = `public-invitee-${stamp}@example.com`;
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await onboard(page, owner, LONG_ORG);
+    const orgSlug = new URL(page.url()).pathname.split('/')[2];
+    expect(orgSlug, 'organisation slug from the URL').toBeTruthy();
+
+    // Created through the API with the browser's own session cookie rather than through the members
+    // dialog: this test is about a *string length* reaching an `<h1>`, and routing it through four
+    // screens of UI would make an unrelated change to the invite dialog fail a layout gate.
+    const created = await page.request.post(
+      `http://localhost:3000/api/v1/organizations/${orgSlug}/invitations`,
+      { data: { email: invitee, role: 'PLANNER' } },
+    );
+    expect(created.ok(), `invite create: ${created.status()}`).toBe(true);
+    const body = (await created.json()) as { data: { acceptUrl: string } };
+    const path = invitePath(body.data.acceptUrl);
+
+    // State: signed in as somebody else. The org name is in the description here, not the heading,
+    // but the card is the tallest of the three and 320px is where it clips if it is going to.
+    for (const viewport of [VIEWPORTS[0], VIEWPORTS[5]]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1, name: 'Wrong account' })).toBeVisible();
+      await expectPublicLayout(page, `wrong-account ${viewport.name}`, {
+        primary: 'Sign out',
+        width: viewport.width,
+      });
+    }
+
+    // State: signed out. `Join <100 characters>` is the heading.
+    await page.context().clearCookies();
+    for (const viewport of [VIEWPORTS[0], VIEWPORTS[5]]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1, name: `Join ${LONG_ORG}` })).toBeVisible();
+      await expectPublicLayout(page, `invite-signed-out ${viewport.name}`, {
+        primary: 'Sign in',
+        width: viewport.width,
+      });
+    }
+
+    // State: signed in as the invited address — the accept screen, same heading, different action.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/sign-up');
+    await page.getByLabel('Full name').fill('Invited Reader');
+    await page.getByLabel('Email').fill(invitee);
+    await page.getByLabel('Password').fill('correct-horse-battery');
+    await page.getByRole('button', { name: 'Create an account' }).click();
+    await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+
+    for (const viewport of [VIEWPORTS[0], VIEWPORTS[5]]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1, name: `Join ${LONG_ORG}` })).toBeVisible();
+      await expectPublicLayout(page, `invite-accept ${viewport.name}`, {
+        primary: 'Accept and join',
+        width: viewport.width,
+      });
+    }
+  });
+});
+
+test.describe('the throttled sign-in', () => {
+  /**
+   * **The only end-to-end proof available for the 429 branch.** Better Auth's limiter is
+   * `enabled: options.isProduction` (`apps/api/src/common/auth/better-auth.ts:270-274`), so no test
+   * server can produce a real one — which is exactly why the unhandled 429 was live in production
+   * and invisible in development until ADR-0077 M1 (spec §0.1 B4). Fulfilling the response is not a
+   * shortcut around a reachable state; it is the state's only route.
+   *
+   * `X-Retry-After` is sent and deliberately **not** asserted in the copy: `@better-fetch/fetch`
+   * builds its error from body + status + statusText and discards response headers
+   * (`@better-fetch/fetch/dist/index.js:733-739`), so the number is unreachable to the client and
+   * the message says "in a minute" rather than inventing a figure.
+   */
+  test('a 429 renders the throttled message rather than a raw server string', async ({ page }) => {
+    await page.route('**/api/auth/sign-in/email', (route) =>
+      route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        headers: { 'X-Retry-After': '10' },
+        body: JSON.stringify({ message: 'Too many requests. Please try again later.' }),
+      }),
+    );
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto('/sign-in');
+    await page.getByLabel('Email').fill('throttled@example.com');
+    await page.getByLabel('Password').fill('correct-horse-battery');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('Too many attempts. Wait a moment and try again.');
+    // The server's own sentence must not be what the reader sees — that is the defect, not the fix.
+    await expect(alert).not.toContainText('Too many requests. Please try again later.');
+    await expectPublicLayout(page, 'sign-in 429 @320', { primary: 'Sign in', width: 320 });
+  });
+});
+
+test.describe('the tallest state', () => {
+  /**
+   * Measured, not assumed (#98's precedent of **recording the figure**). The plan guessed
+   * `/verify-email` pending; this reports what the browser says at the reflow floor, and the number
+   * lands in `docs/TECH_DEBT.md` rather than in somebody's memory.
+   */
+  test('is recorded at the 320×568 reflow floor', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    const heights: { path: string; height: number; band: number }[] = [];
+
+    for (const state of URL_STATES) {
+      await page.goto(state.path);
+      await expect(
+        page.getByRole('heading', { level: 1, name: state.heading, exact: true }),
+      ).toBeVisible();
+      const band = (await page.locator('aside').boundingBox())?.height ?? 0;
+      heights.push({ path: state.path, height: await contentHeight(page), band });
+    }
+
+    heights.sort((a, b) => b.height - a.height);
+    const table = heights
+      .map((row) => `${row.height}px page / ${Math.round(row.band)}px band  ${row.path}`)
+      .join('\n');
+    testInfo.annotations.push({ type: 'tallest-state', description: table });
+    // eslint-disable-next-line no-console -- the measurement IS the deliverable of this test.
+    console.log(`\nRendered height at 320×568, tallest first:\n${table}\n`);
+
+    // No upper bound is asserted. A cap would be a number nobody derived, and the invariant that
+    // matters — the page scrolls to its primary action rather than clipping it — is already
+    // asserted for every state by `expectPublicLayout`.
+    expect(heights[0]!.height).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * **What this suite does not cover, said out loud.**
+ *
+ * - **Contrast.** The computed token matrix (`styles/token-contrast.test.ts`) owns every ratio
+ *   across 3 themes × 4 scopes × 2 flag states. A browser suite sampling a few pixels would be a
+ *   weaker second opinion pretending to be a stronger one.
+ * - **Firefox and WebKit.** Chromium-first (`CLAUDE.md` §17, TECH_DEBT #25a), like all 26 siblings.
+ * - **Real mail.** No message is sent or read here; `e2e-account` owns the SMTP round trip.
+ * - **Ten of the thirty-three landable states are driven by URL; three more by a real invitation
+ *   against a real API; one is synthesised by fulfilling a 429.** The remaining nineteen are
+ *   *outcome* states behind a successful mutation ("Check your email", "Password changed", the
+ *   pending and error branches of each form) and are asserted in each route's own unit suite, where
+ *   the mutation is already mocked and every branch is reachable. What is measured **here** is
+ *   geometry, and geometry belongs to the shell those nineteen share: the same `AuthShell`, the
+ *   same card, the same panel. The distinction matters because "33 states verified in a browser"
+ *   would be false, and this file is the only place the reader can find out.
+ */

@@ -39,7 +39,7 @@ async function signUp(page: Page, email: string, name: string): Promise<void> {
   await page.getByLabel('Full name').fill(name);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: /create account/i }).click();
+  await page.getByRole('button', { name: /create an account/i }).click();
 }
 
 test('sign-up with verification enforced explains itself instead of bouncing', async ({

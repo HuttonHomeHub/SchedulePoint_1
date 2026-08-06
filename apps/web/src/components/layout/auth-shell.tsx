@@ -34,6 +34,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
  * element**: rendering a phone copy and a desktop copy would put both in jsdom's accessibility
  * tree and quietly make every `getByText` on these screens ambiguous.
  *
+ * **`grid-rows-[auto_1fr]` below `md` is the fix for a defect the browser suite measured**
+ * (ADR-0077 M6-T1). With rows left implicit, both are `auto` and `align-content` resolves to
+ * `normal`, which for a grid container **stretches**: every pixel of `min-h-dvh` beyond the two
+ * rows' content is split evenly between them. The band's own content is **146px**, and on the seven
+ * states whose content fits a 320×568 phone it was rendering at **226–265px — up to 47% of the
+ * screen**, which is not a band above a card, it is a half-page of navy above a card. Pinning the
+ * first row to `auto` and giving the second `1fr` sizes the band by its content and hands the rest
+ * to the card, which then still centres in what is left. At `md` the columns take over and
+ * `md:grid-rows-1` restores the single full-height row the split-screen needs.
+ *
+ * The defect is worth naming rather than just fixing: it was invisible to every unit test, because
+ * jsdom has no layout, and to a reviewer reading the classes, because nothing in
+ * `grid min-h-dvh md:grid-cols-2` says "stretch". It is exactly what
+ * `docs/specs/public-screens-brand/implementation-plan.md` meant by "M4 must not be merged on a
+ * reviewer's reading of the CSS".
+ *
  * `min-h-dvh` is load-bearing and predates this: centring a tall card in a 360px-high landscape
  * viewport is where content gets clipped. It stays, and `auth-shell.test.tsx` asserts it.
  */
@@ -54,7 +70,10 @@ export function AuthShell({
 
   return (
     <AnnouncerProvider>
-      <main className="grid min-h-dvh md:grid-cols-2" aria-busy={busy}>
+      <main
+        className="grid min-h-dvh grid-rows-[auto_1fr] md:grid-cols-2 md:grid-rows-1"
+        aria-busy={busy}
+      >
         <BrandPanel />
         <div className="flex items-center justify-center p-4 md:p-8">
           <Card className="w-full max-w-md">
