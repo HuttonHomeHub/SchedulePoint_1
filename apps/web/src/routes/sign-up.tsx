@@ -3,6 +3,7 @@ import { Link, useRouter } from '@tanstack/react-router';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { textLinkVariants } from '@/components/ui/text-link';
 import { SignUpForm } from '@/features/auth';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
 
 /**
@@ -20,6 +21,7 @@ import { useNoindex } from '@/hooks/use-noindex';
  */
 export function SignUpScreen(): React.ReactElement {
   useNoindex();
+  useDocumentTitle('Create an account');
   const router = useRouter();
 
   return (

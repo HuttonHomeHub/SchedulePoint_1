@@ -5,6 +5,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { textLinkVariants } from '@/components/ui/text-link';
 import { RequestPasswordResetForm, useRequestPasswordReset, useSession } from '@/features/auth';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
@@ -23,6 +24,7 @@ import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
  */
 export function ForgotPasswordScreen(): React.ReactElement {
   useNoindex();
+  useDocumentTitle('Reset your password');
   const search = useSearch({ strict: false });
   const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
   const session = useSession();

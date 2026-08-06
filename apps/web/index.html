@@ -6,6 +6,21 @@
     <meta name="color-scheme" content="light dark" />
     <title>SchedulePoint</title>
     <!--
+      A served SVG, not a `data:` URI: ADR-0074's CSP is `img-src 'self' blob:` with no `data:`, so
+      the fashionable zero-request favicon is blocked on this origin. Without this, `/favicon.ico`
+      fell through the SPA rule to `index.html` and browsers were handed HTML where they expected an
+      icon (nginx.conf now serves it from its own `location`).
+
+      No `theme-color`: the app has FOUR theme settings (light, dark, system, corporate) and
+      `prefers-color-scheme` knows two, so any single value is wrong for at least one of them and a
+      media-split pair still cannot see the Corporate choice. Omitted deliberately (ADR-0077 M5-T2).
+    -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta
+      name="description"
+      content="SchedulePoint is browser-based construction scheduling: draw activities straight onto a time-scaled logic diagram and see the critical path update as you plan."
+    />
+    <!--
       Applies the persisted theme before first paint. A served file rather than an inline script
       so `script-src` needs no `'unsafe-inline'` and no `sha256-` hash (ADR-0074) — see
       `public/theme-boot.js` for why the hash was rejected. Still parser-blocking, so the

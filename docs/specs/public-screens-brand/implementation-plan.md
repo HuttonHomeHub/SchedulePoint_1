@@ -729,7 +729,12 @@ description and a theme colour.
 > **Testing requirements:** unit per route for the title; a browser assertion that the favicon
 > returns an image content type.
 
-##### Task M5-T1 — Per-route `document.title`
+##### Task M5-T1 — Per-route `document.title` — ✅ **DONE 2026-08-06**
+
+- **Outcome:** `hooks/use-document-title.ts` on all six routes, format `"<Screen> · SchedulePoint"`.
+  A **layout** effect, so the title is right before the browser paints rather than a frame later —
+  that frame is exactly where a screen-reader user is told the previous page's name. Restored on
+  unmount, or `/reset-password`'s title rides into the app for the rest of the session.
 
 - **Description:** there is **no `document.title` anywhere in `apps/web/src`** outside the print
   surfaces (grepped). Every route shares `<title>SchedulePoint</title>` (`index.html:7`).
@@ -742,7 +747,17 @@ description and a theme colour.
 - **Development steps:** `hooks/use-document-title.ts`; apply to the six public routes; en-GB, format
   `"<Screen> · SchedulePoint"`.
 
-##### Task M5-T2 — Favicon and document metadata
+##### Task M5-T2 — Favicon and document metadata — ✅ **DONE 2026-08-06**
+
+- **Outcome:** `public/favicon.svg` (the brand tile reduced to what survives at 16 px), a
+  `<link rel="icon">`, a `<meta name="description">`, and an nginx `location = /favicon.svg` with a
+  one-day max-age — without it the SPA fallback hands the icon request the index document, which is
+  what `/favicon.ico` was already getting. **`theme-color` omitted, as the task's default said**:
+  the app has four theme settings and `prefers-color-scheme` knows two, so a single value is wrong
+  for at least one and even a media-split pair cannot see the Corporate choice.
+  The SVG carries **two colour literals, and that is correct here and only here** — a file served
+  outside the document has no access to the app's custom properties and a favicon has no theme to
+  follow. They are the brand scope's own `--brand` and `--brand-primary` converted to sRGB.
 
 - **Description:** `index.html` has no `<link rel="icon">`, no `<meta name="description">` and no
   `theme-color`. `apps/web/public/` contains exactly one file. `nginx.conf:62-64` falls

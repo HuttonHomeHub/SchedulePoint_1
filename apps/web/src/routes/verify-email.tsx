@@ -4,6 +4,7 @@ import { AuthShell } from '@/components/layout/auth-shell';
 import { buttonVariants } from '@/components/ui/button';
 import { textLinkVariants } from '@/components/ui/text-link';
 import { ResendVerificationButton } from '@/features/auth';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
 
 /**
@@ -60,6 +61,7 @@ export function pendingDescription(email: string | undefined): string {
 
 export function VerifyEmailScreen(): React.ReactElement {
   useNoindex();
+  useDocumentTitle('Verify your email');
   const search = useSearch({ strict: false });
   const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
   const verified = 'verified' in search && search.verified === '1';

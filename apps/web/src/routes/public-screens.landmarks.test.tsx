@@ -172,3 +172,24 @@ describe('every public screen is one page with one heading', () => {
     expectPublicHeading('Wrong account');
   });
 });
+
+describe('every public screen names itself in the tab (ADR-0077 M5-T1)', () => {
+  // One shared `<title>SchedulePoint</title>` meant three open tabs were indistinguishable, and a
+  // reader scanning history for the reset link they opened had nothing to go on. It is also the
+  // first thing a screen reader announces on navigation.
+  it.each([
+    [<SignInScreen key="a" />, {}, 'Sign in · SchedulePoint'],
+    [<SignUpScreen key="b" />, {}, 'Create an account · SchedulePoint'],
+    [<ForgotPasswordScreen key="c" />, {}, 'Reset your password · SchedulePoint'],
+    [<ResetPasswordScreen key="d" />, { token: 'tok' }, 'Choose a new password · SchedulePoint'],
+    [<VerifyEmailScreen key="e" />, {}, 'Verify your email · SchedulePoint'],
+    [<AcceptInviteScreen key="f" />, {}, 'Accept your invitation · SchedulePoint'],
+  ] as const)('%#', (element, params, expected) => {
+    const { unmount } = mount(element, params);
+    expect(document.title).toBe(expected);
+    unmount();
+    // Restored, or `/reset-password`'s title rides into the app for the rest of the session — the
+    // cleanup mistake `useNoindex` exists to avoid, one attribute along.
+    expect(document.title).not.toBe(expected);
+  });
+});

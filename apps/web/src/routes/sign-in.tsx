@@ -4,6 +4,7 @@ import { AuthShell } from '@/components/layout/auth-shell';
 import { textLinkVariants } from '@/components/ui/text-link';
 import { PASSWORD_RESET_ENABLED } from '@/config/env';
 import { SignInForm } from '@/features/auth';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
 
 /**
@@ -16,6 +17,7 @@ import { useNoindex } from '@/hooks/use-noindex';
  */
 export function SignInScreen(): React.ReactElement {
   useNoindex();
+  useDocumentTitle('Sign in');
   const router = useRouter();
   const search = useSearch({ strict: false });
 

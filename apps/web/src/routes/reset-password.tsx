@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { buttonVariants } from '@/components/ui/button';
 import { ResetPasswordForm, useResetPassword } from '@/features/auth';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
@@ -24,6 +25,7 @@ import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
  */
 export function ResetPasswordScreen(): React.ReactElement {
   useNoindex();
+  useDocumentTitle('Choose a new password');
   const search = useSearch({ strict: false });
   const navigate = useNavigate();
   // Owned here, not in the form (ADR-0077 M2-T3): this screen used to keep the heading "Choose a

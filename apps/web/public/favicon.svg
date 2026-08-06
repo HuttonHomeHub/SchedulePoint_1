@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="SchedulePoint">
+  <!--
+    The brand mark's tile, reduced to what survives at 16 px: the navy square and the amber "S".
+    Colour literals are correct here and only here — an SVG served as a file has no access to the
+    app's CSS custom properties, and a favicon has no theme to follow. The values are the brand
+    scope's own `--brand` and `--brand-primary` (ADR-0077 §1), converted to sRGB.
+
+    Served as a file rather than a `data:` URI because ADR-0074's Content-Security-Policy is
+    `img-src 'self' blob:` with no `data:` — the zero-request trick is blocked on this origin.
+  -->
+  <rect width="32" height="32" rx="7" fill="#14213d" />
+  <text
+    x="16"
+    y="22"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19"
+    font-weight="700"
+    fill="#f0a02a"
+  >S</text>
+</svg>
