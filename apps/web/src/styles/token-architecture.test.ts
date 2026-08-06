@@ -49,7 +49,29 @@ const FAMILY_TOKENS = [
   '-ring',
 ] as const;
 
-const FAMILIES = ['chrome', 'panel'] as const;
+const FAMILIES = ['chrome', 'panel', 'brand'] as const;
+
+/**
+ * `brand` is the only family whose defining property is a **value** one: identical in Light, Dark
+ * and Corporate, because a signed-out visitor cannot choose a theme and something else chooses one
+ * for them (ADR-0077 §2).
+ *
+ * That property needs its own assertion, because the completeness sweep below **cannot see it**:
+ * `themeTokens()` merges each theme over `:root`, so a member deleted from `.dark` is inherited and
+ * reads as present. Verified by deleting `--brand-input` from the `.dark` block and watching
+ * `token-architecture.test.ts` stay green. The plan for this milestone asserted the opposite — that
+ * repeating the family per block is what the gate rests on — so this is the claim being checked
+ * rather than trusted (ADR-0076 §19.9).
+ */
+describe('the brand family is theme-invariant, literally', () => {
+  it.each(FAMILY_TOKENS)('declares --brand%s in all three theme blocks, identically', (suffix) => {
+    const name = `--brand${suffix}`;
+    const values = THEME_SELECTORS.map((selector) => declarations(blockBody(selector)).get(name));
+    // Declared — not inherited — in each block.
+    expect(values.filter((value) => value !== undefined)).toHaveLength(THEME_SELECTORS.length);
+    expect(new Set(values).size).toBe(1);
+  });
+});
 
 /** The exact rebind list each `[data-surface]` rule must carry — no more, no fewer. */
 const REBOUND_NAMES = [

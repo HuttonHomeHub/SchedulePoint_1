@@ -149,6 +149,47 @@
   --panel-info-text: oklch(0.45 0.14 250);
   --panel-ring: oklch(0.55 0.18 255);
 
+  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
+     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
+
+     This family does not follow the theme. A signed-out visitor cannot choose one
+     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
+     colleague signed in on this machine last month — so the one screen where the
+     product has to be recognisable would otherwise render in one of three
+     identities, selected by something the visitor did not do and cannot undo.
+
+     It is repeated per theme rather than declared once on `:root` because the
+     repetition is what makes the *values* visible where a reader looks for them,
+     and because `token-contrast.test.ts` resolves each theme independently. Note
+     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
+     `.corporate` over `:root` by inheritance, so a member deleted from one theme
+     block is NOT caught by the completeness gate — see the `brand` case in
+     `token-architecture.test.ts`, which pins the literal declarations per block
+     precisely because the inherited read cannot.
+
+     The values are Corporate's navy chrome — already measured against this fill —
+     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
+     across all three themes rather than trusting the provenance.
+
+     Do not "fix" this to follow the theme. That would be undoing the decision. */
+  --brand: oklch(0.252 0.056 264);
+  --brand-foreground: oklch(0.985 0 0);
+  --brand-muted-foreground: oklch(0.78 0.02 264);
+  --brand-muted: oklch(0.32 0.05 264);
+  --brand-border: oklch(1 0 0 / 14%);
+  --brand-input: oklch(0.62 0.02 264);
+  --brand-accent: oklch(0.338 0.081 262);
+  --brand-accent-foreground: oklch(0.985 0 0);
+  --brand-primary: oklch(0.786 0.167 70);
+  --brand-primary-foreground: oklch(0.252 0.056 264);
+  --brand-field: oklch(1 0 0);
+  --brand-field-foreground: oklch(0.321 0 0);
+  --brand-field-muted-foreground: oklch(0.51 0 0);
+  --brand-destructive-text: oklch(0.74 0.15 25);
+  --brand-warning-text: oklch(0.8 0.14 70);
+  --brand-info-text: oklch(0.8 0.09 245);
+  --brand-ring: oklch(0.786 0.167 70);
+
   /* A form field's surface has never been the same concept as the page's;
      pretending it was is what made an outline button invisible on navy. */
   --field: oklch(1 0 0);
@@ -283,6 +324,47 @@
   --panel-warning-text: oklch(0.85 0.14 82);
   --panel-info-text: oklch(0.82 0.11 245);
   --panel-ring: oklch(0.65 0.17 255);
+
+  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
+     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
+
+     This family does not follow the theme. A signed-out visitor cannot choose one
+     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
+     colleague signed in on this machine last month — so the one screen where the
+     product has to be recognisable would otherwise render in one of three
+     identities, selected by something the visitor did not do and cannot undo.
+
+     It is repeated per theme rather than declared once on `:root` because the
+     repetition is what makes the *values* visible where a reader looks for them,
+     and because `token-contrast.test.ts` resolves each theme independently. Note
+     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
+     `.corporate` over `:root` by inheritance, so a member deleted from one theme
+     block is NOT caught by the completeness gate — see the `brand` case in
+     `token-architecture.test.ts`, which pins the literal declarations per block
+     precisely because the inherited read cannot.
+
+     The values are Corporate's navy chrome — already measured against this fill —
+     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
+     across all three themes rather than trusting the provenance.
+
+     Do not "fix" this to follow the theme. That would be undoing the decision. */
+  --brand: oklch(0.252 0.056 264);
+  --brand-foreground: oklch(0.985 0 0);
+  --brand-muted-foreground: oklch(0.78 0.02 264);
+  --brand-muted: oklch(0.32 0.05 264);
+  --brand-border: oklch(1 0 0 / 14%);
+  --brand-input: oklch(0.62 0.02 264);
+  --brand-accent: oklch(0.338 0.081 262);
+  --brand-accent-foreground: oklch(0.985 0 0);
+  --brand-primary: oklch(0.786 0.167 70);
+  --brand-primary-foreground: oklch(0.252 0.056 264);
+  --brand-field: oklch(1 0 0);
+  --brand-field-foreground: oklch(0.321 0 0);
+  --brand-field-muted-foreground: oklch(0.51 0 0);
+  --brand-destructive-text: oklch(0.74 0.15 25);
+  --brand-warning-text: oklch(0.8 0.14 70);
+  --brand-info-text: oklch(0.8 0.09 245);
+  --brand-ring: oklch(0.786 0.167 70);
 
   --field: oklch(0.145 0 0);
   --field-foreground: oklch(0.985 0 0);
@@ -443,6 +525,47 @@
   --panel-info-text: oklch(0.8 0.09 245);
   --panel-ring: oklch(0.786 0.167 70);
 
+  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
+     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
+
+     This family does not follow the theme. A signed-out visitor cannot choose one
+     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
+     colleague signed in on this machine last month — so the one screen where the
+     product has to be recognisable would otherwise render in one of three
+     identities, selected by something the visitor did not do and cannot undo.
+
+     It is repeated per theme rather than declared once on `:root` because the
+     repetition is what makes the *values* visible where a reader looks for them,
+     and because `token-contrast.test.ts` resolves each theme independently. Note
+     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
+     `.corporate` over `:root` by inheritance, so a member deleted from one theme
+     block is NOT caught by the completeness gate — see the `brand` case in
+     `token-architecture.test.ts`, which pins the literal declarations per block
+     precisely because the inherited read cannot.
+
+     The values are Corporate's navy chrome — already measured against this fill —
+     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
+     across all three themes rather than trusting the provenance.
+
+     Do not "fix" this to follow the theme. That would be undoing the decision. */
+  --brand: oklch(0.252 0.056 264);
+  --brand-foreground: oklch(0.985 0 0);
+  --brand-muted-foreground: oklch(0.78 0.02 264);
+  --brand-muted: oklch(0.32 0.05 264);
+  --brand-border: oklch(1 0 0 / 14%);
+  --brand-input: oklch(0.62 0.02 264);
+  --brand-accent: oklch(0.338 0.081 262);
+  --brand-accent-foreground: oklch(0.985 0 0);
+  --brand-primary: oklch(0.786 0.167 70);
+  --brand-primary-foreground: oklch(0.252 0.056 264);
+  --brand-field: oklch(1 0 0);
+  --brand-field-foreground: oklch(0.321 0 0);
+  --brand-field-muted-foreground: oklch(0.51 0 0);
+  --brand-destructive-text: oklch(0.74 0.15 25);
+  --brand-warning-text: oklch(0.8 0.14 70);
+  --brand-info-text: oklch(0.8 0.09 245);
+  --brand-ring: oklch(0.786 0.167 70);
+
   /* White fields on navy — the reference's date and filter inputs. Deliberately
      per-theme: literal white would glare on Dark's near-black chrome. */
   --field: oklch(1 0 0);
@@ -516,6 +639,26 @@
   --warning-text: var(--panel-warning-text);
   --info-text: var(--panel-info-text);
   --ring: var(--panel-ring);
+}
+
+[data-surface='brand'] {
+  --background: var(--brand);
+  --foreground: var(--brand-foreground);
+  --muted: var(--brand-muted);
+  --muted-foreground: var(--brand-muted-foreground);
+  --border: var(--brand-border);
+  --input: var(--brand-input);
+  --accent: var(--brand-accent);
+  --accent-foreground: var(--brand-accent-foreground);
+  --primary: var(--brand-primary);
+  --primary-foreground: var(--brand-primary-foreground);
+  --field: var(--brand-field);
+  --field-foreground: var(--brand-field-foreground);
+  --field-muted-foreground: var(--brand-field-muted-foreground);
+  --destructive-text: var(--brand-destructive-text);
+  --warning-text: var(--brand-warning-text);
+  --info-text: var(--brand-info-text);
+  --ring: var(--brand-ring);
 }
 
 /* ------------------------------------------------------------------------- */

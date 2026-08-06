@@ -542,7 +542,12 @@ it**. Shipping this separately is what makes M4 a single revertible commit.
 > runs automatically once `'brand'` is in `FAMILIES`; do not add the family without adding it there.
 > **Testing requirements:** all five gates below, green, with the family present.
 
-##### Task M3-T1 — Declare the family and the rebind rule
+##### Task M3-T1 — Declare the family and the rebind rule — ✅ **DONE 2026-08-06**
+
+- **Outcome:** all 17 `--brand-*` members in `:root`, `.dark` and `.corporate` with **identical
+  literal values** (Corporate's navy chrome, re-verified rather than trusted), plus
+  `[data-surface='brand']` rebinding exactly `REBOUND_NAMES`. The comment block states the
+  theme-invariance as a decision so the next reader does not "fix" it.
 
 - **Description:** add `--brand` … `--brand-ring` (the 17 suffixes at
   `token-architecture.test.ts:26-50`) to `:root`, `.dark` **and** `.corporate`, with **identical
@@ -563,7 +568,19 @@ it**. Shipping this separately is what makes M4 a single revertible commit.
   3. Write the comment block in the register's own voice: state that this family is deliberately
      theme-invariant, and why, so the next reader does not "fix" it.
 
-##### Task M3-T2 — Extend the gates
+##### Task M3-T2 — Extend the gates — ✅ **DONE 2026-08-06**
+
+- **Outcome:** all five landed, and **each was verified red before being trusted** — a deleted
+  member, a rebind pointed at the wrong family, a `--color-brand-x` in `@theme inline`, and a
+  hand-written `data-surface` in a component, each restored after.
+  **The first probe found the task's own premise to be false, and that is the finding.** This task
+  says "the repetition IS the mechanism" — that declaring the family per theme block is what the
+  completeness gate rests on. It is not: `themeTokens()` merges `.dark` and `.corporate` over
+  `:root`, so a member deleted from one theme block is **inherited** and reads as present. Deleting
+  `--brand-input` from `.dark` left `token-architecture.test.ts` green. Closed with a `brand`-
+  specific assertion that reads each block's **literal** declarations and requires all 17 in each,
+  with one distinct value across the three — which is `brand`'s defining property and now the only
+  thing pinning it (ADR-0076 §19.9: the claim was checked rather than repeated).
 
 - **Description:** five changes, four of which are one word.
 - **Complexity:** S

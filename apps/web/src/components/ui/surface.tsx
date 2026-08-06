@@ -6,10 +6,11 @@ import { cn } from '@/lib/utils';
  * A **surface scope** (ADR-0055 §1) — a region within which the semantic token names keep their
  * meaning but resolve to a surface-appropriate family.
  *
- * Applying a scope is a COMPONENT, not a class, and deliberately so. The `--chrome-*` and
- * `--panel-*` families are not mapped into Tailwind's theme, so `bg-chrome` does not compile:
- * this component is the only route to those values. That is the structural guard — a developer
- * cannot hand-apply a chrome colour to a page component, because the class does not exist.
+ * Applying a scope is a COMPONENT, not a class, and deliberately so. The `--chrome-*`,
+ * `--panel-*` and `--brand-*` families are not mapped into Tailwind's theme, so `bg-chrome` does
+ * not compile: this component is the only route to those values. That is the structural guard — a
+ * developer cannot hand-apply a chrome colour to a page component, because the class does not
+ * exist.
  *
  * Inside its own scope `bg-background text-foreground` ARE the surface's colours, which is why
  * every descendant needs no change: `text-muted-foreground` in the header keeps its name and
@@ -19,7 +20,20 @@ import { cn } from '@/lib/utils';
  * listbox render to `document.body`, so a menu opened from the navy toolbar paints on `--popover`.
  * That is intended: an overlay belongs to the page, not to the surface that summoned it.
  */
-export type SurfaceTone = 'chrome' | 'panel';
+/**
+ * `chrome` is the app's top band, `panel` the navigator rail, and `brand` the public screens'
+ * panel (ADR-0077 §1).
+ *
+ * **`brand` is the odd one and the ADR says why**: it is **theme-invariant** — identical values in
+ * Light, Dark and Corporate — because a signed-out visitor cannot choose a theme and something
+ * else chooses one for them. It is the only scope whose fill is a decision about identity rather
+ * than about position in the app.
+ *
+ * The bar for a fifth scope is written down in ADR-0077 §1. It is five conditions, and the load-
+ * bearing one is that the region's fill must be chosen for a reason the page's fill structurally
+ * cannot serve — otherwise it is a component with props, not a scope.
+ */
+export type SurfaceTone = 'chrome' | 'panel' | 'brand';
 
 /**
  * Carries the enclosing tone for the nesting invariant ONLY, and is deliberately not exported.
