@@ -247,6 +247,18 @@ per-surface token held at ≥ 3:1 by `styles/token-contrast.test.ts`. Reach for 
 on anything whose edge identifies a control (fields, `outline` buttons, an unfilled chip);
 `border-border` is for dividers only.
 
+**No raw colour literals in `className` or `style`.** A literal cannot follow a surface scope
+and is invisible to `token-contrast.test.ts`, so a hard-coded `#666` looks right on the page
+and disappears on navy with nothing in the build to say so. The lint rule lives in
+`packages/config/eslint/react.js`. It covers `src/components/**`, `src/features/**` and — since
+2026-08-06 (ADR-0077 M0-T3) — **`src/routes/**` and `src/app/**`, which is where every public,
+signed-out screen lives**: until then a hard-coded navy on the brand panel itself would have
+linted clean, on the one surface a stranger sees first. The Canvas 2D painter is exempt
+(`fillStyle` takes a string, and `render/palette.ts` resolves tokens at runtime). A `mask-image`
+alpha stop is a legitimate literal — the browser reads the gradient's alpha, so it is never
+painted — and takes a scoped `eslint-disable-next-line` saying so, never a rewrite to `black`,
+which would slip past the regex while changing nothing.
+
 ---
 
 ## Accessibility requirements (WCAG 2.2 AA — enforced)

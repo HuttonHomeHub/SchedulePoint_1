@@ -1270,4 +1270,38 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 ---
 
-**Next free number: 101.**
+## 101. `check:claims` completeness has two structural blind spots
+
+**Status:** open · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2)
+
+`pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
+green on the day it was written **because it could not see half its input**. ADR-0077's M0-T2 widened
+it — both `.js` and `.mjs`, the prose form ("`dist/api/routes/sign-in.mjs`, lines **234**"), and an
+exclusion for files this repository owns — and the widening immediately surfaced **two dependency
+citations that had been in the tree unregistered all along**: `nodemailer`'s `_formatError` and
+`zod`'s `allowsEval` probe. Both were verified and registered. Two limitations remain, recorded here
+rather than solved, because each trade is a real one:
+
+1. **The own-file exclusion is by basename.** `ownJsBasenames()` runs `git ls-files` and excludes any
+   citation whose basename this repo also has. If a dependency file and a repo file ever share a
+   basename, an **unregistered** citation into that dependency is silently skipped. Today there is no
+   collision (the set holds no `index.js`/`index.mjs`, and `@better-fetch/fetch`'s `index.js:733-739`
+   is registered, which is checked before the exclusion). Matching on full paths instead was rejected
+   because prose legitimately writes both `dist/api/routes/sign-in.mjs` and `sign-in.mjs` for the same
+   claim, and neither is wrong.
+2. **The scan walks four directories** — `docs`, `apps/api/src`, `apps/web/src`, `apps/api/test`. A
+   citation in `packages/*`, `apps/seed-cli`, a root config or a `README` is not scanned, so it is
+   neither demanded nor checked. Widening it is cheap; what is not free is that each new directory
+   can surface unregistered citations that then need a human to read the cited code, which is the
+   whole point and also the cost.
+
+**Why not now:** both are bounded and neither can produce a _false_ pass on a claim the register
+already holds — they can only fail to _demand_ a new one. The fix for (2) is one array literal plus
+whatever it turns up.
+
+**Risk:** low. The gate's core property (a registered claim's anchor is verified against the pinned
+version, and a version bump fails CI) is unaffected by either.
+
+---
+
+**Next free number: 102.**

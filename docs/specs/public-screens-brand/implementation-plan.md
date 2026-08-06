@@ -1,8 +1,8 @@
 # Implementation Plan: The public screens — brand surface, and the four blocking defects
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **ADR draft:** [`./adr-0077-draft-public-screens-brand-surface.md`](./adr-0077-draft-public-screens-brand-surface.md)
-  — not yet filed; **task M0-T0** files it
+- **ADR:** [`../../adr/0077-public-screens-brand-surface.md`](../../adr/0077-public-screens-brand-surface.md)
+  — filed 2026-08-06 by task M0-T0
 - **Status:** Draft — awaiting approval
 - **Owner:** _(unassigned)_
 
@@ -53,12 +53,14 @@ and every dependency claim this epic rests on is registered.
 > **Testing requirements:** the new suites must be verified to **fail** against a deliberately
 > broken version before being trusted.
 
-##### Task M0-T0 — File ADR-0077 (do this first, and do not split it)
+##### Task M0-T0 — File ADR-0077 (do this first, and do not split it) — ✅ **DONE 2026-08-06**
 
-- **Description:** move
-  `docs/specs/public-screens-brand/adr-0077-draft-public-screens-brand-surface.md` to
+- **Description:** move the draft out of this directory to
   `docs/adr/0077-public-screens-brand-surface.md`, set `Status: Accepted`, delete the draft header
   box, add the `CLAUDE.md` §16 entry, and bump the banner's ADR count **76 → 77**.
+- **Outcome:** filed in the same commit as M0-T2 and M0-T3, with CQ-1 (motif drawn from the brand
+  family's own semantic names), CQ-2 (the route owns the header and the terminal branch) and CQ-3
+  (`useNoindex` on all six routes) folded in as confirmed rather than recommended.
 - **Complexity:** S
 - **Dependencies:** approval; CQ-1 and CQ-2 answered (both change §4 and §6 of the ADR).
 - **Risks:**
@@ -96,8 +98,18 @@ and every dependency claim this epic rests on is registered.
   3. Confirm the four fail; mark them `.fails` or `todo` with an explicit pointer to M1-T1, so the
      suite is honest rather than green-by-omission.
 
-##### Task M0-T2 — Register the dependency claims
+##### Task M0-T2 — Register the dependency claims — ✅ **DONE 2026-08-06**
 
+- **Outcome:** all four citations registered with verified anchors, and **all three** of the
+  `check-claims.mjs` limitations below fixed rather than worked around — the scope transform, both
+  citation forms (`.js` as well as `.mjs`, and the prose form these artefacts had been forced into),
+  and an own-file exclusion driven by `git ls-files`. The widening then found **two dependency
+  citations that had been unregistered in the tree all along** — `nodemailer@9.0.3`'s `_formatError`
+  and `zod@4.4.3`'s `allowsEval` probe, both load-bearing (the first for the ADR-0075 security
+  review's log-safety conclusion, the second for `config/zod-jitless.ts` existing at all). Both were
+  read and registered; the register is 40 claims across five packages. Verified red with a probe
+  document exercising both new forms plus a self-citation, then green. Residual limitations (the
+  basename-level own-file exclusion, and the four-directory scan) are `docs/TECH_DEBT.md` **#101**.
 - **Description:** the spec and ADR-0077 cite `better-auth` and `@better-fetch/fetch` internals.
   `pnpm check:claims` fails on any `<file>.mjs:<line>` citation in `docs/` that is not in
   `scripts/dependency-claims.json` (`scripts/check-claims.mjs`, completeness scan, lines 106-134).
@@ -141,8 +153,15 @@ and every dependency claim this epic rests on is registered.
   3. Teach `installed()` the scope transform, or record why `@better-fetch/fetch` stays unregistered.
   4. `pnpm check:claims` and `pnpm check:doc-links`.
 
-##### Task M0-T3 — Widen the colour-literal rule to the public routes
+##### Task M0-T3 — Widen the colour-literal rule to the public routes — ✅ **DONE 2026-08-06**
 
+- **Outcome:** `**/src/routes/**` and `**/src/app/**` added to the `files` array. One pre-existing
+  violation, and it was a **false positive worth keeping the rule honest about**:
+  `welcome-empty-state.tsx` uses `#000` as a `mask-image` alpha stop, which the browser reads as
+  opacity and never paints — so it cannot suffer the harm the rule exists to stop. Fixed with a
+  scoped `eslint-disable-next-line` carrying that reasoning, deliberately **not** by rewriting it as
+  `black` (which slips past the regex while changing nothing). Verified red by inserting
+  `text-[#14213D]` into `sign-in.tsx`.
 - **Description:** `packages/config/eslint/react.js:45` scopes the rule to
   `**/src/components/**` and `**/src/features/**`. **Every public screen lives in `src/routes/`** and
   is outside it — so a hard-coded navy on the very panel this epic adds would lint clean.

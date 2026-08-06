@@ -1,30 +1,31 @@
 # ADR-0077: The public screens' brand surface — a fourth scope, fixed dark in every theme, and what counts as a brand asset
 
-> **THIS IS A PRE-APPROVAL DRAFT AND IT IS NOT FILED.**
->
-> On approval it moves to `docs/adr/0077-public-screens-brand-surface.md` **in the same commit** as
-> the `CLAUDE.md` banner count bump (76 → 77 ADRs) and the `CLAUDE.md` §16 entry. The two cannot be
-> separated: `pnpm check:counts` re-derives the ADR count from `docs/adr/` and fails on the file's
-> arrival otherwise (`scripts/check-counts.mjs`, the `ADRs` entries at lines 42 and 54).
->
-> _(Written that way, and not in the usual `<file>.mjs:<line>` form, on purpose:
-> `scripts/check-claims.mjs`'s completeness
-> scan matches **any** `<name>.mjs:<line>` in `docs/` and demands a register entry, without
-> distinguishing a dependency from this repository's own tooling — so citing our own scripts by line
-> fails CI. That is a third limitation of the gate, alongside the two in "Consequences".)_
->
-> **It is drafted here rather than filed as `Proposed` for exactly one reason** — filing it now would
-> turn `main` red before anyone has approved it. That is a worse trade than the risk of forgetting to
-> move it, and the risk of forgetting is why filing is task **M0-T0** of the implementation plan
-> rather than a note. ADR-0071 lived at `docs/specs/assignment-lag/…` for its entire epic, was
-> maintained through M6 and the flag flip, and **was never moved** — so a decision cited by number in
-> `docs/DATABASE.md`, three other ADRs, two migrations and `packages/types` was absent from the
-> register until the audit-log spec tripped over it. That is the failure this box exists to prevent.
-
-- **Status:** Proposed _(draft — see the box above)_
+- **Status:** **Accepted** — 2026-08-06. Filed as plan task **M0-T0**, in the same commit as the
+  `CLAUDE.md` §16 entry and the banner count bump (76 → 77), because `pnpm check:counts` re-derives
+  the ADR count from `docs/adr/` and the file arriving alone turns CI red.
 - **Date:** 2026-08-06
-- **Deciders:** Product owner; feature-analyst; prior ui-architect and ux-reviewer passes
-- **Spec:** [`./feature-spec.md`](./feature-spec.md) · **Plan:** [`./implementation-plan.md`](./implementation-plan.md)
+- **Deciders:** Product owner (the brand panel's theme behaviour, the motif over a photograph, the
+  defect scope, no "Remember me", the tagline, and CQ-1/CQ-2/CQ-3); feature-analyst; prior
+  ui-architect and ux-reviewer passes
+- **Spec:** [`../specs/public-screens-brand/feature-spec.md`](../specs/public-screens-brand/feature-spec.md)
+  · **Plan:** [`../specs/public-screens-brand/implementation-plan.md`](../specs/public-screens-brand/implementation-plan.md)
+
+> **On filing.** This document spent its drafting life at
+> `docs/specs/public-screens-brand/adr-0077-draft-…` and was moved here as the **first** task of the
+> implementation plan rather than the last. That ordering is deliberate: ADR-0071 lived in a spec
+> directory for its entire epic, was maintained through M6 and a flag flip, and **was never moved**
+> — so a decision cited by number in `docs/DATABASE.md`, three other ADRs, two migrations and
+> `packages/types` was absent from the register until the audit-log spec tripped over it while
+> choosing its own number.
+>
+> Note also that this file cites this repository's **own** scripts as "line N" rather than in the
+> usual `file.mjs:N` form. That began as a workaround for `scripts/check-claims.mjs`, whose
+> completeness scan demanded a register entry for any `<name>.mjs:<line>` under `docs/` without
+> distinguishing a dependency from our own tooling. **M0-T2 fixed the gate rather than keeping the
+> workaround** — and discovered while doing so that the same scan had never seen a `.js` citation or
+> the prose form these artefacts had adopted, so it had been passing on half its input. The prose
+> here is left as written because it now reads correctly to both a human and the gate; see
+> Consequences for what the widening then found.
 
 ---
 
@@ -175,8 +176,8 @@ in M3-T2) so this is a number in the test output rather than an impression.
 
 ### 4. The motif is drawn from the brand family's own semantic names, not from `--chart-*`
 
-_(This is **CQ-1** in the spec; the paragraph below is the recommended resolution, and the ADR should
-not be accepted until the PO confirms it.)_
+_(This was **CQ-1** in the spec. **Confirmed by the product owner, 2026-08-06**, along with CQ-2 —
+the route owns the header — and the decision to `noindex` all six routes.)_
 
 The intent — "draw it in the product's data-visualisation colours" — is right. The literal
 implementation is blocked three ways, each verified in the test source rather than assumed
@@ -247,6 +248,15 @@ in use (`CLAUDE.md` §17).
   a module-level side channel. A fabricated countdown is worse than none.
 - **`/change-password` and `/change-email` share the 10-second rule** (`index.mjs:370-383`), so the
   authed `/account` screen inherits the 429 handling for free. Recorded so nobody re-implements it.
+- **All six public routes carry `useNoindex`** (PO decision). Two do today (`forgot-password`,
+  `reset-password`) and four do not, which is drift rather than a decision — and one of the four,
+  `accept-invite`, carries a **live bearer token in its URL**. SchedulePoint has no marketing site
+  and no landing route: `/sign-in` **is** the front door, and `router.tsx:109` redirects every
+  unauthenticated arrival to it, so nothing reaches these screens from a search result anyway. The
+  question was put deliberately rather than settled by omission, because `/sign-up` is the one route
+  where a discoverable front door would be defensible if the product ever acquires a marketing
+  surface. If that day comes, this is the line to revisit — and it will also need the
+  `<meta name="description">` the application currently has nowhere.
 
 ---
 
@@ -310,14 +320,27 @@ in use (`CLAUDE.md` §17).
 
 - Self-hosting a webfont is now a clearly-scoped, separately-decidable improvement rather than an
   ambient wish.
-- `scripts/check-claims.mjs` gains two limitations worth a `TECH_DEBT` row, found while writing this:
-  its `installed()` helper cannot resolve a **scoped** package (pnpm stores `@better-fetch/fetch` as
-  `@better-fetch+fetch@…`, and the lookup uses `startsWith(name + '@')`); its completeness scan is
-  a text pattern over `<base>.mjs:<line>`, so a citation written any other way — including every
-  citation into a `.js` dist file — is invisible to it; and that same pattern makes **no distinction
-  between a dependency and this repository's own tooling**, so citing `scripts/*.mjs` by line number
-  in a doc fails `pnpm check:claims` with a demand to register a file that is in the repository. All
-  three were found while writing this ADR, by hitting them.
+- **`scripts/check-claims.mjs` was passing for the wrong reason, and this epic found it by hitting
+  it three times.** Its `installed()` helper could not resolve a **scoped** package (pnpm stores
+  `@better-fetch/fetch` as `@better-fetch+fetch@…`, and the lookup used `startsWith(name + '@')`);
+  its completeness scan was a text pattern over `<base>.mjs:<line>`, so **every citation into a
+  `.js` file was invisible** and so was the prose form this ADR's own artefacts used
+  ("`dist/api/routes/sign-in.mjs`, lines **234**"); and the same pattern drew **no distinction
+  between a dependency and this repository's own tooling**, so citing `scripts/check-counts.mjs` by
+  line failed the gate with a demand to register a file that is in the repository — which is what
+  pushed the artefacts into the prose form in the first place. That is the ADR-0076 Class 2 failure
+  **inside the gate built to stop it**: `pnpm check:claims` reported OK on the day it shipped
+  because it could not see half its input.
+
+  All three are fixed in M0-T2, and the widening immediately found **two unregistered dependency
+  citations that had been in the tree all along** — `nodemailer@9.0.3`'s `_formatError`
+  (`lib/smtp-connection/index.js:932-957`, load-bearing for the ADR-0075 security review's
+  conclusion that a transport error cannot smuggle the message body into a log) and `zod@4.4.3`'s
+  `allowsEval` probe (`v4/core/util.js:145-163`, the whole reason `config/zod-jitless.ts` exists).
+  Both anchors were read and verified; the register is now 40 claims across five packages. The
+  residual blind spot — the own-file exclusion is by **basename**, and the scan walks four
+  directories — is `docs/TECH_DEBT.md` **#101**.
+
 - The engine, the API, the database and the recalc parity gate are **untouched by construction**: no
   file under `apps/api` is modified, no migration runs, and `computeSchedule` is not imported by
   anything in the diff. In its honest form (ADR-0074's phrasing): there is nothing to hold parity
@@ -327,19 +350,19 @@ in use (`CLAUDE.md` §17).
 
 ## References
 
-- Spec: [`./feature-spec.md`](./feature-spec.md) · Plan: [`./implementation-plan.md`](./implementation-plan.md)
-- [ADR-0055](../../adr/0055-designed-chrome-and-canvas-visual-language.md) — surface scopes, the
+- Spec: [`./feature-spec.md`](../specs/public-screens-brand/feature-spec.md) · Plan: [`./implementation-plan.md`](../specs/public-screens-brand/implementation-plan.md)
+- [ADR-0055](./0055-designed-chrome-and-canvas-visual-language.md) — surface scopes, the
   17-token completeness rule, the computed gates
-- [ADR-0074](../../adr/0074-account-recovery-verification-enforcement-and-csp.md) — the screens
+- [ADR-0074](./0074-account-recovery-verification-enforcement-and-csp.md) — the screens
   themselves, and the CSP this decision designs within
-- [ADR-0061](../../adr/0061-dialog-layout-system.md) — the unflagged structural-refactor precedent
-- [ADR-0062](../../adr/0062-activity-editor-convergence-logic-resources-notes-as-tabs.md) — extraction
+- [ADR-0061](./0061-dialog-layout-system.md) — the unflagged structural-refactor precedent
+- [ADR-0062](./0062-activity-editor-convergence-logic-resources-notes-as-tabs.md) — extraction
   proved by pre-existing suites passing unchanged
-- [ADR-0076](../../adr/0076-wrong-claims-are-a-defect-class.md) — why every claim above names what was
+- [ADR-0076](./0076-wrong-claims-are-a-defect-class.md) — why every claim above names what was
   read, and why the dependency citations are registered
-- [ADR-0058](../../adr/0058-drift-control-and-the-reconciliation-pass.md) — verify the claim; do not
+- [ADR-0058](./0058-drift-control-and-the-reconciliation-pass.md) — verify the claim; do not
   trust the document
-- [ADR-0071](../../adr/0071-per-assignment-lag.md) — the filing failure this draft's header box guards
+- [ADR-0071](./0071-per-assignment-lag.md) — the filing failure this draft's header box guards
   against
 - `docs/TECH_DEBT.md` #97(b) (closed by this epic), #98 (the measurement precedent), #96 (the search
   parser limit this epic does **not** fix)

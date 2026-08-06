@@ -6,7 +6,7 @@
 - **Tracking issue / epic:** _(to be raised)_
 - **Roadmap link:** `docs/ROADMAP.md` → Next → Product features
 - **Related ADR(s):** **ADR-0077** — drafted beside this spec at
-  [`./adr-0077-draft-public-screens-brand-surface.md`](./adr-0077-draft-public-screens-brand-surface.md)
+  [`../../adr/0077-public-screens-brand-surface.md`](../../adr/0077-public-screens-brand-surface.md)
   and **deliberately not yet filed** (filing it would fail `pnpm check:counts` before approval; see
   the draft's header box and plan task M0-T0). It amends the
   surface-scope mechanism of [ADR-0055](../../adr/0055-designed-chrome-and-canvas-visual-language.md);
@@ -721,7 +721,7 @@ Alternatives considered and rejected:
 ## 5. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
-- ADR draft: [`./adr-0077-draft-public-screens-brand-surface.md`](./adr-0077-draft-public-screens-brand-surface.md)
+- ADR: [`../../adr/0077-public-screens-brand-surface.md`](../../adr/0077-public-screens-brand-surface.md)
   — moves to `docs/adr/0077-public-screens-brand-surface.md` on approval (plan task M0-T0)
 - Docs this change updates: `docs/DESIGN_SYSTEM.md` (the fourth scope and the bar for a fifth),
   `docs/COMPONENT_LIBRARY.md` (`ServerError`, `TextLink`, `BrandPanel`), `docs/TESTING.md` (the new
