@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import {
   RESET_PASSWORD_DISABLED,
   authErrorMessage,
-  useRequestPasswordReset,
+  type useRequestPasswordReset,
 } from '../api/use-session';
 import {
   requestPasswordResetSchema,
@@ -13,7 +13,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
-import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
+import { ServerError } from '@/components/ui/server-error';
 
 /**
  * Ask for a password-reset link (ADR-0074 M4).
@@ -27,11 +27,19 @@ import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
  * **It does not promise delivery either.** On a stock deployment the mail port only logs
  * (`TECH_DEBT` #94), so "we've emailed you" would be false wherever SMTP is unconfigured. "If that
  * address has an account" is true in every configuration.
+ *
+ * **The mutation is owned by the route, not by this form** (ADR-0077 M2-T3). The submitted state is
+ * a *terminal* state of the screen — the heading "Reset your password" is wrong once the link has
+ * been asked for — and only the route can change the heading. The form keeps owning its fields;
+ * one object moves.
  */
 export function RequestPasswordResetForm({
   email,
+  request,
 }: {
   email?: string | undefined;
+  /** The route's mutation, so the route can render the terminal state with its own heading. */
+  request: ReturnType<typeof useRequestPasswordReset>;
 }): React.ReactElement {
   const {
     register,
@@ -41,26 +49,11 @@ export function RequestPasswordResetForm({
     resolver: zodResolver(requestPasswordResetSchema),
     defaultValues: { email: email ?? '' },
   });
-  const request = useRequestPasswordReset();
-  const outcomeRef = useOutcomeFocus<HTMLDivElement>(request.isSuccess);
-
   const onSubmit = handleSubmit((values) => {
-    // Announced by the `role="status"` block below and nowhere else: two live regions carrying the
-    // same sentence read it twice (ADR-0074 M5-T1).
+    // Announced by the route's terminal `role="status"` block and nowhere else: two live regions
+    // carrying the same sentence read it twice (ADR-0074 M5-T1).
     request.mutate(values.email);
   });
-
-  if (request.isSuccess) {
-    return (
-      <div role="status" tabIndex={-1} ref={outcomeRef} className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Check your email</p>
-        <p className="text-muted-foreground text-sm">
-          If that address has an account, a reset link is on its way. The link works once and
-          expires in an hour.
-        </p>
-      </div>
-    );
-  }
 
   // "Reset isn't available" must never read as "no such account" — it is a server configuration
   // fact about the whole deployment, not a fact about the address just typed.
@@ -69,13 +62,15 @@ export function RequestPasswordResetForm({
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
       <FormErrorSummary errors={errors} />
-      {request.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {disabled
-            ? 'Password reset is not available on this installation. Contact your administrator.'
-            : authErrorMessage(request.error, 'email')}
-        </p>
-      ) : null}
+      <ServerError
+        message={
+          request.isError
+            ? disabled
+              ? 'Password reset is not available on this installation. Contact your administrator.'
+              : authErrorMessage(request.error, 'email')
+            : null
+        }
+      />
       <TextField
         label="Email"
         type="email"

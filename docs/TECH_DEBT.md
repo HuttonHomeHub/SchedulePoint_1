@@ -1064,11 +1064,12 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
   expect to see them — but a reader asking "who changed a password this month?" cannot ask it. The
   fix is a fourth category, which touches ADR-0073 C1's chip vocabulary and its derived cap, so it
   belongs with the next audit slice rather than bolted on here.
-- **(b) The inline text-link `className` is repeated across five auth screens**
-  (component-reviewer). `text-primary font-medium underline-offset-4 hover:underline` appears in
-  `sign-in`, `sign-up`, `verify-email`, `forgot-password` and `reset-password`. It is the
-  one-off-styling smell `docs/COMPONENT_LIBRARY.md` warns about — five copies of a decision nobody
-  will remember to change together. It wants a `Link` variant in `components/ui/`, not a sixth copy.
+- **(b) ~~The inline text-link `className` is repeated across five auth screens~~ — CLOSED
+  2026-08-06 (ADR-0077 M2-T2).** `text-primary font-medium underline-offset-4 hover:underline`
+  appeared in `sign-in`, `sign-up`, `verify-email`, `forgot-password` and `reset-password`, and the
+  brand-surface epic was about to add a sixth. It is now `components/ui/text-link.tsx` —
+  a `className` factory rather than a component, so the router's type-safe `to`/`search` inference
+  survives, and it gained the visible focus ring the five copies never had.
 - **(c) `password-reset.parity.test.tsx` overstates itself, and one of its assertions is vacuous**
   (test-engineer). Its docblock calls the suite "the only gate" on the flag structure, which was
   true when written and is not now — `router-search.test.ts` and the flag-on journey both cross it.
@@ -1076,12 +1077,11 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
   what produced it: it cannot fail. Both are documentation defects in a test rather than missing
   coverage, which is why they are here and not in the fix.
 
-**Risk:** none is user-visible. (a) makes one audit question unaskable; (b) is a maintenance cost
-that compounds with the next auth screen; (c) is a test that reads as stronger than it is, which is
-the failure mode this register exists to name.
+**Risk:** neither remaining item is user-visible. (a) makes one audit question unaskable; (c) is a
+test that reads as stronger than it is, which is the failure mode this register exists to name.
 
-**Remediation:** (a) with the next audit-coverage slice, (b) with the next auth screen or a
-design-system pass, (c) whenever that file is next touched — it is a comment and one assertion.
+**Remediation:** (a) with the next audit-coverage slice; (c) whenever that file is next touched — it
+is a comment and one assertion. (b) is closed.
 
 ## Closed numbers
 

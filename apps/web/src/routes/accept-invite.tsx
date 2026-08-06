@@ -2,9 +2,11 @@ import { useSearch } from '@tanstack/react-router';
 
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AcceptInvitationCard, InviteExitLinks, InviteShell } from '@/features/members';
+import { useNoindex } from '@/hooks/use-noindex';
 
 /** Public route for accepting an invitation from an email/share link. */
 export function AcceptInviteScreen(): React.ReactElement {
+  useNoindex();
   const search = useSearch({ strict: false });
   const token = 'token' in search && typeof search.token === 'string' ? search.token : '';
 

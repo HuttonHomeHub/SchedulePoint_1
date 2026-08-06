@@ -58,7 +58,7 @@ describe('flag OFF — the prior sign-in screen, byte for byte', () => {
   it('leaves the rest of the screen exactly as it was', () => {
     renderSignIn();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create one' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create an account' })).toBeInTheDocument();
   });
 });
 

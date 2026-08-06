@@ -2,8 +2,10 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { AuthShell } from '@/components/layout/auth-shell';
-import { ResetPasswordForm } from '@/features/auth';
+import { buttonVariants } from '@/components/ui/button';
+import { ResetPasswordForm, useResetPassword } from '@/features/auth';
 import { useNoindex } from '@/hooks/use-noindex';
+import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
  * Set a new password from an emailed link (`/reset-password`, ADR-0074 M4) — behind
@@ -24,6 +26,10 @@ export function ResetPasswordScreen(): React.ReactElement {
   useNoindex();
   const search = useSearch({ strict: false });
   const navigate = useNavigate();
+  // Owned here, not in the form (ADR-0077 M2-T3): this screen used to keep the heading "Choose a
+  // new password" over a body that already said the password had been changed.
+  const reset = useResetPassword();
+  const outcomeRef = useOutcomeFocus<HTMLDivElement>(reset.isSuccess);
 
   // Captured on the first render, before the effect below removes it from the URL. A `useState`
   // initialiser rather than an effect: an effect would run after a render in which the token is
@@ -46,19 +52,31 @@ export function ResetPasswordScreen(): React.ReactElement {
         title="That link is no longer valid"
         description="Reset links work once and expire after an hour. Ask for a new one and it will replace any earlier link."
       >
-        <Link
-          to="/forgot-password"
-          className="text-primary text-sm font-medium underline-offset-4 hover:underline"
-        >
+        <Link to="/forgot-password" className={buttonVariants()}>
           Send a new link
         </Link>
       </AuthShell>
     );
   }
 
+  if (reset.isSuccess) {
+    return (
+      <AuthShell title="Password changed">
+        {/* The revocation claim is the reader's confirmation that the lockout is over, so it is
+            carried by the live region rather than by the heading alone. */}
+        <div role="status" tabIndex={-1} ref={outcomeRef} className="flex flex-col gap-4">
+          <p className="text-muted-foreground text-sm">Every other session has been signed out.</p>
+          <Link to="/sign-in" className={buttonVariants()}>
+            Sign in
+          </Link>
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
     <AuthShell title="Choose a new password" description="Then sign in with it.">
-      <ResetPasswordForm token={token} />
+      <ResetPasswordForm token={token} reset={reset} />
     </AuthShell>
   );
 }

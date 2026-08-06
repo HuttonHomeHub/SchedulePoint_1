@@ -10,6 +10,7 @@ import { InviteShell } from './InviteShell';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ServerError } from '@/components/ui/server-error';
 import { Spinner } from '@/components/ui/spinner';
 import { ResendVerificationButton, useSession, useSignOut } from '@/features/auth';
 
@@ -205,11 +206,7 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
         <CardDescription>You&rsquo;ve been invited as {roleLabel}.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {accept.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {accept.error.message}
-          </p>
-        ) : null}
+        <ServerError message={accept.isError ? accept.error.message : null} />
         {/* `aria-disabled`, not `disabled`: a native disabled control blurs to `<body>` the moment
             the request starts and flips back when it settles, so a keyboard user loses their place
             twice per action (WCAG 2.4.3). **The `onClick` guard is what prevents the double

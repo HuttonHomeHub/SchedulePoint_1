@@ -8,6 +8,7 @@ import { ResendVerificationButton } from './ResendVerificationButton';
 
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { ServerError } from '@/components/ui/server-error';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /** Email + password sign-in form. Calls `onSuccess` once a session is established. */
@@ -57,11 +58,7 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
       <FormErrorSummary errors={errors} />
-      {signIn.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {authErrorMessage(signIn.error)}
-        </p>
-      ) : null}
+      <ServerError message={signIn.isError ? authErrorMessage(signIn.error) : null} />
       <TextField
         label="Email"
         type="email"

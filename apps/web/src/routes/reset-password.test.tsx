@@ -113,7 +113,12 @@ describe('ResetPasswordScreen — submitting', () => {
     renderScreen({ token: 'tok-123' });
     fill();
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Password changed');
+    // The heading is part of the state (ADR-0077 M2-T3): it used to stay "Choose a new password"
+    // over a body that had already told the reader the password was different.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Every other session has been signed out',
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Password changed');
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     // Only the token-stripping navigation — pushing `/` would land in the `_authed` guard and
     // bounce, which is the dead end this epic exists to remove.

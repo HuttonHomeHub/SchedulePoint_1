@@ -81,7 +81,10 @@ describe('SignInScreen', () => {
     renderScreen();
 
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create one' })).toHaveAttribute('href', '/sign-up');
+    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
+      'href',
+      '/sign-up',
+    );
   });
 
   it('goes home when nothing asked for somewhere else', async () => {

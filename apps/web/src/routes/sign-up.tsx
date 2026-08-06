@@ -1,7 +1,9 @@
 import { Link, useRouter } from '@tanstack/react-router';
 
 import { AuthShell } from '@/components/layout/auth-shell';
+import { textLinkVariants } from '@/components/ui/text-link';
 import { SignUpForm } from '@/features/auth';
+import { useNoindex } from '@/hooks/use-noindex';
 
 /**
  * Public sign-up screen (open self-service).
@@ -17,10 +19,11 @@ import { SignUpForm } from '@/features/auth';
  * copy for that case too, and there is no "already in use" message to add.
  */
 export function SignUpScreen(): React.ReactElement {
+  useNoindex();
   const router = useRouter();
 
   return (
-    <AuthShell title="Create your account" description="Start planning with SchedulePoint.">
+    <AuthShell title="Create an account" description="Start planning with SchedulePoint.">
       <SignUpForm
         onSuccess={(outcome, email) => {
           router.history.push(
@@ -30,7 +33,7 @@ export function SignUpScreen(): React.ReactElement {
       />
       <p className="text-muted-foreground text-sm">
         Already have an account?{' '}
-        <Link to="/sign-in" className="text-primary font-medium underline-offset-4 hover:underline">
+        <Link to="/sign-in" className={textLinkVariants()}>
           Sign in
         </Link>
       </p>

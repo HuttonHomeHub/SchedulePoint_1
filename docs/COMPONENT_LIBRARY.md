@@ -286,8 +286,17 @@ a cycle never tells the user what the other three options are.
 The centred card every **public** screen sits in — sign-in, sign-up, accept-invite, and the
 account-recovery screens (ADR-0074). It is the page's single `main` landmark, takes an optional
 `title`/`description` (omit them when the children own their heading, as the accept-invite card
-does), a `size` of `sm` for forms or `md` for the wider decision screens, and reflects `busy` as
-`aria-busy`.
+does), and reflects `busy` as `aria-busy`. **One width, 448px** — the `size` prop is gone
+(ADR-0077 M2-T4): keeping both prior widths behind a prop preserved the very drift the convergence
+existed to remove, so a reader who signed in and then accepted an invitation watched the card
+change size for no reason they could name.
+
+**The route owns the heading, including every terminal state.** A form that swaps its own body for
+an outcome leaves the heading describing a task that is over — which is what `/reset-password` did,
+keeping "Choose a new password" over a body that had already said the password was changed. Where a
+screen has a terminal state, the route holds the mutation and renders it; the form keeps its fields.
+`components/layout/auth-shell-assertions.ts` carries the one-`main`/one-`h1` assertion so 33 states
+do not each hand-write it.
 
 **It mounts `AnnouncerProvider`, and a public screen depends on that.** The app's provider lives
 inside the authed shell, so out here `useAnnounce()` would otherwise resolve to the context's
@@ -297,11 +306,35 @@ rather than hand-rolling a second live region is what keeps a component like
 `ResendVerificationButton` working identically on a public screen and an authed one without
 knowing where it is.
 
-`InviteShell` is a thin named wrapper over it (`size="md"`, no title) rather than a second
+`InviteShell` is a thin named wrapper over it (no title) rather than a second
 implementation: it was a near-copy that had already drifted on width and on whether it announced
 anything, and three new public screens were about to make that five callers on two shells — the
 ADR-0062 shape, where each looks right alone and only a reader who opens the same thing two ways
 ever notices one is a version behind.
+
+## Primitive: `ServerError` (`components/ui/server-error.tsx`)
+
+The failure that came back from the server, given the same weight as the client-side validation
+beside it (ADR-0077 M2-T1). It renders `role="alert"`, takes focus **once** when it appears, and
+uses the bordered, tinted treatment `FormErrorSummary` already had — the defect it replaces is a
+hierarchy inversion, where "enter a valid email" got a bordered block and "too many attempts" got a
+bare red sentence, in six hand-assembled copies.
+
+It takes a `message`, not an error object, and deliberately **knows nothing about HTTP**. A
+primitive in `components/ui` that imported `AuthError` to branch on a 429 would be a one-off in a
+`ui/` costume; the single place deciding what 429 means is `authErrorMessage()` in
+`features/auth`, whose result callers pass in.
+
+## Primitive: `textLinkVariants` (`components/ui/text-link.tsx`)
+
+The inline text link. A `className` factory rather than a component — the same shape as
+`buttonVariants`, and for a concrete reason: these are TanStack Router `<Link>`s, and wrapping one
+loses the type-safe inference on `to`/`params`/`search` that catches a link to a route that does not
+exist. `size: 'inherit'` (the default) takes the surrounding prose's size; `size: 'sm'` sizes itself.
+
+**Reach for it, never for the classes.** It closed `docs/TECH_DEBT.md` #97(b), which was five
+hand-written copies of `text-primary font-medium underline-offset-4 hover:underline` across the
+public screens — and it adds the visible focus ring none of those copies had.
 
 ## Primitive: `Surface` (`components/ui/surface.tsx`)
 

@@ -381,7 +381,16 @@ action; one link style. Still visually conservative — no brand panel yet.
 > **Testing requirements:** component tests for both; every migrated screen's existing suite must
 > pass **unchanged** (queries are by role and accessible name).
 
-##### Task M2-T1 — `ServerError`
+##### Task M2-T1 — `ServerError` — ✅ **DONE 2026-08-06**
+
+- **Outcome:** `components/ui/server-error.tsx`, migrated at all six call sites plus
+  `ChangePasswordForm` (the seventh copy, on `/account`, which the task list did not name).
+  **One departure, and it is the task's own risk note honoured**: the component takes a `message`,
+  not an error object, and does not know what a 429 is. A `components/ui` primitive importing
+  `AuthError` to branch on a rate limit would be the one-off-in-a-`ui`-costume that note warns
+  about; the single place deciding what 429 means is `authErrorMessage()` from M1-T4, which every
+  call site already routes through — so the property the task wanted (one decision, one place) is
+  held without the layering inversion.
 
 - **Description:** six copies of `<p role="alert" className="text-destructive-text text-sm">{msg}</p>`
   (`SignInForm.tsx:60-64`, `SignUpForm.tsx:41-45`, `RequestPasswordResetForm.tsx:68-74`,
@@ -402,7 +411,13 @@ action; one link style. Still visually conservative — no brand panel yet.
   2. Migrate all six call sites.
   3. `docs/COMPONENT_LIBRARY.md` entry.
 
-##### Task M2-T2 — `TextLink`, closing TECH_DEBT #97(b)
+##### Task M2-T2 — `TextLink`, closing TECH_DEBT #97(b) — ✅ **DONE 2026-08-06**
+
+- **Outcome:** shipped as `textLinkVariants`, a `className` factory rather than a component — the
+  risk note's first option, taken because wrapping TanStack Router's `Link` loses the type-safe
+  `to`/`search` inference that catches a link to a route that does not exist. All five call sites
+  migrated; #97(b) struck from the register. It also adds the **visible focus ring** none of the
+  five copies had, which is the one behavioural change rather than a pure consolidation.
 
 - **Description:** `text-primary font-medium underline-offset-4 hover:underline` appears in
   `sign-in`, `sign-up`, `verify-email`, `forgot-password` and `reset-password`. #97(b) says it wants
@@ -427,7 +442,20 @@ action; one link style. Still visually conservative — no brand panel yet.
 > **Testing requirements:** one `<h1>` and one `main` on all 33 states; the `<h1>` text asserted per
 > terminal state.
 
-##### Task M2-T3 — Hoist the terminal branch to the route
+##### Task M2-T3 — Hoist the terminal branch to the route — ✅ **DONE 2026-08-06**
+
+- **Outcome:** `/forgot-password` and `/reset-password` own their mutations and render their own
+  terminal states; the forms keep their fields. The missing `session.isPending` branch (state #11)
+  is added. `components/layout/auth-shell-assertions.ts` carries the one-`main`/one-`h1` assertion
+  and `routes/public-screens.landmarks.test.tsx` sweeps 13 first-render states across all six
+  routes, asserting headings by **text** so M4's rebuild should pass it unchanged.
+  **The reset confirmation is split, not rewritten**, and the difference matters: the heading is
+  "Password changed" and the live region says "Every other session has been signed out." Both
+  claims survive word for word; only the sentence boundary moved, because putting the whole
+  sentence in a body under a heading that repeats its first two words reads as a stutter. The
+  enumeration-safe forgot-password sentence moved **byte-identical**. One existing assertion
+  changed with it (`reset-password.test.tsx` looked for "Password changed" inside `role="status"`)
+  — that is the M2-T3 testing requirement landing, not a suite weakened to fit.
 
 - **Description:** `reset-password.tsx:60` renders `<h1>Choose a new password</h1>` while
   `ResetPasswordForm.tsx:40-51` replaces the body with "Password changed". `forgot-password.tsx:40`
@@ -454,7 +482,18 @@ action; one link style. Still visually conservative — no brand panel yet.
   4. Add a shared assertion helper so all 33 states can be swept for the one-`h1`/one-`main`
      invariant.
 
-##### Task M2-T4 — Copy and consistency pass (en-GB)
+##### Task M2-T4 — Copy and consistency pass (en-GB) — ✅ **DONE 2026-08-06**
+
+- **Outcome:** one name — **"Create an account"** on the sign-up heading, its submit button, the
+  sign-in link (was "Create one") and the invitation card, which already used it. The primary
+  action is a button everywhere (`/account` on forgot-password and "Send a new link" on
+  reset-password were text links); the secondary is `textLinkVariants`. `useNoindex` on all six
+  routes — it was on two, which was drift rather than policy, and `/accept-invite` carries a live
+  bearer token in its URL. `readForeignParam` on every route that reads a param: `/sign-in`'s
+  `?redirect=` and `/accept-invite`'s `?token=` join the three that had it. **`/sign-up` is the
+  exception and needs no change — it reads no search params at all**, so "all six" is five routes
+  and one that has nothing to guard. Card width unified at 448px by **deleting** `AuthShell`'s
+  `size` prop rather than defaulting it.
 
 - **Description:** one action currently has four names — "Create your account" (`sign-up.tsx:23`),
   "Create account" (`SignUpForm.tsx:77`), "Create one" (`sign-in.tsx:36`), "Create an account"

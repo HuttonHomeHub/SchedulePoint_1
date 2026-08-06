@@ -1,13 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 
-import { authErrorMessage, useResetPassword } from '../api/use-session';
+import { authErrorMessage, type useResetPassword } from '../api/use-session';
 import { resetPasswordSchema, type ResetPasswordValues } from '../schemas/auth-schemas';
 
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
-import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
+import { ServerError } from '@/components/ui/server-error';
 
 /**
  * Set a new password from an emailed token (ADR-0074 M4).
@@ -20,44 +19,36 @@ import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
  * session (`password.mjs`), so pushing `/` would land in the `_authed` guard and bounce — the exact
  * dead end ADR-0074 M2 exists to remove, and it would be self-inflicted here. It is also the honest
  * shape: proving you can read a mailbox is not the same as being signed in.
+ *
+ * **The mutation is owned by the route** (ADR-0077 M2-T3). This used to swap its own body for
+ * "Password changed" while the route's heading still read **"Choose a new password"** — a heading
+ * that outlived the task it named, on the screen that has just told somebody their password is
+ * different. The route now renders the terminal state, heading and all; the form keeps its fields.
  */
-export function ResetPasswordForm({ token }: { token: string }): React.ReactElement {
+export function ResetPasswordForm({
+  token,
+  reset,
+}: {
+  token: string;
+  /** The route's mutation, so the route can render the terminal state with its own heading. */
+  reset: ReturnType<typeof useResetPassword>;
+}): React.ReactElement {
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<ResetPasswordValues>({ resolver: zodResolver(resetPasswordSchema) });
-  const reset = useResetPassword();
-  const outcomeRef = useOutcomeFocus<HTMLDivElement>(reset.isSuccess);
-
   const onSubmit = handleSubmit((values) => {
-    // Announced once, by the `role="status"` below. This previously also called `announce()` with a
-    // DIFFERENT sentence, so a screen-reader user heard two overlapping and non-matching claims
-    // about the same event (ADR-0074 M5-T1).
+    // Announced once, by the route's terminal `role="status"`. This previously also called
+    // `announce()` with a DIFFERENT sentence, so a screen-reader user heard two overlapping and
+    // non-matching claims about the same event (ADR-0074 M5-T1).
     reset.mutate({ token, newPassword: values.newPassword });
   });
-
-  if (reset.isSuccess) {
-    return (
-      <div role="status" tabIndex={-1} ref={outcomeRef} className="flex flex-col gap-4">
-        <p className="text-sm font-medium">
-          Password changed. Every other session has been signed out.
-        </p>
-        <Link to="/sign-in" className={buttonVariants()}>
-          Sign in
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
       <FormErrorSummary errors={errors} />
-      {reset.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {authErrorMessage(reset.error)}
-        </p>
-      ) : null}
+      <ServerError message={reset.isError ? authErrorMessage(reset.error) : null} />
       <TextField
         label="New password"
         type="password"

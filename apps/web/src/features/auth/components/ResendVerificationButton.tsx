@@ -4,6 +4,7 @@ import { authErrorMessage, useSendVerificationEmail } from '../api/use-session';
 
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/form';
+import { ServerError } from '@/components/ui/server-error';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
@@ -68,11 +69,7 @@ export function ResendVerificationButton({
           check your spam folder before trying again.
         </p>
       ) : null}
-      {send.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {authErrorMessage(send.error, 'email')}
-        </p>
-      ) : null}
+      <ServerError message={send.isError ? authErrorMessage(send.error, 'email') : null} />
       {needsAddress ? (
         <TextField
           label="Email"

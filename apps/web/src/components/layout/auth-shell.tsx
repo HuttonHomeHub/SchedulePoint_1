@@ -17,19 +17,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
  * and on whether it announced anything. Three new callers were about to make that five callers on
  * two implementations, where each looks right alone and only a reader who opens the same thing two
  * ways ever notices one is a version behind.
+ *
+ * **One width, 448px** (ADR-0077 M2-T4). The convergence kept both prior widths behind a `size`
+ * prop — 384px for the forms, 448px for the invitation — which preserved the drift it existed to
+ * remove: a reader who signs in and then accepts an invitation watches the card change size for no
+ * reason they can name. `docs/DESIGN_SYSTEM.md` calls 448px the width of a record form, and every
+ * one of these screens is one. The prop is gone rather than defaulted, so there is nothing to set
+ * back.
  */
 export function AuthShell({
   title,
   description,
-  size = 'sm',
   busy = false,
   children,
 }: {
   /** Omit when the children own the heading — the accept-invite card does. */
   title?: string;
   description?: string;
-  /** `sm` for forms, `md` for the wider decision screens. Preserves both prior widths exactly. */
-  size?: 'sm' | 'md';
   /** Reflected as `aria-busy` while an outcome is resolving. */
   busy?: boolean;
   children: React.ReactNode;
@@ -39,7 +43,7 @@ export function AuthShell({
   return (
     <AnnouncerProvider>
       <main className="flex min-h-dvh items-center justify-center p-4" aria-busy={busy}>
-        <Card className={size === 'md' ? 'w-full max-w-md' : 'w-full max-w-sm'}>
+        <Card className="w-full max-w-md">
           {hasHeader ? (
             <CardHeader>
               <CardTitle>{title}</CardTitle>
