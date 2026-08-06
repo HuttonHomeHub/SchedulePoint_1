@@ -1,6 +1,7 @@
 import { forwardRef, useId } from 'react';
 import type { FieldErrors } from 'react-hook-form';
 
+import { Alert } from '@/components/ui/alert';
 import { alertBoxClassName } from '@/components/ui/alert-box';
 import { Input, type InputProps } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -326,5 +327,50 @@ export function FormErrorSummary({
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * How many fields are wrong — and deliberately **not what is wrong with them** (ADR-0077 §9).
+ *
+ * The alternative to {@link FormErrorSummary} on a form whose fields already show their own errors.
+ * That component lists every message, and every `TextField` prints the same sentence under its own
+ * control, so each problem was stated **twice at once** on all five auth forms. The product owner
+ * saw it on sign-up ("password insufficient is displayed in two places") and it was systemic:
+ * `SignInForm.tsx:60` vs `:62-75`, `SignUpForm.tsx:41` vs `:43-63`, `ResetPasswordForm.tsx:50` vs
+ * `:52-66`, `RequestPasswordResetForm.tsx:64` vs `:74-80`, `ChangePasswordForm.tsx:65` vs `:72-93`.
+ * The rule that replaces it: **a field's problem belongs to the field; the alert belongs to the
+ * form** — which is also how the previous Flask app split `.error-message` from `.alert`.
+ *
+ * **It renders nothing below two problems, and that threshold is the whole design.** React Hook
+ * Form's `shouldFocusError` defaults to `true` and every field here forwards its ref to the real
+ * `<input>`, so a failed submit already moves focus to the first invalid control — which is exactly
+ * the case WCAG 4.1.3 exempts, because the message arrives by focus rather than needing a status
+ * announcement. For the SECOND and later invalid fields nothing informs a screen-reader user that
+ * more problems exist without tabbing forward to find each one, and that is a real 4.1.3 regression
+ * if the summary is simply deleted. So the summary is not deleted; it stops restating. One problem:
+ * silence, because focus has already done the job. Two or more: a count, which duplicates no
+ * sentence and says the one thing the inline messages cannot say from where the reader is standing.
+ */
+export function FormProblemCount({
+  errors,
+  className,
+}: {
+  errors: FieldErrors;
+  className?: string;
+}): React.ReactElement | null {
+  // Counts entries that carry a message, matching what the fields themselves will render — a
+  // `refine()` error attached to a path with no control would otherwise inflate the count past the
+  // number of highlighted fields, which is worse than saying nothing.
+  const count = Object.values(errors).filter(
+    (error) => typeof error?.message === 'string' && error.message !== '',
+  ).length;
+
+  if (count < 2) return null;
+
+  return (
+    <Alert tone="error" className={className}>
+      {count} problems — check the highlighted fields below.
+    </Alert>
   );
 }

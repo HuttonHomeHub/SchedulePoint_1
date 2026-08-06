@@ -12,7 +12,13 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ServerError } from '@/components/ui/server-error';
 import { Spinner } from '@/components/ui/spinner';
-import { ResendVerificationButton, useSession, useSignOut } from '@/features/auth';
+import {
+  ResendVerificationButton,
+  isRateLimited,
+  throttledMessage,
+  useSession,
+  useSignOut,
+} from '@/features/auth';
 
 /**
  * The one-sentence summary of how an invitation resolved, or `null` while it is still resolving.
@@ -214,7 +220,20 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
         <CardDescription>You&rsquo;ve been invited as {roleLabel}.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <ServerError message={accept.isError ? accept.error.message : null} />
+        {/* Routed through the shared rate-limit check rather than rendering `error.message` raw
+            (ADR-0077 §9). This was the one server failure on any auth screen that bypassed the
+            translation layer, because it comes back as an `ApiFetchError` from our own API rather
+            than an `AuthError` from Better Auth — a difference in plumbing that the reader has no
+            reason to experience as a difference in copy. */}
+        <ServerError
+          message={
+            accept.isError
+              ? isRateLimited(accept.error)
+                ? throttledMessage()
+                : accept.error.message
+              : null
+          }
+        />
         {/* `aria-disabled`, not `disabled`: a native disabled control blurs to `<body>` the moment
             the request starts and flips back when it settles, so a keyboard user loses their place
             twice per action (WCAG 2.4.3). **The `onClick` guard is what prevents the double

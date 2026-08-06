@@ -12,8 +12,9 @@ import {
 } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 import { ServerError } from '@/components/ui/server-error';
+import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
 
 /**
  * Ask for a password-reset link (ADR-0074 M4).
@@ -44,11 +45,13 @@ export function RequestPasswordResetForm({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RequestPasswordResetValues>({
     resolver: zodResolver(requestPasswordResetSchema),
     defaultValues: { email: email ?? '' },
   });
+  useClearOnEdit(watch, request);
   const onSubmit = handleSubmit((values) => {
     // Announced by the route's terminal `role="status"` block and nowhere else: two live regions
     // carrying the same sentence read it twice (ADR-0074 M5-T1).
@@ -61,7 +64,7 @@ export function RequestPasswordResetForm({
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      <FormProblemCount errors={errors} />
       <ServerError
         message={
           request.isError

@@ -1,6 +1,7 @@
 import { Link, useSearch } from '@tanstack/react-router';
 
 import { AuthShell } from '@/components/layout/auth-shell';
+import { Alert } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { textLinkVariants } from '@/components/ui/text-link';
@@ -29,7 +30,7 @@ export function ForgotPasswordScreen(): React.ReactElement {
   const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
   const session = useSession();
   const request = useRequestPasswordReset();
-  const outcomeRef = useOutcomeFocus<HTMLParagraphElement>(request.isSuccess);
+  const outcomeRef = useOutcomeFocus<HTMLDivElement>(request.isSuccess);
 
   // State #11 (spec §2.2). Without this the signed-out form paints first and is replaced a moment
   // later by the signed-in screen — a flash of the wrong screen, and on a slow connection long
@@ -65,10 +66,14 @@ export function ForgotPasswordScreen(): React.ReactElement {
             because the endpoint answers identically for a known and an unknown address and a UI
             that distinguished them would hand back the oracle the library closed. It also does not
             claim delivery, which would be false wherever SMTP is unconfigured. */}
-        <p role="status" tabIndex={-1} ref={outcomeRef} className="text-muted-foreground text-sm">
+        {/* `info`, not `success` (ADR-0077 §9): a success tone would assert that something was
+            sent, and this endpoint deliberately cannot know — it answers identically for a known
+            and an unknown address, and on a deployment with no working relay nothing goes out at
+            all. The tone has to be as non-committal as the sentence. */}
+        <Alert tone="info" tabIndex={-1} ref={outcomeRef}>
           If that address has an account, a reset link is on its way. The link works once and
           expires in an hour.
-        </p>
+        </Alert>
         <p className="text-muted-foreground text-sm">
           Remembered it?{' '}
           <Link to="/sign-in" className={textLinkVariants()}>

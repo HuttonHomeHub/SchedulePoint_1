@@ -463,6 +463,101 @@ ten URL-reachable states.
 
 ---
 
+### 9. M8 — alerts: the old app's treatment, three tones, and one fact in one place
+
+_(Product-owner report, 2026-08-06: "On the auth forms we have 'alerts' to the user. Can we make
+sure these take the styling from the old app. Ensure all appropriate actions are covered by an
+appropriate alert. Also ensure the styled alert isn't replicated by a non styled alert. I see
+password insufficient on signup is displayed in two places.")_
+
+**9.1 The rule, which is what the milestone actually is: _a field's problem belongs to the field;
+the alert belongs to the form._**
+
+The reported duplication was not a sign-up bug. `FormErrorSummary` rendered every
+`errors.*.message` in a tinted box while each `TextField` printed the same sentence under its own
+control, so **every** validation failure on **all five** auth forms was stated twice at once —
+`SignInForm.tsx:60` vs `:62-75`, `SignUpForm.tsx:41` vs `:43-63`, `ResetPasswordForm.tsx:50` vs
+`:52-66`, `RequestPasswordResetForm.tsx:64` vs `:74-80`, `ChangePasswordForm.tsx:65` vs `:72-93`.
+The split adopted here is the one the previous Flask app already made between `.error-message` and
+`.alert`.
+
+**It found a second door nobody had noticed.** `ChangePasswordForm` injects the _server's_
+`INVALID_PASSWORD` sentence into React Hook Form via `setError` (`:47-49`), and the summary read
+`Object.values(errors)` indiscriminately — it cannot tell a resolver error from an injected one. So
+the message that component's own docblock says "lands on the current-password field, not in a form
+banner" landed in **both**. The docblock was half true and had been since it was written.
+
+**9.2 The summary is not deleted; it stops restating.** The accessibility review established that a
+bare removal is unsafe: RHF's `shouldFocusError` default moves focus to the _first_ invalid field —
+the case WCAG 4.1.3 exempts — but for the **second and later** simultaneously-invalid fields nothing
+would tell a screen-reader user more problems exist without tabbing forward to find each. That is a
+real 4.1.3 regression on the three forms that can produce two or more errors. So `FormProblemCount`
+renders a **count** ("3 problems — check the highlighted fields below.") and only from two problems
+up. One problem plus a box saying "1 problem" would be the same duplication in a new costume.
+
+**9.3 The geometry is the old app's; the colours cannot be.** `static/css/auth.css:99-136`: 4px left
+accent bar, tint at 30% opacity, leading icon, `.9rem`. Reproduced. The hex values are **not**,
+because `packages/config/eslint/react.js:60-78` rejects colour literals in `className`/`style` — a
+literal cannot follow a surface scope and is invisible to the contrast matrix. Nothing is lost:
+the old app's own text-on-tint pairs measure **10.12:1** (error), **8.14:1** (success) and **8.04:1**
+(info) over the white card, and the `*-text` tokens are already gated at ≥4.5:1 everywhere.
+
+`radius` also deliberately departs. The old app's 8px came from `--border-radius`, which it applied
+to its inputs and buttons too; copying the figure without its context would make the alert the one
+element in our form with a radius of its own. The faithful translation of "it matched its
+surroundings" is `rounded-md`.
+
+**Placement is deliberately not copied.** The old app's flash messages are `position: absolute;
+top: 20px`, floating over the card and auto-fading on a timer (`auth.css:110`, `login.html:172`).
+Auto-dismissing an alert fails WCAG 2.2.1, and `docs/DESIGN_SYSTEM.md` already states this app's
+model — feedback inline and in place, toasts deliberately not built. The treatment moves; the
+messages stay where they are.
+
+**9.4 `--success-text` is the eighteenth rebound name, and its absence was an ADR-0055 §1 trap.**
+The family had words for "this failed", "be careful" and "here is a fact", and none for "that
+worked". A green success would have had to reach for the global `--success`, which is a solid
+**button fill** that follows the page theme — on the theme-invariant login card that is Dark's mint
+green on pinned white. Added across all five families in all three theme blocks; the `auth` value is
+the old app's `#155724` converted to OKLCH (`oklch(0.403 0.105 147)`), the one colour genuinely
+taken from it, because unlike error and info it had no token to translate into. The contrast matrix
+picked the new pair up automatically and was **verified red first** — a deliberately light green on
+the auth card fails 6 assertions.
+
+**9.5 Coverage, and two "gaps" that turned out not to be.** Measured against the old app's 32
+`flash()` calls (`blueprints/auth/routes.py`). Closed: **sign-out said nothing at all** (the reader
+pressed a menu item and arrived at a sign-in form, which is also what an expired session looks like
+— now an info alert carried across the navigation by `?signedOut`); the invitation-accept failure
+rendered `error.message` raw, the **one** server failure on any auth screen bypassing the shared
+translation layer, because it is an `ApiFetchError` rather than an `AuthError` (`isRateLimited` now
+covers both); and `ResendVerificationButton`'s typed address had **no format check**, alone among
+four surfaces asking for an email.
+
+Two reported inconsistencies were checked and **left alone**, because they are correct: the
+"already signed in" branch of `/forgot-password` and the no-token branch of `/accept-invite` lack
+the announcements their siblings have, but both are _initial_ content rather than a transition —
+there is no event to announce, and moving focus on load without a user gesture would be the defect.
+A third — the `/account` screen "stuck on Loading your details…" — is near-unreachable: the
+`_authed` guard `await`s `ensureQueryData` (`app/router.tsx:118`) and throws on a non-401 failure,
+and React Query keeps prior data across a failed refetch.
+
+**9.6 What the gates caught this time.** The once-only assertion was **verified red** against the
+old summary before being kept. Three existing suites failed on the change and each failure was a
+real statement about it: `account-chip.test.tsx` pinned the navigation that now carries the
+confirmation; `surface-seams.structural.test.ts` fired because a **docblock** spelt a family token
+(the gate is right to be that blunt — the thing it guards looks exactly like a comment until it is a
+`var()`); and `server-error.test.tsx`'s "the treatment is declared once" assertion had to be
+re-founded, since `ServerError` now renders `Alert` while `FormErrorSummary` keeps the older box for
+its twenty callers outside auth. It asserts the property directly instead of by proxy: the two
+components that co-occur agree, and **no file renders both boxes**.
+
+And the browser suite earned its place again. `signOut()` in `e2e-public/support.ts` had shipped
+with a locator matching **three accessible names the control does not have** — it is
+`aria-label={`Account: ${email}`}` (`account-chip.tsx:74`). Nothing caught it because **no test
+called it**: an unused helper is not a tested one, and a locator that matches nothing fails only on
+the day somebody relies on it.
+
+---
+
 ## Consequences
 
 **Positive**

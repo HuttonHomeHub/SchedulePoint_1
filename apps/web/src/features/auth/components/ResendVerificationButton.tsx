@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { authErrorMessage, useSendVerificationEmail } from '../api/use-session';
+import { emailField } from '../schemas/auth-schemas';
 
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/form';
 import { ServerError } from '@/components/ui/server-error';
@@ -41,8 +43,10 @@ export function ResendVerificationButton({
   email?: string | undefined;
 }): React.ReactElement {
   const [typed, setTyped] = useState('');
+  const [formatError, setFormatError] = useState<string | null>(null);
+  const fieldRef = useRef<HTMLInputElement>(null);
   const send = useSendVerificationEmail();
-  const outcomeRef = useOutcomeFocus<HTMLParagraphElement>(send.isSuccess);
+  const outcomeRef = useOutcomeFocus<HTMLDivElement>(send.isSuccess);
   const address = email ?? typed;
   const needsAddress = email === undefined;
 
@@ -54,6 +58,16 @@ export function ResendVerificationButton({
   function submit(event: React.FormEvent): void {
     event.preventDefault();
     if (blocked) return;
+    // The format check its three siblings have had all along (ADR-0077 §9). Without it a typo here
+    // bought a full round trip to an endpoint that answers identically for every address, so the
+    // reader learned nothing and waited to learn it. Client-side only, so it is not an oracle: it
+    // reports on the shape of what was typed, never on whether an account exists.
+    if (needsAddress && !emailField.safeParse(address).success) {
+      setFormatError('Enter a valid email address');
+      fieldRef.current?.focus();
+      return;
+    }
+    setFormatError(null);
     // One outcome for every case. The endpoint deliberately answers the same for an unknown
     // address, an already-verified one and a real pending one; a UI that distinguished them would
     // hand back the oracle the server just closed. Both outcomes are announced by the elements
@@ -64,20 +78,23 @@ export function ResendVerificationButton({
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-3">
       {send.isSuccess ? (
-        <p role="status" tabIndex={-1} ref={outcomeRef} className="text-muted-foreground text-sm">
+        <Alert tone="info" tabIndex={-1} ref={outcomeRef}>
           If that address needs verifying, an email is on its way. It can take a minute to arrive —
           check your spam folder before trying again.
-        </p>
+        </Alert>
       ) : null}
       <ServerError message={send.isError ? authErrorMessage(send.error, 'email') : null} />
       {needsAddress ? (
         <TextField
+          ref={fieldRef}
           label="Email"
           type="email"
           autoComplete="email"
           value={typed}
+          error={formatError ?? undefined}
           onChange={(event) => {
             setTyped(event.target.value);
+            setFormatError(null);
             // Editing the address makes the confirmation above stale — it is about the address that
             // was sent to, not the one now in the field. Clearing the mutation removes it rather
             // than leaving a sentence that has quietly stopped being true.

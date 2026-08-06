@@ -5,8 +5,9 @@ import { authErrorMessage, type useResetPassword } from '../api/use-session';
 import { resetPasswordSchema, type ResetPasswordValues } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 import { ServerError } from '@/components/ui/server-error';
+import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
 
 /**
  * Set a new password from an emailed token (ADR-0074 M4).
@@ -36,8 +37,10 @@ export function ResetPasswordForm({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<ResetPasswordValues>({ resolver: zodResolver(resetPasswordSchema) });
+  useClearOnEdit(watch, reset);
   const onSubmit = handleSubmit((values) => {
     // Announced once, by the route's terminal `role="status"`. This previously also called
     // `announce()` with a DIFFERENT sentence, so a screen-reader user heard two overlapping and
@@ -47,7 +50,7 @@ export function ResetPasswordForm({
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      <FormProblemCount errors={errors} />
       <ServerError message={reset.isError ? authErrorMessage(reset.error) : null} />
       <TextField
         label="New password"

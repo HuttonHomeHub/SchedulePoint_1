@@ -4,9 +4,11 @@ import { useForm } from 'react-hook-form';
 import { INVALID_PASSWORD, authErrorMessage, useChangePassword } from '../api/use-session';
 import { changePasswordSchema, type ChangePasswordValues } from '../schemas/auth-schemas';
 
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 import { ServerError } from '@/components/ui/server-error';
+import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
 
 /**
  * Change your own password from `/account` (ADR-0074 M3).
@@ -29,9 +31,11 @@ export function ChangePasswordForm(): React.ReactElement {
     reset,
     setError,
     setFocus,
+    watch,
     formState: { errors },
   } = useForm<ChangePasswordValues>({ resolver: zodResolver(changePasswordSchema) });
   const changePassword = useChangePassword();
+  useClearOnEdit(watch, changePassword);
 
   const onSubmit = handleSubmit((values) => {
     changePassword.mutate(
@@ -62,12 +66,15 @@ export function ChangePasswordForm(): React.ReactElement {
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      {/* A count, not the messages — and it is why the docblock's claim above is now true rather
+          than half true. `setError` writes the server's INVALID_PASSWORD sentence into `errors`,
+          and `FormErrorSummary` could not tell a resolver error from an injected one, so the
+          message the docblock says "lands on the field, not in a form banner" landed in both
+          (ADR-0077 §9). A count restates nothing, so there is nothing left to double. */}
+      <FormProblemCount errors={errors} />
       <ServerError message={formLevelError} />
       {changePassword.isSuccess ? (
-        <p role="status" className="text-sm font-medium">
-          Password changed. Your other sessions have been signed out.
-        </p>
+        <Alert tone="success">Password changed. Your other sessions have been signed out.</Alert>
       ) : null}
       <TextField
         label="Current password"
