@@ -1,5 +1,101 @@
 # @repo/web
 
+## 0.71.0
+
+### Minor Changes
+
+- [#244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/244) [`e1cb41b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1cb41b726facb2d5f7fec229bfe856aa50fb3e3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Measure the public screens in a real browser, and fix what the measurement found (ADR-0077 M6).
+
+  `apps/web/e2e-public` drives the six pre-authentication routes across ten states × six viewports ×
+  three themes, plus a real invitation carrying a 100-character organisation name and a fulfilled 429.
+  It found four defects that no unit test could see, because jsdom has no layout:
+
+  - The brand band was **stretched** by implicit grid `align-content`, rendering at up to **47% of a
+    320×568 phone screen** against a content height of 76px.
+  - The tagline rendered at every width, against its own acceptance criterion — it is a `md:` band
+    caption, not phone content.
+  - `/verify-email` overflowed a 320px viewport (334px) because the resend button's label could not
+    wrap.
+  - The invitation screens overflowed (327px) because an email address is one unbreakable token and a
+    grid column is sized by min-content. `CardTitle`/`CardDescription` now use `wrap-anywhere`.
+
+  Also from the enablement gate pass: a server error no longer takes focus off the field you were
+  typing in, the reset confirmation now says your password was changed rather than only that other
+  sessions ended, and the "wrong account" screen's Sign out is the primary action it always was.
+
+- [#244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/244) [`e1cb41b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1cb41b726facb2d5f7fec229bfe856aa50fb3e3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Repair four blocking defects on the pre-authentication screens (ADR-0077 M1). Visually unchanged.
+
+  - **Six states that offered nothing to press now offer something.** The resend confirmation stops
+    unmounting the form it confirms — it told the reader to "check your spam folder before trying
+    again" and removed the thing to try again with, on three surfaces. The invitation screens for a
+    missing token, an unknown invitation and a spent invitation gain a way into the app; **wrong
+    account** gains the Sign out its own copy instructs, which it had never had.
+  - **Accept and join keeps focus while it works.** It used the native `disabled` attribute, which
+    blurs to `<body>` when the request starts and flips back when it settles, so a keyboard user lost
+    their place twice per action (WCAG 2.4.3). It is now `aria-disabled` with a guard that prevents
+    the double submit.
+  - **A rate-limited reader is told what happened.** Better Auth's 429 carries no error code, so every
+    auth screen fell through to the library's own sentence in a bare red paragraph. All six auth
+    mutations now carry the HTTP status, and one shared message says "too many attempts" — naming no
+    number of seconds, because the header carrying one is discarded by the fetch client before the
+    error reaches us.
+
+- [#244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/244) [`e1cb41b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1cb41b726facb2d5f7fec229bfe856aa50fb3e3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - One vocabulary across the six pre-authentication screens (ADR-0077 M2).
+
+  - **A server failure now looks at least as serious as a typo.** "Enter a valid email" rendered in a
+    bordered, tinted block; "too many attempts" or "wrong password" rendered as a bare red sentence,
+    in six hand-assembled copies. Both are now the same `ServerError` primitive, which announces
+    itself and takes focus once.
+  - **The heading is part of the state.** `/reset-password` kept "Choose a new password" as its
+    heading over a body that had already told the reader their password was changed. Each screen's
+    route now owns its terminal state, heading and all. `/forgot-password` also gains the loading
+    branch it was missing — it used to paint the signed-out form and then replace it.
+  - **One name for one action** — "Create an account", which had been "Create one", "Create account"
+    and "Create your account" depending on where you stood. The primary action on a screen is always
+    a button; the inline link is one shared style with a visible focus ring it never had.
+  - **One card width.** The sign-in card was 384px and the invitation card 448px, so signing in and
+    then accepting an invitation resized the card for no reason a reader could name.
+  - Every public screen is now `noindex`, including the invitation screen, which carries a live token
+    in its URL.
+
+- [#244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/244) [`e1cb41b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1cb41b726facb2d5f7fec229bfe856aa50fb3e3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The public screens get a brand surface (ADR-0077 M4). This is the visible change.
+
+  Sign-in, sign-up, the three account-recovery screens and the invitation screen now sit beside a
+  fixed dark navy panel carrying the SchedulePoint mark, a token-drawn time-scaled logic diagram, and
+  the tagline. Below `md` the panel becomes a band above the card.
+
+  **The panel does not follow the theme, and that is deliberate.** A signed-out visitor cannot choose
+  one — the theme boot script picks Dark from their operating system, or Corporate because a colleague
+  signed in on this machine last month — so the one screen where the product has to be recognisable
+  was rendering in one of three identities, chosen by something the visitor did not do and cannot
+  undo.
+
+  The diagram is the product's own picture rather than stock decoration: bars on a time axis joined by
+  logic, drawn entirely in design tokens so the computed contrast suite can see it, and inline so it
+  costs no request and the Content-Security-Policy cannot block it.
+
+### Patch Changes
+
+- [#244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/244) [`e1cb41b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1cb41b726facb2d5f7fec229bfe856aa50fb3e3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the `brand` surface scope's token family (ADR-0077 M3). **Nothing changes for a user** — the
+  family exists, complete, in all three themes, and nothing renders it yet. Shipping it separately is
+  what lets the visible panel land as one revertible commit.
+
+  The family is deliberately **theme-invariant**: identical values in Light, Dark and Corporate,
+  because a signed-out visitor cannot choose a theme and something else chooses one for them. The
+  computed contrast matrix now sweeps it across every theme, and the structural seam test guards it in
+  the same regexes as `chrome` and `panel` — the place the protection actually lives.
+
+- [#244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/244) [`e1cb41b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1cb41b726facb2d5f7fec229bfe856aa50fb3e3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Give the public screens a document identity (ADR-0077 M5).
+
+  Every route shared one tab title, so three open tabs were indistinguishable and history offered no
+  way to find the reset link you opened; each public screen now names itself, set before paint so a
+  screen reader announces the new page rather than the old one. The site also gets a favicon —
+  previously `/favicon.ico` fell through the single-page-app rule and browsers were handed HTML where
+  they expected an icon — and a description for when a link is shared.
+
+  No `theme-color`: the app has four theme settings and the browser's media query knows two, so any
+  single value would be wrong for at least one of them.
+
 ## 0.70.4
 
 ### Patch Changes
