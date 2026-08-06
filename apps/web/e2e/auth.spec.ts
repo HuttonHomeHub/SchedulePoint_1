@@ -31,7 +31,7 @@ test.describe('Authentication journey', () => {
     await page.getByLabel('Full name').fill('E2E Tester');
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill('correct-horse-battery');
-    await page.getByRole('button', { name: /create account/i }).click();
+    await page.getByRole('button', { name: /create an account/i }).click();
 
     // With no organisations yet, onboarding is shown.
     await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();

@@ -1,6 +1,7 @@
 import { forwardRef, useId } from 'react';
 import type { FieldErrors } from 'react-hook-form';
 
+import { alertBoxClassName } from '@/components/ui/alert-box';
 import { Input, type InputProps } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, type SelectProps } from '@/components/ui/select';
@@ -300,6 +301,9 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
  * Summarises form-level and field errors at the top of a form, announced via
  * `role="alert"`. Complements per-field messages (React Hook Form focuses the
  * first invalid field on submit).
+ *
+ * The treatment comes from {@link alertBoxClassName}, shared with `ServerError` — the two carried
+ * byte-identical copies of it until ADR-0077 M6-T2.
  */
 export function FormErrorSummary({
   errors,
@@ -315,13 +319,7 @@ export function FormErrorSummary({
   if (messages.length === 0) return null;
 
   return (
-    <div
-      role="alert"
-      className={cn(
-        'border-destructive-text bg-destructive-text/5 text-destructive-text rounded-md border p-3 text-sm',
-        className,
-      )}
-    >
+    <div role="alert" className={cn(alertBoxClassName, className)}>
       <ul className="list-inside list-disc space-y-0.5">
         {messages.map((message) => (
           <li key={message}>{message}</li>

@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 771 web
-> source files with 25 flag-scoped Playwright suites beside the base journey, and
-> 76 ADRs.
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 788 web
+> source files with 26 flag-scoped Playwright suites beside the base journey, and
+> 77 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1437,6 +1437,47 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   the weak one (§19.9): a decision-bearing claim names the command, file or test that established
   it, and **a claim inherited from the brief is checked like any other** — both Class 3 failures
   entered through a brief. The CPM engine is not imported and no product behaviour changes.
+
+- **ADR-0077** _(Accepted; M0 landed 2026-08-06)_ — The public screens' brand surface: a fourth
+  scope, fixed dark in every theme, and what counts as a brand asset. The six pre-authentication
+  routes are **the only part of SchedulePoint a stranger meets** — `/sign-in` is the front door,
+  since `router.tsx:109` redirects every unauthenticated arrival to it and there is no landing
+  route — and they were the one significant surface that never had a design pass: a 384 px card on
+  a page where `--background` and `--card` are **the same white**, so figure/ground separation in
+  the default theme is a 1px border. Adds a fourth ADR-0055 surface scope, `brand`, with a
+  **complete 17-token family** in all three theme blocks; it is **dark navy in every theme**, which
+  is a deliberate documented exception to "theme-aware light/dark/system" and is stated here
+  because undocumented it reads as a bug and gets "fixed". `chrome` was rejected for it: in the
+  light theme `--chrome` is near-white, so binding the panel there reproduces the flat screen, and
+  the only escape re-values a token the authenticated top bar depends on. The panel carries a
+  **token-drawn TSLD motif, not a photograph** — a photo weighs 200–600 kB on the LCP path of the
+  coldest page in the product, needs an image pipeline this repo does not have, and defeats the one
+  gate ADR-0055 built, since `token-contrast.test.ts` computes ratios between **tokens** and cannot
+  see a JPEG. The motif draws from the brand family's own rebound names rather than `--chart-*`,
+  which is not in `REBOUND_NAMES` and would therefore keep the page theme's values on a fixed navy
+  panel (Corporate's `--chart-2` lands at ~1.4:1) — and both escapes fail an existing set-equality
+  gate. **No feature flag** (ADR-0061's reasoning, strengthened: unlike ADR-0055 S5 this _adds_ a
+  family rather than re-valuing existing tokens, so flag-off parity is structural); the mitigation
+  is a commit boundary, with the panel landing as one revertible commit. The epic also repairs
+  **four blocking defects found on the way**, all independent of the redesign: six dead-end states
+  (including a resend button that unmounts its own form while telling the reader to try again), a
+  stale `<h1>` on two screens, the last surviving native `disabled` submit, and an **unhandled 429**
+  that is live in production and invisible in development because `rateLimit` is
+  `enabled: options.isProduction`. That message names no number of seconds, because
+  `@better-fetch/fetch` builds its error from body + status + statusText and **discards response
+  headers**, so `X-Retry-After` is unreachable. **No "Remember me"**: `rememberMe` defaults to
+  `true`, so every session is already remembered and a checkbox could only ever offer to make one
+  _less_ persistent. The design pass corrected five claims in its own brief — the largest being
+  ~33 landable states rather than ~20, the most useful that `sign-in`'s heading is **not** stale, so
+  "fix all three" would have changed a correct screen (ADR-0076's rule, third consecutive brief to
+  fail it). **M0 also found ADR-0076's own gate passing for the wrong reason**: `check:claims`
+  matched one citation form, so every citation into a `.js` file was invisible to it, as was the
+  prose form (`file.mjs`, lines **234**) that this epic's artefacts had been pushed into by a
+  third hole — the scan could not tell a dependency from this repository's own tooling. All three
+  fixed, and the widening immediately surfaced two load-bearing dependency citations that had sat in
+  the tree unregistered (`nodemailer`'s `_formatError`, `zod`'s `allowsEval` probe). The register is
+  now 40 claims across five packages; the residual basename blind spot is `docs/TECH_DEBT.md` #101.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

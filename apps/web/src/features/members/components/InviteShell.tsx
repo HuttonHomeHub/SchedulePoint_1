@@ -10,6 +10,9 @@ import { AuthShell } from '@/components/layout/auth-shell';
  *
  * Kept as a named wrapper rather than replaced at every call site: the name carries the fact that
  * this flow's children own their own `CardHeader`, which is what the title-less variant is for.
+ *
+ * It no longer passes a width. ADR-0077 M2-T4 gave every public screen one (448px), which is what
+ * this one already had — the sign-in card was the narrow one.
  */
 export function InviteShell({
   children,
@@ -18,9 +21,5 @@ export function InviteShell({
   children: React.ReactNode;
   busy?: boolean;
 }): React.ReactElement {
-  return (
-    <AuthShell size="md" busy={busy}>
-      {children}
-    </AuthShell>
-  );
+  return <AuthShell busy={busy}>{children}</AuthShell>;
 }

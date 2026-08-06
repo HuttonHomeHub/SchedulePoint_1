@@ -81,8 +81,14 @@ function readForeignParam(value: unknown): string | undefined {
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sign-in',
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
-    typeof search.redirect === 'string' ? { redirect: search.redirect } : {},
+  // `readForeignParam` here too (ADR-0077 M2-T4). `?redirect=` is composed by the `_authed`
+  // guard, so it is ours — but it is also whatever a person types or a mail client mangles, and
+  // `?redirect=1` parses to the NUMBER 1 and was silently dropped. Being applied on three of six
+  // public routes was drift, not a decision.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+    const redirect = readForeignParam(search.redirect);
+    return redirect ? { redirect } : {};
+  },
   component: SignInScreen,
 });
 
@@ -386,8 +392,13 @@ const verifyEmailRoute = createRoute({
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/accept-invite',
-  validateSearch: (search: Record<string, unknown>): { token?: string } =>
-    typeof search.token === 'string' ? { token: search.token } : {},
+  // An invitation token is a 64-character hex string, so it never round-trips as a number — but
+  // the rule is the rule, and the next token format might (`readForeignParam`'s own docblock names
+  // the 32-digit case it cannot save).
+  validateSearch: (search: Record<string, unknown>): { token?: string } => {
+    const token = readForeignParam(search.token);
+    return token ? { token } : {};
+  },
   component: AcceptInviteScreen,
 });
 

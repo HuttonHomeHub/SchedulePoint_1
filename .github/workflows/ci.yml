@@ -416,6 +416,17 @@ jobs:
       - name: Web end-to-end tests (email verification enforced)
         run: pnpm --filter @repo/web test:e2e:account-verify
 
+      # The public screens, **measured** rather than reasoned about (ADR-0077 M6-T1): ten
+      # URL-reachable states × six viewports × three themes, plus a real invitation carrying a
+      # 100-character organisation name and a fulfilled 429. It earned its place before it was ever
+      # committed — its first four runs each found a live defect no unit test could see, because
+      # jsdom has no layout: a brand band stretched to 47% of a phone screen by implicit grid
+      # `align-content`, a tagline rendering at every width against its own acceptance criterion,
+      # and two WCAG 1.4.10 reflow failures at 320px (a 31-character button label, and an email
+      # address setting a grid column's min-content width).
+      - name: Web end-to-end tests (public screens layout)
+        run: pnpm --filter @repo/web test:e2e:public
+
       # The CSP gate. Unlike every step above it, this one builds the app and serves `dist/` through
       # `vite preview`, because the policy applies to the deployed artefact and the dev server is
       # the wrong one — it serves unbundled modules and injects an inline react-refresh preamble

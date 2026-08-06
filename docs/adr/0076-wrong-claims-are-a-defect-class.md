@@ -74,6 +74,28 @@ is a fresh assertion written the same day by the person applying the rule.** No 
 periodicity reaches it — a reconciliation pass three months later re-reads a document, and a
 plausible false statement re-reads as true.
 
+**A third instance arrived the day after this ADR was accepted, and it is the most instructive of
+the three.** ADR-0075's Consequences open "An operator **can** write an alert that fires", and the
+release note built on that told the product owner to "update your mail alerting". There is no
+alerting: no log shipping, no evaluator, and `docs/OBSERVABILITY.md:80` says so in its own heading
+— "Monitoring & alerting — standard, **not yet implemented**". So the ADR's entire remedy, an
+operator-facing signal, reaches a file on the host and no person. That is `docs/TECH_DEBT.md`
+**#100**.
+
+Three things about it are worth keeping:
+
+- **It was found by a reader, not by a gate or a reviewer**, and found by the most ordinary
+  question available — _how would I do this?_ Neither computed gate could have caught it: the
+  counts were right and the citations were right. The claim was about the world outside the
+  repository, which is where this class is hardest.
+- **The false step was a modal verb.** "Can write an alert" is true. It was read, by its own
+  author one message later, as "has an alert" — so the rule in §3 below needs to bite on
+  _capability_ claims too, not only on flat assertions of fact. A sentence that is true of the
+  system and false of the deployment is the same defect wearing better grammar.
+- It is the second time in two days that a claim survived **because it was about the operator**
+  rather than about code. Nothing in the repository models the deployment, so nothing contradicts
+  a sentence about it.
+
 ## Decision
 
 **Wrong claims are a defect class with three species, and each gets the strongest control its shape

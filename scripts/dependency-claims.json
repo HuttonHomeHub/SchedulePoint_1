@@ -1,7 +1,10 @@
 {
   "verifiedAgainst": {
     "better-auth": "1.6.25",
-    "better-call": "1.3.7"
+    "better-call": "1.3.7",
+    "@better-fetch/fetch": "1.3.1",
+    "nodemailer": "9.0.3",
+    "zod": "4.4.3"
   },
   "claims": [
     {
@@ -106,6 +109,26 @@
       ]
     },
     {
+      "ref": "index.js:733-739",
+      "package": "@better-fetch/fetch",
+      "path": "dist/index.js",
+      "lines": "733-739",
+      "anchor": "statusText: response.statusText",
+      "citedBy": [
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "index.js:932-957",
+      "package": "nodemailer",
+      "path": "lib/smtp-connection/index.js",
+      "lines": "932-957",
+      "anchor": "_formatError(message, type, response, command) {",
+      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.spec.ts"]
+    },
+    {
       "ref": "index.mjs:168",
       "package": "better-auth",
       "path": "dist/api/index.mjs",
@@ -122,7 +145,11 @@
       "path": "dist/api/rate-limiter/index.mjs",
       "lines": "370-383",
       "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
-      "citedBy": ["docs/TECH_DEBT.md"]
+      "citedBy": [
+        "docs/TECH_DEBT.md",
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md"
+      ]
     },
     {
       "ref": "index.mjs:370-384",
@@ -131,6 +158,18 @@
       "lines": "370-384",
       "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
       "citedBy": ["docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"]
+    },
+    {
+      "ref": "index.mjs:64-70",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "64-70",
+      "anchor": "function rateLimitResponse(retryAfter) {",
+      "citedBy": [
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
+      ]
     },
     {
       "ref": "internal-adapter.mjs:650-660",
@@ -160,7 +199,9 @@
       "citedBy": [
         "apps/api/src/common/auth/better-auth.ts",
         "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/specs/account-security/feature-spec.md"
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/public-screens-brand/feature-spec.md"
       ]
     },
     {
@@ -238,6 +279,17 @@
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
     {
+      "ref": "sign-in.mjs:234",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-in.mjs",
+      "lines": "234",
+      "anchor": "rememberMe: z.boolean()",
+      "citedBy": [
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
+      ]
+    },
+    {
       "ref": "sign-in.mjs:312-324",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
@@ -246,6 +298,17 @@
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.ts",
         "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"
+      ]
+    },
+    {
+      "ref": "sign-in.mjs:326",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-in.mjs",
+      "lines": "326",
+      "anchor": "const session = await ctx.context.internalAdapter.createSession(",
+      "citedBy": [
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
       ]
     },
     {
@@ -329,6 +392,14 @@
       "lines": "127-131",
       "anchor": "if (isAPIError(data)) return toResponse(data.body, {",
       "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
+    },
+    {
+      "ref": "util.js:145-163",
+      "package": "zod",
+      "path": "v4/core/util.js",
+      "lines": "145-163",
+      "anchor": "export const allowsEval = /* @__PURE__*/ cached(() => {",
+      "citedBy": ["apps/web/src/config/zod-jitless.ts"]
     },
     {
       "ref": "verification-token-storage.mjs:10-12",

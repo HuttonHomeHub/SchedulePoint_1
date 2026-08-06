@@ -4,13 +4,15 @@ import { useEffect } from 'react';
 import { useAcceptInvitation, useInvitationPreview } from '../api/use-invitations';
 import { ROLE_LABELS } from '../schemas/invite-schemas';
 
+import { InviteExitLinks } from './InviteExitLinks';
 import { InviteShell } from './InviteShell';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ServerError } from '@/components/ui/server-error';
 import { Spinner } from '@/components/ui/spinner';
-import { ResendVerificationButton, useSession } from '@/features/auth';
+import { ResendVerificationButton, useSession, useSignOut } from '@/features/auth';
 
 /**
  * The one-sentence summary of how an invitation resolved, or `null` while it is still resolving.
@@ -43,6 +45,7 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
   const preview = useInvitationPreview(token);
   const session = useSession();
   const accept = useAcceptInvitation();
+  const signOut = useSignOut();
   const announce = useAnnounce();
 
   // The invitation resolves asynchronously into one of five terminal states, and **which one it is
@@ -78,6 +81,7 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
             This invitation link is invalid or has already been used.
           </CardDescription>
         </CardHeader>
+        <InviteExitLinks />
       </InviteShell>
     );
   }
@@ -95,6 +99,7 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
             It may have expired or already been used. Ask for a new one.
           </CardDescription>
         </CardHeader>
+        <InviteExitLinks />
       </InviteShell>
     );
   }
@@ -167,11 +172,37 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
       <InviteShell>
         <CardHeader>
           <CardTitle>Wrong account</CardTitle>
+          {/* "Sign out and come back to this page as {email}" overclaimed (ADR-0077 M6-T2, UX
+              review): signing out returns to *this* invitation in its signed-out branch, where the
+              reader still has to choose Sign in or Create an account and type that address in
+              themselves. Nothing resumes "as" anybody. */}
           <CardDescription>
             You&rsquo;re signed in as {user.email}, but this invitation is for {invite.email}. Sign
-            out and use the invited account.
+            out, then sign in as {invite.email} to accept it.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          {/* The instruction above used to be the whole screen: "sign out" with nothing to sign out
+              with, on a page reached from an email (ADR-0077 M1-T2). Signing out drops every cached
+              query except the seeded `null` session, so the invitation preview refetches and this
+              card re-renders in its signed-out branch — the reader stays on the invitation rather
+              than being sent anywhere.
+
+              It is the **only** action on this screen, so it takes the primary treatment — it
+              shipped as `variant="outline"` while every other single-action terminal state in this
+              epic used the solid button, which read as "here is the secondary option" with no
+              primary anywhere (ADR-0077 M6-T2, UX review). */}
+          <Button
+            aria-disabled={signOut.isPending}
+            aria-busy={signOut.isPending}
+            onClick={() => {
+              if (signOut.isPending) return;
+              signOut.mutate();
+            }}
+          >
+            {signOut.isPending ? 'Signing out…' : 'Sign out'}
+          </Button>
+        </CardContent>
       </InviteShell>
     );
   }
@@ -183,15 +214,18 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
         <CardDescription>You&rsquo;ve been invited as {roleLabel}.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {accept.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {accept.error.message}
-          </p>
-        ) : null}
+        <ServerError message={accept.isError ? accept.error.message : null} />
+        {/* `aria-disabled`, not `disabled`: a native disabled control blurs to `<body>` the moment
+            the request starts and flips back when it settles, so a keyboard user loses their place
+            twice per action (WCAG 2.4.3). **The `onClick` guard is what prevents the double
+            submit** — this is the same correction made in `SignInForm.tsx`, `ScopeSaveBar`
+            (ADR-0060 M6) and the WBS Assign button (ADR-0063 M6); it was simply never applied
+            here. */}
         <Button
-          disabled={accept.isPending}
+          aria-disabled={accept.isPending}
           aria-busy={accept.isPending}
-          onClick={() =>
+          onClick={() => {
+            if (accept.isPending) return;
             accept.mutate(token, {
               onSuccess: (organization) => {
                 void router.navigate({
@@ -199,8 +233,8 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
                   params: { orgSlug: organization.slug },
                 });
               },
-            })
-          }
+            });
+          }}
         >
           {accept.isPending ? 'Joining…' : `Accept and join`}
         </Button>

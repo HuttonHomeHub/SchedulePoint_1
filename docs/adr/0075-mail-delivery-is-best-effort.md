@@ -140,10 +140,23 @@ critical path of scheduling — the API is.
 
 ## Consequences
 
-- An operator can write an alert that fires. Previously `docs/DEPLOYMENT.md` instructed them to
+- An operator **can** write an alert that fires. Previously `docs/DEPLOYMENT.md` instructed them to
   watch for Better Auth's `Failed to run background task`, a line that **stopped being reachable**
   when the adapter began catching first — an alert built exactly as documented would have stayed
   silent through a total outage.
+
+  **"Can" is doing real work in that sentence, and this ADR did not notice.** There is no log
+  shipping and no alert evaluator in this deployment
+  (`docs/OBSERVABILITY.md:80` — "Monitoring & alerting — standard, **not yet implemented**"), so
+  the record reaches `docker logs` on the host and stops. The whole design turns on preferring an
+  operator-facing signal to a caller-facing one; the half that was examined is that the caller must
+  not be told, which is sound. The half that was not is whether "operator-facing" reaches an
+  operator. It does not — it reaches a file. Recorded as `docs/TECH_DEBT.md` **#100** the day after
+  this ADR shipped, when the product owner asked how to act on it.
+
+  This is the third instance of the failure ADR-0076 Class 3 describes, and the first found by a
+  reader rather than by a gate or a reviewer.
+
 - **The residual risk is unchanged and real**: an individual whose message is lost after a
   successful boot is still stranded silently. The window is narrowed, not closed.
 - The characterisation suite's assertions **do not change** — the clearest statement of what this

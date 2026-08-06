@@ -2,7 +2,10 @@ import { Link, useSearch } from '@tanstack/react-router';
 
 import { AuthShell } from '@/components/layout/auth-shell';
 import { buttonVariants } from '@/components/ui/button';
+import { textLinkVariants } from '@/components/ui/text-link';
 import { ResendVerificationButton } from '@/features/auth';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useNoindex } from '@/hooks/use-noindex';
 
 /**
  * The address-verification landing screen (ADR-0074 M2-T3).
@@ -57,6 +60,8 @@ export function pendingDescription(email: string | undefined): string {
 }
 
 export function VerifyEmailScreen(): React.ReactElement {
+  useNoindex();
+  useDocumentTitle('Verify your email');
   const search = useSearch({ strict: false });
   const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
   const verified = 'verified' in search && search.verified === '1';
@@ -87,7 +92,7 @@ export function VerifyEmailScreen(): React.ReactElement {
       <ResendVerificationButton email={email} />
       <p className="text-muted-foreground text-sm">
         Already confirmed?{' '}
-        <Link to="/sign-in" className="text-primary font-medium underline-offset-4 hover:underline">
+        <Link to="/sign-in" className={textLinkVariants()}>
           Sign in
         </Link>
       </p>

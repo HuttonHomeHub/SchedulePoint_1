@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-import { useSendVerificationEmail } from '../api/use-session';
+import { authErrorMessage, useSendVerificationEmail } from '../api/use-session';
 
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/form';
+import { ServerError } from '@/components/ui/server-error';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
@@ -23,8 +24,15 @@ import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
  * `role="status"` / `role="alert"` element and nothing else. Pairing that with a `useAnnounce()`
  * call — which this did — has assistive tech read the same sentence twice, because both are live
  * regions; and the visible element is the better of the two, since sighted users get the same
- * persistent text rather than a message that has already gone. It also takes focus, because the
- * button the reader just pressed is unmounted by the same render.
+ * persistent text rather than a message that has already gone. It still takes focus, because the
+ * outcome is the new information on the screen.
+ *
+ * **The confirmation sits ABOVE the form; it does not replace it** (ADR-0077 M1-T1). This used to
+ * return the `<p role="status">` alone, unmounting the button — and `send.isSuccess` never clears,
+ * so only a page reload got it back. The copy told the reader to "check your spam folder before
+ * trying again" and then removed the thing to try again with, on three separate surfaces. The
+ * second send is now possible, and if it lands inside the 3-per-60s window the 429 state
+ * (ADR-0077 M1-T4) is the honest answer rather than a hidden control.
  */
 export function ResendVerificationButton({
   email,
@@ -53,22 +61,15 @@ export function ResendVerificationButton({
     send.mutate(address);
   }
 
-  if (send.isSuccess) {
-    return (
-      <p role="status" tabIndex={-1} ref={outcomeRef} className="text-muted-foreground text-sm">
-        If that address needs verifying, an email is on its way. It can take a minute to arrive —
-        check your spam folder before trying again.
-      </p>
-    );
-  }
-
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-3">
-      {send.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {send.error.message}
+      {send.isSuccess ? (
+        <p role="status" tabIndex={-1} ref={outcomeRef} className="text-muted-foreground text-sm">
+          If that address needs verifying, an email is on its way. It can take a minute to arrive —
+          check your spam folder before trying again.
         </p>
       ) : null}
+      <ServerError message={send.isError ? authErrorMessage(send.error, 'email') : null} />
       {needsAddress ? (
         <TextField
           label="Email"
@@ -77,10 +78,27 @@ export function ResendVerificationButton({
           value={typed}
           onChange={(event) => {
             setTyped(event.target.value);
+            // Editing the address makes the confirmation above stale — it is about the address that
+            // was sent to, not the one now in the field. Clearing the mutation removes it rather
+            // than leaving a sentence that has quietly stopped being true.
+            if (send.isSuccess || send.isError) send.reset();
           }}
         />
       ) : null}
-      <Button type="submit" aria-disabled={blocked} aria-busy={send.isPending}>
+      {/* `whitespace-normal` overrides the primitive's `whitespace-nowrap`, which exists so a
+          toolbar control never wraps mid-label. This is a full-width form submit, not a toolbar
+          control, and its label is the longest on any public screen: **measured** at 320×568 it
+          forced `documentElement.scrollWidth` to 334 against a 320px viewport — a WCAG 1.4.10
+          reflow failure on the one screen a reader reaches when their verification email has not
+          arrived (ADR-0077 M6-T1, the TECH_DEBT #98 defect class). Wrapping rather than shortening,
+          because "another" is what tells a reader who is here for the second time that this is not
+          the same link again. */}
+      <Button
+        type="submit"
+        aria-disabled={blocked}
+        aria-busy={send.isPending}
+        className="whitespace-normal"
+      >
         {send.isPending ? 'Sending…' : 'Send another verification email'}
       </Button>
     </form>

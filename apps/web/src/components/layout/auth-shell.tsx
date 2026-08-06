@@ -1,3 +1,5 @@
+import { BrandPanel } from './brand-panel';
+
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -17,19 +19,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
  * and on whether it announced anything. Three new callers were about to make that five callers on
  * two implementations, where each looks right alone and only a reader who opens the same thing two
  * ways ever notices one is a version behind.
+ *
+ * **One width, 448px** (ADR-0077 M2-T4). The convergence kept both prior widths behind a `size`
+ * prop — 384px for the forms, 448px for the invitation — which preserved the drift it existed to
+ * remove: a reader who signs in and then accepts an invitation watches the card change size for no
+ * reason they can name. `docs/DESIGN_SYSTEM.md` calls 448px the width of a record form, and every
+ * one of these screens is one. The prop is gone rather than defaulted, so there is nothing to set
+ * back.
+ *
+ * **Two columns at `md`+, one below** (ADR-0077 M4). The brand panel is a sibling of the card in a
+ * grid, so the card's own contract — heading, description, children, `aria-busy` — is untouched
+ * and every existing public-screen suite passes unchanged. Below `md` the grid collapses to a
+ * single column and the panel becomes a band above the card, **by layout, not by a second
+ * element**: rendering a phone copy and a desktop copy would put both in jsdom's accessibility
+ * tree and quietly make every `getByText` on these screens ambiguous.
+ *
+ * **`grid-rows-[auto_1fr]` below `md` is the fix for a defect the browser suite measured**
+ * (ADR-0077 M6-T1). With rows left implicit, both are `auto` and `align-content` resolves to
+ * `normal`, which for a grid container **stretches**: every pixel of `min-h-dvh` beyond the two
+ * rows' content is split evenly between them. The band's own content is **146px**, and on the seven
+ * states whose content fits a 320×568 phone it was rendering at **226–265px — up to 47% of the
+ * screen**, which is not a band above a card, it is a half-page of navy above a card. Pinning the
+ * first row to `auto` and giving the second `1fr` sizes the band by its content and hands the rest
+ * to the card, which then still centres in what is left. At `md` the columns take over and
+ * `md:grid-rows-1` restores the single full-height row the split-screen needs.
+ *
+ * The defect is worth naming rather than just fixing: it was invisible to every unit test, because
+ * jsdom has no layout, and to a reviewer reading the classes, because nothing in
+ * `grid min-h-dvh md:grid-cols-2` says "stretch". It is exactly what
+ * `docs/specs/public-screens-brand/implementation-plan.md` meant by "M4 must not be merged on a
+ * reviewer's reading of the CSS".
+ *
+ * `min-h-dvh` is load-bearing and predates this: centring a tall card in a 360px-high landscape
+ * viewport is where content gets clipped. It stays, and `auth-shell.test.tsx` asserts it.
  */
 export function AuthShell({
   title,
   description,
-  size = 'sm',
   busy = false,
   children,
 }: {
   /** Omit when the children own the heading — the accept-invite card does. */
   title?: string;
   description?: string;
-  /** `sm` for forms, `md` for the wider decision screens. Preserves both prior widths exactly. */
-  size?: 'sm' | 'md';
   /** Reflected as `aria-busy` while an outcome is resolving. */
   busy?: boolean;
   children: React.ReactNode;
@@ -38,23 +70,31 @@ export function AuthShell({
 
   return (
     <AnnouncerProvider>
-      <main className="flex min-h-dvh items-center justify-center p-4" aria-busy={busy}>
-        <Card className={size === 'md' ? 'w-full max-w-md' : 'w-full max-w-sm'}>
-          {hasHeader ? (
-            <CardHeader>
-              <CardTitle>{title}</CardTitle>
-              {description === undefined ? null : <CardDescription>{description}</CardDescription>}
-            </CardHeader>
-          ) : null}
-          {/* Without a header the children ARE the card — they bring their own CardHeader — so
-              wrapping them in CardContent would double the padding. That is the shape the
-              accept-invite flow uses and the reason this branch exists. */}
-          {hasHeader ? (
-            <CardContent className="flex flex-col gap-6">{children}</CardContent>
-          ) : (
-            children
-          )}
-        </Card>
+      <main
+        className="grid min-h-dvh grid-rows-[auto_1fr] md:grid-cols-2 md:grid-rows-1"
+        aria-busy={busy}
+      >
+        <BrandPanel />
+        <div className="flex items-center justify-center p-4 md:p-8">
+          <Card className="w-full max-w-md">
+            {hasHeader ? (
+              <CardHeader>
+                <CardTitle>{title}</CardTitle>
+                {description === undefined ? null : (
+                  <CardDescription>{description}</CardDescription>
+                )}
+              </CardHeader>
+            ) : null}
+            {/* Without a header the children ARE the card — they bring their own CardHeader — so
+                wrapping them in CardContent would double the padding. That is the shape the
+                accept-invite flow uses and the reason this branch exists. */}
+            {hasHeader ? (
+              <CardContent className="flex flex-col gap-6">{children}</CardContent>
+            ) : (
+              children
+            )}
+          </Card>
+        </div>
       </main>
     </AnnouncerProvider>
   );

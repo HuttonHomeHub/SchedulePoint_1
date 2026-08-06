@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { INVALID_PASSWORD, useChangePassword } from '../api/use-session';
+import { INVALID_PASSWORD, authErrorMessage, useChangePassword } from '../api/use-session';
 import { changePasswordSchema, type ChangePasswordValues } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { ServerError } from '@/components/ui/server-error';
 
 /**
  * Change your own password from `/account` (ADR-0074 M3).
@@ -56,17 +57,13 @@ export function ChangePasswordForm(): React.ReactElement {
   // a network drop — so it keeps the form-level alert. The narrowing is what makes that honest.
   const formLevelError =
     changePassword.isError && changePassword.error.code !== INVALID_PASSWORD
-      ? changePassword.error.message
+      ? authErrorMessage(changePassword.error)
       : undefined;
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
       <FormErrorSummary errors={errors} />
-      {formLevelError === undefined ? null : (
-        <p role="alert" className="text-destructive-text text-sm">
-          {formLevelError}
-        </p>
-      )}
+      <ServerError message={formLevelError} />
       {changePassword.isSuccess ? (
         <p role="status" className="text-sm font-medium">
           Password changed. Your other sessions have been signed out.

@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { useSignUp, type SignUpOutcome } from '../api/use-session';
+import { authErrorMessage, useSignUp, type SignUpOutcome } from '../api/use-session';
 import { signUpSchema, type SignUpValues } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { ServerError } from '@/components/ui/server-error';
 
 /**
  * Create-account form.
@@ -38,11 +39,7 @@ export function SignUpForm({
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
       <FormErrorSummary errors={errors} />
-      {signUp.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {signUp.error.message}
-        </p>
-      ) : null}
+      <ServerError message={signUp.isError ? authErrorMessage(signUp.error) : null} />
       <TextField
         label="Full name"
         autoComplete="name"
@@ -74,7 +71,7 @@ export function SignUpForm({
           if (signUp.isPending) event.preventDefault();
         }}
       >
-        {signUp.isPending ? 'Creating account…' : 'Create account'}
+        {signUp.isPending ? 'Creating your account…' : 'Create an account'}
       </Button>
     </form>
   );

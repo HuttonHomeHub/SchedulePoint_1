@@ -30,9 +30,11 @@
  *    the code turns this gate into a rubber stamp.
  * 2. **Anchor.** The recorded snippet must still appear within the cited line range. This catches
  *    a citation that was wrong when it was written, which a version pin alone cannot.
- * 3. **Completeness.** Every `<file>.mjs:<line>` reference in `docs/` and in the app sources must
- *    be in the register. This is the half that keeps the register honest over time: a new
- *    citation cannot be added without recording what it says and what proves it.
+ * 3. **Completeness.** Every citation of a `.js`/`.mjs` file by line in `docs/` and in the app
+ *    sources must be in the register — in either the `file.mjs:234` form or the prose form
+ *    "`file.mjs`, lines **234**". This is the half that keeps the register honest over time: a new
+ *    citation cannot be added without recording what it says and what proves it. Files this
+ *    repository owns are excluded (they have no version to pin and nothing to rot).
  *
  * ## What it deliberately does NOT check
  *
@@ -41,21 +43,58 @@
  * this guarantees is narrower and still worth having: the line is where we said it was, in the
  * version we said we read.
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const register = JSON.parse(readFileSync(join(root, 'scripts/dependency-claims.json'), 'utf8'));
 
-/** Resolve an installed package's real directory through pnpm's content-addressed store. */
+/**
+ * Resolve an installed package's real directory through pnpm's content-addressed store.
+ *
+ * **pnpm flattens the scope separator**: `@better-fetch/fetch` is stored as
+ * `@better-fetch+fetch@1.3.1`, so a naive `startsWith(name + '@')` never matches and the script
+ * reports a perfectly-installed package as missing. Found by ADR-0077's design pass, which was the
+ * first to need a scoped citation.
+ */
 function installed(name) {
   const store = join(root, 'node_modules/.pnpm');
+  const stored = `${name.replace('/', '+')}@`;
   const dir = readdirSync(store).find(
-    (entry) => entry.startsWith(`${name}@`) && statSync(join(store, entry)).isDirectory(),
+    (entry) => entry.startsWith(stored) && statSync(join(store, entry)).isDirectory(),
   );
   if (!dir) return null;
-  const version = /@(\d+\.\d+\.\d+)/.exec(dir)?.[1];
+  const version = /@(\d+\.\d+\.\d+)/.exec(dir.slice(stored.length - 1))?.[1];
   return { version, dir: join(store, dir, 'node_modules', name) };
+}
+
+/**
+ * Basenames of this repository's OWN JavaScript, so the completeness scan can tell a dependency
+ * citation from a self-citation.
+ *
+ * Without this the scan demands a register entry for `check-counts.mjs:42` — a file sitting in this
+ * repo, readable by anyone, with no version to pin and nothing to rot. It is not just `scripts/`:
+ * `packages/config/eslint/react.js` and `apps/web/public/theme-boot.js` are both cited by line in
+ * ADR-0077's artefacts.
+ *
+ * **The exclusion is by basename, so a shared basename is a blind spot** — an unregistered
+ * `index.js:12` in a dependency would be skipped if this repo also had an `index.js`. It does not —
+ * the set this function returns was printed and read, and holds no `index.js` or `index.mjs` — and
+ * `@better-fetch/fetch`'s `index.js:733-739` is registered anyway, since a registered ref is
+ * accepted before this set is consulted. Recorded as `docs/TECH_DEBT.md` #101 rather than solved
+ * with path matching, because prose cites `dist/api/routes/sign-in.mjs` and `sign-in.mjs`
+ * interchangeably and neither form is wrong.
+ */
+function ownJsBasenames() {
+  const names = new Set();
+  for (const line of execFileSync('git', ['ls-files', '*.js', '*.mjs', '*.cjs'], {
+    cwd: root,
+    encoding: 'utf8',
+  }).split('\n')) {
+    if (line) names.add(line.slice(line.lastIndexOf('/') + 1));
+  }
+  return names;
 }
 
 const problems = [];
@@ -104,7 +143,19 @@ for (const claim of register.claims) {
 }
 
 // (3) Completeness — every citation in the tree is registered.
-const CITATION = /\b([a-z0-9-]+\.mjs):(\d+(?:-\d+)?)/g;
+//
+// TWO forms, because the register was silently missing half its input. The gate shipped matching
+// only `file.mjs:234`, and ADR-0077's own artefacts wrote the same four citations as
+// "`dist/api/routes/sign-in.mjs`, lines **234**" — prose the regex never saw. `pnpm check:claims`
+// passed for the wrong reason, on the day it was written, in the epic that widened it. That is the
+// ADR-0076 Class 2 failure the gate exists to stop, inside the gate.
+const CITATIONS = [
+  // `sign-in.mjs:234` / `dist/api/routes/sign-in.mjs:234-240`
+  /\b([a-z0-9-]+\.m?js):(\d+(?:-\d+)?)\b/g,
+  // `` `dist/api/routes/sign-in.mjs`, lines **234** `` — also "line", "on lines", ``234``, 234–240
+  /`[^`\n]*?([a-z0-9-]+\.m?js)`[,;]?\s*(?:on\s+)?lines?\s*\**`?(\d+(?:\s*[-–]\s*\d+)?)/gi,
+];
+const own = ownJsBasenames();
 const known = new Set(register.claims.map((c) => c.ref));
 const found = new Map();
 for (const dir of ['docs', 'apps/api/src', 'apps/web/src', 'apps/api/test']) {
@@ -115,10 +166,12 @@ for (const dir of ['docs', 'apps/api/src', 'apps/web/src', 'apps/api/test']) {
         walk(rel);
       } else if (/\.(md|ts|tsx|mjs)$/.test(entry.name)) {
         const text = readFileSync(join(root, rel), 'utf8');
-        for (const [, base, lines] of text.matchAll(CITATION)) {
-          const ref = `${base}:${lines}`;
-          if (!found.has(ref)) found.set(ref, new Set());
-          found.get(ref).add(rel);
+        for (const pattern of CITATIONS) {
+          for (const [, base, lines] of text.matchAll(pattern)) {
+            const ref = `${base}:${lines.replace(/\s*[-–]\s*/, '-')}`;
+            if (!found.has(ref)) found.set(ref, new Set());
+            found.get(ref).add(rel);
+          }
         }
       }
     }
@@ -126,6 +179,7 @@ for (const dir of ['docs', 'apps/api/src', 'apps/web/src', 'apps/api/test']) {
 }
 for (const [ref, where] of [...found].sort()) {
   if (known.has(ref)) continue;
+  if (own.has(ref.slice(0, ref.lastIndexOf(':')))) continue;
   problems.push(
     `${ref}: cited in ${[...where].join(', ')} but not in scripts/dependency-claims.json.\n` +
       `    Add it — record the package, the path, the line range and a short anchor from the\n` +

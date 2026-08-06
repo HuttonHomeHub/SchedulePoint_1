@@ -19,7 +19,7 @@ export async function onboard(page: Page, stamp: number): Promise<string> {
   await page.getByLabel('Full name').fill('Gantt Tester');
   await page.getByLabel('Email').fill(`gantt-${stamp}@example.com`);
   await page.getByLabel('Password').fill('correct-horse-battery');
-  await page.getByRole('button', { name: /create account/i }).click();
+  await page.getByRole('button', { name: /create an account/i }).click();
   await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
   await page.getByLabel('Organisation name').fill(`Gantt Co ${stamp}`);
   await page.getByRole('button', { name: /create organisation/i }).click();

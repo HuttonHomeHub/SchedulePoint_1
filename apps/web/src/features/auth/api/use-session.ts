@@ -48,18 +48,26 @@ function messageFrom(error: unknown, fallback: string): string {
 }
 
 /**
- * An auth failure that carries the library's machine-readable `code` alongside the message
- * (ADR-0074).
+ * An auth failure that carries the library's machine-readable `code` and HTTP `status` alongside
+ * the message (ADR-0074, ADR-0077 M1-T4).
  *
  * The code is what lets a screen branch. Matching on the message string would work today and break
  * on any wording change in a dependency — and the branch it guards is the difference between "check
  * your password" and "your address is not verified, here is how to fix that", which is not a
  * distinction to leave resting on prose.
+ *
+ * **`status` exists because the rate limit has no code.** Better Auth's 429 body is
+ * `{ message: "Too many requests. Please try again later." }` with no `code` field, so every screen
+ * fell through to that library sentence in a bare red paragraph — the reader is told nothing about
+ * what to do or how long. `@better-fetch/fetch` does put the status on the returned error
+ * (`index.js:733-739`, `status: response.status` spread over the parsed body), so the one fact
+ * needed to branch is already there and was simply being dropped here.
  */
 export class AuthError extends Error {
   constructor(
     message: string,
     readonly code: string | undefined,
+    readonly status: number | undefined,
   ) {
     super(message);
     this.name = 'AuthError';
@@ -69,6 +77,53 @@ export class AuthError extends Error {
 function codeFrom(error: unknown): string | undefined {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? code : undefined;
+}
+
+function statusFrom(error: unknown): number | undefined {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === 'number' ? status : undefined;
+}
+
+/**
+ * Was this failure the rate limiter?
+ *
+ * **One predicate, because six screens must not drift on what 429 means.** Better Auth applies
+ * 3-per-10s to `/sign-in*`, `/sign-up*`, `/change-password` and `/change-email`, and 3-per-60s to
+ * `/request-password-reset` and `/send-verification-email` (`index.mjs:370-383`).
+ *
+ * **It is `enabled: options.isProduction`** (`better-auth.ts:270-274`), so no journey against the
+ * dev or test API can reach this state — which is exactly why it went unhandled for so long, and
+ * why the only end-to-end proof is a fulfilled route in the browser suite.
+ */
+export function isRateLimited(error: unknown): boolean {
+  return error instanceof AuthError && error.status === 429;
+}
+
+/**
+ * Which limiter a screen sits behind, and therefore which sentence it should say.
+ *
+ * `'email'` is the 60-second pair (`/request-password-reset`, `/send-verification-email`);
+ * `'attempts'` is everything else — the 10-second sign-in/sign-up/change-password rule and the
+ * global 100-per-60s default that `/reset-password` falls through to.
+ */
+export type RateLimitScope = 'attempts' | 'email';
+
+const THROTTLED_MESSAGE: Record<RateLimitScope, string> = {
+  attempts: 'Too many attempts. Wait a moment and try again.',
+  email: 'Too many requests. Wait a minute before asking for another email.',
+};
+
+/**
+ * What to show the reader for a failed auth call.
+ *
+ * **The throttled copy names no number of seconds, and that is deliberate.** The window is on the
+ * `X-Retry-After` header (`index.mjs:64-70`), and `@better-fetch/fetch` builds its error from the
+ * body, status and statusText only — **response headers are discarded** (`index.js:733-739`). So a
+ * countdown here would be a figure nobody read. The two sentences differ in scale because the two
+ * rules do (10 s vs 60 s), which is the honest amount of precision available.
+ */
+export function authErrorMessage(error: AuthError, scope: RateLimitScope = 'attempts'): string {
+  return isRateLimited(error) ? THROTTLED_MESSAGE[scope] : error.message;
 }
 
 /**
@@ -96,6 +151,7 @@ export function useSignIn() {
         throw new AuthError(
           messageFrom(error, 'Could not sign in. Check your details.'),
           codeFrom(error),
+          statusFrom(error),
         );
       }
     },
@@ -155,8 +211,10 @@ export interface SignUpOutcome {
  */
 export function useSignUp() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (values: SignUpValues): Promise<SignUpOutcome> => {
+  // Pinned to `AuthError` for the same reason `useSignIn` is: react-query would otherwise widen it
+  // to `Error`, and the 429 branch (ADR-0077 M1-T4) would not compile.
+  return useMutation<SignUpOutcome, AuthError, SignUpValues>({
+    mutationFn: async (values): Promise<SignUpOutcome> => {
       const { data, error } = await authClient.signUp.email({
         name: values.name,
         email: values.email,
@@ -164,7 +222,11 @@ export function useSignUp() {
         callbackURL: VERIFIED_CALLBACK_URL,
       });
       if (error) {
-        throw new AuthError(messageFrom(error, 'Could not create your account.'), codeFrom(error));
+        throw new AuthError(
+          messageFrom(error, 'Could not create your account.'),
+          codeFrom(error),
+          statusFrom(error),
+        );
       }
       // `token` is the session token. Absent or null ⇒ the account exists but nobody is signed in.
       return { signedIn: Boolean(data?.token) };
@@ -188,8 +250,8 @@ export function useSignUp() {
  * whatever the truth, with no branch a caller could read as an existence oracle.
  */
 export function useSendVerificationEmail() {
-  return useMutation({
-    mutationFn: async (email: string): Promise<void> => {
+  return useMutation<void, AuthError, string>({
+    mutationFn: async (email): Promise<void> => {
       const { error } = await authClient.sendVerificationEmail({
         email,
         callbackURL: VERIFIED_CALLBACK_URL,
@@ -198,6 +260,7 @@ export function useSendVerificationEmail() {
         throw new AuthError(
           messageFrom(error, 'Could not send the email. Try again in a moment.'),
           codeFrom(error),
+          statusFrom(error),
         );
       }
     },
@@ -236,6 +299,7 @@ export function useChangePassword() {
         throw new AuthError(
           messageFrom(error, 'Could not change your password. Try again.'),
           codeFrom(error),
+          statusFrom(error),
         );
       }
     },
@@ -275,6 +339,7 @@ export function useRequestPasswordReset() {
         throw new AuthError(
           messageFrom(error, 'Could not send the email. Try again in a moment.'),
           codeFrom(error),
+          statusFrom(error),
         );
       }
     },
@@ -296,6 +361,7 @@ export function useResetPassword() {
         throw new AuthError(
           messageFrom(error, 'Could not set your new password. Try again.'),
           codeFrom(error),
+          statusFrom(error),
         );
       }
     },

@@ -99,7 +99,7 @@ test('the signed-out surfaces raise no CSP violation', async ({ page }) => {
   expectClean(await violations(page), '/sign-in');
 
   await page.goto('/sign-up');
-  await expect(page.getByRole('button', { name: /create account/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /create an account/i })).toBeVisible();
   expectClean(await violations(page), '/sign-up');
 
   await page.goto('/forgot-password');
@@ -115,7 +115,7 @@ test('the authenticated shell raises no CSP violation', async ({ page }) => {
   await page.getByLabel('Full name').fill('CSP Subject');
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: /create account/i }).click();
+  await page.getByRole('button', { name: /create an account/i }).click();
 
   await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
   expectClean(await violations(page), 'onboarding');

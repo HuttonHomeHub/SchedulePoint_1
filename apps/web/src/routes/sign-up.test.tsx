@@ -55,7 +55,7 @@ function fillAndSubmit() {
   fireEvent.change(screen.getByLabelText('Password'), {
     target: { value: 'correct-horse-battery' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create an account' }));
 }
 
 afterEach(() => {

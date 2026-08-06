@@ -83,6 +83,12 @@ function ScheduleBackdrop(): React.ReactElement {
         <div
           className="bg-destructive absolute inset-y-0 w-px opacity-70"
           style={{
+            // `#000` here is a MASK stop, not a paint colour: `mask-image` reads the gradient's
+            // alpha, so this literal never renders and cannot "disappear on navy chrome" — the
+            // harm ADR-0055 §5's rule exists to stop. The colour that does render is
+            // `bg-destructive`, a token, one line above. Deliberately NOT rewritten as `black`,
+            // which would slip past the regex while changing nothing.
+            // eslint-disable-next-line no-restricted-syntax -- mask alpha stop, never painted
             maskImage: 'repeating-linear-gradient(to bottom, #000 0 6px, transparent 6px 12px)',
           }}
         />

@@ -16,8 +16,8 @@ import { blockBody, declarations, hasBlock, THEME_SELECTORS, themeTokens } from 
  * checked the moment they add a value, without anyone remembering to extend this file.
  */
 
-type Scope = 'page' | 'chrome' | 'panel';
-const SCOPES: Scope[] = ['page', 'chrome', 'panel'];
+type Scope = 'page' | 'chrome' | 'panel' | 'brand';
+const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand'];
 
 const FLAG_ATTRIBUTES = ['data-designed-chrome', 'data-canvas-visual-language'] as const;
 
@@ -168,7 +168,7 @@ describe.each(THEME_SELECTORS)('%s — adjacent surfaces', (theme) => {
      * every scope keeps a real `border-r`/`border-b` rather than relying on the fill difference,
      * and the design WANTS these close. What the suite owes is the number, not a threshold.
      */
-    it.each(['chrome', 'panel'] as const)('%s vs the page fill', (scope) => {
+    it.each(['chrome', 'panel', 'brand'] as const)('%s vs the page fill', (scope) => {
       const page = fillOf(resolve(theme, 'page', flagsOn));
       const surface = fillOf(resolve(theme, scope, flagsOn));
       const a = relativeLuminance(page);

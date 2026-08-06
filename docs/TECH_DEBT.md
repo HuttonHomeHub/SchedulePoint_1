@@ -1064,11 +1064,12 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
   expect to see them — but a reader asking "who changed a password this month?" cannot ask it. The
   fix is a fourth category, which touches ADR-0073 C1's chip vocabulary and its derived cap, so it
   belongs with the next audit slice rather than bolted on here.
-- **(b) The inline text-link `className` is repeated across five auth screens**
-  (component-reviewer). `text-primary font-medium underline-offset-4 hover:underline` appears in
-  `sign-in`, `sign-up`, `verify-email`, `forgot-password` and `reset-password`. It is the
-  one-off-styling smell `docs/COMPONENT_LIBRARY.md` warns about — five copies of a decision nobody
-  will remember to change together. It wants a `Link` variant in `components/ui/`, not a sixth copy.
+- **(b) ~~The inline text-link `className` is repeated across five auth screens~~ — CLOSED
+  2026-08-06 (ADR-0077 M2-T2).** `text-primary font-medium underline-offset-4 hover:underline`
+  appeared in `sign-in`, `sign-up`, `verify-email`, `forgot-password` and `reset-password`, and the
+  brand-surface epic was about to add a sixth. It is now `components/ui/text-link.tsx` —
+  a `className` factory rather than a component, so the router's type-safe `to`/`search` inference
+  survives, and it gained the visible focus ring the five copies never had.
 - **(c) `password-reset.parity.test.tsx` overstates itself, and one of its assertions is vacuous**
   (test-engineer). Its docblock calls the suite "the only gate" on the flag structure, which was
   true when written and is not now — `router-search.test.ts` and the flag-on journey both cross it.
@@ -1076,12 +1077,11 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
   what produced it: it cannot fail. Both are documentation defects in a test rather than missing
   coverage, which is why they are here and not in the fix.
 
-**Risk:** none is user-visible. (a) makes one audit question unaskable; (b) is a maintenance cost
-that compounds with the next auth screen; (c) is a test that reads as stronger than it is, which is
-the failure mode this register exists to name.
+**Risk:** neither remaining item is user-visible. (a) makes one audit question unaskable; (c) is a
+test that reads as stronger than it is, which is the failure mode this register exists to name.
 
-**Remediation:** (a) with the next audit-coverage slice, (b) with the next auth screen or a
-design-system pass, (c) whenever that file is next touched — it is a comment and one assertion.
+**Remediation:** (a) with the next audit-coverage slice; (c) whenever that file is next touched — it
+is a comment and one assertion. (b) is closed.
 
 ## Closed numbers
 
@@ -1206,4 +1206,152 @@ register exists for.
 
 ---
 
-**Next free number: 100.**
+### 100. The operator-facing mail signal has no operator-facing channel
+
+**Found:** 2026-08-06, immediately after releasing ADR-0075, by the product owner asking how to
+action the release note's instruction to "update your mail alerting".
+
+**There is no alerting to update.** ADR-0075's entire remedy is that a mail failure is surfaced to
+the operator as a greppable log record (`event: "mail.send_failed"`), and its Consequences section
+opens with **"An operator can write an alert that fires"**
+(`docs/adr/0075-mail-delivery-is-best-effort.md:143`). That sentence is true and it is not the same
+as an alert existing. Verified rather than assumed:
+
+| Link in the chain         | State                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| The API emits the record  | ✅ `smtp-mail.service.ts`, structured, with correlation id and redaction                    |
+| `DEPLOYMENT.md` names it  | ✅ "Alert on this" — but it gives a **term**, not a mechanism                               |
+| Logs leave the host       | ❌ no shipping. `grep -rln "Loki\|Grafana\|Datadog\|Sentry\|promtail"` → docs only          |
+| Anything evaluates a rule | ❌ `docs/OBSERVABILITY.md:80` — "Monitoring & alerting — **standard, not yet implemented**" |
+| A human is notified       | ❌ nothing                                                                                  |
+
+So the record lands in `docker logs` on the host and stops there. The one place any doc shows an
+operator reading logs at all is `docs/DEVELOPMENT.md:44`, which is a **development** instruction.
+
+**This is the ADR's own premise not holding.** ADR-0075 chose operator-facing over caller-facing
+because delivery failure must not reach the caller (the enumeration argument, which is sound and
+unaffected). The unexamined half was whether "operator-facing" reaches an operator. It does not —
+it reaches a file. A signal nobody receives is the same amount of information as no signal, which
+is what that ADR set out to fix.
+
+**Two adjacent facts found while checking, both accurate as of 2026-08-06:**
+
+- **Neither compose file sets a `logging:` block**, so Docker's default `json-file` driver applies
+  with no `max-size` or `max-file`. On a long-lived host the API log grows unbounded, and the
+  grep this row is about gets slower the longer it goes unnoticed. `max-size: 10m` /
+  `max-file: 3` on `api` and `web` is the whole fix.
+- **`WATCHTOWER_NOTIFICATION_URL` already exists** in `docker-compose.release.yml`, defaulted
+  empty. A shoutrrr channel is therefore _half_ wired: setting it gives Watchtower deploy
+  notifications, and the same URL would serve a log watcher. It cannot serve this row by itself —
+  Watchtower reports on container updates, not on log contents.
+
+**Remediation, cheapest first.** All three are host-side operational work, not application code,
+which is why none of it is gated by CI:
+
+1. **A cron log-watcher.** ~15 lines: `docker compose logs api --since` over the interval, grep
+   `mail.send_failed` and `mail.transport_check_failed`, POST to a notification URL on a hit.
+   Add the `logging:` rotation block in the same change.
+2. **Real aggregation** — Promtail → Loki → Grafana, or a hosted service, with an alert rule on
+   the same terms. This is what `OBSERVABILITY.md` §"Monitoring & alerting" describes as the
+   eventual standard, and it would also close the metrics/tracing halves of ADR-0013.
+3. **Accept and document** — say plainly in `DEPLOYMENT.md` that mail failures are discoverable
+   only by looking, and that nobody is watching. Least work, and honest, which beats an "Alert on
+   this" instruction that reads as though a mechanism exists.
+
+**The notification channel must not be email.** The condition being reported is "mail is broken",
+so an emailed alert cannot send in exactly the case it exists for — and the deployed host's only
+configured transport is the SMTP relay. ntfy, a Discord/Slack webhook or Telegram all avoid the
+circularity; shoutrrr (already present for Watchtower) speaks all three.
+
+**Risk:** low-frequency, high-consequence. It needs a broken or misconfigured relay to bite. When
+it does, every affected sign-up, invitation and password reset fails silently, the caller is told
+nothing by design, and — this row's point — the operator is told nothing by accident. The window is
+open-ended rather than bounded by a poll interval, because there is no poll.
+
+---
+
+## 101. `check:claims` completeness has two structural blind spots
+
+**Status:** open · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2)
+
+`pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
+green on the day it was written **because it could not see half its input**. ADR-0077's M0-T2 widened
+it — both `.js` and `.mjs`, the prose form ("`dist/api/routes/sign-in.mjs`, lines **234**"), and an
+exclusion for files this repository owns — and the widening immediately surfaced **two dependency
+citations that had been in the tree unregistered all along**: `nodemailer`'s `_formatError` and
+`zod`'s `allowsEval` probe. Both were verified and registered. Two limitations remain, recorded here
+rather than solved, because each trade is a real one:
+
+1. **The own-file exclusion is by basename.** `ownJsBasenames()` runs `git ls-files` and excludes any
+   citation whose basename this repo also has. If a dependency file and a repo file ever share a
+   basename, an **unregistered** citation into that dependency is silently skipped. Today there is no
+   collision (the set holds no `index.js`/`index.mjs`, and `@better-fetch/fetch`'s `index.js:733-739`
+   is registered, which is checked before the exclusion). Matching on full paths instead was rejected
+   because prose legitimately writes both `dist/api/routes/sign-in.mjs` and `sign-in.mjs` for the same
+   claim, and neither is wrong.
+2. **The scan walks four directories** — `docs`, `apps/api/src`, `apps/web/src`, `apps/api/test`. A
+   citation in `packages/*`, `apps/seed-cli`, a root config or a `README` is not scanned, so it is
+   neither demanded nor checked. Widening it is cheap; what is not free is that each new directory
+   can surface unregistered citations that then need a human to read the cited code, which is the
+   whole point and also the cost.
+
+**Why not now:** both are bounded and neither can produce a _false_ pass on a claim the register
+already holds — they can only fail to _demand_ a new one. The fix for (2) is one array literal plus
+whatever it turns up.
+
+**Risk:** low. The gate's core property (a registered claim's anchor is verified against the pinned
+version, and a version bump fails CI) is unaffected by either.
+
+---
+
+## 102. The public screens' deferred review findings (ADR-0077 M6-T2)
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-06 (ADR-0077 M6-T2)
+
+Six non-blocking findings from the five specialist gates over the ADR-0077 diff, recorded rather than
+rushed. Each is real; none blocks the epic.
+
+1. **`/sign-in?redirect=` is not validated as a same-origin relative path.** `router.tsx`'s
+   `readForeignParam` accepts any string and `sign-in.tsx` hands it to `router.history.push`. Today
+   this cannot navigate off-origin, but **only because `pushState` throws a `SecurityError` for a
+   cross-origin `href`** — a property of the History API, not of this code. Swapping to
+   `window.location.href`, an `<a href>`, or a server-side redirect would turn it into a real open
+   redirect with no diff to the reading file. Pre-existing, not introduced by this epic. Fix: a
+   `/^\/(?!\/)/` check in `signInRoute`'s `validateSearch`.
+2. **`/accept-invite` does not strip its `?token=` from the URL**, while `/reset-password` — the
+   sibling this epic touched — captures its token into state and immediately `replace`s it away. An
+   invitation token is a live capability grant, and it sits in the address bar and in browser history
+   for the life of the tab. `Referrer-Policy: strict-origin-when-cross-origin` stops it leaking
+   cross-origin. Pre-existing; the inconsistency is what makes it worth a row.
+3. **No route-level code splitting.** `app/router.tsx` eagerly imports every screen except
+   `ShareGuestScreen`, so a first-time visitor to `/sign-in` downloads 1.23 MB / **353 kB gzip** —
+   the whole authed app, canvas, Gantt, audit log and all — against the ~200 kB initial-JS target in
+   `CLAUDE.md` §15. **Measured** at HEAD against the epic's base commit; this epic added ~2.1 kB gzip
+   in total, so it is not the cause. It is on the list because this epic's own framing (the coldest
+   page in the product, LCP-sensitive) is what makes it newly relevant.
+4. **`GET /me` now fires on the token-less `/accept-invite` branch**, which previously made no request
+   at all: `InviteExitLinks` calls `useSession()` so it can offer a signed-in reader "Go to
+   SchedulePoint" instead of a sign-in form they do not need. A deliberate trade, one small same-origin
+   request, on one degenerate state — but it is the single place in the diff where a request-free
+   public screen gained a request.
+5. **No regression test pins "the brand panel contains nothing focusable."** It is true today by
+   inspection of its three children, not by construction; the day somebody adds a "Learn more" link
+   inside the `aria-hidden` panel it becomes a hidden-but-reachable focus stop (WCAG 4.1.2/2.4.3) and
+   nothing fails.
+6. **`useDocumentTitle`'s docblock claims a title change is "the first thing a screen reader
+   announces on navigation."** That is unreliable for **client-side** route changes unless paired
+   with a focus move, and none of the six public routes move focus on navigation — an app-wide SPA
+   gap, not one this epic introduced. The hook is correct and worth having; the sentence overstates
+   what it delivers, which is exactly the ADR-0076 §19.9 failure applied to this epic's own artefact.
+
+**Why not now:** (1) and (2) are hardening on pre-existing behaviour with no live exploit; (3) is an
+architecture-sized change that wants its own measurement and its own decision; (4)–(6) are small and
+independent. Doing them inside the enablement milestone would mean shipping six unreviewed changes
+in the pass whose purpose is review.
+
+**Risk:** low individually. (1) is the one that changes character if the navigation mechanism is ever
+swapped, which is why it is written down rather than remembered.
+
+---
+
+**Next free number: 103.**

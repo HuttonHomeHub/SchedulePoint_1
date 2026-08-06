@@ -1,10 +1,14 @@
 import { useSearch } from '@tanstack/react-router';
 
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AcceptInvitationCard, InviteShell } from '@/features/members';
+import { AcceptInvitationCard, InviteExitLinks, InviteShell } from '@/features/members';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useNoindex } from '@/hooks/use-noindex';
 
 /** Public route for accepting an invitation from an email/share link. */
 export function AcceptInviteScreen(): React.ReactElement {
+  useNoindex();
+  useDocumentTitle('Accept your invitation');
   const search = useSearch({ strict: false });
   const token = 'token' in search && typeof search.token === 'string' ? search.token : '';
 
@@ -17,6 +21,7 @@ export function AcceptInviteScreen(): React.ReactElement {
           <CardTitle>Invitation not found</CardTitle>
           <CardDescription>This link is missing its invitation token.</CardDescription>
         </CardHeader>
+        <InviteExitLinks />
       </InviteShell>
     );
   }

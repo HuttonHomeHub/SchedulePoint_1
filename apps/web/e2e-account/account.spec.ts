@@ -52,7 +52,7 @@ async function signUp(page: Page, email: string, name: string): Promise<void> {
   await page.getByLabel('Full name').fill(name);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: /create account/i }).click();
+  await page.getByRole('button', { name: /create an account/i }).click();
 }
 
 async function signIn(page: Page, email: string, password: string): Promise<void> {
@@ -130,7 +130,12 @@ test('a locked-out member recovers their account, and the old session dies', asy
   await stranger.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
   await stranger.getByLabel('Confirm new password').fill(NEW_PASSWORD);
   await stranger.getByRole('button', { name: 'Set new password' }).click();
-  await expect(stranger.getByRole('status')).toContainText('Password changed');
+  // The **announced** region has to carry the outcome, not only its consequence (ADR-0077 M6-T2):
+  // focus moves in here, and a screen reader reads the focused element rather than the `<h1>`
+  // beside it. This assertion used to pass on the heading's wording appearing anywhere on the page.
+  await expect(stranger.getByRole('status')).toContainText(
+    'Your password has been changed, and every other session has been signed out.',
+  );
 
   // Success ends at a link, not inside the app — the reset issues no session.
   await expect(stranger.getByRole('link', { name: 'Sign in' })).toBeVisible();

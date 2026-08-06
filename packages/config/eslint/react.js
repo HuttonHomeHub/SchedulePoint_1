@@ -42,7 +42,16 @@ export default [
     // Deliberately narrow. It matches COLOUR LITERALS inside `className`/`style` — not the
     // `style` attribute itself, which is the legitimate home of `{{ width }}` and
     // `{{ height: RULER_HEIGHT }}`. A rule everyone disables is worse than no rule.
-    files: ['**/src/components/**/*.{ts,tsx}', '**/src/features/**/*.{ts,tsx}'],
+    // `src/routes/**` and `src/app/**` were outside this glob until 2026-08-06, and that is where
+    // the six PUBLIC screens live — so a hard-coded navy on the very brand panel ADR-0077 adds
+    // would have linted clean, on the one surface a stranger sees first. Found by the ui-architect
+    // pass over that epic, not by the rule.
+    files: [
+      '**/src/components/**/*.{ts,tsx}',
+      '**/src/features/**/*.{ts,tsx}',
+      '**/src/routes/**/*.{ts,tsx}',
+      '**/src/app/**/*.{ts,tsx}',
+    ],
     // The Canvas 2D painter is exempt: `fillStyle` takes a colour string, not a class, and
     // `render/palette.ts` resolves tokens at runtime with documented literal fallbacks for the
     // one case where `getComputedStyle` cannot answer (an offscreen export canvas).
