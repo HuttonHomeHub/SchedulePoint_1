@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  cardHeight,
   contentHeight,
   expectPublicLayout,
   expectTheme,
@@ -55,11 +56,26 @@ test.describe('the states carrying an unbounded server-supplied string', () => {
    * (`create-organization.dto.ts:11`). This is the only place on any public screen where a string
    * somebody else chose sets the width of the largest element on the page — the invitation heading
    * is `Join {organizationName}` inside an `<h1>`.
+   *
+   * **The stamp is in the middle of the name, not appended, and that is the fix for a real defect
+   * in this test.** It first shipped with the name as a `const`, which made the test pass exactly
+   * **six** times against any one database and fail on the seventh, for a reason that looks nothing
+   * like its cause: `organizations.service.ts` derives a slug from the name and retries collisions
+   * with `-2`, `-3` … up to `MAX_SLUG_ATTEMPTS = 6`, so the seventh create is refused and the
+   * onboarding heading simply never goes away. CI never sees it (a fresh database every run), which
+   * makes it precisely the kind of trap that punishes the local-first workflow `CLAUDE.md` §19.7
+   * asks for. The stamp goes at character 40 so it lands inside the **slug's** own truncation
+   * window; appended, it would be cut off before the slug was derived and change nothing.
    */
-  const LONG_ORG =
-    'Northgate Regeneration Framework Delivery Partnership (Phase Two Enabling Works) Limited Liability C';
+  function longOrgName(stamp: number): string {
+    const unique = stamp.toString(36).toUpperCase();
+    const base =
+      'Northgate Regeneration Framework Delivery Partnership (Phase Two Enabling Works) Limited Liability C';
+    return `${base.slice(0, 40)}${unique}${base.slice(40 + unique.length)}`;
+  }
 
   test('a 100-character organisation name wraps rather than overflowing', async ({ page }) => {
+    const LONG_ORG = longOrgName(Date.now());
     expect(LONG_ORG).toHaveLength(100);
     const stamp = Date.now();
     const owner = `public-owner-${stamp}@example.com`;
@@ -160,6 +176,46 @@ test.describe('the throttled sign-in', () => {
     // The server's own sentence must not be what the reader sees — that is the defect, not the fix.
     await expect(alert).not.toContainText('Too many requests. Please try again later.');
     await expectPublicLayout(page, 'sign-in 429 @320', { primary: 'Sign in', width: 320 });
+  });
+});
+
+test.describe('the card does not resize between screens', () => {
+  /**
+   * The product owner's one keeper from the M4 design, and the reason `md:h-[40rem]` exists.
+   *
+   * In the old app the card was 466px on Forgot Password and 694px on Register, so moving between
+   * two screens resized the box under the reader's cursor and the form jumped. This asserts the
+   * **rendered** height rather than the class, because a fixed height is easy to write and easy to
+   * defeat — one `h-auto` on a child, one state whose content overflows the 40rem and pushes the
+   * grid open, and the class is still there while the box moves again.
+   *
+   * `md` and up only. Below it the card is content-sized on purpose: a fixed height on a 320px
+   * phone clips the tallest state instead, which the sweep above measures.
+   */
+  test('every state is exactly the same height at md and up', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const measured: { path: string; height: number }[] = [];
+
+    for (const state of URL_STATES) {
+      await page.goto(state.path);
+      await expect(
+        page.getByRole('heading', { level: 1, name: state.heading, exact: true }),
+      ).toBeVisible();
+      const height = await cardHeight(page);
+      expect(height, `${state.path}: card box`).not.toBeNull();
+      measured.push({ path: state.path, height: height ?? 0 });
+    }
+
+    const heights = [...new Set(measured.map((row) => Math.round(row.height)))];
+    expect(
+      heights,
+      `card heights differ between states:\n${measured
+        .map((row) => `${Math.round(row.height)}px  ${row.path}`)
+        .join('\n')}`,
+    ).toHaveLength(1);
+    // 40rem at the default 16px root. Pinned, so a later "make it a bit taller" is a decision
+    // somebody takes rather than a number that drifts.
+    expect(heights[0]).toBe(640);
   });
 });
 

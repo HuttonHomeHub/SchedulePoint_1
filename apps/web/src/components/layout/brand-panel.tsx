@@ -4,33 +4,39 @@ import { TsldMotif } from './tsld-motif';
 import { Surface } from '@/components/ui/surface';
 
 /**
- * The product's tagline, verbatim (ADR-0077 §5, product-owner decision).
- *
- * Exported and pinned by a string-equality test because a copy pass is exactly how a line like
- * this gets "improved" — it is the only sentence on any public screen that says what the product
- * is *for* rather than what the form in front of you does.
+ * The tagline, in one place because it is the same sentence on all six public screens and on the
+ * old app before them. Exported so a test can assert the screens agree rather than restating it.
  */
 export const BRAND_TAGLINE = 'A future reimagined by intelligent visual planning';
 
 /**
- * The dark navy panel beside the card on every public screen (ADR-0077 §2–§4).
+ * Where the photograph lives. Served same-origin from `public/`, and that is not a preference:
+ * the deployed Content-Security-Policy is `img-src 'self' blob:` (`docker-compose.yml:81`), so
+ * the old app's approach — hotlinking `images.unsplash.com` straight from CSS — would be blocked
+ * outright on the real site. Vendoring it is the only way this image renders at all.
  *
- * **Fixed dark in every theme, and that is a decision rather than an oversight.** A signed-out
- * visitor cannot choose a theme — `theme-boot.js` picks Dark from their OS or Corporate because a
- * colleague signed in on this machine last month — so without this the one screen that has to be
- * recognisable renders in one of three identities, selected by something the visitor did not do
- * and cannot undo. The `brand` surface scope carries that; nothing in here names a colour.
+ * A missing file degrades correctly rather than breaking: the request 404s, nothing paints, and
+ * the navy fill beneath shows through with the mark and tagline still legible on it. What the
+ * asset has to be, and why a replacement is a low-stakes choice, is `docs/BRAND_ASSETS.md`.
+ */
+const PANEL_IMAGE = '/brand/auth-panel.avif';
+
+/**
+ * The public screens' brand panel (ADR-0077 §2, photograph restored in M7).
  *
- * **One `<aside>`, always rendered; only its proportion changes.** Rendering two copies behind
- * `hidden md:flex` / `md:hidden` is the obvious way to do a responsive layout and would break every
- * existing suite silently: jsdom has no CSS, so both copies land in the accessibility tree,
- * `getByText` queries go ambiguous, and `getAllBy*` assertions keep passing while asserting
- * nothing. `brand-panel.test.tsx` counts the lockup for exactly that reason.
+ * **Three layers, and the order is the whole design.** A photograph, a navy wash over it at
+ * 80–90% opacity, and the content on top. The wash is what makes this safe: at that opacity the
+ * photograph is a *texture*, not a picture, so it carries atmosphere without ever competing with
+ * the words — which is also why ADR-0077 §3's original objection (a photo defeats the computed
+ * contrast gate, because the gate reads tokens and cannot see a JPEG) is much smaller than it
+ * first looked. The text sits on the wash, and the wash is a token the gate can read.
  *
- * **`aria-hidden`, and it loses nothing.** The brand mark, the tagline and the motif are the same
- * three facts on all six screens; the product's name is already in `<title>` (M5) and the heading
- * says what the screen is for. A screen-reader user meeting the same decorative panel six times is
- * being charged for it six times.
+ * The opacities, the 3px amber seam and its position are the old app's exact values, read from
+ * `static/css/auth.css` in `HuttonHomeHub/SchedulePoint` rather than matched by eye.
+ *
+ * `aria-hidden`, still: the mark, the diagram and the tagline are decoration on every one of these
+ * screens. The product name is already in `<title>` and the heading beside this panel says what
+ * the screen is for, so a screen-reader user loses nothing and skips three redundant stops.
  */
 export function BrandPanel(): React.ReactElement {
   return (
@@ -38,24 +44,40 @@ export function BrandPanel(): React.ReactElement {
       tone="brand"
       as="aside"
       aria-hidden="true"
-      className="text-foreground flex flex-col justify-between gap-6 overflow-hidden p-6 md:p-8"
+      className="text-foreground relative flex flex-col items-center justify-center gap-5 overflow-hidden p-6 md:p-8"
     >
-      <BrandMark className="text-lg" />
+      {/* Layer 1 — the photograph. A background image rather than an `<img>` because it is
+          decoration with no accessible name to give; `bg-cover bg-center` is the old app's
+          `background-size: cover; background-position: center`. */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url('${PANEL_IMAGE}')` }}
+      />
+      {/* Layer 2 — the navy wash. `--background` inside this scope IS the brand navy, so the
+          wash follows the token rather than repeating a hex the contrast gate cannot see. */}
+      <div className="from-background/80 to-background/90 absolute inset-0 bg-linear-to-b" />
+      {/* Layer 3 — the amber seam at the join. 3px, centred on the panel's right edge over the
+          middle half of its height, exactly as `.auth-image::after` drew it. Hidden below `md`,
+          where the panel is a band above the card and there is no vertical join to mark. */}
+      <div className="bg-primary absolute top-1/4 right-0 hidden h-1/2 w-[3px] md:block" />
 
-      {/* The motif sits between the mark and the tagline so the eye meets identity, then evidence,
-          then the claim. Capped rather than stretched: on a tall viewport a huge diagram reads as a
-          chart somebody forgot to label. */}
-      <TsldMotif className="mx-auto hidden w-full max-w-sm md:block" />
-
-      {/* `hidden md:block`, like the motif, because the acceptance criterion says so (spec §2.1
-          US-1: "given a viewport < `md` … the tagline is not rendered") and because the measurement
-          says why. Below `md` this panel is a **band above the card**, and a band's job is to say
-          whose product this is — the tagline is a claim, and a claim costs vertical space on the
-          one screen where the reader came to do something. It shipped visible at every width until
-          the M6 browser sweep; nothing else could have caught it, since jsdom has no breakpoints. */}
-      <p className="text-muted-foreground hidden max-w-xs text-sm leading-relaxed md:block md:text-base">
-        {BRAND_TAGLINE}
-      </p>
+      <div className="relative flex flex-col items-center gap-3 text-center">
+        {/* Two shapes, one element. At `md` and up this is the old app's large centred lockup —
+            tile above wordmark, the panel's whole subject. Below `md` the panel is a slim band
+            above the card, and the same lockup measured **124px on a 640×360 landscape phone: 34%
+            of the screen given to decoration**, which `e2e-public` caught. The row form at
+            `text-lg` is 76px. Responsive utilities rather than two elements, because two copies
+            behind `hidden`/`md:hidden` both land in jsdom's accessibility tree and silently make
+            every `getByText` on a public screen ambiguous — see the lockup count above. */}
+        <BrandMark className="text-lg md:flex-col md:gap-3 md:text-4xl" />
+        {/* The motif keeps its place beneath the wordmark: the photograph says "construction", the
+            diagram says "and this is what we do with it". Below `md` the panel is a slim band, and
+            a five-bar diagram at that size is a smudge. */}
+        <TsldMotif className="mt-2 hidden w-full max-w-xs md:block" />
+        <p className="text-muted-foreground hidden max-w-xs text-sm leading-relaxed md:block">
+          {BRAND_TAGLINE}
+        </p>
+      </div>
     </Surface>
   );
 }

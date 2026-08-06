@@ -49,7 +49,7 @@ const FAMILY_TOKENS = [
   '-ring',
 ] as const;
 
-const FAMILIES = ['chrome', 'panel', 'brand'] as const;
+const FAMILIES = ['chrome', 'panel', 'brand', 'auth'] as const;
 
 /**
  * `brand` is the only family whose defining property is a **value** one: identical in Light, Dark
@@ -121,6 +121,11 @@ describe('@theme inline is load-bearing', () => {
       '--color-field-foreground',
       '--color-canvas',
       '--color-canvas-band',
+      // The public screens' ground (ADR-0077 M7). A gradient needs two stops and the 17-name
+      // vocabulary has no word for the second one, so — like `--canvas` — it is a global pair
+      // drawn BY the page rather than a name rebound within a scope.
+      '--color-ground',
+      '--color-ground-end',
     ]) {
       expect(theme.has(name), `${name} is missing from @theme inline`).toBe(true);
     }

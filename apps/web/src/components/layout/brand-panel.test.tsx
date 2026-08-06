@@ -50,10 +50,36 @@ describe('AuthShell with the panel', () => {
     expect(container.querySelectorAll('aside')).toHaveLength(1);
   });
 
-  it('keeps `min-h-dvh` on the main landmark', () => {
+  it('fills the viewport with the ground and floats the card on it', () => {
     // Not decoration: centring a tall card in a 360px-high landscape viewport is where content
-    // gets clipped, and the grid rewrite is exactly the kind of edit that drops it.
+    // gets clipped, and a layout rewrite is exactly the kind of edit that drops it.
+    //
+    // M7 moved which element carries this. The card became the `main` landmark and the viewport
+    // height moved out to the ground behind it — so the assertion follows the invariant rather
+    // than the element it used to sit on. `min-h-*`, never `h-*`: a card taller than a short
+    // landscape viewport must be able to push the ground past one screen and scroll, and a fixed
+    // ground height would clip it instead.
+    const { container } = render(<AuthShell title="Sign in">form</AuthShell>);
+
+    const main = screen.getByRole('main');
+    const ground = main.parentElement;
+    expect(ground).toBeInstanceOf(HTMLElement);
+    expect(ground?.className).toContain('min-h-dvh');
+    // Anchored on whitespace, not `\b`: a hyphen IS a word boundary, so `\bh-dvh\b` matches
+    // inside `min-h-dvh` and this assertion would fail against the correct code.
+    expect(ground?.className).not.toMatch(/(?:^|\s)h-dvh(?:\s|$)/);
+    expect(container.firstElementChild).toBe(ground);
+  });
+
+  it('fixes the card height only from `md` up', () => {
+    // The product owner's one keeper from the current design: the box does not resize as you move
+    // between screens. It is deliberately `md:`-only — a fixed height on a 320px phone clips the
+    // tallest state instead, which is the defect `e2e-public` was built to measure.
     render(<AuthShell title="Sign in">form</AuthShell>);
-    expect(screen.getByRole('main').className).toContain('min-h-dvh');
+
+    const card = screen.getByRole('main').className;
+    expect(card).toContain('md:h-[40rem]');
+    // No unprefixed height: that would take the phone with it.
+    expect(card).not.toMatch(/(?:^|\s)h-\[/);
   });
 });
