@@ -19,7 +19,7 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
   await admin.getByLabel('Full name').fill('Admin User');
   await admin.getByLabel('Email').fill(adminEmail);
   await admin.getByLabel('Password').fill('correct-horse-battery');
-  await admin.getByRole('button', { name: /create account/i }).click();
+  await admin.getByRole('button', { name: /create an account/i }).click();
 
   await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
   await admin.getByLabel('Organisation name').fill(orgName);
@@ -46,7 +46,7 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
   await invitee.getByLabel('Full name').fill('Invited Teammate');
   await invitee.getByLabel('Email').fill(inviteeEmail);
   await invitee.getByLabel('Password').fill('correct-horse-battery');
-  await invitee.getByRole('button', { name: /create account/i }).click();
+  await invitee.getByRole('button', { name: /create an account/i }).click();
   await expect(invitee.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
 
   await invitee.goto(acceptUrl);
