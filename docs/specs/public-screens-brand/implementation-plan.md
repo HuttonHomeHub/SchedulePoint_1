@@ -76,8 +76,21 @@ and every dependency claim this epic rests on is registered.
 - **Development steps:** move; update status; update the two artefacts' links; `CLAUDE.md` §16 + count;
   run the three checks.
 
-##### Task M0-T1 — `sign-in.test.tsx` and `accept-invite.test.tsx`
+##### Task M0-T1 — `sign-in.test.tsx` and `accept-invite.test.tsx` — ✅ **DONE 2026-08-06**
 
+- **Outcome:** both suites landed; 10 passing, **4 `it.fails`**. The four are rows 28/30/31/34, each
+  asserting only "this state offers at least one operable control", each named for the M1-T1 that
+  turns it green — `it.fails` rather than `todo` deliberately, because it goes **red** the moment
+  the defect is fixed, forcing the fix and its evidence into one commit. Row 29 (loading) is
+  exempted with its reason stated: it is transient, and a control on a screen about to be replaced
+  is worse than none. Row 28's positive test asserts only the explanation, not the absence of
+  controls, so M1-T1 does not have to edit a test that claims to describe correct behaviour.
+  **One departure from step 1:** `sign-in.test.tsx` does **not** re-assert the
+  `PASSWORD_RESET_ENABLED` link gating. `features/auth/password-reset.parity.test.tsx` already pins
+  it on both branches as the flag's rollback contract, and a second copy would drift from it rather
+  than reinforce it (the ADR-0062 duplication rule). What that suite does not cover, and this one
+  now does, is where a successful sign-in **goes**: `?redirect=` is the invitation hand-off
+  `AcceptInvitationCard` composes, and nothing asserted it.
 - **Description:** route-level suites for the two public routes that have none. `sign-in` has
   `SignInForm.test.tsx` and `SignInForm.verification.test.tsx`, but **nothing covers the route** —
   the `PASSWORD_RESET_ENABLED` link gating (`sign-in.tsx:22-31`), the `redirect` search param
