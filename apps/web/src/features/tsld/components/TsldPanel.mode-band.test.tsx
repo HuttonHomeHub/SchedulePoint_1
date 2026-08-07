@@ -260,6 +260,47 @@ describe('TsldPanel — canvas empty state (T9)', () => {
     expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
   });
+
+  /**
+   * **The handoff must not strand focus** (WCAG 2.4.3, the M6 gate finding). Yielding the notice to
+   * the armed tool (the test above) unmounts the very button the planner just pressed — and the mode
+   * band deliberately renders no focusable element for the `adding` statement. So focus reverted to
+   * `<body>` and the next Tab restarted from the top of the document, on a brand-new empty plan:
+   * the one screen the epic exists to make self-explanatory.
+   *
+   * The listbox is the destination because it is where drawing is next operated from, and it is the
+   * pattern already in the file (the Next-conflict cycle focuses it the same way).
+   */
+  it('hands focus to the diagram listbox rather than stranding it on the unmounted button', () => {
+    render(<Harness arm="select" activities={[]} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw the first activity' }));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(listbox);
+
+    // The disarm direction: Escape gives the notice back, and focus must still be somewhere the
+    // keyboard can carry on from — NOT pulled back to the restored button, which would be a focus
+    // move the planner did not ask for (Escape can be pressed from anywhere).
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+    expect(document.activeElement).toBe(listbox);
+  });
+
+  /**
+   * The other half of the same rule: a focus move with no user gesture behind it is its own defect.
+   * Arming the tool from anywhere else (the toolbar, a shortcut) must leave focus where the planner
+   * put it — only the notice button's own click owns the handoff.
+   */
+  it('does not steal focus when the tool is armed from somewhere else', () => {
+    render(<Harness arm="select" activities={[]} />);
+    const elsewhere = screen.getByRole('button', { name: 're-arm link' });
+    elsewhere.focus();
+
+    fireEvent.click(elsewhere); // arms `link` from outside the notice
+    expect(screen.getByTestId('canvas-mode-band')).toBeInTheDocument();
+    expect(document.activeElement).toBe(elsewhere);
+  });
 });
 
 /**

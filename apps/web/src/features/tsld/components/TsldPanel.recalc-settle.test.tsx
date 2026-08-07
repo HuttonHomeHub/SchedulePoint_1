@@ -1,6 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
-import { fireEvent, render, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 /**
  * **The coalesced recalculation used to settle in silence** (M5 T5.3).
@@ -104,8 +104,26 @@ interface PanelState {
   projectFinish: string | null;
 }
 
-function renderPanel(initial: PanelState) {
-  const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+type PanelProps = React.ComponentProps<typeof TsldPanel>;
+type RepositionMock = Mock<NonNullable<PanelProps['onReposition']>>;
+type ResizeMock = Mock<NonNullable<PanelProps['onResize']>>;
+
+function renderPanel(
+  initial: PanelState,
+  handlers: { onReposition?: RepositionMock; onResize?: ResizeMock } = {},
+) {
+  const onReposition: RepositionMock =
+    handlers.onReposition ??
+    vi.fn<NonNullable<PanelProps['onReposition']>>().mockResolvedValue({
+      applied: true,
+      conflict: null,
+    });
+  const onResize: ResizeMock =
+    handlers.onResize ??
+    vi.fn<NonNullable<PanelProps['onResize']>>().mockResolvedValue({
+      applied: true,
+      conflict: null,
+    });
   const view = (state: PanelState) => (
     <TsldPanel
       activities={state.activities}
@@ -114,6 +132,7 @@ function renderPanel(initial: PanelState) {
       canEdit
       onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
       onReposition={onReposition}
+      onResize={onResize}
       recalcPending={state.recalcPending}
       projectFinish={state.projectFinish}
     />
@@ -124,8 +143,17 @@ function renderPanel(initial: PanelState) {
   return {
     canvas,
     onReposition,
+    onResize,
+    container: utils.container,
     update: (state: PanelState) => utils.rerender(view(state)),
   };
+}
+
+/** Focus the parallel listbox (which default-selects the first activity) and return it. */
+function focusedListbox(): HTMLElement {
+  const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+  fireEvent.focus(listbox);
+  return listbox;
 }
 
 /** Drag the lane-0 bar's body to the right — the canonical reposition-in-time gesture. */
@@ -242,5 +270,104 @@ describe('TsldPanel — the recalculation settle', () => {
     expect(result).not.toBe(promise);
     expect(result).not.toBe(MANUAL_CONFIRMATION);
     expect(result).not.toContain('will update');
+  });
+});
+
+/**
+ * **The same edit, made from the keyboard** (the M6 gate finding, WCAG 4.1.3).
+ *
+ * The settle was noted only from the panel's pointer-gesture handler (`onIntent`), and the keyboard
+ * equivalents commit through their own coalescing hooks — so `Alt`+arrow and `Shift`+arrow reached
+ * the API without ever noting the edit. The announcer then returned early on every settle
+ * (`if (!baseline) return;`), and a keyboard user heard the promise ("…dates will update.") followed
+ * by permanent silence, while the identical mouse edit got both sentences.
+ *
+ * The note now happens at the ONE seam both routes share — the host's `onReposition`/`onResize`
+ * callbacks — rather than at three call sites kept in step by hand, which is why these assertions
+ * mirror the pointer ones above rather than describing a second mechanism.
+ */
+describe('TsldPanel — the settle speaks for keyboard edits too', () => {
+  const idle: PanelState = {
+    activities: [activity()],
+    recalcPending: false,
+    projectFinish: '2026-03-01',
+  };
+
+  it('states the new dates after an Alt+→ time nudge settles', async () => {
+    const { onReposition, update } = renderPanel(idle);
+    fireEvent.keyDown(focusedListbox(), { key: 'ArrowRight', altKey: true });
+    await waitFor(() =>
+      expect(onReposition).toHaveBeenCalledWith({ activityId: 'a1', startDay: 1 }),
+    );
+    announceSpy.mockClear(); // drop the pre-settle "dates will update" promise
+
+    update({ ...idle, recalcPending: true });
+    update({ ...idle, activities: [MOVED], recalcPending: false });
+
+    expect(announceSpy).toHaveBeenCalledExactlyOnceWith(
+      '“Excavate” now 08 Jan 2026 to 10 Jan 2026.',
+    );
+  });
+
+  it('states the new dates after a Shift+→ duration nudge settles', async () => {
+    const { onResize, update } = renderPanel(idle);
+    fireEvent.keyDown(focusedListbox(), { key: 'ArrowRight', shiftKey: true });
+    await waitFor(() =>
+      expect(onResize).toHaveBeenCalledWith({ activityId: 'a1', durationDays: 4 }),
+    );
+    announceSpy.mockClear();
+
+    update({ ...idle, recalcPending: true });
+    update({ activities: [MOVED], recalcPending: false, projectFinish: '2026-03-14' });
+
+    expect(announceSpy).toHaveBeenCalledExactlyOnceWith(
+      '“Excavate” now 08 Jan 2026 to 10 Jan 2026. Project finish moved to 14 Mar 2026.',
+    );
+  });
+
+  /**
+   * The keyboard half of the pointer suite's lane-only rule, and the reason the shared seam notes on
+   * the WRITE rather than on the keystroke: `Alt`+↓ sends `laneIndex` alone, which recalculates
+   * nothing. A note taken there would sit open until some unrelated recalculation settled, and then
+   * be narrated as this planner's doing.
+   */
+  it('does not claim an Alt+↓ lane nudge as the cause of the next recalculation', async () => {
+    const { onReposition, update } = renderPanel(idle);
+    fireEvent.keyDown(focusedListbox(), { key: 'ArrowDown', altKey: true });
+    await waitFor(() =>
+      expect(onReposition).toHaveBeenCalledExactlyOnceWith({ activityId: 'a1', laneIndex: 1 }),
+    );
+    announceSpy.mockClear();
+
+    update({ ...idle, recalcPending: true });
+    update({ activities: [MOVED], recalcPending: false, projectFinish: '2026-03-14' });
+
+    expect(announceSpy).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **The interim state, on the surface the keyboard user is actually on.** `aria-busy` for an
+   * in-flight write sat only on the canvas's outer container — a `div` with no role and no
+   * accessible name, structurally separate from the `role="listbox"` a keyboard planner is focused
+   * on and nudging from. So the pointer path had a busy cursor AND a busy state, and the keyboard
+   * path had neither: the write was simply invisible until it settled.
+   */
+  it('marks the listbox busy while a keyboard nudge’s write is in flight', async () => {
+    let settle: ((outcome: { applied: boolean; conflict: null }) => void) | undefined;
+    const onReposition = vi.fn<NonNullable<PanelProps['onReposition']>>().mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    renderPanel(idle, { onReposition });
+    const listbox = focusedListbox();
+    expect(listbox).not.toHaveAttribute('aria-busy');
+
+    fireEvent.keyDown(listbox, { key: 'ArrowRight', altKey: true });
+    await waitFor(() => expect(onReposition).toHaveBeenCalled());
+    await waitFor(() => expect(listbox).toHaveAttribute('aria-busy', 'true'));
+
+    settle?.({ applied: true, conflict: null });
+    await waitFor(() => expect(listbox).not.toHaveAttribute('aria-busy'));
   });
 });

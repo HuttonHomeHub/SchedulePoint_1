@@ -69,6 +69,33 @@ describe('usePlanAutoRecalc', () => {
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * **One settle, one owner** (the M6 gate finding). Pressing Recalculate *inside* the 500 ms
+   * debounce of a canvas edit put TWO owners on the same settle: this generic confirmation
+   * ("Schedule recalculated.") and the settle announcer's informative sentence naming the resulting
+   * dates. `useAnnounce` clears and re-sets one polite region on the next frame, so two utterances
+   * in a frame collapse to whichever lands last — dropping either the status word or the facts,
+   * non-deterministically. When an edit was waiting, the informative sentence wins and this one
+   * stands down; the recalculation itself still fires exactly once.
+   */
+  it('stands down its confirmation when a debounced edit was already waiting', () => {
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+    act(() => {
+      result.current.notify(); // an edit is now waiting inside the debounce window
+      result.current.flush(onSuccess); // …and the planner presses Recalculate
+    });
+    expect(
+      recalcMock.run,
+      'the debounce is cancelled — one recalculation, not two',
+    ).toHaveBeenCalledTimes(1);
+    act(() => recalcMock.run.mock.calls[0]![0]?.onSuccess?.());
+    expect(
+      onSuccess,
+      'the settle announcer owns this settle — a second owner would collapse the region',
+    ).not.toHaveBeenCalled();
+  });
+
   it('flush(onSuccess) does not confirm when the manual recalc fails', () => {
     const onSuccess = vi.fn();
     const { result } = renderHook(() =>

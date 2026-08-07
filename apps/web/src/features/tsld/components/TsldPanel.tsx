@@ -1135,12 +1135,53 @@ export function TsldPanel({
     onSelectionChange?.(selectedId);
   }, [selectedId, onSelectionChange]);
 
+  /**
+   * **The one place an edit is recorded for the settle announcement.**
+   *
+   * The settle announcer needs a note ("this planner edited that activity") to have something to
+   * compare the recalculated dates against; without one it returns early and says nothing. That note
+   * used to be taken inside the pointer-gesture handler (`onIntent`), which the keyboard nudges do
+   * not go through — they commit through their own coalescing hooks — so `Alt`+arrow and
+   * `Shift`+arrow wrote to the API and then settled in permanent silence, while the identical mouse
+   * edit got both sentences (WCAG 4.1.3).
+   *
+   * Both routes do share exactly one seam: the host's `onReposition` / `onResize` callbacks. Noting
+   * there covers every present and future caller by construction, rather than leaving three call
+   * sites to be kept in step — which is the failure mode this fix exists to remove, not to repeat.
+   *
+   * The lane-only rule is preserved and is now *derivable* rather than restated: a write that
+   * carries no `startDay` changed only layout, recalculates nothing, and must not leave an open note
+   * for some unrelated recalculation to consume and narrate as this planner's doing.
+   */
+  const { noteEdit } = recalcOutcome;
+  const notedReposition = useMemo(
+    () =>
+      onReposition
+        ? (input: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
+            if (input.startDay !== undefined) noteEdit(input.activityId);
+            return onReposition(input);
+          }
+        : undefined,
+    [onReposition, noteEdit],
+  );
+  // A resize always changes a duration, so it always recalculates — note it unconditionally.
+  const notedResize = useMemo(
+    () =>
+      onResize
+        ? (input: TsldResizeInput): Promise<TsldResizeOutcome> => {
+            noteEdit(input.activityId);
+            return onResize(input);
+          }
+        : undefined,
+    [onResize, noteEdit],
+  );
+
   // Coalesced keyboard nudge (M5 5.2) — a held Alt+arrow becomes one net write per burst, read at
   // the live version, serialized, flushed on unmount, and race-free vs. an in-flight pointer drag.
   // The full state machine + its correctness reasoning live in the hook (unit-tested there).
   const pointerRepositionBusyRef = useRef(false);
   const nudge = useCoalescedNudge({
-    onReposition,
+    onReposition: notedReposition,
     activities,
     dataDate,
     setGhost: setPendingReposition,
@@ -1153,7 +1194,7 @@ export function TsldPanel({
   // the finish-edge resize drag, sharing the pointer-busy gate + ghost + banner seams with the
   // reposition nudge above. Inert unless the direct-manipulation flag armed the keyboard branch.
   const durationNudge = useCoalescedDurationNudge({
-    onResize,
+    onResize: notedResize,
     activities,
     dataDate,
     setGhost: setPendingReposition,
@@ -1513,7 +1554,7 @@ export function TsldPanel({
     }
     if (intent.kind === 'reposition') {
       const activity = activities.find((a) => a.id === intent.activityId);
-      if (!activity || !onReposition) return;
+      if (!activity || !notedReposition) return;
       clearConflict();
       // Snap to grid (canvas nav, `docs/specs/canvas-nav/`, Visual mode): round the dropped day to the
       // nearest working day BEFORE the PATCH — only in Visual mode (`barDateSource === 'visual'`), only
@@ -1540,13 +1581,12 @@ export function TsldPanel({
       const startDay = snappedStartDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
-      // Note the edit for the settle announcement, but only when the DAY changed: a pure lane move
-      // is layout-only and triggers no recalculation, so a note taken here would sit open until some
-      // unrelated recalculation settled and then be narrated as this planner's doing.
-      if (snappedStartDay !== undefined) recalcOutcome.noteEdit(intent.activityId);
+      // The settle note is taken at the shared write seam (`notedReposition`), not here: this
+      // handler is the pointer route only, and the keyboard nudges — which commit through the same
+      // callback — were silently missing it.
       // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
       pointerRepositionBusyRef.current = true;
-      void onReposition({
+      void notedReposition({
         activityId: intent.activityId,
         ...(snappedStartDay !== undefined ? { startDay: snappedStartDay } : {}),
         ...(intent.laneIndex !== undefined ? { laneIndex: intent.laneIndex } : {}),
@@ -1599,7 +1639,7 @@ export function TsldPanel({
       // pins the finish (the ghost's left edge tracks the new start; the route maps it mode-aware,
       // ADR-0052 §3). The route owns the PATCH + recalc; a stale-version refusal banners.
       const activity = activities.find((a) => a.id === intent.activityId);
-      if (!activity || !onResize) return;
+      if (!activity || !notedResize) return;
       clearConflict();
       const startDay =
         intent.edge === 'start'
@@ -1622,11 +1662,11 @@ export function TsldPanel({
         endDay: drawnEndDay,
         laneIndex: activity.laneIndex,
       });
-      // A resize always changes a duration, so it always recalculates — note it unconditionally.
-      recalcOutcome.noteEdit(intent.activityId);
+      // The settle note rides the shared write seam (`notedResize`), which the `Shift+←/→` nudge
+      // commits through as well — see the seam's docblock.
       // Share the pointer-busy gate with reposition so a keyboard nudge can't race this write.
       pointerRepositionBusyRef.current = true;
-      void onResize({
+      void notedResize({
         activityId: intent.activityId,
         durationDays: days,
         ...(intent.edge === 'start' ? { startDay: placement.startDay } : {}),
@@ -1894,6 +1934,19 @@ export function TsldPanel({
                 event.preventDefault();
                 return;
               }
+              // Arming REPLACES this notice with the mode band's instruction (above), which
+              // unmounts the button being pressed — and the band deliberately carries no focusable
+              // element for the `adding` statement. Without a destination, focus reverts to
+              // <body> and the next Tab restarts at the top of the document (WCAG 2.4.3), on the
+              // one screen this notice exists to make self-explanatory. So the transition carries
+              // focus to the diagram's parallel listbox, which is both where drawing is operated
+              // from next and the existing pattern for a programmatic move here (the
+              // Next-conflict cycle above). Done HERE, in the button's own click handler, rather
+              // than in an effect keyed on `mode`: a mode change arriving from the toolbar or a
+              // shortcut is not this planner asking to be moved, and a focus move with no gesture
+              // behind it is its own defect. The disarm direction needs nothing — focus is on the
+              // listbox by then, so restoring the notice strands no one.
+              listboxRef.current?.focus();
               setMode('add-activity');
             }}
             className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
@@ -2020,6 +2073,14 @@ export function TsldPanel({
               role="listbox"
               aria-label="Activities in the diagram"
               tabIndex={0}
+              // The in-flight write, stated on the widget the keyboard planner is actually on. The
+              // canvas container carries the same attribute for the pointer path (kept — it is what
+              // the busy cursor sits on), but that node has no role and no accessible name and is
+              // structurally elsewhere from this listbox, so a nudge committed from here was
+              // invisible until it settled. Same source of truth as the canvas's `writeBusy`, so
+              // the two can never disagree; `undefined` rather than `false` keeps the attribute
+              // absent while idle (the existing `[aria-busy="true"]` assertions).
+              aria-busy={pendingReposition !== null || undefined}
               className="sr-only"
               {...(CANVAS_DATA_DATE_ENABLED
                 ? { 'aria-describedby': `${listboxId}-data-date` }
