@@ -51,6 +51,7 @@ import {
   type LagRun,
   type Point,
   type Rect,
+  type RectCache,
   type RenderActivity,
   type RenderEdge,
   type Size,
@@ -90,6 +91,34 @@ export function edgeFanOutFor(
     edgeFanOuts.set(edges, offsets);
   }
   return offsets;
+}
+
+/**
+ * Id→activity index memoised on the activities ARRAY identity, the {@link edgeFanOuts} pattern
+ * one field over: `scene.activities` carries the same reference-stability contract as
+ * `scene.edges` (the scene is only rebuilt on a data / selection / hover-id change), and
+ * `TsldCanvas`'s own `activityIndexRef` already relies on it. Rebuilding the Map inside
+ * `paintScene` cost one O(n) allocation per dirty frame — continuously, during pan/zoom/drag.
+ */
+const activityIndexes = new WeakMap<
+  readonly RenderActivity[],
+  ReadonlyMap<string, RenderActivity>
+>();
+
+/**
+ * The memoised id→activity index the painter reads: the SAME array instance returns the SAME
+ * (identical) map; a new array instance recomputes. Exported so the memo identity is
+ * unit-testable — the painter is its only production caller.
+ */
+export function activityIndexFor(
+  activities: readonly RenderActivity[],
+): ReadonlyMap<string, RenderActivity> {
+  let index = activityIndexes.get(activities);
+  if (!index) {
+    index = new Map(activities.map((a) => [a.id, a]));
+    activityIndexes.set(activities, index);
+  }
+  return index;
 }
 
 /** Below this px-per-day the per-day gridlines would merge into a solid block, so they're culled. */
@@ -892,8 +921,17 @@ export function paintScene(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
-  const byId = new Map(scene.activities.map((a) => [a.id, a]));
-  const visibleIds = new Set(cull(scene.activities, view, size, scene.dataDate));
+  const byId = activityIndexFor(scene.activities);
+  // Per-frame geometry cache (Finding B of docs/specs/canvas-paint-loop-fixes/plan.md).
+  // Deliberately a fresh Map per paintScene call, NEVER hoisted to module/WeakMap scope like
+  // `edgeFanOuts`: a rect depends on `view` and `scene.dataDate`, which change every frame on
+  // the exact pan/zoom/drag path this cache exists for — an identity-keyed cross-frame cache
+  // would serve stale geometry mid-pan. `view`/`dataDate` are fixed for one call's lifetime,
+  // so id-keyed-per-call is exactly right.
+  const rectCache: RectCache = new Map();
+  const visibleIds = new Set(
+    cull(scene.activities, view, size, scene.dataDate, undefined, rectCache),
+  );
   const toggles = scene.view ?? DEFAULT_VIEW_TOGGLES;
   const firstDay = Math.floor((0 - view.originX) / view.pxPerDay);
   const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay);
@@ -1042,6 +1080,7 @@ export function paintScene(
             scene.activities.filter((a) => visibleIds.has(a.id)),
             view,
             scene.dataDate,
+            rectCache,
           )
         : null;
     const highlightIds = refresh ? linkHighlightIds(scene.selectedId, scene.hoverId) : null;
@@ -1058,13 +1097,33 @@ export function paintScene(
       pred: RenderActivity,
       succ: RenderActivity,
     ): Point[] | null => {
-      if (!workingWalk) return dependencyPolyline(pred, succ, edge.type, view, scene.dataDate);
+      if (!workingWalk) {
+        return dependencyPolyline(pred, succ, edge.type, view, scene.dataDate, rectCache);
+      }
       const walk = edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk;
       const lag = edge.lagDays ?? 0;
       if (!fanOut) {
-        return dependencyPolylineTimeTrue(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+        return dependencyPolylineTimeTrue(
+          pred,
+          succ,
+          edge.type,
+          lag,
+          view,
+          scene.dataDate,
+          walk,
+          rectCache,
+        );
       }
-      const anchors = lagAnchorPoints(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+      const anchors = lagAnchorPoints(
+        pred,
+        succ,
+        edge.type,
+        lag,
+        view,
+        scene.dataDate,
+        walk,
+        rectCache,
+      );
       if (!anchors) return null;
       const off = fanOut.get(edge);
       if (lagRuns && lag !== 0) {
@@ -1074,7 +1133,16 @@ export function paintScene(
         // (the ±FAN_OUT_MAX_PX spread is well inside the zone's ±BAR_HEIGHT/2 y tolerance).
         const walkedSucc = edge.type === 'FS' || edge.type === 'FF';
         const dy = (walkedSucc ? off?.succ : off?.pred) ?? 0;
-        const run = lagRunSegment(pred, succ, edge.type, lag, view, scene.dataDate, walk);
+        const run = lagRunSegment(
+          pred,
+          succ,
+          edge.type,
+          lag,
+          view,
+          scene.dataDate,
+          walk,
+          rectCache,
+        );
         if (run) {
           lagRuns.push(
             dy === 0
@@ -1256,15 +1324,16 @@ export function paintScene(
     ctx.setLineDash([]);
   }
 
-  // Each visible activity's screen rect is computed once here and reused by the bar, label, and
-  // selection layers below, rather than recomputed per layer — each recompute re-parses the
-  // activity's ISO dates (two Date.parse calls), so a shared map keeps the per-frame draw within
-  // the ADR-0026 budget. Insertion follows `visibleIds`, so bar draw order (z-order) is unchanged.
+  // Each visible activity's screen rect is read from the frame's rectCache (populated above by
+  // cull, the lane index and the edge pass) and reused by the bar, label, and selection layers
+  // below — each recompute re-parses the activity's ISO dates (two Date.parse calls), so the
+  // shared cache keeps the per-frame draw within the ADR-0026 budget. Insertion follows
+  // `visibleIds`, so bar draw order (z-order) is unchanged.
   const rects = new Map<string, Rect>();
   for (const id of visibleIds) {
     const activity = byId.get(id);
     if (!activity) continue;
-    const rect = activityRect(activity, view, scene.dataDate);
+    const rect = activityRect(activity, view, scene.dataDate, rectCache);
     if (rect) rects.set(id, rect);
   }
 
