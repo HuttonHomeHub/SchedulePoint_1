@@ -5,7 +5,11 @@
 - **Date:** 2026-08-07
 - **Tracking issue / epic:** _(to be opened)_
 - **Roadmap link:** TSLD canvas capability — planner throughput
-- **Related ADR(s):** draft **ADR-0078** (outline in §4.10); builds on ADR-0021, ADR-0022,
+- **Related ADR(s):** draft ADR — **number assigned at filing time from the register, not
+  reserved here** (outline in §4.10). This document originally reserved `ADR-0078`; that number was
+  taken by canvas module boundaries, and `0079` by search navigation, while this spec awaited
+  approval. Reserving a number in a plan is how ADR-0071 went unfiled and how ADR-0079 was filed
+  under the wrong one. Builds on ADR-0021, ADR-0022,
   ADR-0026, ADR-0028, ADR-0031, ADR-0032, ADR-0033, ADR-0038, ADR-0048, ADR-0052, ADR-0053,
   ADR-0054, ADR-0055, ADR-0056, ADR-0063, ADR-0064, ADR-0065, ADR-0072, ADR-0073
 
@@ -838,7 +842,9 @@ baseline (16.7–23.1 ms p95, ADR-0065), not against ADR-0026 §16's ≤ 4 ms, w
 #75 has reopened. This epic's obligation is "no worse", and it says so rather than implying it fixes
 a budget it does not touch.
 
-### 4.10 Draft ADR outline — **ADR-0078: Canvas multi-select, and what a plural selection means**
+### 4.10 Draft ADR outline — **Canvas multi-select, and what a plural selection means**
+
+> The number is assigned when the ADR is filed, from `docs/adr/README.md`. See the header note.
 
 _(Next free number verified: `docs/adr/` runs to 0077.)_
 

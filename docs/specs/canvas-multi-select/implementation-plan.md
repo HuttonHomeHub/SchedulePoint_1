@@ -5,7 +5,8 @@
 - **Owner:** _(to be assigned)_
 - **Flag:** `VITE_CANVAS_MULTI_SELECT` (`flagDefaultOff`, `AND`-ed with
   `CANVAS_DIRECT_MANIPULATION_ENABLED`)
-- **Draft ADR:** ADR-0078 (outline in the spec §4.10)
+- **Draft ADR:** number assigned at filing time from the register (outline in the spec §4.10) —
+  the reserved `ADR-0078` was taken while this plan awaited approval; see the spec header
 
 ## Breakdown
 
@@ -517,7 +518,8 @@ web:multi-select` must be run locally before pushing** (`CLAUDE.md` §19.7 — o
 
 ##### Task M5-T4 — Documentation, ADR, flip
 
-- **Description:** write **ADR-0078** from the spec §4.10 outline (Accepted); update `CLAUDE.md` §16
+- **Description:** write the epic's ADR from the spec §4.10 outline (Accepted), **taking its number
+  from `docs/adr/README.md` at the moment of filing**; update `CLAUDE.md` §16
   and the stage banner (`pnpm check:counts` re-derives it — ADR-0076); `docs/API.md`;
   `docs/UX_STANDARDS.md` (the selection + bulk-action pattern); `docs/TESTING.md`;
   `docs/DECISIONS.md` (the `Space` rebinding); the flag docblock's move from `flagDefaultOff` to
@@ -548,7 +550,7 @@ added in the same PRs as the features they pin — `vi.mock` of `@/config/env` w
 
 **Deliberately not in this epic:** debt rows **#28** (ring/stroke colour treatment), **#31** (the
 floating bar covers the lane above — it becomes _more_ valuable once a plural selection exists, and
-is noted as a follow-up in ADR-0078), **#48**, **#51** (`classifyHit` iterating all activities per
+is noted as a follow-up in this epic's ADR), **#48**, **#51** (`classifyHit` iterating all activities per
 pointer-move — the marquee predicate runs over the culled set once per release, so it does not widen
 this), **#56** (the pure gesture helpers living in `TsldCanvas.tsx` — the new marquee helpers go in
 `render/` from the start rather than joining the pile, which is the smallest honest thing to do
@@ -571,7 +573,7 @@ Docker build, CI, changelog, version impact — with the pre-push gate **run, no
 | The `Space` rebinding annoys existing keyboard users (**CQ-1**)                          | med        | low    | Shortcuts help, a one-time announcement, and a flag-off rollback that restores it exactly                                         |
 | Ctrl/Cmd+drag is undiscoverable                                                          | high       | low    | It is the _second_ route; the discoverable one is the toolbar tool mode, which does the same thing                                |
 | The painter grows cost inside an already-overspent budget (#75)                          | med        | med    | Counting-stub gate at M2-T5 + one browser-measured run at M5-T3, reported against the ADR-0065 baseline, not the stale §16 figure |
-| A bulk EARLY-mode move silently pins N SNET constraints                                  | high       | high   | Stated in the bar **before** the drag; named in ADR-0078's consequences; asserted by a copy test                                  |
+| A bulk EARLY-mode move silently pins N SNET constraints                                  | high       | high   | Stated in the bar **before** the drag; named in the epic ADR's consequences; asserted by a copy test                              |
 | An undo of a bulk delete loses incident links (**CQ-4**)                                 | high       | med    | Either the confirm copy says so plainly, or M1-T7 ships the id-stable batch restore. The answer changes the copy, so it is a CQ   |
 | A chain is created in the wrong direction (the ADR-0064 report)                          | med        | high   | The order is previewed with names and arrows, with Reverse, before any write; the journey asserts the stored direction            |
 | Two intersection implementations drift (span vs marquee)                                 | low        | med    | One exported `idsIntersecting`, pinned by a structural test                                                                       |
