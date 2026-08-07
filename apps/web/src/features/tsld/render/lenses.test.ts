@@ -15,6 +15,7 @@ import {
   NEUTRAL_COLOUR_KEY,
   overAllocatedIds,
   WBS_LEGEND_CAP,
+  wbsGroupLabelById,
   type ColourableActivity,
   type FilterAttr,
   type LegendActivity,
@@ -477,6 +478,43 @@ describe('buildColourLegend', () => {
       PALETTE,
     );
     expect(legend.bands.some((b) => b.label === 'Ungrouped')).toBe(true);
+  });
+});
+
+describe('wbsGroupLabelById', () => {
+  it('labels a group by its code, falling back to its name', () => {
+    const labels = wbsGroupLabelById([
+      legendActivity({ id: 'p1', code: 'A200', name: 'Substructure' }),
+      legendActivity({ id: 'p2', code: null, name: 'Fit-out' }),
+    ]);
+    expect(labels.get('p1')).toBe('A200');
+    expect(labels.get('p2')).toBe('Fit-out');
+  });
+
+  it('has no entry for a parent that is not in the plan — the orphan rule, by construction', () => {
+    const labels = wbsGroupLabelById([legendActivity({ id: 'c', parentId: 'gone' })]);
+    expect(labels.has('gone')).toBe(false);
+  });
+
+  it('is the SAME producer the legend labels its bands with (they cannot drift)', () => {
+    // Not "two similar strings": the legend's band label must be exactly this map's value.
+    const parents = Array.from({ length: 2 }, (_, i) =>
+      legendActivity({ id: `p${i}`, code: `SUM${i}`, name: `Summary ${i}` }),
+    );
+    const children = parents.map((p, i) => legendActivity({ id: `c${i}`, parentId: p.id }));
+    const activities = [...parents, ...children];
+    const labels = wbsGroupLabelById(activities);
+    const legend = buildColourLegend(activities, 'wbs', PALETTE);
+    const groupBands = legend.bands.filter((b) => b.label !== 'Ungrouped');
+    expect(groupBands.map((b) => b.label)).toEqual(parents.map((p) => labels.get(p.id)));
+  });
+
+  it('labels a group the legend collapsed into “+N more” just the same — speech has no cap', () => {
+    const parents = Array.from({ length: WBS_LEGEND_CAP + 3 }, (_, i) =>
+      legendActivity({ id: `p${i}`, code: `SUM${i}`, name: `Summary ${i}` }),
+    );
+    const labels = wbsGroupLabelById(parents);
+    expect(labels.get(`p${WBS_LEGEND_CAP + 2}`)).toBe(`SUM${WBS_LEGEND_CAP + 2}`);
   });
 });
 

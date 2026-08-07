@@ -436,6 +436,30 @@ export interface LegendActivity extends ColourableActivity {
   code: string | null;
 }
 
+/** The minimal shape {@link wbsGroupLabelById} needs — an id and something to call it by. */
+export interface WbsLabellable {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+/**
+ * The **one** producer of a WBS group's display label: `id → code ?? name`, over the activities the
+ * plan actually holds. Both the on-canvas Colour-by legend and the parallel listbox's spoken
+ * `(group: …)` clause read it, so the label a sighted planner sees in the key and the one a
+ * screen-reader user hears on the row cannot drift apart (WCAG 1.4.1 — the lens's text equivalent).
+ *
+ * Keyed by **every present activity**, not only the ones that are parents, which is what makes the
+ * orphan rule fall out rather than being restated: a `parentId` naming a row that is not in the plan
+ * simply misses, and the caller treats a miss as ungrouped — the same resolution
+ * `features/wbs/model/wbs-groups.ts` and the Gantt row model already agree on.
+ */
+export function wbsGroupLabelById(
+  activities: readonly WbsLabellable[],
+): ReadonlyMap<string, string> {
+  return new Map(activities.map((a) => [a.id, a.code ?? a.name]));
+}
+
 /**
  * Build the Colour-by legend bands for a mode, so the on-canvas Legend spells out every band in **text**
  * (WCAG 1.4.1 — colour is never the sole carrier). **Criticality** returns no bands (the Legend keeps
@@ -469,7 +493,7 @@ export function buildColourLegend(
   // The cap never exceeds the palette's distinct-swatch count, so no two shown bands share a colour.
   const cap = legendGroupCap(palette);
   const wbsIndexOf = buildWbsIndex(activities);
-  const nameById = new Map(activities.map((a) => [a.id, a.code ?? a.name]));
+  const nameById = wbsGroupLabelById(activities);
   const groups = [...wbsIndexOf.entries()].sort((a, b) => a[1] - b[1]);
   const bands: LegendBand[] = [];
   const shown = groups.slice(0, cap);

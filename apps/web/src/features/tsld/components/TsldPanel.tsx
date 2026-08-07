@@ -23,10 +23,13 @@ import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
   announceChainStep,
+  baselineGhostClause,
   chainNeighbour,
+  composeListboxRowText,
   describeActivity,
   lagPhrase,
   summarizeLogic,
+  wbsGroupClause,
 } from '../render/a11y';
 import {
   buildBaselineGhosts,
@@ -35,6 +38,7 @@ import {
   isFilterActive,
   matchesActivityFilter,
   overAllocatedIds,
+  wbsGroupLabelById,
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
@@ -806,6 +810,30 @@ export function TsldPanel({
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
   }, [baselineOverlay, varianceRows, activities]);
+  // The spoken twin of the ghost layer above (WCAG 1.4.1). Built by walking `baselineGhosts` itself
+  // rather than re-filtering the variance rows, so "which rows have a ghost" is answered ONCE: a bar
+  // drawn a ghost always says so, and one that isn't never does. Absent ⇒ no clause on any row.
+  const baselineClauseById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (!baselineGhosts || !varianceRows) return undefined;
+    const rowById = new Map(varianceRows.map((row) => [row.activityId, row]));
+    const clauses = new Map<string, string>();
+    for (const ghost of baselineGhosts) {
+      const row = rowById.get(ghost.id);
+      // The Late overlay repaints the live bars at their late dates, so the comparison the ghost
+      // shows is baseline-vs-late — the qualification the legend already makes in text.
+      if (row)
+        clauses.set(ghost.id, baselineGhostClause(row, { lateView: barDateSource === 'late' }));
+    }
+    return clauses.size > 0 ? clauses : undefined;
+  }, [baselineGhosts, varianceRows, barDateSource]);
+  // The spoken twin of the Colour-by-WBS fills (WCAG 1.4.1 — the a11y audit's one blocker: membership
+  // was carried by hue alone). Only while WBS is the ACTIVE colour mode: the clause describes what is
+  // drawn, so on any other mode there is nothing to describe and the row text is byte-for-byte today's.
+  const wbsGroupClauseById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (!CANVAS_LENSES_ENABLED || colourMode !== 'wbs') return undefined;
+    const labelById = wbsGroupLabelById(activities);
+    return new Map(activities.map((a) => [a.id, wbsGroupClause(a, labelById)]));
+  }, [colourMode, activities]);
   // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ──────────
   // The ids of the engine-flagged over-allocated activities (`levelingWindowExceeded ||
   // selfOverAllocated`, ADR-0041) — marked on the canvas with a badge + in the parallel listbox, and
@@ -824,6 +852,51 @@ export function TsldPanel({
     () => (flaggedIds ? [...flaggedIds].sort().join(',') : ''),
     [flaggedIds],
   );
+  // ── The parallel listbox's row text — ONE composition, two consumers ─────────────────────────
+  // The rendered `<li>` and the sentence `select()` announces both read this map. They used to be
+  // composed separately, and had drifted: selection spoke the Tier-1 line alone while the row it
+  // named also carried its dim reasons and its over-allocation mark.
+  //
+  // Memoised over the whole plan rather than composed per row on every render: the inputs are the
+  // precomputed lens maps, so this recomputes when a lens changes and not when (say) the workspace's
+  // resizer drags.
+  const rowTextById = useMemo(() => {
+    const text = new Map<string, string>();
+    for (const a of activities) {
+      // The canvas dimming, mirrored so it isn't conveyed by colour/emphasis alone (WCAG 1.4.1).
+      // Isolate (canvas nav) and the insight-lens filter each carry their own wording, and a row
+      // dimmed by more than one names EVERY cause — a single-cause suffix would hide the others.
+      //
+      // A REASONS ARRAY rather than nested ternaries: with two causes that was four branches and
+      // readable; a third makes it eight, and one of the eight ends up wrong with nobody noticing.
+      // The order below is the reading order, fixed.
+      const dimReasons = [
+        filterDimmedIds?.has(a.id) === true ? 'filtered out' : '',
+        isolateDimmed?.has(a.id) === true ? 'off the logic path' : '',
+        floatPathDimmed?.has(a.id) === true ? 'off the float path' : '',
+      ].filter(Boolean);
+      text.set(
+        a.id,
+        composeListboxRowText({
+          description: optionDescriptions.get(a.id) ?? '',
+          dimReasons,
+          overAllocated: flaggedIds?.has(a.id) ?? false,
+          baseline: baselineClauseById?.get(a.id),
+          wbsGroup: wbsGroupClauseById?.get(a.id),
+        }),
+      );
+    }
+    return text;
+  }, [
+    activities,
+    optionDescriptions,
+    filterDimmedIds,
+    isolateDimmed,
+    floatPathDimmed,
+    flaggedIds,
+    baselineClauseById,
+    wbsGroupClauseById,
+  ]);
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
   // filter clears (active → inactive), announce a neutral empty message so the polite live region drops
@@ -1006,10 +1079,10 @@ export function TsldPanel({
   const select = (id: string | null): void => {
     setSelectedId(id);
     if (id) {
-      // Reuse the memoised Tier-1 line (it already carries the lane-overlap clause) rather than
-      // recomputing describeActivity here, so the spoken line matches the listbox exactly.
-      const description = optionDescriptions.get(id);
-      if (description) announce(description);
+      // The row's OWN text, not a rebuild of part of it — so what is spoken and what is on screen
+      // are the same string by construction, including the lens marks (WCAG 1.4.1 / 4.1.3).
+      const rowText = rowTextById.get(id);
+      if (rowText) announce(rowText);
     }
   };
 
@@ -1933,41 +2006,22 @@ export function TsldPanel({
                 if (!selectedId && activities[0]) select(activities[0].id);
               }}
             >
-              {activities.map((a) => {
-                // Mirror the canvas dimming in the parallel listbox so it isn't conveyed by
-                // colour/emphasis alone (WCAG 1.4.1). Isolate (canvas nav) and the insight-lens filter
-                // (`docs/specs/canvas-lenses/`) each carry their own wording; a marked option stays fully
-                // selectable/navigable (dim-not-hide) — so NO `aria-disabled`, which would wrongly signal
-                // an inoperable option (a11y review). When a row is dimmed by BOTH, name both causes (a
-                // single-cause suffix would hide the other), rather than letting isolate silently win.
+              {activities.map((a) => (
+                // Every canvas mark this row mirrors — the dim reasons, the over-allocation flag, the
+                // WBS group and the baseline ghost — is composed in `rowTextById`, which `select()`
+                // also announces, so the two can never again say different things (WCAG 1.4.1).
                 //
-                // Built as a REASONS ARRAY rather than nested ternaries. With two causes that was
-                // four branches and readable; a third makes it eight, and one of the eight ends up
-                // wrong with nobody noticing. The order below is the reading order, fixed.
-                const reasons = [
-                  filterDimmedIds?.has(a.id) === true ? 'filtered out' : '',
-                  isolateDimmed?.has(a.id) === true ? 'off the logic path' : '',
-                  floatPathDimmed?.has(a.id) === true ? 'off the float path' : '',
-                ].filter(Boolean);
-                const marker = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
-                // Over-allocation (Stage E M2) is an ADDITIVE highlight, not a dim — so it marks the
-                // option independently of the dim marker above (a bar can be over-allocated AND dimmed),
-                // mirroring the canvas badge that draws over the dim (WCAG 1.4.1 — the flag isn't
-                // colour/emphasis-only). Absent `flaggedIds` ⇒ empty ⇒ byte-for-byte today's option text.
-                const overAllocated = flaggedIds?.has(a.id) ?? false;
-                return (
-                  <li
-                    key={a.id}
-                    id={optionId(a.id)}
-                    role="option"
-                    aria-selected={a.id === selectedId}
-                  >
-                    {optionDescriptions.get(a.id)}
-                    {marker}
-                    {overAllocated ? ' (over-allocated)' : ''}
-                  </li>
-                );
-              })}
+                // A marked row stays fully selectable/navigable (dim-not-hide) — so NO `aria-disabled`,
+                // which would wrongly signal an inoperable option (a11y review).
+                <li
+                  key={a.id}
+                  id={optionId(a.id)}
+                  role="option"
+                  aria-selected={a.id === selectedId}
+                >
+                  {rowTextById.get(a.id)}
+                </li>
+              ))}
             </ul>
           </>
         ) : (

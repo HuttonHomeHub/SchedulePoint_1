@@ -1,7 +1,8 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
+import { formatFinishVariance } from '@/lib/schedule-format';
 
 /**
  * Pure text builders for the TSLD's parallel accessible representation (ADR-0026 D7, M5). Kept out
@@ -94,6 +95,99 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
       ? `, drift ${days(a.visualDriftDays)} later than its earliest start`
       : '';
   return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}${driftPart}${overlapPart}`;
+}
+
+// ── Lens marks: the listbox row's text equivalents for what the canvas is currently drawing ──────
+//
+// These are deliberately NOT part of `describeActivity`. That function speaks properties of the
+// *activity* (duration, dates, lane, float, constraint, drift); a colour lens's group and a baseline
+// overlay's ghost are properties of **what is on screen right now**, which is why the pre-existing
+// marks (`filtered out`, `off the logic path`, `over-allocated`) are already composed at the row and
+// not here. It also protects the memo: `optionDescriptions` is keyed on the activities alone
+// precisely because re-running `describeActivity` per render measured ~1.3 s at 2,000 activities, and
+// threading lens state into it would rebuild every row on every lens change for no benefit.
+
+/**
+ * The spoken equivalent of the **Colour by WBS group** lens (WCAG 1.4.1 — the lens conveys membership
+ * by fill alone). `(group: {label})` when the activity is filed under a group the plan holds;
+ * `(ungrouped)` when it is top-level; **nothing** for a summary, which *is* a group rather than an
+ * activity missing one.
+ *
+ * An activity whose `parentId` names a row that is not present is an orphan and reads as ungrouped —
+ * the same resolution `features/wbs/model/wbs-groups.ts` and the Gantt row model use, applied here by
+ * a plain lookup miss in {@link wbsGroupLabelById}'s map rather than by a second rule.
+ */
+export function wbsGroupClause(
+  activity: Pick<ActivitySummary, 'parentId' | 'type'>,
+  labelById: ReadonlyMap<string, string>,
+): string {
+  const label = activity.parentId === null ? undefined : labelById.get(activity.parentId);
+  if (label !== undefined) return ` (group: ${label})`;
+  return activity.type === 'WBS_SUMMARY' ? '' : ' (ungrouped)';
+}
+
+/**
+ * The spoken equivalent of a **baseline ghost bar** (WCAG 1.4.1 — the ghost is an outline and nothing
+ * else): the captured span, plus the finish variance in working days. The direction word comes from
+ * the variance table's own {@link formatFinishVariance}, so "behind"/"ahead" cannot come to mean the
+ * opposite here from what the table shows; only the phrasing is speech-shaped (`5 working days
+ * behind` rather than the table's `5 d behind`).
+ *
+ * Deliberately the finish variance **only**, not every variance column — a row read on every arrow
+ * keystroke has to stay short enough to listen to.
+ *
+ * Returns `''` where there is no ghost to describe, which is the same test `buildBaselineGhosts`
+ * applies: absence is not narrated. When the Late overlay is also on the live bars follow the late
+ * dates, so the clause qualifies the comparison exactly as the legend does (`TsldLegend`).
+ */
+export function baselineGhostClause(
+  row: BaselineVarianceRow,
+  opts?: { lateView?: boolean },
+): string {
+  if (row.removed || row.baselineStart === null || row.baselineFinish === null) return '';
+  const span =
+    row.baselineFinish !== row.baselineStart
+      ? `${formatCalendarDate(row.baselineStart)} to ${formatCalendarDate(row.baselineFinish)}`
+      : formatCalendarDate(row.baselineStart);
+  const view = opts?.lateView === true ? ' vs the late view' : '';
+  const { tone } = formatFinishVariance(row);
+  const days = row.finishVarianceDays;
+  const variance =
+    tone === 'onTrack'
+      ? ', finish on baseline'
+      : (tone === 'behind' || tone === 'ahead') && days !== null
+        ? `, finish ${Math.abs(days)} working ${Math.abs(days) === 1 ? 'day' : 'days'} ${tone}`
+        : '';
+  return ` (baseline ${span}${view}${variance})`;
+}
+
+/** The parts of one parallel-listbox row, in the order they are spoken. */
+export interface ListboxRowParts {
+  /** The memoised Tier-1 sentence ({@link describeActivity}). */
+  description: string;
+  /** Why the bar is dimmed — filter, isolate, float path. Reading order, fixed by the caller. */
+  dimReasons?: readonly string[];
+  overAllocated?: boolean;
+  /** {@link baselineGhostClause} for this row, when the overlay draws it a ghost. */
+  baseline?: string | undefined;
+  /** {@link wbsGroupClause} for this row, when the WBS colour lens is the active mode. */
+  wbsGroup?: string | undefined;
+}
+
+/**
+ * Compose one listbox row's text. The **only** producer of it: both the rendered `<li>` and the
+ * sentence `select()` announces go through here.
+ *
+ * That is the point of the helper rather than a tidy-up. Selection used to announce the Tier-1
+ * sentence alone while the row it named carried that string *plus* the dim reasons and the
+ * over-allocation mark — so selecting a filtered-out bar spoke a sentence the visible list did not
+ * contain, and the two could only be compared by someone reading the list and listening at once.
+ */
+export function composeListboxRowText(parts: ListboxRowParts): string {
+  const reasons = parts.dimReasons ?? [];
+  const dim = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
+  const overAllocated = parts.overAllocated === true ? ' (over-allocated)' : '';
+  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}`;
 }
 
 /**
