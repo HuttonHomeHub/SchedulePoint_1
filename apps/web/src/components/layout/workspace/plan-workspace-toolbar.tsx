@@ -34,6 +34,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   ENTRY_ROUTES_ENABLED,
   FLOAT_PATHS_ENABLED,
@@ -466,6 +467,19 @@ export function ToolbarPlanWorkspace({
   //
   // Selection is workspace state, not view state, so choosing a row here opens the same Logic panel
   // the canvas opens — switching views keeps the activity you were looking at.
+  // The ONE emphasis set the Gantt receives (M4). The canvas gets the matches through its own dim
+  // seam; both read `ctx.matchedIds`, which `useSearchNavigation` derives once — so the two views
+  // cannot disagree about what the search matched, which is the whole point of lifting it.
+  const searchNavActive = CANVAS_SEARCH_NAV_ENABLED && ctx.matchedIds.size > 0;
+  const ganttEmphasisIds = useMemo<ReadonlySet<string>>(() => {
+    if (!searchNavActive) return floatPaths.emphasisIds;
+    if (floatPaths.emphasisIds.size === 0) return ctx.matchedIds;
+    // Both active ⇒ intersection (see the prop's comment below for why, not union).
+    const both = new Set<string>();
+    for (const id of ctx.matchedIds) if (floatPaths.emphasisIds.has(id)) both.add(id);
+    return both;
+  }, [searchNavActive, ctx.matchedIds, floatPaths.emphasisIds]);
+
   const surface =
     ctx.planView === 'gantt' ? (
       <GanttPanel
@@ -495,10 +509,18 @@ export function ToolbarPlanWorkspace({
         // two views cannot disagree about which activities are on the path. Bring-into-view follows
         // the workspace selection, which the panel lifts when a chain row is activated —
         // scroll only, never focus, so the planner stays in the panel they are reading.
-        emphasisIds={floatPaths.emphasisIds}
-        {...(floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
-          ? { bringIntoViewActivityId: model.selectedActivityId }
-          : {})}
+        // Emphasis is one prop with two possible sources (M4). When BOTH a float path and a live
+        // search are narrowing, it is their **intersection** — the planner asking for both means
+        // "the matches that are also on the path", and a union would emphasise activities neither
+        // question selected. Defined here rather than left to whichever happens to be non-empty,
+        // because "whichever is set" is not a rule, it is an accident that only shows up when both
+        // are on at once.
+        emphasisIds={ganttEmphasisIds}
+        {...(searchNavActive && ctx.currentMatchId !== null
+          ? { bringIntoViewActivityId: ctx.currentMatchId }
+          : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+            ? { bringIntoViewActivityId: model.selectedActivityId }
+            : {})}
       />
     ) : (
       canvas

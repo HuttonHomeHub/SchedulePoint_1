@@ -35,6 +35,9 @@ export interface SearchNavigation {
   readonly searchStatus: TsldToolbarContext['searchStatus'];
   /** Jump to the next / previous match: centre, select, announce. */
   readonly goToMatch: TsldToolbarContext['goToMatch'];
+  /** The matched ids as a set — the shape both views consume (M4). Derived from `matchHits`, so it
+   *  cannot disagree with what Enter walks. */
+  readonly matchedIds: ReadonlySet<string>;
 }
 
 export function useSearchNavigation(args: {
@@ -105,5 +108,7 @@ export function useSearchNavigation(args: {
     ],
   );
 
-  return { matchHits, searchStatus, goToMatch };
+  const matchedIds = useMemo(() => new Set(matchHits.map((h) => h.id)), [matchHits]);
+
+  return { matchHits, searchStatus, goToMatch, matchedIds };
 }

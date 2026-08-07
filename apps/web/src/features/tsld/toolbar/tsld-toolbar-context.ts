@@ -320,6 +320,15 @@ export interface TsldToolbarContext {
    */
   goToMatch: (direction: 'next' | 'previous') => void;
   /**
+   * The ids the live search matches, and the one the cursor is on — **derived once**, here, and
+   * handed to both views by the workspace (M4). Two derivations would agree on ordinary queries and
+   * differ on the edges, and the only way to see it would be to switch views mid-search.
+   *
+   * Empty / null when the search is inactive or the flag is off.
+   */
+  matchedIds: ReadonlySet<string>;
+  currentMatchId: string | null;
+  /**
    * Frame the selected activity at a readable scale, and announce that it did.
    *
    * A **command**, not a mode (ADR-0056): it sets the scale once and a later resize preserves it. A

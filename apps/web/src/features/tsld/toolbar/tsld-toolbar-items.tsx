@@ -1935,20 +1935,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     CANVAS_LENSES_ENABLED
       ? {
           ...searchShape,
-          // With search navigation on, the field is a diagram control: Enter centres a bar on the
-          // canvas, which the Gantt does not have. Shading it there with a reason is the honest
-          // interim state until M4 gives the Gantt the same jump — the ADR-0059 M6 lesson
-          // (a lit-but-inert control) applied at the first version rather than after a review finds
-          // it. Flag-off the clause is absent, because today's inert behaviour is what the parity
-          // suite has to reproduce.
-          isEnabled: (ctx) =>
-            ctx.hasDiagram && (CANVAS_SEARCH_NAV_ENABLED ? ctx.canvasActive : true),
-          disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? LENS_NO_DIAGRAM_REASON
-              : CANVAS_SEARCH_NAV_ENABLED && !ctx.canvasActive
-                ? CANVAS_ONLY_REASON
-                : undefined,
+          // Enabled in BOTH views. M1 shaded it in the Gantt because Enter had nothing to centre
+          // there; M4 gave the Gantt the same match set and a row scroll, so the interim shade is
+          // reverted rather than left as a permanent half-truth — which is what it would have
+          // become if nobody came back to it.
+          isEnabled: (ctx) => ctx.hasDiagram,
+          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
           render: (ctx, api) => <LiveSearchControl ctx={ctx} api={api} />,
         }
       : {

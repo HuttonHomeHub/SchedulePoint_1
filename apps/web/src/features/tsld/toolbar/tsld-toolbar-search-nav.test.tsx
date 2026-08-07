@@ -170,11 +170,12 @@ describe('the clear button', () => {
 });
 
 describe('the field is honest about where it works', () => {
-  it('is shaded with a reason in the Gantt, where there is nothing to centre', () => {
+  it('is enabled in the Gantt too, once M4 gave it a match set there', () => {
+    // M1 shaded it here, honestly, because Enter had nothing to centre in the Gantt. M4 handed the
+    // Gantt the same match set and a row scroll, so the interim shade is reverted rather than left
+    // as a permanent half-truth — which is what it becomes if nobody comes back to it.
     renderRows(ctx({ canvasActive: false }));
-    const input = field();
-    expect(input).toHaveAttribute('aria-disabled', 'true');
-    expect(input).toHaveAttribute('title', 'Only in the diagram view');
+    expect(field()).not.toHaveAttribute('aria-disabled');
   });
 
   it('is enabled in the diagram', () => {
@@ -182,11 +183,9 @@ describe('the field is honest about where it works', () => {
     expect(field()).not.toHaveAttribute('aria-disabled');
   });
 
-  it('keeps the empty-plan reason ahead of the view reason', () => {
-    // Both conditions can be false at once. "Add an activity first" is the one the planner can act
-    // on, so it wins — the layered-reason pattern the zoom cluster already uses.
+  it('still shades on an empty plan, in either view', () => {
     renderRows(ctx({ hasDiagram: false, canvasActive: false }));
-    expect(field()).toHaveAttribute('title', expect.not.stringMatching(/diagram view/i));
+    expect(field()).toHaveAttribute('aria-disabled', 'true');
   });
 });
 
@@ -201,7 +200,7 @@ describe('Zoom to selection', () => {
   });
 
   it('says to select something first when nothing is selected', () => {
-    renderRows(ctx({ selectedActivity: null }));
+    renderRows(ctx({ selectedActivity: undefined }));
     expect(button()).toHaveAttribute('aria-disabled', 'true');
     // The toolbar prefixes the item label onto the reason, so a tooltip reads as a sentence.
     expect(button()).toHaveAttribute('title', 'Zoom to selection — Select an activity first');
@@ -215,12 +214,12 @@ describe('Zoom to selection', () => {
   });
 
   it('says to add an activity on an empty plan, ahead of the other two reasons', () => {
-    renderRows(ctx({ selectedActivity: null, canvasActive: false, hasDiagram: false }));
+    renderRows(ctx({ selectedActivity: undefined, canvasActive: false, hasDiagram: false }));
     expect(button()).toHaveAttribute('title', 'Zoom to selection — Add an activity to zoom to');
   });
 
   it('does not fire while shaded', () => {
-    renderRows(ctx({ selectedActivity: null }));
+    renderRows(ctx({ selectedActivity: undefined }));
     fireEvent.click(button());
     expect(zoomToSelection).not.toHaveBeenCalled();
   });

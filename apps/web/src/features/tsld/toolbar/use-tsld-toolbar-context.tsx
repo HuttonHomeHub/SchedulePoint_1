@@ -278,7 +278,7 @@ export function useTsldToolbarContext({
 
   // Search that navigates (VITE_CANVAS_SEARCH_NAV) — the same shape as the conflict cycle above,
   // sharing its walk so the two can never order a plan differently.
-  const { searchStatus, goToMatch } = useSearchNavigation({
+  const { searchStatus, goToMatch, matchedIds } = useSearchNavigation({
     activities,
     filterQuery: canvasUi.lensState.filterQuery,
     filterAttrs: canvasUi.lensState.filterAttrs,
@@ -576,6 +576,8 @@ export function useTsldToolbarContext({
       searchStatus,
       goToMatch,
       zoomToSelection,
+      matchedIds,
+      currentMatchId: canvasUi.lensState.searchCursorId,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
 
@@ -885,6 +887,8 @@ export function useTsldToolbarContext({
     searchStatus,
     goToMatch,
     zoomToSelection,
+    matchedIds,
+    canvasUi.lensState.searchCursorId,
     // Export & print — re-identify only when the exported set / its match state / the plan name change
     // (the callbacks close over these). `todayIso` + `announce` are already listed above. The
     // dependency edges, the view toggles and the late overlay now reach the picture through
