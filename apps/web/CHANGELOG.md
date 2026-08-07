@@ -1,5 +1,83 @@
 # @repo/web
 
+## 0.74.0
+
+### Minor Changes
+
+- [#252](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/252) [`779a5b3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/779a5b3545e87d91ac9de6a7756f1412b71c9f20) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The data-date line is on by default. On a statused programme the canvas now draws the status line
+  the whole progress model pivots on — solid, labelled, and distinguishable from the dashed Today
+  marker by shape as well as colour — with its own `View▾ ▸ Markers` switch for anyone who wants the
+  diagram back without it.
+
+  It is enabled after a review pass over the whole status-and-feedback epic, which turned up three
+  defects worth naming because none of them was in the line itself: a settled recalculation announced
+  nothing at all for edits made with the keyboard, arming the drawing tool from the empty-plan notice
+  dropped the reader's place on the page, and pressing Recalculate while an edit was still settling
+  could talk over its own result.
+
+- [#252](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/252) [`779a5b3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/779a5b3545e87d91ac9de6a7756f1412b71c9f20) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The TSLD canvas can now draw the **data date** — the status line the whole progress model pivots
+  on — behind `VITE_CANVAS_DATA_DATE` (default **off**). When enabled: a solid 2px foreground-hue
+  vertical at day offset 0 with a `Data date` pill, distinguishable from the dashed Today line by
+  shape and weight rather than hue (WCAG 1.4.1); when the two lines round to the same pixel exactly
+  one draws, with a merged `Data date · today` pill. The mark gets a `View▾ ▸ Markers ▸ Data date
+line` toggle, a legend entry and an export-legend entry (so an exported PNG/PDF shows and names
+  it), and the activities listbox gains a visually-hidden statement of the data date (and today,
+  when they differ) via `aria-describedby`. Flag-off, the canvas paints byte-for-byte the prior
+  frame — pinned by a dedicated parity suite.
+
+### Patch Changes
+
+- [#252](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/252) [`779a5b3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/779a5b3545e87d91ac9de6a7756f1412b71c9f20) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The first drawing gesture is described once, and accurately. Pressing "Draw the first activity" on
+  an empty plan armed the tool but left the empty-plan notice up beside the mode band, so the canvas
+  carried two instructions at once — one of them the button that had just been pressed. The notice now
+  yields while a tool is armed and returns when it is cancelled.
+
+  The Add statement also names the gesture the armed type actually wants: a milestone is placed with a
+  click, while a task is drawn by dragging its length — with a click as a one-day shortcut, which the
+  old wording ("click the diagram to draw") never mentioned and no planner could have discovered.
+
+- [#252](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/252) [`779a5b3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/779a5b3545e87d91ac9de6a7756f1412b71c9f20) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The WBS colour lens and the baseline ghost now have spoken equivalents. "Colour by WBS group" told
+  you which activities belong together using fill colour and nothing else, and the baseline overlay
+  drew a ghost bar with no text anywhere naming it — so on both, a keyboard or screen-reader user was
+  given a diagram with a fact removed from it. Each row of the diagram's activity list now ends with
+  its group ("group: A200", or "ungrouped"), and a ghosted row names the captured baseline span and
+  how far its finish has moved, in the same behind/ahead words the variance table uses. The group name
+  spoken on the row is the one printed in the on-canvas legend — one producer, so they cannot drift.
+
+  Selecting an activity also now says exactly what its row says. It used to announce the activity's
+  dates and float alone, while the row on screen carried that sentence plus its "filtered out" and
+  "over-allocated" marks — so selecting a bar the filter had dimmed spoke a sentence the visible list
+  did not contain. The row text and the announcement are now one composition.
+
+- [#252](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/252) [`779a5b3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/779a5b3545e87d91ac9de6a7756f1412b71c9f20) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A recalculation now shows it is working and says what settled. While the schedule is being
+  recalculated — whether you pressed Recalculate or simply moved a bar, which recalculates on your
+  behalf a moment later — the Recalculate button's icon spins, so the surface that is about to move
+  every bar on the canvas is no longer doing it invisibly. The busy state is also carried by
+  `aria-busy` and the existing "Recalculating…" tooltip, because the app reduces every animation for
+  anyone who has asked for reduced motion, and a spinner would be the one cue they never see.
+
+  When the recalculation settles, the diagram says what changed. Editing a bar used to announce a
+  promise — "Moved 'Excavate'; dates will update." — and then the dates updated in silence, so the
+  only thing a screen-reader user was ever told about their edit was said before the new dates
+  existed. The settle now names the activity and its resulting dates, and adds the project finish as
+  a separate sentence when that moved too. Nothing is announced when nothing moved, when the
+  recalculation was somebody else's, or when it failed — in which case the existing error message
+  stands on its own.
+
+- [#252](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/252) [`779a5b3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/779a5b3545e87d91ac9de6a7756f1412b71c9f20) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The TSLD canvas no longer freezes entirely while a bar's move or resize is being saved: pan,
+  wheel zoom, hover and selection stay live for the write's round trip, and a second edit grab is
+  refused visibly — a busy cursor over the surface and `aria-busy` on the container — instead of a
+  drag that runs and silently applies nothing. The naming popover still holds the canvas until it
+  commits, exactly as before, and the busy state clears on every settle path, including a rejected
+  write.
+
+- [#250](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/250) [`81dcf87`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/81dcf878b8477f3eacc26db791d029abca02efc1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The TSLD painter and hit-test stop redoing per-frame work: the id→activity index is memoised on
+  the scene's array identity (the fan-out memo's pattern), each activity's screen rectangle is
+  computed once per frame and shared by culling, routing and every incident link instead of once per
+  consumer, and the pointer-move hit-test no longer rebuilds its index and re-sorts every edge on
+  each mousemove while the lag tool is armed. No visual change — draw order and geometry are
+  byte-identical; call-count gates pin the new bounds.
+
 ## 0.73.0
 
 ### Minor Changes
