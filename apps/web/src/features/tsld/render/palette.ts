@@ -39,6 +39,13 @@ export function resolveTsldPalette(root: Element = document.documentElement): Ts
     // Today pill ink (F6b, `VITE_CANVAS_TIME_AXIS`) — paired with `today` the same way every other
     // fill pairs with its `*-foreground` token.
     todayInk: token('--color-destructive-foreground', '#ffffff'),
+    // The data-date status line + pill (`VITE_CANVAS_DATA_DATE`) — the FOREGROUND/BACKGROUND pair,
+    // deliberately NOT `--color-info`: in all three themes info is a near neighbour of the
+    // `--color-primary` bar fill, and a "distinct" line in the bar hue is not distinct (spec CQ-1,
+    // measured). Foreground is the strongest neutral already in the palette and pairs 1:1 with
+    // background for the pill ink — the `todayInk` guarantee, pinned in `palette.test.ts`.
+    dataDate: token('--color-foreground', '#e6e8ee'),
+    dataDateInk: token('--color-background', '#161a22'),
     // Visual-Planning conflict cue — the warning hue, drawn as a distinct triangle shape so it never
     // relies on colour alone (WCAG 1.4.1); shares the token with near-critical but a different shape.
     conflict: token('--color-warning', '#d29628'),
@@ -132,6 +139,10 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
       nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#c7c7c7'),
       today: token('--color-destructive', '#c2331f'),
       todayInk: token('--color-destructive-foreground', '#ffffff'),
+      // The data-date pair with LIGHT fallbacks (mirrors `resolveTsldPalette`): near-black rule +
+      // pill on paper, white ink on the pill — the export path draws the same line the screen does.
+      dataDate: token('--color-foreground', '#1a1a1a'),
+      dataDateInk: token('--color-background', '#ffffff'),
       conflict: token('--color-warning', '#b58900'),
       laneOverlap: token('--color-warning', '#b58900'),
       labelInside: token('--color-primary-foreground', '#ffffff'),

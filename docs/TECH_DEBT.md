@@ -1355,3 +1355,67 @@ swapped, which is why it is written down rather than remembered.
 ---
 
 **Next free number: 103.**
+
+## 103. ADR-0064's recalculation hold is not wired on the surface it ships on
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M5)
+
+ADR-0064 T7 added **token-based recalculation holds** so the bars cannot move between a planner's two
+clicks during a link pick — the epic's own founding defect. The hold is real and its unit suite
+passes. It is passed into `TsldPanel` from **one** host:
+
+- `components/layout/workspace/plan-workspace.tsx:150-151` — `recalcHold={model.autoRecalcHold}` and
+  `dropLinkPickSignal={model.dropLinkPickSignal}`. This is the **ADR-0030 host**, reached only with
+  `VITE_CANVAS_TOOLBAR` **off**.
+- `components/layout/workspace/plan-workspace-toolbar.tsx` — passes **neither**. This is the default
+  surface (`VITE_CANVAS_TOOLBAR` has been default-on since ADR-0031's enablement).
+
+So on the surface every planner actually uses, `recalcHold` is `undefined`, `TsldPanel`'s
+`recalcHoldRef.current?.hold(...)` is a no-op, and a two-click link pick takes no hold at all. The
+feature is not broken in the sense of throwing — it is inert, which is the shape ADR-0064 §7 itself
+names (lit-but-inert) and the reason that epic exists.
+
+Found while wiring M5's settle announcer through the same host, by reading which props each workspace
+supplies; **not** introduced by this epic, and deliberately not fixed inside it — the fix is one line
+per prop plus a test that the hold is actually taken on the default surface, and it belongs with
+somebody re-reading ADR-0064 T7's contract rather than bolted onto a feedback milestone.
+
+## 104. Two live-region owners can collapse one recalculation into one sentence
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M5)
+
+`useAnnounce` clears the polite region and sets it on the next animation frame, so **two calls in one
+frame collapse to the last**. After M5 there are two owners for a single settle: the manual
+Recalculate command announces `'Schedule recalculated.'` from `flush`'s success callback
+(`use-tsld-toolbar-context.tsx`), and the new settle announcer speaks the dates on the next render
+(`use-recalc-outcome-announcer.ts`). Press Recalculate inside the 500 ms debounce of a canvas edit and
+both fire.
+
+M5 made the loss direction **safe** rather than fixing it: the settle facts land after the
+confirmation, so the utterance that can be dropped is the redundant status word, never the
+informative one. Fixing it properly means one owner at the `flush` call site, which the approved plan
+precluded by putting the announcer in `TsldPanel`. Worth doing when ADR-0078 is written, since that
+is where the announcement ownership should be stated.
+
+## 105. Two follow-ups from the canvas status & feedback gate pass
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
+
+Non-blocking findings from the three specialist gates over the epic diff. Both are real; neither
+blocked the epic.
+
+1. **`ToolbarItemRenderApi` does not expose the resolved `busy`.** M5 widened the registry with
+   `isBusy?: (ctx) => boolean`, resolved once in `resolveItems` and read by `ToolbarButton` — but the
+   `render` escape-hatch's api object still carries only `disabled`/`disabledReason`/`active`/
+   `itemProps`. No `render` item declares `isBusy` today, so this is latent rather than broken. The
+   trap is that `ToolbarItem.isBusy`'s docblock reads as a general contract and does not scope itself
+   to plain-button items: the first Tier-2 popover trigger that wants a busy state will silently have
+   no way to read it and will re-derive it from `ctx`, which is the two-derivations-of-one-fact
+   pattern this same epic eliminated twice elsewhere.
+2. **`EXPORT_LEGEND` is still a hand-authored mirror of the DOM legend** (`render-export-image.ts`,
+   already TECH_DEBT #48(e)). This epic **extended** it — adding the Data date entry in the same PR
+   as the DOM entry, which is the mitigation the plan called for — rather than fixing the pattern.
+   Worth noting because the same epic proved it knows how to fix this class of bug: it gave WBS group
+   labels one producer (`wbsGroupLabelById`, consumed by both the legend and the spoken clause) and
+   listbox row text one producer (`composeListboxRowText`, consumed by both the row and the
+   announcement). The export legend is the third instance of the same shape, left alone.

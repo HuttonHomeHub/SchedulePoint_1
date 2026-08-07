@@ -21,6 +21,12 @@ export interface ToolbarButtonProps {
   /** Show the text label beside the icon (Tier-1 emphasis); icon-only otherwise (label → aria-label). */
   showLabel?: boolean;
   pressed?: boolean;
+  /**
+   * The command's work is in flight → `aria-busy="true"`. Paired with (not replaced by) an animated
+   * icon: the app reduces every animation to 0.01 ms under `prefers-reduced-motion`, so a spin is
+   * the only busy cue a motion-averse user does **not** get.
+   */
+  busy?: boolean;
   disabled?: boolean;
   disabledReason?: string | undefined;
   tabIndex: number;
@@ -39,6 +45,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       icon,
       showLabel,
       pressed,
+      busy,
       disabled,
       disabledReason,
       tabIndex,
@@ -71,6 +78,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         data-toolbar-item={itemId}
         // aria-disabled (not `disabled`) keeps the control focusable so the reason is reachable.
         aria-disabled={disabled || undefined}
+        {...(busy ? { 'aria-busy': true } : {})}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
         {...(showLabel ? {} : { 'aria-label': label })}
         {...(title ? { title } : {})}

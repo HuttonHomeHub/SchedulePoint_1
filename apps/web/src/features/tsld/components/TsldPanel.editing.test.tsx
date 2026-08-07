@@ -1,5 +1,5 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The M2 editing gate reads a build-time flag; force it on for these tests. Direct manipulation
@@ -263,6 +263,130 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(onReposition.mock.calls[0]?.[0]).toEqual({ activityId: 'a1', laneIndex: 1 });
     await waitFor(() =>
       expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('lane 2')),
+    );
+  });
+
+  // ── Canvas status & feedback M2: the surface stays live while a write is in flight ──────────
+  // A write the test settles by hand, so assertions can run while the PATCH is genuinely pending.
+  function deferredWrite() {
+    let resolve!: (v: { applied: boolean; conflict: string | null }) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<{ applied: boolean; conflict: string | null }>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  function renderWithDeferredReposition() {
+    const write = deferredWrite();
+    const onReposition = vi.fn().mockReturnValue(write.promise);
+    const utils = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    // Start a reposition: grab the bar body (day 0..2 at lane 0 ⇒ x 40..82) and drop it right.
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    expect(onReposition).toHaveBeenCalledTimes(1);
+    return { ...utils, canvas, onReposition, write };
+  }
+
+  it('keeps the canvas pannable while a reposition write is in flight (M2 unfreeze)', async () => {
+    const { container, canvas, write } = renderWithDeferredReposition();
+    // While the PATCH is pending, pan the viewport 140px left. Under the old single `pending`
+    // gate the pointer-down returned early, so this drag moved nothing (red-first proof).
+    fireEvent.pointerDown(canvas, { clientX: 300, clientY: 200, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    // The pan moved the bar off its old pixels, so a click where it USED to sit selects nothing —
+    // which is only possible if the viewport really moved during the write.
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    expect(container.querySelector('[role="option"][aria-selected="true"]')).toBeNull();
+    await act(async () => {
+      write.resolve({ applied: true, conflict: null });
+      await Promise.resolve(); // let the write's settle handlers run
+    });
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it('marks the surface aria-busy during the write and refuses a second edit grab, then settles', async () => {
+    const { container, canvas, onReposition, write } = renderWithDeferredReposition();
+    // The busy state is stated to AT on the canvas container while the write is pending…
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    // …and a second edit grab is refused BEFORE it starts: a body drag issues no second write.
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    expect(onReposition).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      write.resolve({ applied: true, conflict: null });
+      await Promise.resolve(); // let the write's settle handlers run
+    });
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it('a rejected write (stale version, 409-shaped) settles the gate back to live', async () => {
+    const { container, canvas, onReposition, write } = renderWithDeferredReposition();
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    await act(async () => {
+      write.resolve({ applied: false, conflict: 'This plan changed — your move wasn’t applied.' });
+      await Promise.resolve(); // let the write's settle handlers run
+    });
+    // The banner explains, the busy gate clears, and a NEW edit grab starts a fresh write.
+    expect(await screen.findByRole('alert')).toHaveTextContent('wasn’t applied');
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    expect(onReposition).toHaveBeenCalledTimes(2);
+  });
+
+  it('a write that rejects (lock lost mid-write, the .catch path) settles the gate back to live', async () => {
+    const { container, canvas, onReposition, write } = renderWithDeferredReposition();
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    await act(async () => {
+      write.reject(new Error('The plan is locked by Dana.'));
+      await Promise.resolve(); // let the write's settle handlers run
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('locked by Dana');
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    expect(onReposition).toHaveBeenCalledTimes(2);
+  });
+
+  it('the create popover still owns the canvas totally: no pan while it is open, and it is not "busy"', async () => {
+    const { canvas, container } = renderEditable();
+    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    await screen.findByLabelText('Name');
+    // The popover is a held question, not a pending write — the busy state must not claim it.
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    // An attempted pan while the popover is open moves nothing (the preserved total gate)…
+    fireEvent.pointerDown(canvas, { clientX: 300, clientY: 200, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    // …proven by the bar still being selectable at its ORIGINAL pixels after the popover closes.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select' })); // disarm the Add tool first
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    await waitFor(() =>
+      expect(container.querySelector('[role="option"][aria-selected="true"]')).not.toBeNull(),
     );
   });
 

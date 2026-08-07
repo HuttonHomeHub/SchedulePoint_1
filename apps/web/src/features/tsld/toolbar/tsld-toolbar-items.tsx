@@ -69,6 +69,7 @@ import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -134,6 +135,11 @@ const VIEW_TOGGLE_META: Record<
     enabled: CANVAS_VISUAL_LANGUAGE_ENABLED,
   },
   wbsBand: { group: 'structure', label: 'WBS band', enabled: WBS_IMPROVEMENTS_ENABLED },
+  // The data-date status line (canvas status & feedback M1) — listed before Today because on a
+  // statused programme the data date sits left of (before) today, and the menu order should read
+  // in diagram order. Flag-off it is filtered out, so `View▾` offers no such toggle (the parity
+  // claim in the spec's US-1).
+  dataDate: { group: 'markers', label: 'Data date line', enabled: CANVAS_DATA_DATE_ENABLED },
   today: { group: 'markers', label: 'Today line' },
   nonWorking: { group: 'markers', label: 'Non-working' },
   labels: { group: 'markers', label: 'Labels' },
@@ -2076,8 +2082,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       showLabel: 'always',
       order: 7,
       label: 'Recalculate',
-      icon: <RefreshCw className="size-4" />,
+      // In flight the icon spins — the same `Loader2 … animate-spin` idiom the export items above
+      // use, so this is an established pattern rather than a new one. The spin is the *only* cue a
+      // `prefers-reduced-motion` user loses (the global rule reduces it to 0.01 ms), which is why
+      // `isBusy` (→ `aria-busy`) and the "Recalculating…" disabled reason below carry the same fact
+      // in two motion-independent channels. Covers BOTH triggers: `recalcPending` is the shared
+      // coalescer's `isPending` (ADR-0032 M3), so a debounced auto-recalc spins it too.
+      icon: (ctx) =>
+        ctx.recalcPending ? (
+          <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        ) : (
+          <RefreshCw className="size-4" />
+        ),
       penGated: true,
+      isBusy: (ctx) => ctx.recalcPending,
       isEnabled: (ctx) => ctx.canRecalc && !ctx.recalcPending,
       // Explain the disabled state like the sibling authoring commands do, rather than a silent grey:
       // in-flight (busy) vs. no pen (identical underlying cause to Add activity).

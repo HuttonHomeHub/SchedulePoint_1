@@ -1340,3 +1340,36 @@ export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACCOU
  * `password-reset.parity.test.tsx`, kept rather than weakened (ADR-0053 M6).
  */
 export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWORD_RESET);
+
+/**
+ * The TSLD **data-date line** (`VITE_CANVAS_DATA_DATE`, default **OFF** during build) — canvas
+ * status & feedback M1 (spec `docs/specs/canvas-status-and-feedback/`, proposing ADR-0078). It
+ * flips on at that epic's M6 gate once the specialist reviews and the flag-on journey are green.
+ *
+ * When on, the canvas draws the schedule's **data date** — the origin of its own coordinate
+ * system (`screenXOfDay(0)` is literally its x) and the pivot of the whole progress model
+ * (ADR-0033) — as a solid 2px foreground-hue vertical with a `Data date` pill, distinguishable
+ * from the dashed Today line by shape and weight, never hue alone (WCAG 1.4.1). When the two
+ * lines round to the same pixel, exactly one draws (the data-date treatment) with one merged
+ * `Data date · today` pill. The mark is named in the legend and the export legend, toggleable
+ * under `View▾ ▸ Markers`, and stated once in text for the activities listbox
+ * (`aria-describedby`, not a live region).
+ *
+ * **Deliberately NOT `AND`-ed with another flag** (unlike the ADR-0062-shaped derived pairs):
+ * the status line is meaningful on every canvas surface — authoring or read-only, toolbar-hosted
+ * or legacy — so there is no host flag whose absence would strand it, and tying it to one would
+ * only remove the line from surfaces where it is still a fact.
+ *
+ * **Default-on since 2026-08-07**, once the M6 gate pass over the combined epic diff was folded
+ * (three blocking findings: the keyboard settle silence, the stranded empty-plan focus, and the
+ * two-owner announcement race — none of them in this milestone's own code, all of them found by
+ * running the gates the epic budgeted for).
+ *
+ * Rollback: set `VITE_CANVAS_DATA_DATE=false` and rebuild the web image. Flag-off the scene
+ * carries no `dataDateLine`, so the painter's layer never runs and the frame is **byte-for-byte**
+ * today's paint (`paint.data-date-parity.test.ts` — the rollback contract, kept rather than
+ * weakened); no `View▾` toggle, legend entry, export-legend entry or listbox sentence renders.
+ * Nothing persisted depends on it — the line is a per-frame display decision over a value
+ * (`dataDate`) that has always been on the wire.
+ */
+export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_DATA_DATE);

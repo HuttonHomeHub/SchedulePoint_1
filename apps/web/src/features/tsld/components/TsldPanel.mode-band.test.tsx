@@ -148,7 +148,7 @@ describe('TsldPanel — mode statement band (flag on)', () => {
   });
 
   it.each([
-    ['add-activity', /^Adding task — click the diagram to draw/],
+    ['add-activity', /^Adding task — drag on the diagram to draw its length, or click for one day/],
     ['link', /^Linking FS — click the predecessor/],
     ['loe', /^Level of effort — click the start driver/],
   ] as const)('states the %s tool', (arm, text) => {
@@ -237,6 +237,86 @@ describe('TsldPanel — canvas empty state (T9)', () => {
   it('says nothing once the plan has any activity at all', () => {
     render(<Harness arm="select" />);
     expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
+  });
+
+  /**
+   * **One instruction at a time** (the epic's M3). Pressing "Draw the first activity" arms the tool
+   * and the band starts telling the planner what to do next — but the notice stayed up, still
+   * offering the button they had just pressed. Two strips above the same empty canvas, giving
+   * different instructions, one of them already obeyed.
+   */
+  it('yields the empty-plan notice to the armed tool, and takes it back on disarm', () => {
+    render(<Harness arm="select" activities={[]} />);
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw the first activity' }));
+    expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('canvas-mode-band')).toBeInTheDocument();
+
+    // Both directions: disarming must give the notice back, or an empty plan whose tool was
+    // cancelled would offer no way in at all.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+  });
+
+  /**
+   * **The handoff must not strand focus** (WCAG 2.4.3, the M6 gate finding). Yielding the notice to
+   * the armed tool (the test above) unmounts the very button the planner just pressed — and the mode
+   * band deliberately renders no focusable element for the `adding` statement. So focus reverted to
+   * `<body>` and the next Tab restarted from the top of the document, on a brand-new empty plan:
+   * the one screen the epic exists to make self-explanatory.
+   *
+   * The listbox is the destination because it is where drawing is next operated from, and it is the
+   * pattern already in the file (the Next-conflict cycle focuses it the same way).
+   */
+  it('hands focus to the diagram listbox rather than stranding it on the unmounted button', () => {
+    render(<Harness arm="select" activities={[]} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw the first activity' }));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(listbox);
+
+    // The disarm direction: Escape gives the notice back, and focus must still be somewhere the
+    // keyboard can carry on from — NOT pulled back to the restored button, which would be a focus
+    // move the planner did not ask for (Escape can be pressed from anywhere).
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+    expect(document.activeElement).toBe(listbox);
+  });
+
+  /**
+   * The other half of the same rule: a focus move with no user gesture behind it is its own defect.
+   * Arming the tool from anywhere else (the toolbar, a shortcut) must leave focus where the planner
+   * put it — only the notice button's own click owns the handoff.
+   */
+  it('does not steal focus when the tool is armed from somewhere else', () => {
+    render(<Harness arm="select" activities={[]} />);
+    const elsewhere = screen.getByRole('button', { name: 're-arm link' });
+    elsewhere.focus();
+
+    fireEvent.click(elsewhere); // arms `link` from outside the notice
+    expect(screen.getByTestId('canvas-mode-band')).toBeInTheDocument();
+    expect(document.activeElement).toBe(elsewhere);
+  });
+});
+
+/**
+ * **The Add statement describes the gesture the armed type actually wants** (the epic's M3). The
+ * band and the announcement are the same string by construction (`modeStatementText`), and this
+ * proves it at the panel, where the type is resolved — the leaf suite cannot see `ActivityType`.
+ */
+describe('TsldPanel — the Add statement is gesture-accurate', () => {
+  it('offers drag-or-click for a task, and says the same thing aloud', () => {
+    announceSpy.mockClear();
+    render(<Harness arm="add-activity" activities={[]} />);
+    const band = screen.getByTestId('canvas-mode-band');
+    expect(band).toHaveTextContent(
+      'Adding task — drag on the diagram to draw its length, or click for one day. Esc to stop.',
+    );
+    expect(announceSpy).toHaveBeenCalledWith(band.textContent);
   });
 });
 

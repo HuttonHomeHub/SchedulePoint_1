@@ -122,8 +122,20 @@ export interface ToolbarItem<Ctx> {
    * "…— Opens the Logic panel (links & notes)") without lengthening the visible/announced name.
    */
   description?: string;
-  /** Optional leading icon (decorative; `aria-hidden`). */
-  icon?: ReactNode;
+  /**
+   * Optional leading icon (decorative; `aria-hidden`). Either a fixed node, or — symmetric with
+   * {@link isEnabled} / {@link isActive} / {@link disabledReason} — a **function of the context**,
+   * resolved once per resolve pass in {@link resolveItems} onto {@link ResolvedToolbarItem.icon}.
+   *
+   * The ctx form exists so a command can show an in-flight icon (a spinner) without reaching for
+   * the {@link render} escape hatch, which is XOR with {@link onActivate}: taking it for one item
+   * would mean re-implementing that item's button, label policy, pen-gating and disabled-reason
+   * wiring. A plain `ReactNode` resolves to **itself** (pinned by a registry test), so every
+   * pre-existing item is unaffected.
+   *
+   * Consumers read `ResolvedToolbarItem.icon`, never `item.icon` — the raw field may be a function.
+   */
+  icon?: ReactNode | ((ctx: Ctx) => ReactNode);
   /**
    * Part of the **authoring set** (group 4). The primitive disables every pen-gated item together
    * when authoring is not enabled (ADR-0028), so read-only ↔ editing flips as one coherent state.
@@ -135,6 +147,14 @@ export interface ToolbarItem<Ctx> {
   isEnabled?: (ctx: Ctx) => boolean;
   /** Toggle/segment pressed state → `aria-pressed`. Absent ⇒ not a toggle. */
   isActive?: (ctx: Ctx) => boolean;
+  /**
+   * Whether the command's work is currently in flight → `aria-busy` on the control. Absent ⇒ never
+   * busy. Deliberately separate from {@link isEnabled}: a busy command is usually also disabled, but
+   * "off because you can't do this" and "off because it is happening right now" are different facts,
+   * and a busy state conveyed **only** by a spinning {@link icon} would say nothing at all under
+   * `prefers-reduced-motion` (the global rule in `globals.css` reduces every animation to 0.01 ms).
+   */
+  isBusy?: (ctx: Ctx) => boolean;
   /** Human reason shown/announced when disabled (e.g. "Start editing to add activities"). */
   disabledReason?: (ctx: Ctx) => string | undefined;
   /** Plain-button activation. Mutually exclusive with {@link render}. */
@@ -156,6 +176,14 @@ export interface ResolvedToolbarItem<Ctx> {
   enabled: boolean;
   active: boolean;
   disabledReason: string | undefined;
+  /**
+   * The item's icon with any ctx form already applied — **the only supported read**. A plain
+   * `ReactNode` icon appears here unchanged (identity), so reading this is never worse than reading
+   * `item.icon` and is correct for both forms.
+   */
+  icon?: ReactNode;
+  /** Resolved {@link ToolbarItem.isBusy} → `aria-busy` on the rendered control. */
+  busy?: boolean;
 }
 
 /**
@@ -228,6 +256,11 @@ export function resolveItems<Ctx>(
         enabled,
         active: item.isActive?.(ctx) ?? false,
         disabledReason: enabled ? undefined : item.disabledReason?.(ctx),
+        // A function icon is called exactly once here, not per consumer: the bar and the `⋯`
+        // overflow both render from this resolution, and calling it twice would let one item paint
+        // two different icons in the two places it can appear.
+        icon: typeof item.icon === 'function' ? item.icon(ctx) : item.icon,
+        busy: item.isBusy?.(ctx) ?? false,
       };
     });
 }

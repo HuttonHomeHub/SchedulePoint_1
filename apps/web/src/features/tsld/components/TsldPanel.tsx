@@ -10,6 +10,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -22,10 +23,13 @@ import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import {
   announceChainStep,
+  baselineGhostClause,
   chainNeighbour,
+  composeListboxRowText,
   describeActivity,
   lagPhrase,
   summarizeLogic,
+  wbsGroupClause,
 } from '../render/a11y';
 import {
   buildBaselineGhosts,
@@ -34,6 +38,7 @@ import {
   isFilterActive,
   matchesActivityFilter,
   overAllocatedIds,
+  wbsGroupLabelById,
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
@@ -57,6 +62,7 @@ import {
   type SelectionAnchor,
 } from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
+import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -223,6 +229,18 @@ export interface TsldPanelProps {
   recalcHold?: { hold: (token: symbol) => void; release: (token: symbol) => void } | undefined;
   /** Forwarded to the canvas: drop an open link pick because the schedule is about to move (T7). */
   dropLinkPickSignal?: number;
+  /**
+   * Whether a recalculation is in flight — the shared ADR-0032 coalescer's `isPending`, covering
+   * the debounced auto-recalc **and** the manual Recalculate flush. Feeds the settle announcer
+   * (`useRecalcOutcomeAnnouncer`): the pending→idle edge is what "the schedule settled" means.
+   * Absent ⇒ no settle is ever detected ⇒ nothing announced (the read-only guest view).
+   */
+  recalcPending?: boolean;
+  /**
+   * The plan's computed project finish (`YYYY-MM-DD`), for the settle announcer's second sentence.
+   * Null/absent before the first recalculation ⇒ that sentence is never spoken.
+   */
+  projectFinish?: string | null;
   /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
    * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
    * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
@@ -392,6 +410,8 @@ export function TsldPanel({
   onUndoLastEdit,
   recalcHold,
   dropLinkPickSignal = 0,
+  recalcPending = false,
+  projectFinish = null,
   onLoeSpan,
   onAutoArrange,
   onOpenLogic,
@@ -425,6 +445,15 @@ export function TsldPanel({
   // this anchor (the workspace's `onTsldCreate`), keeping the persisted dates coherent.
   const dataDate = dataDateProp ?? (CANVAS_AUTHORING_ENABLED ? (todayIso ?? null) : null);
   const announce = useAnnounce();
+  // What a recalculation SETTLED, as opposed to what an edit promised. The edit paths below note the
+  // activity they wrote; this speaks the result once the schedule stops moving. Keyed by the host's
+  // `key={planId}` remount, so nothing is ever said about a plan that is no longer open.
+  const recalcOutcome = useRecalcOutcomeAnnouncer({
+    pending: recalcPending,
+    activities,
+    projectFinish,
+    announce,
+  });
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -578,7 +607,13 @@ export function TsldPanel({
     if (previous === mode) return;
     announcedModeRef.current = mode;
     if (mode === 'add-activity') {
-      announce(modeStatementText({ kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }));
+      announce(
+        modeStatementText({
+          kind: 'adding',
+          typeLabel: ACTIVITY_TYPE_LABELS[createType],
+          gesture: isMilestone(createType) ? 'click' : 'drag',
+        }),
+      );
     } else if (mode === 'link') {
       // A fresh arming of the tool is a fresh session: bump the generation so any confirmation from
       // a PREVIOUS arming stops matching and the band goes back to prompting. See the state's
@@ -623,7 +658,14 @@ export function TsldPanel({
   const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
     ? null
     : mode === 'add-activity'
-      ? { kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }
+      ? {
+          kind: 'adding',
+          typeLabel: ACTIVITY_TYPE_LABELS[createType],
+          // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
+          // module reads no domain enum), and this is the same `isMilestone` the gesture machine
+          // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
+          gesture: isMilestone(createType) ? 'click' : 'drag',
+        }
       : mode === 'loe'
         ? { kind: 'loe', startPicked: loeStartId !== null }
         : mode === 'link'
@@ -792,6 +834,30 @@ export function TsldPanel({
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
   }, [baselineOverlay, varianceRows, activities]);
+  // The spoken twin of the ghost layer above (WCAG 1.4.1). Built by walking `baselineGhosts` itself
+  // rather than re-filtering the variance rows, so "which rows have a ghost" is answered ONCE: a bar
+  // drawn a ghost always says so, and one that isn't never does. Absent ⇒ no clause on any row.
+  const baselineClauseById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (!baselineGhosts || !varianceRows) return undefined;
+    const rowById = new Map(varianceRows.map((row) => [row.activityId, row]));
+    const clauses = new Map<string, string>();
+    for (const ghost of baselineGhosts) {
+      const row = rowById.get(ghost.id);
+      // The Late overlay repaints the live bars at their late dates, so the comparison the ghost
+      // shows is baseline-vs-late — the qualification the legend already makes in text.
+      if (row)
+        clauses.set(ghost.id, baselineGhostClause(row, { lateView: barDateSource === 'late' }));
+    }
+    return clauses.size > 0 ? clauses : undefined;
+  }, [baselineGhosts, varianceRows, barDateSource]);
+  // The spoken twin of the Colour-by-WBS fills (WCAG 1.4.1 — the a11y audit's one blocker: membership
+  // was carried by hue alone). Only while WBS is the ACTIVE colour mode: the clause describes what is
+  // drawn, so on any other mode there is nothing to describe and the row text is byte-for-byte today's.
+  const wbsGroupClauseById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (!CANVAS_LENSES_ENABLED || colourMode !== 'wbs') return undefined;
+    const labelById = wbsGroupLabelById(activities);
+    return new Map(activities.map((a) => [a.id, wbsGroupClause(a, labelById)]));
+  }, [colourMode, activities]);
   // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ──────────
   // The ids of the engine-flagged over-allocated activities (`levelingWindowExceeded ||
   // selfOverAllocated`, ADR-0041) — marked on the canvas with a badge + in the parallel listbox, and
@@ -810,6 +876,51 @@ export function TsldPanel({
     () => (flaggedIds ? [...flaggedIds].sort().join(',') : ''),
     [flaggedIds],
   );
+  // ── The parallel listbox's row text — ONE composition, two consumers ─────────────────────────
+  // The rendered `<li>` and the sentence `select()` announces both read this map. They used to be
+  // composed separately, and had drifted: selection spoke the Tier-1 line alone while the row it
+  // named also carried its dim reasons and its over-allocation mark.
+  //
+  // Memoised over the whole plan rather than composed per row on every render: the inputs are the
+  // precomputed lens maps, so this recomputes when a lens changes and not when (say) the workspace's
+  // resizer drags.
+  const rowTextById = useMemo(() => {
+    const text = new Map<string, string>();
+    for (const a of activities) {
+      // The canvas dimming, mirrored so it isn't conveyed by colour/emphasis alone (WCAG 1.4.1).
+      // Isolate (canvas nav) and the insight-lens filter each carry their own wording, and a row
+      // dimmed by more than one names EVERY cause — a single-cause suffix would hide the others.
+      //
+      // A REASONS ARRAY rather than nested ternaries: with two causes that was four branches and
+      // readable; a third makes it eight, and one of the eight ends up wrong with nobody noticing.
+      // The order below is the reading order, fixed.
+      const dimReasons = [
+        filterDimmedIds?.has(a.id) === true ? 'filtered out' : '',
+        isolateDimmed?.has(a.id) === true ? 'off the logic path' : '',
+        floatPathDimmed?.has(a.id) === true ? 'off the float path' : '',
+      ].filter(Boolean);
+      text.set(
+        a.id,
+        composeListboxRowText({
+          description: optionDescriptions.get(a.id) ?? '',
+          dimReasons,
+          overAllocated: flaggedIds?.has(a.id) ?? false,
+          baseline: baselineClauseById?.get(a.id),
+          wbsGroup: wbsGroupClauseById?.get(a.id),
+        }),
+      );
+    }
+    return text;
+  }, [
+    activities,
+    optionDescriptions,
+    filterDimmedIds,
+    isolateDimmed,
+    floatPathDimmed,
+    flaggedIds,
+    baselineClauseById,
+    wbsGroupClauseById,
+  ]);
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
   // filter clears (active → inactive), announce a neutral empty message so the polite live region drops
@@ -992,10 +1103,10 @@ export function TsldPanel({
   const select = (id: string | null): void => {
     setSelectedId(id);
     if (id) {
-      // Reuse the memoised Tier-1 line (it already carries the lane-overlap clause) rather than
-      // recomputing describeActivity here, so the spoken line matches the listbox exactly.
-      const description = optionDescriptions.get(id);
-      if (description) announce(description);
+      // The row's OWN text, not a rebuild of part of it — so what is spoken and what is on screen
+      // are the same string by construction, including the lens marks (WCAG 1.4.1 / 4.1.3).
+      const rowText = rowTextById.get(id);
+      if (rowText) announce(rowText);
     }
   };
 
@@ -1024,12 +1135,53 @@ export function TsldPanel({
     onSelectionChange?.(selectedId);
   }, [selectedId, onSelectionChange]);
 
+  /**
+   * **The one place an edit is recorded for the settle announcement.**
+   *
+   * The settle announcer needs a note ("this planner edited that activity") to have something to
+   * compare the recalculated dates against; without one it returns early and says nothing. That note
+   * used to be taken inside the pointer-gesture handler (`onIntent`), which the keyboard nudges do
+   * not go through — they commit through their own coalescing hooks — so `Alt`+arrow and
+   * `Shift`+arrow wrote to the API and then settled in permanent silence, while the identical mouse
+   * edit got both sentences (WCAG 4.1.3).
+   *
+   * Both routes do share exactly one seam: the host's `onReposition` / `onResize` callbacks. Noting
+   * there covers every present and future caller by construction, rather than leaving three call
+   * sites to be kept in step — which is the failure mode this fix exists to remove, not to repeat.
+   *
+   * The lane-only rule is preserved and is now *derivable* rather than restated: a write that
+   * carries no `startDay` changed only layout, recalculates nothing, and must not leave an open note
+   * for some unrelated recalculation to consume and narrate as this planner's doing.
+   */
+  const { noteEdit } = recalcOutcome;
+  const notedReposition = useMemo(
+    () =>
+      onReposition
+        ? (input: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
+            if (input.startDay !== undefined) noteEdit(input.activityId);
+            return onReposition(input);
+          }
+        : undefined,
+    [onReposition, noteEdit],
+  );
+  // A resize always changes a duration, so it always recalculates — note it unconditionally.
+  const notedResize = useMemo(
+    () =>
+      onResize
+        ? (input: TsldResizeInput): Promise<TsldResizeOutcome> => {
+            noteEdit(input.activityId);
+            return onResize(input);
+          }
+        : undefined,
+    [onResize, noteEdit],
+  );
+
   // Coalesced keyboard nudge (M5 5.2) — a held Alt+arrow becomes one net write per burst, read at
   // the live version, serialized, flushed on unmount, and race-free vs. an in-flight pointer drag.
   // The full state machine + its correctness reasoning live in the hook (unit-tested there).
   const pointerRepositionBusyRef = useRef(false);
   const nudge = useCoalescedNudge({
-    onReposition,
+    onReposition: notedReposition,
     activities,
     dataDate,
     setGhost: setPendingReposition,
@@ -1042,7 +1194,7 @@ export function TsldPanel({
   // the finish-edge resize drag, sharing the pointer-busy gate + ghost + banner seams with the
   // reposition nudge above. Inert unless the direct-manipulation flag armed the keyboard branch.
   const durationNudge = useCoalescedDurationNudge({
-    onResize,
+    onResize: notedResize,
     activities,
     dataDate,
     setGhost: setPendingReposition,
@@ -1402,7 +1554,7 @@ export function TsldPanel({
     }
     if (intent.kind === 'reposition') {
       const activity = activities.find((a) => a.id === intent.activityId);
-      if (!activity || !onReposition) return;
+      if (!activity || !notedReposition) return;
       clearConflict();
       // Snap to grid (canvas nav, `docs/specs/canvas-nav/`, Visual mode): round the dropped day to the
       // nearest working day BEFORE the PATCH — only in Visual mode (`barDateSource === 'visual'`), only
@@ -1429,9 +1581,12 @@ export function TsldPanel({
       const startDay = snappedStartDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
+      // The settle note is taken at the shared write seam (`notedReposition`), not here: this
+      // handler is the pointer route only, and the keyboard nudges — which commit through the same
+      // callback — were silently missing it.
       // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
       pointerRepositionBusyRef.current = true;
-      void onReposition({
+      void notedReposition({
         activityId: intent.activityId,
         ...(snappedStartDay !== undefined ? { startDay: snappedStartDay } : {}),
         ...(intent.laneIndex !== undefined ? { laneIndex: intent.laneIndex } : {}),
@@ -1484,7 +1639,7 @@ export function TsldPanel({
       // pins the finish (the ghost's left edge tracks the new start; the route maps it mode-aware,
       // ADR-0052 §3). The route owns the PATCH + recalc; a stale-version refusal banners.
       const activity = activities.find((a) => a.id === intent.activityId);
-      if (!activity || !onResize) return;
+      if (!activity || !notedResize) return;
       clearConflict();
       const startDay =
         intent.edge === 'start'
@@ -1507,9 +1662,11 @@ export function TsldPanel({
         endDay: drawnEndDay,
         laneIndex: activity.laneIndex,
       });
+      // The settle note rides the shared write seam (`notedResize`), which the `Shift+←/→` nudge
+      // commits through as well — see the seam's docblock.
       // Share the pointer-busy gate with reposition so a keyboard nudge can't race this write.
       pointerRepositionBusyRef.current = true;
-      void onResize({
+      void notedResize({
         activityId: intent.activityId,
         durationDays: days,
         ...(intent.edge === 'start' ? { startDay: placement.startDay } : {}),
@@ -1750,7 +1907,17 @@ export function TsldPanel({
         Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
         right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
       */}
-      {CANVAS_AUTHORING_FLOW_ENABLED && showDiagram && activities.length === 0 ? (
+      {/*
+        …and only while nothing is armed. Arming a tool replaces this notice with the mode band's
+        instruction: two strips stacked above the same empty canvas told the planner to press a
+        button they had already pressed and to draw, at the same time, in different words. One
+        instruction at a time, and the armed tool's is the one that describes what the next click
+        does.
+      */}
+      {CANVAS_AUTHORING_FLOW_ENABLED &&
+      showDiagram &&
+      activities.length === 0 &&
+      mode === 'select' ? (
         <NoticeStrip
           data-testid="canvas-empty-state"
           emphasis="dashed"
@@ -1767,6 +1934,19 @@ export function TsldPanel({
                 event.preventDefault();
                 return;
               }
+              // Arming REPLACES this notice with the mode band's instruction (above), which
+              // unmounts the button being pressed — and the band deliberately carries no focusable
+              // element for the `adding` statement. Without a destination, focus reverts to
+              // <body> and the next Tab restarts at the top of the document (WCAG 2.4.3), on the
+              // one screen this notice exists to make self-explanatory. So the transition carries
+              // focus to the diagram's parallel listbox, which is both where drawing is operated
+              // from next and the existing pattern for a programmatic move here (the
+              // Next-conflict cycle above). Done HERE, in the button's own click handler, rather
+              // than in an effect keyed on `mode`: a mode change arriving from the toolbar or a
+              // shortcut is not this planner asking to be moved, and a focus move with no gesture
+              // behind it is its own defect. The disarm direction needs nothing — focus is on the
+              // listbox by then, so restoring the notice strands no one.
+              listboxRef.current?.focus();
               setMode('add-activity');
             }}
             className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
@@ -1829,6 +2009,10 @@ export function TsldPanel({
               wbsBandHeightPx={wbsBandHeightPx}
               {...(onSelectionChange ? { onSelectBandSummary: onSelectionChange } : {})}
               {...(selectionActionsWired ? { selectionAnchorRef } : {})}
+              // The substantive M2 change (canvas status & feedback): `pending` NARROWS to the
+              // create-popover ghost only — a reposition/resize write no longer freezes the whole
+              // surface. Its optimistic ghost still paints (writeGhost) and new edit grabs are
+              // refused visibly (writeBusy); `onIntent`'s double-write guard above is untouched.
               pending={
                 pendingCreate
                   ? {
@@ -1836,8 +2020,10 @@ export function TsldPanel({
                       endDay: pendingCreate.endDay,
                       laneIndex: pendingCreate.laneIndex,
                     }
-                  : pendingReposition
+                  : null
               }
+              writeGhost={pendingReposition}
+              writeBusy={pendingReposition !== null}
             />
 
             {pendingCreate ? (
@@ -1858,6 +2044,23 @@ export function TsldPanel({
             ) : null}
 
             {/*
+              The data date stated once in TEXT (canvas status & feedback M1, WCAG 1.4.1): the
+              marker a screen-reader user cannot see is still a fact they have. Linked to the
+              listbox with `aria-describedby` rather than trusting reading order — a landmark-
+              navigating reader lands INSIDE the region and never passes a preceding paragraph
+              (the ADR-0073 C2.5 finding, applied rather than re-learnt). Deliberately NOT a
+              live region: a standing fact re-announced on every re-render is noise. Today is
+              named only when it differs — absence a reader can distinguish from a fact.
+            */}
+            {CANVAS_DATA_DATE_ENABLED ? (
+              <p id={`${listboxId}-data-date`} className="sr-only">
+                {`Data date ${formatCalendarDate(dataDate)}.`}
+                {todayIso && todayIso !== dataDate
+                  ? ` Today is ${formatCalendarDate(todayIso)}.`
+                  : ''}
+              </p>
+            ) : null}
+            {/*
               The accessible parallel representation: a focusable listbox mirroring the
               canvas (ADR-0026). Visually hidden — the canvas is the sighted view and rings
               the selection — but fully keyboard-operable and announced, so the diagram is
@@ -1870,7 +2073,18 @@ export function TsldPanel({
               role="listbox"
               aria-label="Activities in the diagram"
               tabIndex={0}
+              // The in-flight write, stated on the widget the keyboard planner is actually on. The
+              // canvas container carries the same attribute for the pointer path (kept — it is what
+              // the busy cursor sits on), but that node has no role and no accessible name and is
+              // structurally elsewhere from this listbox, so a nudge committed from here was
+              // invisible until it settled. Same source of truth as the canvas's `writeBusy`, so
+              // the two can never disagree; `undefined` rather than `false` keeps the attribute
+              // absent while idle (the existing `[aria-busy="true"]` assertions).
+              aria-busy={pendingReposition !== null || undefined}
               className="sr-only"
+              {...(CANVAS_DATA_DATE_ENABLED
+                ? { 'aria-describedby': `${listboxId}-data-date` }
+                : {})}
               aria-activedescendant={selectedId ? optionId(selectedId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {
@@ -1883,41 +2097,22 @@ export function TsldPanel({
                 if (!selectedId && activities[0]) select(activities[0].id);
               }}
             >
-              {activities.map((a) => {
-                // Mirror the canvas dimming in the parallel listbox so it isn't conveyed by
-                // colour/emphasis alone (WCAG 1.4.1). Isolate (canvas nav) and the insight-lens filter
-                // (`docs/specs/canvas-lenses/`) each carry their own wording; a marked option stays fully
-                // selectable/navigable (dim-not-hide) — so NO `aria-disabled`, which would wrongly signal
-                // an inoperable option (a11y review). When a row is dimmed by BOTH, name both causes (a
-                // single-cause suffix would hide the other), rather than letting isolate silently win.
+              {activities.map((a) => (
+                // Every canvas mark this row mirrors — the dim reasons, the over-allocation flag, the
+                // WBS group and the baseline ghost — is composed in `rowTextById`, which `select()`
+                // also announces, so the two can never again say different things (WCAG 1.4.1).
                 //
-                // Built as a REASONS ARRAY rather than nested ternaries. With two causes that was
-                // four branches and readable; a third makes it eight, and one of the eight ends up
-                // wrong with nobody noticing. The order below is the reading order, fixed.
-                const reasons = [
-                  filterDimmedIds?.has(a.id) === true ? 'filtered out' : '',
-                  isolateDimmed?.has(a.id) === true ? 'off the logic path' : '',
-                  floatPathDimmed?.has(a.id) === true ? 'off the float path' : '',
-                ].filter(Boolean);
-                const marker = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
-                // Over-allocation (Stage E M2) is an ADDITIVE highlight, not a dim — so it marks the
-                // option independently of the dim marker above (a bar can be over-allocated AND dimmed),
-                // mirroring the canvas badge that draws over the dim (WCAG 1.4.1 — the flag isn't
-                // colour/emphasis-only). Absent `flaggedIds` ⇒ empty ⇒ byte-for-byte today's option text.
-                const overAllocated = flaggedIds?.has(a.id) ?? false;
-                return (
-                  <li
-                    key={a.id}
-                    id={optionId(a.id)}
-                    role="option"
-                    aria-selected={a.id === selectedId}
-                  >
-                    {optionDescriptions.get(a.id)}
-                    {marker}
-                    {overAllocated ? ' (over-allocated)' : ''}
-                  </li>
-                );
-              })}
+                // A marked row stays fully selectable/navigable (dim-not-hide) — so NO `aria-disabled`,
+                // which would wrongly signal an inoperable option (a11y review).
+                <li
+                  key={a.id}
+                  id={optionId(a.id)}
+                  role="option"
+                  aria-selected={a.id === selectedId}
+                >
+                  {rowTextById.get(a.id)}
+                </li>
+              ))}
             </ul>
           </>
         ) : (

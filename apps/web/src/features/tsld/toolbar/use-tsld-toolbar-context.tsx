@@ -28,6 +28,7 @@ import type {
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -438,6 +439,12 @@ export function useTsldToolbarContext({
         dataDate,
         view: viewToggles,
         todayOffset: daysBetween(dataDate, todayIso),
+        // The data-date line (canvas status & feedback M1) — the SAME composition `TsldCanvas`
+        // makes, because the export builds its own scene rather than reusing the live one: without
+        // this line the exported picture would silently disagree with the screen about the one
+        // status mark the epic exists to draw. Flag-off the field is false ⇒ the layer never runs
+        // ⇒ the export is byte-for-byte the prior picture.
+        dataDateLine: CANVAS_DATA_DATE_ENABLED && (viewToggles.dataDate ?? true),
       };
       const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {
         extent,

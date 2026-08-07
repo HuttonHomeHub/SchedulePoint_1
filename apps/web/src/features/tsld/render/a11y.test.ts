@@ -1,14 +1,17 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import {
   activityBarLabel,
   activityLabel,
   announceChainStep,
+  baselineGhostClause,
   chainNeighbour,
+  composeListboxRowText,
   describeActivity,
   lagPhrase,
   summarizeLogic,
+  wbsGroupClause,
 } from './a11y';
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
@@ -390,6 +393,111 @@ describe('a11y-string parity across the M4 visual refresh', () => {
   it('pins the shared bar-label identity byte-for-byte (visible label = accessible prefix)', () => {
     expect(activityBarLabel({ code: 'A100', name: 'Excavate', durationDays: 3 })).toBe(
       'A100 Excavate · 3d',
+    );
+  });
+});
+
+// ── Lens marks: the row's text equivalents for what the canvas is currently drawing ──────────
+
+function variance(over: Partial<BaselineVarianceRow> = {}): BaselineVarianceRow {
+  return {
+    activityId: 'a1',
+    code: null,
+    name: 'Excavate',
+    inBaseline: true,
+    removed: false,
+    currentStart: '2026-01-06',
+    currentFinish: '2026-01-10',
+    currentTotalFloat: 0,
+    baselineStart: '2026-01-01',
+    baselineFinish: '2026-01-05',
+    baselineTotalFloat: 0,
+    startVarianceDays: 5,
+    finishVarianceDays: 5,
+    floatVarianceDays: 0,
+    ...over,
+  };
+}
+
+describe('wbsGroupClause (the WBS colour lens’s text equivalent)', () => {
+  const labels = new Map([['sum', 'A200']]);
+
+  it('names the group an activity is filed under', () => {
+    expect(wbsGroupClause({ parentId: 'sum', type: 'TASK' }, labels)).toBe(' (group: A200)');
+  });
+
+  it('says ungrouped for a top-level activity', () => {
+    expect(wbsGroupClause({ parentId: null, type: 'TASK' }, labels)).toBe(' (ungrouped)');
+  });
+
+  it('says ungrouped for an orphan — a parentId naming a row the plan does not hold', () => {
+    // The rule `features/wbs/model/wbs-groups.ts` and the Gantt row model already agree on, reached
+    // here by a lookup miss rather than by a second "who is my parent" resolution.
+    expect(wbsGroupClause({ parentId: 'gone', type: 'TASK' }, labels)).toBe(' (ungrouped)');
+  });
+
+  it('says nothing for a top-level summary — a summary IS a group', () => {
+    expect(wbsGroupClause({ parentId: null, type: 'WBS_SUMMARY' }, labels)).toBe('');
+  });
+});
+
+describe('baselineGhostClause (the baseline ghost’s text equivalent)', () => {
+  it('names the captured span and the finish variance, in the variance table’s direction words', () => {
+    expect(baselineGhostClause(variance())).toBe(
+      ' (baseline 01 Jan 2026 to 05 Jan 2026, finish 5 working days behind)',
+    );
+    expect(baselineGhostClause(variance({ finishVarianceDays: -1 }))).toBe(
+      ' (baseline 01 Jan 2026 to 05 Jan 2026, finish 1 working day ahead)',
+    );
+    expect(baselineGhostClause(variance({ finishVarianceDays: 0 }))).toBe(
+      ' (baseline 01 Jan 2026 to 05 Jan 2026, finish on baseline)',
+    );
+  });
+
+  it('states one date for a baselined milestone (start === finish)', () => {
+    expect(
+      baselineGhostClause(variance({ baselineStart: '2026-01-01', baselineFinish: '2026-01-01' })),
+    ).toContain('(baseline 01 Jan 2026,');
+  });
+
+  it('says the span alone when the variance is not comparable', () => {
+    expect(baselineGhostClause(variance({ finishVarianceDays: null }))).toBe(
+      ' (baseline 01 Jan 2026 to 05 Jan 2026)',
+    );
+  });
+
+  it('says nothing where there is no ghost — removed, or null baseline dates', () => {
+    expect(baselineGhostClause(variance({ removed: true }))).toBe('');
+    expect(baselineGhostClause(variance({ baselineStart: null }))).toBe('');
+    expect(baselineGhostClause(variance({ baselineFinish: null }))).toBe('');
+  });
+
+  it('qualifies the comparison when the Late overlay is drawing the live bars', () => {
+    expect(baselineGhostClause(variance(), { lateView: true })).toBe(
+      ' (baseline 01 Jan 2026 to 05 Jan 2026 vs the late view, finish 5 working days behind)',
+    );
+  });
+});
+
+describe('composeListboxRowText', () => {
+  it('is the Tier-1 sentence unchanged when no lens is marking the row', () => {
+    expect(composeListboxRowText({ description: 'Excavate, 3 working days' })).toBe(
+      'Excavate, 3 working days',
+    );
+  });
+
+  it('appends the marks in reading order: dim reasons, over-allocation, baseline, group', () => {
+    expect(
+      composeListboxRowText({
+        description: 'Excavate',
+        dimReasons: ['filtered out', 'off the logic path'],
+        overAllocated: true,
+        baseline: ' (baseline 01 Jan 2026 to 05 Jan 2026)',
+        wbsGroup: ' (group: A200)',
+      }),
+    ).toBe(
+      'Excavate (filtered out, off the logic path) (over-allocated) ' +
+        '(baseline 01 Jan 2026 to 05 Jan 2026) (group: A200)',
     );
   });
 });

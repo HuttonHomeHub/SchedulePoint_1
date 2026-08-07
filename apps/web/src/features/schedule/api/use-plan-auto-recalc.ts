@@ -188,11 +188,18 @@ export function usePlanAutoRecalc(
 
   const flush = useCallback(
     (onSuccess?: () => void): void => {
+      // A waiting timer means an edit was made inside the debounce window, so the settle announcer
+      // is already going to speak that edit's new dates. Registering the manual confirmation as well
+      // would put two owners on one settle, and the polite region clears-and-re-sets on the next
+      // frame — so two utterances in a frame collapse to whichever lands last, non-deterministically
+      // dropping either the status word or the facts. One settle, one owner: when an edit is
+      // waiting, the informative sentence wins and this generic confirmation stands down.
+      const editWasWaiting = timerRef.current !== null;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      if (onSuccess) manualSuccessRef.current = onSuccess;
+      if (onSuccess && !editWasWaiting) manualSuccessRef.current = onSuccess;
       // An explicit Recalculate is the user overruling the hold, not a coalesced edit: fire now and
       // drop the holds, so the surface that took one is told its gesture is no longer protected.
       if (holdsRef.current.size > 0) {

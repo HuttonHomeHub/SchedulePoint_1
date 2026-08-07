@@ -6,6 +6,7 @@ import {
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
   SCHEDULING_MODES_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 
@@ -43,6 +44,10 @@ describe('TSLD View▾ toggle registry', () => {
       // The ADR-0063 pinned WBS band — gated on VITE_WBS_IMPROVEMENTS. It sits with its Structure
       // group-mates rather than at the end: the order here is the order of the menu.
       'wbsBand',
+      // The data-date status line (canvas status & feedback M1) — gated on VITE_CANVAS_DATA_DATE,
+      // default-on 2026-08-07. It sits immediately before Today because the two are one decision:
+      // they are the canvas's two vertical time markers and a planner reads them as a pair.
+      'dataDate',
       'today',
       'nonWorking',
       'labels',
@@ -63,6 +68,7 @@ describe('TSLD View▾ toggle registry', () => {
     expect(SCHEDULING_MODES_ENABLED).toBe(true);
     expect(CANVAS_VISUAL_LANGUAGE_ENABLED).toBe(true);
     expect(WBS_IMPROVEMENTS_ENABLED).toBe(true);
-    expect(TSLD_VIEW_TOGGLE_KEYS).toHaveLength(12);
+    expect(CANVAS_DATA_DATE_ENABLED).toBe(true);
+    expect(TSLD_VIEW_TOGGLE_KEYS).toHaveLength(13);
   });
 });

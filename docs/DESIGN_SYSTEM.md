@@ -502,6 +502,33 @@ link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
   month-band ground (ADR-0055 §4) gains its own `View▾ → Structure → Month bands` switch in the
   same milestone — `VITE_CANVAS_VISUAL_LANGUAGE` stays the gate and default; the switch only lets
   a user turn an existing layer off for the session.
+- **TSLD marker channels & the data-date line (`VITE_CANVAS_DATA_DATE`, canvas status & feedback
+  M1; proposes ADR-0078)** — the canvas's full-height and near-full-height marks each own a
+  **channel** (shape + weight + hue), decided as one vocabulary rather than per-mark, because
+  ADR-0056 already had to reason about the dash channel in the absence of such a record. The table
+  is the constraint the next canvas mark must obey:
+
+  | Mark                            | Channel                             | Rationale                                                                     |
+  | ------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
+  | Gridline tiers (day/month/year) | solid, hairline, border-family hues | Structure. Never dashed (ADR-0056).                                           |
+  | **Data date**                   | **solid, 2 px, foreground**         | The schedule's own pivot — a fact of the programme, permanent, authoritative. |
+  | Today                           | dashed, 1.5 px, destructive         | Wall-clock now: a _moving_ cue, and the dash says so.                         |
+  | Cursor guideline (ADR-0054)     | dashed, ring hue, transient         | Follows the pointer; exists only during a gesture.                            |
+
+  Shape (solid vs dashed) and weight distinguish the data date from Today **without relying on
+  hue** — that is what makes the pair WCAG 1.4.1-safe rather than merely pretty. The palette pair
+  is `dataDate`/`dataDateInk`, resolved from `--color-foreground`/`--color-background` in **both**
+  `resolveTsldPalette` and `resolvePrintPalette` (the painter palette contract is total; pinned in
+  `palette.test.ts`). `--color-info` — P6's blue, the semantically obvious pick — was measured and
+  **rejected**: in all three shipped themes it is a near neighbour of `--color-primary`, the
+  on-schedule bar fill, and a "distinct" line in the bar hue on a diagram whose entire content is
+  bars is not distinct. The foreground token's one collision is the 1.5 px critical-bar outline —
+  a bar-shaped stroke, not a full-height rule — noted and accepted. **The coincidence rule:** when
+  the data-date and Today rules round to the same screen pixel, exactly one line draws (the
+  data-date treatment) with one merged `Data date · today` pill — two coincident lines are a
+  rendering artefact, not two facts. Each pill has its own **derived** row constant
+  (`DATA_DATE_CHIP_TOP = TODAY_CHIP_TOP + TODAY_CHIP_H + 4`), never a literal, so the clamped
+  pills can never overlap.
 
 ---
 

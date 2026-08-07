@@ -83,6 +83,7 @@ import type { SelectionAnchor } from '../toolbar/selection-actions';
 
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
@@ -225,9 +226,23 @@ export interface TsldCanvasProps {
   loePickStartId?: string | null;
   /** Called when Esc is pressed while idle in add-activity mode (revert to Select). */
   onExitAddMode?: () => void;
-  /** The active edit ghost drawn on the interaction layer — a dropped create awaiting its name,
-   * or the moved bar while a reposition is in flight. While set, canvas gestures are suspended. */
+  /** The dropped-create ghost held open under the name popover. While set, the canvas is TOTALLY
+   * inert (no pan, no gesture): an in-progress name must never be lost to a stray drag. A
+   * reposition/resize write in flight is deliberately NOT this prop — that state keeps the surface
+   * live and rides {@link writeGhost} + {@link writeBusy} instead (canvas status & feedback M2). */
   pending?: PendingGhost | null;
+  /** The optimistic ghost of a reposition/resize write in flight — painted in the same overlay
+   * slot as {@link pending} (at most one of the two is ever set: `onIntent` refuses a new gesture
+   * while either is pending), but it does NOT own the canvas. */
+  writeGhost?: PendingGhost | null;
+  /** True while a reposition/resize write is in flight. Refuses only NEW edit grabs
+   * (body-reposition, bar-end resize, lag-anchor — and an add-mode draw, whose intent the panel
+   * would drop anyway); empty-ground pan, wheel zoom, hover and the plain click-select stay live.
+   * Split from {@link pending} rather than deleting the gate: `onIntent` already refuses a second
+   * intent mid-write, so an un-gated drag would run, ghost and then apply nothing — the "lit but
+   * inert" defect shape (ADR-0059 M6 / ADR-0062 M6). The refusal is visible instead (busy cursor,
+   * `aria-busy`). */
+  writeBusy?: boolean;
   /** Which optional view layers to draw (grid variants / today / non-working). Defaults to all on. */
   view?: TsldViewToggles;
   /** Predicate built from the plan calendar (mask + holiday exceptions): is this day offset worked?
@@ -575,6 +590,8 @@ export function TsldCanvas({
   loePickStartId = null,
   onExitAddMode,
   pending = null,
+  writeGhost = null,
+  writeBusy = false,
   view,
   isWorkingDay = null,
   todayOffset = null,
@@ -671,7 +688,7 @@ export function TsldCanvas({
     list: readonly RenderActivity[];
     byId: ReadonlyMap<string, RenderActivity>;
   } | null>(null);
-  const pendingRef = useRef<PendingGhost | null>(pending);
+  const pendingRef = useRef<PendingGhost | null>(pending ?? writeGhost);
   // Read by the window key listener (set up once), so it sees the current mode/handler.
   const modeRef = useRef(mode);
   const exitAddModeRef = useRef(onExitAddMode);
@@ -708,6 +725,11 @@ export function TsldCanvas({
   // expression (component-review finding) so the initial scene ref and the resync effect below
   // can't drift out of step.
   const monthBandsEnabled = CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? true);
+  // Same shape for the data-date line (canvas status & feedback M1): the flag decides whether the
+  // status layer exists at all — flag-off the scene carries no `dataDateLine` and the frame is
+  // byte-for-byte today's — while the user's `View▾` preference only narrows the flag-on case.
+  // The painter stays flag-free, as every other layer does.
+  const dataDateLineEnabled = CANVAS_DATA_DATE_ENABLED && (view?.dataDate ?? true);
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -719,6 +741,7 @@ export function TsldCanvas({
     todayOffset,
     todayFraction,
     monthBands: monthBandsEnabled,
+    dataDateLine: dataDateLineEnabled,
     // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
     // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
     gridTiers: CANVAS_TIME_AXIS_ENABLED,
@@ -808,6 +831,7 @@ export function TsldCanvas({
       todayOffset,
       todayFraction,
       monthBands: monthBandsEnabled,
+      dataDateLine: dataDateLineEnabled,
       // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
       // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
       gridTiers: CANVAS_TIME_AXIS_ENABLED,
@@ -842,6 +866,7 @@ export function TsldCanvas({
     lagArmed,
     view,
     monthBandsEnabled,
+    dataDateLineEnabled,
     isWorkingDay,
     todayOffset,
     todayFraction,
@@ -969,11 +994,15 @@ export function TsldCanvas({
     }
   }, [selectedId, activities, dataDate, wbsBandHeightPx]);
 
-  // Publish the pending ghost to the loop.
+  // Publish the held ghost to the loop. The create ghost and the write ghost share the one overlay
+  // slot (they are mutually exclusive — see the prop docs), so the in-flight write keeps its
+  // optimistic picture even though it no longer rides the `pending` gate. The Escape handler's
+  // "no ghost pending" check reads this same ref, so its behaviour is byte-for-byte the old
+  // single-prop gate's in both states.
   useEffect(() => {
-    pendingRef.current = pending;
+    pendingRef.current = pending ?? writeGhost;
     interactionDirtyRef.current = true;
-  }, [pending]);
+  }, [pending, writeGhost]);
 
   // Publish the resource-strip snapshot to the loop (Stage E, ADR-0049). Writing it marks ONLY the
   // strip dirty (`stripDirtyRef`) — never `dirtyRef` — so a picker/bucket/refetch change repaints the
@@ -1453,6 +1482,14 @@ export function TsldCanvas({
     wbsBandDirtyRef.current = true;
   }, [themeVersion]);
 
+  // The idle-hover affordance writes an INLINE cursor ('ew-resize'), which beats the class-based
+  // busy cursor. Clear it the moment a write starts: the hover branch only re-runs on the next
+  // pointer move, so a stationary pointer over a handle would otherwise keep advertising a grab
+  // the pointer-down gate now refuses.
+  useEffect(() => {
+    if (writeBusy && canvasRef.current) canvasRef.current.style.cursor = '';
+  }, [writeBusy]);
+
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const localPoint = (e: React.PointerEvent | React.MouseEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -1495,7 +1532,14 @@ export function TsldCanvas({
   };
 
   return (
-    <div ref={containerRef} className="bg-canvas relative h-full w-full overflow-hidden">
+    // `aria-busy` states the in-flight write to AT (plan test: present while the write is pending,
+    // absent after EVERY settle path incl. `.catch`). Deliberately not set for the create popover —
+    // that is a held question awaiting the user, not the app being busy.
+    <div
+      ref={containerRef}
+      aria-busy={writeBusy || undefined}
+      className="bg-canvas relative h-full w-full overflow-hidden"
+    >
       {/* The sticky date ruler: a DOM band updated imperatively from the rAF loop (aria-hidden — the
           canvas already has the parallel a11y listbox; pointer-events-none so pan/zoom fall through). */}
       <div
@@ -1547,9 +1591,14 @@ export function TsldCanvas({
         aria-hidden="true"
         style={{ top: sceneTopOffset(wbsBandHeightPx) }}
         className={`absolute inset-x-0 block touch-none ${
-          editing && (mode === 'add-activity' || mode === 'link' || mode === 'loe')
-            ? 'cursor-crosshair'
-            : 'cursor-grab active:cursor-grabbing'
+          editing && writeBusy
+            ? // A write is in flight: `progress` (busy but still interactive) rather than `wait` —
+              // pan/select/hover stay live; only a new edit grab is refused. This also replaces the
+              // grab/crosshair affordance over bars, so the refusal is visible before the press.
+              'cursor-progress'
+            : editing && (mode === 'add-activity' || mode === 'link' || mode === 'loe')
+              ? 'cursor-crosshair'
+              : 'cursor-grab active:cursor-grabbing'
         }`}
         onPointerDown={(e) => {
           // A create popover is open — the canvas is inert until it commits or cancels, so an
@@ -1561,6 +1610,14 @@ export function TsldCanvas({
           // drag gestures — so a press must NOT run the gesture reducer here, else it would clear an
           // in-progress pick before the second click's release lands. Panning still works via `drag`.
           if (editing && mode !== 'link' && mode !== 'loe') {
+            // A reposition/resize write is in flight (canvas status & feedback M2): refuse to START
+            // another edit gesture. The panel's `onIntent` would drop its result anyway, and a drag
+            // that runs, ghosts and then applies nothing is the "lit but inert" shape (ADR-0059 M6 /
+            // ADR-0062 M6) — so it is refused before it arms, with the busy cursor + `aria-busy`
+            // saying why. Returning HERE (after the pan setup above) keeps panning live by
+            // construction, and a stationary press still selects through the plain click path on
+            // pointer-up.
+            if (writeBusy) return;
             const p = localPoint(e);
             const rawHit = classifyAt(p, resizeArmed, lagArmed);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
@@ -1663,10 +1720,13 @@ export function TsldCanvas({
               const hover = classifyAt(localPoint(e), resizeArmed, lagArmed);
               const surface = canvasRef.current;
               if (surface) {
+                // While a write is in flight the grab is refused (M2), so the zone must not
+                // advertise it — '' falls back to the class-based busy cursor.
                 surface.style.cursor =
-                  hover.kind === 'resizeFinish' ||
-                  hover.kind === 'resizeStart' ||
-                  hover.kind === 'lagAnchor'
+                  !writeBusy &&
+                  (hover.kind === 'resizeFinish' ||
+                    hover.kind === 'resizeStart' ||
+                    hover.kind === 'lagAnchor')
                     ? 'ew-resize'
                     : '';
               }

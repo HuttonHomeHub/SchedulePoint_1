@@ -35,6 +35,8 @@ const PALETTE: TsldPalette = {
   nonWorkingHatch: '#e5e7eb',
   today: '#dc2626',
   todayInk: '#ffffff',
+  dataDate: '#111827',
+  dataDateInk: '#ffffff',
   conflict: '#f59e0b',
   laneOverlap: '#f59e0b',
   labelInside: '#ffffff',
