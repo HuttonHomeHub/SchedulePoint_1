@@ -323,6 +323,127 @@ describe('liveResize / liveLag readouts (ADR-0052 M3 — pure overlay helpers)',
 });
 
 /**
+ * **The write-busy gate** (canvas status & feedback M2): `writeBusy` refuses only NEW edit grabs
+ * while a reposition/resize write is in flight; pan, wheel zoom, hover and the plain click-select
+ * stay live. `pending` keeps its create-popover meaning — a TOTAL gate. The panel-level halves
+ * (the real prop composition, both error paths) live in `TsldPanel.editing.test.tsx` /
+ * `TsldPanel.resize.test.tsx`, where the red-first proof against the old single gate ran.
+ */
+describe('TsldCanvas — the write-busy gate (canvas status & feedback M2)', () => {
+  function renderBusy(overrides: { writeBusy?: boolean; pending?: boolean } = {}) {
+    const onIntent = vi.fn();
+    const onSelect = vi.fn();
+    const utils = render(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={onSelect}
+        fitSignal={0}
+        editing
+        mode="select"
+        canReposition
+        canResize
+        onIntent={onIntent}
+        writeBusy={overrides.writeBusy ?? false}
+        pending={overrides.pending ? { startDay: 1, endDay: 4, laneIndex: 0 } : null}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    return { ...utils, canvas, onIntent, onSelect };
+  }
+
+  it('refuses a NEW edit grab while writeBusy: a bar-body drag pans instead of arming a reposition', () => {
+    const { canvas, onIntent, onSelect } = renderBusy({ writeBusy: true });
+    // The a1 bar (days 1..4 at lane 0) body sits at x 62..102, y 45..63 at the default viewport.
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    expect(onIntent).not.toHaveBeenCalled(); // the gesture never armed…
+    expect(onSelect).not.toHaveBeenCalled(); // …and the drag was a pan, not a click
+  });
+
+  it('still selects on a stationary bar click while writeBusy (selection is a read)', () => {
+    const { canvas, onIntent, onSelect } = renderBusy({ writeBusy: true });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    expect(onSelect).toHaveBeenCalledWith('a1');
+    expect(onIntent).not.toHaveBeenCalled();
+  });
+
+  it('keeps wheel zoom live while writeBusy (still prevents default)', () => {
+    const { canvas } = renderBusy({ writeBusy: true });
+    const event = new WheelEvent('wheel', { deltaY: -100, cancelable: true, bubbles: true });
+    canvas.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('swaps the grab affordance for the busy (progress) cursor while writeBusy', () => {
+    const { canvas, rerender } = renderBusy({ writeBusy: true });
+    expect(canvas.className).toContain('cursor-progress');
+    expect(canvas.className).not.toContain('cursor-grab');
+    rerender(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        editing
+        mode="select"
+        canReposition
+        canResize
+        onIntent={vi.fn()}
+        writeBusy={false}
+      />,
+    );
+    expect(canvas.className).toContain('cursor-grab');
+  });
+
+  it('suppresses the inline ew-resize handle affordance while writeBusy', () => {
+    // The finish grab-zone is the bar's last 8px (x 102..110). Idle-hovering it normally
+    // advertises the resize grab; while a write is in flight that grab would be refused, so the
+    // zone must not advertise it — '' falls back to the class-based busy cursor.
+    const busy = renderBusy({ writeBusy: true });
+    fireEvent.pointerMove(busy.canvas, { clientX: 106, clientY: 54, pointerId: 1 });
+    expect(busy.canvas.style.cursor).toBe('');
+    busy.unmount();
+    const live = renderBusy();
+    fireEvent.pointerMove(live.canvas, { clientX: 106, clientY: 54, pointerId: 1 });
+    expect(live.canvas.style.cursor).toBe('ew-resize');
+  });
+
+  it('carries aria-busy="true" on the container only while writeBusy', () => {
+    const busy = renderBusy({ writeBusy: true });
+    expect(busy.container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    busy.unmount();
+    const live = renderBusy();
+    expect(live.container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it('keeps the create-popover gate TOTAL: while `pending` is set no pan starts and no gesture arms', () => {
+    const { canvas, onIntent, onSelect } = renderBusy({ pending: true });
+    // An attempted body drag arms nothing (the pointer-down returns before the pan setup)…
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    expect(onIntent).not.toHaveBeenCalled();
+    // …and an attempted pan moved nothing: the bar still answers a click at its ORIGINAL pixels.
+    fireEvent.pointerDown(canvas, { clientX: 300, clientY: 200, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 70, clientY: 54, pointerId: 3 });
+    expect(onSelect).toHaveBeenLastCalledWith('a1');
+    // The popover state is not "busy" — it is a held question, not an in-flight write.
+    expect(canvas.className).not.toContain('cursor-progress');
+  });
+});
+
+/**
  * **The recalculation-hold drop path** (ADR-0064 T7). When the 10-second cap expires, the workspace
  * recalculates anyway and bumps `dropLinkPickSignal`; the canvas must abandon the open pick and say
  * so upward, leaving the tool armed — the planner did not ask to stop linking, the schedule moved

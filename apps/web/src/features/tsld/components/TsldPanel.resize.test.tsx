@@ -170,6 +170,50 @@ describe('TsldPanel finish-edge resize (ADR-0052 M2, flag on)', () => {
     expect(onResize).toHaveBeenCalledWith({ activityId: 'a1', durationDays: 2 });
   });
 
+  it('keeps the canvas pannable while a resize write is in flight (M2 unfreeze — the brief’s “resize stays live” was false)', async () => {
+    // A resize sets `pendingReposition` exactly as a move does (TsldPanel.tsx), so the old single
+    // `pending` gate froze the surface here too. Settle the write by hand so the pan runs while
+    // the PATCH is genuinely pending.
+    let settle!: (v: { applied: boolean; conflict: string | null }) => void;
+    const onResize = vi.fn().mockReturnValue(
+      new Promise<{ applied: boolean; conflict: string | null }>((res) => {
+        settle = res;
+      }),
+    );
+    const utils = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onResize={onResize}
+      />,
+    );
+    const canvas = utils.container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    // Drag the finish grab-zone right — the resize write is now in flight.
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(utils.container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    // Pan the viewport 140px left while the write is pending.
+    fireEvent.pointerDown(canvas, { clientX: 300, clientY: 200, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
+    // The pan moved the bar off its old pixels: a click on its ORIGINAL body selects nothing.
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    expect(utils.container.querySelector('[role="option"][aria-selected="true"]')).toBeNull();
+    // Settle → the busy gate clears on the success path too.
+    await act(async () => {
+      settle({ applied: true, conflict: null });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(utils.container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
   it('no-ops the duration nudge on a duration-derived selection (milestone)', async () => {
     const { onResize } = renderPanel([
       activity({ type: 'START_MILESTONE', durationDays: 0, earlyFinish: '2026-01-01' }),

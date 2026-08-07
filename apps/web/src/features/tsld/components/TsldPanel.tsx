@@ -1830,6 +1830,10 @@ export function TsldPanel({
               wbsBandHeightPx={wbsBandHeightPx}
               {...(onSelectionChange ? { onSelectBandSummary: onSelectionChange } : {})}
               {...(selectionActionsWired ? { selectionAnchorRef } : {})}
+              // The substantive M2 change (canvas status & feedback): `pending` NARROWS to the
+              // create-popover ghost only — a reposition/resize write no longer freezes the whole
+              // surface. Its optimistic ghost still paints (writeGhost) and new edit grabs are
+              // refused visibly (writeBusy); `onIntent`'s double-write guard above is untouched.
               pending={
                 pendingCreate
                   ? {
@@ -1837,8 +1841,10 @@ export function TsldPanel({
                       endDay: pendingCreate.endDay,
                       laneIndex: pendingCreate.laneIndex,
                     }
-                  : pendingReposition
+                  : null
               }
+              writeGhost={pendingReposition}
+              writeBusy={pendingReposition !== null}
             />
 
             {pendingCreate ? (
