@@ -1,6 +1,7 @@
 # Feature Spec: Canvas multi-select & bulk operations
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** **Approved 2026-08-07** — the four critical questions in §6 are answered; see the
+  decision block there. Cleared for implementation.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-07
 - **Tracking issue / epic:** _(to be opened)_
@@ -934,6 +935,21 @@ two that exist, sliced dark-foundation → API → gestures → keyboard → bul
 ---
 
 ## 6. Critical questions (answers change design or scope)
+
+> **ANSWERED 2026-08-07 by the product owner.** The four questions and their reasoning are kept
+> below unedited, because the alternatives are the record of what was weighed. The decisions:
+>
+> | Question                  | Decision                                                                | Note                                                                                                       |
+> | ------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+> | **CQ-1** Rebind `Space`?  | **Yes — `Space` toggles, the logic summary moves to `i`**               | The proposed default. Flag-off parity pins the old binding.                                                |
+> | **CQ-2** Shift-click      | **Bounding rectangle**, sharing one predicate with the marquee          | The proposed default.                                                                                      |
+> | **CQ-3** Bulk time shift  | **`PATCH …/activities/placements`** — complete-row, all-or-nothing      | The proposed default; third member of the `positions` / `parents` family.                                  |
+> | **CQ-4** Bulk-delete undo | **Build the id-stable batch restore** (`POST …/restore-batch/:batchId`) | **NOT the proposed default.** M1-T7 is therefore **required, not optional**, and the confirm copy follows. |
+>
+> CQ-4's reasoning, stated because it changes a milestone: re-creating rows makes "undo that delete"
+> silently drop every incident dependency, which on a fragnet is a wrong schedule rather than a
+> cosmetic loss. A bulk delete is the first operation that makes ADR-0048's already-designed,
+> already-deferred M4 worth its cost, and it needs no schema change.
 
 > Everything not listed here is decided above with a stated default. These four are the ones whose
 > answers change what gets built.
