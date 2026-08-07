@@ -3,19 +3,16 @@ import { useMemo, useState } from 'react';
 
 import { downloadBlob } from '../export/download';
 import { buildScheduleCsv } from '../export/export-csv';
-import { buildExportViewport, EXPORT_TOP_BAND, type ExportExtent } from '../export/export-image';
+import type { ExportExtent } from '../export/export-image';
 import { buildExportFilename } from '../export/filename';
 import { exportDiagramToPdf } from '../export/pdf';
 import { printDiagramImage } from '../export/PrintSurface';
-import { renderExportImage } from '../export/render-export-image';
 import { isFilterActive, isOverAllocated, matchesActivityFilter } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
-import { resolvePrintPalette, resolvePrintWbsBandPalette } from '../render/palette';
-import { daysBetween } from '../render/render-model';
-import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../render/to-render-model';
-import { wbsBandBars } from '../render/wbs-band';
 
 import { useConflictNavigation } from './commands/use-conflict-navigation';
+import { useDiagramImage } from './commands/use-diagram-image';
+import { useViewportCommands } from './commands/use-viewport-commands';
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
@@ -28,13 +25,11 @@ import type {
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   CANVAS_AUTHORING_ENABLED,
-  CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
   SCHEDULING_MODES_ENABLED,
-  WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
 import {
@@ -49,7 +44,6 @@ import {
 } from '@/features/interchange';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
-import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The pinned Tier-1 Project-finish chip (product-owner decision #1) — the number planners glance
@@ -346,132 +340,52 @@ export function useTsldToolbarContext({
     model.dependencies,
   ]);
 
+  // The three imperative canvas viewport commands (ADR-0078 S11). Extracting the two readers below
+  // freed enough of the `react-hooks/refs` analysis budget that the rule reached a THIRD ref read it
+  // had never flagged — see `commands/use-viewport-commands` for why that is #85's diagnosis landing
+  // rather than a new defect.
+  const { setZoomPreset, stepZoom, goToDate } = useViewportCommands({
+    canvasControlRef,
+    setCanvasZoomPreset,
+  });
+
+  // Shared off-screen Diagram-image build (M2/M3) — moved to `commands/use-diagram-image`
+  // (ADR-0078 S11). It was the LAST of the two `canvasControlRef` readers `docs/TECH_DEBT.md` #85
+  // named, and lifting it out of this memo is what let #85's second `react-hooks/refs` suppression
+  // be deleted: the register's instruction was "the fix is to split this memo, not to move the ref
+  // reads", and the suppression's absence is the binary test that the split is what happened.
+  const buildDiagramImage = useDiagramImage({
+    plan,
+    activities,
+    dependencies,
+    viewToggles,
+    todayIso,
+    lateOverlayActive,
+    canvasControlRef,
+  });
+
   // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
   // drag, the 15s pen poll) doesn't hand `<Toolbar>` a fresh context and churn its resolve →
   // partition → measure → ResizeObserver cycle (perf review, ADR-0031). Behaviour is unchanged —
   // only identity is stabilised.
   return useMemo(() => {
-    // Shared off-screen Diagram-image build (M2/M3): frame an OFF-SCREEN canvas to the requested extent
-    // (whole / current view), paint it with the shipped `paintScene` + the light print palette, and
-    // resolve the PNG blob. Both PNG (download) and PDF (embed via lazy jsPDF) reuse this exact path, so
-    // the render logic isn't duplicated (DRY) and the live canvas is never touched (we only READ its
-    // viewport). Returns `null` when there's nothing to frame yet (no data date / no live viewport);
-    // `hasDiagram` gates the menu, so that's a defensive guard. `imageWidth`/`imageHeight` are the raster
-    // pixel dims (aspect ratio) the PDF page-fit needs.
-    const buildDiagramImage = (
-      extent: ExportExtent,
-    ): {
-      promise: Promise<{ blob: Blob; scaledToFit: boolean }>;
-      imageWidth: number;
-      imageHeight: number;
-    } | null => {
-      const dataDate = plan.plannedStart;
-      // `react-hooks/refs` disabled on this line — the LAST of the two readers #85 named. It reads
-      // the canvas handle inside a CALLBACK (it runs when an export command is invoked, never during
-      // render), which is what the rule is protecting; the React Compiler only began flagging it
-      // when this already-large context memo grew by three more properties (audit F4), so the
-      // trigger is its analysis budget rather than a change in what the code does.
-      //
-      // The second reader — `goToNextConflict` — left in ADR-0078 S11 and its disable went with it,
-      // which is the evidence that splitting the memo is the fix #85 said it was rather than a
-      // guess. This one waits on the export commands moving to `commands/use-export-commands`: it
-      // carries `buildDiagramImage` plus five commands and the five pieces of state they own, so it
-      // is a step of its own. Do not remove THIS disable without doing that — the register's rule
-      // is unchanged, only its scope is now one reader instead of two.
-      // eslint-disable-next-line react-hooks/refs -- read in a command callback, not during render
-      const live = canvasControlRef.current?.getViewport();
-      if (dataDate === null || !live) return null;
-      const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
-      // The band comes from the SAME derivation the live canvas uses (ADR-0063 §M5), so the export
-      // cannot disagree with the screen about the band's height or about which activities the
-      // scene still paints. With the band on, summaries live in the band and not in the diagram —
-      // exactly as they do on screen.
-      const band = deriveWbsBandSource(activities, {
-        enabled: WBS_IMPROVEMENTS_ENABLED,
-        toggleOn: viewToggles.wbsBand ?? false,
-        source,
-      });
-      const renderActivities = toRenderActivities(band.sceneActivities, source);
-      const scene = {
-        activities: renderActivities,
-        edges: toRenderEdges(dependencies),
-        dataDate,
-        view: viewToggles,
-        todayOffset: daysBetween(dataDate, todayIso),
-        // The data-date line (canvas status & feedback M1) — the SAME composition `TsldCanvas`
-        // makes, because the export builds its own scene rather than reusing the live one: without
-        // this line the exported picture would silently disagree with the screen about the one
-        // status mark the epic exists to draw. Flag-off the field is false ⇒ the layer never runs
-        // ⇒ the export is byte-for-byte the prior picture.
-        dataDateLine: CANVAS_DATA_DATE_ENABLED && (viewToggles.dataDate ?? true),
-      };
-      const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {
-        extent,
-        liveViewport: live,
-        dpr: globalThis.devicePixelRatio || 1,
-        topBand: EXPORT_TOP_BAND,
-        wbsBandHeight: band.height,
-      });
-      const promise = renderExportImage({
-        scene,
-        viewport,
-        size,
-        dpr,
-        topBand: EXPORT_TOP_BAND,
-        palette: resolvePrintPalette(),
-        scaledToFit,
-        meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },
-        // Placed against the EXPORT viewport, by the same `wbsBandBars` the live canvas calls with
-        // the live one — so the band's columns line up with the diagram's in the picture for the
-        // same reason they do on screen, not by a second calculation that agrees.
-        ...(band.groups && band.height > 0
-          ? {
-              wbsBand: {
-                height: band.height,
-                bars: wbsBandBars(band.groups, dataDate, viewport, {
-                  width: size.width,
-                  height: band.height,
-                }),
-                palette: resolvePrintWbsBandPalette(),
-              },
-            }
-          : {}),
-      }).then((blob) => ({ blob, scaledToFit }));
-      return {
-        promise,
-        imageWidth: Math.max(1, Math.round(size.width * dpr)),
-        imageHeight: Math.max(1, Math.round(size.height * dpr)),
-      };
-    };
-
     return {
       // Frame — the canvas is commanded imperatively via the shared control handle.
       zoomPreset,
-      // The zoom PRESET is shared state, not a canvas property: the Gantt derives its scale from it
-      // directly (ADR-0059 §2). So it is set here first and the canvas is commanded second —
-      // delegating only to the handle would leave the control enabled and silently inert whenever
-      // the canvas is unmounted, which is every moment the Gantt is showing.
-      setZoomPreset: (level) => {
-        setCanvasZoomPreset(level);
-        canvasControlRef.current?.zoomToPreset(level);
-      },
+      // The three imperative viewport commands live in `commands/use-viewport-commands`
+      // (ADR-0078 S11) — see that module for why they had to move.
+      setZoomPreset,
       // Stepping, fitting and go-to-date are canvas VIEWPORT commands with no Gantt equivalent (its
       // scale comes from the preset and its chart already spans the plan). `canvasActive` shades
       // them with a reason in the Gantt rather than leaving dead buttons.
       canvasActive: planView === 'tsld',
-      stepZoom: (factor) => canvasControlRef.current?.stepZoom(factor),
+      stepZoom,
       fit: requestFit,
       // The plan's data date (`plannedStart`) is read-only here: it gates Go-to-date visibility and is
       // the canvas day-zero origin. Its persisted value is edited off-toolbar (plan creation / Edit
       // plan), so there's no write seam here (ADR-0031 two-row amendment).
       plannedStart: plan.plannedStart,
-      // Go to date (ADR-0033 M2): a pure view pan via the canvas control handle — no fetch, no write,
-      // no persisted state (CQ-1). Available to every role; navigating never mutates the plan. It
-      // announces the jump (WCAG 4.1.3) since the canvas repaint is otherwise invisible to AT.
-      goToDate: (iso: string) => {
-        canvasControlRef.current?.goToDate(iso);
-        announce(`Jumped to ${formatCalendarDate(iso)}.`);
-      },
+      goToDate,
 
       // Lens
       viewToggles,
@@ -858,11 +772,12 @@ export function useTsldToolbarContext({
     };
   }, [
     zoomPreset,
-    // A `useState` setter, so its identity is stable and this cannot change how often the memo
-    // recomputes — listed because the rule is right that an omitted dependency is unverifiable by
-    // inspection, and a silenced warning is a worse record than a redundant entry.
-    setCanvasZoomPreset,
-    canvasControlRef,
+    // The three extracted viewport commands (ADR-0078 S11). Each is a `useCallback` over the same
+    // inputs the inline arrow closed over, so the memo re-identifies exactly as often as before —
+    // listed rather than silenced, because an omitted dependency is unverifiable by inspection.
+    setZoomPreset,
+    stepZoom,
+    goToDate,
     requestFit,
     plan.plannedStart,
     planView,
@@ -949,13 +864,15 @@ export function useTsldToolbarContext({
     currentConflict,
     goToNextConflict,
     // Export & print — re-identify only when the exported set / its match state / the plan name change
-    // (the callbacks close over these). `todayIso` + `announce` + `viewToggles` + `plan.schedulingMode`
-    // + `lateOverlayActive` + `canvasControlRef` are already listed above; the PNG command also reads
-    // the loaded dependency edges.
+    // (the callbacks close over these). `todayIso` + `announce` are already listed above. The
+    // dependency edges, the view toggles and the late overlay now reach the picture through
+    // `buildDiagramImage`'s own dependency list rather than this one.
     activities,
     plan.name,
     exportMatch,
-    dependencies,
+    // The extracted image builder (ADR-0078 S11) — a `useCallback` keyed on exactly what the block
+    // used to close over, so the memo re-identifies on the same inputs it always did.
+    buildDiagramImage,
     pdfExporting,
     printing,
     exportError,

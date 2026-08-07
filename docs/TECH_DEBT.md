@@ -691,6 +691,27 @@ lifts the workspace selection and lets each view reveal it, rather than calling 
 which is null whenever the Gantt is showing, so half its work would be silently skipped in half the
 product anyway.
 
+**RESOLVED 2026-08-07 (ADR-0078 S11).** Both suppressions are gone, and the memo shrank by roughly
+190 lines: `goToNextConflict` moved to `toolbar/commands/use-conflict-navigation.ts` and
+`buildDiagramImage` to `toolbar/commands/use-diagram-image.ts`. The instruction above was followed
+exactly — the memo was split, the reads were not merely relocated — and `pnpm lint` staying green
+with no `react-hooks/refs` comment anywhere in `apps/web/src` is the binary test that it was.
+
+**And the diagnosis above was confirmed the hard way, which is worth keeping.** This row said the
+trigger was _"the compiler's analysis of an already-large hook, not a change in what the code
+does"_. That predicts something specific: shrink the hook and the rule's reach should **grow**.
+It did. With the two readers lifted, the rule immediately reported a **third** `canvasControlRef`
+read — `setZoomPreset`, at what was line 371 — which it had never flagged, in code nobody had
+touched in this change. Adding a suppression there would have been the wrong response; the three
+viewport commands moved to `toolbar/commands/use-viewport-commands.ts` instead, and the module's
+docblock records why. If a fourth appears later, the answer is the same one: keep splitting.
+
+One consequence to know rather than discover: the three viewport commands are now `useCallback`s
+over stable inputs, so they are referentially stable across memo recomputes where the inline arrows
+were fresh each time. Nothing downstream compares them (the registry calls them), and the context
+memo's own identity is unchanged, so this is a side effect of the extraction rather than an
+optimisation pursued inside a refactor — which ADR-0078 §3 forbids.
+
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
 **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
