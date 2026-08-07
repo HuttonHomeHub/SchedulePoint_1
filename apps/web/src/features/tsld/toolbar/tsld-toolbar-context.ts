@@ -320,6 +320,13 @@ export interface TsldToolbarContext {
    */
   goToMatch: (direction: 'next' | 'previous') => void;
   /**
+   * Escape typed **inside the search field** (spec §4.5, M1-T4). Two steps, and both belong to the
+   * field: with a query it clears it and announces; with the field already empty it hands focus to
+   * the diagram's listbox — which is a keyboard planner's only remaining route to Escape's other
+   * meaning, now that the canvas's `window` listener ignores keys typed into a text control.
+   */
+  escapeSearchField: () => void;
+  /**
    * The ids the live search matches, and the one the cursor is on — **derived once**, here, and
    * handed to both views by the workspace (M4). Two derivations would agree on ordinary queries and
    * differ on the edges, and the only way to see it would be to switch views mid-search.

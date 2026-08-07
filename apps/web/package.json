@@ -32,6 +32,7 @@
     "test:e2e:sub-day": "playwright test --config playwright.sub-day.config.ts --pass-with-no-tests",
     "test:e2e:assignment-lag": "playwright test --config playwright.assignment-lag.config.ts --pass-with-no-tests",
     "test:e2e:float-paths": "playwright test --config playwright.float-paths.config.ts --pass-with-no-tests",
+    "test:e2e:search-nav": "playwright test --config playwright.search-nav.config.ts --pass-with-no-tests",
     "measure:draw": "node scripts/measure-link-routing.mjs 120 scale --headed",
     "test:e2e:designed-ui": "playwright test --config playwright.designed-ui.config.ts --pass-with-no-tests",
     "test:e2e:designed-chrome": "playwright test --config playwright.designed-chrome.config.ts --pass-with-no-tests",

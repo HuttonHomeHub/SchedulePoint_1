@@ -17,12 +17,14 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 const goToMatch = vi.fn();
+const escapeSearchField = vi.fn();
 const zoomToSelection = vi.fn();
 const setFilterQuery = vi.fn();
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     goToMatch,
+    escapeSearchField,
     zoomToSelection,
     setFilterQuery,
     filterQuery: 'pile',
@@ -50,6 +52,7 @@ const field = (): HTMLInputElement =>
 
 beforeEach(() => {
   goToMatch.mockClear();
+  escapeSearchField.mockClear();
   zoomToSelection.mockClear();
   setFilterQuery.mockClear();
 });
@@ -97,6 +100,35 @@ describe('the search field walks the match set', () => {
     renderRows(ctx({ hasDiagram: false }));
     fireEvent.keyDown(field(), { key: 'Enter' });
     expect(goToMatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('Escape belongs to the field', () => {
+  it('hands Escape to the field’s own two-step rule', () => {
+    renderRows(ctx());
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(escapeSearchField).toHaveBeenCalledOnce();
+  });
+
+  it('prevents the default, so the native ✕ cannot clear it unannounced', () => {
+    // `type="search"` clears itself on Escape in Blink and WebKit. Without `preventDefault` the
+    // native clear and the handled one both fire, so the announced step races an unannounced one.
+    renderRows(ctx());
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    field().dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('does not walk the match set', () => {
+    renderRows(ctx());
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(goToMatch).not.toHaveBeenCalled();
+  });
+
+  it('ignores Escape while the field is shaded', () => {
+    renderRows(ctx({ hasDiagram: false }));
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(escapeSearchField).not.toHaveBeenCalled();
   });
 });
 

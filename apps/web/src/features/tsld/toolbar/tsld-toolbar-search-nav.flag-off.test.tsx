@@ -25,10 +25,12 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 const goToMatch = vi.fn();
+const escapeSearchField = vi.fn();
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     goToMatch,
+    escapeSearchField,
     filterQuery: 'pile',
     hasDiagram: true,
     canvasActive: true,
@@ -70,6 +72,18 @@ describe('flag-off, the search field is today’s filter and nothing more', () =
     renderRows(ctx());
     const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     field().dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('Escape is the browser’s, exactly as it is today', () => {
+    // Flag-off the handler is not passed at all, so Escape neither reaches the two-step rule nor is
+    // prevented — the native `type="search"` clear and the canvas's own listener both keep today's
+    // behaviour. This is the rollback contract for the ADR-0064 amendment.
+    renderRows(ctx());
+    escapeSearchField.mockClear();
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    field().dispatchEvent(event);
+    expect(escapeSearchField).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
   });
 

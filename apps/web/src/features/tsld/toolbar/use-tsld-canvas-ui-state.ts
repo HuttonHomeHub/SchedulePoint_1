@@ -101,6 +101,16 @@ export interface TsldCanvasUiState {
    * the behaviour every pre-existing caller already had.
    */
   requestSelectActivity: (id: string, opts?: { focusListbox?: boolean }) => void;
+  /**
+   * Move DOM focus into the canvas's parallel listbox **without changing the selection**
+   * (`docs/specs/canvas-search-navigation/` §4.5, M1-T4).
+   *
+   * The second Escape in the search field leaves the field for the diagram — which is the only way a
+   * keyboard planner reaches Escape's *other* meaning now that an Escape typed into a text field
+   * belongs to the field. With a match under the cursor `requestSelectActivity` already does this
+   * job; with no match there is nothing to select and this is what is left.
+   */
+  requestFocusDiagram: () => void;
 }
 
 /** The canvas nav/authoring view-state shape (see {@link TsldCanvasUiState.navState}). */
@@ -111,7 +121,10 @@ export interface NavState {
   snapToGrid: boolean;
   /** The pending selection command from the toolbar (Next-conflict), or null. `TsldPanel` applies it and
    * de-dupes by `nonce`. */
-  selectSignal: { id: string; nonce: number; focusListbox: boolean } | null;
+  /** `id: null` is the FOCUS-ONLY form (`requestFocusDiagram`) — no selection change, just move
+   *  DOM focus into the listbox. It exists because the search field's second Escape has to hand the
+   *  planner to the diagram whether or not they have jumped to a match yet. */
+  selectSignal: { id: string | null; nonce: number; focusListbox: boolean } | null;
 }
 
 /** The lens view-state shape (see {@link TsldCanvasUiState.lensState}). */
@@ -228,6 +241,17 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       })),
     [],
   );
+  const requestFocusDiagram = useCallback(
+    (): void =>
+      setNavState((s) => ({
+        ...s,
+        // `id: null` — focus only. Deliberately the same one-shot signal rather than a second
+        // channel: two signals into the same effect would need their own de-dupe nonce and could
+        // arrive in either order, and there is only ever one thing to do with focus.
+        selectSignal: { id: null, nonce: (s.selectSignal?.nonce ?? 0) + 1, focusListbox: true },
+      })),
+    [],
+  );
 
   // Memoised on its own values (setters/ref are stable), so the object's identity only changes when
   // the canvas view-state actually changes — an unrelated parent re-render (e.g. an activity-panel
@@ -265,6 +289,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setConflictCursorId,
       toggleSnapToGrid,
       requestSelectActivity,
+      requestFocusDiagram,
     }),
     [
       mode,
@@ -291,6 +316,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setConflictCursorId,
       toggleSnapToGrid,
       requestSelectActivity,
+      requestFocusDiagram,
     ],
   );
 }

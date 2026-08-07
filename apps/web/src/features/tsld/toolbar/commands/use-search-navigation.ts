@@ -38,6 +38,8 @@ export interface SearchNavigation {
   /** The matched ids as a set — the shape both views consume (M4). Derived from `matchHits`, so it
    *  cannot disagree with what Enter walks. */
   readonly matchedIds: ReadonlySet<string>;
+  /** The field's two-step Escape (spec §4.5): clear the query, then leave for the diagram. */
+  readonly escapeSearchField: TsldToolbarContext['escapeSearchField'];
 }
 
 export function useSearchNavigation(args: {
@@ -46,8 +48,10 @@ export function useSearchNavigation(args: {
   filterAttrs: ReadonlySet<FilterAttr>;
   searchCursorId: string | null;
   setSearchCursorId: (id: string) => void;
+  setFilterQuery: (query: string) => void;
   canvasControlRef: React.RefObject<TsldCanvasHandle | null>;
   requestSelectActivity: (id: string, opts?: { focusListbox?: boolean }) => void;
+  requestFocusDiagram: () => void;
   announce: (message: string) => void;
 }): SearchNavigation {
   const {
@@ -56,8 +60,10 @@ export function useSearchNavigation(args: {
     filterAttrs,
     searchCursorId,
     setSearchCursorId,
+    setFilterQuery,
     canvasControlRef,
     requestSelectActivity,
+    requestFocusDiagram,
     announce,
   } = args;
 
@@ -110,5 +116,38 @@ export function useSearchNavigation(args: {
 
   const matchedIds = useMemo(() => new Set(matchHits.map((h) => h.id)), [matchHits]);
 
-  return { matchHits, searchStatus, goToMatch, matchedIds };
+  // The two-step Escape inside the field (spec §4.5). It lives here rather than in the toolbar item
+  // because both steps need something the item does not have — the announcer and the cursor — and
+  // splitting the branch across two files is how a rule ends up applied to one half of itself.
+  //
+  // Step 2 exists for a reason that is easy to drop as "polish" and is not: an Escape typed into the
+  // field now belongs to the field, so this is the ONLY way out for a keyboard planner who wants
+  // Escape's other meaning (disarm the armed tool). Without it the guard would be a dead end.
+  const escapeSearchField = useCallback<TsldToolbarContext['escapeSearchField']>(() => {
+    if (filterQuery.length > 0) {
+      setFilterQuery('');
+      // Deliberately NOT announced here. The panel's filter effect announces "Search cleared." on the
+      // active → inactive transition, and it runs after this commit — so an announcement made here is
+      // overwritten by that effect's own message a tick later. One control, one utterance, and the
+      // panel is the only place that can see the transition for BOTH routes into it (this key and the
+      // Clear button).
+      return;
+    }
+    // Already empty — hand the planner to the diagram, on the current match if there is one so they
+    // land where they were looking rather than at the top of the plan.
+    if (searchCursorId !== null && matchHits.some((h) => h.id === searchCursorId)) {
+      requestSelectActivity(searchCursorId, { focusListbox: true });
+    } else {
+      requestFocusDiagram();
+    }
+  }, [
+    filterQuery,
+    setFilterQuery,
+    searchCursorId,
+    matchHits,
+    requestSelectActivity,
+    requestFocusDiagram,
+  ]);
+
+  return { matchHits, searchStatus, goToMatch, matchedIds, escapeSearchField };
 }

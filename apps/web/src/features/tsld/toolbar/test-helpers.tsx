@@ -120,6 +120,7 @@ export function makeTsldToolbarContext(
     goToNextConflict: vi.fn(),
     searchStatus: null,
     goToMatch: vi.fn(),
+    escapeSearchField: vi.fn(),
     zoomToSelection: vi.fn(),
     matchedIds: new Set<string>(),
     currentMatchId: null,
