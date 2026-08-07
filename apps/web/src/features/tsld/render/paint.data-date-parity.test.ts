@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, Viewport } from './render-model';
+import { recordingCtx } from './test-support/recording-ctx';
 
 /**
  * **The flag-off parity gate for the data-date line** (`VITE_CANVAS_DATA_DATE`, canvas status &
@@ -54,54 +55,6 @@ const PALETTE: TsldPalette = {
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
 const SIZE = { width: 800, height: 400 };
 const DATA_DATE = '2026-01-01';
-
-function mockCtx() {
-  return {
-    clearRect: vi.fn(),
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    fill: vi.fn(),
-    setTransform: vi.fn(),
-    setLineDash: vi.fn(),
-    fillText: vi.fn(),
-    measureText: vi.fn((s: string) => ({ width: s.length * 6 }) as TextMetrics),
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 1,
-    globalAlpha: 1,
-    font: '',
-    textBaseline: 'alphabetic' as CanvasTextBaseline,
-    textAlign: 'start' as CanvasTextAlign,
-  };
-}
-
-/** Records method calls AND property assignments in order, so two paints compare byte-for-byte. */
-function recordingCtx(): { ctx: Parameters<typeof paintScene>[0]; log: string[] } {
-  const target: Record<string | symbol, unknown> = mockCtx();
-  const log: string[] = [];
-  const proxy = new Proxy(target, {
-    get(t, prop) {
-      const value = t[prop];
-      if (typeof value === 'function') {
-        return (...args: unknown[]) => {
-          log.push(`${String(prop)}(${JSON.stringify(args)})`);
-          return (value as (...a: unknown[]) => unknown)(...args);
-        };
-      }
-      return value;
-    },
-    set(t, prop, value) {
-      log.push(`${String(prop)}=${String(value)}`);
-      t[prop] = value;
-      return true;
-    },
-  });
-  return { ctx: proxy as unknown as Parameters<typeof paintScene>[0], log };
-}
 
 function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
   return {

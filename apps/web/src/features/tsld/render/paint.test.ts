@@ -20,6 +20,7 @@ import {
   type RenderEdge,
   type Viewport,
 } from './render-model';
+import { mockCtx, recordingCtx } from './test-support/recording-ctx';
 
 const PALETTE: TsldPalette = {
   gridLine: '#111',
@@ -65,31 +66,6 @@ const ALL_ON = {
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
 const SIZE = { width: 800, height: 400 };
 const DATA_DATE = '2026-01-01';
-
-function mockCtx() {
-  return {
-    clearRect: vi.fn(),
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    fill: vi.fn(),
-    setTransform: vi.fn(),
-    setLineDash: vi.fn(),
-    fillText: vi.fn(),
-    // Deterministic width so truncation/placement tests are stable: ~6px per glyph.
-    measureText: vi.fn((s: string) => ({ width: s.length * 6 }) as TextMetrics),
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 1,
-    globalAlpha: 1,
-    font: '',
-    textBaseline: 'alphabetic' as CanvasTextBaseline,
-    textAlign: 'start' as CanvasTextAlign,
-  };
-}
 
 function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
   return {
@@ -992,33 +968,9 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
 });
 
 // ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────────────────────────────────
-// A recording ctx that logs method calls AND property assignments in order, so two paints can be
-// compared byte-for-byte (the flag-off / no-lens parity gate).
-function recordingCtx(base: Record<string, unknown> = mockCtx()): {
-  ctx: Parameters<typeof paintScene>[0];
-  log: string[];
-} {
-  const target: Record<string | symbol, unknown> = base;
-  const log: string[] = [];
-  const proxy = new Proxy(target, {
-    get(t, prop) {
-      const value = t[prop];
-      if (typeof value === 'function') {
-        return (...args: unknown[]) => {
-          log.push(`${String(prop)}(${JSON.stringify(args)})`);
-          return (value as (...a: unknown[]) => unknown)(...args);
-        };
-      }
-      return value;
-    },
-    set(t, prop, value) {
-      log.push(`${String(prop)}=${String(value)}`);
-      t[prop] = value;
-      return true;
-    },
-  });
-  return { ctx: proxy as unknown as Parameters<typeof paintScene>[0], log };
-}
+// The recording ctx these use — method calls AND property assignments logged in order, so two
+// paints can be compared byte-for-byte (the flag-off / no-lens parity gate) — now lives in
+// `./test-support/recording-ctx`, shared with the other painter suites (ADR-0078 S0).
 
 describe('paintScene — insight lenses', () => {
   const lensScene: TsldScene = {

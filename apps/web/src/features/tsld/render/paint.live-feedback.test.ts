@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { paintInteractionLayer, paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, Rect, Viewport } from './render-model';
+import { mockCtx } from './test-support/recording-ctx';
 
 /**
  * Canvas **live feedback** painter tests (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`) — the ghost
@@ -56,30 +57,6 @@ const ALL_ON = {
   labels: true,
   lateOverlay: false,
 } as const;
-
-function mockCtx() {
-  return {
-    clearRect: vi.fn(),
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    fill: vi.fn(),
-    setTransform: vi.fn(),
-    setLineDash: vi.fn(),
-    fillText: vi.fn(),
-    measureText: vi.fn((s: string) => ({ width: s.length * 6 }) as TextMetrics),
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 1,
-    globalAlpha: 1,
-    font: '',
-    textBaseline: 'alphabetic' as CanvasTextBaseline,
-    textAlign: 'start' as CanvasTextAlign,
-  };
-}
 
 function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
   return {
