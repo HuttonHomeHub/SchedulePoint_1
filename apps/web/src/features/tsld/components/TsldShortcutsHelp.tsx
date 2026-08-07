@@ -1,5 +1,9 @@
 import { Dialog } from '@/components/ui/dialog';
-import { CANVAS_DIRECT_MANIPULATION_ENABLED, UNDO_REDO_ENABLED } from '@/config/env';
+import {
+  CANVAS_DIRECT_MANIPULATION_ENABLED,
+  CANVAS_SEARCH_NAV_ENABLED,
+  UNDO_REDO_ENABLED,
+} from '@/config/env';
 
 interface Shortcut {
   keys: string;
@@ -32,6 +36,17 @@ const EDIT_SHORTCUTS: readonly Shortcut[] = [
  */
 const DIRECT_MANIPULATION_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Shift + ← / →', action: 'Shorten / lengthen the duration one day (recalculates)' },
+];
+
+/**
+ * Search-navigation accelerators (`docs/specs/canvas-search-navigation/` M2-T3) — appended only when
+ * `VITE_CANVAS_SEARCH_NAV` is on, so the sheet stays byte-for-byte identical with the flag off.
+ * These are the only shortcuts in the sheet that act on a **focused field** rather than the canvas,
+ * which is why they say so: a planner reading the list needs to know where to press them.
+ */
+const SEARCH_NAV_SHORTCUTS: readonly Shortcut[] = [
+  { keys: 'Enter (in Search)', action: 'Go to the next matching activity' },
+  { keys: 'Shift + Enter (in Search)', action: 'Go to the previous matching activity' },
 ];
 
 /**
@@ -73,6 +88,7 @@ export function TsldShortcutsHelp({
   const editShortcuts = [
     ...EDIT_SHORTCUTS,
     ...(CANVAS_DIRECT_MANIPULATION_ENABLED ? DIRECT_MANIPULATION_SHORTCUTS : []),
+    ...(CANVAS_SEARCH_NAV_ENABLED ? SEARCH_NAV_SHORTCUTS : []),
     ...(UNDO_REDO_ENABLED ? UNDO_REDO_SHORTCUTS : []),
   ];
   return (

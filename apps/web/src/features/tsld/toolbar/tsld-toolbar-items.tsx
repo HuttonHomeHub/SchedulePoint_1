@@ -47,6 +47,7 @@ import {
   TriangleAlert,
   Undo2,
   Waypoints,
+  X,
 } from 'lucide-react';
 import { useRef } from 'react';
 
@@ -685,6 +686,16 @@ function LiveSearchControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const disabled = api.disabled;
+  // A real, keyboard-reachable clear (`VITE_CANVAS_SEARCH_NAV`). `type="search"` renders a native ✕ in
+  // Chromium only, and it is not in the tab order in any browser — so on a control whose whole point is
+  // that you can drive it from the keyboard, the only way to empty it was to select-all and delete.
+  //
+  // Deliberately NOT `components/ui/search-field.tsx`, which solves the same problem: that primitive
+  // renders a visible `<Label>` above the input, and the toolbar has one line of vertical space. Its
+  // structural decisions (the leading icon offset, the trailing button, suppressing the native glyph)
+  // are reused; the component is not.
+  const showClear = CANVAS_SEARCH_NAV_ENABLED && !disabled && ctx.filterQuery.length > 0;
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="ml-3 flex items-center">
       <Search
@@ -692,6 +703,7 @@ function LiveSearchControl({
         className="text-muted-foreground pointer-events-none -mr-6 size-4"
       />
       <Input
+        ref={inputRef}
         {...api.itemProps}
         type="search"
         value={ctx.filterQuery}
@@ -727,8 +739,29 @@ function LiveSearchControl({
         className={cn(
           'h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm',
           disabled && 'cursor-not-allowed opacity-50',
+          // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
+          // absent, so the native glyph is exactly where it is today.
+          showClear && '[&::-webkit-search-cancel-button]:appearance-none',
+          showClear && 'pr-7',
         )}
       />
+      {showClear ? (
+        <button
+          type="button"
+          // Focus returns to the input, never to `<body>`: the planner clears in order to type
+          // something else. This is also why the button unmounts rather than disabling — a control
+          // that vanishes while focused would strand focus, so it can only vanish on the click that
+          // moves focus off it first.
+          onClick={() => {
+            ctx.setFilterQuery('');
+            inputRef.current?.focus();
+          }}
+          aria-label="Clear search"
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring -ml-6 flex size-5 shrink-0 items-center justify-center rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <X aria-hidden="true" className="size-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1140,6 +1173,49 @@ function IsolateControl({
  * full reason list is in the `title`. `goToNextConflict` keeps speaking the full polite announcement,
  * so this doubles as its visible half rather than replacing it.
  */
+/**
+ * The **find read-out** (`VITE_CANVAS_SEARCH_NAV`) — how many activities the live search matches, and
+ * which one the planner is standing on.
+ *
+ * Modelled on {@link CurrentConflictStatus} down to the `aria-hidden`, and for the same reason: the
+ * spoken channel is the shared polite announcer `goToMatch` already writes to, so a second live region
+ * here would say "Match 3 of 12" twice to a screen-reader user and once to nobody else. This is the
+ * visible half only.
+ *
+ * Two states, and the difference matters: **"12 matches"** before the first Enter (the planner has
+ * typed and wants to know whether it was worth pressing), **"3 of 12"** after (they are walking them).
+ * Collapsing the two into one would make the read-out say a position the planner has not reached.
+ */
+function SearchMatchStatus({
+  ctx,
+  itemProps,
+}: {
+  ctx: TsldToolbarContext;
+  itemProps: ToolbarItemRenderApi['itemProps'];
+}): React.ReactElement | null {
+  const status = ctx.searchStatus;
+  if (!status) return null;
+  const text =
+    status.index === null
+      ? `${status.total} ${status.total === 1 ? 'match' : 'matches'}`
+      : `${status.index} of ${status.total}`;
+  return (
+    <span
+      {...itemProps}
+      aria-hidden="true"
+      title={
+        status.index === null
+          ? `${text} — press Enter to go to the first`
+          : `Match ${text} — Enter for the next, Shift+Enter for the previous`
+      }
+      className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[10rem] gap-1')}
+    >
+      <Search aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="truncate whitespace-nowrap">{text}</span>
+    </span>
+  );
+}
+
 function CurrentConflictStatus({
   ctx,
   itemProps,
@@ -1954,6 +2030,29 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: (ctx) => ctx.currentConflict != null,
       render: (ctx, api) => <CurrentConflictStatus ctx={ctx} itemProps={api.itemProps} />,
     },
+
+    // The find read-out (VITE_CANVAS_SEARCH_NAV) — "12 matches" / "3 of 12", pinned beside the search
+    // field. Registered only flag-on: flag-off `searchStatus` is always null, so an always-registered
+    // item would be inert — but registering it anyway would still put an entry in the item list the
+    // overflow measures, and the parity contract is that flag-off the toolbar is byte-for-byte today's.
+    // Presentational ⇒ never a roving-tabindex stop.
+    ...(CANVAS_SEARCH_NAV_ENABLED
+      ? [
+          {
+            id: 'search-status',
+            group: 'find' as const,
+            row: 'look' as const,
+            tier: 2 as const,
+            order: 1,
+            label: 'Search matches',
+            presentational: true,
+            isVisible: (ctx: TsldToolbarContext) => ctx.searchStatus != null,
+            render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
+              <SearchMatchStatus ctx={ctx} itemProps={api.itemProps} />
+            ),
+          },
+        ]
+      : []),
 
     // --- 4 · Tools / author (Row 2 · Do — pen-gated authoring cluster) ------------------------
     // The whole authoring cluster shades as one set when the pen isn't held (ADR-0028 + the ADR-0031

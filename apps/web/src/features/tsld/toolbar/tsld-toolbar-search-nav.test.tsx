@@ -97,6 +97,75 @@ describe('the search field walks the match set', () => {
   });
 });
 
+describe('the find read-out', () => {
+  it('says how many matched before the first jump', () => {
+    renderRows(ctx({ searchStatus: { total: 12, index: null } }));
+    expect(screen.getByText('12 matches')).toBeInTheDocument();
+  });
+
+  it('says which one you are on after a jump', () => {
+    renderRows(ctx({ searchStatus: { total: 12, index: 3 } }));
+    expect(screen.getByText('3 of 12')).toBeInTheDocument();
+  });
+
+  it('says "1 match", not "1 matches"', () => {
+    renderRows(ctx({ searchStatus: { total: 1, index: null } }));
+    expect(screen.getByText('1 match')).toBeInTheDocument();
+  });
+
+  it('is absent when there is nothing to report', () => {
+    renderRows(ctx({ searchStatus: null }));
+    expect(screen.queryByText(/matches?$/)).toBeNull();
+  });
+
+  it('is aria-hidden, so a screen reader hears the announcer once and not twice', () => {
+    const { container } = renderRows(ctx({ searchStatus: { total: 4, index: 2 } }));
+    const chip = container.querySelector('[aria-hidden="true"]:has(> span)');
+    expect(screen.getByText('2 of 4').closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(chip).not.toBeNull();
+  });
+
+  it('is not a tab stop', () => {
+    const { container } = renderRows(ctx({ searchStatus: { total: 4, index: 2 } }));
+    const chip = screen.getByText('2 of 4').closest('span[aria-hidden="true"]');
+    expect(chip).not.toBeNull();
+    // Presentational items never join the roving tabindex — a read-out you have to tab past is a
+    // control that does nothing.
+    expect(chip).not.toHaveAttribute('tabindex', '0');
+    expect(container.querySelectorAll('[data-toolbar-focusable]').length).toBeGreaterThan(0);
+  });
+});
+
+describe('the clear button', () => {
+  it('appears only once there is something to clear', () => {
+    renderRows(ctx({ filterQuery: '' }));
+    expect(screen.queryByRole('button', { name: /clear search/i })).toBeNull();
+  });
+
+  it('empties the field and returns focus to it', async () => {
+    renderRows(ctx());
+    const button = screen.getByRole('button', { name: /clear search/i });
+    button.focus();
+    fireEvent.click(button);
+    expect(setFilterQuery).toHaveBeenCalledExactlyOnceWith('');
+    // Never `<body>`: the planner cleared in order to type something else. This is also why the
+    // button unmounts on the click that moves focus off it, rather than disabling in place.
+    expect(document.activeElement).toBe(field());
+  });
+
+  it('is reachable by keyboard, unlike the native ✕ it replaces', () => {
+    renderRows(ctx());
+    const button = screen.getByRole('button', { name: /clear search/i });
+    expect(button).not.toHaveAttribute('tabindex', '-1');
+    expect(button).not.toBeDisabled();
+  });
+
+  it('is absent while the field is shaded', () => {
+    renderRows(ctx({ hasDiagram: false }));
+    expect(screen.queryByRole('button', { name: /clear search/i })).toBeNull();
+  });
+});
+
 describe('the field is honest about where it works', () => {
   it('is shaded with a reason in the Gantt, where there is nothing to centre', () => {
     renderRows(ctx({ canvasActive: false }));
