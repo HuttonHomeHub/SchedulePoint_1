@@ -8,7 +8,6 @@ import { buildExportFilename } from '../export/filename';
 import { exportDiagramToPdf } from '../export/pdf';
 import { printDiagramImage } from '../export/PrintSurface';
 import { renderExportImage } from '../export/render-export-image';
-import { orderedConflicts, nextConflictIndex, type ConflictHit } from '../render/conflicts';
 import { isFilterActive, isOverAllocated, matchesActivityFilter } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
 import { resolvePrintPalette, resolvePrintWbsBandPalette } from '../render/palette';
@@ -16,6 +15,7 @@ import { daysBetween } from '../render/render-model';
 import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../render/to-render-model';
 import { wbsBandBars } from '../render/wbs-band';
 
+import { useConflictNavigation } from './commands/use-conflict-navigation';
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
@@ -51,10 +51,6 @@ import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
 import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
-
-/** A stable empty conflict list, so the flag-off path (P-sug1) hands a byte-stable reference to the
- * memos below (`orderedConflicts` is never even called when the flag is off — "flag-off ⇒ zero cost"). */
-const EMPTY_CONFLICTS: readonly ConflictHit[] = [];
 
 /** The pinned Tier-1 Project-finish chip (product-owner decision #1) — the number planners glance
  * at most, kept inline even though the rest of the summary moves into `Summary▾`. Loading shows a
@@ -272,60 +268,18 @@ export function useTsldToolbarContext({
     requestSelectActivity,
   } = canvasUi;
 
-  // Canvas nav (VITE_CANVAS_NAV): the plan's flagged activities in stable order (CQ-2), memoised on the
-  // activities only so it never rebuilds per render. `goToNextConflict` reads it to advance the cursor,
-  // centre + select the hit, and announce; `conflictCount`/`hasConflicts` gate the toolbar item. Nothing
-  // reads any of this while the flag is off (the id resolves to its placeholder stub), so it is inert.
-  // Gated on the flag (P-sug1): flag-off ⇒ the stable empty list, so `orderedConflicts` never runs and
-  // `hasConflicts`/`conflictCount`/`currentConflict` all degrade to zero/null — matching the flag's
-  // "flag-off ⇒ zero cost" contract (`orderedConflicts` is only exercised when the feature is on).
-  const orderedConflictHits = useMemo(
-    () => (CANVAS_NAV_ENABLED ? orderedConflicts(activities) : EMPTY_CONFLICTS),
-    [activities],
-  );
-  // The current-conflict readout the visible Next-conflict status chip renders (U2), derived from the
-  // cursor + the ordered set. Null (chip hidden) until the user starts cycling (no cursor), while
-  // isolating, when the cursor's activity is no longer flagged, when there are none, or flag-off (the
-  // ordered set is then empty). Kept in step with the polite announcement `goToNextConflict` speaks.
-  const currentConflict = useMemo<TsldToolbarContext['currentConflict']>(() => {
-    if (navState.isolateActive || navState.conflictCursorId === null) return null;
-    const index = orderedConflictHits.findIndex((h) => h.id === navState.conflictCursorId);
-    if (index === -1) return null;
-    const hit = orderedConflictHits[index];
-    if (!hit) return null;
-    return {
-      index: index + 1,
-      total: orderedConflictHits.length,
-      name: hit.name,
-      reasons: hit.reasons,
-    };
-  }, [navState.isolateActive, navState.conflictCursorId, orderedConflictHits]);
-  const goToNextConflict = useMemo(
-    () => (): void => {
-      if (orderedConflictHits.length === 0) return;
-      const index = nextConflictIndex(navState.conflictCursorId, orderedConflictHits);
-      const hit = orderedConflictHits[index];
-      if (!hit) return;
-      setConflictCursorId(hit.id);
-      // Centre the flagged bar (a small centred variant of `goToDate`), then lift the selection to it —
-      // the canvas rings it; the reveal-on-select pan is then a no-op since it is already centred.
-      const activity = activities.find((a) => a.id === hit.id);
-      if (activity?.earlyStart) canvasControlRef.current?.centerOnDate(activity.earlyStart);
-      requestSelectActivity(hit.id);
-      announce(
-        `Conflict ${index + 1} of ${orderedConflictHits.length}: ${hit.name} — ${hit.reasons.join(', ')}.`,
-      );
-    },
-    [
-      orderedConflictHits,
-      navState.conflictCursorId,
-      setConflictCursorId,
-      activities,
-      canvasControlRef,
-      requestSelectActivity,
-      announce,
-    ],
-  );
+  // Canvas nav (VITE_CANVAS_NAV). Moved to `commands/use-conflict-navigation` (ADR-0078 S11):
+  // it is one of the two `canvasControlRef` readers `docs/TECH_DEBT.md` #85 named, and lifting
+  // them out of this memo is what let the two `react-hooks/refs` suppressions be deleted.
+  const { orderedConflictHits, currentConflict, goToNextConflict } = useConflictNavigation({
+    activities,
+    isolateActive: navState.isolateActive,
+    conflictCursorId: navState.conflictCursorId,
+    setConflictCursorId,
+    canvasControlRef,
+    requestSelectActivity,
+    announce,
+  });
 
   // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2): whether the plan has ≥ 1
   // engine-flagged over-allocated activity (ADR-0041 `levelingWindowExceeded || selfOverAllocated`),
@@ -412,13 +366,18 @@ export function useTsldToolbarContext({
       imageHeight: number;
     } | null => {
       const dataDate = plan.plannedStart;
-      // `react-hooks/refs` disabled on this line and on `goToNextConflict` below. Both read the
-      // canvas handle inside a CALLBACK — this one runs when an export command is invoked, that one
-      // on a Next-conflict click — never during render, which is what the rule is protecting. The
-      // React Compiler only began flagging them when this already-large context memo grew by three
-      // more properties (audit F4), so the trigger is its analysis budget rather than a change in
-      // what the code does. Recorded as `docs/TECH_DEBT.md` #85: the fix is to split this memo, not
-      // to move the ref reads. Do not remove the disables without doing that first.
+      // `react-hooks/refs` disabled on this line — the LAST of the two readers #85 named. It reads
+      // the canvas handle inside a CALLBACK (it runs when an export command is invoked, never during
+      // render), which is what the rule is protecting; the React Compiler only began flagging it
+      // when this already-large context memo grew by three more properties (audit F4), so the
+      // trigger is its analysis budget rather than a change in what the code does.
+      //
+      // The second reader — `goToNextConflict` — left in ADR-0078 S11 and its disable went with it,
+      // which is the evidence that splitting the memo is the fix #85 said it was rather than a
+      // guess. This one waits on the export commands moving to `commands/use-export-commands`: it
+      // carries `buildDiagramImage` plus five commands and the five pieces of state they own, so it
+      // is a step of its own. Do not remove THIS disable without doing that — the register's rule
+      // is unchanged, only its scope is now one reader instead of two.
       // eslint-disable-next-line react-hooks/refs -- read in a command callback, not during render
       const live = canvasControlRef.current?.getViewport();
       if (dataDate === null || !live) return null;
@@ -683,7 +642,6 @@ export function useTsldToolbarContext({
       floatPathsOpen: model.floatPaths?.open ?? false,
       toggleFloatPaths,
       currentConflict,
-      // eslint-disable-next-line react-hooks/refs -- see the note on `buildDiagramImage` above
       goToNextConflict,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
