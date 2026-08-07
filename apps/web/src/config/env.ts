@@ -1401,3 +1401,23 @@ export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  */
 export const CANVAS_SEARCH_NAV_ENABLED =
   CANVAS_LENSES_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_SEARCH_NAV);
+
+/**
+ * TSLD canvas **multi-select and bulk operations** (spec + plan in
+ * `docs/specs/canvas-multi-select/`, approved 2026-08-07). When on, the canvas selection becomes a
+ * set rather than one id: ctrl/cmd-click toggles, shift-click takes the bounding rectangle, a
+ * marquee sweeps, and a bulk bar acts on the whole set in one write and one undo step.
+ *
+ * **Derived** from {@link CANVAS_DIRECT_MANIPULATION_ENABLED}, and the reason is a keyboard
+ * collision rather than a layering preference: the legacy edge-drag reads `Shift` as the
+ * start-to-start chord, and this epic gives `Shift`+click the span meaning. The two must never be
+ * live at once, so the `&&` makes that unrepresentable instead of documented. A test asserts it.
+ *
+ * **Default-off** until the M5 gate pass. Flag-off the selection is structurally singular — only
+ * `replace` and `clear` are reachable, so `ids.length <= 1` holds after any sequence of events, and
+ * a structural test pins exactly that. Nothing else changes: the canvas paint, the toolbar, the
+ * a11y tree and the `Space` binding are byte-for-byte today's (the flag-off parity suite is the
+ * rollback contract).
+ */
+export const CANVAS_MULTI_SELECT_ENABLED =
+  CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOff(import.meta.env.VITE_CANVAS_MULTI_SELECT);
