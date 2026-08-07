@@ -120,6 +120,7 @@ export function makeTsldToolbarContext(
     goToNextConflict: vi.fn(),
     searchStatus: null,
     goToMatch: vi.fn(),
+    zoomToSelection: vi.fn(),
     snapToGrid: false,
     toggleSnapToGrid: vi.fn(),
     // Export & print

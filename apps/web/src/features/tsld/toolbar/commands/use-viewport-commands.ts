@@ -24,8 +24,11 @@ import { formatCalendarDate } from '@/lib/format-date';
 export function useViewportCommands(args: {
   canvasControlRef: React.RefObject<TsldCanvasHandle | null>;
   setCanvasZoomPreset: (level: TsldToolbarContext['zoomPreset']) => void;
-}): Pick<TsldToolbarContext, 'setZoomPreset' | 'stepZoom' | 'goToDate'> {
-  const { canvasControlRef, setCanvasZoomPreset } = args;
+  /** The current selection, for `zoomToSelection`. Null when nothing is selected. */
+  selectedActivityId: string | null;
+  selectedActivityName: string | null;
+}): Pick<TsldToolbarContext, 'setZoomPreset' | 'stepZoom' | 'goToDate' | 'zoomToSelection'> {
+  const { canvasControlRef, setCanvasZoomPreset, selectedActivityId, selectedActivityName } = args;
   const announce = useAnnounce();
 
   // The zoom PRESET is shared state, not a canvas property: the Gantt derives its scale from it
@@ -59,5 +62,22 @@ export function useViewportCommands(args: {
     [canvasControlRef, announce],
   );
 
-  return { setZoomPreset, stepZoom, goToDate };
+  // Zoom to selection (`docs/specs/canvas-search-navigation/` M3): the fourth viewport command, and
+  // it lives here for the ADR-0078 §3b reason rather than beside the selection it reads. Composed in
+  // the context memo first, it tripped `react-hooks/refs` immediately — the rule's report is a signal
+  // to split, not to silence, so the command moved to the module that already owns the handle and the
+  // selection comes in as two plain values.
+  const zoomToSelection = useCallback<TsldToolbarContext['zoomToSelection']>(() => {
+    if (selectedActivityId === null) return;
+    const framed = canvasControlRef.current?.zoomToActivity(selectedActivityId) ?? false;
+    // Announce only what happened. A bar with no computed dates cannot be framed, and claiming it was
+    // would be the lit-but-inert defect moved into the spoken channel.
+    announce(
+      framed
+        ? `Zoomed to ${selectedActivityName ?? 'the selected activity'}.`
+        : 'Nothing to zoom to — this activity has no calculated dates.',
+    );
+  }, [selectedActivityId, selectedActivityName, canvasControlRef, announce]);
+
+  return { setZoomPreset, stepZoom, goToDate, zoomToSelection };
 }

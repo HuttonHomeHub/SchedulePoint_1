@@ -358,9 +358,11 @@ export function useTsldToolbarContext({
   // freed enough of the `react-hooks/refs` analysis budget that the rule reached a THIRD ref read it
   // had never flagged — see `commands/use-viewport-commands` for why that is #85's diagnosis landing
   // rather than a new defect.
-  const { setZoomPreset, stepZoom, goToDate } = useViewportCommands({
+  const { setZoomPreset, stepZoom, goToDate, zoomToSelection } = useViewportCommands({
     canvasControlRef,
     setCanvasZoomPreset,
+    selectedActivityId,
+    selectedActivityName: selectedActivity?.name ?? null,
   });
 
   // Shared off-screen Diagram-image build (M2/M3) — moved to `commands/use-diagram-image`
@@ -573,6 +575,7 @@ export function useTsldToolbarContext({
       goToNextConflict,
       searchStatus,
       goToMatch,
+      zoomToSelection,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
 
@@ -881,6 +884,7 @@ export function useTsldToolbarContext({
     goToNextConflict,
     searchStatus,
     goToMatch,
+    zoomToSelection,
     // Export & print — re-identify only when the exported set / its match state / the plan name change
     // (the callbacks close over these). `todayIso` + `announce` are already listed above. The
     // dependency edges, the view toggles and the late overlay now reach the picture through

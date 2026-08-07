@@ -17,11 +17,13 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 const goToMatch = vi.fn();
+const zoomToSelection = vi.fn();
 const setFilterQuery = vi.fn();
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     goToMatch,
+    zoomToSelection,
     setFilterQuery,
     filterQuery: 'pile',
     hasDiagram: true,
@@ -48,6 +50,7 @@ const field = (): HTMLInputElement =>
 
 beforeEach(() => {
   goToMatch.mockClear();
+  zoomToSelection.mockClear();
   setFilterQuery.mockClear();
 });
 
@@ -142,7 +145,7 @@ describe('the clear button', () => {
     expect(screen.queryByRole('button', { name: /clear search/i })).toBeNull();
   });
 
-  it('empties the field and returns focus to it', async () => {
+  it('empties the field and returns focus to it', () => {
     renderRows(ctx());
     const button = screen.getByRole('button', { name: /clear search/i });
     button.focus();
@@ -184,5 +187,41 @@ describe('the field is honest about where it works', () => {
     // on, so it wins — the layered-reason pattern the zoom cluster already uses.
     renderRows(ctx({ hasDiagram: false, canvasActive: false }));
     expect(field()).toHaveAttribute('title', expect.not.stringMatching(/diagram view/i));
+  });
+});
+
+describe('Zoom to selection', () => {
+  const activity = { id: 'a', name: 'Piling' } as TsldToolbarContext['selectedActivity'];
+  const button = () => screen.getByRole('button', { name: /zoom to selection/i });
+
+  it('frames the selection when one is held in the diagram', () => {
+    renderRows(ctx({ selectedActivity: activity }));
+    fireEvent.click(button());
+    expect(zoomToSelection).toHaveBeenCalledOnce();
+  });
+
+  it('says to select something first when nothing is selected', () => {
+    renderRows(ctx({ selectedActivity: null }));
+    expect(button()).toHaveAttribute('aria-disabled', 'true');
+    // The toolbar prefixes the item label onto the reason, so a tooltip reads as a sentence.
+    expect(button()).toHaveAttribute('title', 'Zoom to selection — Select an activity first');
+  });
+
+  it('says it is diagram-only in the Gantt — the first version, not a later fix', () => {
+    // `zoomToActivity` is a canvas-handle command and the Gantt mounts no canvas. Without this the
+    // button would be lit and do nothing, which is exactly the ADR-0059 M6 defect.
+    renderRows(ctx({ selectedActivity: activity, canvasActive: false }));
+    expect(button()).toHaveAttribute('title', 'Zoom to selection — Only in the diagram view');
+  });
+
+  it('says to add an activity on an empty plan, ahead of the other two reasons', () => {
+    renderRows(ctx({ selectedActivity: null, canvasActive: false, hasDiagram: false }));
+    expect(button()).toHaveAttribute('title', 'Zoom to selection — Add an activity to zoom to');
+  });
+
+  it('does not fire while shaded', () => {
+    renderRows(ctx({ selectedActivity: null }));
+    fireEvent.click(button());
+    expect(zoomToSelection).not.toHaveBeenCalled();
   });
 });

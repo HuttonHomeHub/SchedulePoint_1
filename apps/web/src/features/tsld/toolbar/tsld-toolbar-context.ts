@@ -319,6 +319,14 @@ export interface TsldToolbarContext {
    * role) — finding is not editing.
    */
   goToMatch: (direction: 'next' | 'previous') => void;
+  /**
+   * Frame the selected activity at a readable scale, and announce that it did.
+   *
+   * A **command**, not a mode (ADR-0056): it sets the scale once and a later resize preserves it. A
+   * no-op with nothing selected, in the Gantt, or when the activity has no computed dates — each of
+   * which the item shades with its own reason rather than leaving the button lit and inert.
+   */
+  zoomToSelection: () => void;
   /** Whether *Snap to grid* is on (drives the toggle's pressed state). Session-local (CQ-3). */
   snapToGrid: boolean;
   /** Toggle *Snap to grid* on/off (pen-gated + Visual mode; rounds a dropped `visualStart` to the

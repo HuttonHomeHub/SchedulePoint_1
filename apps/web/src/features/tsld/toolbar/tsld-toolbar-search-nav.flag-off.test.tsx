@@ -93,3 +93,10 @@ describe('flag-off, the search field is today’s filter and nothing more', () =
     expect(screen.queryByText(/4 matches/i)).toBeNull();
   });
 });
+
+describe('flag-off, Zoom to selection does not exist', () => {
+  it('registers no such item', () => {
+    renderRows(ctx());
+    expect(screen.queryByRole('button', { name: /zoom to selection/i })).toBeNull();
+  });
+});

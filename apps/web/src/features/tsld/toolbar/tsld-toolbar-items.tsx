@@ -28,6 +28,7 @@ import {
   ListChecks,
   Loader2,
   LocateFixed,
+  Crosshair,
   Maximize2,
   MessageSquare,
   Minus,
@@ -1699,6 +1700,38 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.fit(),
     },
+    // Zoom to selection (search navigation M3) — the companion to `Fit to plan`, ordered right after
+    // it, for the planner who has just landed on a match and wants to read it. Registered only
+    // flag-on, so flag-off the toolbar is byte-for-byte today's.
+    //
+    // Three shade reasons, layered most-actionable first, because three different things can make it
+    // impossible and a single reason would be wrong for two of them. `canvasActive` is in the FIRST
+    // version, not added after a review: `zoomToActivity` is a canvas-handle command and the Gantt
+    // does not mount one, so without it this is exactly the lit-but-inert control ADR-0059 M6 found.
+    ...(CANVAS_SEARCH_NAV_ENABLED
+      ? [
+          {
+            id: 'zoom-to-selection',
+            group: 'frame' as const,
+            row: 'look' as const,
+            tier: 2 as const,
+            order: 13,
+            label: 'Zoom to selection',
+            icon: <Crosshair className="size-4" />,
+            isEnabled: (ctx: TsldToolbarContext) =>
+              ctx.hasDiagram && ctx.canvasActive && ctx.selectedActivity != null,
+            disabledReason: (ctx: TsldToolbarContext) =>
+              !ctx.hasDiagram
+                ? 'Add an activity to zoom to'
+                : !ctx.canvasActive
+                  ? CANVAS_ONLY_REASON
+                  : ctx.selectedActivity == null
+                    ? 'Select an activity first'
+                    : undefined,
+            onActivate: (ctx: TsldToolbarContext) => ctx.zoomToSelection(),
+          },
+        ]
+      : []),
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
     // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
