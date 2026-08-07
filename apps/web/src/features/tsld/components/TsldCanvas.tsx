@@ -83,6 +83,7 @@ import type { SelectionAnchor } from '../toolbar/selection-actions';
 
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
@@ -708,6 +709,11 @@ export function TsldCanvas({
   // expression (component-review finding) so the initial scene ref and the resync effect below
   // can't drift out of step.
   const monthBandsEnabled = CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? true);
+  // Same shape for the data-date line (canvas status & feedback M1): the flag decides whether the
+  // status layer exists at all — flag-off the scene carries no `dataDateLine` and the frame is
+  // byte-for-byte today's — while the user's `View▾` preference only narrows the flag-on case.
+  // The painter stays flag-free, as every other layer does.
+  const dataDateLineEnabled = CANVAS_DATA_DATE_ENABLED && (view?.dataDate ?? true);
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -719,6 +725,7 @@ export function TsldCanvas({
     todayOffset,
     todayFraction,
     monthBands: monthBandsEnabled,
+    dataDateLine: dataDateLineEnabled,
     // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
     // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
     gridTiers: CANVAS_TIME_AXIS_ENABLED,
@@ -808,6 +815,7 @@ export function TsldCanvas({
       todayOffset,
       todayFraction,
       monthBands: monthBandsEnabled,
+      dataDateLine: dataDateLineEnabled,
       // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
       // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
       gridTiers: CANVAS_TIME_AXIS_ENABLED,
@@ -842,6 +850,7 @@ export function TsldCanvas({
     lagArmed,
     view,
     monthBandsEnabled,
+    dataDateLineEnabled,
     isWorkingDay,
     todayOffset,
     todayFraction,

@@ -69,6 +69,7 @@ import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -134,6 +135,11 @@ const VIEW_TOGGLE_META: Record<
     enabled: CANVAS_VISUAL_LANGUAGE_ENABLED,
   },
   wbsBand: { group: 'structure', label: 'WBS band', enabled: WBS_IMPROVEMENTS_ENABLED },
+  // The data-date status line (canvas status & feedback M1) — listed before Today because on a
+  // statused programme the data date sits left of (before) today, and the menu order should read
+  // in diagram order. Flag-off it is filtered out, so `View▾` offers no such toggle (the parity
+  // claim in the spec's US-1).
+  dataDate: { group: 'markers', label: 'Data date line', enabled: CANVAS_DATA_DATE_ENABLED },
   today: { group: 'markers', label: 'Today line' },
   nonWorking: { group: 'markers', label: 'Non-working' },
   labels: { group: 'markers', label: 'Labels' },

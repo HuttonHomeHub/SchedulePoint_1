@@ -114,4 +114,6 @@ interface ImportMetaEnv {
   readonly VITE_ACCOUNT_SETTINGS?: string;
   /** ADR-0074 M4 — the signed-out password-reset flow AND its sign-in link, together. Default off. */
   readonly VITE_PASSWORD_RESET?: string;
+  /** Canvas status & feedback M1 — the TSLD data-date line, pill, legend + text equivalents. Default off. */
+  readonly VITE_CANVAS_DATA_DATE?: string;
 }

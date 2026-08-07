@@ -184,6 +184,19 @@ export interface TsldPalette {
   handleHalo: string;
   /** The alternating month band drawn under the diagram (ADR-0055 §4). Opaque. */
   monthBand: string;
+  // ── Data-date status marker (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1) ─────────
+  /** The **data-date** status vertical + its pill fill — the strongest neutral in the palette
+   * (`--color-foreground`), NOT `--color-info`: in all three shipped themes info is a near
+   * neighbour of `--color-primary`, the on-schedule bar fill, and a "distinct" line in the bar
+   * hue on a diagram made of bars is not distinct (measured, spec CQ-1). Its one collision is the
+   * 1.5px critical-bar outline — a bar-shaped stroke, not a full-height rule — noted and
+   * accepted. The line is solid 2px vs Today's dashed 1.5px, so the two differ by shape and
+   * weight, never hue alone (WCAG 1.4.1). */
+  dataDate: string;
+  /** Data-date pill ink — `dataDate`'s 1:1 partner (`--color-background`), the same guarantee
+   * `todayInk` gives the Today pill: the pair inverts together per theme, so the label always
+   * reads on its own fill without a per-theme contrast decision. */
+  dataDateInk: string;
   // The refresh introduces NO other colour: the in-bar progress band + front divider draw in the
   // bar's own paired label ink (`labelInside*` / the lens `barInk` override), so their contrast is
   // guaranteed by the same 1:1 fill↔ink pairing labels rely on in both themes and under every
@@ -241,6 +254,12 @@ export interface TsldViewToggles {
    * every existing caller/fixture stays valid; the default below is a plain literal, not a flag
    * read, so this module stays flag-free. */
   monthBands?: boolean;
+  /** The **data-date line** (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1). A plain
+   * boolean here — the pure painter module never imports a flag; `TsldCanvas` composes the gate
+   * (`CANVAS_DATA_DATE_ENABLED && (view?.dataDate ?? true)`) into `TsldScene.dataDateLine`,
+   * which is what the painter reads (the `monthBands` precedent). Optional so every existing
+   * caller/fixture stays valid. */
+  dataDate?: boolean;
   /** The pinned **WBS band** across the top of the canvas (ADR-0063, `VITE_WBS_IMPROVEMENTS`).
    * Default **off**: the band takes canvas height, and ADR-0031's canvas-maximal layout is not a
    * decision this may quietly reverse for every existing plan. A plain boolean here — the pure
@@ -259,6 +278,9 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   labels: true,
   lateOverlay: false,
   monthBands: true,
+  // The data-date line defaults ON under its flag (a plan fact, like the month bands' ground);
+  // the flag itself — composed by the host, never read here — is what decides reachability.
+  dataDate: true,
 };
 
 export interface TsldScene {
@@ -290,6 +312,19 @@ export interface TsldScene {
    * the flag-off parity claim structural rather than a promise. The budget suite flips it.
    */
   monthBands?: boolean | undefined;
+  /**
+   * Draw the **data-date line** — a solid 2px `palette.dataDate` vertical at day offset 0 (day 0
+   * IS the data date: `screenXOfDay(0, view) === view.originX`, `render-model.ts`) with its own
+   * pill row, plus the coincidence rule against the Today line (`VITE_CANVAS_DATA_DATE`, canvas
+   * status & feedback M1). Absent ⇒ the layer never runs ⇒ the frame is byte-for-byte today's
+   * paint — the flag-off parity claim is structural, not a promise (the `monthBands` precedent;
+   * pinned by `paint.data-date-parity.test.ts`).
+   *
+   * Named `dataDateLine`, NOT the plan's `TsldScene.dataDate`: that name has been the scene's
+   * coordinate-origin ISO date since ADR-0026, and overloading one key with a date-or-boolean
+   * meaning is exactly the conflation ADR-0033 unpicked once already.
+   */
+  dataDateLine?: boolean | undefined;
   /**
    * Draw the time-axis grid as three tiers — day / month / year, each its own colour + weight
    * (ADR-0055 token rule; day/month tier F5, `VITE_CANVAS_TIME_AXIS`) — instead of the single
@@ -1447,10 +1482,45 @@ export function paintScene(
   }
   if (activeLagHandle) drawLagHandles(ctx, [activeLagHandle], palette, true);
 
-  // Layer 3.5: the TODAY marker — a dashed vertical in the destructive hue, above the bars and
-  // below the labels + selection ring. Dashed (not colour alone) and named in the panel legend.
-  // Drawn only when the toggle is on, today maps to a day offset, and that column is on-screen.
-  // Painted before the labels so label text stays legible over the dashed line, not under it.
+  // Layer 3.5: the STATUS verticals — the data date and TODAY — above the bars and below the
+  // labels + selection ring, so label text stays legible over the lines, not under them.
+  //
+  // Two marks, two channels (the marker-channel vocabulary, `docs/DESIGN_SYSTEM.md`): the **data
+  // date** (`VITE_CANVAS_DATA_DATE`) is the schedule's own pivot — a fact of the programme — so it
+  // draws SOLID at 2px in the foreground hue; **Today** is wall-clock now, a moving cue, so it
+  // stays dashed at 1.5px in the destructive hue. Shape and weight distinguish them without
+  // relying on hue (WCAG 1.4.1). Day 0 IS the data date (`screenXOfDay(0, view) === view.originX`,
+  // render-model.ts), so the line needs no new geometry; it is culled by the same on-screen test
+  // the Today line uses. `scene.dataDateLine` absent ⇒ `dataDateX` stays null ⇒ not one call is
+  // added and the Today branch below is byte-for-byte the pre-change layer (the parity gate).
+  //
+  // THE COINCIDENCE RULE: when the two rules round to the same pixel, drawing both would only
+  // overdraw one line with the other — the sole case where two lines are a rendering artefact
+  // rather than two facts — so exactly ONE line draws, in the data-date treatment, and its pill
+  // merges the labels (`Data date · today`). The test is `Math.round(x)` on the already-computed
+  // screen x values, asserted both ways in `paint.test.ts`.
+  const dataDateX = ((): number | null => {
+    if (scene.dataDateLine !== true) return null;
+    const x = Math.round(screenXOfDay(0, view)) + 0.5;
+    return x >= 0 && x <= size.width ? x : null;
+  })();
+  // Whether Today rounded onto the drawn data-date rule this frame — set in the Today branch,
+  // read by the data-date pill below so the merged label and the suppressed second line come
+  // from ONE comparison, not two that could disagree.
+  let todayMerged = false;
+  if (dataDateX !== null) {
+    ctx.strokeStyle = palette.dataDate;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(dataDateX, 0);
+    ctx.lineTo(dataDateX, size.height);
+    ctx.stroke();
+  }
+
+  // The TODAY marker — a dashed vertical in the destructive hue. Drawn only when the toggle is
+  // on, today maps to a day offset, that column is on-screen, AND it does not round onto the
+  // data-date rule (the coincidence rule above).
   //
   // `todayFraction` (F6a, `VITE_CANVAS_TIME_AXIS`) interpolates the line to the actual
   // time-of-day rather than the midnight boundary; absent/null keeps the plain integer offset,
@@ -1462,7 +1532,8 @@ export function paintScene(
   if (toggles.today && scene.todayOffset != null) {
     const dayOffset = scene.todayOffset + (scene.todayFraction ?? 0);
     const x = Math.round(screenXOfDay(dayOffset, view)) + 0.5;
-    if (x >= 0 && x <= size.width) {
+    todayMerged = dataDateX !== null && Math.round(x) === Math.round(dataDateX);
+    if (!todayMerged && x >= 0 && x <= size.width) {
       ctx.strokeStyle = palette.today;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 3]);
@@ -1489,6 +1560,27 @@ export function paintScene(
         ctx.fillText(label, cx + LABEL_PAD_PX, TODAY_CHIP_TOP + TODAY_CHIP_H / 2);
       }
     }
+  }
+
+  // The `Data date` pill — the Today pill's geometry on its OWN derived row (DATA_DATE_CHIP_TOP),
+  // so the two can never overlap after clamping. It draws under the same text-capability guard
+  // the Today pill uses (at most one measureText per frame), but is NOT gated on `todayFraction`:
+  // that gate is Today's own flag composition, and the data-date pill is this flag's to gate.
+  if (
+    dataDateX !== null &&
+    typeof ctx.fillText === 'function' &&
+    typeof ctx.measureText === 'function'
+  ) {
+    ctx.font = LABEL_FONT;
+    const label = todayMerged ? 'Data date · today' : 'Data date';
+    const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
+    const cx = Math.max(0, Math.min(dataDateX - w / 2, size.width - w));
+    ctx.fillStyle = palette.dataDate;
+    ctx.fillRect(cx, DATA_DATE_CHIP_TOP, w, TODAY_CHIP_H);
+    ctx.fillStyle = palette.dataDateInk;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, cx + LABEL_PAD_PX, DATA_DATE_CHIP_TOP + TODAY_CHIP_H / 2);
   }
 
   // Layer 3.55: GPM **float / drift tails** (ADR-0054 §4) — a hollow tail right of the bar for
@@ -1869,6 +1961,16 @@ export const TODAY_CHIP_H = 16;
  * future edit to either from silently reintroducing the collision (asserted in `paint.test.ts`).
  */
 export const TODAY_CHIP_TOP = CURSOR_CHIP_TOP + CURSOR_CHIP_H + 4;
+
+/**
+ * Gap (px) between the canvas top edge and the **Data date** pill (`VITE_CANVAS_DATA_DATE`) —
+ * derived as the next row below the Today pill's footprint for the same reason `TODAY_CHIP_TOP`
+ * is derived from the cursor chip's: both pills clamp inside the canvas width, so at a narrow
+ * viewport they would converge on the same x, and only a derived row (never a literal offset)
+ * guarantees a future edit to either sibling cannot silently reintroduce a collision (asserted
+ * in `paint.test.ts`; height reuses TODAY_CHIP_H — the pills share one geometry).
+ */
+export const DATA_DATE_CHIP_TOP = TODAY_CHIP_TOP + TODAY_CHIP_H + 4;
 
 /**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):

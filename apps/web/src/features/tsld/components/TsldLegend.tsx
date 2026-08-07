@@ -10,6 +10,7 @@
 import type { ColourLegend, ColourMode } from '../render/lenses';
 
 import {
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -22,6 +23,7 @@ type LegendItem =
   | { label: string; line: 'solid' | 'dashed' }
   | { label: string; pin: true }
   | { label: string; today: true }
+  | { label: string; dataDate: true }
   | { label: string; conflict: true }
   | { label: string; overlap: true }
   | { label: string; overAllocation: true }
@@ -73,6 +75,12 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
     label: 'Non-working',
     swatch: { backgroundColor: 'var(--color-muted)', border: '1px solid var(--color-border)' },
   },
+  // The data-date status line (canvas status & feedback M1, `VITE_CANVAS_DATA_DATE`) — a SOLID
+  // vertical beside the dashed Today one, listed first because it sits left of today on a statused
+  // programme. The swatch mirrors the canvas channel exactly: shape (solid vs dashed) and weight
+  // (2px vs 1.5px) carry the distinction, never hue alone (WCAG 1.4.1). Flag-off the legend
+  // renders byte-identically (the parity gate).
+  ...(CANVAS_DATA_DATE_ENABLED ? [{ label: 'Data date', dataDate: true } as const] : []),
   { label: 'Today', today: true },
   // Logic ties, matching the canvas: a driving link (heavier solid) sets its
   // successor's start; a non-driving link (thin dashed) carries slack (M3).
@@ -203,6 +211,19 @@ export function TsldLegend({
                   borderLeftWidth: 1.5,
                   borderLeftStyle: 'dashed',
                   borderLeftColor: 'var(--color-destructive)',
+                }}
+              />
+            </span>
+          ) : 'dataDate' in item ? (
+            <span aria-hidden="true" className="inline-flex h-3 w-5 justify-center">
+              {/* Solid 2px vertical in the foreground hue — the data-date channel (vs Today's
+                  dashed destructive), mirroring the canvas rule exactly. */}
+              <span
+                className="h-full"
+                style={{
+                  borderLeftWidth: 2,
+                  borderLeftStyle: 'solid',
+                  borderLeftColor: 'var(--color-foreground)',
                 }}
               />
             </span>

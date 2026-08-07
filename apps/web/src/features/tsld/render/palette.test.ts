@@ -150,6 +150,49 @@ describe('today marker pill ink (todayInk)', () => {
   });
 });
 
+// ── Data-date marker pair (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1) ─────────
+describe('data-date marker pair (dataDate / dataDateInk)', () => {
+  it('resolveTsldPalette resolves the pair (documented jsdom fallbacks), distinct from today/bar/selection', () => {
+    const palette = resolveTsldPalette();
+    expect(palette.dataDate).toBe('#e6e8ee'); // --color-foreground fallback
+    expect(palette.dataDateInk).toBe('#161a22'); // --color-background fallback
+    // CQ-1's whole point: the data-date hue must not collide with an existing MARK. `--color-info`
+    // was measured and REJECTED (a near neighbour of the primary bar fill in all three themes);
+    // the chosen foreground neutral differs from the today rule, the bar fill and the selection
+    // ring. Pinning the values means a later token re-pick cannot silently re-introduce the
+    // collision without failing here.
+    expect(palette.dataDate).not.toBe(palette.today);
+    expect(palette.dataDate).not.toBe(palette.bar);
+    expect(palette.dataDate).not.toBe(palette.selection);
+    // The one ACCEPTED collision, stated rather than implied: the critical-bar outline is the same
+    // foreground token — a bar-shaped stroke, not a full-height rule (spec §4).
+    expect(palette.dataDate).toBe(palette.outline);
+  });
+
+  it('resolvePrintPalette carries LIGHT fallbacks for the pair, same distinctness (total contract)', () => {
+    const palette = resolvePrintPalette();
+    expect(palette.dataDate).toBe('#1a1a1a');
+    expect(palette.dataDateInk).toBe('#ffffff');
+    expect(palette.dataDate).not.toBe(palette.today);
+    expect(palette.dataDate).not.toBe(palette.bar);
+    expect(palette.dataDate).not.toBe(palette.selection);
+  });
+
+  it('the ink is the fill’s 1:1 FOREGROUND/BACKGROUND partner in both resolvers (the todayInk contract)', () => {
+    // The pill's legibility rides the same guarantee todayInk gives the Today pill: the pair is
+    // two halves of ONE token pairing (foreground on background), never two independent picks —
+    // so the two invert together per theme and the label always reads on its own fill.
+    const dark = resolveTsldPalette();
+    expect(dark.dataDateInk).not.toBe(dark.dataDate);
+    const print = resolvePrintPalette();
+    expect(print.dataDateInk).not.toBe(print.dataDate);
+    // In the print resolver the pairing is literal: the pill ink IS the paper ground the export
+    // lays behind the diagram, exactly as the fill IS the title ink.
+    expect(print.dataDate).toBe(print.ink);
+    expect(print.dataDateInk).toBe(print.ground);
+  });
+});
+
 // Self-contained oklch→luminance/contrast helpers shared by the token-mirror contrast suites
 // below (mirrors lenses.test.ts; token values mirror `styles/globals.css`).
 const oklchToLuminance = (L: number, C: number, H: number): number => {
@@ -247,6 +290,51 @@ describe('M4/M5 refresh contrast on the canvas ground (WCAG 1.4.11-equivalent, b
 // `outline` core (foreground) and the `handleHalo` ring (card, the canvas ground) are each other's
 // theme-inverse, so whichever loses contrast against the ground it lands on, the other holds it.
 // Asserted as `max(core, halo) ≥ 3` per fill, plus the pair's own separation.
+// The data-date pair resolved in ALL THREE shipped themes (token values mirror
+// `styles/globals.css` :root / .dark / .corporate — the same mirroring convention as the suites
+// above). Two facts are pinned per theme: the pill's ink clears 4.5:1 on its fill (the pair is
+// the theme's own foreground-on-background text pairing, so this should never be close), and the
+// fill's token VALUE differs from the today (destructive), bar (primary) and selection (ring)
+// tokens — the CQ-1 collision measurement restated as a gate.
+describe('data-date pair across all three themes (token-mirror, WCAG 1.4.3 + CQ-1)', () => {
+  const themes: Record<
+    string,
+    Record<'foreground' | 'background' | 'destructive' | 'primary' | 'ring', Oklch>
+  > = {
+    light: {
+      foreground: [0.145, 0, 0],
+      background: [1, 0, 0],
+      destructive: [0.577, 0.245, 27.325],
+      primary: [0.5, 0.18, 255],
+      ring: [0.55, 0.18, 255],
+    },
+    dark: {
+      foreground: [0.985, 0, 0],
+      background: [0.145, 0, 0],
+      destructive: [0.52, 0.2, 22.216],
+      primary: [0.65, 0.17, 255],
+      ring: [0.65, 0.17, 255],
+    },
+    corporate: {
+      foreground: [0.321, 0, 0],
+      background: [0.982, 0.002, 248],
+      destructive: [0.505, 0.19, 27.5],
+      primary: [0.252, 0.056, 264],
+      ring: [0.35, 0.09, 262],
+    },
+  };
+  for (const [theme, t] of Object.entries(themes)) {
+    it(`pill ink clears 4.5:1 on the pill fill (${theme})`, () => {
+      expect(ratio(t.foreground, t.background)).toBeGreaterThanOrEqual(4.5);
+    });
+    it(`the fill token differs from today/bar/selection (${theme})`, () => {
+      expect(t.foreground).not.toEqual(t.destructive);
+      expect(t.foreground).not.toEqual(t.primary);
+      expect(t.foreground).not.toEqual(t.ring);
+    });
+  }
+});
+
 describe('lag-handle core/halo contrast on the bar fills (WCAG 1.4.11-equivalent, both themes)', () => {
   const core: Record<string, Oklch> = { light: [0.145, 0, 0], dark: [0.985, 0, 0] }; // foreground
   const halo: Record<string, Oklch> = { light: [1, 0, 0], dark: [0.205, 0, 0] }; // card

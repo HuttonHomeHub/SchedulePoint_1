@@ -3,6 +3,8 @@ import type { PrintPalette } from '../render/palette';
 import type { Size, Viewport } from '../render/render-model';
 import type { WbsBandBar } from '../render/wbs-band';
 
+import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
+
 /**
  * The thin, off-screen **Diagram-PNG renderer** for the TSLD export deliverables (spec
  * `docs/specs/export-print/` §Milestone 2, behind `VITE_EXPORT_PRINT`). It creates its **own** canvas
@@ -77,17 +79,27 @@ export interface RenderExportImageDeps {
 /** One legend entry, matching the canvas cues (palette-derived, so colours track the drawn bars). */
 type LegendEntry = {
   label: string;
-  kind: 'fill' | 'outlineSolid' | 'outlineDashed' | 'lineSolid' | 'lineDashed' | 'today';
+  kind:
+    'fill' | 'outlineSolid' | 'outlineDashed' | 'lineSolid' | 'lineDashed' | 'today' | 'dataDate';
   colour: (palette: PrintPalette) => string;
 };
 
-/** The compact export legend — the criticality key + the link/today cues, mirroring `TsldLegend`. */
+/** The compact export legend — the criticality key + the link/status cues, mirroring `TsldLegend`.
+ * This list is a HAND-AUTHORED mirror of the DOM legend (TECH_DEBT #48(e)): a mark added to the
+ * canvas must gain its entry here in the SAME change, or the exported picture silently drifts from
+ * the screen's key — which is why the data-date entry landed with its painter layer. */
 const EXPORT_LEGEND: readonly LegendEntry[] = [
   { label: 'Critical', kind: 'outlineSolid', colour: (p) => p.critical },
   { label: 'Near-critical', kind: 'outlineDashed', colour: (p) => p.nearCritical },
   { label: 'On schedule', kind: 'fill', colour: (p) => p.bar },
   { label: 'Driving link', kind: 'lineSolid', colour: (p) => p.edge },
   { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },
+  // The data-date status line (canvas status & feedback M1) — drawn SOLID, before Today, matching
+  // the DOM legend's order and the marker-channel table. Flag-off it is absent, so the export
+  // legend is byte-for-byte the prior row (the parity gate).
+  ...(CANVAS_DATA_DATE_ENABLED
+    ? [{ label: 'Data date', kind: 'dataDate', colour: (p: PrintPalette) => p.dataDate } as const]
+    : []),
   { label: 'Today', kind: 'today', colour: (p) => p.today },
 ];
 
@@ -213,6 +225,16 @@ function drawLegend(ctx: CanvasRenderingContext2D, palette: PrintPalette, maxWid
       ctx.lineTo(x + SWATCH_W, swatchTop + SWATCH_H / 2);
       ctx.stroke();
       ctx.setLineDash([]);
+    } else if (entry.kind === 'dataDate') {
+      // dataDate: a SOLID 2px vertical, matching the canvas data-date rule — shape and weight
+      // distinguish it from Today's dashed 1.5px, never hue alone (WCAG 1.4.1).
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(x + SWATCH_W / 2, swatchTop);
+      ctx.lineTo(x + SWATCH_W / 2, swatchTop + SWATCH_H);
+      ctx.stroke();
     } else {
       // today: a dashed vertical, matching the canvas today marker.
       ctx.strokeStyle = colour;

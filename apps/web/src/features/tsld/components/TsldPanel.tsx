@@ -10,6 +10,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import {
   CANVAS_AUTHORING_ENABLED,
+  CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -1858,6 +1859,23 @@ export function TsldPanel({
             ) : null}
 
             {/*
+              The data date stated once in TEXT (canvas status & feedback M1, WCAG 1.4.1): the
+              marker a screen-reader user cannot see is still a fact they have. Linked to the
+              listbox with `aria-describedby` rather than trusting reading order — a landmark-
+              navigating reader lands INSIDE the region and never passes a preceding paragraph
+              (the ADR-0073 C2.5 finding, applied rather than re-learnt). Deliberately NOT a
+              live region: a standing fact re-announced on every re-render is noise. Today is
+              named only when it differs — absence a reader can distinguish from a fact.
+            */}
+            {CANVAS_DATA_DATE_ENABLED ? (
+              <p id={`${listboxId}-data-date`} className="sr-only">
+                {`Data date ${formatCalendarDate(dataDate)}.`}
+                {todayIso && todayIso !== dataDate
+                  ? ` Today is ${formatCalendarDate(todayIso)}.`
+                  : ''}
+              </p>
+            ) : null}
+            {/*
               The accessible parallel representation: a focusable listbox mirroring the
               canvas (ADR-0026). Visually hidden — the canvas is the sighted view and rings
               the selection — but fully keyboard-operable and announced, so the diagram is
@@ -1871,6 +1889,9 @@ export function TsldPanel({
               aria-label="Activities in the diagram"
               tabIndex={0}
               className="sr-only"
+              {...(CANVAS_DATA_DATE_ENABLED
+                ? { 'aria-describedby': `${listboxId}-data-date` }
+                : {})}
               aria-activedescendant={selectedId ? optionId(selectedId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {

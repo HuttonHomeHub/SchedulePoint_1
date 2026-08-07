@@ -4,6 +4,7 @@ import {
   activityIndexFor,
   CURSOR_CHIP_H,
   CURSOR_CHIP_TOP,
+  DATA_DATE_CHIP_TOP,
   edgeFanOutFor,
   paintInteractionLayer,
   paintScene,
@@ -35,6 +36,9 @@ const PALETTE: TsldPalette = {
   nonWorkingHatch: '#444',
   today: '#f00',
   todayInk: '#fff',
+  // The data-date pair (VITE_CANVAS_DATA_DATE) — distinct fixture values so assertions can pin them.
+  dataDate: '#dd1',
+  dataDateInk: '#dd2',
   conflict: '#fa0',
   laneOverlap: '#fa0',
   labelInside: '#fff',
@@ -557,6 +561,150 @@ describe('paintScene', () => {
     // A future edit to either constant cannot silently reintroduce the collision this asserts.
     expect(TODAY_CHIP_TOP).toBeGreaterThanOrEqual(CURSOR_CHIP_TOP + CURSOR_CHIP_H);
     expect(TODAY_CHIP_TOP + TODAY_CHIP_H).toBeLessThanOrEqual(1000);
+  });
+
+  // ── The DATA-DATE line + the coincidence rule (`VITE_CANVAS_DATA_DATE`, status & feedback M1).
+  // The rule table from the implementation plan: data date only · both lines · coincident (one
+  // line, one merged pill) · toggle off · todayOffset null · off-screen (culled). The merge test
+  // is `Math.round(x) === Math.round(x)` on the already-computed screen x values, asserted BOTH
+  // ways (a sub-pixel difference merges; a whole-pixel difference draws both).
+  describe('the data-date line + the coincidence rule (scene.dataDateLine)', () => {
+    // Isolated from the grid layers exactly like TODAY_ONLY, so strokes/pills are unambiguous.
+    const base: TsldScene = { activities: [], edges: [], dataDate: DATA_DATE, view: TODAY_ONLY };
+    // At VIEW (originX 60), day 0 — the data date — lands at x = 60.5.
+
+    it('draws the rule SOLID at lineWidth 2 in palette.dataDate, with its pill on the derived row (data date only)', () => {
+      const ctx = mockCtx();
+      // No todayOffset ⇒ the Today branch (and therefore the coincidence test) never runs.
+      paintScene(ctx, { ...base, dataDateLine: true }, VIEW, SIZE, PALETTE);
+      expect(ctx.moveTo).toHaveBeenCalledWith(60.5, 0);
+      // Two strokes: the flag-off grid pass always strokes its (here empty) path once, plus the
+      // data-date rule — and no third.
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
+      expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]); // no dashed line anywhere
+      expect(ctx.lineWidth).toBe(2);
+      expect(ctx.strokeStyle).toBe(PALETTE.dataDate);
+      // The pill sits on its OWN derived row, at the Today pill's height.
+      expect(ctx.fillRect).toHaveBeenCalledWith(
+        expect.any(Number),
+        DATA_DATE_CHIP_TOP,
+        expect.any(Number),
+        TODAY_CHIP_H,
+      );
+      expect(ctx.fillText).toHaveBeenCalledWith(
+        'Data date',
+        expect.any(Number),
+        expect.any(Number),
+      );
+    });
+
+    it('draws BOTH lines when they round to different pixels (the merge test, direction 1)', () => {
+      const ctx = mockCtx();
+      // todayOffset 5 ⇒ today at x = 120.5, a whole 60px from the data date's 60.5.
+      paintScene(
+        ctx,
+        { ...base, dataDateLine: true, todayOffset: 5, todayFraction: 0.25 },
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      // Both verticals: the solid data-date rule AND the dashed Today rule…
+      expect(ctx.moveTo).toHaveBeenCalledWith(60.5, 0);
+      expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
+      // …and both pills, each with its own label (no merged label).
+      expect(ctx.fillText).toHaveBeenCalledWith('Data date', expect.any(Number), expect.any(Number)); // prettier-ignore
+      expect(ctx.fillText).toHaveBeenCalledWith('Today', expect.any(Number), expect.any(Number));
+    });
+
+    it('coincident ⇒ ONE line in the data-date treatment and ONE merged pill (the merge test, direction 2)', () => {
+      const ctx = mockCtx();
+      // todayOffset 0 ⇒ both compute x = 60.5 exactly.
+      paintScene(
+        ctx,
+        { ...base, dataDateLine: true, todayOffset: 0, todayFraction: null },
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      // One vertical: no dashed Today rule, and exactly ONE marker stroke on top of the grid
+      // pass's always-present empty-path stroke (two would be the un-merged case's three).
+      expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]);
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
+      // One merged pill, and never a second 'Today' one.
+      expect(ctx.fillText).toHaveBeenCalledTimes(1);
+      expect(ctx.fillText).toHaveBeenCalledWith(
+        'Data date · today',
+        expect.any(Number),
+        expect.any(Number),
+      );
+    });
+
+    it('merges a sub-pixel difference too — they merge exactly when they would overdraw', () => {
+      const ctx = mockCtx();
+      // todayFraction 0.03 at 12px/day shifts today by 0.36px: not zero, but rounds to the same
+      // pixel — the only case where two lines are a rendering artefact rather than two facts.
+      paintScene(
+        ctx,
+        { ...base, dataDateLine: true, todayOffset: 0, todayFraction: 0.03 },
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]);
+      expect(ctx.fillText).toHaveBeenCalledWith(
+        'Data date · today',
+        expect.any(Number),
+        expect.any(Number),
+      );
+    });
+
+    it('draws nothing of its own when the scene field is absent or false (the toggle-off path)', () => {
+      for (const scene of [base, { ...base, dataDateLine: false }]) {
+        const ctx = mockCtx();
+        paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+        // No todayOffset either, so the whole status layer is silent: only the grid pass's
+        // always-present empty-path stroke remains, and not one pill.
+        expect(ctx.stroke).toHaveBeenCalledTimes(1);
+        expect(ctx.fillText).not.toHaveBeenCalled();
+      }
+    });
+
+    it('culls the line off-screen with the same test the Today line uses — Today then draws normally', () => {
+      const ctx = mockCtx();
+      // originX -500 puts day 0 at x = -500 (off-screen left); today (offset 50) is at 100.5.
+      paintScene(
+        ctx,
+        { ...base, dataDateLine: true, todayOffset: 50 },
+        { ...VIEW, originX: -500 },
+        SIZE,
+        PALETTE,
+      );
+      expect(ctx.fillText).not.toHaveBeenCalledWith(
+        'Data date',
+        expect.any(Number),
+        expect.any(Number),
+      );
+      expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]); // the Today rule is unaffected
+    });
+
+    it('skips the pill (never the line) when the ctx cannot measure/fill text', () => {
+      const ctx = mockCtx();
+      // @ts-expect-error — simulate an environment without text support.
+      ctx.fillText = undefined;
+      // @ts-expect-error — simulate an environment without text support.
+      ctx.measureText = undefined;
+      paintScene(ctx, { ...base, dataDateLine: true }, VIEW, SIZE, PALETTE);
+      // The rule still strokes (grid pass + marker); the pill is skipped without text support.
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
+      expect(ctx.fillRect).not.toHaveBeenCalled();
+    });
+
+    it('keeps the Data date pill row disjoint from the Today pill row (derived, never a literal)', () => {
+      // Both pills clamp inside the canvas width, so at a narrow viewport they converge on the
+      // same x — only the derived row keeps them apart. A future edit to either sibling constant
+      // cannot silently reintroduce the collision this asserts.
+      expect(DATA_DATE_CHIP_TOP).toBeGreaterThanOrEqual(TODAY_CHIP_TOP + TODAY_CHIP_H);
+    });
   });
 
   it('culls per-day gridlines at coarse zoom but keeps month/year lines', () => {
