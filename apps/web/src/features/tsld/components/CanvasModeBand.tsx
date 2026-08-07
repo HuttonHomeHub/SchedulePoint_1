@@ -3,7 +3,19 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
 
 /** What the band has to say, or `null` for "say nothing and take no height". */
 export type CanvasModeStatement =
-  | { kind: 'adding'; typeLabel: string }
+  | {
+      kind: 'adding';
+      typeLabel: string;
+      /**
+       * Which gesture the armed type actually wants. **Required, never optional**: an optional
+       * field defaults silently, and the default would be wrong for half the types — the sentence
+       * would ship describing a gesture the tool does not have. A zero-duration type is placed by
+       * a single click; a task is drawn by dragging its length, with a click as a one-day
+       * shortcut. Both are named for the drag case, because the click is not a mistake to warn
+       * against — it is an undocumented shortcut nobody could discover from the old copy.
+       */
+      gesture: 'click' | 'drag';
+    }
   | { kind: 'linking'; linkType: string }
   | { kind: 'linkPicking'; linkType: string; predecessorName: string }
   | { kind: 'loe'; startPicked: boolean }
@@ -23,7 +35,9 @@ export type CanvasModeStatement =
 export function modeStatementText(statement: CanvasModeStatement): string {
   switch (statement.kind) {
     case 'adding':
-      return `Adding ${statement.typeLabel.toLowerCase()} — click the diagram to draw. Esc to stop.`;
+      return statement.gesture === 'click'
+        ? `Adding ${statement.typeLabel.toLowerCase()} — click the diagram to place it. Esc to stop.`
+        : `Adding ${statement.typeLabel.toLowerCase()} — drag on the diagram to draw its length, or click for one day. Esc to stop.`;
     case 'linking':
       return `Linking ${statement.linkType} — click the predecessor. Esc to stop.`;
     case 'linkPicking':

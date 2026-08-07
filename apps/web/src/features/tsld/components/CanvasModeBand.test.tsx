@@ -14,10 +14,26 @@ describe('CanvasModeBand', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('states the armed tool and the click it expects', () => {
-    render(<CanvasModeBand statement={{ kind: 'adding', typeLabel: 'Start milestone' }} />);
+  it('states the armed tool and the click a zero-duration type expects', () => {
+    render(
+      <CanvasModeBand
+        statement={{ kind: 'adding', typeLabel: 'Start milestone', gesture: 'click' }}
+      />,
+    );
+    // A milestone has no length to drag, so "place it" is the whole gesture.
     expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(
-      'Adding start milestone — click the diagram to draw. Esc to stop.',
+      'Adding start milestone — click the diagram to place it. Esc to stop.',
+    );
+  });
+
+  it('names BOTH gestures for a type that has a length', () => {
+    render(<CanvasModeBand statement={{ kind: 'adding', typeLabel: 'Task', gesture: 'drag' }} />);
+    // The old copy said "click the diagram to draw" for every type. For a task that under-describes
+    // the tool: dragging sizes the bar, and the click is a one-day shortcut nobody could discover
+    // from a sentence that never mentioned dragging. Naming the click as a shortcut, not a mistake,
+    // is the point — it commits through the naming popover exactly like a drag does.
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(
+      'Adding task — drag on the diagram to draw its length, or click for one day. Esc to stop.',
     );
   });
 

@@ -579,7 +579,13 @@ export function TsldPanel({
     if (previous === mode) return;
     announcedModeRef.current = mode;
     if (mode === 'add-activity') {
-      announce(modeStatementText({ kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }));
+      announce(
+        modeStatementText({
+          kind: 'adding',
+          typeLabel: ACTIVITY_TYPE_LABELS[createType],
+          gesture: isMilestone(createType) ? 'click' : 'drag',
+        }),
+      );
     } else if (mode === 'link') {
       // A fresh arming of the tool is a fresh session: bump the generation so any confirmation from
       // a PREVIOUS arming stops matching and the band goes back to prompting. See the state's
@@ -624,7 +630,14 @@ export function TsldPanel({
   const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
     ? null
     : mode === 'add-activity'
-      ? { kind: 'adding', typeLabel: ACTIVITY_TYPE_LABELS[createType] }
+      ? {
+          kind: 'adding',
+          typeLabel: ACTIVITY_TYPE_LABELS[createType],
+          // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
+          // module reads no domain enum), and this is the same `isMilestone` the gesture machine
+          // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
+          gesture: isMilestone(createType) ? 'click' : 'drag',
+        }
       : mode === 'loe'
         ? { kind: 'loe', startPicked: loeStartId !== null }
         : mode === 'link'
@@ -1751,7 +1764,17 @@ export function TsldPanel({
         Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
         right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
       */}
-      {CANVAS_AUTHORING_FLOW_ENABLED && showDiagram && activities.length === 0 ? (
+      {/*
+        …and only while nothing is armed. Arming a tool replaces this notice with the mode band's
+        instruction: two strips stacked above the same empty canvas told the planner to press a
+        button they had already pressed and to draw, at the same time, in different words. One
+        instruction at a time, and the armed tool's is the one that describes what the next click
+        does.
+      */}
+      {CANVAS_AUTHORING_FLOW_ENABLED &&
+      showDiagram &&
+      activities.length === 0 &&
+      mode === 'select' ? (
         <NoticeStrip
           data-testid="canvas-empty-state"
           emphasis="dashed"
