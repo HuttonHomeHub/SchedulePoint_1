@@ -5,7 +5,7 @@
 - **Date:** 2026-08-07
 - **Tracking issue / epic:** _(to be raised)_
 - **Roadmap link:** TSLD canvas — find & focus (ADR-0031 `find` group)
-- **Related ADR(s):** proposes **ADR-0078** (see §4.9). Amends/builds on ADR-0026 (canvas handle
+- **Related ADR(s):** proposes **ADR-0079** (see §4.9 — `0078` was taken before this landed). Amends/builds on ADR-0026 (canvas handle
   - parallel DOM listbox), ADR-0031 (toolbar registry & taxonomy), ADR-0056 (zoom presets are
     commands), ADR-0059 (view seam / shade what only one view can do), ADR-0064 (tool-mode arm/disarm
     contract), plus the `canvas-lenses` and `canvas-nav` specs.
@@ -635,8 +635,8 @@ unguarded, and the Gantt untouched. Pinned by a dedicated parity suite that `vi.
 
 ### 4.9 ADR
 
-**Recommended: write ADR-0078 — "Search that navigates: the find cursor, the Escape rule, and
-zoom-to-selection."** `0078` is free (`docs/adr/` runs to `0077`). It is architecturally significant
+**Recommended: write ADR-0079 — "Search that navigates: the find cursor, the Escape rule, and
+zoom-to-selection."** `0078` was free when this was written and was taken by canvas module boundaries before the milestone landed; the ADR is filed as **0079** (see its filing note). It is architecturally significant
 on four counts, each an amendment to an accepted decision:
 
 - **ADR-0026** — a new method on the canvas control handle, and a rule about how search focus and the

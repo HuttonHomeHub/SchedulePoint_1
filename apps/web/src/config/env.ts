@@ -1385,11 +1385,19 @@ export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  * keyboard behaviour and an n-of-m readout for a field that does not render. A flag whose feature
  * has no host is worse than no flag — it is a behaviour with nowhere to happen.
  *
- * **Default-off** until the M5 gate pass. Flag-off: the search field keeps today's filter-only
+ * **Default-ON since 2026-08-07** (ADR-0079), once the flag-on journey `apps/web/e2e-search-nav/`
+ * ran green against a real API with the pen enforced. That journey is the rollout record rather
+ * than a formality: it failed on its first run on **two live defects** — an armed tool disarmed by
+ * an Escape typed into the search field (ADR-0064's contract, arriving through a door that decision
+ * did not have), and the jump announcement overwritten by a stale debounced filter count. Neither
+ * was reachable by any unit suite here, because the component tests mount the toolbar alone and
+ * cannot see a native `window` listener or two debounces racing in one live region.
+ *
+ * Flag-off: the search field keeps today's filter-only
  * behaviour exactly, Enter does nothing, no readout renders and no cursor state is held — the
  * canvas paint, the toolbar and the a11y tree are byte-for-byte today's (the flag-off parity suite
  * is the rollback contract). Frontend-only: no API, DTO, schema or migration, and the CPM engine is
  * not imported, so the ADR-0034 recalculation parity gate is untouched by construction.
  */
 export const CANVAS_SEARCH_NAV_ENABLED =
-  CANVAS_LENSES_ENABLED && flagDefaultOff(import.meta.env.VITE_CANVAS_SEARCH_NAV);
+  CANVAS_LENSES_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_SEARCH_NAV);
