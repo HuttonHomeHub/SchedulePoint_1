@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  activityIndexFor,
   CURSOR_CHIP_H,
   CURSOR_CHIP_TOP,
   edgeFanOutFor,
@@ -2054,6 +2055,20 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
     expect(second).not.toBe(first);
     expect(second.size).toBe(first.size);
     for (const edge of rebuilt) expect(second.get(edge)).toEqual(first.get(edge));
+  });
+
+  it('memoises the activity index on the activities array identity (same array ⇒ === map)', () => {
+    // The id→activity index the painter reads nine times per frame rides the same array-identity
+    // contract as the fan-out memo above: identity is the call-count proxy — `===` across calls
+    // proves the Map constructor ran once, with no spy hook needed.
+    const activities = crowded().activities;
+    const first = activityIndexFor(activities);
+    expect(activityIndexFor(activities)).toBe(first);
+    const rebuilt = [...activities]; // same activity objects, new array identity
+    const second = activityIndexFor(rebuilt);
+    expect(second).not.toBe(first);
+    expect(second.size).toBe(first.size);
+    for (const a of rebuilt) expect(second.get(a.id)).toBe(a);
   });
 
   it('highlights transiently from the hovered bar id (the pointer twin of selection)', () => {

@@ -438,12 +438,40 @@ export function laneAtScreenY(y: number, view: Viewport): number {
 }
 
 /**
+ * A per-frame id→rect cache the painter threads through the geometry functions so one frame
+ * computes each activity's rect once instead of once per consumer (cull, the lane index, and
+ * every incident edge's anchors each re-derive it otherwise — up to five `Date.parse` pairs per
+ * lagged edge). The cache is only valid for one `(view, dataDate)` pair, so it must live for a
+ * single paint call and never longer; the caller owns that lifetime.
+ */
+export type RectCache = Map<string, Rect | null>;
+
+/**
  * The screen-space rectangle for an activity, or null if it has no computed dates yet
  * (nothing to place). A task spans `[earlyStart, earlyFinish + 1 day)` — the inclusive
  * finish plus one day so a 1-day task is one column wide (ADR-0023). A milestone is a
  * zero-duration diamond centred on its day: the rect is the diamond's bounding box.
+ *
+ * `cache` (optional) is a same-frame {@link RectCache}; omitted, behaviour is byte-identical
+ * to the uncached path.
  */
 export function activityRect(
+  activity: RenderActivity,
+  view: Viewport,
+  dataDateIso: string,
+  cache?: RectCache,
+): Rect | null {
+  if (cache) {
+    const hit = cache.get(activity.id);
+    if (hit !== undefined) return hit;
+    const rect = computeActivityRect(activity, view, dataDateIso);
+    cache.set(activity.id, rect);
+    return rect;
+  }
+  return computeActivityRect(activity, view, dataDateIso);
+}
+
+function computeActivityRect(
   activity: RenderActivity,
   view: Viewport,
   dataDateIso: string,
@@ -526,6 +554,7 @@ export function cull(
   size: Size,
   dataDateIso: string,
   marginPx = LANE_HEIGHT,
+  cache?: RectCache,
 ): string[] {
   const viewport: Rect = {
     x: -marginPx,
@@ -535,7 +564,7 @@ export function cull(
   };
   const visible: string[] = [];
   for (const activity of activities) {
-    const rect = activityRect(activity, view, dataDateIso);
+    const rect = activityRect(activity, view, dataDateIso, cache);
     if (rect && rectsIntersect(rect, viewport)) visible.push(activity.id);
   }
   return visible;
@@ -553,9 +582,10 @@ export function dependencyPolyline(
   type: DependencyType,
   view: Viewport,
   dataDateIso: string,
+  cache?: RectCache,
 ): Point[] | null {
-  const from = activityRect(predecessor, view, dataDateIso);
-  const to = activityRect(successor, view, dataDateIso);
+  const from = activityRect(predecessor, view, dataDateIso, cache);
+  const to = activityRect(successor, view, dataDateIso, cache);
   if (!from || !to) return null;
   // Anchor each end to the edge the relationship type constrains (ADR-0021 logic types), not always
   // predecessor-finish → successor-start: FS finish→start, SS start→start, FF finish→finish,
@@ -605,10 +635,11 @@ export function laneIntervalIndex(
   activities: readonly RenderActivity[],
   view: Viewport,
   dataDate: string,
+  cache?: RectCache,
 ): LaneIntervalIndex {
   const byLane = new Map<number, [number, number][]>();
   for (const activity of activities) {
-    const rect = activityRect(activity, view, dataDate);
+    const rect = activityRect(activity, view, dataDate, cache);
     if (!rect) continue;
     const lane = activity.laneIndex;
     const list = byLane.get(lane);
@@ -989,9 +1020,10 @@ export function lagAnchorPoints(
   view: Viewport,
   dataDateIso: string,
   walk: DayWalk,
+  cache?: RectCache,
 ): LagAnchors | null {
-  const from = activityRect(predecessor, view, dataDateIso);
-  const to = activityRect(successor, view, dataDateIso);
+  const from = activityRect(predecessor, view, dataDateIso, cache);
+  const to = activityRect(successor, view, dataDateIso, cache);
   if (!from || !to || predecessor.earlyStart === null) return null;
   const predFinish = type === 'FS' || type === 'FF';
   const succStart = type === 'FS' || type === 'SS';
@@ -1030,8 +1062,18 @@ export function dependencyPolylineTimeTrue(
   view: Viewport,
   dataDateIso: string,
   walk: DayWalk,
+  cache?: RectCache,
 ): Point[] | null {
-  const anchors = lagAnchorPoints(predecessor, successor, type, lagDays, view, dataDateIso, walk);
+  const anchors = lagAnchorPoints(
+    predecessor,
+    successor,
+    type,
+    lagDays,
+    view,
+    dataDateIso,
+    walk,
+    cache,
+  );
   if (!anchors) return null;
   return routeOrthogonal(anchors.pred, anchors.succ, type, view);
 }
@@ -1214,20 +1256,30 @@ export function lagRunSegment(
   view: Viewport,
   dataDateIso: string,
   walk: DayWalk,
+  cache?: RectCache,
 ): LagRun | null {
   if (lagDays === 0) return null;
-  const anchors = lagAnchorPoints(predecessor, successor, type, lagDays, view, dataDateIso, walk);
+  const anchors = lagAnchorPoints(
+    predecessor,
+    successor,
+    type,
+    lagDays,
+    view,
+    dataDateIso,
+    walk,
+    cache,
+  );
   if (!anchors) return null;
   if (type === 'FS' || type === 'FF') {
     // The walked (offset) end is the successor's; its zero-lag edge is the constrained one.
-    const rect = activityRect(successor, view, dataDateIso);
+    const rect = activityRect(successor, view, dataDateIso, cache);
     if (!rect) return null;
     const edgeX = type === 'FS' ? rect.x : rect.x + rect.w;
     if (anchors.succ.x === edgeX) return null;
     return { from: { x: edgeX, y: anchors.succ.y }, to: anchors.succ };
   }
   // SS/SF embed along the predecessor from its start edge.
-  const rect = activityRect(predecessor, view, dataDateIso);
+  const rect = activityRect(predecessor, view, dataDateIso, cache);
   if (!rect) return null;
   if (anchors.pred.x === rect.x) return null;
   return { from: { x: rect.x, y: anchors.pred.y }, to: anchors.pred };
@@ -1430,6 +1482,49 @@ export function isResizeEligibleType(type: ActivityType): boolean {
  * (the bar the anchor sits on), which also covers the M5 fan-out offset (±`FAN_OUT_MAX_PX`). */
 export const LAG_ANCHOR_PX = 12;
 
+/**
+ * Id→activity index for {@link classifyHit}'s lag branch, memoised on the activities ARRAY
+ * identity — the `edgeFanOutFor` pattern (paint.ts), duplicated here rather than shared because
+ * paint.ts imports this module and the reverse import would be a cycle. `classifyHit` runs on
+ * every pointer-move while the lag tool is armed, and its single production caller passes the
+ * reference-stable `sceneRef.current.activities`, so per-call rebuilding was O(n) per mousemove.
+ * A caller constructing fresh arrays per call degrades to always-recompute — a missed
+ * optimisation, never a stale result. Exported for the memo-identity test only.
+ */
+const classifyActivityIndexes = new WeakMap<
+  readonly RenderActivity[],
+  ReadonlyMap<string, RenderActivity>
+>();
+export function classifyActivityIndexFor(
+  activities: readonly RenderActivity[],
+): ReadonlyMap<string, RenderActivity> {
+  let index = classifyActivityIndexes.get(activities);
+  if (!index) {
+    index = new Map(activities.map((a) => [a.id, a]));
+    classifyActivityIndexes.set(activities, index);
+  }
+  return index;
+}
+
+/**
+ * The filtered + id-sorted offset-edge list {@link classifyHit}'s lag branch walks, memoised on
+ * the edges ARRAY identity. The sort is what makes overlapping anchors resolve deterministically
+ * (ADR-0065's fixed-order rule); memoising it changes nothing about the order — the same array
+ * reference now returns the identical precomputed list instead of re-sorting per pointer-move
+ * (O(E log E) each). Exported for the memo-identity test only.
+ */
+const offsetEdgesByArray = new WeakMap<readonly RenderEdge[], readonly RenderEdge[]>();
+export function offsetEdgesFor(edges: readonly RenderEdge[]): readonly RenderEdge[] {
+  let sorted = offsetEdgesByArray.get(edges);
+  if (!sorted) {
+    sorted = edges
+      .filter((e) => e.id !== undefined && (e.lagDays ?? 0) !== 0)
+      .sort((a, b) => (a.id! < b.id! ? -1 : 1));
+    offsetEdgesByArray.set(edges, sorted);
+  }
+  return sorted;
+}
+
 /** Options for {@link classifyHit}'s zone vocabulary (ADR-0052 M2/M3). */
 export interface ClassifyHitOptions {
   /**
@@ -1478,10 +1573,8 @@ export function classifyHit(
   // so the winner never jitters between frames/refetches.
   if (options?.lagAnchors) {
     const { edges, walk } = options.lagAnchors;
-    const byId = new Map(activities.map((a) => [a.id, a]));
-    const offsetEdges = edges
-      .filter((e) => e.id !== undefined && (e.lagDays ?? 0) !== 0)
-      .sort((a, b) => (a.id! < b.id! ? -1 : 1));
+    const byId = classifyActivityIndexFor(activities);
+    const offsetEdges = offsetEdgesFor(edges);
     for (const edge of offsetEdges) {
       const pred = byId.get(edge.predecessorId);
       const succ = byId.get(edge.successorId);

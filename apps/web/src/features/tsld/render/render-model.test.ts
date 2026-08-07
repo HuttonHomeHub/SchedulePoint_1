@@ -5,6 +5,7 @@ import {
   activityRect,
   arrowhead,
   barGlyphKind,
+  classifyActivityIndexFor,
   classifyHit,
   clampPxPerDay,
   computeEdgeFanOut,
@@ -19,6 +20,7 @@ import {
   linkHighlightIds,
   loeBracketRects,
   makeWorkingDayWalk,
+  offsetEdgesFor,
   progressGeometry,
   routeOrthogonal,
   summaryTabRects,
@@ -710,7 +712,9 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
 
   it('resolves overlapping anchors on a crowded bar by stable edge-id order', () => {
     // Two same-shape edges anchoring at the same point: the lexically-first id wins, regardless
-    // of the array order handed in (stable across frames/refetches).
+    // of the array order handed in (stable across frames/refetches). Each call here constructs a
+    // FRESH array, so this also pins that the offset-edge memo's cache-miss path — the only path
+    // a per-call array ever takes — still filters and sorts exactly as before.
     const twin = edge({ id: 'd0' });
     expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE, options([edge(), twin])).dependencyId).toBe(
       'd0',
@@ -718,6 +722,31 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
     expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE, options([twin, edge()])).dependencyId).toBe(
       'd0',
     );
+  });
+
+  it('memoises the sorted offset-edge list on the edges array identity (no per-pointer-move sort)', () => {
+    // `classifyHit` runs per pointer-move while the lag tool is armed, and its production caller
+    // passes the reference-stable `sceneRef.current.edges` — so the SAME array must return the
+    // IDENTICAL precomputed list (identity is the call-count proxy: `===` proves the filter+sort
+    // ran once), while a rebuilt array (a data change) recomputes to an equivalent list.
+    const edges = [edge(), edge({ id: 'd2', lagDays: 3 }), edge({ id: 'd3', lagDays: 0 })];
+    const first = offsetEdgesFor(edges);
+    expect(offsetEdgesFor(edges)).toBe(first);
+    expect(first.map((e) => e.id)).toEqual(['d1', 'd2']); // zero-lag filtered, id-sorted
+    const rebuilt = [...edges];
+    const second = offsetEdgesFor(rebuilt);
+    expect(second).not.toBe(first);
+    expect(second.map((e) => e.id)).toEqual(['d1', 'd2']);
+  });
+
+  it('memoises the classify activity index on the activities array identity', () => {
+    const first = classifyActivityIndexFor(acts);
+    expect(classifyActivityIndexFor(acts)).toBe(first);
+    expect(first.get('p')).toBe(pred);
+    const rebuilt = [...acts];
+    const second = classifyActivityIndexFor(rebuilt);
+    expect(second).not.toBe(first);
+    expect(second.get('s')).toBe(succ);
   });
 
   it('anchors the SS/SF zone on the predecessor bar', () => {
