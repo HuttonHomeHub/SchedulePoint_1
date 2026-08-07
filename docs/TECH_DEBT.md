@@ -1419,3 +1419,35 @@ blocked the epic.
    labels one producer (`wbsGroupLabelById`, consumed by both the legend and the spoken clause) and
    listbox row text one producer (`composeListboxRowText`, consumed by both the row and the
    announcement). The export legend is the third instance of the same shape, left alone.
+
+---
+
+## #106 — `render-model.ts` cannot become "barrel + core model": the core must be its own module
+
+**Found:** 2026-08-07, doing ADR-0078 S8's first extraction.
+**Blocks:** the `link-routing`, `viewport` and `hit-test` extractions (ADR-0078 S8's remainder).
+
+The decomposition plan (`docs/specs/canvas-decomposition/plan.md` §3.2) describes the end state as
+`render-model.ts` = **barrel + what is genuinely the model** — the types, `activityRect`, the glyph
+geometry — with `link-routing.ts` and friends beside it. That shape does not work, and the reason is
+countable rather than a matter of taste: the link-routing region uses `activityRect` **eight times**
+plus `screenXOfDay`, `BAR_HEIGHT`, `RectCache` and the core types, so `link-routing.ts` must import
+from `render-model.ts`, which re-exports `link-routing.ts`. A genuine import cycle.
+
+ES modules tolerate cycles, so this would have compiled and passed — which is exactly why it is
+worth recording rather than discovering later. A cycle at the foundation of a decomposition is the
+wrong thing for four more modules to be built on.
+
+**The fix** is that the core model becomes a module of its own (`geometry.ts` or similar), leaving
+`render-model.ts` a **pure** barrel over `geometry` / `working-time` / `link-routing` / `viewport` /
+`hit-test` — a barrel that re-exports and holds nothing. Then every module depends only on
+`geometry`, and nothing depends on the barrel.
+
+**Why it is not done here.** It is a bigger move than one step, and ADR-0078's own rule is that a
+step which needs more than a move is wrong and must be split. `working-time.ts` was extractable
+today precisely because its whole surface needs only `DependencyType`; it went first for that
+reason, and the ordering rule it demonstrates — _lift only what depends on nothing that will be
+re-exported around it_ — is the thing the next step needs to follow.
+
+**Not urgent.** Nothing is broken: `render-model.ts` is 1,500 lines rather than 1,660 and every
+consumer is unchanged. This is the shape of the remaining work, written down while it is fresh.

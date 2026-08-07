@@ -74,6 +74,22 @@ are import paths and file moves; if a step needs an assertion changed, the step 
 split. Comments move **verbatim** — these files' comments record defects that shipped, and rewording
 one during a move destroys the evidence.
 
+**3a. A correction to the plan's §3.2, found by doing the first move.** The plan describes the end
+state as `render-model.ts` = _"BARREL + what is genuinely the model"_ — the types, `activityRect`,
+the glyph geometry. That shape **cannot work for `link-routing.ts`**: the routing code uses
+`activityRect` eight times plus `screenXOfDay`, `BAR_HEIGHT`, `RectCache` and the core types
+(counted, not estimated), so it must import from `render-model.ts` — which re-exports it. That is a
+genuine import cycle, and while ES modules tolerate one, a cycle at the foundation of a
+decomposition is the wrong thing to build on.
+
+The **order of extraction therefore matters, and the plan's ordering is only accidentally right**.
+A module can be lifted only when it depends on nothing that will be re-exported around it.
+`working-time.ts` satisfies that (its whole surface needs only `DependencyType`), which is why it
+went first. `link-routing.ts` does not, and cannot until the **core model itself becomes a module**
+— leaving `render-model.ts` a _pure_ barrel over `geometry`, `working-time`, `link-routing`,
+`viewport` and `hit-test` rather than a barrel that also holds code. That is a larger move than one
+step and is recorded as such rather than attempted in passing (`docs/TECH_DEBT.md` #106).
+
 **4. Where nothing pins a seam, the characterisation test lands first, in its own commit, verified
 red.** Three are named: the whole-scene ordered golden log (**C1**, landed), the Escape precedence
 table (**C2**), and the ADR-0026 D3 React-render-count invariant (**C3**) — the last of which has
