@@ -749,7 +749,7 @@ export function TsldPanel({
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
   // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
   // so the scene carries no lens fields and the paint is byte-for-byte today's.
-  const { filterQuery, filterAttrs, colourMode, baselineOverlay } = lensState;
+  const { filterQuery, filterAttrs, colourMode, baselineOverlay, searchCursorId } = lensState;
   // Bumps on a light/dark/system switch so the Colour-by fill + ink maps re-resolve their token colours
   // (the canvas paints concrete colours, not `var()`), matching the base painter's re-theme (C1/U3).
   const themeVersion = useThemeVersion();
@@ -930,8 +930,32 @@ export function TsldPanel({
   const filterWasActiveRef = useRef(false);
   useEffect(() => {
     if (!CANVAS_LENSES_ENABLED) return;
+    // Once the planner has pressed Enter, the JUMP owns the live region
+    // (`docs/specs/canvas-search-navigation/` M1-T2 step 3). Returning early here is the "cancel the
+    // pending count timer" seam: the effect's own cleanup clears whatever was armed, and nothing new
+    // is scheduled — so one keystroke says one thing.
+    //
+    // Without it the count re-arms on every re-render that hands the effect a fresh `filterDimmedIds`
+    // Set (a selection change does), and eventually lands 400 ms AFTER a jump, overwriting
+    // "Match 3 of 5: Pile cap B." with a stale "3 of 5 activities match." The flag-on journey caught
+    // exactly that, four jumps in — a unit test cannot, because it does not run two debounces against
+    // each other.
+    //
+    // Typing again clears the cursor (`setFilterQuery`/`toggleFilterAttr` reset it), so the count
+    // returns for the phase it is actually for: refining the query, before any jump.
+    if (CANVAS_SEARCH_NAV_ENABLED && searchCursorId !== null) return;
     if (!filterActive) {
-      if (filterWasActiveRef.current) announce(''); // clear the stale count only on the clear transition
+      // On the active → inactive transition, replace the stale "N of M activities match" rather than
+      // leaving it to be re-read. Flag-on it says **what happened** instead of saying nothing: the
+      // clear is otherwise silent to a screen-reader user on both routes that reach it (the Clear
+      // button and the field's first Escape), and a blank live region is indistinguishable from one
+      // that was never updated.
+      //
+      // The message lives HERE and not in `escapeSearchField`, which is where it was first written:
+      // this effect runs after the commit, so it would have overwritten the handler's announcement
+      // with the blank — one control, two announcements, and the useful one loses. The journey
+      // caught exactly that. Owning it here also covers the Clear button for free.
+      if (filterWasActiveRef.current) announce(CANVAS_SEARCH_NAV_ENABLED ? 'Search cleared.' : '');
       filterWasActiveRef.current = false;
       return;
     }
@@ -944,7 +968,7 @@ export function TsldPanel({
       announce(matched === 0 ? 'No activities match.' : `${matched} of ${total} activities match.`);
     }, 400);
     return () => clearTimeout(handle);
-  }, [filterActive, activities.length, filterDimmedIds, announce]);
+  }, [filterActive, activities.length, filterDimmedIds, searchCursorId, announce]);
   // Announce isolate for AT (WCAG 4.1.3 / 1.4.1) — the canvas dimming + listbox marking are otherwise
   // colour/emphasis-only. Fires on activate, selection change, or mode change; clears on exit. Isolate
   // changes only on those (not per keystroke), so no debounce is needed. Inert when the flag is off.
@@ -1010,6 +1034,15 @@ export function TsldPanel({
     const signal = navState.selectSignal;
     if (!signal || signal.nonce === selectSignalSeenRef.current) return;
     selectSignalSeenRef.current = signal.nonce;
+    if (signal.id === null) {
+      // The FOCUS-ONLY form (`requestFocusDiagram`, spec §4.5): the second Escape in the search
+      // field hands the planner to the diagram with no match to land on. No `conflictFocusPending`
+      // guard, deliberately — with nothing selected, the listbox's own `onFocus` selecting row 0 is
+      // the right answer to "put me in the diagram", and suppressing it would leave focus on a list
+      // with no active option.
+      listboxRef.current?.focus();
+      return;
+    }
     if (activities.some((a) => a.id === signal.id)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- external one-shot signal → selection sync
       setSelectedId(signal.id);

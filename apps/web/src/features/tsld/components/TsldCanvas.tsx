@@ -95,6 +95,7 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
+  CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
 } from '@/config/env';
@@ -1468,6 +1469,32 @@ export function TsldCanvas({
     // back to Select (unless a create popover is open — that owns its own Esc).
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
+      // **An Escape typed into a text field belongs to that field**
+      // (`docs/specs/canvas-search-navigation/` §4.5, M1-T4). This listener is on `window`, so
+      // before the search field existed it fired wherever focus was — and with a tool armed, a
+      // planner refining their search query lost the tool to a keystroke they aimed at the text.
+      // That is the ADR-0064 defect class exactly, and it was live: the flag-on journey found it.
+      //
+      // The guard, not `stopPropagation` from the field: the toolbar is portalled into the chrome
+      // band (ADR-0055 S2), so whether a React handler's `stopPropagation` reaches a `window`
+      // listener depends on the native bubble path through the portal target — an assumption the
+      // spec refuses to make (C15). This is the third consumer of the pattern
+      // `use-plan-workspace-key-scope.ts` already uses for `?`.
+      //
+      // Deliberately about text ENTRY, not "anything that is not the canvas": Escape typed on a
+      // toolbar button does not mean "undo my typing", so the tool contract still applies there.
+      //
+      // Flag-gated, because flag-off must be byte-for-byte the prior behaviour — including this
+      // listener (spec §4.8, the rollback contract).
+      if (CANVAS_SEARCH_NAV_ENABLED) {
+        const target = e.target;
+        if (
+          target instanceof HTMLElement &&
+          target.closest('input, textarea, select, [contenteditable="true"]')
+        ) {
+          return;
+        }
+      }
       if (gestureActiveRef.current) {
         gestureActiveRef.current = false;
         gestureRef.current = reduce(

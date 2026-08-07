@@ -43,7 +43,9 @@ function setup(
 ) {
   const centerOnDate = vi.fn();
   const setSearchCursorId = vi.fn();
+  const setFilterQuery = vi.fn();
   const requestSelectActivity = vi.fn();
+  const requestFocusDiagram = vi.fn();
   const announce = vi.fn();
   const canvasControlRef = {
     current: { centerOnDate },
@@ -57,13 +59,23 @@ function setup(
         filterAttrs: over.attrs ?? NO_ATTRS,
         searchCursorId: props.cursor,
         setSearchCursorId,
+        setFilterQuery,
         canvasControlRef,
         requestSelectActivity,
+        requestFocusDiagram,
         announce,
       }),
     { initialProps: { cursor: over.cursor ?? null } },
   );
-  return { view, centerOnDate, setSearchCursorId, requestSelectActivity, announce };
+  return {
+    view,
+    centerOnDate,
+    setSearchCursorId,
+    setFilterQuery,
+    requestSelectActivity,
+    requestFocusDiagram,
+    announce,
+  };
 }
 
 describe('useSearchNavigation', () => {

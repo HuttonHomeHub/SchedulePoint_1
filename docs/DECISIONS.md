@@ -1842,3 +1842,25 @@ alternative — would have produced two presets differing only by weekend covera
 Every label carries its hours, so a planner reads what a preset writes before committing to it; a
 preset is a **verb** (ADR-0067 §5), so nothing records which one produced a week, and changing this
 constant later reinterprets no stored calendar.
+
+## 2026-08-07 — The search field's Escape, and who owns the live region
+
+Two decisions the search-navigation epic (ADR-0079) settled by being driven in a real browser rather
+than reasoned about.
+
+**Escape belongs to the field, and the way out is two Escapes.** The alternative — leaving the
+canvas's `window` listener unguarded and accepting that a planner sometimes loses an armed tool —
+was never seriously available once it was seen happening: it is the ADR-0064 defect verbatim. What
+was genuinely open is whether the guard could stand alone. It cannot: with the guard and no second
+step, a keyboard planner has **no route at all** to Escape's other meaning, because focus never
+leaves the field. The two-step is therefore part of the guard rather than a refinement of it.
+
+**The panel owns "Search cleared.", not the handler.** The obvious place is the callback that clears
+the query — it is where the decision is made and where the announcer is already injected. It is
+wrong, and invisibly so: the panel's filter effect runs _after_ that commit and blanks the region to
+drop the stale count, so the useful message is overwritten a tick later by machinery that is doing
+its own job correctly. Owning it at the transition also covers the Clear button, which had been
+silent since it shipped.
+
+Both were found by `apps/web/e2e-search-nav/` on its first run. Neither is reachable by a unit test
+in this repository.

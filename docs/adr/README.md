@@ -102,3 +102,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0076](0076-wrong-claims-are-a-defect-class.md)                           | Wrong claims are a defect class                    | Accepted           |
 | [0077](0077-public-screens-brand-surface.md)                              | The public screens' brand surface                  | Accepted           |
 | [0078](0078-canvas-module-boundaries.md)                                  | Canvas module boundaries & the per-frame context   | Accepted           |
+| [0079](0079-search-that-navigates.md)                                     | Search that navigates: cursor, Escape, zoom        | Accepted           |

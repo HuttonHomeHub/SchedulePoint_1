@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 829 web
-> source files with 26 flag-scoped Playwright suites beside the base journey, and
-> 78 ADRs.
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 831 web
+> source files with 27 flag-scoped Playwright suites beside the base journey, and
+> 79 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1568,6 +1568,42 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   the ADR-0071 failure one level up, in the index rather than the register — repaired in the same
   commit rather than stepped over. **The CPM engine is not imported and no migration runs**, so the
   ADR-0034 recalculation parity gate is untouched by construction.
+
+- **ADR-0079** _(Accepted; M0–M5 landed, `VITE_CANVAS_SEARCH_NAV` **default-on** 2026-08-07)_ —
+  Search that navigates: the find cursor, the Escape rule, and zoom-to-selection. The TSLD's search
+  field **filtered and did not find** — typing dimmed the non-matching bars and left the planner to
+  spot the survivors, which on a 500-activity import (60–80 lanes, about a dozen visible at the Day
+  preset) is scrolling a wall looking for something not greyed out. Every other cycle in the product
+  already worked the other way; search was the one live-derived set with no way to walk it. Enter /
+  Shift+Enter now centre, select and announce each match in turn, sharing **one comparator** with
+  Next-conflict (`render/ordering.ts` — the existing conflicts suite passed unchanged, which was the
+  acceptance condition) and **one predicate** with the lens dimming (`matchesActivityFilter`, pinned
+  structurally), so the two cycles cannot walk a plan differently and Enter cannot skip a bar the
+  canvas left un-dimmed.
+  **The load-bearing decision amends ADR-0064: _an Escape typed into a text field belongs to that
+  field_.** The canvas's Escape handler is a native `window` listener, so it fired wherever focus
+  was — a planner refining a search query with the Link tool armed lost the tool to a keystroke
+  aimed at the text, which is the exact defect class ADR-0064 was opened on arriving through a door
+  that decision did not have. The fix is a **target guard**, not `stopPropagation` from the field:
+  the toolbar is portalled into the chrome band (ADR-0055 S2), so whether a React handler reaches a
+  `window` listener depends on the native bubble path through the portal target — an assumption the
+  spec refused to make. The guard is about text **entry**, not "anything that is not the canvas", so
+  Escape on a toolbar button still disarms; a guard written as `target !== canvas` would have taken
+  that away silently, and there is a test for it. Its **accepted consequence** is a two-step Escape
+  in the field — clear the query, then hand focus to the diagram — because a rule that removes the
+  only route to a behaviour is not a scoping decision but a defect: without step 2 the guard is a
+  dead end for anyone driving from the keyboard.
+  **The flag-on journey is the rollout record, not a formality.** `apps/web/e2e-search-nav/` (its own
+  CI step) failed on its **first run**, twice, on defects no unit suite here could report — the
+  Escape rule had been specified and never implemented, and the jump announcement was being
+  overwritten four jumps in by a stale debounced filter count re-arming on every re-render. Both
+  timers are correct alone; only a real browser runs them against each other, and the component tests
+  mount the toolbar in isolation where a native `window` listener does not exist at all. Three of the
+  journey's own assumptions were also wrong and each correction improved it. **The CPM engine is not
+  imported and the ADR-0034 recalculation parity gate is untouched**; the flag-off parity suites are
+  kept and pinned as the rollback contract. Filed as **0079** rather than the `0078` its own plan
+  names, because that number was taken between the plan and the milestone — recorded rather than
+  routed around, which is the ADR-0071 lesson the plan itself cited.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

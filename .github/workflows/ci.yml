@@ -329,6 +329,17 @@ jobs:
       - name: Web end-to-end tests (float paths flag on)
         run: pnpm --filter @repo/web test:e2e:float-paths
 
+      # Search that navigates (`VITE_CANVAS_SEARCH_NAV`) against a real API with the pen enforced.
+      # What a mocked fetch and a mounted-in-isolation toolbar structurally cannot prove: that Enter
+      # reaches the handler through the PORTALLED chrome band (React events follow the React tree,
+      # the canvas's key listener is a native `window` one); that a full cycle leaves focus in the
+      # field, which is the difference between a find control and one that works exactly once; that
+      # **Escape in the field does not disarm an armed Link tool** — the ADR-0064 contract this epic
+      # amended, and the single assertion here worth the whole suite; and that the Gantt walks the
+      # same match set without stealing focus to do it.
+      - name: Web end-to-end tests (search navigation flag on)
+        run: pnpm --filter @repo/web test:e2e:search-nav
+
       # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
       # theme, which is how the Corporate theme shipped with six contrast defects past a green
       # axe run. This one boots the shell once per picker option — light, dark, corporate, and

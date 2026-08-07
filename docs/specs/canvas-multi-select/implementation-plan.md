@@ -1,11 +1,13 @@
 # Implementation Plan: Canvas multi-select & bulk operations
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
-- **Status:** Draft — awaiting approval before implementation
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **approved 2026-08-07**
+- **Status:** **Cleared for implementation.** The four critical questions are answered (spec §6);
+  CQ-4 went to the **alternative**, which makes M1-T7 required rather than optional
 - **Owner:** _(to be assigned)_
 - **Flag:** `VITE_CANVAS_MULTI_SELECT` (`flagDefaultOff`, `AND`-ed with
   `CANVAS_DIRECT_MANIPULATION_ENABLED`)
-- **Draft ADR:** ADR-0078 (outline in the spec §4.10)
+- **Draft ADR:** number assigned at filing time from the register (outline in the spec §4.10) —
+  the reserved `ADR-0078` was taken while this plan awaited approval; see the spec header
 
 ## Breakdown
 
@@ -211,7 +213,7 @@ product calls it yet. Shipped unflagged and early so it soaks before the UI need
 - **Testing:** structural spec + an e2e reading the recorded payload back.
 - **Steps:** 1) census; 2) redactor; 3) specs.
 
-##### Task M1-T7 _(optional, gated on **CQ-4**)_ — `POST …/activities/restore-batch/:batchId`
+##### Task M1-T7 _(**REQUIRED** — CQ-4 answered "build it", 2026-08-07)_ — `POST …/activities/restore-batch/:batchId`
 
 - **Description:** restore every activity soft-deleted under one batch id — id-stable, links intact.
   ADR-0048's already-designed, already-deferred M4; no schema change.
@@ -410,9 +412,9 @@ because everything is behind the flag.
 ##### Task M4-T4 — Confirm + write + `bulkDeleteCommand`
 
 - **Complexity:** M · **Dependencies:** M1-T5, M4-T3
-- **Risks:** the undo losing incident links (**CQ-4**) → if CQ-4 is answered "re-create", the confirm
-  copy says so plainly; if "restore-batch", the command calls M1-T7 instead. **The copy differs
-  between the two answers**, which is why CQ-4 is a critical question and not a detail.
+- **Risks:** the undo losing incident links (**CQ-4**) → **answered "restore-batch"**, so the command
+  calls M1-T7 and the links survive. The confirm copy is written for that answer; a later retreat to
+  re-create would have to change the copy too, which is why this was a critical question.
 - **Testing:** unit + component; e2e asserts one audit row (M1) and the journey asserts one undo step.
 - **Steps:** 1) confirm dialog reusing the existing host-owned pattern; 2) mutation; 3) command; 4) selection clear + focus return to the listbox; 5) tests.
 
@@ -517,7 +519,8 @@ web:multi-select` must be run locally before pushing** (`CLAUDE.md` §19.7 — o
 
 ##### Task M5-T4 — Documentation, ADR, flip
 
-- **Description:** write **ADR-0078** from the spec §4.10 outline (Accepted); update `CLAUDE.md` §16
+- **Description:** write the epic's ADR from the spec §4.10 outline (Accepted), **taking its number
+  from `docs/adr/README.md` at the moment of filing**; update `CLAUDE.md` §16
   and the stage banner (`pnpm check:counts` re-derives it — ADR-0076); `docs/API.md`;
   `docs/UX_STANDARDS.md` (the selection + bulk-action pattern); `docs/TESTING.md`;
   `docs/DECISIONS.md` (the `Space` rebinding); the flag docblock's move from `flagDefaultOff` to
@@ -548,7 +551,7 @@ added in the same PRs as the features they pin — `vi.mock` of `@/config/env` w
 
 **Deliberately not in this epic:** debt rows **#28** (ring/stroke colour treatment), **#31** (the
 floating bar covers the lane above — it becomes _more_ valuable once a plural selection exists, and
-is noted as a follow-up in ADR-0078), **#48**, **#51** (`classifyHit` iterating all activities per
+is noted as a follow-up in this epic's ADR), **#48**, **#51** (`classifyHit` iterating all activities per
 pointer-move — the marquee predicate runs over the culled set once per release, so it does not widen
 this), **#56** (the pure gesture helpers living in `TsldCanvas.tsx` — the new marquee helpers go in
 `render/` from the start rather than joining the pile, which is the smallest honest thing to do
@@ -564,17 +567,17 @@ Docker build, CI, changelog, version impact — with the pre-push gate **run, no
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                        | Likelihood | Impact | Mitigation                                                                                                                        |
-| ---------------------------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| The `TsldPanel` selection refactor changes behaviour somewhere in a 2,000-line component | med        | high   | M0-T3 requires the **entire existing suite to pass unchanged**; any test edit must be justified in the PR                         |
-| `cascadeSoftDelete` will not accept an injected `deleteBatchId`                          | med        | med    | **Checked first** in M1-T5, before any other work in that task; it decides whether the task is S or L                             |
-| The `Space` rebinding annoys existing keyboard users (**CQ-1**)                          | med        | low    | Shortcuts help, a one-time announcement, and a flag-off rollback that restores it exactly                                         |
-| Ctrl/Cmd+drag is undiscoverable                                                          | high       | low    | It is the _second_ route; the discoverable one is the toolbar tool mode, which does the same thing                                |
-| The painter grows cost inside an already-overspent budget (#75)                          | med        | med    | Counting-stub gate at M2-T5 + one browser-measured run at M5-T3, reported against the ADR-0065 baseline, not the stale §16 figure |
-| A bulk EARLY-mode move silently pins N SNET constraints                                  | high       | high   | Stated in the bar **before** the drag; named in ADR-0078's consequences; asserted by a copy test                                  |
-| An undo of a bulk delete loses incident links (**CQ-4**)                                 | high       | med    | Either the confirm copy says so plainly, or M1-T7 ships the id-stable batch restore. The answer changes the copy, so it is a CQ   |
-| A chain is created in the wrong direction (the ADR-0064 report)                          | med        | high   | The order is previewed with names and arrows, with Reverse, before any write; the journey asserts the stored direction            |
-| Two intersection implementations drift (span vs marquee)                                 | low        | med    | One exported `idsIntersecting`, pinned by a structural test                                                                       |
-| The audit action-filter cap breaks if a new action is added (ADR-0073 C4)                | low        | med    | We **reuse** `activity.deleted` rather than adding an action; if review prefers a distinct one, the cap derivation is re-checked  |
-| The gate pass finds defects late                                                         | **high**   | med    | It has on four consecutive epics. M5 is budgeted as a full milestone, not a checklist, and every finding carries a red-first test |
-| "The multi-agent canvas review" cannot be located                                        | —          | low    | The **gap** is verified from the code (spec §0); the review is not cited as evidence anywhere                                     |
+| Risk / assumption                                                                        | Likelihood      | Impact | Mitigation                                                                                                                        |
+| ---------------------------------------------------------------------------------------- | --------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| The `TsldPanel` selection refactor changes behaviour somewhere in a 2,000-line component | med             | high   | M0-T3 requires the **entire existing suite to pass unchanged**; any test edit must be justified in the PR                         |
+| `cascadeSoftDelete` will not accept an injected `deleteBatchId`                          | med             | med    | **Checked first** in M1-T5, before any other work in that task; it decides whether the task is S or L                             |
+| The `Space` rebinding annoys existing keyboard users (**CQ-1**)                          | med             | low    | Shortcuts help, a one-time announcement, and a flag-off rollback that restores it exactly                                         |
+| Ctrl/Cmd+drag is undiscoverable                                                          | high            | low    | It is the _second_ route; the discoverable one is the toolbar tool mode, which does the same thing                                |
+| The painter grows cost inside an already-overspent budget (#75)                          | med             | med    | Counting-stub gate at M2-T5 + one browser-measured run at M5-T3, reported against the ADR-0065 baseline, not the stale §16 figure |
+| A bulk EARLY-mode move silently pins N SNET constraints                                  | high            | high   | Stated in the bar **before** the drag; named in the epic ADR's consequences; asserted by a copy test                              |
+| An undo of a bulk delete loses incident links (**CQ-4**)                                 | ~~high~~ closed | med    | **Answered 2026-08-07: M1-T7 ships the id-stable batch restore**, so the links survive an undo                                    |
+| A chain is created in the wrong direction (the ADR-0064 report)                          | med             | high   | The order is previewed with names and arrows, with Reverse, before any write; the journey asserts the stored direction            |
+| Two intersection implementations drift (span vs marquee)                                 | low             | med    | One exported `idsIntersecting`, pinned by a structural test                                                                       |
+| The audit action-filter cap breaks if a new action is added (ADR-0073 C4)                | low             | med    | We **reuse** `activity.deleted` rather than adding an action; if review prefers a distinct one, the cap derivation is re-checked  |
+| The gate pass finds defects late                                                         | **high**        | med    | It has on four consecutive epics. M5 is budgeted as a full milestone, not a checklist, and every finding carries a red-first test |
+| "The multi-agent canvas review" cannot be located                                        | —               | low    | The **gap** is verified from the code (spec §0); the review is not cited as evidence anywhere                                     |

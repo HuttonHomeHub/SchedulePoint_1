@@ -435,9 +435,9 @@ defects in code that had already passed a human read on **every** epic that ran 
   scrolls the row without moving focus. Run **locally** via `scripts/e2e-local.sh web:search-nav`
   before pushing — the pre-push gate, not CI's job.
 
-##### Task M5-T3 — ADR-0078, docs, changeset
+##### Task M5-T3 — ADR-0079, docs, changeset
 
-- **Description:** write and accept ADR-0078 (spec §4.9 outline); update `CLAUDE.md` §16 + run
+- **Description:** write and accept ADR-0079 (spec §4.9 outline; `0078` was taken in the meantime); update `CLAUDE.md` §16 + run
   `pnpm check:counts`; add a `docs/DECISIONS.md` entry; update `docs/TESTING.md` with the new suite;
   finalise the flag docblock as the rollout record; `pnpm changeset` (minor, pre-1.0 user-visible).
 - **Complexity:** S

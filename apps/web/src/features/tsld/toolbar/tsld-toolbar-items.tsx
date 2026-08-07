@@ -743,6 +743,15 @@ function LiveSearchControl({
         {...(CANVAS_SEARCH_NAV_ENABLED && !disabled
           ? {
               onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+                if (event.key === 'Escape') {
+                  // `preventDefault` because `type="search"` clears itself on Escape in Blink and
+                  // WebKit. Without it the native clear and the handled clear both happen, so the
+                  // announced step and the unannounced one race — exactly one thing must happen and
+                  // it must be the one that says so (spec §4.5).
+                  event.preventDefault();
+                  ctx.escapeSearchField();
+                  return;
+                }
                 if (event.key !== 'Enter') return;
                 event.preventDefault();
                 ctx.goToMatch(event.shiftKey ? 'previous' : 'next');

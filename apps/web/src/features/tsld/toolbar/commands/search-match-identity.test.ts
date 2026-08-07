@@ -63,8 +63,10 @@ function run(query: string, attrs: ReadonlySet<FilterAttr> = NO_ATTRS) {
       filterAttrs: attrs,
       searchCursorId: null,
       setSearchCursorId: vi.fn(),
+      setFilterQuery: vi.fn(),
       canvasControlRef: { current: null },
       requestSelectActivity: vi.fn(),
+      requestFocusDiagram: vi.fn(),
       announce: vi.fn(),
     }),
   );

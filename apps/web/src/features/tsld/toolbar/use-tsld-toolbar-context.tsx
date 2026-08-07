@@ -278,14 +278,16 @@ export function useTsldToolbarContext({
 
   // Search that navigates (VITE_CANVAS_SEARCH_NAV) — the same shape as the conflict cycle above,
   // sharing its walk so the two can never order a plan differently.
-  const { searchStatus, goToMatch, matchedIds } = useSearchNavigation({
+  const { searchStatus, goToMatch, matchedIds, escapeSearchField } = useSearchNavigation({
     activities,
     filterQuery: canvasUi.lensState.filterQuery,
     filterAttrs: canvasUi.lensState.filterAttrs,
     searchCursorId: canvasUi.lensState.searchCursorId,
     setSearchCursorId: canvasUi.setSearchCursorId,
+    setFilterQuery: canvasUi.setFilterQuery,
     canvasControlRef,
     requestSelectActivity,
+    requestFocusDiagram: canvasUi.requestFocusDiagram,
     announce,
   });
 
@@ -575,6 +577,7 @@ export function useTsldToolbarContext({
       goToNextConflict,
       searchStatus,
       goToMatch,
+      escapeSearchField,
       zoomToSelection,
       matchedIds,
       currentMatchId: canvasUi.lensState.searchCursorId,
@@ -886,6 +889,7 @@ export function useTsldToolbarContext({
     goToNextConflict,
     searchStatus,
     goToMatch,
+    escapeSearchField,
     zoomToSelection,
     matchedIds,
     canvasUi.lensState.searchCursorId,
