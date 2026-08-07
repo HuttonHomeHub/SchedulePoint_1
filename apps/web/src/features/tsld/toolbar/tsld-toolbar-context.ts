@@ -301,6 +301,41 @@ export interface TsldToolbarContext {
   /** Advance to the next flagged activity (wrapping): centre + select it and announce "<i> of <n>:
    * <name> — <reasons>". A no-op when there are no conflicts. View-only (every role). */
   goToNextConflict: () => void;
+
+  // --- Search that navigates (VITE_CANVAS_SEARCH_NAV, `docs/specs/canvas-search-navigation/`) ----
+  /**
+   * The find read-out: how many activities the live search matches, and which one the planner is
+   * standing on (1-based; `null` before the first Enter). `null` for the whole object when the
+   * search is inactive or the flag is off — so the status chip only appears once a search is
+   * actually running, exactly as `currentConflict` only appears once cycling has started.
+   *
+   * The **visible** half of the announcement `goToMatch` speaks; the chip is `aria-hidden` so a
+   * screen-reader user hears it once, from the shared announcer, rather than twice.
+   */
+  searchStatus: { total: number; index: number | null } | null;
+  /**
+   * Jump to the next (or previous) search match, wrapping: centre it, select it, and announce
+   * "<i> of <n>: <name>". A no-op when the search matches nothing or is inactive. View-only (every
+   * role) — finding is not editing.
+   */
+  goToMatch: (direction: 'next' | 'previous') => void;
+  /**
+   * The ids the live search matches, and the one the cursor is on — **derived once**, here, and
+   * handed to both views by the workspace (M4). Two derivations would agree on ordinary queries and
+   * differ on the edges, and the only way to see it would be to switch views mid-search.
+   *
+   * Empty / null when the search is inactive or the flag is off.
+   */
+  matchedIds: ReadonlySet<string>;
+  currentMatchId: string | null;
+  /**
+   * Frame the selected activity at a readable scale, and announce that it did.
+   *
+   * A **command**, not a mode (ADR-0056): it sets the scale once and a later resize preserves it. A
+   * no-op with nothing selected, in the Gantt, or when the activity has no computed dates — each of
+   * which the item shades with its own reason rather than leaving the button lit and inert.
+   */
+  zoomToSelection: () => void;
   /** Whether *Snap to grid* is on (drives the toggle's pressed state). Session-local (CQ-3). */
   snapToGrid: boolean;
   /** Toggle *Snap to grid* on/off (pen-gated + Visual mode; rounds a dropped `visualStart` to the

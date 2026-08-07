@@ -7,6 +7,8 @@
  * announces the reason.
  */
 
+import { compareByTimeThenLane } from './ordering';
+
 /** The minimal activity shape the conflict machinery reads — a subset of `ActivitySummary`. */
 export interface ConflictableActivity {
   id: string;
@@ -74,14 +76,6 @@ export interface ConflictHit {
   reasons: string[];
 }
 
-/** Order two nullable early-start ISO dates ascending, nulls last (`YYYY-MM-DD` sorts lexicographically). */
-function compareEarlyStart(a: string | null, b: string | null): number {
-  if (a === b) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return a < b ? -1 : 1;
-}
-
 /**
  * The plan's flagged activities in a stable left-to-right, top-to-bottom walk: matches-any of
  * {@link CONFLICT_FLAGS}, ordered by `earlyStart` → `laneIndex` → `id` (CQ-2). Each hit carries every
@@ -102,12 +96,7 @@ export function orderedConflicts(activities: readonly ConflictableActivity[]): C
       laneIndex: activity.laneIndex,
     });
   }
-  hits.sort(
-    (x, y) =>
-      compareEarlyStart(x.earlyStart, y.earlyStart) ||
-      x.laneIndex - y.laneIndex ||
-      (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
-  );
+  hits.sort(compareByTimeThenLane);
   return hits.map(({ id, name, reasons }) => ({ id, name, reasons }));
 }
 

@@ -1,6 +1,12 @@
 import type { ActivityType, DependencyType, LagCalendarSource } from '@repo/types';
 
-import { daysBetween, ELAPSED_DAY_WALK, lagAnchorDay, type DayWalk } from './working-time';
+import {
+  addCalendarDays,
+  daysBetween,
+  ELAPSED_DAY_WALK,
+  lagAnchorDay,
+  type DayWalk,
+} from './working-time';
 
 import type { ConstraintAnchor } from '@/lib/constraint-format';
 
@@ -1599,6 +1605,47 @@ export const DEFAULT_VIEWPORT: Viewport = { pxPerDay: ZOOM_STOPS.week, originX: 
  * {@link DEFAULT_VIEWPORT} when nothing is computed yet. `maxPxPerDay` is required, not defaulted,
  * so the caller must resolve the flag-aware ceiling (`MAX_PX_PER_DAY` vs {@link LEGACY_MAX_PX_PER_DAY}).
  */
+/**
+ * The minimum span {@link withMinimumSpan} frames, in days.
+ *
+ * Two weeks, and the number is doing two jobs. A **milestone has zero span**, so framing it exactly
+ * would divide by nothing and produce an undefined scale. And a task framed to its own edges is
+ * legible as a shape but not as a *position*: a planner who jumped to it wants to see what is beside
+ * it. Fourteen days is one working fortnight either side of a short task at the finest useful zoom.
+ */
+export const MIN_CONTEXT_DAYS = 14;
+
+/**
+ * One activity, widened to at least `minDays` and re-centred on its own midpoint, as the single-item
+ * array {@link fitToContent} frames.
+ *
+ * Pure and separate from the canvas so the arithmetic is unit-testable without a 2D context. It
+ * returns a **synthetic** activity rather than mutating: the widened span is a framing decision, and
+ * nothing downstream should be able to mistake it for the activity's real dates.
+ */
+export function withMinimumSpan(
+  activity: RenderActivity,
+  dataDateIso: string,
+  minDays: number,
+): RenderActivity[] {
+  if (activity.earlyStart === null) return [];
+  const start = daysBetween(dataDateIso, activity.earlyStart);
+  const finish =
+    activity.earlyFinish === null ? start : daysBetween(dataDateIso, activity.earlyFinish);
+  const span = finish - start;
+  if (span >= minDays) return [activity];
+  // Grow symmetrically about the midpoint, so a short task stays where the planner is looking rather
+  // than sliding to one edge of the new frame.
+  const pad = (minDays - span) / 2;
+  return [
+    {
+      ...activity,
+      earlyStart: addCalendarDays(dataDateIso, Math.floor(start - pad)),
+      earlyFinish: addCalendarDays(dataDateIso, Math.ceil(finish + pad)),
+    },
+  ];
+}
+
 export function fitToContent(
   activities: readonly RenderActivity[],
   size: Size,

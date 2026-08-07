@@ -28,6 +28,7 @@ import {
   ListChecks,
   Loader2,
   LocateFixed,
+  Crosshair,
   Maximize2,
   MessageSquare,
   Minus,
@@ -47,6 +48,7 @@ import {
   TriangleAlert,
   Undo2,
   Waypoints,
+  X,
 } from 'lucide-react';
 import { useRef } from 'react';
 
@@ -71,6 +73,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -684,6 +687,31 @@ function LiveSearchControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const disabled = api.disabled;
+  // A real, keyboard-reachable clear (`VITE_CANVAS_SEARCH_NAV`). `type="search"` renders a native ✕ in
+  // Chromium only, and it is not in the tab order in any browser — so on a control whose whole point is
+  // that you can drive it from the keyboard, the only way to empty it was to select-all and delete.
+  //
+  // Deliberately NOT `components/ui/search-field.tsx`, which solves the same problem: that primitive
+  // renders a visible `<Label>` above the input, and the toolbar has one line of vertical space. Its
+  // structural decisions (the leading icon offset, the trailing button, suppressing the native glyph)
+  // are reused; the component is not.
+  const showClear = CANVAS_SEARCH_NAV_ENABLED && !disabled && ctx.filterQuery.length > 0;
+  const inputRef = useRef<HTMLInputElement>(null);
+  // The count, in the ONE channel a screen-reader user has while typing. The visible chip beside the
+  // field is `aria-hidden` (it would otherwise duplicate the announcer), which left a sighted planner
+  // knowing how many matched and a screen-reader user knowing nothing until they pressed Enter — the
+  // read-out on screen and no read-out in the accessibility tree.
+  //
+  // A plain `sr-only` node linked by `aria-describedby`, NOT a live region: the search field already
+  // has a debounced count announcement, and a second polite region would say the number twice on
+  // every keystroke. A description is read when the field is focused and re-read on demand, which is
+  // what "how many did that match?" actually wants.
+  const describedById = CANVAS_SEARCH_NAV_ENABLED && ctx.searchStatus ? 'tsld-search-count' : null;
+  const countText = ctx.searchStatus
+    ? ctx.searchStatus.index === null
+      ? `${ctx.searchStatus.total} ${ctx.searchStatus.total === 1 ? 'activity matches' : 'activities match'}. Press Enter to go to the first.`
+      : `Match ${ctx.searchStatus.index} of ${ctx.searchStatus.total}. Enter for the next, Shift and Enter for the previous.`
+    : null;
   return (
     <div className="ml-3 flex items-center">
       <Search
@@ -691,6 +719,7 @@ function LiveSearchControl({
         className="text-muted-foreground pointer-events-none -mr-6 size-4"
       />
       <Input
+        ref={inputRef}
         {...api.itemProps}
         type="search"
         value={ctx.filterQuery}
@@ -703,14 +732,58 @@ function LiveSearchControl({
           if (!disabled) ctx.setFilterQuery(event.target.value);
         }}
         {...(disabled ? { readOnly: true } : {})}
+        // Enter / Shift+Enter walk the match set (`VITE_CANVAS_SEARCH_NAV`). `preventDefault` because
+        // an unhandled Enter inside a field can submit an enclosing form — the toolbar has none today,
+        // but a future host might, and a search that navigates away is worse than one that does
+        // nothing. Focus deliberately stays here: `goToMatch` selects with `focusListbox: false`, so
+        // the planner can press Enter again without reaching for the field.
+        //
+        // Flag-off the prop is not passed at ALL (not passed-and-inert), which is what makes the
+        // parity suite able to assert its absence rather than its behaviour.
+        {...(CANVAS_SEARCH_NAV_ENABLED && !disabled
+          ? {
+              onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                ctx.goToMatch(event.shiftKey ? 'previous' : 'next');
+              },
+            }
+          : {})}
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities"
+        {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
           'h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm',
           disabled && 'cursor-not-allowed opacity-50',
+          // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
+          // absent, so the native glyph is exactly where it is today.
+          showClear && '[&::-webkit-search-cancel-button]:appearance-none',
+          showClear && 'pr-7',
         )}
       />
+      {showClear ? (
+        <button
+          type="button"
+          // Focus returns to the input, never to `<body>`: the planner clears in order to type
+          // something else. This is also why the button unmounts rather than disabling — a control
+          // that vanishes while focused would strand focus, so it can only vanish on the click that
+          // moves focus off it first.
+          onClick={() => {
+            ctx.setFilterQuery('');
+            inputRef.current?.focus();
+          }}
+          aria-label="Clear search"
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring -ml-6 flex size-5 shrink-0 items-center justify-center rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <X aria-hidden="true" className="size-3.5" />
+        </button>
+      ) : null}
+      {describedById && countText ? (
+        <span id={describedById} className="sr-only">
+          {countText}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -1122,6 +1195,49 @@ function IsolateControl({
  * full reason list is in the `title`. `goToNextConflict` keeps speaking the full polite announcement,
  * so this doubles as its visible half rather than replacing it.
  */
+/**
+ * The **find read-out** (`VITE_CANVAS_SEARCH_NAV`) — how many activities the live search matches, and
+ * which one the planner is standing on.
+ *
+ * Modelled on {@link CurrentConflictStatus} down to the `aria-hidden`, and for the same reason: the
+ * spoken channel is the shared polite announcer `goToMatch` already writes to, so a second live region
+ * here would say "Match 3 of 12" twice to a screen-reader user and once to nobody else. This is the
+ * visible half only.
+ *
+ * Two states, and the difference matters: **"12 matches"** before the first Enter (the planner has
+ * typed and wants to know whether it was worth pressing), **"3 of 12"** after (they are walking them).
+ * Collapsing the two into one would make the read-out say a position the planner has not reached.
+ */
+function SearchMatchStatus({
+  ctx,
+  itemProps,
+}: {
+  ctx: TsldToolbarContext;
+  itemProps: ToolbarItemRenderApi['itemProps'];
+}): React.ReactElement | null {
+  const status = ctx.searchStatus;
+  if (!status) return null;
+  const text =
+    status.index === null
+      ? `${status.total} ${status.total === 1 ? 'match' : 'matches'}`
+      : `${status.index} of ${status.total}`;
+  return (
+    <span
+      {...itemProps}
+      aria-hidden="true"
+      title={
+        status.index === null
+          ? `${text} — press Enter to go to the first`
+          : `Match ${text} — Enter for the next, Shift+Enter for the previous`
+      }
+      className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[10rem] gap-1')}
+    >
+      <Search aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="truncate whitespace-nowrap">{text}</span>
+    </span>
+  );
+}
+
 function CurrentConflictStatus({
   ctx,
   itemProps,
@@ -1605,6 +1721,38 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.fit(),
     },
+    // Zoom to selection (search navigation M3) — the companion to `Fit to plan`, ordered right after
+    // it, for the planner who has just landed on a match and wants to read it. Registered only
+    // flag-on, so flag-off the toolbar is byte-for-byte today's.
+    //
+    // Three shade reasons, layered most-actionable first, because three different things can make it
+    // impossible and a single reason would be wrong for two of them. `canvasActive` is in the FIRST
+    // version, not added after a review: `zoomToActivity` is a canvas-handle command and the Gantt
+    // does not mount one, so without it this is exactly the lit-but-inert control ADR-0059 M6 found.
+    ...(CANVAS_SEARCH_NAV_ENABLED
+      ? [
+          {
+            id: 'zoom-to-selection',
+            group: 'frame' as const,
+            row: 'look' as const,
+            tier: 2 as const,
+            order: 13,
+            label: 'Zoom to selection',
+            icon: <Crosshair className="size-4" />,
+            isEnabled: (ctx: TsldToolbarContext) =>
+              ctx.hasDiagram && ctx.canvasActive && ctx.selectedActivity != null,
+            disabledReason: (ctx: TsldToolbarContext) =>
+              !ctx.hasDiagram
+                ? 'Add an activity to zoom to'
+                : !ctx.canvasActive
+                  ? CANVAS_ONLY_REASON
+                  : ctx.selectedActivity == null
+                    ? 'Select an activity first'
+                    : undefined,
+            onActivate: (ctx: TsldToolbarContext) => ctx.zoomToSelection(),
+          },
+        ]
+      : []),
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
     // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
@@ -1808,6 +1956,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     CANVAS_LENSES_ENABLED
       ? {
           ...searchShape,
+          // Enabled in BOTH views. M1 shaded it in the Gantt because Enter had nothing to centre
+          // there; M4 gave the Gantt the same match set and a row scroll, so the interim shade is
+          // reverted rather than left as a permanent half-truth — which is what it would have
+          // become if nobody came back to it.
           isEnabled: (ctx) => ctx.hasDiagram,
           disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
           render: (ctx, api) => <LiveSearchControl ctx={ctx} api={api} />,
@@ -1924,6 +2076,29 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: (ctx) => ctx.currentConflict != null,
       render: (ctx, api) => <CurrentConflictStatus ctx={ctx} itemProps={api.itemProps} />,
     },
+
+    // The find read-out (VITE_CANVAS_SEARCH_NAV) — "12 matches" / "3 of 12", pinned beside the search
+    // field. Registered only flag-on: flag-off `searchStatus` is always null, so an always-registered
+    // item would be inert — but registering it anyway would still put an entry in the item list the
+    // overflow measures, and the parity contract is that flag-off the toolbar is byte-for-byte today's.
+    // Presentational ⇒ never a roving-tabindex stop.
+    ...(CANVAS_SEARCH_NAV_ENABLED
+      ? [
+          {
+            id: 'search-status',
+            group: 'find' as const,
+            row: 'look' as const,
+            tier: 2 as const,
+            order: 1,
+            label: 'Search matches',
+            presentational: true,
+            isVisible: (ctx: TsldToolbarContext) => ctx.searchStatus != null,
+            render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
+              <SearchMatchStatus ctx={ctx} itemProps={api.itemProps} />
+            ),
+          },
+        ]
+      : []),
 
     // --- 4 · Tools / author (Row 2 · Do — pen-gated authoring cluster) ------------------------
     // The whole authoring cluster shades as one set when the pen isn't held (ADR-0028 + the ADR-0031

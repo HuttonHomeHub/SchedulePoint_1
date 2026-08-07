@@ -14,6 +14,7 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
+  CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
@@ -1001,7 +1002,11 @@ export function TsldPanel({
   // effect below), so the direct setState is intentional.
   const selectSignalSeenRef = useRef<number | null>(navState.selectSignal?.nonce ?? null);
   useEffect(() => {
-    if (!CANVAS_NAV_ENABLED) return;
+    // Widened from `CANVAS_NAV_ENABLED` for the search cycle (`docs/specs/canvas-search-navigation/`
+    // M1-T2): Enter-to-jump lifts a selection through this same one-shot signal, so gating it on the
+    // nav flag alone would leave the search's jump silently selecting nothing in a build with lenses
+    // on and nav off. Either flag arms the subscription; neither leaves it exactly as it was.
+    if (!CANVAS_NAV_ENABLED && !CANVAS_SEARCH_NAV_ENABLED) return;
     const signal = navState.selectSignal;
     if (!signal || signal.nonce === selectSignalSeenRef.current) return;
     selectSignalSeenRef.current = signal.nonce;
@@ -1012,8 +1017,13 @@ export function TsldPanel({
       // SR user who pressed the toolbar's Next-conflict button LANDS on the conflict (a11y-rec-1) — not
       // just hears the announcement. Guarded to this conflict-cycle path so ordinary canvas selection
       // never steals focus; the guard also stops the listbox's `onFocus` from re-selecting row 0.
-      conflictFocusPendingRef.current = true;
-      listboxRef.current?.focus();
+      // Only when the signal asked for it. The Next-conflict cycle does (the planner pressed a
+      // toolbar button and must land somewhere); the search cycle does not, because focus has to stay
+      // in the field or the next Enter goes nowhere.
+      if (signal.focusListbox) {
+        conflictFocusPendingRef.current = true;
+        listboxRef.current?.focus();
+      }
     }
   }, [navState.selectSignal, activities]);
 

@@ -46,6 +46,8 @@ import {
   edgeAnchor,
   fitToContent,
   hitTest,
+  MIN_CONTEXT_DAYS,
+  withMinimumSpan,
   lagAnchorDay,
   makeWorkingDayWalk,
   pan,
@@ -70,7 +72,13 @@ import {
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement } from '../render/snap';
-import { presetOf, rulerTicks, stepZoom, zoomToPreset } from '../render/time-scale';
+import {
+  presetOf,
+  pxPerDayForPreset,
+  rulerTicks,
+  stepZoom,
+  zoomToPreset,
+} from '../render/time-scale';
 import { useThemeVersion } from '../render/use-theme-version';
 import {
   wbsBandBarAnchor,
@@ -105,6 +113,16 @@ export interface TsldCanvasHandle {
    * centred sibling of {@link goToDate}, used by *Next conflict* to bring a flagged bar to the middle
    * (canvas nav, `docs/specs/canvas-nav/`). Same pure view transform; no fetch/persisted state. */
   centerOnDate: (iso: string) => void;
+  /**
+   * Frame a single activity at a readable scale (`docs/specs/canvas-search-navigation/` M3).
+   *
+   * A **command, not a mode** (ADR-0056): it sets the scale once, and a later resize preserves what
+   * it set rather than re-deriving it — the same contract the zoom presets have.
+   *
+   * Returns whether it framed anything, so the caller can announce honestly. False when the activity
+   * has no computed dates (nothing to frame) or the canvas has not been measured yet.
+   */
+  zoomToActivity: (id: string) => boolean;
   /** Read (never mutate) the current viewport transform + measured surface size — used by the
    * **Diagram — current view (PNG)** export (spec `docs/specs/export-print/`) to crop the off-screen
    * image to the live bounds. A pure read off the rAF-owned refs; it never repaints the live canvas. */
@@ -940,6 +958,36 @@ export function TsldCanvas({
         );
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
+      },
+      zoomToActivity: (id: string): boolean => {
+        const size = sizeRef.current;
+        // An unmeasured canvas has no width to divide by, so every derived scale would be garbage.
+        if (size.width <= 1) return false;
+        const activity = sceneRef.current.activities.find((a) => a.id === id);
+        if (!activity || activity.earlyStart === null) return false;
+        // It IS `fitToContent`, handed a one-element array — not a second implementation of "frame
+        // these". A parallel one would drift from `Fit to plan` about padding and the lane axis, and
+        // the drift would only ever be visible to someone using both on the same plan.
+        //
+        // Two clamps, each for its own reason:
+        //  - MIN_CONTEXT_DAYS, because a milestone has zero span and `fitToContent` would frame it to
+        //    nothing; a bar with no surrounding days is also unreadable as a *position* in a plan.
+        //  - the `day` preset's scale, because zooming past the finest preset leaves `presetOf`
+        //    unable to name the result and the zoom control silently misreports where you are
+        //    (ADR-0056: a preset is the vocabulary, not just a button).
+        const framed = withMinimumSpan(activity, sceneRef.current.dataDate, MIN_CONTEXT_DAYS);
+        viewRef.current = fitToContent(
+          framed,
+          size,
+          sceneRef.current.dataDate,
+          Math.min(RESOLVED_MAX_PX_PER_DAY, pxPerDayForPreset('day', size.width)),
+        );
+        // The command owns the scale from here — a later resize preserves it (ADR-0056 M2).
+        fittedRef.current = true;
+        dirtyRef.current = true;
+        interactionDirtyRef.current = true;
+        reportZoomStop();
+        return true;
       },
       // A pure read of the live viewport (transform + measured size) for the current-view PNG export.
       // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.

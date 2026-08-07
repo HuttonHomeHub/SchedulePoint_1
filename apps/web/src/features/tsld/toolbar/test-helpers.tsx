@@ -118,6 +118,11 @@ export function makeTsldToolbarContext(
     toggleFloatPaths: vi.fn(),
     currentConflict: null,
     goToNextConflict: vi.fn(),
+    searchStatus: null,
+    goToMatch: vi.fn(),
+    zoomToSelection: vi.fn(),
+    matchedIds: new Set<string>(),
+    currentMatchId: null,
     snapToGrid: false,
     toggleSnapToGrid: vi.fn(),
     // Export & print

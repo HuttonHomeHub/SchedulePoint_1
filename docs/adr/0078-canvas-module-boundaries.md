@@ -90,6 +90,34 @@ went first. `link-routing.ts` does not, and cannot until the **core model itself
 `viewport` and `hit-test` rather than a barrel that also holds code. That is a larger move than one
 step and is recorded as such rather than attempted in passing (`docs/TECH_DEBT.md` #106).
 
+**3a-bis. The ordering rule bites again in S2, and it costs three modules the plan did not list.**
+S2 is described as three files — `paint-frame.ts`, `layers/shapes.ts`, `layers/text-measure.ts`.
+Building it produced **six**, because §3a's rule (_a module can be lifted only when it depends on
+nothing that will be re-exported around it_) applies transitively and the plan had not traced it:
+`shapes.ts` needs `Ctx2D`, `paint-frame.ts` needs `activityIndexFor` and `DEFAULT_VIEW_TOGGLES`, and
+all three were declared inside `paint.ts` — the file that would import the new modules. So
+`ctx-2d.ts`, `activity-index.ts` and `view-toggles.ts` are lifted first and re-exported from
+`paint.ts`, which is the barrel rule doing exactly what it was written for: **not one consumer or
+suite changed an import**, and the 29 render suites (612 tests) pass untouched.
+
+This is worth recording rather than absorbing, because it predicts the shape of every later layer
+step: a layer painter needs `Ctx2D`, the palette type and `TsldScene`, and only the first of those
+is now a leaf. The remaining two are why `TsldScene` is **not** imported by `paint-frame.ts` — it
+takes a structural `PaintFrameScene` of the three fields it actually reads instead. That is a
+deliberate, narrower contract, not a shortcut: a per-frame context that needed the whole 400-line
+scene interface would make every future layer module depend on `paint.ts` again.
+
+**3b. A second correction from doing, this time to `docs/TECH_DEBT.md` #85 — in its favour.** That
+row diagnosed its two `react-hooks/refs` suppressions as a **budget** symptom: the reads had not
+changed, the hook had merely grown past what the rule's analysis could follow. That is a falsifiable
+claim, and S11 falsified it in the direction that confirms it. Lifting `goToNextConflict` and
+`buildDiagramImage` out — about 190 lines — made the rule reach a **third** `canvasControlRef` read
+it had never reported, in code the change did not touch. A suppression there would have been the
+wrong answer twice over: it is the same shape as the two just removed, and it would have restored
+the register entry the step exists to close. The three viewport commands were extracted instead. The
+standing rule this sets: **a `react-hooks/refs` report in this tree is a signal to split, not to
+silence** — and if a fourth surfaces, the answer is the same.
+
 **4. Where nothing pins a seam, the characterisation test lands first, in its own commit, verified
 red.** Three are named: the whole-scene ordered golden log (**C1**, landed), the Escape precedence
 table (**C2**), and the ADR-0026 D3 React-render-count invariant (**C3**) — the last of which has
