@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 806 web
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 808 web
 > source files with 26 flag-scoped Playwright suites beside the base journey, and
-> 77 ADRs.
+> 78 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1526,6 +1526,48 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   **docblock** naming a family token, and `e2e-public`'s `signOut()` helper turned out to have
   shipped with a locator matching nothing — never noticed because nothing had ever called it.
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0078** _(Accepted; S0–S1 landed 2026-08-07)_ — Canvas module boundaries: layer painters, a
+  per-frame context, and extraction as a gated move. **Amends ADR-0026 §8**, which is most of what
+  makes this cheap: that decision already specified `render/` as _"layer painters (grid, bars,
+  edges)"_ — **plural** — plus `viewport/`, `a11y/` and `hooks/`, none of which were ever created.
+  The drift is not one bad decision but fourteen accepted features (ADR-0033 → ADR-0065) each adding
+  correctly to the nearest existing place, until `paintScene` was 808 lines across **fourteen**
+  comment-delimited layers (the brief said thirteen; 3.2 and 3.2b share a number). Three
+  consequences are already in the register, which is what makes it debt rather than taste: #85
+  carries a standing instruction not to remove two `react-hooks/refs` suppressions until this
+  happens, #76's two measured hoists are unreachable without a per-frame context, and #75 cannot
+  attribute a millisecond to a layer while the painter is one function. And
+  `render/link-routing.test.ts` imports ten symbols forming exactly that module **from
+  `./render-model`** — a test named for a module that does not exist, which is a small live piece of
+  misinformation of exactly the ADR-0058 class.
+  **The decisions.** `paintScene` decomposes into pure layer painters each taking one **`PaintFrame`**
+  — holding only what is derived once per frame and shared by **two or more** layers, so it is a
+  context and not a bag; `rects`/`laneRows` stay **lazy**, preserving today's ordering, because
+  building them eagerly would be **invisible to every existing gate** (`activityRect` makes no `ctx`
+  calls) and is therefore exactly the optimisation that must be resisted here and done deliberately
+  as #76. The edge layer **returns a value**: it collects lag geometry that layers 3.2/3.2b draw two
+  hundred lines later, which is the one place the "layers are independent" story is false, and a
+  closure variable hides it. `hooks/` and `a11y/` are created (they hold React, which does not belong
+  beside a pure painter); `render/` is recognised as the home of viewport and hit-test. Extraction is
+  a **barrel-preserving move** — the three barrels keep every export, so 30 consumers and their
+  suites are untouched and act as the before/after oracle, and **a refactor PR changes no behaviour,
+  no performance characteristic and no test assertion**. Comments move verbatim: these files' comments
+  record defects that shipped. Where nothing pins a seam the characterisation test lands **first,
+  verified red** — the whole-scene golden log (S1, landed), the Escape precedence table, and the
+  ADR-0026 D3 React-render-count invariant, which has **never** been asserted though the whole frame
+  budget rests on it. Most of the rest is **extract-when-touched** by standing rule, and `TsldPanel`
+  is **explicitly deferred** rather than overlooked.
+  **S1 is also the ADR's own premise landing on it.** Writing the golden log produced two
+  corrections to its author rather than to the painter: a layer-ordering assertion went red against a
+  perfectly correct painter, because `palette.selection` is written by the **edge** layer too (the
+  ADR-0052 M5 incident-link highlight, `paint.ts:1297`) some 200 entries before the ring at 1823 — so
+  first-occurrence cannot identify that layer; and typecheck caught two enum values asserted from
+  memory rather than read (`MILESTONE` does not exist; `constraint` is a bare `'start' | 'finish'`).
+  Filing this ADR also surfaced that **`docs/adr/README.md` was missing seven ADRs** (0071–0077) —
+  the ADR-0071 failure one level up, in the index rather than the register — repaired in the same
+  commit rather than stepped over. **The CPM engine is not imported and no migration runs**, so the
+  ADR-0034 recalculation parity gate is untouched by construction.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
