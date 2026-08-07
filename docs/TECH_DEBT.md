@@ -1396,3 +1396,26 @@ confirmation, so the utterance that can be dropped is the redundant status word,
 informative one. Fixing it properly means one owner at the `flush` call site, which the approved plan
 precluded by putting the announcer in `TsldPanel`. Worth doing when ADR-0078 is written, since that
 is where the announcement ownership should be stated.
+
+## 105. Two follow-ups from the canvas status & feedback gate pass
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
+
+Non-blocking findings from the three specialist gates over the epic diff. Both are real; neither
+blocked the epic.
+
+1. **`ToolbarItemRenderApi` does not expose the resolved `busy`.** M5 widened the registry with
+   `isBusy?: (ctx) => boolean`, resolved once in `resolveItems` and read by `ToolbarButton` — but the
+   `render` escape-hatch's api object still carries only `disabled`/`disabledReason`/`active`/
+   `itemProps`. No `render` item declares `isBusy` today, so this is latent rather than broken. The
+   trap is that `ToolbarItem.isBusy`'s docblock reads as a general contract and does not scope itself
+   to plain-button items: the first Tier-2 popover trigger that wants a busy state will silently have
+   no way to read it and will re-derive it from `ctx`, which is the two-derivations-of-one-fact
+   pattern this same epic eliminated twice elsewhere.
+2. **`EXPORT_LEGEND` is still a hand-authored mirror of the DOM legend** (`render-export-image.ts`,
+   already TECH_DEBT #48(e)). This epic **extended** it — adding the Data date entry in the same PR
+   as the DOM entry, which is the mitigation the plan called for — rather than fixing the pattern.
+   Worth noting because the same epic proved it knows how to fix this class of bug: it gave WBS group
+   labels one producer (`wbsGroupLabelById`, consumed by both the legend and the spoken clause) and
+   listbox row text one producer (`composeListboxRowText`, consumed by both the row and the
+   announcement). The export legend is the third instance of the same shape, left alone.

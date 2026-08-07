@@ -1360,6 +1360,11 @@ export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWOR
  * or legacy — so there is no host flag whose absence would strand it, and tying it to one would
  * only remove the line from surfaces where it is still a fact.
  *
+ * **Default-on since 2026-08-07**, once the M6 gate pass over the combined epic diff was folded
+ * (three blocking findings: the keyboard settle silence, the stranded empty-plan focus, and the
+ * two-owner announcement race — none of them in this milestone's own code, all of them found by
+ * running the gates the epic budgeted for).
+ *
  * Rollback: set `VITE_CANVAS_DATA_DATE=false` and rebuild the web image. Flag-off the scene
  * carries no `dataDateLine`, so the painter's layer never runs and the frame is **byte-for-byte**
  * today's paint (`paint.data-date-parity.test.ts` — the rollback contract, kept rather than
@@ -1367,4 +1372,4 @@ export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWOR
  * Nothing persisted depends on it — the line is a per-frame display decision over a value
  * (`dataDate`) that has always been on the wire.
  */
-export const CANVAS_DATA_DATE_ENABLED = flagDefaultOff(import.meta.env.VITE_CANVAS_DATA_DATE);
+export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_DATA_DATE);
