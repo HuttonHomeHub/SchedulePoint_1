@@ -1,16 +1,22 @@
-import type { GhostBar } from './lenses';
-import { createMeasureCache } from './measure';
+import { activityIndexFor } from './activity-index';
+import type { Ctx2D } from './ctx-2d';
 import {
-  activityRect,
+  beginRoundedRect,
+  drawPolyline,
+  drawRoundedPolyline,
+  traceMilestoneDiamond,
+} from './layers/shapes';
+import { labelWidths } from './layers/text-measure';
+import type { GhostBar } from './lenses';
+import { buildPaintFrame } from './paint-frame';
+import {
   arrowhead,
   barGlyphKind,
   computeEdgeFanOut,
-  cull,
   daysBetween,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
   edgeTouches,
-  elbowRadius,
   isMilestone,
   isResizeEligibleType,
   labelPlacement,
@@ -51,21 +57,14 @@ import {
   type LagRun,
   type Point,
   type Rect,
-  type RectCache,
   type RenderActivity,
   type RenderEdge,
   type Size,
   type Viewport,
 } from './render-model';
 import { bucketBarsFromDays, type ResourceStripSnapshot } from './resource-strip';
-import { calendarBoundaries } from './time-scale';
+import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from './view-toggles';
 import type { WbsBandBar } from './wbs-band';
-
-/**
- * Session-lived width memo for label text (font is fixed, so keyed by string alone). Held at
- * module scope so it persists across frames and canvas instances — a given label measures once.
- */
-const labelWidths = createMeasureCache();
 
 /**
  * Fan-out offsets memoised on the edges ARRAY identity (ADR-0052 M5 perf). `scene.edges` is
@@ -91,34 +90,6 @@ export function edgeFanOutFor(
     edgeFanOuts.set(edges, offsets);
   }
   return offsets;
-}
-
-/**
- * Id→activity index memoised on the activities ARRAY identity, the {@link edgeFanOuts} pattern
- * one field over: `scene.activities` carries the same reference-stability contract as
- * `scene.edges` (the scene is only rebuilt on a data / selection / hover-id change), and
- * `TsldCanvas`'s own `activityIndexRef` already relies on it. Rebuilding the Map inside
- * `paintScene` cost one O(n) allocation per dirty frame — continuously, during pan/zoom/drag.
- */
-const activityIndexes = new WeakMap<
-  readonly RenderActivity[],
-  ReadonlyMap<string, RenderActivity>
->();
-
-/**
- * The memoised id→activity index the painter reads: the SAME array instance returns the SAME
- * (identical) map; a new array instance recomputes. Exported so the memo identity is
- * unit-testable — the painter is its only production caller.
- */
-export function activityIndexFor(
-  activities: readonly RenderActivity[],
-): ReadonlyMap<string, RenderActivity> {
-  let index = activityIndexes.get(activities);
-  if (!index) {
-    index = new Map(activities.map((a) => [a.id, a]));
-    activityIndexes.set(activities, index);
-  }
-  return index;
 }
 
 /** Below this px-per-day the per-day gridlines would merge into a solid block, so they're culled. */
@@ -215,73 +186,6 @@ export interface TsldPalette {
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
-export interface TsldViewToggles {
-  dayGrid: boolean;
-  monthGrid: boolean;
-  yearGrid: boolean;
-  today: boolean;
-  nonWorking: boolean;
-  /** On-canvas activity labels (`{code} {name} · {n}d`). */
-  labels: boolean;
-  /** Flanking start/finish **dates** on each bar (ADR-0054 §3, `VITE_CANVAS_LIVE_FEEDBACK`).
-   * Optional so every existing caller/fixture stays valid and paints byte-for-byte; absent or
-   * false ⇒ the pass never runs and not one `measureText` is spent. */
-  dates?: boolean;
-  /** The GPM **float / drift tails** (ADR-0054 §4, `VITE_CANVAS_LIVE_FEEDBACK`): a hollow tail
-   * right of each bar for total float, left for drift.
-   *
-   * A view TOGGLE rather than a lens (a deliberate departure from the plan's "beside Baseline
-   * overlay"): a lens exists because it needs data that can be loading or absent — Baseline
-   * overlay is disabled with a reason when there is no active baseline. Float and drift are
-   * already on every activity, so the control can never be unavailable and needs none of the
-   * lens context's loading/error/enablement machinery. It belongs with Labels and Dates.
-   *
-   * Optional ⇒ absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
-  floatTails?: boolean;
-  /** Annotate **relationship slack** on the SELECTED activity's own links (ADR-0054 §5). Scoped to
-   * the selection on purpose: a number on every edge of a real network is noise that obscures the
-   * very structure the diagram exists to show, so this is an *inspection* affordance. Optional ⇒
-   * absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
-  linkSlack?: boolean;
-  /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
-   * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
-   * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
-  lateOverlay: boolean;
-  /** User preference for the alternating month-band ground (F7b, `VITE_CANVAS_TIME_AXIS` +
-   * `VITE_CANVAS_VISUAL_LANGUAGE`) — a plain boolean here so the pure painter module never imports
-   * a flag; `TsldCanvas` composes the actual gate (`CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands
-   * ?? true)`) into `TsldScene.monthBands`, which is what the painter actually reads. Optional so
-   * every existing caller/fixture stays valid; the default below is a plain literal, not a flag
-   * read, so this module stays flag-free. */
-  monthBands?: boolean;
-  /** The **data-date line** (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1). A plain
-   * boolean here — the pure painter module never imports a flag; `TsldCanvas` composes the gate
-   * (`CANVAS_DATA_DATE_ENABLED && (view?.dataDate ?? true)`) into `TsldScene.dataDateLine`,
-   * which is what the painter reads (the `monthBands` precedent). Optional so every existing
-   * caller/fixture stays valid. */
-  dataDate?: boolean;
-  /** The pinned **WBS band** across the top of the canvas (ADR-0063, `VITE_WBS_IMPROVEMENTS`).
-   * Default **off**: the band takes canvas height, and ADR-0031's canvas-maximal layout is not a
-   * decision this may quietly reverse for every existing plan. A plain boolean here — the pure
-   * painter module never imports a flag; the host composes the gate. Optional ⇒ absent/false ⇒ no
-   * band is reserved, mounted or painted (the parity path). */
-  wbsBand?: boolean;
-}
-
-/** All view layers on — the default before the user toggles anything (the Late overlay starts off). */
-export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
-  dayGrid: true,
-  monthGrid: true,
-  yearGrid: true,
-  today: true,
-  nonWorking: true,
-  labels: true,
-  lateOverlay: false,
-  monthBands: true,
-  // The data-date line defaults ON under its flag (a plan fact, like the month bands' ground);
-  // the flag itself — composed by the host, never read here — is what decides reachability.
-  dataDate: true,
-};
 
 export interface TsldScene {
   activities: readonly RenderActivity[];
@@ -426,56 +330,15 @@ const EDGE_HANDLE_MARK = 3;
 const CONSTRAINT_PIN_W = 7;
 const CONSTRAINT_PIN_H = 5;
 
-/** The minimal 2D-context surface the painter uses (kept small so it is easy to mock/test). */
-export type Ctx2D = Pick<
-  CanvasRenderingContext2D,
-  | 'clearRect'
-  | 'fillRect'
-  | 'strokeRect'
-  | 'beginPath'
-  | 'moveTo'
-  | 'lineTo'
-  | 'stroke'
-  | 'fill'
-  | 'setTransform'
-  | 'setLineDash'
-  | 'fillText'
-  | 'measureText'
-> & {
-  fillStyle: string | CanvasGradient | CanvasPattern;
-  strokeStyle: string | CanvasGradient | CanvasPattern;
-  lineWidth: number;
-  /** Global opacity multiplier (0–1). Used to dim filter non-matches without a second fill colour. */
-  globalAlpha: number;
-  font: string;
-  textBaseline: CanvasTextBaseline;
-  textAlign: CanvasTextAlign;
-  /** Optional (Baseline 2023; absent from older/test contexts): the refreshed bar shape rounds its
-   * corners with it when present and falls back to square rects when not — guarded like the
-   * text APIs (`paintResourceStrip`'s label), so a minimal test context never throws. */
-  roundRect?: (x: number, y: number, w: number, h: number, radii: number) => void;
-  /** Optional like `roundRect`: the refreshed link routing rounds its elbows with it when present
-   * (ADR-0052 M5) and falls back to hard `lineTo` corners when not — an arc, not a shadow/blur,
-   * so the draw budget holds; a minimal test context never throws. */
-  arcTo?: (x1: number, y1: number, x2: number, y2: number, radius: number) => void;
-  /** Optional like `roundRect`/`arcTo`: builds a repeating fill pattern from an offscreen tile —
-   * used only for the non-working hatch (F7a, `VITE_CANVAS_TIME_AXIS`). Absent ⇒ the flat-fill
-   * fallback, which is also the path every existing painter unit suite exercises (jsdom serves no
-   * `canvas` package, so the offscreen tile itself never builds). */
-  createPattern?: (image: CanvasImageSource, repetition: string | null) => CanvasPattern | null;
-};
-
 /**
- * Begin a rounded-rect path when the context supports `roundRect` (ADR-0052 M4). Returns whether
- * the path was begun — callers fall back to the square `fillRect`/`strokeRect` when not, so the
- * refresh degrades gracefully on contexts without it (older browsers / minimal test mocks).
+ * Re-exported so every existing consumer keeps importing them from `paint.ts` (ADR-0078 §3: the
+ * barrel is preserved, so the 30 consuming files and their suites are the before/after oracle).
+ * Their definitions moved out for the §3a ordering reason — `paint-frame.ts` needs them and
+ * `paint.ts` imports `paint-frame.ts`.
  */
-function beginRoundedRect(ctx: Ctx2D, r: Rect, radius: number): boolean {
-  if (typeof ctx.roundRect !== 'function') return false;
-  ctx.beginPath();
-  ctx.roundRect(r.x, r.y, r.w, r.h, radius);
-  return true;
-}
+export type { Ctx2D };
+export { activityIndexFor };
+export { DEFAULT_VIEW_TOGGLES, type TsldViewToggles };
 
 /**
  * The fill for a bar. A Colour-by lens (`barFill`) overrides per id when present (precomputed from the
@@ -584,11 +447,6 @@ function criticalDash(activity: RenderActivity): number[] | null {
   return null;
 }
 
-function drawPolyline(ctx: Ctx2D, points: Point[]): void {
-  ctx.moveTo(points[0]!.x, points[0]!.y);
-  for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i]!.x, points[i]!.y);
-}
-
 /** Dash pattern of the lag-run depiction (ADR-0052 M5) — visibly "waiting", not a solid tie. */
 const LAG_RUN_DASH: readonly number[] = [2, 2];
 
@@ -637,28 +495,6 @@ function drawLagHandles(
   if (trace()) ctx.stroke();
   else for (const b of boxes) ctx.strokeRect(b.x, b.y, b.w, b.h);
   ctx.lineWidth = 1;
-}
-
-/**
- * Trace a polyline with small rounded elbows (ADR-0052 M5): each interior corner arcs with the
- * pure {@link elbowRadius} (clamped to half its adjoining segments; 0 = a hard corner) via the
- * optional `arcTo` — degrading to the plain hard-cornered {@link drawPolyline} on contexts
- * without it (older browsers / minimal test mocks), like the M4 `roundRect` guard. Rect/line/arc
- * primitives only; called only on the refreshed (flag-on) path.
- */
-function drawRoundedPolyline(ctx: Ctx2D, points: Point[]): void {
-  if (points.length < 3 || typeof ctx.arcTo !== 'function') {
-    drawPolyline(ctx, points);
-    return;
-  }
-  ctx.moveTo(points[0]!.x, points[0]!.y);
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const radius = elbowRadius(points[i - 1]!, points[i]!, points[i + 1]!);
-    if (radius > 0)
-      ctx.arcTo(points[i]!.x, points[i]!.y, points[i + 1]!.x, points[i + 1]!.y, radius);
-    else ctx.lineTo(points[i]!.x, points[i]!.y);
-  }
-  ctx.lineTo(points[points.length - 1]!.x, points[points.length - 1]!.y);
 }
 
 /**
@@ -810,21 +646,6 @@ function drawOverAllocationBadge(
   }
 }
 
-/**
- * Begin the 4-vertex milestone diamond path centred on (`cx`, `cy`) — the ONE tracing shared by
- * the refreshed bar, the baseline ghost, and the legacy bar layer, so the three can never drift.
- * Left open by default (a `fill` closes it implicitly); `close` traces the final segment back to
- * the top vertex for stroke-only callers (the Ctx2D surface has no closePath).
- */
-function traceMilestoneDiamond(ctx: Ctx2D, cx: number, cy: number, r: number, close = false): void {
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r);
-  ctx.lineTo(cx + r, cy);
-  ctx.lineTo(cx, cy + r);
-  ctx.lineTo(cx - r, cy);
-  if (close) ctx.lineTo(cx, cy - r);
-}
-
 /** The criticality-paired inside ink for a bar — the lens `barInk` override when present, else
  * the painter's own criticality ink (the same fallback chain the inside labels use). */
 function barInkColour(
@@ -956,24 +777,11 @@ export function paintScene(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
-  const byId = activityIndexFor(scene.activities);
-  // Per-frame geometry cache (Finding B of docs/specs/canvas-paint-loop-fixes/plan.md).
-  // Deliberately a fresh Map per paintScene call, NEVER hoisted to module/WeakMap scope like
-  // `edgeFanOuts`: a rect depends on `view` and `scene.dataDate`, which change every frame on
-  // the exact pan/zoom/drag path this cache exists for — an identity-keyed cross-frame cache
-  // would serve stale geometry mid-pan. `view`/`dataDate` are fixed for one call's lifetime,
-  // so id-keyed-per-call is exactly right.
-  const rectCache: RectCache = new Map();
-  const visibleIds = new Set(
-    cull(scene.activities, view, size, scene.dataDate, undefined, rectCache),
-  );
-  const toggles = scene.view ?? DEFAULT_VIEW_TOGGLES;
-  const firstDay = Math.floor((0 - view.originX) / view.pxPerDay);
-  const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay);
-
-  // ONE calendar walk per frame, shared by the month bands (layer -0.5) and the month/year
-  // gridlines (layer 1). Two walks could disagree by a day; one cannot.
-  const bounds = calendarBoundaries(firstDay, lastDay, scene.dataDate);
+  // Everything derived once per frame and shared by two or more layers (ADR-0078 §1). Destructured
+  // straight back out, so each layer below still reads a plain local and the call sites are
+  // untouched — which is what lets the existing suites act as the before/after oracle (§3).
+  const frame = buildPaintFrame(ctx, scene, view, size);
+  const { byId, rectCache, visibleIds, toggles, firstDay, lastDay, bounds } = frame;
 
   // Layer -0.5: alternating month bands — the diagram's own ground, banded, so a planner can
   // count months without reading a label. Beneath EVERYTHING, including the non-working wash, so
@@ -1359,18 +1167,13 @@ export function paintScene(
     ctx.setLineDash([]);
   }
 
-  // Each visible activity's screen rect is read from the frame's rectCache (populated above by
-  // cull, the lane index and the edge pass) and reused by the bar, label, and selection layers
-  // below — each recompute re-parses the activity's ISO dates (two Date.parse calls), so the
-  // shared cache keeps the per-frame draw within the ADR-0026 budget. Insertion follows
-  // `visibleIds`, so bar draw order (z-order) is unchanged.
-  const rects = new Map<string, Rect>();
-  for (const id of visibleIds) {
-    const activity = byId.get(id);
-    if (!activity) continue;
-    const rect = activityRect(activity, view, scene.dataDate, rectCache);
-    if (rect) rects.set(id, rect);
-  }
+  // Forced HERE, at exactly the point the eager build used to sit — after the edge layer, whose
+  // `laneIntervalIndex` independently re-derives the same geometry. That duplication is
+  // `docs/TECH_DEBT.md` #76 and is deliberately NOT fixed by this refactor: hoisting the call above
+  // the edge layer is a performance change with its own measurement, and it would be invisible to
+  // every gate here (`activityRect` makes no `ctx` calls). The frame's getter makes that a one-line
+  // move later; this line keeps today's ordering byte-for-byte until someone measures it.
+  const rects = frame.rects();
 
   // Layer 3: activity bars + milestone diamonds. Critical/near-critical activities also
   // get a solid/dashed outline (a non-colour cue for criticality — WCAG 1.4.1).
@@ -1684,25 +1487,9 @@ export function paintScene(
     ctx.textBaseline = 'middle';
   }
 
-  // The visible bars bucketed by lane and x-sorted — the shape both text passes below need, since
-  // each asks "what is my neighbour in this lane, and how much room does it leave?". Built ONCE and
-  // lazily: with the labels and dates layers both on, this was the same O(v log v) bucket-and-sort
-  // done twice per frame over the same data, which is the second-largest cost in the pass after
-  // `measureText`. A paint with both layers off never calls it.
-  let laneRowsCache: Map<number, { activity: RenderActivity; rect: Rect }[]> | null = null;
-  const laneRows = (): Map<number, { activity: RenderActivity; rect: Rect }[]> => {
-    if (laneRowsCache) return laneRowsCache;
-    const lanes = new Map<number, { activity: RenderActivity; rect: Rect }[]>();
-    for (const [id, rect] of rects) {
-      const activity = byId.get(id)!;
-      const row = lanes.get(activity.laneIndex);
-      if (row) row.push({ activity, rect });
-      else lanes.set(activity.laneIndex, [{ activity, rect }]);
-    }
-    for (const row of lanes.values()) row.sort((a, b) => a.rect.x - b.rect.x);
-    laneRowsCache = lanes;
-    return lanes;
-  };
+  // Lane-bucketed, x-sorted rows — owned by the frame (ADR-0078 §1) and still lazy, so a paint
+  // with both text layers off never builds it.
+  const laneRows = frame.laneRows;
 
   // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting
   // (ADR-0026 D1). Gated by the toggle and a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
