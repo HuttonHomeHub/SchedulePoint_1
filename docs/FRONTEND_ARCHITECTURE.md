@@ -8,6 +8,12 @@
 > [0029](adr/0029-persistent-hierarchy-navigator.md)–[0031](adr/0031-tsld-toolbar-registry-and-taxonomy.md)
 > and the token/surface model by
 > [0055](adr/0055-designed-chrome-and-canvas-visual-language.md).
+>
+> The TSLD canvas's own module boundaries are
+> [0078](adr/0078-canvas-module-boundaries.md), which **amends ADR-0026 §8** — read it before
+> adding a paint layer or a canvas hook. Its rules in one line: a layer is a module taking one
+> `PaintFrame`; extraction is a barrel-preserving move that changes no behaviour and no test
+> assertion; and the PR that changes a layer extracts it first, in its own commit.
 
 ## Guiding principles
 

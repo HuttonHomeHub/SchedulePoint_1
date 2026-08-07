@@ -94,3 +94,11 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0068](0068-calendar-hours-per-day.md)                                    | A calendar carries an hours-per-day                | Accepted           |
 | [0069](0069-shared-lane-layout-and-packing-at-import.md)                  | Shared lane layout & packing at import             | Accepted           |
 | [0070](0070-sub-day-durations-and-lags-in-the-authoring-surface.md)       | Sub-day durations & lags in the authoring surface  | Accepted           |
+| [0071](0071-per-assignment-lag.md)                                        | Per-assignment lag & the parity arguments it costs | Accepted           |
+| [0072](0072-append-only-audit-log.md)                                     | The append-only audit log                          | Accepted           |
+| [0073](0073-audit-coverage-and-actor-less-readability.md)                 | Audit coverage & actor-less readability            | Accepted           |
+| [0074](0074-account-recovery-verification-enforcement-and-csp.md)         | Account recovery, verification enforcement & CSP   | Accepted           |
+| [0075](0075-mail-delivery-is-best-effort.md)                              | Mail delivery is best-effort                       | Accepted           |
+| [0076](0076-wrong-claims-are-a-defect-class.md)                           | Wrong claims are a defect class                    | Accepted           |
+| [0077](0077-public-screens-brand-surface.md)                              | The public screens' brand surface                  | Accepted           |
+| [0078](0078-canvas-module-boundaries.md)                                  | Canvas module boundaries & the per-frame context   | Accepted           |
