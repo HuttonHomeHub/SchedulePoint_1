@@ -139,6 +139,45 @@ describe('the find read-out', () => {
   });
 });
 
+describe('the count reaches the accessibility tree', () => {
+  // The gate-pass finding (M5): the visible chip is `aria-hidden` so it cannot duplicate the
+  // announcer, which left a screen-reader user with no count at all until they pressed Enter — a
+  // read-out on screen and none in the accessibility tree.
+  it('describes the field with the match count', () => {
+    renderRows(ctx({ searchStatus: { total: 7, index: null } }));
+    const described = field().getAttribute('aria-describedby');
+    expect(described).toBeTruthy();
+    const node = document.getElementById(described!);
+    expect(node?.textContent).toMatch(/7 activities match/i);
+    expect(node?.textContent).toMatch(/press enter/i);
+  });
+
+  it('describes the position once cycling has started', () => {
+    renderRows(ctx({ searchStatus: { total: 7, index: 3 } }));
+    const node = document.getElementById(field().getAttribute('aria-describedby')!);
+    expect(node?.textContent).toMatch(/match 3 of 7/i);
+  });
+
+  it('says "1 activity matches", not "1 activities match"', () => {
+    renderRows(ctx({ searchStatus: { total: 1, index: null } }));
+    const node = document.getElementById(field().getAttribute('aria-describedby')!);
+    expect(node?.textContent).toMatch(/1 activity matches/i);
+  });
+
+  it('is not a live region — the announcer already speaks on jump', () => {
+    // Two polite regions would say the number twice on every keystroke.
+    renderRows(ctx({ searchStatus: { total: 7, index: 3 } }));
+    const node = document.getElementById(field().getAttribute('aria-describedby')!);
+    expect(node).not.toHaveAttribute('aria-live');
+    expect(node).not.toHaveAttribute('role', 'status');
+  });
+
+  it('describes nothing when there is nothing to describe', () => {
+    renderRows(ctx({ searchStatus: null }));
+    expect(field()).not.toHaveAttribute('aria-describedby');
+  });
+});
+
 describe('the clear button', () => {
   it('appears only once there is something to clear', () => {
     renderRows(ctx({ filterQuery: '' }));

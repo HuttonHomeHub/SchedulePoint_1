@@ -81,6 +81,11 @@ describe('flag-off, the search field is today’s filter and nothing more', () =
     expect(field()).not.toHaveAttribute('title');
   });
 
+  it('links no description — the field is exactly what it is today', () => {
+    renderRows(ctx());
+    expect(field()).not.toHaveAttribute('aria-describedby');
+  });
+
   it('renders no clear button — the native ✕ stays exactly as it is today', () => {
     renderRows(ctx());
     expect(screen.queryByRole('button', { name: /clear search/i })).toBeNull();

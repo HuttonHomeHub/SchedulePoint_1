@@ -697,6 +697,21 @@ function LiveSearchControl({
   // are reused; the component is not.
   const showClear = CANVAS_SEARCH_NAV_ENABLED && !disabled && ctx.filterQuery.length > 0;
   const inputRef = useRef<HTMLInputElement>(null);
+  // The count, in the ONE channel a screen-reader user has while typing. The visible chip beside the
+  // field is `aria-hidden` (it would otherwise duplicate the announcer), which left a sighted planner
+  // knowing how many matched and a screen-reader user knowing nothing until they pressed Enter — the
+  // read-out on screen and no read-out in the accessibility tree.
+  //
+  // A plain `sr-only` node linked by `aria-describedby`, NOT a live region: the search field already
+  // has a debounced count announcement, and a second polite region would say the number twice on
+  // every keystroke. A description is read when the field is focused and re-read on demand, which is
+  // what "how many did that match?" actually wants.
+  const describedById = CANVAS_SEARCH_NAV_ENABLED && ctx.searchStatus ? 'tsld-search-count' : null;
+  const countText = ctx.searchStatus
+    ? ctx.searchStatus.index === null
+      ? `${ctx.searchStatus.total} ${ctx.searchStatus.total === 1 ? 'activity matches' : 'activities match'}. Press Enter to go to the first.`
+      : `Match ${ctx.searchStatus.index} of ${ctx.searchStatus.total}. Enter for the next, Shift and Enter for the previous.`
+    : null;
   return (
     <div className="ml-3 flex items-center">
       <Search
@@ -736,6 +751,7 @@ function LiveSearchControl({
           : {})}
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities"
+        {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
           'h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm',
@@ -762,6 +778,11 @@ function LiveSearchControl({
         >
           <X aria-hidden="true" className="size-3.5" />
         </button>
+      ) : null}
+      {describedById && countText ? (
+        <span id={describedById} className="sr-only">
+          {countText}
+        </span>
       ) : null}
     </div>
   );
