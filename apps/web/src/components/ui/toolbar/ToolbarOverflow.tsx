@@ -71,9 +71,10 @@ function ToolbarOverflowInner<Ctx>(
         {items.map((r) =>
           r.item.onActivate && r.enabled ? (
             <MenuItem key={r.item.id} onSelect={() => r.item.onActivate!(context)}>
-              {r.item.icon ? (
+              {/* The RESOLVED icon — `item.icon` may be a ctx function (see `resolveItems`). */}
+              {r.icon ? (
                 <span aria-hidden="true" className="inline-flex shrink-0 items-center">
-                  {r.item.icon}
+                  {r.icon}
                 </span>
               ) : null}
               {r.item.label}
@@ -86,13 +87,14 @@ function ToolbarOverflowInner<Ctx>(
               aria-disabled="true"
               tabIndex={-1}
               {...(r.disabledReason ? { title: r.disabledReason } : {})}
+              {...(r.busy ? { 'aria-busy': true } : {})}
               // Still an arrow-key stop in the menu, so it needs a visible focus ring like MenuItem —
               // `opacity-60` alone leaves a keyboard user unsure where focus is (WCAG 2.4.7).
               className="text-muted-foreground focus:ring-ring flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm opacity-60 outline-none focus:ring-2 focus:ring-inset"
             >
-              {r.item.icon ? (
+              {r.icon ? (
                 <span aria-hidden="true" className="inline-flex shrink-0 items-center">
-                  {r.item.icon}
+                  {r.icon}
                 </span>
               ) : null}
               {r.item.label}

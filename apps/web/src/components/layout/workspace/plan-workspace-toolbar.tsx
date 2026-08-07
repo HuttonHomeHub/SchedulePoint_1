@@ -52,7 +52,7 @@ import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
-import { ProgrammeScheduleSection } from '@/features/schedule';
+import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
@@ -342,6 +342,11 @@ export function ToolbarPlanWorkspace({
   const canvasLoading =
     CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
 
+  // The project finish, for the canvas's recalculation-settle announcement. The SAME query the
+  // toolbar's pinned Finish chip already runs, so this is a cache read and adds no request; a recalc
+  // invalidates the key, which is exactly the value the settle needs to compare.
+  const scheduleSummary = useScheduleSummary(model.orgSlug, model.planId);
+
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
   // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
   // tools read as live while doing nothing on the canvas (ux/a11y review).
@@ -396,6 +401,11 @@ export function ToolbarPlanWorkspace({
       onResize={model.onTsldResize}
       onLag={model.onTsldLag}
       onLink={model.onTsldLink}
+      // What a recalculation SETTLED (M5): the shared ADR-0032 coalescer's in-flight flag marks the
+      // settle edge, and the summary's finish is the second fact. Both read-only — supplying them
+      // does not make the panel trigger a recalculation, only describe one.
+      recalcPending={model.autoRecalc.isPending}
+      projectFinish={scheduleSummary.data?.projectFinish ?? null}
       // LOE endpoint-pick span (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`). Gated on the flag so flag-off is
       // byte-for-byte today's canvas — the LOE tool-mode is then unreachable (the Add-menu item is also
       // flag-gated), so the prop is simply absent.

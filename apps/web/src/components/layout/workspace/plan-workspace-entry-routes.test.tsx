@@ -133,6 +133,9 @@ vi.mock('@/features/schedule', () => ({
   RecalculateButton: () => <div data-testid="recalculate-button" />,
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({ notify: vi.fn(), flush: vi.fn(), isPending: false }),
+  // The canvas's recalculation-settle announcement reads the project finish from the SAME
+  // summary query the toolbar's Finish chip runs (a cache read, not a second request).
+  useScheduleSummary: () => ({ data: undefined, isPending: false, isError: false }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculate: () => ({ mutate: vi.fn(), isPending: false }),

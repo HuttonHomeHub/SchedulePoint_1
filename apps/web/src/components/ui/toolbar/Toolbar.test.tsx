@@ -303,6 +303,50 @@ describe('Toolbar (APG primitive)', () => {
     expect(fit).toHaveFocus();
   });
 
+  /**
+   * **Both icon forms reach the DOM through the same path** (M5 T5.1). The registry widened `icon`
+   * to `ReactNode | ((ctx) => ReactNode)`; the primitive must render each identically, and must
+   * never render the raw field (a function passed to React is a component reference, which renders
+   * as nothing — a silently icon-less button).
+   */
+  it('renders a plain icon and a ctx-resolved icon the same way, and carries aria-busy', () => {
+    const items = defineToolbar<Ctx>([
+      {
+        id: 'plain',
+        group: 'frame',
+        tier: 1,
+        showLabel: 'always',
+        order: 0,
+        label: 'plain',
+        icon: <span data-testid="plain-icon" />,
+        onActivate: () => {},
+      },
+      {
+        id: 'ctx',
+        group: 'frame',
+        tier: 1,
+        showLabel: 'always',
+        order: 1,
+        label: 'ctx',
+        icon: (c) => <span data-testid={c.count > 0 ? 'busy-icon' : 'idle-icon'} />,
+        isBusy: (c) => c.count > 0,
+        onActivate: () => {},
+      },
+    ]);
+    const { rerender } = render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
+    expect(screen.getByTestId('plain-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('busy-icon')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ctx' })).toHaveAttribute('aria-busy', 'true');
+    // Both icons sit inside the same aria-hidden decorative wrapper — the ctx form is not a
+    // second rendering path with its own chrome.
+    expect(screen.getByTestId('plain-icon').parentElement).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByTestId('busy-icon').parentElement).toHaveAttribute('aria-hidden', 'true');
+
+    rerender(<Toolbar items={items} context={{ count: 0 }} label="T" />);
+    expect(screen.getByTestId('idle-icon')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ctx' })).not.toHaveAttribute('aria-busy');
+  });
+
   it('has no axe violations', async () => {
     render(<Toolbar items={makeItems()} context={{ count: 1 }} label="Plan toolbar" />);
     expect((await axe(screen.getByRole('toolbar'))).violations).toEqual([]);

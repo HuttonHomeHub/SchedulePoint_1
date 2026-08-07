@@ -2082,8 +2082,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       showLabel: 'always',
       order: 7,
       label: 'Recalculate',
-      icon: <RefreshCw className="size-4" />,
+      // In flight the icon spins — the same `Loader2 … animate-spin` idiom the export items above
+      // use, so this is an established pattern rather than a new one. The spin is the *only* cue a
+      // `prefers-reduced-motion` user loses (the global rule reduces it to 0.01 ms), which is why
+      // `isBusy` (→ `aria-busy`) and the "Recalculating…" disabled reason below carry the same fact
+      // in two motion-independent channels. Covers BOTH triggers: `recalcPending` is the shared
+      // coalescer's `isPending` (ADR-0032 M3), so a debounced auto-recalc spins it too.
+      icon: (ctx) =>
+        ctx.recalcPending ? (
+          <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        ) : (
+          <RefreshCw className="size-4" />
+        ),
       penGated: true,
+      isBusy: (ctx) => ctx.recalcPending,
       isEnabled: (ctx) => ctx.canRecalc && !ctx.recalcPending,
       // Explain the disabled state like the sibling authoring commands do, rather than a silent grey:
       // in-flight (busy) vs. no pen (identical underlying cause to Add activity).

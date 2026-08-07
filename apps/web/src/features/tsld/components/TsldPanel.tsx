@@ -62,6 +62,7 @@ import {
   type SelectionAnchor,
 } from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
+import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -228,6 +229,18 @@ export interface TsldPanelProps {
   recalcHold?: { hold: (token: symbol) => void; release: (token: symbol) => void } | undefined;
   /** Forwarded to the canvas: drop an open link pick because the schedule is about to move (T7). */
   dropLinkPickSignal?: number;
+  /**
+   * Whether a recalculation is in flight — the shared ADR-0032 coalescer's `isPending`, covering
+   * the debounced auto-recalc **and** the manual Recalculate flush. Feeds the settle announcer
+   * (`useRecalcOutcomeAnnouncer`): the pending→idle edge is what "the schedule settled" means.
+   * Absent ⇒ no settle is ever detected ⇒ nothing announced (the read-only guest view).
+   */
+  recalcPending?: boolean;
+  /**
+   * The plan's computed project finish (`YYYY-MM-DD`), for the settle announcer's second sentence.
+   * Null/absent before the first recalculation ⇒ that sentence is never spoken.
+   */
+  projectFinish?: string | null;
   /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
    * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
    * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
@@ -397,6 +410,8 @@ export function TsldPanel({
   onUndoLastEdit,
   recalcHold,
   dropLinkPickSignal = 0,
+  recalcPending = false,
+  projectFinish = null,
   onLoeSpan,
   onAutoArrange,
   onOpenLogic,
@@ -430,6 +445,15 @@ export function TsldPanel({
   // this anchor (the workspace's `onTsldCreate`), keeping the persisted dates coherent.
   const dataDate = dataDateProp ?? (CANVAS_AUTHORING_ENABLED ? (todayIso ?? null) : null);
   const announce = useAnnounce();
+  // What a recalculation SETTLED, as opposed to what an edit promised. The edit paths below note the
+  // activity they wrote; this speaks the result once the schedule stops moving. Keyed by the host's
+  // `key={planId}` remount, so nothing is ever said about a plan that is no longer open.
+  const recalcOutcome = useRecalcOutcomeAnnouncer({
+    pending: recalcPending,
+    activities,
+    projectFinish,
+    announce,
+  });
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1516,6 +1540,10 @@ export function TsldPanel({
       const startDay = snappedStartDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
+      // Note the edit for the settle announcement, but only when the DAY changed: a pure lane move
+      // is layout-only and triggers no recalculation, so a note taken here would sit open until some
+      // unrelated recalculation settled and then be narrated as this planner's doing.
+      if (snappedStartDay !== undefined) recalcOutcome.noteEdit(intent.activityId);
       // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
       pointerRepositionBusyRef.current = true;
       void onReposition({
@@ -1594,6 +1622,8 @@ export function TsldPanel({
         endDay: drawnEndDay,
         laneIndex: activity.laneIndex,
       });
+      // A resize always changes a duration, so it always recalculates — note it unconditionally.
+      recalcOutcome.noteEdit(intent.activityId);
       // Share the pointer-busy gate with reposition so a keyboard nudge can't race this write.
       pointerRepositionBusyRef.current = true;
       void onResize({

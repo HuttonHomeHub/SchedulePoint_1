@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   computeOverflow,
@@ -136,6 +136,42 @@ describe('resolveItems', () => {
     const items = [base({ id: 't', isActive: (c) => c.editing })];
     expect(resolveItems(items, { ...ctx, editing: true }, true)[0]!.active).toBe(true);
     expect(resolveItems(items, ctx, true)[0]!.active).toBe(false);
+  });
+
+  /**
+   * **The ctx-resolvable icon** (M5 T5.1). The parity claim for every item that predates it is that
+   * a plain `ReactNode` icon comes out of `resolveItems` **as itself** — identity, not a copy and
+   * not a wrapper — so widening the type cannot have changed what any existing toolbar paints.
+   */
+  it('passes a plain ReactNode icon through unchanged (identity)', () => {
+    const icon = 'icon-node';
+    const resolved = resolveItems([base({ id: 'a', icon })], ctx, true);
+    expect(resolved[0]!.icon).toBe(icon);
+  });
+
+  it('leaves the resolved icon undefined when the item has none', () => {
+    expect(resolveItems([base({ id: 'a' })], ctx, true)[0]!.icon).toBeUndefined();
+  });
+
+  it('calls a function icon exactly once, with the context, and resolves to its return', () => {
+    const icon = vi.fn((c: Ctx) => (c.editing ? 'busy' : 'idle'));
+    const items = [base({ id: 'a', icon })];
+
+    expect(resolveItems(items, { ...ctx, editing: true }, true)[0]!.icon).toBe('busy');
+    // Once per resolve pass — the bar and the `⋯` overflow both render from this one resolution, so
+    // a second call is how one item ends up painting two different icons in the two places it appears.
+    expect(icon).toHaveBeenCalledTimes(1);
+    expect(icon).toHaveBeenCalledWith({ ...ctx, editing: true });
+
+    expect(resolveItems(items, ctx, true)[0]!.icon).toBe('idle');
+  });
+
+  it('reads isBusy for the aria-busy state, defaulting to false', () => {
+    const items = [base({ id: 'a', isBusy: (c) => c.editing }), base({ id: 'b' })];
+    const resolved = resolveItems(items, { ...ctx, editing: true }, true);
+    expect(resolved.find((r) => r.item.id === 'a')?.busy).toBe(true);
+    expect(resolved.find((r) => r.item.id === 'b')?.busy).toBe(false);
+    expect(resolveItems(items, ctx, true).find((r) => r.item.id === 'a')?.busy).toBe(false);
   });
 });
 
