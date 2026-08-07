@@ -6,9 +6,11 @@ import { signInSchema, type SignInValues } from '../schemas/auth-schemas';
 
 import { ResendVerificationButton } from './ResendVerificationButton';
 
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 import { ServerError } from '@/components/ui/server-error';
+import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /** Email + password sign-in form. Calls `onSuccess` once a session is established. */
@@ -17,9 +19,11 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
     register,
     handleSubmit,
     getValues,
+    watch,
     formState: { errors },
   } = useForm<SignInValues>({ resolver: zodResolver(signInSchema) });
   const signIn = useSignIn();
+  useClearOnEdit(watch, signIn);
 
   const onSubmit = handleSubmit((values) => {
     signIn.mutate(values, { onSuccess });
@@ -34,15 +38,18 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
   if (unverified) {
     return (
       <div className="flex flex-col gap-4">
-        <div role="alert" tabIndex={-1} ref={unverifiedRef} className="flex flex-col gap-1">
+        {/* `info`, not `error` (ADR-0077 §9). The credentials were right; what is missing is a step
+            the reader can complete, and the two buttons below are how. An error tone would say the
+            attempt was wrong, which is the one thing this state establishes it was not. */}
+        <Alert tone="info" tabIndex={-1} ref={unverifiedRef}>
           {/* A heading, not a paragraph: this is the replacement content's title, and a reader
               navigating by headings would otherwise not find it. */}
           <h2 className="text-sm font-medium">Confirm your email address first</h2>
-          <p className="text-muted-foreground text-sm">
+          <p className="mt-1 text-sm">
             Your account exists, but we still need you to open the link we emailed you. Sending a
             new one replaces any earlier link.
           </p>
-        </div>
+        </Alert>
         <ResendVerificationButton email={getValues('email')} />
         {/* The way back. Without it this state is a dead end on the one screen whose whole purpose
             is removing dead ends — and the commonest reason to be here after a mistyped address is
@@ -57,7 +64,9 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      {/* A count, never the messages themselves: each field prints its own below, and stating a
+          problem twice at once is the defect ADR-0077 §9 exists to remove. */}
+      <FormProblemCount errors={errors} />
       <ServerError message={signIn.isError ? authErrorMessage(signIn.error) : null} />
       <TextField
         label="Email"

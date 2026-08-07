@@ -1,6 +1,7 @@
 import { Link, useRouter, useSearch } from '@tanstack/react-router';
 
 import { AuthShell } from '@/components/layout/auth-shell';
+import { Alert } from '@/components/ui/alert';
 import { textLinkVariants } from '@/components/ui/text-link';
 import { PASSWORD_RESET_ENABLED } from '@/config/env';
 import { SignInForm } from '@/features/auth';
@@ -23,6 +24,7 @@ export function SignInScreen(): React.ReactElement {
 
   return (
     <AuthShell title="Sign in" description="Welcome back to SchedulePoint.">
+      {search.signedOut ? <Alert tone="info">You have been signed out.</Alert> : null}
       <SignInForm onSuccess={() => router.history.push(search.redirect ?? '/')} />
       {PASSWORD_RESET_ENABLED ? (
         <p className="text-muted-foreground text-sm">

@@ -161,7 +161,12 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
           onSelect={() => {
             signOut.mutate(undefined, {
               onSuccess: () => {
-                void navigate({ to: '/sign-in' });
+                // `signedOut` carries the confirmation across the navigation. Signing out was the
+                // one deliberate action in the product that said nothing at all when it worked —
+                // the reader pressed a menu item and landed on a sign-in form, which is also what
+                // an expired session looks like (ADR-0077 §9; the old app flashed "You have been
+                // logged out" here).
+                void navigate({ to: '/sign-in', search: { signedOut: 'true' } });
               },
             });
           }}

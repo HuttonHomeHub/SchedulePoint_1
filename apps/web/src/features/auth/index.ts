@@ -14,6 +14,7 @@ export {
   useResetPassword,
   AuthError,
   authErrorMessage,
+  throttledMessage,
   isRateLimited,
   INVALID_PASSWORD,
   RESET_PASSWORD_DISABLED,

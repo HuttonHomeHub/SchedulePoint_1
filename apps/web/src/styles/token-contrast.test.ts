@@ -87,6 +87,7 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   ['--background', '--foreground', 'body text on the surface'],
   ['--background', '--muted-foreground', 'secondary text on the surface'],
   ['--background', '--destructive-text', 'an error message on the surface'],
+  ['--background', '--success-text', 'a success message on the surface'],
   ['--background', '--warning-text', 'a warning message on the surface'],
   ['--background', '--info-text', 'an informational message on the surface'],
   ['--accent', '--accent-foreground', 'a hovered or selected row'],

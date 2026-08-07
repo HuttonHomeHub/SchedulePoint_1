@@ -22,7 +22,7 @@ import {
  * machine that resolves the token and computes the ratio catches it.
  */
 
-/** The 17 tokens a surface family must supply, per ADR-0055 §1. */
+/** The 18 tokens a surface family must supply, per ADR-0055 §1. */
 const FAMILY_TOKENS = [
   '',
   '-foreground',
@@ -44,6 +44,12 @@ const FAMILY_TOKENS = [
   '-field-foreground',
   '-field-muted-foreground',
   '-destructive-text',
+  /* The eighteenth, added by ADR-0077 §9. The family had words for "this failed", "be careful"
+     and "here is a fact", and none for "that worked" — so a success message on a scoped surface
+     had to reach for the global `--success`, which is a solid BUTTON FILL that follows the page
+     theme. On the theme-invariant login card that meant Dark's mint green on pinned white. The
+     absence was the trap ADR-0055 §1 describes, sitting inside a family that read as complete. */
+  '-success-text',
   '-warning-text',
   '-info-text',
   '-ring',
@@ -89,6 +95,7 @@ const REBOUND_NAMES = [
   '--field-foreground',
   '--field-muted-foreground',
   '--destructive-text',
+  '--success-text',
   '--warning-text',
   '--info-text',
   '--ring',
@@ -135,7 +142,7 @@ describe('@theme inline is load-bearing', () => {
 describe.each(THEME_SELECTORS)('%s declares complete surface families', (selector) => {
   const tokens = themeTokens(selector);
 
-  it.each(FAMILIES)('the %s family has all 17 tokens', (family) => {
+  it.each(FAMILIES)('the %s family has all 18 tokens', (family) => {
     const missing = FAMILY_TOKENS.map((suffix) => `--${family}${suffix}`).filter(
       (name) => !tokens.has(name),
     );

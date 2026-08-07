@@ -5,8 +5,9 @@ import { authErrorMessage, useSignUp, type SignUpOutcome } from '../api/use-sess
 import { signUpSchema, type SignUpValues } from '../schemas/auth-schemas';
 
 import { Button } from '@/components/ui/button';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 import { ServerError } from '@/components/ui/server-error';
+import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
 
 /**
  * Create-account form.
@@ -24,9 +25,11 @@ export function SignUpForm({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema) });
   const signUp = useSignUp();
+  useClearOnEdit(watch, signUp);
 
   const onSubmit = handleSubmit((values) => {
     signUp.mutate(values, {
@@ -38,7 +41,9 @@ export function SignUpForm({
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      {/* A count, not the messages. This form is where the product owner reported the defect: a
+          password under 12 characters was stated here AND under the Password field (ADR-0077 §9). */}
+      <FormProblemCount errors={errors} />
       <ServerError message={signUp.isError ? authErrorMessage(signUp.error) : null} />
       <TextField
         label="Full name"

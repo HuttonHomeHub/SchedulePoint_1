@@ -5,8 +5,18 @@ import { z } from 'zod';
  * feature spec): password ≥ 12 chars, name ≤ 80. The server is authoritative;
  * these give fast, accessible inline feedback.
  */
+/**
+ * "An email address", once (ADR-0077 §9).
+ *
+ * Four surfaces ask for one, and `ResendVerificationButton` — the only one that is not a React
+ * Hook Form — had **no format check at all**: a typo there produced no inline feedback and a full
+ * round trip to a server whose answer is deliberately identical for every address. Naming the rule
+ * once also stops the message drifting across the four places that show it.
+ */
+export const emailField = z.email('Enter a valid email address');
+
 export const signInSchema = z.object({
-  email: z.email('Enter a valid email address'),
+  email: emailField,
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -14,7 +24,7 @@ export type SignInValues = z.infer<typeof signInSchema>;
 
 export const signUpSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(80, 'Name must be 80 characters or fewer'),
-  email: z.email('Enter a valid email address'),
+  email: emailField,
   password: z.string().min(12, 'Password must be at least 12 characters'),
 });
 
@@ -48,7 +58,7 @@ export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
 
 /** Ask for a reset link (ADR-0074 M4). One field, and the server answers identically either way. */
 export const requestPasswordResetSchema = z.object({
-  email: z.email('Enter a valid email address'),
+  email: emailField,
 });
 
 export type RequestPasswordResetValues = z.infer<typeof requestPasswordResetSchema>;

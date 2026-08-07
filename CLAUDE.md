@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 788 web
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 792 web
 > source files with 26 flag-scoped Playwright suites beside the base journey, and
 > 77 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -1438,7 +1438,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   it, and **a claim inherited from the brief is checked like any other** — both Class 3 failures
   entered through a brief. The CPM engine is not imported and no product behaviour changes.
 
-- **ADR-0077** _(Accepted; M0–M7 landed 2026-08-06)_ — The public screens' brand surface: a fourth
+- **ADR-0077** _(Accepted; M0–M8 landed 2026-08-06)_ — The public screens' brand surface: a fourth
   scope, fixed dark in every theme, and what counts as a brand asset. The six pre-authentication
   routes are **the only part of SchedulePoint a stranger meets** — `/sign-in` is the front door,
   since `router.tsx:109` redirects every unauthenticated arrival to it and there is no landing
@@ -1500,6 +1500,31 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   3.01–3.36:1 at the same hue. The old app's leading field icons are deliberately **not**
   reproduced (§8.6) — that is an icon slot on the shared `Input` primitive, with every consumer in
   the product downstream of it.
+  **M8 brings the old app's alerts back, and its rule is one sentence: _a field's problem belongs
+  to the field; the alert belongs to the form_** (§9). The product owner reported seeing "password
+  insufficient on signup displayed in two places"; it was not a sign-up bug but **all five** auth
+  forms, because `FormErrorSummary` listed every message in a tinted box while each `TextField`
+  printed the same sentence under its own control. It had a second door nobody had noticed:
+  `ChangePasswordForm` injects the _server's_ wrong-password message through `setError`, and the
+  summary could not tell a resolver error from an injected one — so the sentence that component's
+  own docblock says "lands on the field, not in a form banner" landed in **both**. The summary is
+  not deleted, because a bare removal is a real WCAG 4.1.3 regression for the second and later
+  fields of a multi-error submit (RHF focuses only the first); it stops **restating** and becomes a
+  **count**, shown only from two problems up. The old app's geometry is reproduced exactly (4px left
+  accent bar, 30% tint, leading icon) and its **hex values deliberately are not** — the
+  colour-literal lint rule exists because a literal cannot follow a surface scope and is invisible
+  to the contrast matrix, and nothing is lost: the old app's own pairs measure 10.12 / 8.14 / 8.04:1
+  against tokens already gated at ≥4.5. Its floating auto-fading **placement** is also not copied
+  (auto-dismissal fails WCAG 2.2.1). `--success-text` joins the vocabulary as the **eighteenth**
+  rebound name — the family had words for failure, caution and fact and none for "that worked", so a
+  green success had to reach for the global `--success`, a solid button fill that follows the page
+  theme and would have painted Dark's mint on the pinned white login card. Coverage closed three
+  real gaps (sign-out said **nothing at all**; invitation-accept was the one server failure
+  bypassing the shared translation layer; the resend field had no format check) and deliberately
+  left two alone after checking that they are correct rather than inconsistent. Every gate that
+  fired was informative: the once-only assertion was verified red first, the seam test caught a
+  **docblock** naming a family token, and `e2e-public`'s `signOut()` helper turned out to have
+  shipped with a locator matching nothing — never noticed because nothing had ever called it.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

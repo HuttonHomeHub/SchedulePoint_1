@@ -94,9 +94,14 @@ function statusFrom(error: unknown): number | undefined {
  * **It is `enabled: options.isProduction`** (`better-auth.ts:270-274`), so no journey against the
  * dev or test API can reach this state — which is exactly why it went unhandled for so long, and
  * why the only end-to-end proof is a fulfilled route in the browser suite.
+ *
+ * **It covers `ApiFetchError` as well as `AuthError`** (ADR-0077 §9). The invitation-accept call
+ * goes to our own REST API rather than to Better Auth, so it raises the other error class — and
+ * that screen was consequently the one place in this whole area where a 429 reached the reader as
+ * whatever terse string the server happened to send. Two error classes, one question.
  */
 export function isRateLimited(error: unknown): boolean {
-  return error instanceof AuthError && error.status === 429;
+  return (error instanceof AuthError || error instanceof ApiFetchError) && error.status === 429;
 }
 
 /**
@@ -124,6 +129,17 @@ const THROTTLED_MESSAGE: Record<RateLimitScope, string> = {
  */
 export function authErrorMessage(error: AuthError, scope: RateLimitScope = 'attempts'): string {
   return isRateLimited(error) ? THROTTLED_MESSAGE[scope] : error.message;
+}
+
+/**
+ * The throttled sentence on its own, for a caller whose error is not an {@link AuthError}.
+ *
+ * Exported rather than duplicated: the invitation-accept screen needs the same words for the same
+ * status code, and a second copy would be one copy-edit away from the two screens disagreeing
+ * about what "too many" means.
+ */
+export function throttledMessage(scope: RateLimitScope = 'attempts'): string {
+  return THROTTLED_MESSAGE[scope];
 }
 
 /**

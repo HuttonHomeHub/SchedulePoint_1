@@ -85,9 +85,22 @@ const signInRoute = createRoute({
   // guard, so it is ours — but it is also whatever a person types or a mail client mangles, and
   // `?redirect=1` parses to the NUMBER 1 and was silently dropped. Being applied on three of six
   // public routes was drift, not a decision.
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; signedOut?: string } => {
     const redirect = readForeignParam(search.redirect);
-    return redirect ? { redirect } : {};
+    // `?signedOut` is how a completed sign-out reaches its confirmation, since the action and the
+    // message it earns happen on two different screens (ADR-0077 §9).
+    //
+    // **A string, not a boolean, and that is not a style choice.** `useSearch({ strict: false })`
+    // resolves this key as `string | undefined` regardless of what the validator declares —
+    // established by annotating it `never` and reading what tsc said it was, not by assuming. A
+    // boolean therefore compiles here and fails at the only place that reads it. `readForeignParam`
+    // normalises the default parser's boolean `true` to `'true'`, which is also what every other
+    // param on these public routes already is.
+    const signedOut = readForeignParam(search.signedOut);
+    return {
+      ...(redirect ? { redirect } : {}),
+      ...(signedOut === 'true' || signedOut === '1' ? { signedOut } : {}),
+    };
   },
   component: SignInScreen,
 });

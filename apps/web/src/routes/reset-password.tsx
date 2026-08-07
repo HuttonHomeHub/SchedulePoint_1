@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { AuthShell } from '@/components/layout/auth-shell';
+import { Alert } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button';
 import { ResetPasswordForm, useResetPassword } from '@/features/auth';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -72,10 +73,15 @@ export function ResetPasswordScreen(): React.ReactElement {
             screen was sighted-only, while a secondary detail was what got spoken. Leading with it
             here fixes that without a visually-hidden duplicate of the heading, which would then be
             read twice by anyone who navigates by headings. */}
-        <div role="status" tabIndex={-1} ref={outcomeRef} className="flex flex-col gap-4">
-          <p className="text-muted-foreground text-sm">
+        <div className="flex flex-col gap-4">
+          {/* `success`, unlike its `/forgot-password` sibling: this one reports something the
+              server actually did and confirmed, so the tone can commit where the request-a-link
+              screen's cannot. The action stays OUTSIDE the alert — an alert reports, a button
+              acts, and burying the only way forward inside a coloured block makes it read as part
+              of the message rather than the next step (ADR-0077 §9). */}
+          <Alert tone="success" tabIndex={-1} ref={outcomeRef}>
             Your password has been changed, and every other session has been signed out.
-          </p>
+          </Alert>
           <Link to="/sign-in" className={buttonVariants()}>
             Sign in
           </Link>

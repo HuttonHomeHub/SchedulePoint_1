@@ -352,6 +352,24 @@ link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
   Destructive confirmations use `ConfirmDialog` (`role="alertdialog"`), whose
   busy confirm button uses `aria-disabled` (not native `disabled`) so it keeps
   focus during the mutation.
+- **Alerts** — `components/ui/alert.tsx`, tones `error | success | info`. The one
+  treatment a message about what just happened gets: a 4px left accent bar, a
+  low-opacity tint of the same hue, a leading icon. Geometry taken from the
+  previous Flask app (`static/css/auth.css:99-136`); colours are the
+  `--*-text` tokens, never that app's hex values, because a literal cannot follow
+  a surface scope and is invisible to `token-contrast.test.ts`.
+  **The live-region role is derived from the tone and is not a prop** —
+  `role="alert"` for an error (it interrupts a task in progress),
+  `role="status"` for success and info (they report something finished). Making
+  it a prop would let two call sites answer the same question differently.
+  **The authoring rule that goes with it: _a field's problem belongs to the
+  field; the alert belongs to the form_.** Field validation renders inline under
+  its control and nowhere else; server and form-level facts get the alert. Never
+  both — stating one problem twice was live on all five auth forms until
+  ADR-0077 §9. Where several fields fail at once, `FormProblemCount` shows a
+  **count** (never the messages again), and only from two problems up: React Hook
+  Form already moves focus to the first invalid field, which is the case WCAG
+  4.1.3 exempts.
 - **Notifications (toasts)** — **_(not built)_**. Today, feedback is inline and
   in place: the mutating control owns its pending/error state, and asynchronous
   results are announced through the shared `Announcer` live region. When a

@@ -64,6 +64,7 @@
   --destructive-text: oklch(0.505 0.21 27.5);
   --success: oklch(0.52 0.14 155);
   --success-foreground: oklch(0.985 0 0);
+  --success-text: oklch(0.48 0.13 150);
   --warning: oklch(0.769 0.15 80);
   --warning-foreground: oklch(0.205 0 0);
   /* Readable warning for TEXT on page surfaces. Like `--destructive-text`, the
@@ -126,6 +127,7 @@
   --chrome-field-foreground: oklch(0.145 0 0);
   --chrome-field-muted-foreground: oklch(0.545 0 0);
   --chrome-destructive-text: oklch(0.505 0.21 27.5);
+  --chrome-success-text: oklch(0.48 0.13 150);
   --chrome-warning-text: oklch(0.48 0.13 80);
   --chrome-info-text: oklch(0.45 0.14 250);
   --chrome-ring: oklch(0.55 0.18 255);
@@ -145,6 +147,7 @@
   --panel-field-foreground: oklch(0.145 0 0);
   --panel-field-muted-foreground: oklch(0.545 0 0);
   --panel-destructive-text: oklch(0.505 0.21 27.5);
+  --panel-success-text: oklch(0.48 0.13 150);
   --panel-warning-text: oklch(0.48 0.13 80);
   --panel-info-text: oklch(0.45 0.14 250);
   --panel-ring: oklch(0.55 0.18 255);
@@ -186,6 +189,7 @@
   --brand-field-foreground: oklch(0.321 0 0);
   --brand-field-muted-foreground: oklch(0.51 0 0);
   --brand-destructive-text: oklch(0.74 0.15 25);
+  --brand-success-text: oklch(0.8 0.12 150);
   --brand-warning-text: oklch(0.8 0.14 70);
   --brand-info-text: oklch(0.8 0.09 245);
   --brand-ring: oklch(0.786 0.167 70);
@@ -235,6 +239,7 @@
   --auth-field-foreground: oklch(0.252 0.056 264);
   --auth-field-muted-foreground: oklch(0.53 0.017 258);
   --auth-destructive-text: oklch(0.505 0.213 27);
+  --auth-success-text: oklch(0.403 0.105 147);
   --auth-warning-text: oklch(0.52 0.13 70);
   --auth-info-text: oklch(0.5 0.13 245);
   --auth-ring: oklch(0.648 0.167 70);
@@ -294,6 +299,7 @@
   --destructive-text: oklch(0.7 0.19 22);
   --success: oklch(0.696 0.14 160);
   --success-foreground: oklch(0.205 0 0);
+  --success-text: oklch(0.82 0.13 150);
   --warning: oklch(0.82 0.16 82);
   --warning-foreground: oklch(0.205 0 0);
   /* Lighter amber so warning text stays legible on the dark background/card. */
@@ -345,6 +351,7 @@
   --chrome-field-foreground: oklch(0.985 0 0);
   --chrome-field-muted-foreground: oklch(0.708 0 0);
   --chrome-destructive-text: oklch(0.7 0.19 22);
+  --chrome-success-text: oklch(0.82 0.13 150);
   --chrome-warning-text: oklch(0.85 0.14 82);
   --chrome-info-text: oklch(0.82 0.11 245);
   --chrome-ring: oklch(0.65 0.17 255);
@@ -364,6 +371,7 @@
   --panel-field-foreground: oklch(0.985 0 0);
   --panel-field-muted-foreground: oklch(0.708 0 0);
   --panel-destructive-text: oklch(0.7 0.19 22);
+  --panel-success-text: oklch(0.82 0.13 150);
   --panel-warning-text: oklch(0.85 0.14 82);
   --panel-info-text: oklch(0.82 0.11 245);
   --panel-ring: oklch(0.65 0.17 255);
@@ -405,6 +413,7 @@
   --brand-field-foreground: oklch(0.321 0 0);
   --brand-field-muted-foreground: oklch(0.51 0 0);
   --brand-destructive-text: oklch(0.74 0.15 25);
+  --brand-success-text: oklch(0.8 0.12 150);
   --brand-warning-text: oklch(0.8 0.14 70);
   --brand-info-text: oklch(0.8 0.09 245);
   --brand-ring: oklch(0.786 0.167 70);
@@ -448,6 +457,7 @@
   --auth-field-foreground: oklch(0.252 0.056 264);
   --auth-field-muted-foreground: oklch(0.53 0.017 258);
   --auth-destructive-text: oklch(0.505 0.213 27);
+  --auth-success-text: oklch(0.403 0.105 147);
   --auth-warning-text: oklch(0.52 0.13 70);
   --auth-info-text: oklch(0.5 0.13 245);
   --auth-ring: oklch(0.648 0.167 70);
@@ -529,6 +539,7 @@
   --destructive-text: oklch(0.505 0.19 27.5);
   --success: oklch(0.52 0.15 143);
   --success-foreground: oklch(0.985 0 0);
+  --success-text: oklch(0.45 0.11 150);
   /* Bronze, not amber — see note 2 above. */
   --warning: oklch(0.56 0.115 55);
   --warning-foreground: oklch(0.985 0 0);
@@ -588,6 +599,7 @@
   --chrome-field-foreground: oklch(0.321 0 0);
   --chrome-field-muted-foreground: oklch(0.51 0 0);
   --chrome-destructive-text: oklch(0.74 0.15 25);
+  --chrome-success-text: oklch(0.8 0.12 150);
   --chrome-warning-text: oklch(0.8 0.14 70);
   --chrome-info-text: oklch(0.8 0.09 245);
   --chrome-ring: oklch(0.786 0.167 70);
@@ -607,6 +619,7 @@
   --panel-field-foreground: oklch(0.321 0 0);
   --panel-field-muted-foreground: oklch(0.51 0 0);
   --panel-destructive-text: oklch(0.74 0.15 25);
+  --panel-success-text: oklch(0.8 0.12 150);
   --panel-warning-text: oklch(0.8 0.14 70);
   --panel-info-text: oklch(0.8 0.09 245);
   --panel-ring: oklch(0.786 0.167 70);
@@ -648,6 +661,7 @@
   --brand-field-foreground: oklch(0.321 0 0);
   --brand-field-muted-foreground: oklch(0.51 0 0);
   --brand-destructive-text: oklch(0.74 0.15 25);
+  --brand-success-text: oklch(0.8 0.12 150);
   --brand-warning-text: oklch(0.8 0.14 70);
   --brand-info-text: oklch(0.8 0.09 245);
   --brand-ring: oklch(0.786 0.167 70);
@@ -693,6 +707,7 @@
   --auth-field-foreground: oklch(0.252 0.056 264);
   --auth-field-muted-foreground: oklch(0.53 0.017 258);
   --auth-destructive-text: oklch(0.505 0.213 27);
+  --auth-success-text: oklch(0.403 0.105 147);
   --auth-warning-text: oklch(0.52 0.13 70);
   --auth-info-text: oklch(0.5 0.13 245);
   --auth-ring: oklch(0.648 0.167 70);
@@ -745,6 +760,7 @@
   --field-foreground: var(--chrome-field-foreground);
   --field-muted-foreground: var(--chrome-field-muted-foreground);
   --destructive-text: var(--chrome-destructive-text);
+  --success-text: var(--chrome-success-text);
   --warning-text: var(--chrome-warning-text);
   --info-text: var(--chrome-info-text);
   --ring: var(--chrome-ring);
@@ -765,6 +781,7 @@
   --field-foreground: var(--panel-field-foreground);
   --field-muted-foreground: var(--panel-field-muted-foreground);
   --destructive-text: var(--panel-destructive-text);
+  --success-text: var(--panel-success-text);
   --warning-text: var(--panel-warning-text);
   --info-text: var(--panel-info-text);
   --ring: var(--panel-ring);
@@ -785,6 +802,7 @@
   --field-foreground: var(--brand-field-foreground);
   --field-muted-foreground: var(--brand-field-muted-foreground);
   --destructive-text: var(--brand-destructive-text);
+  --success-text: var(--brand-success-text);
   --warning-text: var(--brand-warning-text);
   --info-text: var(--brand-info-text);
   --ring: var(--brand-ring);
@@ -805,6 +823,7 @@
   --field-foreground: var(--auth-field-foreground);
   --field-muted-foreground: var(--auth-field-muted-foreground);
   --destructive-text: var(--auth-destructive-text);
+  --success-text: var(--auth-success-text);
   --warning-text: var(--auth-warning-text);
   --info-text: var(--auth-info-text);
   --ring: var(--auth-ring);
@@ -853,6 +872,7 @@
   --chrome-field-foreground: oklch(0.145 0 0);
   --chrome-field-muted-foreground: oklch(0.535 0 0);
   --chrome-destructive-text: oklch(0.505 0.21 27.5);
+  --chrome-success-text: oklch(0.48 0.13 150);
   --chrome-warning-text: oklch(0.48 0.13 80);
   --chrome-info-text: oklch(0.45 0.14 250);
   --chrome-ring: oklch(0.55 0.18 255);
@@ -873,6 +893,7 @@
   --panel-field-foreground: oklch(0.145 0 0);
   --panel-field-muted-foreground: oklch(0.535 0 0);
   --panel-destructive-text: oklch(0.505 0.21 27.5);
+  --panel-success-text: oklch(0.48 0.13 150);
   --panel-warning-text: oklch(0.48 0.13 80);
   --panel-info-text: oklch(0.45 0.14 250);
   --panel-ring: oklch(0.55 0.18 255);
@@ -901,6 +922,7 @@
   --chrome-field-foreground: oklch(0.985 0 0);
   --chrome-field-muted-foreground: oklch(0.708 0 0);
   --chrome-destructive-text: oklch(0.7 0.19 22);
+  --chrome-success-text: oklch(0.82 0.13 150);
   --chrome-warning-text: oklch(0.85 0.14 82);
   --chrome-info-text: oklch(0.82 0.11 245);
   --chrome-ring: oklch(0.65 0.17 255);
@@ -919,6 +941,7 @@
   --panel-field-foreground: oklch(0.985 0 0);
   --panel-field-muted-foreground: oklch(0.708 0 0);
   --panel-destructive-text: oklch(0.7 0.19 22);
+  --panel-success-text: oklch(0.82 0.13 150);
   --panel-warning-text: oklch(0.85 0.14 82);
   --panel-info-text: oklch(0.82 0.11 245);
   --panel-ring: oklch(0.65 0.17 255);
@@ -955,6 +978,7 @@
   --chrome-field-foreground: oklch(0.321 0 0);
   --chrome-field-muted-foreground: oklch(0.51 0 0);
   --chrome-destructive-text: oklch(0.74 0.15 25);
+  --chrome-success-text: oklch(0.8 0.12 150);
   --chrome-warning-text: oklch(0.8 0.14 70);
   --chrome-info-text: oklch(0.8 0.09 245);
   --chrome-ring: oklch(0.786 0.167 70);
@@ -976,6 +1000,7 @@
   --panel-field-foreground: oklch(0.321 0 0);
   --panel-field-muted-foreground: oklch(0.51 0 0);
   --panel-destructive-text: oklch(0.505 0.19 27.5);
+  --panel-success-text: oklch(0.45 0.11 150);
   --panel-warning-text: oklch(0.47 0.11 55);
   --panel-info-text: oklch(0.3 0.075 262);
   --panel-ring: oklch(0.35 0.09 262);
@@ -1011,6 +1036,7 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-text: var(--destructive-text);
+  --color-success-text: var(--success-text);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);

@@ -1,6 +1,4 @@
-import { alertBoxClassName } from './alert-box';
-
-import { cn } from '@/lib/utils';
+import { Alert } from './alert';
 
 /**
  * A failure that came back from the server, given the weight it deserves (ADR-0077 M2-T1).
@@ -30,6 +28,11 @@ import { cn } from '@/lib/utils';
  * wrong is the enumeration oracle they exist to avoid — but "cannot attribute it" argues for
  * leaving focus alone, not for moving it somewhere useless.
  *
+ * **Since ADR-0077 §9 it renders {@link Alert} rather than assembling the box itself.** It is now a
+ * thin adapter — "a server message, or nothing" — over the one treatment the product gives a
+ * message, and `role="alert"` comes from `Alert`'s tone rather than being restated here. That is
+ * what stops this component and a success message on the same screen drifting apart in weight.
+ *
  * **It deliberately does NOT know what a 429 is**, which is a departure from the plan's wording.
  * `components/ui` is the design system; a primitive that imported `AuthError` to branch on a rate
  * limit would be a one-off in a `ui/` costume, which is the risk that task's own notes name. The
@@ -47,8 +50,8 @@ export function ServerError({
   if (typeof message !== 'string' || message === '') return null;
 
   return (
-    <div role="alert" className={cn(alertBoxClassName, className)}>
+    <Alert tone="error" className={className}>
       {message}
-    </div>
+    </Alert>
   );
 }

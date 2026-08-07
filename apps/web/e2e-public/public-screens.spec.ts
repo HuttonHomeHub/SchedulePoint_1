@@ -8,6 +8,7 @@ import {
   invitePath,
   onboard,
   pinTheme,
+  signOut,
   THEMES,
   URL_STATES,
   VIEWPORTS,
@@ -176,6 +177,64 @@ test.describe('the throttled sign-in', () => {
     // The server's own sentence must not be what the reader sees — that is the defect, not the fix.
     await expect(alert).not.toContainText('Too many requests. Please try again later.');
     await expectPublicLayout(page, 'sign-in 429 @320', { primary: 'Sign in', width: 320 });
+  });
+});
+
+test.describe('one fact, one place on the screen (ADR-0077 §9)', () => {
+  /**
+   * The product owner's report, driven in a real browser: *"I see password insufficient on signup
+   * is displayed in two places."*
+   *
+   * It is worth a journey rather than only a unit test because the count is what a **person**
+   * counts. jsdom will happily report two nodes carrying the same string as two nodes; only a
+   * rendered page shows that the reader was being told the same thing twice in two different
+   * weights, and only a rendered page proves the tinted box is genuinely gone rather than merely
+   * unqueried by whatever selector a unit test happened to use.
+   */
+  test('a short sign-up password is stated exactly once', async ({ page }) => {
+    await page.goto('/sign-up');
+    await page.getByLabel('Full name').fill('Jo Planner');
+    await page.getByLabel('Email').fill('jo@example.com');
+    await page.getByLabel('Password').fill('short');
+    await page.getByRole('button', { name: 'Create an account', exact: true }).click();
+
+    const message = page.getByText('Password must be at least 12 characters');
+    await expect(message).toHaveCount(1);
+    // One problem, so no summary either: React Hook Form has already put focus on the field, which
+    // is the case WCAG 4.1.3 exempts. A box saying "1 problem" would be the duplication restored.
+    await expect(page.getByText(/problems — check the highlighted fields below\./)).toHaveCount(0);
+    await expect(page.getByLabel('Password')).toBeFocused();
+  });
+
+  test('three empty fields earn one count, and each message still once', async ({ page }) => {
+    await page.goto('/sign-up');
+    await page.getByRole('button', { name: 'Create an account', exact: true }).click();
+
+    await expect(page.getByText('3 problems — check the highlighted fields below.')).toHaveCount(1);
+    for (const sentence of [
+      'Name is required',
+      'Enter a valid email address',
+      'Password must be at least 12 characters',
+    ]) {
+      await expect(page.getByText(sentence)).toHaveCount(1);
+    }
+  });
+
+  /**
+   * Signing out was the one deliberate action in the product that said nothing when it worked: the
+   * reader pressed a menu item and arrived at a sign-in form, which is also exactly what an expired
+   * session looks like. The old app flashed "You have been logged out" here.
+   *
+   * Driven end to end because the confirmation crosses a navigation — the action happens on one
+   * screen and the message renders on another, carried by a search param. A unit test can assert
+   * the param is passed; only this can assert it survives and paints.
+   */
+  test('signing out arrives at /sign-in with a confirmation', async ({ page }) => {
+    const stamp = Date.now();
+    await onboard(page, `signed-out-${stamp}@example.com`, `Signed Out ${stamp}`);
+    await signOut(page);
+
+    await expect(page.getByRole('status')).toContainText('You have been signed out.');
   });
 });
 

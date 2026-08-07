@@ -104,7 +104,11 @@ describe('AccountChip', () => {
     fireEvent.click(screen.getByRole('button', { name: /Account:/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
     expect(h.signOutMutate).toHaveBeenCalledTimes(1);
-    expect(h.navigate).toHaveBeenCalledWith({ to: '/sign-in' });
+    // The confirmation rides the navigation (ADR-0077 §9). Signing out was the one deliberate
+    // action in the product that said nothing when it worked: the reader pressed a menu item and
+    // landed on a sign-in form, which is also exactly what an expired session looks like. The
+    // param is asserted here because it is the only thing carrying that fact across the screens.
+    expect(h.navigate).toHaveBeenCalledWith({ to: '/sign-in', search: { signedOut: 'true' } });
   });
 
   it('disables sign out while the mutation is in flight', () => {
