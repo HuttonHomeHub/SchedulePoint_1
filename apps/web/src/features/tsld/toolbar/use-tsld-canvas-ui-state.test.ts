@@ -32,6 +32,7 @@ describe('useTsldCanvasUiState', () => {
     const { result } = renderHook(() => useTsldCanvasUiState());
     // Defaults are the "no lens active" identity.
     expect(result.current.lensState).toEqual({
+      searchCursorId: null,
       filterQuery: '',
       filterAttrs: new Set(),
       colourMode: 'criticality',
@@ -84,11 +85,40 @@ describe('useTsldCanvasUiState', () => {
     expect(result.current.navState.snapToGrid).toBe(true);
 
     // Each select request bumps a monotonic nonce so a repeat jump to the same id still fires.
+    // `focusListbox` defaults true — the Next-conflict cycle's behaviour, and every pre-existing
+    // caller's, so the search cycle has to ask for false rather than the other way round.
     act(() => result.current.requestSelectActivity('a2'));
     const first = result.current.navState.selectSignal;
-    expect(first).toEqual({ id: 'a2', nonce: 1 });
+    expect(first).toEqual({ id: 'a2', nonce: 1, focusListbox: true });
     act(() => result.current.requestSelectActivity('a2'));
-    expect(result.current.navState.selectSignal).toEqual({ id: 'a2', nonce: 2 });
+    expect(result.current.navState.selectSignal).toEqual({
+      id: 'a2',
+      nonce: 2,
+      focusListbox: true,
+    });
+    // The search cycle opts out: the planner is still typing, so focus must not leave the field.
+    act(() => result.current.requestSelectActivity('a3', { focusListbox: false }));
+    expect(result.current.navState.selectSignal).toEqual({
+      id: 'a3',
+      nonce: 3,
+      focusListbox: false,
+    });
+  });
+
+  it('editing the query or an attribute resets the find cursor', () => {
+    // A cursor into a match set the planner has just changed is not a position: the next Enter would
+    // land somewhere neither of them chose. Both setters clear it, unconditionally.
+    const { result } = renderHook(() => useTsldCanvasUiState());
+    expect(result.current.lensState.searchCursorId).toBeNull();
+
+    act(() => result.current.setSearchCursorId('a1'));
+    expect(result.current.lensState.searchCursorId).toBe('a1');
+    act(() => result.current.setFilterQuery('pil'));
+    expect(result.current.lensState.searchCursorId).toBeNull();
+
+    act(() => result.current.setSearchCursorId('a2'));
+    act(() => result.current.toggleFilterAttr('critical'));
+    expect(result.current.lensState.searchCursorId).toBeNull();
   });
 
   it('the edit mode is single-valued, so the LOE / Link / Add tools are mutually exclusive', () => {

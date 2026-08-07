@@ -1373,3 +1373,23 @@ export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWOR
  * (`dataDate`) that has always been on the wire.
  */
 export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_DATA_DATE);
+
+/**
+ * TSLD search that navigates (spec `docs/specs/canvas-search-navigation/`). When on, the canvas
+ * search stops being only a filter and becomes a **find** control: Enter / Shift+Enter cycle the
+ * matches, each jump centres the bar, selects it and announces it, an n-of-m readout says where
+ * the planner is, and `Zoom to selection` lets them read what they landed on.
+ *
+ * **Derived** from `CANVAS_LENSES_ENABLED`, deliberately, and for the ADR-0062 reason: the search
+ * field itself is a lenses-flag control, so a build with this on and lenses off would register
+ * keyboard behaviour and an n-of-m readout for a field that does not render. A flag whose feature
+ * has no host is worse than no flag — it is a behaviour with nowhere to happen.
+ *
+ * **Default-off** until the M5 gate pass. Flag-off: the search field keeps today's filter-only
+ * behaviour exactly, Enter does nothing, no readout renders and no cursor state is held — the
+ * canvas paint, the toolbar and the a11y tree are byte-for-byte today's (the flag-off parity suite
+ * is the rollback contract). Frontend-only: no API, DTO, schema or migration, and the CPM engine is
+ * not imported, so the ADR-0034 recalculation parity gate is untouched by construction.
+ */
+export const CANVAS_SEARCH_NAV_ENABLED =
+  CANVAS_LENSES_ENABLED && flagDefaultOff(import.meta.env.VITE_CANVAS_SEARCH_NAV);

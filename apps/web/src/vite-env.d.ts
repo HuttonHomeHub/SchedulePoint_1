@@ -116,4 +116,7 @@ interface ImportMetaEnv {
   readonly VITE_PASSWORD_RESET?: string;
   /** Canvas status & feedback M1 — the TSLD data-date line, pill, legend + text equivalents. Default off. */
   readonly VITE_CANVAS_DATA_DATE?: string;
+  /** Search that navigates — Enter cycles the matches, centring, selecting and announcing each.
+   *  Derived from VITE_CANVAS_LENSES; the search field is a lenses control. Default off. */
+  readonly VITE_CANVAS_SEARCH_NAV?: string;
 }

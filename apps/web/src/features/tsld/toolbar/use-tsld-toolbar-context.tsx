@@ -12,6 +12,7 @@ import { computeLogicPath } from '../render/logic-path';
 
 import { useConflictNavigation } from './commands/use-conflict-navigation';
 import { useDiagramImage } from './commands/use-diagram-image';
+import { useSearchNavigation } from './commands/use-search-navigation';
 import { useViewportCommands } from './commands/use-viewport-commands';
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
@@ -270,6 +271,19 @@ export function useTsldToolbarContext({
     isolateActive: navState.isolateActive,
     conflictCursorId: navState.conflictCursorId,
     setConflictCursorId,
+    canvasControlRef,
+    requestSelectActivity,
+    announce,
+  });
+
+  // Search that navigates (VITE_CANVAS_SEARCH_NAV) — the same shape as the conflict cycle above,
+  // sharing its walk so the two can never order a plan differently.
+  const { searchStatus, goToMatch } = useSearchNavigation({
+    activities,
+    filterQuery: canvasUi.lensState.filterQuery,
+    filterAttrs: canvasUi.lensState.filterAttrs,
+    searchCursorId: canvasUi.lensState.searchCursorId,
+    setSearchCursorId: canvasUi.setSearchCursorId,
     canvasControlRef,
     requestSelectActivity,
     announce,
@@ -557,6 +571,8 @@ export function useTsldToolbarContext({
       toggleFloatPaths,
       currentConflict,
       goToNextConflict,
+      searchStatus,
+      goToMatch,
       snapToGrid: navState.snapToGrid,
       toggleSnapToGrid,
 
@@ -863,6 +879,8 @@ export function useTsldToolbarContext({
     orderedConflictHits.length,
     currentConflict,
     goToNextConflict,
+    searchStatus,
+    goToMatch,
     // Export & print — re-identify only when the exported set / its match state / the plan name change
     // (the callbacks close over these). `todayIso` + `announce` are already listed above. The
     // dependency edges, the view toggles and the late overlay now reach the picture through

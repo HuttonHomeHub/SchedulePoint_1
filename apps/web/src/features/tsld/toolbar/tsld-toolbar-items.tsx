@@ -71,6 +71,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -703,6 +704,23 @@ function LiveSearchControl({
           if (!disabled) ctx.setFilterQuery(event.target.value);
         }}
         {...(disabled ? { readOnly: true } : {})}
+        // Enter / Shift+Enter walk the match set (`VITE_CANVAS_SEARCH_NAV`). `preventDefault` because
+        // an unhandled Enter inside a field can submit an enclosing form — the toolbar has none today,
+        // but a future host might, and a search that navigates away is worse than one that does
+        // nothing. Focus deliberately stays here: `goToMatch` selects with `focusListbox: false`, so
+        // the planner can press Enter again without reaching for the field.
+        //
+        // Flag-off the prop is not passed at ALL (not passed-and-inert), which is what makes the
+        // parity suite able to assert its absence rather than its behaviour.
+        {...(CANVAS_SEARCH_NAV_ENABLED && !disabled
+          ? {
+              onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                ctx.goToMatch(event.shiftKey ? 'previous' : 'next');
+              },
+            }
+          : {})}
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities"
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
@@ -1808,8 +1826,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     CANVAS_LENSES_ENABLED
       ? {
           ...searchShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+          // With search navigation on, the field is a diagram control: Enter centres a bar on the
+          // canvas, which the Gantt does not have. Shading it there with a reason is the honest
+          // interim state until M4 gives the Gantt the same jump — the ADR-0059 M6 lesson
+          // (a lit-but-inert control) applied at the first version rather than after a review finds
+          // it. Flag-off the clause is absent, because today's inert behaviour is what the parity
+          // suite has to reproduce.
+          isEnabled: (ctx) =>
+            ctx.hasDiagram && (CANVAS_SEARCH_NAV_ENABLED ? ctx.canvasActive : true),
+          disabledReason: (ctx) =>
+            !ctx.hasDiagram
+              ? LENS_NO_DIAGRAM_REASON
+              : CANVAS_SEARCH_NAV_ENABLED && !ctx.canvasActive
+                ? CANVAS_ONLY_REASON
+                : undefined,
           render: (ctx, api) => <LiveSearchControl ctx={ctx} api={api} />,
         }
       : {

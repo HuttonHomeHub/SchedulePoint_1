@@ -301,6 +301,24 @@ export interface TsldToolbarContext {
   /** Advance to the next flagged activity (wrapping): centre + select it and announce "<i> of <n>:
    * <name> — <reasons>". A no-op when there are no conflicts. View-only (every role). */
   goToNextConflict: () => void;
+
+  // --- Search that navigates (VITE_CANVAS_SEARCH_NAV, `docs/specs/canvas-search-navigation/`) ----
+  /**
+   * The find read-out: how many activities the live search matches, and which one the planner is
+   * standing on (1-based; `null` before the first Enter). `null` for the whole object when the
+   * search is inactive or the flag is off — so the status chip only appears once a search is
+   * actually running, exactly as `currentConflict` only appears once cycling has started.
+   *
+   * The **visible** half of the announcement `goToMatch` speaks; the chip is `aria-hidden` so a
+   * screen-reader user hears it once, from the shared announcer, rather than twice.
+   */
+  searchStatus: { total: number; index: number | null } | null;
+  /**
+   * Jump to the next (or previous) search match, wrapping: centre it, select it, and announce
+   * "<i> of <n>: <name>". A no-op when the search matches nothing or is inactive. View-only (every
+   * role) — finding is not editing.
+   */
+  goToMatch: (direction: 'next' | 'previous') => void;
   /** Whether *Snap to grid* is on (drives the toggle's pressed state). Session-local (CQ-3). */
   snapToGrid: boolean;
   /** Toggle *Snap to grid* on/off (pen-gated + Visual mode; rounds a dropped `visualStart` to the

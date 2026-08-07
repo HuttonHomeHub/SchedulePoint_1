@@ -67,6 +67,8 @@ export interface TsldCanvasUiState {
   lensState: LensState;
   setFilterQuery: (query: string) => void;
   toggleFilterAttr: (attr: FilterAttr) => void;
+  /** Record the match the planner just jumped to (`VITE_CANVAS_SEARCH_NAV`). */
+  setSearchCursorId: (id: string) => void;
   setColourMode: (mode: ColourMode) => void;
   toggleBaselineOverlay: () => void;
   /**
@@ -89,7 +91,16 @@ export interface TsldCanvasUiState {
   toggleSnapToGrid: () => void;
   /** Ask the canvas (via `TsldPanel`) to select an activity — the *Next conflict* selection lift. A
    * monotonic `nonce` makes each request distinct so repeated jumps to the same id still fire. */
-  requestSelectActivity: (id: string) => void;
+  /**
+   * Ask the canvas to select an activity.
+   *
+   * `focusListbox` decides whether DOM focus moves into the parallel listbox with the selection.
+   * The Next-conflict cycle sets it **true**, because the planner pressed a toolbar button and has
+   * to land somewhere; the search cycle sets it **false**, because the planner is still typing and
+   * moving focus out of the field would end the search after one match. Defaults to true, which is
+   * the behaviour every pre-existing caller already had.
+   */
+  requestSelectActivity: (id: string, opts?: { focusListbox?: boolean }) => void;
 }
 
 /** The canvas nav/authoring view-state shape (see {@link TsldCanvasUiState.navState}). */
@@ -100,7 +111,7 @@ export interface NavState {
   snapToGrid: boolean;
   /** The pending selection command from the toolbar (Next-conflict), or null. `TsldPanel` applies it and
    * de-dupes by `nonce`. */
-  selectSignal: { id: string; nonce: number } | null;
+  selectSignal: { id: string; nonce: number; focusListbox: boolean } | null;
 }
 
 /** The lens view-state shape (see {@link TsldCanvasUiState.lensState}). */
@@ -109,6 +120,13 @@ export interface LensState {
   filterAttrs: ReadonlySet<FilterAttr>;
   colourMode: ColourMode;
   baselineOverlay: boolean;
+  /**
+   * The last search match the planner jumped to (`VITE_CANVAS_SEARCH_NAV`), or null before the first
+   * Enter. It lives here rather than beside `conflictCursorId` in `NavState` because it is **reset by
+   * the two filter setters below** — a cursor into a match set the planner has just changed is not a
+   * position, and keeping it would land the next Enter somewhere neither of them chose.
+   */
+  searchCursorId: string | null;
 }
 
 /** The lens defaults — the "no lens active" identity (dims nothing, today's fills, overlay off). */
@@ -117,6 +135,7 @@ const DEFAULT_LENS_STATE: LensState = {
   filterAttrs: new Set<FilterAttr>(),
   colourMode: 'criticality',
   baselineOverlay: false,
+  searchCursorId: null,
 };
 
 /** The nav defaults — the "no nav active" identity (isolate off, no cursor, snap off, no signal). */
@@ -148,8 +167,12 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   );
   const requestFit = useCallback((): void => setFitSignal((n) => n + 1), []);
   const requestAutoArrange = useCallback((): void => setAutoArrangeSignal((n) => n + 1), []);
+  // Editing the query resets the find cursor: the match set is about to be a different set, so the
+  // position in the old one means nothing. Unconditional — flag-off nothing reads `searchCursorId`,
+  // so writing null costs a field on an object that is rebuilt on this keystroke anyway.
   const setFilterQuery = useCallback(
-    (filterQuery: string): void => setLensState((s) => ({ ...s, filterQuery })),
+    (filterQuery: string): void =>
+      setLensState((s) => ({ ...s, filterQuery, searchCursorId: null })),
     [],
   );
   const toggleFilterAttr = useCallback(
@@ -158,12 +181,17 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
         const filterAttrs = new Set(s.filterAttrs);
         if (filterAttrs.has(attr)) filterAttrs.delete(attr);
         else filterAttrs.add(attr);
-        return { ...s, filterAttrs };
+        // Same reason as `setFilterQuery`: an attribute toggle changes the match set.
+        return { ...s, filterAttrs, searchCursorId: null };
       }),
     [],
   );
   const setColourMode = useCallback(
     (colourMode: ColourMode): void => setLensState((s) => ({ ...s, colourMode })),
+    [],
+  );
+  const setSearchCursorId = useCallback(
+    (searchCursorId: string): void => setLensState((s) => ({ ...s, searchCursorId })),
     [],
   );
   const toggleBaselineOverlay = useCallback(
@@ -189,10 +217,14 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
     [],
   );
   const requestSelectActivity = useCallback(
-    (id: string): void =>
+    (id: string, opts?: { focusListbox?: boolean }): void =>
       setNavState((s) => ({
         ...s,
-        selectSignal: { id, nonce: (s.selectSignal?.nonce ?? 0) + 1 },
+        selectSignal: {
+          id,
+          nonce: (s.selectSignal?.nonce ?? 0) + 1,
+          focusListbox: opts?.focusListbox ?? true,
+        },
       })),
     [],
   );
@@ -224,6 +256,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       lensState,
       setFilterQuery,
       toggleFilterAttr,
+      setSearchCursorId,
       setColourMode,
       toggleBaselineOverlay,
       navState,
@@ -249,6 +282,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       lensState,
       setFilterQuery,
       toggleFilterAttr,
+      setSearchCursorId,
       setColourMode,
       toggleBaselineOverlay,
       navState,
