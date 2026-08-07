@@ -1,5 +1,60 @@
 # @repo/web
 
+## 0.75.0
+
+### Minor Changes
+
+- [#256](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/256) [`00c19a4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/00c19a4b219a76442a5189b54c7090b16be98173) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Search that navigates (behind `VITE_CANVAS_SEARCH_NAV`, default off).
+
+  The TSLD's live search stops being only a filter and becomes a **find** control.
+  Enter and Shift+Enter walk the matches; each jump centres the bar, selects it and
+  announces it, with focus staying in the field so the next press goes somewhere.
+  A read-out says "12 matches" before the first jump and "3 of 12" after, in the
+  accessibility tree as well as on screen. `Zoom to selection` frames what you
+  landed on at a legible scale. The same field, the same Enter and the same count
+  work in the Gantt as well as the diagram, over **one** derived match set — so the
+  two views cannot disagree about what the search matched.
+
+  The field also gains a real, keyboard-reachable clear: `type="search"` renders its
+  native ✕ in Chromium only and puts it in no browser's tab order, so on a control
+  whose whole point is keyboard operation the only way to empty it was
+  select-all-and-delete.
+
+  Frontend-only — no API, DTO, schema or migration, and the CPM engine is not
+  imported, so the ADR-0034 recalculation parity gate is untouched by construction.
+  Flag-off is byte-for-byte today's search, kept as the rollback contract in its own
+  parity suite.
+
+- [#258](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/258) [`e3ac7c6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e3ac7c6543e8e173ba7d04c1a56f7d48ac6f6deb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Search navigation: an Escape typed into the search field belongs to the field, and one keystroke
+  says one thing.
+
+  The flag-on journey (`apps/web/e2e-search-nav/`, its own CI step) found two live defects on its
+  first run — both invisible to every unit suite in the repository, because neither is observable
+  without a real browser, a real API and two debounces running against each other:
+
+  - **An armed tool was lost to a keystroke aimed at text.** The canvas's Escape handler is a native
+    `window` listener, so it fired wherever focus was: a planner refining a search query with the Link
+    tool armed had the tool silently disarmed. The listener now ignores keys typed into a text control,
+    and the field takes a two-step Escape of its own — clear the query, then hand focus to the diagram —
+    so the route to Escape's other meaning stays open rather than becoming a dead end.
+  - **The jump announcement was overwritten by a stale filter count.** Both speak into the same polite
+    live region, and the debounced count re-armed on every re-render, landing after the jump. A
+    screen-reader user heard "3 of 5 activities match" where the product had just said which activity it
+    had moved to. The count now stands down once the planner starts cycling, and clearing the search
+    says "Search cleared." instead of blanking the region.
+
+  The feature stays behind `VITE_CANVAS_SEARCH_NAV` (default off). The CPM engine is not imported and
+  the ADR-0034 recalculation parity gate is untouched.
+
+- [#258](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/258) [`e3ac7c6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e3ac7c6543e8e173ba7d04c1a56f7d48ac6f6deb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Search that navigates is on by default (ADR-0079, `VITE_CANVAS_SEARCH_NAV`).
+
+  The TSLD's search field stops being only a filter. Enter and Shift+Enter walk the matches, each jump
+  centres the bar, selects it and says which one it is; an n-of-m read-out tracks the position; and
+  `Zoom to selection` frames what you landed on. The Gantt walks the same match set.
+
+  Rolling back is `VITE_CANVAS_SEARCH_NAV=false` and a rebuild — the flag-off parity suites are kept
+  and pinned rather than weakened, so the rollback restores the field's filter-only behaviour exactly.
+
 ## 0.74.0
 
 ### Minor Changes
