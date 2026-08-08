@@ -25,9 +25,34 @@ possible signal that it was not a subtle omission.
 
 This ADR is about the process that produced it, not the defect.
 
-### What was different about W5
+### What was different about W5 — and what was not
 
-Every earlier epic pushed work through the running application repeatedly. ADR-0067's flag-on
+**First, the correction this section needs.** The claim below was originally written as "an entire
+milestone unreachable is not in any prior record". That is **false**, and checking the register
+rather than trusting the narrative is what found it:
+
+- **ADR-0080 — the immediately preceding epic** — records `bulk` wired into `plan-workspace.tsx`
+  and **not** into `plan-workspace-toolbar.tsx`, the layout the toolbar flag actually selects, so
+  the bulk bar was "unreachable in the shipped app while every unit test passed".
+- **ADR-0062 M6** records the Resources tab hiding its assign form: "the lit-but-inert dead end
+  inverted".
+- **ADR-0059 M6** records a lit-but-inert zoom control that delegated to a canvas that was not
+  mounted.
+
+So this defect class is **the fourth recorded instance, not the first**. W5's is the largest — a
+whole milestone, with the model carrying no product caller at all — but the epic is an escalation of
+a standing pattern rather than a departure from a clean record. An ADR that framed it as novel would
+have pointed the process fix at the wrong thing.
+
+**Second, what cannot be established.** Every earlier epic reached `main` as a **single squash
+commit**, so the intra-epic ordering — when each landed its journey relative to its first feature
+code — is not recoverable from git. Statements about earlier epics' _sequencing_ below are read from
+their ADR narratives, which are documents, and are therefore weaker evidence than the defect record
+above. This is flagged rather than smoothed over, because ADR-0058's rule is exactly that a document
+is not a measurement.
+
+With those two caveats: every earlier epic's ADR narrative describes work being pushed through the
+running application repeatedly. ADR-0067's flag-on
 journey found a menu unclickable inside a modal `<dialog>`'s top layer. ADR-0070's found that the
 plan's calendar never reached `CreateActivityButton`, so the surface where every activity is first
 created silently refused `4h`. ADR-0064's harness drove the real two-click pick before deciding

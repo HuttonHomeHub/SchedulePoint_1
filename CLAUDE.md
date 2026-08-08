@@ -1668,7 +1668,11 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   log — and both entry points excluded a `WBS_SUMMARY`, so no planner could reach it and its unit
   tests were validating dead code. Three independent reviews found it separately. The cause is
   ADR-0058's rule failing one level up: **a plan is a document too**, and working through its task
-  list is evidence the tasks were done, not that a capability exists. Three decisions: a milestone
+  list is evidence the tasks were done, not that a capability exists. **It is the fourth recorded
+  instance of the class, not the first** — ADR-0080 shipped `bulk` wired into one host and not the
+  layout its flag selects, ADR-0062 M6 hid a form instead of shading it, ADR-0059 M6 lit an inert
+  zoom control — so the ADR treats it as an escalation of a standing pattern rather than a
+  departure, which is what points the fix at the journey rather than at W5's authors. Three decisions: a milestone
   claiming user-facing capability **names its entry point** or declares itself dark; the **flag-on
   journey lands with the first user-facing milestone**, not at enablement (the only one of the three
   that is enforcement rather than intention — M2's hole survived a plan, a spec, a measurement, unit
