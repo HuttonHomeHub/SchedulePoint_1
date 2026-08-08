@@ -26,6 +26,7 @@ const spies = {
   onProgress: vi.fn(),
   onSteps: vi.fn(),
   onDissolve: vi.fn(),
+  onDuplicate: vi.fn(),
 };
 
 function ctx(over: Partial<SelectionActionContext> = {}): SelectionActionContext {
@@ -42,6 +43,7 @@ function ctx(over: Partial<SelectionActionContext> = {}): SelectionActionContext
     onSteps: spies.onSteps,
     isSummary: false,
     onDissolve: spies.onDissolve,
+    onDuplicate: spies.onDuplicate,
     ...over,
   };
 }

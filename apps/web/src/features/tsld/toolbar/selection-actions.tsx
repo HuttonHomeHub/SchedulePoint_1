@@ -1,5 +1,6 @@
 import {
   ClipboardCheck,
+  Copy,
   ListChecks,
   SquarePen,
   Trash2,
@@ -12,6 +13,7 @@ import { useEffect, useRef } from 'react';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import {
+  ACTIVITY_COPY_PASTE_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
@@ -47,6 +49,11 @@ export interface SelectionActionContext {
   onDelete: () => void;
   /** Dissolve the selected summary — remove the grouping, keep the work (`VITE_WBS_IMPROVEMENTS`). */
   onDissolve: () => void;
+  /**
+   * Duplicate the selected activity (`docs/specs/activity-copy-paste/` M1). Wired regardless of the
+   * flag; the `duplicate` item that calls it is only registered when the flag is on.
+   */
+  onDuplicate: () => void;
   /** Open the per-activity resource-assignment editor (entry-route win 2, `VITE_ENTRY_ROUTES`). Wired
    * regardless of the flag; the `resources` item that calls it is only registered when the flag is on. */
   onResources: () => void;
@@ -160,6 +167,30 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       disabledReason: () => PEN_REASON,
       onActivate: (ctx) => ctx.onEdit(),
     },
+    // Duplicate — after Edit, and hidden on a summary. Both facts mirror the activities-table row
+    // menu exactly, so the same operation reads the same on the canvas and in the table (the
+    // wording-convergence rule this bar already follows). `isSummary` is a context fact rather than
+    // a check inside the handler, so a summary selection cannot reach an action that would create
+    // an empty band — copying a band with its subtree is M2.
+    ...(ACTIVITY_COPY_PASTE_ENABLED
+      ? [
+          {
+            id: 'duplicate',
+            group: 'object',
+            tier: 1,
+            showLabel: 'always',
+            order: 4.5,
+            label: 'Duplicate',
+            icon: <Copy className="size-4" />,
+            penGated: true,
+            disabledReason: () => PEN_REASON,
+            isVisible: (ctx: SelectionActionContext) => !ctx.isSummary,
+            onActivate: (ctx: SelectionActionContext) => {
+              ctx.onDuplicate();
+            },
+          } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
     // Dissolve — only for a summary selection, and only behind `VITE_WBS_IMPROVEMENTS`. Registered
     // BEFORE Delete for the same reason the table's row menu orders them that way: the two are
     // neighbours in intent ("get rid of this grouping") and opposites in effect, so the
