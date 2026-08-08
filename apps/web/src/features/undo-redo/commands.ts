@@ -1,5 +1,6 @@
 import type {
   ActivitySummary,
+  ConstraintType,
   DependencySummary,
   DependencyType,
   LagCalendarSource,
@@ -761,5 +762,111 @@ export function autoArrangeCommand(params: {
     label: params.label ?? 'Auto-arrange lanes',
     undo: () => apply(params.before),
     redo: () => apply(params.after),
+  };
+}
+
+/** `useBatchPlacements().mutateAsync` — an all-or-nothing time+lane batch; resolves to the rows. */
+export type BatchPlacementsFn = (input: {
+  placements: {
+    id: string;
+    version: number;
+    constraintType: ConstraintType | null;
+    constraintDate: string | null;
+    visualStart: string | null;
+    laneIndex: number | null;
+  }[];
+}) => Promise<ActivitySummary[]>;
+
+/** One row's placement in a bulk-move snapshot — the complete set of fields the batch writes. */
+export interface ActivityPlacement {
+  id: string;
+  constraintType: ConstraintType | null;
+  constraintDate: string | null;
+  visualStart: string | null;
+  laneIndex: number | null;
+}
+
+/**
+ * Reverse a **bulk move** — a plural drag of many bars in time and/or lane collapses to a SINGLE
+ * reversible step, the `autoArrangeCommand` shape one field set wider.
+ *
+ * **Deliberately not coalescable**, and the reason is worth stating rather than leaving to the
+ * absence of a descriptor: there are no intermediate writes to merge (the ghosts are client-side
+ * and one request goes out on release), and merging two bulk moves would produce an undo that
+ * restores a set **nobody ever selected** — the union of two different selections, in a state
+ * neither of them was in.
+ *
+ * Versions are threaded from each batch response, seeded from the forward pass, so the optimistic
+ * lock always carries the current version and an undo after a redo is not a guaranteed 409.
+ */
+export function bulkPlacementCommand(params: {
+  batchPlacements: BatchPlacementsFn;
+  before: readonly ActivityPlacement[];
+  after: readonly ActivityPlacement[];
+  versions: ReadonlyMap<string, number>;
+  label?: string;
+}): Command {
+  const { batchPlacements } = params;
+  const versions = new Map(params.versions);
+  const apply = async (placements: readonly ActivityPlacement[]): Promise<void> => {
+    const rows = placements.flatMap((p) => {
+      const version = versions.get(p.id);
+      return version === undefined ? [] : [{ ...p, version }];
+    });
+    if (rows.length === 0) return;
+    const saved = await batchPlacements({ placements: rows });
+    for (const row of saved) versions.set(row.id, row.version);
+  };
+  return {
+    label: params.label ?? `Move ${params.after.length} activities`,
+    undo: () => apply(params.before),
+    redo: () => apply(params.after),
+  };
+}
+
+/** `useBulkDeleteActivities().mutateAsync` — sweeps a set and resolves to the batch that ties it. */
+export type BulkDeleteActivitiesFn = (input: {
+  activities: { id: string; version: number }[];
+}) => Promise<{ deleteBatchId: string; activityCount: number; dependencyCount: number }>;
+
+/** `useRestoreDeleteBatch().mutateAsync` — puts a whole batch back, ids and links intact. */
+export type RestoreDeleteBatchFn = (input: { deleteBatchId: string }) => Promise<ActivitySummary[]>;
+
+/**
+ * Reverse a **bulk delete** — one restore, not N re-creates.
+ *
+ * This is the command CQ-4 was asked about, and the answer it was given. The M1–M2 fallback for a
+ * single delete is re-create-with-a-new-id, which loses every link the deleted activity had; for a
+ * plural delete that would also lose the links **between** the deleted activities, so a planner who
+ * removed a phase and pressed undo would get their bars back with the logic gone — silently, and
+ * with nothing on screen saying so. `restore-batch` puts the ids back, so the links come with them.
+ *
+ * The batch id is captured from the forward write and **rethreaded on every redo**: a redo is a new
+ * delete and therefore a new batch, so an undo that reused the first id would restore nothing.
+ */
+export function bulkDeleteCommand(params: {
+  bulkDelete: BulkDeleteActivitiesFn;
+  restoreBatch: RestoreDeleteBatchFn;
+  /** The rows that were deleted, with the versions the forward write used. */
+  activities: readonly { id: string; version: number }[];
+  /** The batch the forward write returned. */
+  deleteBatchId: string;
+  label?: string;
+}): Command {
+  const { bulkDelete, restoreBatch } = params;
+  let batchId = params.deleteBatchId;
+  // Restoring bumps every row's version, so a redo cannot reuse the versions the first delete used.
+  const versions = new Map(params.activities.map((a) => [a.id, a.version] as const));
+  return {
+    label: params.label ?? `Delete ${params.activities.length} activities`,
+    undo: async () => {
+      const restored = await restoreBatch({ deleteBatchId: batchId });
+      for (const row of restored) versions.set(row.id, row.version);
+    },
+    redo: async () => {
+      const rows = [...versions].map(([id, version]) => ({ id, version }));
+      const result = await bulkDelete({ activities: rows });
+      batchId = result.deleteBatchId;
+    },
   };
 }

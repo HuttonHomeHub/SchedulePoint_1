@@ -15,6 +15,8 @@ export {
   dependencyRemoveCommand,
   visualStartCommand,
   autoArrangeCommand,
+  bulkPlacementCommand,
+  bulkDeleteCommand,
   type Command,
   type CommandCoalescing,
   type RepositionLaneFn,
@@ -31,6 +33,10 @@ export {
   type VisualPlacement,
   type BatchPositionsFn,
   type LanePlacement,
+  type BatchPlacementsFn,
+  type ActivityPlacement,
+  type BulkDeleteActivitiesFn,
+  type RestoreDeleteBatchFn,
 } from './commands';
 export {
   usePlanEditHistory,

@@ -513,3 +513,71 @@ export function useDissolveSummary(orgSlug: string, planId: string) {
     onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }
+
+/**
+ * Batch **placement** write (`docs/specs/canvas-multi-select/` M1): move many activities in time
+ * and/or lane in one all-or-nothing PATCH.
+ *
+ * The sibling of `useBatchPositions`, and deliberately a **separate** hook rather than a widened
+ * one: lane is layout and needs no recalculation, whereas a placement carries the constraint and
+ * `visualStart` columns the CPM engine reads, so a committed batch leaves the plan's computed dates
+ * stale. That difference decides the invalidation, and one hook doing both would have to pick the
+ * wider sweep for every lane-only drag in the product.
+ *
+ * Every row is complete: `constraintType`/`constraintDate`/`visualStart`/`laneIndex` are all sent,
+ * `null` where they are to be cleared. The DTO refuses an omitted field rather than defaulting it,
+ * so a caller cannot silently unpin a constraint by forgetting to mention it.
+ */
+export function useBatchPlacements(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      placements: {
+        id: string;
+        version: number;
+        constraintType: ConstraintType | null;
+        constraintDate: string | null;
+        visualStart: string | null;
+        laneIndex: number | null;
+      }[];
+    }) =>
+      apiFetch<ActivitySummary[]>(
+        `/organizations/${orgSlug}/plans/${planId}/activities/placements`,
+        { method: 'PATCH', body: JSON.stringify(input) },
+      ),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
+  });
+}
+
+/**
+ * Bulk soft-delete: sweep many activities and their incident links in ONE batch.
+ *
+ * The response's `deleteBatchId` is the point rather than a diagnostic — it is what
+ * {@link useRestoreDeleteBatch} needs to put the whole gesture back id-stably, which is the only
+ * way the dependencies **between** the deleted activities survive an undo (CQ-4). Discarding it
+ * would leave undo able to re-create the bars and not the logic between them.
+ */
+export function useBulkDeleteActivities(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { activities: { id: string; version: number }[] }) =>
+      apiFetch<{ deleteBatchId: string; activityCount: number; dependencyCount: number }>(
+        `/organizations/${orgSlug}/plans/${planId}/activities/bulk-delete`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
+  });
+}
+
+/** Undo a bulk delete: restore every row the batch swept, ids and links intact. */
+export function useRestoreDeleteBatch(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { deleteBatchId: string }) =>
+      apiFetch<ActivitySummary[]>(
+        `/organizations/${orgSlug}/plans/${planId}/activities/restore-batch/${input.deleteBatchId}`,
+        { method: 'POST' },
+      ),
+    onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
+  });
+}
