@@ -104,3 +104,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0078](0078-canvas-module-boundaries.md)                                  | Canvas module boundaries & the per-frame context   | Accepted           |
 | [0079](0079-search-that-navigates.md)                                     | Search that navigates: cursor, Escape, zoom        | Accepted           |
 | [0080](0080-canvas-plural-selection.md)                                   | The canvas plural selection & bulk operations      | Accepted           |
+| [0081](0081-milestone-entry-point-and-journey.md)                         | A milestone is its entry point; the journey gates  | Proposed           |
