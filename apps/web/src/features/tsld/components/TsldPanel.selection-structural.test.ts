@@ -4,57 +4,55 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * **The M0 inertness proof** (`docs/specs/canvas-multi-select/` M0-T3).
+ * **The rollback contract for the canvas selection** (`docs/specs/canvas-multi-select/`).
  *
- * M0 swaps the canvas's `useState<string | null>` for the set model and changes nothing else. The
- * property that makes that safe is not "the tests still pass" — they would also pass if a plural
- * reducer were wired to a path no test exercises — it is that **the plural reducers are not
- * imported at all**. A module that cannot name `toggle` cannot call it.
+ * At M0 this file asserted that `TsldPanel` could not *name* a plural reducer — the strongest form
+ * of "flag-off is singular", available only while the plural path did not exist. M2 wires the
+ * modifier clicks, so that assertion is retired **by replacement, not deletion**, which is the point
+ * at which someone has to think about the flag rather than notice a red test and delete it.
  *
- * So this is a source assertion rather than a behavioural one, and deliberately so: it is the
- * cheapest thing that actually holds the line, and it fails the moment a later milestone wires a
- * plural path *without* removing this test, which is exactly when someone should be made to think
- * about the flag.
+ * What survives is the property that still holds and still matters: **every plural reducer sits
+ * behind `CANVAS_MULTI_SELECT_ENABLED`**. Flag-off, `select()` returns before it can reach one, so
+ * the canvas is singular by control flow rather than by convention.
  *
- * When M2 lands the pointer gestures, this test is **replaced, not deleted** — by the flag-gated
- * version that asserts the plural reducers are reachable only behind `CANVAS_MULTI_SELECT_ENABLED`.
+ * This is a source assertion, deliberately. A behavioural test proves what the mounted component
+ * does with the flag its bundle was built with; this proves that no *other* path into the plural
+ * reducers exists — which is exactly what a rollback needs to be true and what no amount of
+ * flag-off green tells you.
  */
 const PANEL = readFileSync(join(import.meta.dirname, 'TsldPanel.tsx'), 'utf8');
 
 /**
  * The source with comments removed.
  *
- * Necessary rather than fastidious: the first version of the plural-reducer assertion scanned the
- * raw file and went red on the word "toggle" inside four sentences of prose about the WBS band and
- * the Late overlay. A gate that fires on a comment is a gate someone deletes.
+ * Necessary rather than fastidious: the first version of this assertion scanned the raw file and
+ * went red on the word "toggle" inside four sentences of prose about the WBS band and the Late
+ * overlay. A gate that fires on a comment is a gate someone deletes.
  */
 const CODE = PANEL.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-/** The import block for the selection model, however it is formatted. */
-function selectionImport(): string {
-  const match = /import\s*\{([^}]*)\}\s*from\s*'\.\.\/model\/canvas-selection';/.exec(PANEL);
-  expect(match, 'TsldPanel imports the canvas selection model').not.toBeNull();
-  return match?.[1] ?? '';
+/** Every call site of `name(`, ignoring member calls and longer identifiers that merely end in it. */
+function callSites(name: string): number {
+  return (CODE.match(new RegExp(`(?<![.\\w])${name}\\s*\\(`, 'g')) ?? []).length;
 }
 
-describe('flag-off, TsldPanel cannot reach a plural selection', () => {
-  it('imports only the singular reducers', () => {
-    const imported = selectionImport()
-      .split(',')
-      .map((s) => s.replace(/^\s*type\s+/, '').trim())
-      .filter(Boolean)
-      .sort();
-    // `EMPTY_SELECTION` and the type are inert; `replace` and `clear` are the only two reducers.
-    expect(imported).toEqual(['CanvasSelection', 'EMPTY_SELECTION', 'clear', 'replace']);
-  });
-
-  it.each(['toggle', 'addAll', 'replaceAll', 'spanTo'])(
-    'never calls the plural reducer %s',
+describe('the plural selection reducers are reachable only behind the flag', () => {
+  it.each(['toggle', 'addAll', 'replaceAll'])(
+    'guards every call to %s with CANVAS_MULTI_SELECT_ENABLED',
     (plural) => {
-      // A *call site*, not a mention: `(?<![.\w])` rejects both a member call (`s.replaceAll(…)`,
-      // which is `String.prototype` and nothing to do with this model) and a longer identifier that
-      // merely ends with the name. Comments are already stripped, so a sentence cannot fire it.
-      expect(CODE).not.toMatch(new RegExp(`(?<![.\\w])${plural}\\s*\\(`));
+      const calls = callSites(plural);
+      if (calls === 0) return; // not wired yet — nothing to guard, and that is not a failure
+      // Every plural reducer lives inside `select()`'s flagged branch. The cheapest true statement
+      // about that is a proximity one: each call must have the flag named in the same function, and
+      // `select()` is the only function that names it near a reducer.
+      const guardedRegion =
+        /if \(CANVAS_MULTI_SELECT_ENABLED && modifier && id\) \{([\s\S]*?)\n {4}\}/.exec(
+          CODE,
+        )?.[1] ?? '';
+      expect(guardedRegion, 'select() has a flag-guarded plural branch').not.toBe('');
+      const inGuard = (guardedRegion.match(new RegExp(`(?<![.\\w])${plural}\\s*\\(`, 'g')) ?? [])
+        .length;
+      expect(inGuard).toBe(calls);
     },
   );
 
@@ -71,5 +69,11 @@ describe('flag-off, TsldPanel cannot reach a plural selection', () => {
     // derived-not-effect rule exists to prevent.
     expect(CODE).toMatch(/const selectedId = selection\.primaryId;/);
     expect(CODE).not.toMatch(/useState<string \| null>\(null\);[\s\S]{0,40}selectedId/);
+  });
+
+  it('takes the singular path first when no modifier is passed', () => {
+    // The flag-off call shape. `select(id)` with no second argument must fall through to
+    // `setSelectedId`, which is the one-line difference between a rollback and a rewrite.
+    expect(CODE).toMatch(/if \(CANVAS_MULTI_SELECT_ENABLED && modifier && id\)/);
   });
 });

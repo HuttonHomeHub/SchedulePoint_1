@@ -95,6 +95,7 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
+  CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
@@ -176,12 +177,29 @@ export interface PendingGhost {
   laneIndex: number;
 }
 
+/**
+ * How a click should fold into the selection (`docs/specs/canvas-multi-select/` M2).
+ *
+ * Absent means **replace** — the plain click every version of this canvas has had. Naming only the
+ * two plural cases keeps the flag-off path literally unrepresentable rather than merely unused.
+ */
+export type SelectModifier = 'toggle' | 'span';
+
 export interface TsldCanvasProps {
   activities: readonly RenderActivity[];
   edges: readonly RenderEdge[];
   dataDate: string;
   selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  /**
+   * Report a click's selection target.
+   *
+   * `modifier` is **optional and additive** (`docs/specs/canvas-multi-select/` M2-T2): flag-off the
+   * canvas never passes one, so every existing host reads exactly the signature it always did and
+   * behaves byte-for-byte. A host that does not understand it simply ignores a second argument,
+   * which is why this is a widened parameter rather than a second callback — one selection channel
+   * cannot drift from another.
+   */
+  onSelect: (id: string | null, modifier?: SelectModifier) => void;
   /** Bump to re-fit the viewport to the content (the toolbar's "Fit" button). */
   fitSignal: number;
   /** M2: enable on-canvas editing. Absent/false → the M1 read-only surface, unchanged. */
@@ -1577,7 +1595,25 @@ export function TsldCanvas({
     ...(createType ? { createType } : {}),
     ...(linkType ? { linkType } : {}),
   });
-  const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
+  // `ctrl` folds Ctrl and Cmd into one field on purpose (M2-T1): they are the same intent on two
+  // platforms, and a downstream consumer that had to check both would eventually check one.
+  const modifiersOf = (e: React.PointerEvent): Modifiers => ({
+    shift: e.shiftKey,
+    alt: e.altKey,
+    ctrl: e.ctrlKey || e.metaKey,
+  });
+  /**
+   * The selection modifier a click carries, or `undefined` for a plain replace.
+   *
+   * Ctrl/Cmd wins over Shift when both are held. Arbitrary but stable, and stated rather than left
+   * to reading order: toggle is the reversible one, so a planner who over-reaches with both fingers
+   * down loses less.
+   */
+  const selectModifierOf = (e: React.PointerEvent): SelectModifier | undefined => {
+    if (e.ctrlKey || e.metaKey) return 'toggle';
+    if (e.shiftKey) return 'span';
+    return undefined;
+  };
   // The plan working-day walk the lag-anchor hit zones + grabs run on — memoised so the walk's own
   // per-(day, n) memo survives across pointer events (the painter builds its walk per frame; the
   // two share `makeWorkingDayWalk`, so they can never place an anchor differently). No calendar ⇒
@@ -1904,7 +1940,14 @@ export function TsldCanvas({
             }
             return;
           }
-          onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));
+          // Ctrl/Cmd toggles one bar in or out; Shift extends from the primary. Flag-off the
+          // modifier is never computed, so this call is the one-argument call it has always been —
+          // and `Shift` in particular MUST stay unclaimed there, because the legacy link chord
+          // reads it as start-to-start (M0-T1's derived flag makes the overlap impossible).
+          const modifier = CANVAS_MULTI_SELECT_ENABLED ? selectModifierOf(e) : undefined;
+          const target = hitTest(sceneRef.current.activities, p, viewRef.current, dataDate);
+          if (modifier) onSelect(target, modifier);
+          else onSelect(target);
         }}
         onPointerLeave={() => {
           // Drop the hover ring when the pointer leaves the surface (M4). Flag-off the ref is

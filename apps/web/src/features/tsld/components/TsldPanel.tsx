@@ -13,6 +13,7 @@ import {
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -22,7 +23,14 @@ import {
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
-import { type CanvasSelection, clear, EMPTY_SELECTION, replace } from '../model/canvas-selection';
+import {
+  addAll,
+  type CanvasSelection,
+  clear,
+  EMPTY_SELECTION,
+  replace,
+  toggle,
+} from '../model/canvas-selection';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -69,7 +77,7 @@ import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
-import { sceneTopOffset, TsldCanvas, type PendingGhost } from './TsldCanvas';
+import { sceneTopOffset, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
 import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
@@ -1159,7 +1167,25 @@ export function TsldPanel({
     [dataDate, activities, dependencies],
   );
 
-  const select = (id: string | null): void => {
+  const select = (id: string | null, modifier?: SelectModifier): void => {
+    // Flag-off the canvas never passes a modifier, so this is the single-selection handler it has
+    // always been, statement for statement.
+    if (CANVAS_MULTI_SELECT_ENABLED && modifier && id) {
+      setSelection((current) => {
+        const next =
+          modifier === 'toggle'
+            ? toggle(current, id)
+            : // A span with nothing to span FROM is a plain click, not a no-op: a planner who
+              // shift-clicks first has expressed a selection, and refusing it would be a dead end
+              // whose only cue is that nothing happened.
+              current.primaryId === null
+              ? replace(id)
+              : addAll(current, spanIds(current.primaryId, id));
+        announceSelectionCount(next);
+        return next;
+      });
+      return;
+    }
     setSelectedId(id);
     if (id) {
       // The row's OWN text, not a rebuild of part of it — so what is spoken and what is on screen
@@ -1167,6 +1193,37 @@ export function TsldPanel({
       const rowText = rowTextById.get(id);
       if (rowText) announce(rowText);
     }
+  };
+
+  /**
+   * The ids between two activities in the plan's own order — what Shift+click extends over.
+   *
+   * Deliberately the **row order**, not the geometric one: the parallel listbox, the activities
+   * table and the Gantt all walk the plan in this order, so a span means the same run of work
+   * wherever a planner builds it. A span defined by screen position would change with the zoom.
+   */
+  const spanIds = (fromId: string, toId: string): string[] => {
+    const order = activities.map((a) => a.id);
+    const from = order.indexOf(fromId);
+    const to = order.indexOf(toId);
+    if (from < 0 || to < 0) return [toId];
+    const [lo, hi] = from <= to ? [from, to] : [to, from];
+    return order.slice(lo, hi + 1);
+  };
+
+  /** One utterance for a plural selection — the count, not a list nobody can hold in their head. */
+  const announceSelectionCount = (next: CanvasSelection): void => {
+    if (next.ids.length === 0) {
+      announce('Selection cleared.');
+      return;
+    }
+    if (next.ids.length === 1) {
+      const only = next.ids[0];
+      const rowText = only ? rowTextById.get(only) : undefined;
+      announce(rowText ?? '1 activity selected.');
+      return;
+    }
+    announce(`${next.ids.length} activities selected.`);
   };
 
   // Keep the focused activity's list position, so if it's deleted elsewhere (arriving via a

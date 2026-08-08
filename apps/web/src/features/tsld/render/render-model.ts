@@ -570,6 +570,56 @@ export function cull(
 }
 
 /**
+ * The ids of the activities whose geometry intersects a screen-space rectangle — the **one**
+ * predicate a marquee sweep and a shift-click span both resolve through
+ * (`docs/specs/canvas-multi-select/` M2-T2).
+ *
+ * One function rather than two call sites doing their own overlap arithmetic, and a structural test
+ * pins that: a marquee and a span that disagreed about whether a bar is inside a rectangle would be
+ * a defect nobody could see, because each gesture looks correct in isolation and only a planner who
+ * swept and shift-clicked the same region would ever notice one caught a bar the other missed.
+ *
+ * Order follows `activities`, not the sweep — a selection's order is "the order they were added",
+ * and for a batch gesture that means the plan's own order, which is stable across repeats.
+ *
+ * A milestone is a zero-**duration** diamond but not a zero-**area** rect ({@link activityRect}
+ * returns its bounding box), so it is caught like any bar. An activity with no computed dates has no
+ * geometry and cannot be swept, which is the same rule the painter and the cull already follow.
+ */
+export function idsIntersecting(
+  activities: readonly RenderActivity[],
+  rect: Rect,
+  view: Viewport,
+  dataDateIso: string,
+  cache?: RectCache,
+): string[] {
+  // A zero-area rectangle — a click that never moved — touches nothing. `rectsIntersect` is a
+  // strict overlap test and would already say so; this is here to make the intent explicit rather
+  // than incidental, because "a sweep over nothing clears the selection" is a decision.
+  if (rect.w <= 0 || rect.h <= 0) return [];
+  const hits: string[] = [];
+  for (const activity of activities) {
+    const bar = activityRect(activity, view, dataDateIso, cache);
+    if (bar && rectsIntersect(bar, rect)) hits.push(activity.id);
+  }
+  return hits;
+}
+
+/**
+ * Normalise a drag's two corners into a positive-extent rectangle. A marquee dragged up-and-left is
+ * the same rectangle as one dragged down-and-right, and every consumer downstream — the painter,
+ * {@link idsIntersecting} — assumes non-negative `w`/`h`.
+ */
+export function rectFromCorners(a: Point, b: Point): Rect {
+  return {
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    w: Math.abs(a.x - b.x),
+    h: Math.abs(a.y - b.y),
+  };
+}
+
+/**
  * The orthogonal (L-shaped) polyline routing a dependency from a predecessor's right
  * edge (finish) to a successor's left edge (start), each at the bar's vertical centre.
  * Returns null if either endpoint has no geometry. The elbow steps a small fixed gap

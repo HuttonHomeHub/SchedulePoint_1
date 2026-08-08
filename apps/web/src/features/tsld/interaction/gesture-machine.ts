@@ -69,10 +69,19 @@ function isMilestoneType(type: ActivityType): boolean {
   return type === 'START_MILESTONE' || type === 'FINISH_MILESTONE';
 }
 
-/** The keyboard modifiers held during a link drag, which pick the dependency type. */
+/** The keyboard modifiers held during a pointer gesture. */
 export interface Modifiers {
   shift: boolean;
   alt: boolean;
+  /**
+   * Ctrl **or** Cmd — one field, because they are the same intent on two platforms and a consumer
+   * that had to remember to check both would eventually check one (`docs/specs/canvas-multi-select/`
+   * M2-T1). The shell sets it from `e.ctrlKey || e.metaKey`; nothing downstream can tell which.
+   *
+   * Optional so every pre-existing `Modifiers` literal — the link-drag chords — still type-checks
+   * and still means exactly what it meant.
+   */
+  ctrl?: boolean;
 }
 
 /**
