@@ -1136,7 +1136,14 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-### 98. The guest share view scrolls sideways at 320 px (WCAG 1.4.10)
+### 98. The guest share view scrolls sideways at 320 px (WCAG 1.4.10) **(CLOSED 2026-08-08)**
+
+**Closed by the debt-paydown programme M1-T3.** `TsldViewControls`' zoom group gained `flex-wrap` —
+on the **shared** control, with the member workspace re-checked at the same widths, rather than
+branched by surface (a control that behaves differently depending on who is looking at it is how two
+surfaces drift). The assertion this row exists for is now written and enabled in
+`e2e-share/share.spec.ts` at **320 and 360 px**, and was verified red by removing the wrap: 436 px
+against a 320 px viewport, exactly as first measured.
 
 **Found:** 2026-08-05, by the ADR-0075 M3 accessibility gate — but not the way the finding was
 written. The reviewer reasoned from the CSS that nothing on the guest view's chain sets
@@ -1349,6 +1356,12 @@ version, and a version bump fails CI) is unaffected.
 
 ## 102. The public screens' deferred review findings (ADR-0077 M6-T2)
 
+> **(1) is CLOSED (2026-08-08, programme M1-T2).** `/sign-in`'s `?redirect=` is now same-origin by
+> shape — one leading slash and not two, so `//evil.test` (protocol-relative, resolved by the browser
+> to another origin) is dropped along with absolute URLs and relative paths. A malformed value falls
+> back to `/` rather than being repaired. Six cases in `router-search.test.ts` compose the **real**
+> parser with the **real** validator, four of them verified red first. The remaining sub-items stand.
+
 **Status:** open · **Owner:** web · **Raised:** 2026-08-06 (ADR-0077 M6-T2)
 
 Six non-blocking findings from the five specialist gates over the ADR-0077 diff, recorded rather than
@@ -1399,9 +1412,19 @@ swapped, which is why it is written down rather than remembered.
 
 **Next free number: 103.**
 
-## 103. ADR-0064's recalculation hold is not wired on the surface it ships on
+## 103. ADR-0064's recalculation hold is not wired on the surface it ships on **(CLOSED 2026-08-08)**
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M5)
+**Status:** closed · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M5)
+
+**Closed by the debt-paydown programme M1-T1**, and it was worse than this row recorded. The task
+diffs both hosts' whole `TsldPanel` prop lists rather than fixing the two named here — and found a
+**third**: `onUndoLastEdit`. `CanvasModeBand.tsx:98` renders the link confirmation's Undo only
+`{confirmation && onUndo ? …}`, so on the shipped host that button had **never** appeared, including
+through the ADR-0064 §7 gate pass that found and fixed a defect in it. All three now match the
+legacy layout, pinned by an assertion in `plan-workspace-toolbar.test.tsx` verified red first.
+
+The lesson is the diff, not the props: when a host divergence turns up, compare the whole surface.
+A register row lists what somebody noticed.
 
 ADR-0064 T7 added **token-based recalculation holds** so the bars cannot move between a planner's two
 clicks during a link pick — the epic's own founding defect. The hold is real and its unit suite

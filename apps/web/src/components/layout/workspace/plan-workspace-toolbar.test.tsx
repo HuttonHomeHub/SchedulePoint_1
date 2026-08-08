@@ -336,4 +336,41 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     renderScreen();
     expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument();
   });
+
+  /**
+   * **This host is the one that ships** (`plan-workspace.tsx:70` selects it whenever
+   * `CANVAS_TOOLBAR_ENABLED`, which is default-on), and it was passing three fewer props to
+   * `TsldPanel` than the legacy layout beside it — `docs/TECH_DEBT.md` #103.
+   *
+   * Each absence disabled a mechanism silently, on the surface every planner uses:
+   *
+   * - **`recalcHold`** is ADR-0064's recalculation quiescence — the token-based hold that exists so
+   *   bars cannot move between a planner's two link clicks. That epic was opened on a report of six
+   *   link attempts producing zero dependencies, and the fix was inert here.
+   * - **`dropLinkPickSignal`** abandons an open pick when a recalculation lands underneath it.
+   * - **`onUndoLastEdit`** is the Undo on the link confirmation. `CanvasModeBand.tsx:98` renders that
+   *   button only `{confirmation && onUndo ? …}`, so on this host it has **never** appeared —
+   *   including through the ADR-0064 §7 gate pass, which found and fixed a defect in that very
+   *   button while it was unreachable on the shipped path.
+   *
+   * The third was found by diffing the two hosts' whole prop lists rather than fixing the two the
+   * register named. That step is in the task for this reason, and it is why this test asserts the
+   * **full** set rather than the two: the register's list was incomplete, so an assertion copied
+   * from the register would have been incomplete too.
+   *
+   * Verified red first: against the unmodified host all three read `undefined`.
+   */
+  it('passes the canvas quiescence + undo props the legacy layout passes (#103)', () => {
+    renderScreen();
+    const props = h.tsldProps.current;
+    expect(props?.recalcHold).toBeDefined();
+    expect(props?.dropLinkPickSignal).toBeDefined();
+    // `onUndoLastEdit` is asserted as **present**, not as a function: both hosts pass
+    // `canUndo ? undo : undefined`, and this fixture opens a plan with an empty edit stack, so a
+    // correctly-wired host legitimately passes `undefined` here. The first version of this test
+    // asserted `toBeDefined()` and went red against the *fixed* code — the assertion was wrong, not
+    // the wiring. Presence is exactly the distinction #103 is about: absent means the host never
+    // offers the prop, present-but-undefined means it offers it and there is nothing to undo yet.
+    expect(props).toHaveProperty('onUndoLastEdit');
+  });
 });

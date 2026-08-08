@@ -86,7 +86,19 @@ const signInRoute = createRoute({
   // `?redirect=1` parses to the NUMBER 1 and was silently dropped. Being applied on three of six
   // public routes was drift, not a decision.
   validateSearch: (search: Record<string, unknown>): { redirect?: string; signedOut?: string } => {
-    const redirect = readForeignParam(search.redirect);
+    // **Same-origin by shape** (`docs/TECH_DEBT.md` #102(1)). The value is spent at
+    // `routes/sign-in.tsx:28` as `router.history.push(search.redirect ?? '/')`, and until this check
+    // it was whatever the URL said. It has never been exploitable, but only because `pushState`
+    // throws on a cross-origin URL — a property of the History API, not of this code, and one that
+    // stops protecting us the moment a `window.location` assignment replaces the push. That is one
+    // ordinary refactor away, on the screen every unauthenticated arrival lands on.
+    //
+    // The rule is one leading slash and not two: `/plans/1` is ours, `//evil.test` is a
+    // protocol-relative URL the browser resolves to another origin, and `https://evil.test` is not
+    // a path at all. A malformed value is DROPPED rather than repaired — the fallback is `/`, which
+    // is exactly where a reader with no destination should land.
+    const requested = readForeignParam(search.redirect);
+    const redirect = requested !== undefined && /^\/(?!\/)/.test(requested) ? requested : undefined;
     // `?signedOut` is how a completed sign-out reaches its confirmation, since the action and the
     // message it earns happen on two different screens (ADR-0077 §9).
     //

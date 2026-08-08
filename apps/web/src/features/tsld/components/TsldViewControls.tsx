@@ -55,7 +55,19 @@ export function TsldViewControls({
 }: TsldViewControlsProps): React.ReactElement {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <div role="group" aria-label="Zoom" className="flex items-center gap-1">
+      {/*
+       * `flex-wrap` here, not only on the row above (`docs/TECH_DEBT.md` #98). The outer row has
+       * wrapped since it was written; this group did not, and at 420 px it cannot shrink — so at a
+       * 320 px viewport `documentElement.scrollWidth` measured **436**, a WCAG 1.4.10 failure on the
+       * guest share view, which is the product's only unauthenticated surface. CLAUDE.md §13 calls
+       * AA a merge requirement, so this was a claim the project makes about itself being false in
+       * production since 2026-07-21.
+       *
+       * Fixed on the **shared** control rather than branched by surface: the same component renders
+       * in the member workspace, and a control that behaves differently depending on who is looking
+       * at it is how the two drift. Re-checked at 320/360/768 on both surfaces.
+       */}
+      <div role="group" aria-label="Zoom" className="flex flex-wrap items-center gap-1">
         {ZOOM_LEVELS.map((level) => {
           const active = zoomPreset === level;
           return (

@@ -84,3 +84,47 @@ describe('/reset-password search params', () => {
     });
   });
 });
+
+describe('/sign-in `?redirect=` is same-origin by shape (#102(1))', () => {
+  /**
+   * `/sign-in` is where **every** unauthenticated arrival lands (`router.tsx:128` composes the
+   * param), and the value is spent as `router.history.push(search.redirect ?? '/')`. Until this
+   * check it was whatever the URL said.
+   *
+   * It was never exploitable, and the reason matters more than the fact: `pushState` throws on a
+   * cross-origin URL. That is a property of the History API, not of our code, and it stops
+   * protecting us the moment somebody replaces the push with a `window.location` assignment — one
+   * ordinary refactor, on the product's front door.
+   */
+  it('keeps an ordinary in-app path', () => {
+    expect(validate('/sign-in', '?redirect=/orgs/acme/plans/1')).toEqual({
+      redirect: '/orgs/acme/plans/1',
+    });
+  });
+
+  it('drops a protocol-relative URL, which the browser resolves to another origin', () => {
+    // The case a single leading-slash check would wave through, and the reason the rule is
+    // "one slash, not two" rather than "starts with a slash".
+    expect(validate('/sign-in', '?redirect=//evil.test/phish')).toEqual({});
+  });
+
+  it('drops an absolute URL', () => {
+    expect(validate('/sign-in', '?redirect=https://evil.test')).toEqual({});
+  });
+
+  it('drops a relative path, which is not ours to resolve', () => {
+    expect(validate('/sign-in', '?redirect=orgs/acme')).toEqual({});
+  });
+
+  it('drops a foreign-typed value rather than stringifying it into a path', () => {
+    // `?redirect=1` reaches the validator as the NUMBER 1 (the default parser JSON-parses every
+    // value — #96). `readForeignParam` turns it into `'1'`, which is not a path, so it is dropped
+    // rather than pushed. Before the shape check, `'1'` would have been pushed as a destination.
+    expect(validate('/sign-in', '?redirect=1')).toEqual({});
+  });
+
+  it('leaves `signedOut` alone', () => {
+    // The sibling param on the same route, asserted so the shape check cannot quietly widen.
+    expect(validate('/sign-in', '?signedOut=true')).toEqual({ signedOut: 'true' });
+  });
+});
