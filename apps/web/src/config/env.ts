@@ -1437,13 +1437,27 @@ export const CANVAS_MULTI_SELECT_ENABLED =
  * the arbitrary-set slice reads a plural selection, and it reads it through the shipped model
  * rather than through this flag.
  *
- * **Default-off** until the epic's M5 gate pass (the specialist reviews plus a flag-on journey
- * against a real API with the pen enforced). Flag-off there is no Duplicate item in the row menu
- * or on the canvas selection bar, no keyboard handler is installed, and no clone code is reachable
- * — the surfaces are byte-for-byte today's, pinned by parity suites that land with each surface
- * rather than at the end.
+ * **Default-ON since 2026-08-08**, once the M5 gate pass cleared: six specialist reviews over the
+ * combined diff, every blocking finding folded with a regression test verified to fail first, and
+ * the flag-on journey `apps/web/e2e-copy-paste/` driving a real API with the pen enforced.
  *
- * Frontend-only for M0–M4: no API, DTO, schema or migration, and the CPM engine is not imported,
+ * The gate earned its place for the fifth epic running. Security passed; the other five blocked, on
+ * defects that had all passed a human read — a **band duplicate that was unreachable** (its model,
+ * tests and measurement had shipped while both entry points excluded a summary, so its unit tests
+ * were validating dead code); a completed copy that was **invisible**, landing below the plan's
+ * lowest lane with `createdIds` produced and read by nothing but a count; **caps sized on a request
+ * shape that no longer existed**, leaving M4's assignment creates unbounded against a per-handler
+ * rate limit; a **byte-for-byte duplicated date shift** one file apart, inside the epic whose own
+ * docblocks cite that failure; a disabled-reason carried as a **`title` only** under a docblock
+ * claiming it was reachable; and the composites' rollback, hold-release and failure-class branches
+ * with **no hook-level coverage at all**.
+ *
+ * Flag-off there is no Duplicate item in the row menu or on the canvas selection bar, no keyboard
+ * handler is installed, and no clone code is reachable — the surfaces are byte-for-byte today's,
+ * pinned by parity suites that are **kept** rather than deleted at the flip: they are the rollback
+ * contract (the ADR-0053 M6 rule), not scaffolding.
+ *
+ * Frontend-only throughout: no API, DTO, schema or migration, and the CPM engine is not imported,
  * so the ADR-0034 recalculation parity gate is untouched by construction.
  */
-export const ACTIVITY_COPY_PASTE_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_COPY_PASTE);
+export const ACTIVITY_COPY_PASTE_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_COPY_PASTE);

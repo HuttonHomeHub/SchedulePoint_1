@@ -62,7 +62,7 @@ function buttonNames(): (string | null)[] {
 beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar — entry-route actions (flag on)', () => {
-  it('orders the bar Logic → Report progress → Resources → Steps → Edit → Delete', () => {
+  it('orders the bar Logic → Report progress → Resources → Steps → Edit → Duplicate → Delete', () => {
     render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
     expect(buttonNames()).toEqual([
       'Logic',
@@ -70,6 +70,10 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
       'Resources',
       'Steps',
       'Edit',
+      // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
+      // planner reaches for when the row is nearly right. Present since VITE_ACTIVITY_COPY_PASTE
+      // flipped default-on (W5 M5).
+      'Duplicate',
       'Delete',
     ]);
   });

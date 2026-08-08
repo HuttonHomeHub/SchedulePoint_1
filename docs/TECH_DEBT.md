@@ -1580,7 +1580,7 @@ plans make that cheap to take.
 
 ---
 
-## 109. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
+## 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
 
 **Status:** open, deferred on a measured trigger · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4)
 
@@ -1627,3 +1627,68 @@ endpoint is the answer rather than a bigger constant.
 **Risk:** low while the caps hold. The residual is a copy interrupted mid-flight (a dropped
 connection, a 423 from a pen taken away) leaving some clones written — bounded by the caps, visible
 on the canvas, and undoable by the ADR-0048 command the composite already registers.
+
+---
+
+## 111. The activities-table row menu hides pen-gated actions instead of shading them
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (W5 M5 enablement gate)
+
+Raised independently by the accessibility and component reviews over the W5 diff. The canvas
+selection bar shades a pen-gated action and now carries an `aria-describedby`-linked reason; the
+activities-table row menu **omits the same actions entirely** — `ActivitiesTable.tsx` pushes Edit,
+Duplicate, Dissolve and Delete only `if (canEditSchedule)`, a boolean that already fuses role and
+pen. So a Planner who loses the pen mid-session (an Org-Admin override) sees Duplicate shaded with a
+reason on the canvas and simply absent from the table, and the same operation teaches two mental
+models depending on which surface they are on. It contradicts the ADR-0062 M6 rule the rest of the
+product follows: present and shaded, never hidden, never a dead end.
+
+**Why it is not fixed in W5, and what makes it more than a one-line change.** `MenuItem` supports
+`disabled`, but `Menu`'s roving focus **deliberately skips** `aria-disabled` items
+(`components/ui/menu.tsx`, the focusables filter). Shading a menu item therefore makes the option
+visible and leaves its reason **unreachable by keyboard** — the exact failure this entry is about,
+moved one layer down. Conveying it properly means deciding how a menu says why: the item's own
+accessible name (`"Duplicate — requires the edit lock"`), a non-focusable description row, or making
+disabled items focusable and revising the APG posture. That is a design-system decision affecting
+every menu in the product, and it lands on four actions W5 does not own — three of which ship
+unflagged today.
+
+W5's own surface is compliant: the selection bar's reason is now genuinely associated rather than
+title-only (that fix is in this epic, at the shared `ToolbarButton`, and repairs Edit/Delete/Dissolve
+there too). The feature spec's US-1 criterion is corrected to describe what ships rather than to
+claim both surfaces behave alike.
+
+**Risk:** low-moderate. Nobody is blocked — the capability is reachable from the canvas — but a
+table-first planner cannot discover why an action is missing.
+
+---
+
+## 112. Copy/paste follow-ups from the W5 enablement gate
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (W5 M5 enablement gate)
+
+Non-blocking findings from the six specialist reviews over the W5 diff, recorded rather than rushed.
+
+1. **No `aria-busy` on the single-activity Duplicate while its write is in flight** (accessibility).
+   US-1 names it. A single duplicate is deliberately confirmation-free, so there is no interstitial
+   UI to carry the state, and the source stays selected — so the button remains mounted, focused and
+   enabled through the whole composite. Two quick activations can fire two composites built from the
+   same pre-write `usedNames` snapshot, and the second reports a generic 409 rather than being
+   prevented. The toolbar primitive already supports `isBusy` (the Recalculate item's precedent).
+2. **`ActivitiesTable` offers no "Duplicate band" for a summary** (accessibility), while the canvas
+   bar now does. Not a dead end — an absence — but it breaks the cross-surface wording convergence
+   the two entry points otherwise keep.
+3. **`projectDuplicate` is exported, uncalled and untested** (component, test-engineer). Either wire
+   it or delete it; `planClone` calls `projectClone` directly.
+4. **No flag-off parity suite for the canvas selection bar's Duplicate** (component), though one
+   exists for the table row menu. The flag-off suites are this repo's stated rollback contract.
+5. **`canEditSchedule` reuse across the two entry points is not pinned by a test** (component). The
+   ADR-0062 precedent pinned its equivalent with an identity assertion; here a future refactor could
+   rebuild the gate differently for one host and nothing would notice until the surfaces disagreed.
+6. **Two untested branches in the clipboard keybindings** (test-engineer): `window.getSelection()`
+   returning `null` rather than a collapsed selection, and `event.target === null`.
+7. **`env.test.ts` has no `ACTIVITY_COPY_PASTE_ENABLED` block** (test-engineer), which M0-T1 asked
+   for; the flag is covered indirectly by the flag-mocked component suites.
+
+**Risk:** low. None changes what the product does today; (1) is the only one a planner could meet,
+and only by activating twice inside one round trip.

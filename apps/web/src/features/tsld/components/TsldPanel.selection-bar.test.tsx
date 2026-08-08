@@ -104,11 +104,19 @@ function selectionBar(): HTMLElement | undefined {
     .find((t) => t.getAttribute('aria-label') === 'Actions for Survey');
 }
 
-/** A bar button by its Tier-1 text label (name computation is unavailable on the hidden bar). */
+/**
+ * A bar button by its Tier-1 text label (name computation is unavailable on the hidden bar).
+ *
+ * Matches on the label as a **prefix**, not equality. A shaded button now renders its
+ * `disabledReason` as an `sr-only` span inside itself so the reason can be `aria-describedby`-linked
+ * (W5 M5) — invisible on screen, but part of `textContent`. The accessible NAME is pinned to the
+ * label via `aria-label`, so nothing a user perceives changed; this helper simply reads the wrong
+ * channel, and equality made it look like the button had vanished.
+ */
 function barButton(bar: HTMLElement, label: string): HTMLElement {
   const btn = within(bar)
     .getAllByRole('button', { hidden: true })
-    .find((b) => b.textContent?.trim() === label);
+    .find((b) => b.textContent?.trim().startsWith(label) === true);
   if (!btn) throw new Error(`no bar button labelled "${label}"`);
   return btn;
 }

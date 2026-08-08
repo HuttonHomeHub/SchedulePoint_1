@@ -70,15 +70,21 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     expect(within(bar).queryByRole('button', { name: 'Delete activity' })).not.toBeInTheDocument();
   });
 
-  it('registers only the three base actions when VITE_ENTRY_ROUTES is off', () => {
-    // This suite pins the flag off, so the entry-route Progress/Resources/Steps items are absent —
-    // the bar stays byte-for-byte the prior three-item set.
+  it('registers only the base actions when VITE_ENTRY_ROUTES is off', () => {
+    // This suite pins ENTRY_ROUTES off, so the Progress/Resources/Steps items are absent. Duplicate
+    // is NOT one of those — it rides `VITE_ACTIVITY_COPY_PASTE`, default-on since W5 M5 — so the
+    // base set is Logic → Edit → Duplicate → Delete. Asserting a bare count of 3 here would have
+    // gone red on the flip and said nothing about why; naming the members says which item arrived.
     render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     for (const name of ['Report progress', 'Resources', 'Steps']) {
       expect(within(bar).queryByRole('button', { name })).not.toBeInTheDocument();
     }
-    expect(within(bar).getAllByRole('button')).toHaveLength(3);
+    expect(
+      within(bar)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Logic', 'Edit', 'Duplicate', 'Delete']);
   });
 
   it('runs the read action (logic) even in read-only', () => {

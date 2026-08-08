@@ -81,6 +81,12 @@ describe('usePlanWorkspaceKeyScope', () => {
     ['Cmd/Ctrl+Z', { key: 'z', ctrlKey: true }, () => undo],
     ['Cmd/Ctrl+Shift+Z', { key: 'z', ctrlKey: true, shiftKey: true }, () => redo],
     ['Ctrl+Y', { key: 'y', ctrlKey: true }, () => redo],
+    // The clipboard pair. Composed here in the M5 enablement pass and covered by nothing until the
+    // test review said so: `Host` had gained the three new params while the matrix still only
+    // pressed `?`, z and y — so forgetting `onClipboardKeyDown(event)` inside the composed handler
+    // would have passed every test in this file, and the shortcut would simply not exist.
+    ['Cmd/Ctrl+C', { key: 'c', ctrlKey: true }, () => onCopy],
+    ['Cmd/Ctrl+V', { key: 'v', ctrlKey: true }, () => onPaste],
   ] as const)('%s fires from in-tree AND portalled focus', (_name, init, fn) => {
     render(<Host container={portalHost} />);
     for (const target of targets()) expect(press(init, target)).toBe(true);

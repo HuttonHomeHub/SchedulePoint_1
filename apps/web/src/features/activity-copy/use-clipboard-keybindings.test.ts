@@ -88,6 +88,20 @@ describe('useClipboardKeybindings — fires', () => {
     handler()(keyEvent('v').event);
     expect(onPaste).toHaveBeenCalledTimes(1);
   });
+  it('copies when getSelection returns null rather than a collapsed selection', () => {
+    // Non-browser and some embedded environments return null. Treating that as "there IS a
+    // selection" would make copy silently dead; treating it as "no selection" is the documented
+    // choice, and this pins which one.
+    vi.spyOn(window, 'getSelection').mockReturnValue(null);
+    handler()(keyEvent('c').event);
+    expect(onCopy).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies with a null event target — no element to be inside means no form field', () => {
+    withSelection(true);
+    handler()(keyEvent('c', { target: null }).event);
+    expect(onCopy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useClipboardKeybindings — does NOT fire', () => {
@@ -101,17 +115,32 @@ describe('useClipboardKeybindings — does NOT fire', () => {
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
-  it.each(['input', 'textarea', 'select', '[contenteditable="true"]'])(
-    'with focus inside %s',
-    (selector) => {
-      withSelection(true);
-      const target = { closest: (q: string) => (q.includes(selector.slice(0, 5)) ? {} : null) };
-      handler()(keyEvent('c', { target }).event);
-      handler()(keyEvent('v', { target }).event);
-      expect(onCopy).not.toHaveBeenCalled();
-      expect(onPaste).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    ['input', () => document.createElement('input')],
+    ['textarea', () => document.createElement('textarea')],
+    ['select', () => document.createElement('select')],
+    [
+      'contenteditable',
+      () => {
+        const el = document.createElement('div');
+        el.setAttribute('contenteditable', 'true');
+        return el;
+      },
+    ],
+  ])('with focus inside a real <%s>', (_name, make: () => HTMLElement) => {
+    // **Real elements, calling the real `closest`.** The first version stubbed `closest` as
+    // `q.includes(selector.slice(0, 5))`, which never simulated DOM matching at all: the production
+    // selector string is one fixed literal, identical on every iteration, so all four cases asserted
+    // the same substring. It passed against a wrong implementation — mistype `select` as
+    // `selectable` and a real <select> stops matching in a browser while
+    // `'…, selectable, …'.includes('selec')` stays true. Found by the M5 test review.
+    withSelection(true);
+    const target = make();
+    handler()(keyEvent('c', { target }).event);
+    handler()(keyEvent('v', { target }).event);
+    expect(onCopy).not.toHaveBeenCalled();
+    expect(onPaste).not.toHaveBeenCalled();
+  });
 
   it('while a modal is open', () => {
     // Otherwise a paste writes plan state from beneath an open ConfirmDialog or activity editor.

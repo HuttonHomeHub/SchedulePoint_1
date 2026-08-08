@@ -241,9 +241,21 @@ is taken now, later-on-measurement, or not at all. Full list with proposed defau
 > - **Given** the duplicate succeeds, **then** exactly **one** command is pushed onto the ADR-0048
 >   stack, whose `undo` deletes the clone and whose `redo` re-creates it with a new id (the
 >   conservative M2 rule the house already uses).
-> - **Given** I do not hold the pen, or hold it but lack `activity:create`, **when** I open the row
->   menu or the selection bar, **then** **Duplicate** is **present and shaded with a reason**
->   linked by `aria-describedby` — never hidden, never a dead end (ADR-0062 M6).
+> - **Given** I do not hold the pen, or hold it but lack `activity:create`, **when** I open the
+>   **selection bar**, **then** **Duplicate** is **present and shaded with a reason** linked by
+>   `aria-describedby` — never hidden, never a dead end (ADR-0062 M6).
+>
+>   **Corrected 2026-08-08 (M5 enablement), and the correction is the finding.** This read "the row
+>   menu **or** the selection bar" and was written as though both behaved alike. They do not: the
+>   activities-table row menu **omits** every pen-gated action, which is pre-existing across Edit,
+>   Duplicate, Dissolve and Delete. Fixing it is not a one-line change — `Menu`'s roving focus
+>   deliberately skips `aria-disabled` items, so shading a menu item makes the option visible and
+>   leaves its reason unreachable by keyboard, which is this criterion's failure one layer down. It
+>   is `docs/TECH_DEBT.md` #111 with the evidence attached. What this epic **did** fix is the half it
+>   owns: the shared `ToolbarButton` carried its `disabledReason` as a `title` only — a hover
+>   tooltip no browser shows on keyboard focus — under a docblock claiming the reason was reachable.
+>   It is now `aria-describedby`-linked, which repairs every pen-gated toolbar item at once.
+>
 > - **Given** the selected activity is a `WBS_SUMMARY`, **then** the item reads **Duplicate band**
 >   and behaves as US-2 — a lone summary clone is never created (a childless summary collapses to
 >   the data date and reads as breakage).
