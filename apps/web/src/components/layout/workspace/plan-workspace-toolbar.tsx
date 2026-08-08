@@ -422,6 +422,7 @@ export function ToolbarPlanWorkspace({
       // neighbour" shape ADR-0064 §7 records.
       bulk={model.bulkOperations}
       onDissolveSummary={model.onDissolveSummary}
+      onDuplicateActivity={(a) => void model.onDuplicateActivity(a)}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
       // toolbar item is flag-gated, so flag-off is byte-for-byte. Progress is role-gated via
       // `canReportProgress`; Steps hides for a duration-derived selection via `isStepsEligible`.

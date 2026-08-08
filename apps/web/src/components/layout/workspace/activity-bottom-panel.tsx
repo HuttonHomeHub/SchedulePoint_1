@@ -89,6 +89,7 @@ export function ActivityBottomPanel({
           editorGating={model.activityEditorGating}
           onOpenLogic={model.onOpenLogic}
           onOpenResources={model.onResourcesActivity}
+          onDuplicate={(a) => void model.onDuplicateActivity(a)}
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
           calendarsError={model.calendars.isError}

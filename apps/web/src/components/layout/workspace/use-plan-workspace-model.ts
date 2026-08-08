@@ -33,7 +33,7 @@ import {
   openActivityEditor,
   type ActivityEditorIntent,
 } from '@/features/activities/lib/activity-editor-intent';
-import { planClone, type CloneRefusal } from '@/features/activity-copy';
+import { planClone, refusalMessage, type CloneRefusal } from '@/features/activity-copy';
 import { useCreateClonedActivity } from '@/features/activity-copy/api/use-clone-activities';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
@@ -1503,10 +1503,26 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     return { applied: true, refusal: null, conflict: null, createdIds: created.map((c) => c.id) };
   };
 
+  /**
+   * The single-row entry point both hosts call. Refusals and conflicts are **announced**, because
+   * this is the live region every other canvas action already speaks through and a planner driving
+   * from the keyboard has no other channel; a refusal that only appeared visually would be silent
+   * for exactly the person who cannot see the bar not changing.
+   */
+  const onDuplicateActivity = async (activity: ActivitySummary): Promise<void> => {
+    const outcome = await duplicateActivities([activity]);
+    if (outcome.refusal !== null) {
+      announce(refusalMessage(outcome.refusal));
+      return;
+    }
+    if (outcome.conflict !== null) announce(outcome.conflict);
+  };
+
   return {
     orgSlug,
     planId,
     duplicateActivities,
+    onDuplicateActivity,
     // Queries
     plan,
     project,
