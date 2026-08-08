@@ -172,10 +172,19 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
 
   // ------------------------------------------------- the pen actually gates
   await releasePen(page);
-  // Dissolve is a structural write: without the pen the row menu does not offer it at all, the same
-  // as Edit and Delete.
+  // Dissolve is a structural write, so without the pen the row menu **shades** it and says why —
+  // the same as Edit and Delete, and the same as the bulk-assign bar asserted a few lines below.
+  //
+  // This assertion was inverted by ADR-0082 (`docs/TECH_DEBT.md` #111), and the version it replaces
+  // is the reason that ADR exists: it required Dissolve to be *absent* here while the very next
+  // paragraph of this same test required the Assign button to be *present and shaded with a
+  // reason*. One journey, four lines apart, pinning both halves of the inconsistency.
   await openRowMenu(page, 'Superstructure');
-  await expect(page.getByRole('menuitem', { name: 'Dissolve' })).toHaveCount(0);
+  const dissolve = page.getByRole('menuitem', { name: 'Dissolve' });
+  await expect(dissolve).toHaveAttribute('aria-disabled', 'true');
+  const dissolveReason = await dissolve.getAttribute('aria-describedby');
+  expect(dissolveReason).not.toBeNull();
+  await expect(page.locator(`[id="${dissolveReason ?? ''}"]`)).toContainText('Start editing');
   await page.keyboard.press('Escape');
 
   // Selecting is a READ, so the checkboxes stay live without the pen — and they must, because the
