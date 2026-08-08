@@ -89,6 +89,17 @@ a bug:
   Shift+F10 on the focused row), and touch long-press — **never hover-only**. The
   menu roves focus with the arrow keys and returns focus to the trigger on
   Esc/Tab/selection.
+  - **An action the reader cannot take right now is shaded with the reason, not
+    removed** (ADR-0082, extending ADR-0062 M6 into the menu tier). Hiding it
+    means a planner never learns the row can do the thing, and never learns what
+    would let them — and it made one operation wear two mental models depending
+    on whether they were on the table or the canvas. Shaded items stay arrow-key
+    stops so the reason is reachable by keyboard. **Omit** only when the action
+    does not apply to that object, its flag is off, or there is nothing to show;
+    when **every** item would be shaded, show no trigger at all.
+  - The reason names the next step in the app's existing words ("Start editing
+    to change this activity"), never a bare "Read-only" and never an invented
+    fourth variant of a sentence the toolbar already has.
 
 ## Content & tone
 

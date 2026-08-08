@@ -1766,3 +1766,65 @@ cannot derive the value, which is the test that section already applies.
 
 The API e2e asserts the id is a real uuid **and then uses it** to restore what it deleted. A field
 that is only asserted present is a field that can quietly stop being right.
+
+---
+
+## 114. Two menus still hide rather than shade, for want of a reason to show
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (ADR-0082)
+
+ADR-0082 made a shaded menu item keep its place in the keyboard order and carry an
+`aria-describedby` reason, and applied it to the activities-table row menu. Two consumers are
+knowingly left behind, both recorded here rather than discovered again later — the ADR-0071 rule.
+
+**1. `plan-actions-menu.tsx:62-66` hides "Edit plan…" on `!model.canWrite`.** The blocker is not the
+markup, it is that **there is no sentence to show**. `canWrite` is a bare boolean; it cannot say
+whether the planner lacks the role or merely lacks the pen, and a sentence that guesses — telling
+someone "your role cannot do this" when they simply need the edit lock — is the exact false-statement
+defect ADR-0082 §2 records shipping twice. The fix is to give the plan scope a `ScopeGate` carrying
+its own reason, the way `deriveActivityEditorGating` does for activities, and then shade from it.
+Doing that properly is a small piece of gating work, not a markup change, which is why it is not
+folded into ADR-0082.
+
+**2. `Combobox` still skips disabled options by arrow key.** The APG's _Developing a Keyboard
+Interface_ practice names "Options in a Listbox" in the same keep-focusable list it names menu items
+in, so the argument transfers exactly. It is a separate primitive with `aria-activedescendant`,
+in-flow rendering, its own consumers and its own tests, and changing it inside ADR-0082 would widen
+the blast radius well past what the row menu needed. The decision to leave it is deliberate; the
+inconsistency between two APG primitives in one product is the cost.
+
+**Risk:** low for both. Nobody is blocked — the plan edit is reachable for anyone entitled to it, and
+a combobox's disabled options are not actions. Both are discoverability and consistency defects
+against ADR-0062 M6, which is a real reason to close them and not an urgent one.
+
+---
+
+## 115. The pen sentence names a button the reader cannot see when a peer holds the lock
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
+
+`deriveActivityEditorGating`'s `NO_PEN` sentence is **"Start editing to change this activity."**, and
+the TSLD toolbar shades its pen-gated commands with the same form in eight places
+(`tsld-toolbar-items.tsx:248,435,1824,1840,2197,2247,2281,2326`). That sentence is right in the
+common case — the plan is open, nobody holds the pen, and **Start editing** is on screen.
+
+It is **wrong when a peer holds the pen**, and the ADR-0082 journey step demonstrates it in one run
+rather than by argument: in `e2e-edit/pen-handoff.spec.ts` the same page asserts, within a few lines
+of each other, that B sees a **Request control** button (`New activity` is absent) and that B's row
+menu explains the refusal with _"Start editing to change this activity."_ There is no **Start
+editing** button on that screen. The reader is told to press something that is not there, and the
+control that would actually help them — Request control — is not named.
+
+**Why it was not fixed with ADR-0082.** The sentence is a year old and shared by nine call sites; the
+row menu is the tenth consumer, not the origin. Fixing it means threading the held-by-other state
+into the gate so it can pick between two sentences, then re-wording eight toolbar reasons in step —
+which changes shipped copy across the whole canvas toolbar and deserves its own slice rather than
+riding a primitive's accessibility fix. ADR-0060's own record warns against the other failure mode
+here: an earlier draft invented _"Someone else is editing this plan. Take over the edit lock…"_,
+which was **false** in the common case, so this must be a branch on real state and not a re-wording.
+
+**The point ADR-0082 does close** is that both surfaces now say the _same_ thing, so this is one
+sentence to correct rather than two mental models to reconcile.
+
+**Risk:** low. A planner in this state has a lit **Request control** button in the chrome; the
+sentence sends them looking for the wrong one first. Worth a slice, not urgent.

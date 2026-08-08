@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { openNewPlan, setPlannedStart, startEditing } from './support';
+import { addActivity, openNewPlan, setPlannedStart, startEditing } from './support';
 
 /**
  * Flag-ON multi-actor pen hand-off journey (TECH_DEBT #27b). Two real users in one org:
@@ -73,12 +73,40 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await a.bringToFront();
   await a.goto(planUrl);
   await startEditing(a);
+  // One activity, so B has a row (and therefore a row menu) to look at while locked out.
+  await addActivity(a, 'Excavate');
 
   // --- B opens the plan: read-only, held by A, with a Request-control affordance -------------
   await b.goto(planUrl);
   const requestBtn = b.getByRole('button', { name: 'Request control' });
   await expect(requestBtn).toBeVisible();
   await expect(b.getByRole('button', { name: 'New activity' })).toHaveCount(0);
+
+  // --- The row menu shades rather than hides, and says why (ADR-0082) -----------------------
+  // The only place this can be checked: `canEditSchedule` is false here because a *peer holds the
+  // pen*, which no mocked test distinguishes from "your role cannot write" — and the sentence is
+  // the whole point of the change. Before ADR-0082 the four write actions were simply absent, so
+  // this assertion fails against the old code by not finding the item at all.
+  await b.getByRole('button', { name: 'Actions for Excavate' }).click();
+  const lockedMenu = b.getByRole('menu');
+  const lockedEdit = lockedMenu.getByRole('menuitem', { name: 'Edit' });
+  await expect(lockedEdit).toHaveAttribute('aria-disabled', 'true');
+  const reasonId = await lockedEdit.getAttribute('aria-describedby');
+  expect(reasonId).not.toBeNull();
+  // The reason is a real sentence naming a next step, not a bare "Read-only" — and it is the
+  // app's existing pen sentence rather than a fourth variant invented for this surface.
+  await expect(b.locator(`#${reasonId ?? ''}`)).toHaveText(/Start editing to change this activity/);
+  // A shaded item stays an arrow-key stop, which is the only way that sentence is reachable by
+  // keyboard. `itemsOf` filtered disabled items until ADR-0082, so this line is the primitive's
+  // posture change observed through the product rather than through the primitive's own suite.
+  const labels = await lockedMenu.getByRole('menuitem').allTextContents();
+  const editIndex = labels.indexOf('Edit');
+  expect(editIndex).toBeGreaterThan(-1);
+  await b.keyboard.press('Home');
+  for (let i = 0; i < editIndex; i += 1) await b.keyboard.press('ArrowDown');
+  await expect(lockedEdit).toBeFocused();
+  await b.keyboard.press('Escape');
+
   await requestBtn.click();
   await expect(b.getByText(/Requested — waiting/i)).toBeVisible();
 
@@ -96,6 +124,29 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await refetchLock(b);
   await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
   await expect(b.getByRole('button', { name: 'New activity' })).toBeVisible();
+
+  // ...and the same row-menu item is now live, with the reason gone. Asserting both ends of one
+  // hand-off is what makes this a statement about the *gate* rather than about a snapshot: the
+  // shaded and the actionable state are the same control, on the same row, for the same person.
+  await b.getByRole('button', { name: 'Actions for Excavate' }).click();
+  const freeEdit = b.getByRole('menu').getByRole('menuitem', { name: 'Edit' });
+  await expect(freeEdit).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(freeEdit).not.toHaveAttribute('aria-describedby', /./);
+  await b.keyboard.press('Escape');
+
+  // The other surface's sentence for the same state, so the two cannot drift into two mental
+  // models — which is the defect `docs/TECH_DEBT.md` #111 actually described. A's toolbar is now
+  // the locked-out one, and its pen-gated commands shade with the same "Start editing to …" form.
+  await refetchLock(a);
+  await a.bringToFront();
+  await a.getByRole('button', { name: 'Actions for Excavate' }).click();
+  const aEdit = a.getByRole('menu').getByRole('menuitem', { name: 'Edit' });
+  await expect(aEdit).toHaveAttribute('aria-disabled', 'true', CROSS_ACTOR);
+  const aReasonId = await aEdit.getAttribute('aria-describedby');
+  await expect(a.locator(`#${aReasonId ?? ''}`)).toHaveText(
+    /Start editing to change this activity/,
+  );
+  await a.keyboard.press('Escape');
 
   await ctxA.close();
   await ctxB.close();

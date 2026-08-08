@@ -112,9 +112,13 @@ contract is the commit boundary plus the existing flag-off parity suite.
   unchanged** — `nodeActions` returns `[]` for a non-writer, so §3's all-inert clause suppresses the
   trigger and behaviour is byte-for-byte today's. Recorded as a considered exclusion, not an
   oversight.
-- `plan-actions-menu.tsx:62-66` hides "Edit plan…" on `!canWrite` — **a third instance**, included if
-  the model exposes a reason sentence and recorded explicitly otherwise, rather than left to be
-  re-found.
+- `plan-actions-menu.tsx:62-66` hides "Edit plan…" on `!canWrite` — **a third instance, deliberately
+  left alone**, and the reason is the rule this ADR exists to protect. `model.canWrite` is a bare
+  boolean with **no reason sentence attached**, and it cannot say whether the refusal is a role or a
+  missing pen. Writing a sentence here would therefore be guessing, and a guess that says "your role"
+  to someone who merely lacks the lock is precisely the false-statement defect §2 records shipping
+  twice already. Shading needs a gate that carries its own reason; giving the plan scope one is its
+  own change. Filed rather than fudged (`docs/TECH_DEBT.md` #114).
 - **`Combobox` is knowingly left inconsistent.** It skips disabled options by arrow key, and the same
   APG list names _"Options in a Listbox"_ — but it is a separate primitive with its own consumers and
   tests, and changing it here widens the blast radius past what #111 needs. Filed as its own
@@ -122,7 +126,31 @@ contract is the commit boundary plus the existing flag-off parity suite.
   the ADR-0071 failure.
 - `menu.test.tsx`'s skip assertions are **rewritten**, and must read as a posture change carrying the
   APG citation rather than a test bent to fit new code.
+- **The journey step goes into the existing `e2e-edit/pen-handoff.spec.ts`, not a new suite** — no new
+  CI step, and it is the only place in the repository where the shaded and the actionable state are
+  the **same control, on the same row, for the same person**, either side of a real pen hand-off.
+  That matters because `canEditSchedule` is false here for a reason no mocked test distinguishes:
+  a **peer holds the pen**, not "your role cannot write". Verified red first (ADR-0081): against the
+  pre-ADR-0082 code the assertion fails by not finding the menu item at all, which is precisely what
+  hiding it means. It also drives the primitive's posture change **through the product** — arrowing
+  from Home to the shaded item and asserting it takes focus — rather than through the primitive's
+  own suite.
 - The CPM engine is not imported and no migration runs.
+
+## What the journey found
+
+Making the reason **visible** made it checkable, and it is wrong in one state. The
+sentence — `NO_PEN`, _"Start editing to change this activity."_, shared with eight toolbar
+commands — names a control the reader **does not have** when a peer holds the pen: the same page
+that shows it also shows **Request control** and no **Start editing** button. Both facts are
+asserted a few lines apart in one journey run, so this is observed rather than argued.
+
+It is not a defect this ADR introduces (the sentence is a year old and the row menu is its tenth
+consumer), and it is not one to fix by re-wording: ADR-0060 records an earlier draft that invented
+_"Someone else is editing this plan…"_, which was **false** whenever nobody held the pen. Correcting
+it means branching on real held-by-other state and re-wording eight toolbar reasons in step, which
+is its own slice — `docs/TECH_DEBT.md` #115. What this ADR does close is that both surfaces now say
+the **same** thing, so it is one sentence to correct rather than two mental models to reconcile.
 
 ## Recorded corrections
 

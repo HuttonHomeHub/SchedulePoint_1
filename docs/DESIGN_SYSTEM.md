@@ -408,6 +408,18 @@ link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
   arrow-key focus, `Esc`/`Tab`/click-away dismissal, and focus-return to the
   trigger. Used for the Project Explorer row-actions (context) menu. A shared
   Command palette pattern for power users remains a future addition.
+  **A menu item that is unavailable is shaded, not hidden — and stays an
+  arrow-key stop** (`aria-disabled`, `disabledReason` linked by
+  `aria-describedby`, ADR-0082). This is the one place the "native `disabled` is
+  fine when nothing flips underneath the user" clause above does **not** extend
+  to: the APG's _Developing a Keyboard Interface_ practice names "Menu items in a
+  Menu or menu bar" among the controls to keep focusable when disabled, because a
+  reason a keyboard user cannot reach is not a reason. **Omit** an item only when
+  it does not apply to the object (Dissolve on a non-summary), when its flag is
+  off, or when there is nothing to show at all; **shade with a reason** when it is
+  shut by a state the reader can change (the ADR-0028 pen) or by their role. When
+  every item would be shaded, render **no trigger** rather than a menu of
+  refusals. See [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) for the contract.
 - **Comboboxes (pickers)** — the hand-rolled `Combobox` primitive
   (`components/ui/combobox.tsx`), WAI-ARIA APG "Combobox with List Autocomplete"
   on semantic HTML (no Radix): type-ahead filtering, `aria-activedescendant`

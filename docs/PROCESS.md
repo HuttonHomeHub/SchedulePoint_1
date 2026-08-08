@@ -128,6 +128,26 @@ Every item records: **description**, **complexity** (S/M/L/XL), **dependencies**
 **thin vertical slices** that keep `main` releasable. Use the
 [implementation-plan template](templates/implementation-plan.md).
 
+Two authoring rules on top of that, both from **ADR-0081** and both written after a
+milestone shipped, read as done in the commit log, and **could not be reached from the
+product**:
+
+- **A milestone claiming user-facing capability names its entry point.** Say which
+  control the planner presses, in the milestone header. A milestone that deliberately
+  ships dark — a schema, a pure model, a read path behind a later surface — says _that_,
+  in the same place. There is no third state, and "the model landed" is not a claim that
+  the capability exists.
+- **The flag-on journey lands with the first user-facing milestone, not at
+  enablement** — even as one skeletal step that opens the surface and presses the
+  control. This is the enforcement half. The hole above survived a plan, a spec, a
+  measurement harness, unit tests and a human read, and died the first time something
+  drove the real product. The enablement milestone keeps its full journey; what moves
+  earlier is its first step.
+
+Working through a task list is evidence the tasks were done, not that a capability
+exists — ADR-0058's _verify the claim; do not trust the document_, applied to the plan
+itself.
+
 ---
 
 ## Definition of Ready (may implementation start?)

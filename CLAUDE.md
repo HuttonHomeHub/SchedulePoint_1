@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 882 web
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 883 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 81 ADRs.
+> 82 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1686,6 +1686,45 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   a property of a symbol. The ADR records two of its own claims being asserted before they were
   checked — the rejected gate, and a sentence about a docblock that said close to the opposite — as
   ADR-0076 Class 3 occurring twice inside the ADR written about it. **No product code changes.**
+
+- **ADR-0082** _(Proposed)_ — A shaded menu item keeps its focus, and its reason. `docs/TECH_DEBT.md`
+  #111 read as a markup inconsistency — the activities-table row menu **omits** Edit, Duplicate,
+  Dissolve and Delete without the ADR-0028 pen while the canvas selection bar shades the same actions
+  and links a reason — and turned out to be a decision about the **primitive**: `Menu`'s roving focus
+  deliberately skipped `aria-disabled` items, so shading one made the option visible and its reason
+  **unreachable by keyboard**, which is the same defect one layer down. So `itemsOf` stops filtering,
+  which is the load-bearing change and the only one that makes a reason readable at any call site.
+  It repairs three things at once that nobody had connected: `ToolbarOverflow` already renders a
+  bespoke disabled row whose **two comments assert it is focusable and "an arrow-key stop"** while
+  the filter excluded it — verbatim the failure `ToolbarButton` records having shipped once, sitting
+  undiscovered in the primitive's own neighbour; `onKeyDown`'s `indexOf` returns `-1` when focus sits
+  on a filtered item, so **ArrowUp lands on the second-to-last item** (reachable today wherever an
+  item becomes disabled while focused); and a menu whose items are **all** disabled focuses nothing
+  on open, leaving focus on the trigger **outside the portal**, where the container's React handler
+  never sees the arrows. The APG's _Developing a Keyboard Interface_ practice names "Menu items in a
+  Menu or menu bar" in its keep-focusable list, so removing the filter is a **return** to the pattern
+  the primitive says it implements. `MenuItem` gains `disabledReason` expressed exactly as
+  `ToolbarButton` expresses it — an `sr-only` **sibling** plus `aria-describedby`, never folded into
+  the name — and the row menu shades from the **same `ScopeGate` object** the editor already uses
+  (`editorGating.general`), pinned by an identity assertion rather than a second `{ writable, reason }`
+  assembled beside it. Because "shade, never hide" degenerates without a rule, the ADR states the
+  discriminating one: **omit** when the action does not apply to the object, when a flag is off, or
+  when there is nothing to show at all; **shade with a reason** when it is shut by a state the reader
+  can change or by their role. Plus one clause that earns its keep three times — **a menu whose every
+  item would be shaded renders no trigger**, which preserves today's Project Explorer behaviour,
+  removes the focus trap rather than making it more reachable, and stops a Viewer meeting a menu of
+  nothing but refusals. Two consumers are **knowingly left alone and filed rather than fudged**
+  (`docs/TECH_DEBT.md` #114): `plan-actions-menu.tsx` gates on a bare `canWrite` boolean with **no
+  reason sentence and no way to tell a role from a missing pen**, so writing one would be guessing —
+  and a guess saying "your role" to someone who merely lacks the lock is precisely the
+  false-statement defect this ADR records shipping twice; and `Combobox` skips disabled options by
+  arrow key, which the same APG list covers, but is a separate primitive whose consumers are outside
+  what #111 needs. The ADR also **corrects its own author**: #111 was raised as an accessibility
+  blocker and the independent assessment found **no applicable success criterion** — it is a
+  design-system and usability defect against ADR-0062 M6, which is reason enough, and the overstated
+  citation is corrected rather than quietly dropped. No feature flag (ADR-0061's reasoning, stronger
+  here: a primitive's accessibility posture plus a gating derivation, with no new capability).
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

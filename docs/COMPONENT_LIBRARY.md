@@ -106,6 +106,61 @@ error, empty, and selected/active. A missing state is an incomplete component.
   regression test.
 - Critical flows also get a Playwright journey with accessibility assertions.
 
+## Primitive: `Menu` / `MenuItem` (`components/ui/menu.tsx`)
+
+The single **action menu** primitive: a hand-rolled WAI-ARIA APG "Menu Button" on
+semantic HTML (no new dependency), sibling to `Combobox`. Portal-rendered and anchored
+to a viewport point, so one component serves a trigger button, a right-click context
+menu and the toolbar overflow. Focus moves into the menu on open, ↑/↓/Home/End rove,
+and Escape/Tab/selection return focus to `restoreFocusRef`.
+
+Scope is deliberately minimal — a flat list of a handful of actions, no submenus and no
+typeahead. Pair it with `useMenuTrigger()` rather than re-deriving the
+ref + `getBoundingClientRect()` + `useState` dance at each call site.
+
+### Unavailable items: shade, don't hide (ADR-0082)
+
+This is the part most likely to be got wrong, because the primitive's own posture was
+wrong until ADR-0082 and two of its call sites had comments asserting the opposite of
+what the code did.
+
+- **A shaded item is still an arrow-key stop.** `itemsOf` includes `aria-disabled`
+  items. It used to filter them, and that one line meant a shaded item's reason was
+  unreachable by keyboard — so there was no point writing one, so no call site did.
+  The APG's _Developing a Keyboard Interface_ practice names "Menu items in a Menu or
+  menu bar" among the controls to keep focusable when disabled.
+- **`disabledReason` is a description, never part of the name.** It renders as an
+  `sr-only` **sibling** of the button, linked by `aria-describedby`. Folding it into
+  the label makes the name narrate state and repeats one sentence across every shaded
+  item — the exact defect `ToolbarButton` fixed one primitive along, where thirteen
+  existing tests caught the alternative the moment it was written.
+- **`busy`** sets `aria-busy` for an item whose write is in flight. Never reach for the
+  native `disabled` attribute here; it drops focus to `<body>` twice per action.
+- **Omit vs. shade** — the discriminating rule, because "shade, never hide" degenerates
+  without one:
+
+  | Why it is unavailable                              | Treatment                     |
+  | -------------------------------------------------- | ----------------------------- |
+  | Does not apply to this object (Dissolve on a task) | **Omit**                      |
+  | Feature flag off                                   | **Omit** (parity suites rely) |
+  | Nothing to show at all                             | **Omit**                      |
+  | Shut by a state the reader can change (the pen)    | **Shade + reason**            |
+  | Shut by role                                       | **Shade + reason**            |
+  | Not built yet                                      | **Shade + "Coming soon"**     |
+
+- **When every item would be shaded, render no trigger.** A menu of nothing but
+  refusals is not discoverability, and a menu with no enabled item has nothing to focus
+  on open — which used to leave focus on the trigger, outside the portal, where the
+  container's key handler never sees the arrows.
+- **Derive the reason from the gate the feature already has**, not a second
+  `{ writable, reason }` assembled beside it. `ActivitiesTable` shades from
+  `editorGating.general` — the same `ScopeGate` object the activity editor uses — and an
+  identity assertion pins it, so "this changes no permission" is checkable rather than
+  claimed. A gate that is a bare boolean has no sentence to show, and inventing one is
+  how a reader gets told "your role" when they merely lack the lock.
+
+Behaviour + a11y contract: `components/ui/menu.test.tsx`.
+
 ## Primitive: `Combobox` (`components/ui/combobox.tsx`)
 
 The single **picker** primitive: a hand-rolled WAI-ARIA APG "Combobox with List

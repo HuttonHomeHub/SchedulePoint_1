@@ -17,9 +17,12 @@ import { cn } from '@/lib/utils';
  * should regain focus on Escape/selection (the invoking trigger).
  *
  * Scope is intentionally minimal — a flat list of a handful of actions, no
- * submenus or typeahead. Items may be **disabled** (`aria-disabled`, skipped by
- * roving focus) for "coming soon" affordances. A future consumer needing more
- * should extend this primitive (add the feature here) rather than fork it.
+ * submenus or typeahead. Items may be **disabled** (`aria-disabled`), and roving
+ * focus **still reaches them** so a `disabledReason` is readable by keyboard
+ * (ADR-0082 — this sentence said "skipped by roving focus" until then, which is
+ * exactly why the reason could not be shown at any call site). A future consumer
+ * needing more should extend this primitive (add the feature here) rather than
+ * fork it.
  */
 
 interface MenuAnchor {
