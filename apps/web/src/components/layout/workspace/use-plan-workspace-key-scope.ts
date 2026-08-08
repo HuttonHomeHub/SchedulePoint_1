@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 
+import { useClipboardKeybindings } from '@/features/activity-copy';
 import { useUndoRedoKeybindings } from '@/features/undo-redo';
 
 /**
@@ -13,12 +14,13 @@ import { useUndoRedoKeybindings } from '@/features/undo-redo';
  * stopped working for the one surface a planner uses most. React events follow the React tree, so
  * the portal is invisible to them.
  *
- * The two handlers cannot swallow each other: `?` returns early on **any** modifier, undo/redo
- * returns early **without** one. Composition order is therefore irrelevant, which is the property
- * worth having rather than a documented ordering someone must preserve.
+ * The handlers cannot swallow each other, and that is a structural property rather than an ordering
+ * anybody has to preserve: `?` returns early on **any** modifier; undo/redo returns early **without**
+ * one and then handles only `z`/`y`; copy/paste returns early without one and then handles only
+ * `c`/`v`. No key reaches two of them, so composition order is irrelevant.
  */
 export function usePlanWorkspaceKeyScope(params: {
-  /** A modal is open — both bindings go inert rather than acting beneath it. */
+  /** A modal is open — every binding goes inert rather than acting beneath it. */
   modalOpen: boolean;
   /** Open the shortcuts sheet (`?`). */
   onShowShortcuts: () => void;
@@ -26,14 +28,34 @@ export function usePlanWorkspaceKeyScope(params: {
   undoRedoEnabled: boolean;
   undo: () => void;
   redo: () => void;
+  /** Copy/paste are live only when the copy flag is on AND the planner can create activities. */
+  clipboardEnabled: boolean;
+  onCopy: () => void;
+  onPaste: () => void;
 }): React.KeyboardEventHandler<HTMLElement> {
-  const { modalOpen, onShowShortcuts, undoRedoEnabled, undo, redo } = params;
+  const {
+    modalOpen,
+    onShowShortcuts,
+    undoRedoEnabled,
+    undo,
+    redo,
+    clipboardEnabled,
+    onCopy,
+    onPaste,
+  } = params;
 
   const onUndoRedoKeyDown = useUndoRedoKeybindings({
     enabled: undoRedoEnabled,
     modalOpen,
     undo,
     redo,
+  });
+
+  const onClipboardKeyDown = useClipboardKeybindings({
+    enabled: clipboardEnabled,
+    modalOpen,
+    onCopy,
+    onPaste,
   });
 
   const onShortcutsKeyDown = useCallback(
@@ -52,7 +74,8 @@ export function usePlanWorkspaceKeyScope(params: {
     (event: React.KeyboardEvent<HTMLElement>): void => {
       onShortcutsKeyDown(event);
       onUndoRedoKeyDown(event);
+      onClipboardKeyDown(event);
     },
-    [onShortcutsKeyDown, onUndoRedoKeyDown],
+    [onShortcutsKeyDown, onUndoRedoKeyDown, onClipboardKeyDown],
   );
 }

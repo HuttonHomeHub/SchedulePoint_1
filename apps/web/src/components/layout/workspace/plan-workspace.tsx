@@ -168,6 +168,7 @@ function Adr0030PlanWorkspace({
       canReportProgress={model.canProgress}
       isStepsEligible={(a) => !isDurationDerivedType(a.type)}
       onSelectionChange={model.onSelectionChange}
+      onPluralSelectionChange={model.onPluralSelectionChange}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}

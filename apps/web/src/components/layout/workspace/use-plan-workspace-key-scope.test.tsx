@@ -17,14 +17,18 @@ import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 const onShowShortcuts = vi.fn();
 const undo = vi.fn();
 const redo = vi.fn();
+const onCopy = vi.fn();
+const onPaste = vi.fn();
 
 function Host({
   modalOpen = false,
   undoRedoEnabled = true,
+  clipboardEnabled = true,
   container,
 }: {
   modalOpen?: boolean;
   undoRedoEnabled?: boolean;
+  clipboardEnabled?: boolean;
   container: HTMLElement;
 }): React.ReactElement {
   const onKeyDown = usePlanWorkspaceKeyScope({
@@ -33,6 +37,9 @@ function Host({
     undoRedoEnabled,
     undo,
     redo,
+    clipboardEnabled,
+    onCopy,
+    onPaste,
   });
   return (
     // An event-delegation root, mirroring the production workspace root: no role, no tabIndex

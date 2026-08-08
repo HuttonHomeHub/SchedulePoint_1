@@ -37,6 +37,13 @@ export {
 } from './model/assignment-projection';
 export { STEP_FIELD_DECISIONS, projectSteps } from './model/step-projection';
 export {
+  missingNote,
+  resolveClipboard,
+  type ClipboardContents,
+  type ResolvedClipboard,
+} from './model/clipboard';
+export { useClipboardKeybindings } from './use-clipboard-keybindings';
+export {
   useCloneCarriage,
   type CarriageResult,
   type CloneCarriage,

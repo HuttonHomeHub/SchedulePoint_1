@@ -33,6 +33,7 @@ import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_ACTIVITY_TYPES_ENABLED,
+  ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -365,6 +366,12 @@ export function ToolbarPlanWorkspace({
     undoRedoEnabled: UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive,
     undo: model.undoRedo.undo,
     redo: model.undoRedo.redo,
+    // Copy/paste ride the SAME gate as undo/redo — flag on, and the planner can actually author.
+    // A copy alone is a read, but the paste it exists to feed is not, and a `Ctrl+C` that works
+    // followed by a `Ctrl+V` that refuses is a worse dead end than a shortcut that is simply off.
+    clipboardEnabled: ACTIVITY_COPY_PASTE_ENABLED && model.canEditSchedule && !lateOverlayActive,
+    onCopy: model.copySelection,
+    onPaste: () => void model.pasteClipboard(),
   });
 
   // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
@@ -432,6 +439,7 @@ export function ToolbarPlanWorkspace({
       canReportProgress={model.canProgress}
       isStepsEligible={(a) => !isDurationDerivedType(a.type)}
       onSelectionChange={model.onSelectionChange}
+      onPluralSelectionChange={model.onPluralSelectionChange}
       onRefresh={model.onTsldRefresh}
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}

@@ -33,7 +33,14 @@ import {
   openActivityEditor,
   type ActivityEditorIntent,
 } from '@/features/activities/lib/activity-editor-intent';
-import { planClone, refusalMessage, type CloneRefusal } from '@/features/activity-copy';
+import {
+  missingNote,
+  planClone,
+  refusalMessage,
+  resolveClipboard,
+  type ClipboardContents,
+  type CloneRefusal,
+} from '@/features/activity-copy';
 import { useCreateClonedActivity } from '@/features/activity-copy/api/use-clone-activities';
 import {
   useCloneCarriage,
@@ -279,6 +286,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // from the live query so it clears when the row is deleted. Inert when nothing reads it (flag off).
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const onSelectionChange = useCallback((id: string | null) => setSelectedActivityId(id), []);
+  // The canvas's PLURAL selection, lifted for `Ctrl+C` (`docs/specs/activity-copy-paste/` M3). Held
+  // in a ref rather than state: its only consumer is a keydown handler, so storing it in state would
+  // re-render the whole workspace on every selection transition — including marquee drags, which
+  // emit one per frame — to feed something that reads it lazily and renders nothing.
+  const pluralSelectionRef = useRef<readonly string[]>([]);
+  const onPluralSelectionChange = useCallback((ids: readonly string[]) => {
+    pluralSelectionRef.current = ids;
+  }, []);
+  // The app clipboard (M3). A ref for the same reason: nothing renders from it, and re-rendering the
+  // workspace on a copy would be a visible cost for an invisible change. Cleared on plan switch —
+  // the ADR-0048 history lifetime, mirrored deliberately rather than coincidentally.
+  const clipboardRef = useRef<ClipboardContents | null>(null);
+  useEffect(() => {
+    clipboardRef.current = null;
+  }, [planId]);
   // The activity targeted by the toolbar's **Update progress…** action (F3), driving the
   // workspace-hosted `ActivityProgressDialog` (beside `ActivityCrudDialogs`). Held as an id like the
   // crud dialogs so a 409 retry re-derives the current version; the derived row (below) closes the
@@ -1557,6 +1579,73 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   };
 
   /**
+   * `Ctrl+C` — capture the canvas's current selection (`docs/specs/activity-copy-paste/` M3).
+   *
+   * Stores **ids**, resolved against the live plan at paste time, so a copy always pastes what those
+   * activities are now rather than what they were when the planner pressed the key. The clipboard is
+   * per plan and cleared on plan switch, mirroring the ADR-0048 history lifetime — the two are the
+   * same mental object to a planner, and separate lifetimes would leave a paste landing work that
+   * can no longer be undone in one step.
+   */
+  const copySelection = (): void => {
+    const ids = pluralSelectionRef.current;
+    if (ids.length === 0) {
+      announce('Select an activity to copy.');
+      return;
+    }
+    clipboardRef.current = { planId, activityIds: [...ids] };
+    announce(ids.length === 1 ? '1 activity copied.' : `${String(ids.length)} activities copied.`);
+  };
+
+  /**
+   * `Ctrl+V` — paste the clipboard by the M2 rules.
+   *
+   * **Paste does not touch any ADR-0064 tool mode.** It arms nothing, disarms nothing and does not
+   * take an open link pick's next click: it composes the same `duplicateActivities` the row action
+   * and the toolbar item already call, and that function's whole surface is mutations plus the
+   * recalculation hold. The non-interaction is structural rather than a rule to remember — there is
+   * no mode setter in reach of this module at all, which `paste-tool-mode.structural.test.ts`
+   * asserts directly (and was verified red by planting one).
+   */
+  const pasteClipboard = async (): Promise<void> => {
+    const contents = clipboardRef.current;
+    if (contents === null) {
+      announce('Nothing has been copied yet.');
+      return;
+    }
+    if (contents.planId !== planId) {
+      // Refused rather than translated. A cross-plan paste needs calendars, resources and a parent
+      // tree resolved into a different org-scoped world; guessing would produce a copy that
+      // schedules differently from its source with nothing saying why.
+      announce('That copy came from a different plan.');
+      return;
+    }
+    const { present, missingCount } = resolveClipboard(contents, activitiesRef.current ?? []);
+    if (present.length === 0) {
+      announce('The activities you copied no longer exist.');
+      return;
+    }
+    const outcome = await duplicateActivities(present);
+    if (outcome.refusal !== null) {
+      announce(refusalMessage(outcome.refusal));
+      return;
+    }
+    if (outcome.conflict !== null) {
+      announce(outcome.conflict);
+      return;
+    }
+    // `duplicateActivities` has already announced the success and any skipped assignments. The
+    // stale-id note is folded in by re-announcing the whole sentence rather than adding a second
+    // live-region write, which would collapse to whichever landed last (TECH_DEBT #104).
+    if (missingCount > 0) {
+      announce(
+        `${String(outcome.createdIds?.length ?? present.length)} activities pasted.` +
+          missingNote(missingCount),
+      );
+    }
+  };
+
+  /**
    * The single-row entry point both hosts call. Refusals and conflicts are **announced**, because
    * this is the live region every other canvas action already speaks through and a planner driving
    * from the keyboard has no other channel; a refusal that only appeared visually would be silent
@@ -1576,6 +1665,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     planId,
     duplicateActivities,
     onDuplicateActivity,
+    /** The app clipboard (`docs/specs/activity-copy-paste/` M3): `Ctrl+C` / `Ctrl+V`. */
+    copySelection,
+    pasteClipboard,
+    onPluralSelectionChange,
     // Queries
     plan,
     project,

@@ -344,6 +344,13 @@ export interface TsldPanelProps {
    * delete-reconcile) so the main toolbar's selection-aware items can read it. Optional: absent ⇒ no
    * behaviour change (the in-panel `SelectionActionContext` is unaffected). */
   onSelectionChange?: (id: string | null) => void;
+  /** Report the **plural** selection to the host (`docs/specs/activity-copy-paste/` M3), so the
+   * workspace-root `Ctrl+C` can copy what the canvas has selected. A sibling of
+   * `onSelectionChange` rather than a widening of it: that callback's `id | null` is read by six
+   * selection-aware toolbar items, and changing its shape would touch all of them to serve one new
+   * caller. Reports `selection.ids` verbatim — plan order, primary included. Optional: absent ⇒ no
+   * behaviour change. */
+  onPluralSelectionChange?: (ids: readonly string[]) => void;
   /** Refetch the plan's server truth (activities/links/variance). Wired to the conflict banner's
    * Refresh so the "this changed elsewhere" cases have a real recovery action, not just copy. */
   onRefresh?: () => void;
@@ -477,6 +484,7 @@ export function TsldPanel({
   canReportProgress = false,
   isStepsEligible,
   onSelectionChange,
+  onPluralSelectionChange,
   onRefresh,
   calendar = null,
   todayIso,
@@ -1469,6 +1477,15 @@ export function TsldPanel({
   useEffect(() => {
     onSelectionChange?.(selectedId);
   }, [selectedId, onSelectionChange]);
+
+  // The plural sibling (M3). Keyed on `selection.ids`, which is a new array identity on every
+  // selection transition — including one that leaves the SET unchanged — so the host's setter must
+  // tolerate being called with an equal list. It does: the workspace stores it in state whose
+  // consumers are a keydown handler and nothing that renders, so a redundant set costs one render
+  // of a hook with no visual output rather than a loop.
+  useEffect(() => {
+    onPluralSelectionChange?.(selection.ids);
+  }, [selection.ids, onPluralSelectionChange]);
 
   /**
    * **The one place an edit is recorded for the settle announcement.**
