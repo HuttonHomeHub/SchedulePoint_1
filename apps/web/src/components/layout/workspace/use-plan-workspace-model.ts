@@ -1443,6 +1443,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         idMap.set(step.sourceId, row.id);
         created.push({ id: row.id, version: row.version });
       }
+      // Links are created SEQUENTIALLY, and the plan's "bound the concurrency, start at 4" is
+      // deliberately not followed. Every dependency create runs inside a transaction under
+      // `lockPlanForWrite(plan.id)` — a PLAN-SCOPED advisory lock
+      // (`dependencies.service.ts:213-222`, read before deciding). Concurrent creates on one plan
+      // therefore serialise on that lock server-side: parallelism buys no throughput, and it costs
+      // a worse failure mode, because four in-flight requests failing together make "which one
+      // broke, and what landed" much harder to answer than one at a time does. If M2-T4's
+      // measurement shows the wall clock is the problem, the answer is a batch endpoint
+      // (Milestone B), not client-side fan-out at a lock.
       for (const link of plan_.links) {
         const predecessorId = idMap.get(link.predecessorSourceId);
         const successorId = idMap.get(link.successorSourceId);
