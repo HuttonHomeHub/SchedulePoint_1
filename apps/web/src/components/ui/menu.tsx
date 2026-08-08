@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useId, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
@@ -17,9 +17,12 @@ import { cn } from '@/lib/utils';
  * should regain focus on Escape/selection (the invoking trigger).
  *
  * Scope is intentionally minimal — a flat list of a handful of actions, no
- * submenus or typeahead. Items may be **disabled** (`aria-disabled`, skipped by
- * roving focus) for "coming soon" affordances. A future consumer needing more
- * should extend this primitive (add the feature here) rather than fork it.
+ * submenus or typeahead. Items may be **disabled** (`aria-disabled`), and roving
+ * focus **still reaches them** so a `disabledReason` is readable by keyboard
+ * (ADR-0082 — this sentence said "skipped by roving focus" until then, which is
+ * exactly why the reason could not be shown at any call site). A future consumer
+ * needing more should extend this primitive (add the feature here) rather than
+ * fork it.
  */
 
 interface MenuAnchor {
@@ -45,13 +48,27 @@ function clampAnchor({ x, y }: MenuAnchor): { left: number; top: number } {
   };
 }
 
-/** The focusable menu items currently in the menu, in DOM order (plain + radio items).
- * Disabled items (`aria-disabled`) are present in the DOM but skipped by roving focus. */
+/**
+ * The menu items currently in the menu, in DOM order (plain + radio items).
+ *
+ * **Disabled items are included** (ADR-0082). They used to be filtered out, and that one line had
+ * four consequences: a shaded item's reason was unreachable by keyboard, which is why `#111` could
+ * not be fixed at the call site; `ToolbarOverflow`'s disabled row claimed in a comment to be "an
+ * arrow-key stop" while being excluded here; `onKeyDown`'s `indexOf` returned `-1` when focus sat on
+ * a filtered-out item, so ArrowUp landed on the **second-to-last** item; and a menu whose items were
+ * all disabled focused nothing on open, leaving focus on the trigger outside the portal where the
+ * container's React handler never sees the arrows.
+ *
+ * The APG's *Developing a Keyboard Interface* practice names "Menu items in a Menu or menu bar" in
+ * its keep-focusable list, so including them is a return to the pattern this primitive implements
+ * rather than a departure from it. The accepted cost is that arrow keys pass through inert items —
+ * which the APG accepts for menus, and these are a flat handful of actions by design.
+ */
 function itemsOf(container: HTMLElement | null): HTMLButtonElement[] {
   if (!container) return [];
   return Array.from(
     container.querySelectorAll<HTMLButtonElement>('[role="menuitem"],[role="menuitemradio"]'),
-  ).filter((el) => el.getAttribute('aria-disabled') !== 'true');
+  );
 }
 
 /**
@@ -223,40 +240,74 @@ function portalTarget(): HTMLElement {
  * option in a single-choice group is currently active — the visual check on its
  * own (an `aria-hidden` icon) conveys nothing to AT (component/a11y review).
  *
- * `disabled` renders a non-actionable item (`aria-disabled`, muted, no hover/
- * focus affordance) that {@link Menu}'s roving focus skips — used for "coming
- * soon" affordances so the option is discoverable without being operable.
+ * `disabled` renders a non-actionable item (`aria-disabled`, muted) that {@link Menu}'s roving focus
+ * **still reaches** (ADR-0082) — so the option is discoverable, and `disabledReason` can explain it.
+ *
+ * **`disabledReason` is a description, never part of the name.** Folding it into the name would make
+ * the name narrate state, repeat one sentence across every shaded item in a menu, and re-introduce
+ * the exact defect `ToolbarButton` fixed one primitive along — where thirteen existing tests caught
+ * it the moment it was written. Use it for a reason the reader can act on (the ADR-0028 pen, a
+ * role); a permanently inert "Coming soon" placeholder needs no sentence beyond its label.
+ *
+ * The `sr-only` span is a **sibling** of the button, not a child. `ToolbarButton` had to keep its
+ * copy inside — the button is that component's single forwarded-ref root — and pin the name with
+ * `aria-label` to stop it leaking, because a button's accessible name comes from its content. This
+ * component forwards no ref and takes arbitrary `children` (so there is no label string to pin
+ * `aria-label` to anyway), which makes the sibling the simpler and stricter answer: the name is
+ * whatever the children say, and nothing else.
  */
 export function MenuItem({
   onSelect,
   destructive = false,
   selected,
   disabled = false,
+  disabledReason,
+  busy = false,
   children,
 }: {
   onSelect: () => void;
   destructive?: boolean;
   selected?: boolean;
   disabled?: boolean;
+  /** Why this item is shut, for a reader who can do something about it. Announced as a description. */
+  disabledReason?: string;
+  /** A write is in flight — `aria-busy`, so the item is not silently inert (ToolbarOverflow parity). */
+  busy?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const close = useContext(MenuCloseContext);
-  return (
+  const reasonId = useId();
+  // Only when there IS a reason: `aria-describedby` pointing at an element that renders nothing is
+  // a dangling reference, which some AT reads as an empty description rather than as absence.
+  const describedBy = disabled && disabledReason ? reasonId : undefined;
+  const button = (
     <button
       type="button"
       role={selected === undefined ? 'menuitem' : 'menuitemradio'}
       {...(selected === undefined ? {} : { 'aria-checked': selected })}
       {...(disabled ? { 'aria-disabled': true } : {})}
+      {...(busy ? { 'aria-busy': true } : {})}
+      {...(describedBy ? { 'aria-describedby': describedBy } : {})}
       tabIndex={-1}
       onClick={() => {
-        if (disabled) return;
+        // `busy` guards too, not only `disabled`. Today's one consumer always pairs them, so this
+        // is defence for the next one: `aria-busy` says "a write is in flight", and a primitive
+        // that announces that while still firing its action on a second click is telling the
+        // reader one thing and doing another.
+        if (disabled || busy) return;
         onSelect();
         close?.();
       }}
       className={cn(
         'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none',
         disabled
-          ? 'text-muted-foreground cursor-default'
+          ? [
+              'text-muted-foreground cursor-default',
+              // A shaded item is now an arrow-key stop, so it needs a visible focus indicator like
+              // any other (WCAG 2.4.7). Contrast of the muted label itself stays exempt — 1.4.11
+              // excludes inactive components.
+              'focus:ring-ring focus:ring-2 focus:ring-inset',
+            ]
           : [
               'cursor-pointer',
               // A visible focus ring for the roving-focus item — `bg-accent` alone is ~1.09:1 on the
@@ -269,5 +320,16 @@ export function MenuItem({
     >
       {children}
     </button>
+  );
+
+  return describedBy ? (
+    <>
+      {button}
+      <span id={reasonId} className="sr-only">
+        {disabledReason}
+      </span>
+    </>
+  ) : (
+    button
   );
 }

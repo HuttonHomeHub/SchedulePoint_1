@@ -26,6 +26,12 @@ flowchart LR
 ### Milestone: <name> (shippable slice)
 
 **Outcome:** <what a user can do when this milestone ships>.
+**Entry point:** <the control a planner presses to reach it — screen + accessible name>
+— **or** `Ships dark: <why nothing is reachable yet, and which milestone surfaces it>`.
+One of the two, never neither (ADR-0081 §1).
+**Journey:** <the flag-on Playwright step that opens that surface and presses that
+control — required on the first user-facing milestone, not deferred to enablement
+(ADR-0081 §2)>.
 
 ---
 

@@ -301,7 +301,7 @@ export type CreatePlacedActivityFn = (input: PlacedActivityInput) => Promise<Act
 /** `useCreateActivity().mutateAsync` — a full-definition create; resolves to the created row. */
 export type CreateActivityFn = (input: ActivityDefinitionInput) => Promise<ActivitySummary>;
 /** `useDeleteActivity().mutateAsync` — soft-deletes an activity by id. */
-export type DeleteActivityFn = (activityId: string) => Promise<void>;
+export type DeleteActivityFn = (activityId: string) => Promise<{ deleteBatchId: string } | void>;
 
 /**
  * A small state machine over an entity that either exists (a known live id) or doesn't. Both the
@@ -344,7 +344,11 @@ export function createActivityCommand(params: {
   const toggle = existenceToggle({
     startId: params.created.id,
     create: async () => (await params.createPlaced(params.input)).id,
-    remove: params.deleteActivity,
+    // The delete now resolves with `{ deleteBatchId }` (`docs/TECH_DEBT.md` #113); this toggle
+    // re-creates rather than restores, so it wants the void shape and discards the body.
+    remove: async (id: string) => {
+      await params.deleteActivity(id);
+    },
   });
   return {
     // Name the created entity ("Add “Excavate”"), mirroring the toast convention (S1).
@@ -385,7 +389,9 @@ export function deleteActivityCommand(params: {
       }
       return recreated.id;
     },
-    remove: params.deleteActivity,
+    remove: async (id: string) => {
+      await params.deleteActivity(id);
+    },
   });
   return {
     // Name the deleted entity ("Delete “Excavate”"), mirroring the toast convention (S1).
@@ -542,7 +548,9 @@ export function createLoeSpanCommand(params: {
       return loe.id;
     },
     // Undo deletes the LOE — the cascade removes its SS + FF edges with it.
-    remove: params.deleteActivity,
+    remove: async (id: string) => {
+      await params.deleteActivity(id);
+    },
   });
   return {
     // The quoted name was always the generic default ("Level of effort"), so it added nothing — drop it
@@ -945,14 +953,18 @@ export function pasteActivitiesCommand(params: {
         // which is right while a paste has a single root (a band). Redo of a multi-root non-flat
         // paste would restore only the last cascade, so that shape is not offered: `planClone`'s
         // band path produces exactly one root.
-        for (const root of roots) await deleteActivity(root.id);
-        // **Redo is not available for a band copy, and that is an API limit rather than a choice.**
-        // A cascade delete does assign a `delete_batch_id` server-side, but `DELETE …/activities/:id`
-        // answers 204 with no body, so the client never learns it and has nothing to restore from.
-        // Leaving `batchId` null makes `redo` a no-op rather than a call that would fail — the Redo
-        // affordance simply has nothing to offer, which is the honest shape. Recorded as
-        // `docs/TECH_DEBT.md` #113; the fix is one field on the delete response.
+        // **Redo works now.** This used to leave `batchId` null and make redo a no-op, because
+        // `DELETE …/activities/:id` answered 204 with no body — the cascade's `delete_batch_id`
+        // existed server-side and the client was never told it (`docs/TECH_DEBT.md` #113, closed).
+        // The route returns it, so a band copy's undo is reversible like every other command's.
+        //
+        // The LAST root's id is kept, which is exact while a paste has a single root — `planClone`'s
+        // band path produces exactly one — and is why a multi-root non-flat paste is not offered.
         batchId = null;
+        for (const root of roots) {
+          const result = await deleteActivity(root.id);
+          if (result && typeof result === 'object') batchId = result.deleteBatchId;
+        }
       }
       live = null;
     },

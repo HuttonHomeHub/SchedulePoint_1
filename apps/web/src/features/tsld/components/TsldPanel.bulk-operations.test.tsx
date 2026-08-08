@@ -113,6 +113,7 @@ function renderPanel(bulk: Partial<TsldBulkOperations> = {}) {
     gate: { writable: true, reason: null },
     deleteMany: vi.fn(() => Promise.resolve()),
     linkChain: vi.fn(() => Promise.resolve()),
+    moveMany: vi.fn(() => Promise.resolve({ conflict: null })),
     ...bulk,
   };
   render(
@@ -201,6 +202,7 @@ describe('the panel drives the bulk bar', () => {
           gate: { writable: true, reason: null },
           deleteMany: vi.fn(() => Promise.resolve()),
           linkChain: vi.fn(() => Promise.resolve()),
+          moveMany: vi.fn(() => Promise.resolve({ conflict: null })),
         }}
         fill
       />,

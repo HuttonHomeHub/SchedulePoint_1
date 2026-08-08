@@ -353,7 +353,8 @@ describe.skipIf(!hasDatabase)('Notes API (e2e, pen enforced)', () => {
 
     // Delete the activity (structural → hold the pen).
     await actor.agent.post(lockUrl(planId)).send({}).expect(200);
-    await actor.agent.delete(`${base()}/activities/${activityId}`).expect(204);
+    // 200 since `docs/TECH_DEBT.md` #113 — the route returns the cascade's `deleteBatchId`.
+    await actor.agent.delete(`${base()}/activities/${activityId}`).expect(200);
 
     // The activity's notes are swept with it — the plan's activity-counts no longer lists it.
     const c = await actor.agent.get(counts(planId)).expect(200);

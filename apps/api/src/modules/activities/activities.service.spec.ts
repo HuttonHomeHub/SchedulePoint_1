@@ -1366,6 +1366,18 @@ describe('ActivitiesService', () => {
       );
     });
 
+    /**
+     * The #113 contract at the unit layer. It was proven only by the DB-gated e2e, so on a machine
+     * without Postgres — and in the fast suite everyone actually runs — nothing said the id reaches
+     * the caller at all. It is the cascade's OWN batch id, not a fresh one: that is what makes
+     * `restore-batch` bring back exactly the rows this delete swept, including a summary's subtree.
+     */
+    it('returns the cascade’s delete batch id, so the caller can restore what it deleted', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      const result = await service.remove(principalWith(ALL), 'acme', ACTIVITY_ID);
+      expect(result).toEqual({ deleteBatchId: 'b1' });
+    });
+
     it('404s (and does not delete) when the activity is missing', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(service.remove(principalWith(ALL), 'acme', ACTIVITY_ID)).rejects.toBeInstanceOf(

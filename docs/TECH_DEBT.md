@@ -1558,6 +1558,35 @@ batch write through `useBatchPlacements`, one `bulkPlacementCommand` on the undo
 caveat prop restored **with** it. Sized as its own slice rather than folded into the enablement
 pass, because it is an interaction change with its own ghost-painting cost to measure.
 
+### Narrowed 2026-08-08 — the write path is wired; the N-ghost preview is not
+
+**Status: open, narrowed.** The functional half is done and proven end to end. Dragging one of a
+plural selection now moves every selected activity by the same delta, as **one** batch
+(`PATCH …/activities/placements`) and **one** undoable step, mode-aware through `bulkMoveSnapshots`
+so EARLY pins and VISUAL hand-places exactly as the single-bar drag does. A lane-only move still
+skips the recalculation. `moveMany` joins `deleteMany`/`linkChain` on the host-supplied
+`TsldBulkOperations`, which is where the mutation and the ADR-0048 command stack already live.
+
+The caveat sentence comes back, **but not the one that was removed**. The original — "moving these
+will pin a start-no-earlier-than date on all N" — is true only in EARLY mode, so restoring it
+verbatim would re-introduce a false statement for every VISUAL plan: the same defect wearing a
+different hat. It now reads "Dragging any of these moves all N", which is true in both modes and is
+the fact a planner needs _before_ they drag. The test asserting the old wording absent is **kept**,
+alongside a new one asserting the replacement present.
+
+**What is still open: the N ghosts.** The gesture machine's `repositioning` state remains
+single-`activityId`, so during the drag the planner sees one ghost and the other bars jump on
+release. That is a preview gap, not a correctness one — the write, the undo and the announcement all
+cover the whole set — but it is the half of M4-T1 with a painting cost to measure (ADR-0026 §16),
+and it is not done. Recorded rather than quietly dropped.
+
+**How it was proven**: this is the first slice built under ADR-0081. The journey step
+(`e2e-multi-select`, "dragging one of a plural selection moves them ALL") was written **before** any
+implementation and **verified red** — 1 of 3 bars moved, which is the defect exactly — then green
+after. Writing it first also caught its own bug: the shared plan's bars have been dragged and linked
+by earlier steps, so the one-column probe found one bar rather than three, which would have read as
+a product defect had the step been written after the fix.
+
 ## #109 — `bulkDelete` cascades one activity at a time under the plan-wide advisory lock
 
 **Found:** 2026-08-08, by the security review over the ADR-0080 diff (non-blocking, hardening).
@@ -1695,7 +1724,7 @@ and only by activating twice inside one round trip.
 
 ---
 
-## 113. Redo is unavailable after undoing a band copy
+## 113. Redo is unavailable after undoing a band copy **(CLOSED 2026-08-08)**
 
 **Status:** open · **Owner:** api + web · **Raised:** 2026-08-08 (W5 M5, found by the flag-on journey)
 
@@ -1723,3 +1752,121 @@ matters is only testable against the thing that enforces it.
 
 **Risk:** low. The undo works; only the reversal of the undo is missing, and the planner can copy
 the band again.
+
+### Closed 2026-08-08 — the route returns the id
+
+`DELETE …/activities/:activityId` now answers **200 `{ deleteBatchId }`** instead of `204`. Nothing
+about the delete itself changed: the cascade already assigned that id, and the only defect was that
+the response threw it away. `pasteActivitiesCommand` keeps it and hands it to `restoreDeleteBatch`,
+so a band copy's undo is reversible like every other command's.
+
+Additive rather than breaking — existing callers ignore the body — but it **is** a public contract
+change, so `docs/API.md` records it and says why this `DELETE` is not `204`: the caller genuinely
+cannot derive the value, which is the test that section already applies.
+
+The API e2e asserts the id is a real uuid **and then uses it** to restore what it deleted. A field
+that is only asserted present is a field that can quietly stop being right.
+
+---
+
+## 114. Two menus still hide rather than shade, for want of a reason to show
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (ADR-0082)
+
+ADR-0082 made a shaded menu item keep its place in the keyboard order and carry an
+`aria-describedby` reason, and applied it to the activities-table row menu. Two consumers are
+knowingly left behind, both recorded here rather than discovered again later — the ADR-0071 rule.
+
+**1. `plan-actions-menu.tsx:62-66` hides "Edit plan…" on `!model.canWrite`.** The blocker is not the
+markup, it is that **there is no sentence to show**. `canWrite` is a bare boolean; it cannot say
+whether the planner lacks the role or merely lacks the pen, and a sentence that guesses — telling
+someone "your role cannot do this" when they simply need the edit lock — is the exact false-statement
+defect ADR-0082 §2 records shipping twice. The fix is to give the plan scope a `ScopeGate` carrying
+its own reason, the way `deriveActivityEditorGating` does for activities, and then shade from it.
+Doing that properly is a small piece of gating work, not a markup change, which is why it is not
+folded into ADR-0082.
+
+**2. `Combobox` still skips disabled options by arrow key.** The APG's _Developing a Keyboard
+Interface_ practice names "Options in a Listbox" in the same keep-focusable list it names menu items
+in, so the argument transfers exactly. It is a separate primitive with `aria-activedescendant`,
+in-flow rendering, its own consumers and its own tests, and changing it inside ADR-0082 would widen
+the blast radius well past what the row menu needed. The decision to leave it is deliberate; the
+inconsistency between two APG primitives in one product is the cost.
+
+**Risk:** low for both. Nobody is blocked — the plan edit is reachable for anyone entitled to it, and
+a combobox's disabled options are not actions. Both are discoverability and consistency defects
+against ADR-0062 M6, which is a real reason to close them and not an urgent one.
+
+---
+
+## 115. The pen sentence names a button the reader cannot see when a peer holds the lock
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
+
+`deriveActivityEditorGating`'s `NO_PEN` sentence is **"Start editing to change this activity."**, and
+the TSLD toolbar shades its pen-gated commands with the same form in eight places
+(`tsld-toolbar-items.tsx:248,435,1824,1840,2197,2247,2281,2326`). That sentence is right in the
+common case — the plan is open, nobody holds the pen, and **Start editing** is on screen.
+
+It is **wrong when a peer holds the pen**, and the ADR-0082 journey step demonstrates it in one run
+rather than by argument: in `e2e-edit/pen-handoff.spec.ts` the same page asserts, within a few lines
+of each other, that B sees a **Request control** button (`New activity` is absent) and that B's row
+menu explains the refusal with _"Start editing to change this activity."_ There is no **Start
+editing** button on that screen. The reader is told to press something that is not there, and the
+control that would actually help them — Request control — is not named.
+
+**Why it was not fixed with ADR-0082.** The sentence is a year old and shared by nine call sites; the
+row menu is the tenth consumer, not the origin. Fixing it means threading the held-by-other state
+into the gate so it can pick between two sentences, then re-wording eight toolbar reasons in step —
+which changes shipped copy across the whole canvas toolbar and deserves its own slice rather than
+riding a primitive's accessibility fix. ADR-0060's own record warns against the other failure mode
+here: an earlier draft invented _"Someone else is editing this plan. Take over the edit lock…"_,
+which was **false** in the common case, so this must be a branch on real state and not a re-wording.
+
+**The point ADR-0082 does close** is that both surfaces now say the _same_ thing, so this is one
+sentence to correct rather than two mental models to reconcile.
+
+**Risk:** low. A planner in this state has a lit **Request control** button in the chrome; the
+sentence sends them looking for the wrong one first. Worth a slice, not urgent.
+
+---
+
+## 116. Consolidation-pass findings that were not folded
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
+
+Five specialists reviewed the combined #108/#113/#111 diff. Ten findings were folded with regression
+tests; these are the ones deliberately left, each with the reason, so they are not rediscovered as
+though nobody had looked.
+
+**1. The plural move is pointer-only.** `useCoalescedNudge` commits through the single-activity
+`notedReposition` and has no plural awareness, so a planner with twelve bars selected still nudges
+them one at a time by keyboard while a mouse drag moves all twelve. Not a WCAG 2.1.1 failure — the
+function is available, just not in bulk — which is why no gate flagged it. It is the same defect #108
+fixed for the pointer, one input modality along, and it is the reason the accessibility review scored
+the next item's audience as small: the people who cannot hear the drag hint largely cannot perform
+the gesture either. Fixing it means teaching the nudge hook the selection, which is a slice.
+
+**2. The drag hint is never announced.** `BulkSelectionBar`'s "Dragging any of these moves all N
+activities." is static text with no live region, and `announceSelectionCount` says only the count. A
+screen-reader user is never told the consequence a sighted user reads beside the buttons. Deliberately
+**not** fixed here, because announcing a pointer-only capability while (1) stands would be telling
+that reader about something they cannot do. It should land **with** (1), not before it.
+
+**3. A shaded row-menu item's reason is `sr-only`; the canvas bar's is visible.** ADR-0082's premise
+is that one operation should not teach two mental models, and for a sighted mouse-only user it still
+does: the canvas prints the sentence, the row menu holds it for assistive technology only. The
+honest reason it is not fixed is that there is **no Tooltip primitive** in `components/ui/`, adding
+one is an ADR-level decision (CLAUDE.md §5), and a one-off `title` is what ADR-0082 just removed.
+
+**4. `HierarchyTree` is a third bare-boolean menu.** `tree-actions.ts`'s `nodeActions` returns `[]`
+for a non-writer, so the trigger disappears. ADR-0082 records it as unchanged-by-design, and the
+component review's point stands: it belongs with `plan-actions-menu.tsx` in #114 as the same
+"no reason to show" shape rather than filed apart from it. Treat #114 as covering all three.
+
+**5. `DeleteActivityFn`'s `| void` branch is vestigial.** Since #113 every real caller resolves the
+object, so `pasteActivitiesCommand`'s runtime `if (result && typeof result === 'object')` guard is
+dead weight. Tightening the type is a small cleanup with no behavioural change.
+
+**Risk:** (1) and (2) together are a real capability gap for keyboard-driven planners and should be
+taken as one slice. (3)–(5) are consistency and tidiness.

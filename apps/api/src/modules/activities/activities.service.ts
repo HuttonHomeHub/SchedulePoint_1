@@ -1172,7 +1172,7 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     context?: RequestContext,
-  ): Promise<void> {
+  ): Promise<{ deleteBatchId: string }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:delete', organization.id);
 
@@ -1183,7 +1183,12 @@ export class ActivitiesService {
     // under an activity, so there is nothing here for the cascade's own lock to protect.
     const plan = await this.plans.findActiveByIdInOrg(existing.planId, organization.id);
 
-    await this.prisma.$transaction(async (tx) => {
+    // Returned OUT of the transaction so it reaches the caller (`docs/TECH_DEBT.md` #113) — the
+    // shape `bulkDelete` two methods below already uses, rather than mutating an outer `let`. A cascade
+    // already assigns one batch id for the whole subtree; the route answered 204 with no body, so
+    // the client never learnt it and could not restore what it had just deleted. That is why
+    // undoing a band copy had no redo: `restoreDeleteBatch` needs an id nobody was told.
+    const deleteBatchId = await this.prisma.$transaction(async (tx) => {
       const cascade = await this.lifecycle.cascadeSoftDelete(
         tx,
         'activity',
@@ -1212,11 +1217,13 @@ export class ActivitiesService {
         }),
         tx,
       );
+      return cascade.batchId;
     });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },
       'activity deleted',
     );
+    return { deleteBatchId };
   }
 
   /**

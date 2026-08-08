@@ -10,6 +10,10 @@ import {
   onboard,
   openPlanId,
   seedActivities,
+  clearSelection,
+  dragBar,
+  mapBars,
+  placements,
 } from './support';
 
 /**
@@ -218,5 +222,75 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
       // The CQ-4 answer, proved: `restore-batch` puts the ids back, so the dependency BETWEEN the
       // two deleted activities survives. A re-create would have restored two bars and no link.
       .toBe(beforeCount);
+  });
+  await test.step('dragging one of a plural selection moves them ALL (TECH_DEBT #108)', async () => {
+    // **Written before the gesture existed, and verified red against it** — the ADR-0081 rule.
+    // ADR-0080 landed `movedPlacement`/`bulkMoveSnapshots`, `bulkPlacementCommand`,
+    // `useBatchPlacements` and `PATCH …/activities/placements` with its API e2e, all correct, and
+    // **nothing called them**: the gesture machine's `repositioning` state keys on one
+    // `activityId`, so dragging one of twelve selected bars moved that one bar. The data layer
+    // shipped; the interaction did not. This step is the thing that says which.
+    // Its **own plan**. The steps above drag, link and delete the shared plan's activities, so the
+    // one-column probe finds one bar rather than three — which fails as "need three probed bars"
+    // and would read as a product defect if this step had been written after the fix rather than
+    // before it. Three unconstrained tasks all start at the data date and stack one lane apart,
+    // which is the assumption `mapBars` is bounded on.
+    await newPlan(page, 'Plural drag');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [
+      { name: 'Drag A' },
+      { name: 'Drag B' },
+      { name: 'Drag C' },
+    ]);
+    await ensurePen(page);
+    await clearSelection(page);
+    const bars = await mapBars(page);
+    const ids = [...bars.keys()].slice(0, 3);
+    expect(ids.length, 'need three probed bars to drag a plural selection').toBe(3);
+
+    // Build the selection through the canvas's own keyboard contract (Space toggles, ADR-0080).
+    const list = diagramList(page);
+    await list.focus();
+    await page.keyboard.press('Control+a');
+    await announced(page, /selected/i);
+
+    const before = await placements(page, orgSlug);
+    const grab = bars.get(ids[0]!)!;
+    // Right by ~4 day-columns at the current preset; the exact delta does not matter, only that
+    // every selected bar moves by the SAME one.
+    await dragBar(page, grab, { x: grab.x + 160, y: grab.y });
+
+    await expect
+      .poll(
+        async () => {
+          const after = await placements(page, orgSlug);
+          return ids.filter((id) => after.get(id)?.earlyStart !== before.get(id)?.earlyStart)
+            .length;
+        },
+        { timeout: 20_000 },
+      )
+      // ALL three. Today this is 1 — the dragged bar — which is the defect.
+      .toBe(3);
+
+    // And it is ONE reversible step, not three: the whole gesture undoes together.
+    //
+    // Focus is placed deliberately rather than asserted. The delete step above asserts
+    // `toBeFocused` because its own anchor — the bulk bar's Delete button — unmounts with the
+    // selection, so focus fell to `<body>` and Ctrl+Z reached nothing; that is a real fix worth
+    // pinning. A pointer drag has no such anchor: focus is simply wherever the planner left it, and
+    // asserting the listbox holds it after a mouse gesture would be testing an invariant the
+    // product never claimed.
+    await list.focus();
+    await page.keyboard.press('Control+z');
+    await expect
+      .poll(
+        async () => {
+          const after = await placements(page, orgSlug);
+          return ids.filter((id) => after.get(id)?.earlyStart === before.get(id)?.earlyStart)
+            .length;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(3);
   });
 });

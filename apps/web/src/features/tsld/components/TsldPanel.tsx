@@ -217,6 +217,20 @@ export interface TsldBulkOperations {
   deleteMany: (activities: readonly ActivitySummary[]) => Promise<void>;
   /** Create the chain, in the given order. Rejects with a message; a failure leaves ZERO edges. */
   linkChain: (edges: readonly { predecessorId: string; successorId: string }[]) => Promise<void>;
+  /**
+   * Move every selected activity by one day/lane delta, as ONE batch and ONE undoable step
+   * (`docs/TECH_DEBT.md` #108).
+   *
+   * On this contract rather than inside the panel because the host owns the mutation and the
+   * ADR-0048 command stack — the same reason `deleteMany` and `linkChain` are here. ADR-0080 built
+   * every piece below it (`movedPlacement`, `bulkMoveSnapshots`, `bulkPlacementCommand`,
+   * `useBatchPlacements`, `PATCH …/activities/placements` with its API e2e) and left **nothing
+   * calling them**: the gesture kept moving one bar. This is the call that was missing.
+   */
+  moveMany: (
+    rows: readonly ActivitySummary[],
+    delta: { dayDelta: number; laneDelta: number },
+  ) => Promise<{ conflict: string | null }>;
 }
 
 export interface TsldPanelProps {
@@ -2009,6 +2023,67 @@ export function TsldPanel({
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedReposition) return;
       clearConflict();
+
+      // **The plural drag** (`docs/TECH_DEBT.md` #108). When the dragged bar is part of a selection
+      // of more than one, the whole set moves by the drag's delta as ONE batch and ONE undoable
+      // step. Routed here rather than in the gesture machine because the machine is pure geometry
+      // and knows nothing about the selection; the delta it already computed is all that is needed.
+      //
+      // Falls through to the single-bar path whenever the selection is one, does not contain the
+      // dragged bar, or the host supplied no `moveMany` — so every existing caller is unchanged.
+      const pluralIds =
+        CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
+      if (bulk?.moveMany && pluralIds.includes(intent.activityId)) {
+        const rows = activities.filter((a) => pluralIds.includes(a.id));
+        const originStart =
+          activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
+        const delta = {
+          dayDelta: intent.startDay === undefined ? 0 : intent.startDay - originStart,
+          laneDelta: intent.laneIndex === undefined ? 0 : intent.laneIndex - activity.laneIndex,
+        };
+        // **Hold the dragged bar at the drop position while the batch is in flight**, exactly as
+        // the single-bar path below does. Without this the gesture machine clears its own ghost
+        // synchronously at pointer-up, so the bar the planner just dragged snapped *back* to its
+        // stale position and sat there until the refetch landed — reading as "the drag did
+        // nothing" on the one gesture that moves a dozen bars. Two further things ride on the same
+        // state and were therefore also missing: `writeBusy` (the busy cursor, and the visible
+        // refusal of a new grab), and `onIntent`'s own `if (pendingCreate || pendingReposition)`
+        // re-entrancy guard at the top of this function — so a second plural drag could start
+        // while the first batch write was still in flight.
+        //
+        // Only the dragged bar gets a ghost. The other N-1 still jump on release; that is the
+        // preview gap `docs/TECH_DEBT.md` #108 is narrowed to, and it has a painting cost to
+        // measure against ADR-0026 §16 before it moves.
+        const span =
+          activity.earlyStart && activity.earlyFinish
+            ? daysBetween(activity.earlyStart, activity.earlyFinish)
+            : 0;
+        const ghostStart = originStart + delta.dayDelta;
+        setPendingReposition({
+          startDay: ghostStart,
+          endDay: ghostStart + span,
+          laneIndex: activity.laneIndex + delta.laneDelta,
+        });
+        pointerRepositionBusyRef.current = true;
+        void bulk
+          .moveMany(rows, delta)
+          .then((outcome) => {
+            setPendingReposition(null);
+            if (outcome.conflict) showConflict(outcome.conflict);
+            else announce(`${String(rows.length)} activities moved.`);
+          })
+          .catch((err: unknown) => {
+            setPendingReposition(null);
+            // The real message, like every sibling write in this file. `.catch(() => …)` threw the
+            // server's sentence away and replaced it with a generic one, on the only path that had
+            // no specific conflict sentence of its own.
+            showConflict(err instanceof Error ? err.message : 'Couldn’t move those activities.');
+          })
+          .finally(() => {
+            pointerRepositionBusyRef.current = false;
+          });
+        return;
+      }
       // Snap to grid (canvas nav, `docs/specs/canvas-nav/`, Visual mode): round the dropped day to the
       // nearest working day BEFORE the PATCH — only in Visual mode (`barDateSource === 'visual'`), only
       // when the toggle is on, and only when a day actually changed. Off / flag-off ⇒ the raw dropped

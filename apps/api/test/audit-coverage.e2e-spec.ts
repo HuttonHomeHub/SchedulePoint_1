@@ -165,7 +165,7 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
         .send({ predecessorId: a.id, successorId: b.id })
         .expect(201);
 
-      await actor.agent.delete(`/api/v1/organizations/acme/activities/${summary.id}`).expect(204);
+      await actor.agent.delete(`/api/v1/organizations/acme/activities/${summary.id}`).expect(200);
 
       const written = await rows('activity.deleted');
       // ONE row, not four. The whole argument for the coverage rung is that the log records user
@@ -211,7 +211,7 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
     it('pairs with its delete, carrying the same batch id', async () => {
       const { actor, planId } = await setup();
       const activity = await addActivity(actor, planId, { name: 'Dig', code: 'A100' });
-      await actor.agent.delete(`/api/v1/organizations/acme/activities/${activity.id}`).expect(204);
+      await actor.agent.delete(`/api/v1/organizations/acme/activities/${activity.id}`).expect(200);
       await actor.agent
         .post(`/api/v1/organizations/acme/activities/${activity.id}/restore`)
         .expect(200);

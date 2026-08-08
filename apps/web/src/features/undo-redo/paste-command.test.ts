@@ -165,9 +165,10 @@ describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
     expect(bulkDelete).not.toHaveBeenCalled();
   });
 
-  it('offers no redo, because a cascade delete tells the client no batch id', async () => {
-    // `DELETE …/activities/:id` answers 204 with no body, so there is nothing to restore from. A
-    // no-op redo is the honest shape — better than a call that would fail (TECH_DEBT #113).
+  it('redoes through the batch id the cascade delete now returns (TECH_DEBT #113)', async () => {
+    // This asserted the OPPOSITE until the route stopped answering 204: the cascade's batch id
+    // existed server-side and the client was never told it, so redo was a documented no-op. The
+    // API returns it now, so a band copy's undo is reversible like every other command's.
     const restoreBatch = vi.fn(() => Promise.resolve([]));
     const command = pasteActivitiesCommand({
       created: [
@@ -175,7 +176,7 @@ describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
         { id: 'child-1', version: 1 },
       ],
       roots: [{ id: 'summary', version: 1 }],
-      deleteActivity: vi.fn(() => Promise.resolve()),
+      deleteActivity: vi.fn(() => Promise.resolve({ deleteBatchId: 'cascade-batch' })),
       bulkDelete: vi.fn(() =>
         Promise.resolve({ deleteBatchId: 'b', activityCount: 0, dependencyCount: 0 }),
       ),
@@ -185,6 +186,7 @@ describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
 
     await command.undo();
     await command.redo();
-    expect(restoreBatch).not.toHaveBeenCalled();
+    // The id the DELETE returned, not the bulk one — the band path never touches `bulkDelete`.
+    expect(restoreBatch).toHaveBeenCalledExactlyOnceWith({ deleteBatchId: 'cascade-batch' });
   });
 });

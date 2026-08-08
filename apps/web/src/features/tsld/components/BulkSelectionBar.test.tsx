@@ -155,14 +155,20 @@ describe('the status line', () => {
    * The bar used to carry a third sentence here — "moving these will pin a start-no-earlier-than
    * date on all N" — for a plural drag that was never wired. Its model, its undo command and its
    * endpoint all landed; the gesture did not, so the sentence described something a planner could
-   * not do. Removed rather than left (`docs/TECH_DEBT.md` #108), and asserted absent so it cannot
-   * come back ahead of the gesture that makes it true.
+   * not do, and it was removed rather than left (`docs/TECH_DEBT.md` #108).
+   *
+   * **The gesture is wired now, so the bar speaks again — and the assertion below is kept, not
+   * relaxed.** The original wording is still forbidden, because it was only ever true in EARLY
+   * mode: a plural move pins an SNET there and writes `visualStart` in VISUAL (ADR-0033), so
+   * restoring it verbatim would re-introduce a false statement for half the plans in the product.
+   * What is asserted present is a sentence true in both modes.
    */
-  it('says nothing about moving, because the plural drag is not wired yet', () => {
+  it('tells a planner the drag is plural, without claiming a mode-specific consequence', () => {
     renderBar({});
-    expect(screen.getByTestId('bulk-selection-bar')).not.toHaveTextContent(
-      /start-no-earlier-than/i,
-    );
+    const bar = screen.getByTestId('bulk-selection-bar');
+    expect(bar).toHaveTextContent(/dragging any of these moves all/i);
+    // Still absent, and deliberately: true in EARLY, false in VISUAL.
+    expect(bar).not.toHaveTextContent(/start-no-earlier-than/i);
   });
 });
 

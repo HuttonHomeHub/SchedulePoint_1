@@ -21,6 +21,9 @@ export interface ToolbarOverflowProps<Ctx> {
   onFocus?: (event: React.FocusEvent<HTMLButtonElement>) => void;
 }
 
+/** A disabled item never activates; `MenuItem` requires the prop regardless. */
+const NOOP = (): void => undefined;
+
 function ToolbarOverflowInner<Ctx>(
   { items, context, tabIndex, onKeyDown, onFocus }: ToolbarOverflowProps<Ctx>,
   forwardedRef: Ref<HTMLButtonElement>,
@@ -80,17 +83,21 @@ function ToolbarOverflowInner<Ctx>(
               {r.item.label}
             </MenuItem>
           ) : (
-            // Disabled (or non-activatable) overflow row: inert, focusable for AT with its reason.
-            <div
+            // Disabled overflow row, as an ordinary `MenuItem` (ADR-0082).
+            //
+            // This was a bespoke `<div role="menuitem" aria-disabled tabIndex={-1}>` whose two
+            // comments claimed it was "focusable for AT with its reason" and "still an arrow-key
+            // stop in the menu". **Both were false**: `Menu`'s `itemsOf` filtered `aria-disabled`
+            // out of the roving set, so it was never a stop, the focus ring it carefully added
+            // could never fire, and its reason lived only in `title` — a hover tooltip no browser
+            // shows on keyboard focus. Verbatim the failure `ToolbarButton` records having shipped
+            // once, sitting one file from the primitive that caused it.
+            <MenuItem
               key={r.item.id}
-              role="menuitem"
-              aria-disabled="true"
-              tabIndex={-1}
-              {...(r.disabledReason ? { title: r.disabledReason } : {})}
-              {...(r.busy ? { 'aria-busy': true } : {})}
-              // Still an arrow-key stop in the menu, so it needs a visible focus ring like MenuItem —
-              // `opacity-60` alone leaves a keyboard user unsure where focus is (WCAG 2.4.7).
-              className="text-muted-foreground focus:ring-ring flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm opacity-60 outline-none focus:ring-2 focus:ring-inset"
+              disabled
+              {...(r.busy ? { busy: true } : {})}
+              {...(r.disabledReason ? { disabledReason: r.disabledReason } : {})}
+              onSelect={NOOP}
             >
               {r.icon ? (
                 <span aria-hidden="true" className="inline-flex shrink-0 items-center">
@@ -98,7 +105,7 @@ function ToolbarOverflowInner<Ctx>(
                 </span>
               ) : null}
               {r.item.label}
-            </div>
+            </MenuItem>
           ),
         )}
       </Menu>

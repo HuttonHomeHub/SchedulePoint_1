@@ -345,7 +345,21 @@ export function ActivitiesTable({
   // The per-row action list, role-/flag-gated (ADR-0039/0044). Feeds both the decision to show a
   // row's "⋯" trigger and the items in its overflow `Menu` (TECH_DEBT #38: dense row actions belong
   // behind the APG `Menu`, never a spread of hover-only ghost buttons — docs/UX_STANDARDS.md).
-  type RowAction = { key: string; label: string; destructive?: boolean; onSelect: () => void };
+  type RowAction = {
+    key: string;
+    label: string;
+    destructive?: boolean;
+    onSelect: () => void;
+    /**
+     * Present but shut, with why (ADR-0082 §3). Absent ⇒ actionable.
+     *
+     * Only for a reason the reader can DO something about — the pen, a role. An action that does
+     * not apply to this row (Dissolve off a non-summary), or whose flag is off, is still **omitted**:
+     * shading those would imply a capability that does not exist, and the flag-off parity suites
+     * depend on absence.
+     */
+    disabledReason?: string;
+  };
   const actionsFor = (activity: ActivitySummary): RowAction[] => {
     const actions: RowAction[] = [];
     if (onOpenLogic) {
@@ -378,19 +392,55 @@ export function ActivitiesTable({
           hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
       });
     }
-    // Dark surface (ADR-0044 §2): weighted steps are a writer authoring surface whose only effect is
-    // an Earned-Value physical-% input, so gate on BOTH flags (TECH_DEBT #44a). Hidden for a
-    // duration-derived type (milestone / LOE / WBS summary), where steps are inert — matching the form.
-    if (
-      ACTIVITY_STEPS_ENABLED &&
-      EARNED_VALUE_ENABLED &&
-      canEditSchedule &&
-      !isDurationDerivedType(activity.type)
-    ) {
-      actions.push({ key: 'steps', label: 'Steps', onSelect: () => openFor(activity, 'steps') });
-    }
-    if (canEditSchedule) {
-      actions.push({ key: 'edit', label: 'Edit', onSelect: () => openFor(activity, 'edit') });
+    {
+      // **Shaded, not hidden** (ADR-0082, `docs/TECH_DEBT.md` #111). These used to be pushed only
+      // `if (canEditSchedule)`, so a Planner who lost the pen mid-session saw Duplicate shaded on
+      // the canvas and simply absent here — one operation teaching two mental models.
+      //
+      // The gate is `editorGating.general` **by identity**, not a second `{ writable, reason }`
+      // assembled beside it: two derivations of "may this person write" drift, and the drift is
+      // invisible because each surface looks right alone (ADR-0062's argument, pinned by a test).
+      //
+      // With **no** gating object there is nothing to shade *with*: `canEditSchedule` is a bare
+      // boolean that cannot say whether the refusal is a role or a missing pen. The first draft
+      // invented a fourth sentence here ("You cannot change this plan right now."), which is the
+      // failure `docs/UX_STANDARDS.md` "Row / node actions" warns about and ADR-0060 records
+      // shipping once. So that case **omits**, exactly as `docs/TECH_DEBT.md` #114 decides for
+      // `plan-actions-menu.tsx` — one rule, not a special case: shading needs a reason to show.
+      const gate = editorGating?.general ?? null;
+      const shut =
+        gate === null || gate.writable ? {} : { disabledReason: gate.reason ?? 'Not available.' };
+      // No gating object and no write right ⇒ nothing to say, so say nothing (above).
+      if (gate === null && !canEditSchedule) return actions;
+
+      // Dark surface (ADR-0044 §2): weighted steps are a writer authoring surface whose only effect
+      // is an Earned-Value physical-% input, so gate on BOTH flags (TECH_DEBT #44a). Omitted for a
+      // duration-derived type (milestone / LOE / WBS summary), where steps are inert — matching the
+      // form, and the "does not apply to this object" row of ADR-0082 §3's table.
+      //
+      // The **permission** half is a shade, not an omission, and it took two independent reviewers
+      // to notice: this action shades from `editorGating.steps`, which `deriveActivityEditorGating`
+      // makes the *same object* as `general` (ADR-0060 §5 pen-gated steps and added the server
+      // assertion). Leaving it hidden reproduced the exact defect ADR-0082 exists to close — Edit
+      // shaded and Steps absent, in one menu, on one row, off one gate — inside the change that
+      // fixed its neighbours. The correct pattern applied to a control and not the one beside it.
+      if (ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED && !isDurationDerivedType(activity.type)) {
+        const stepsGate = editorGating?.steps ?? gate;
+        actions.push({
+          key: 'steps',
+          label: 'Steps',
+          ...(stepsGate === null || stepsGate.writable
+            ? {}
+            : { disabledReason: stepsGate.reason ?? 'Not available.' }),
+          onSelect: () => openFor(activity, 'steps'),
+        });
+      }
+      actions.push({
+        key: 'edit',
+        label: 'Edit',
+        ...shut,
+        onSelect: () => openFor(activity, 'edit'),
+      });
       // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
       // planner reaches for when the row is nearly right. Deliberately NOT offered on a summary:
       // duplicating one leaf of a band would produce an empty grouping, and copying the band with
@@ -400,6 +450,7 @@ export function ActivitiesTable({
         actions.push({
           key: 'duplicate',
           label: 'Duplicate',
+          ...shut,
           onSelect: () => onDuplicate(activity),
         });
       }
@@ -410,6 +461,7 @@ export function ActivitiesTable({
         actions.push({
           key: 'dissolve',
           label: 'Dissolve',
+          ...shut,
           onSelect: () => {
             setDissolveError(null);
             setDissolving(activity);
@@ -420,6 +472,7 @@ export function ActivitiesTable({
         key: 'delete',
         label: 'Delete',
         destructive: true,
+        ...shut,
         onSelect: () => {
           setDeleteError(null);
           setDeleting(activity);
@@ -710,7 +763,25 @@ export function ActivitiesTable({
       cellClassName: 'py-2 text-right whitespace-nowrap',
       cell: (activity) => {
         const actions = actionsFor(activity);
-        if (actions.length === 0) return null;
+        // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
+        // the second clause a Viewer would open a menu of nothing but refusals — and it is what
+        // keeps the all-disabled focus trap out of reach rather than merely fixed.
+        // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
+        // this component** — established by trying to test it rather than by assuming either way, after
+        // the consolidation pass blocked on it being untested. The column above renders only when
+        // `canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED`, and each of those
+        // four contributes an action that is never shaded (Logic, Resources and Report progress are
+        // reads or non-pen-gated; `canEditSchedule` and `editorGating.general.writable` are the same
+        // predicate — `penManaged ? canWrite && holdsPen : canWrite` — so they cannot disagree).
+        //
+        // A unit test can only reach it by turning all four off, at which point the column is absent and
+        // the test passes for the wrong reason. The first version of that test did exactly that and still
+        // passed with this clause deleted. Kept as a guard against a future action set where it IS
+        // reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
+        // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
+        if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
+          return null;
+        }
         const openHere = menu?.activity.id === activity.id;
         return (
           <Button
@@ -942,6 +1013,10 @@ export function ActivitiesTable({
             <MenuItem
               key={action.key}
               destructive={action.destructive ?? false}
+              disabled={action.disabledReason !== undefined}
+              {...(action.disabledReason === undefined
+                ? {}
+                : { disabledReason: action.disabledReason })}
               onSelect={action.onSelect}
             >
               {action.label}

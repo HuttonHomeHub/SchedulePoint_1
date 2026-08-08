@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
+import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
@@ -78,6 +79,22 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
+/**
+ * The gate object the real host always supplies. `usePlanWorkspaceModel` derives it in an
+ * unconditional `useMemo` and both production callers pass it, so a test that omitted it was
+ * exercising a branch production never takes — and the shading assertions below were therefore
+ * proving the *fallback*, not the thing that ships. Building it from the real deriver also means a
+ * change to the sentences shows up here rather than in a hand-copied string.
+ */
+const gatingFor = (canWrite: boolean, canProgress = false) =>
+  deriveActivityEditorGating({
+    penManaged: true,
+    holdsPen: canWrite,
+    canWrite: true,
+    canProgress,
+    canReadCost: true,
+  });
+
 function renderTable(
   canEditSchedule: boolean,
   data: ActivitySummary[] = [ACTIVITY],
@@ -92,6 +109,7 @@ function renderTable(
         planId="pl1"
         canEditSchedule={canEditSchedule}
         canReportProgress={canReportProgress}
+        editorGating={gatingFor(canEditSchedule, canReportProgress)}
       />
     </QueryClientProvider>,
   );
@@ -116,22 +134,58 @@ describe('ActivitiesTable', () => {
     expect(openRowMenu('Excavate')).toContain('Edit');
   });
 
-  it('hides write actions for non-writers', () => {
-    // Resources is a member-level action (VITE_RESOURCES defaults on), so the row still has a
-    // trigger/menu for a non-writer — but the write-only actions (Edit/Delete/Steps) must be absent.
+  /**
+   * **These two were inverted deliberately (ADR-0082 / `docs/TECH_DEBT.md` #111), not bent to fit.**
+   *
+   * They used to require that write actions be ABSENT for a non-writer. That is what made the row
+   * menu teach a different mental model from the canvas selection bar, which shades the same actions
+   * and says why — and it left a planner who lost the pen mid-session unable to discover that the
+   * capability exists at all. The house rule is ADR-0062 M6: present and shaded, never hidden.
+   *
+   * What has NOT changed, and is still asserted below: an action that does not apply to this row, or
+   * whose flag is off, is still omitted. "Shade, never hide" is not "shade everything".
+   */
+  it('SHADES write actions for a non-writer rather than hiding them', () => {
     renderTable(false);
     const items = openRowMenu('Excavate');
-    expect(items).not.toContain('Edit');
-    expect(items).not.toContain('Delete');
-    expect(items).not.toContain('Steps');
+    expect(items).toContain('Edit');
+    expect(items).toContain('Delete');
+    const edit = screen.getByRole('menuitem', { name: 'Edit' });
+    expect(edit).toHaveAttribute('aria-disabled', 'true');
+    // The reason is a description, not part of the name — the ToolbarButton trap.
+    expect(edit).toHaveAccessibleName('Edit');
+    expect(edit.getAttribute('aria-describedby')).not.toBeNull();
   });
 
-  it('shows only the progress action for a progress-reporter who cannot write', () => {
+  it('shades write actions for a progress-reporter, keeping progress actionable', () => {
     renderTable(false, [ACTIVITY], true);
     const items = openRowMenu('Excavate');
     expect(items).toContain('Report progress');
-    expect(items).not.toContain('Edit');
-    expect(items).not.toContain('Delete');
+    // Actionable, because progress is deliberately NOT pen-gated (ADR-0060 Q-C).
+    expect(screen.getByRole('menuitem', { name: 'Report progress' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  /**
+   * **Steps shades too**, and the fact this needed a test is the finding. It was left omitted while
+   * its four neighbours were converted — in the same menu, on the same row, off the same gate
+   * (`deriveActivityEditorGating` makes `steps` the *same object* as `general`), inside the change
+   * that fixed them. Two independent reviewers caught it; nothing in the suite would have, because
+   * the old `expect(items).not.toContain('Steps')` assertion was dropped rather than inverted.
+   */
+  it('SHADES Steps for a non-writer, on the same gate as its neighbours', () => {
+    renderTable(false);
+    openRowMenu('Excavate');
+    const steps = screen.getByRole('menuitem', { name: 'Steps' });
+    expect(steps).toHaveAttribute('aria-disabled', 'true');
+    // The same sentence as Edit — one gate object, so one reason, not two that drift apart.
+    const edit = screen.getByRole('menuitem', { name: 'Edit' });
+    const textOf = (el: HTMLElement) =>
+      document.getElementById(el.getAttribute('aria-describedby') ?? '')?.textContent;
+    expect(textOf(steps)).toBeTruthy();
+    expect(textOf(steps)).toBe(textOf(edit));
   });
 
   it('shows progress plus edit/delete for a writer who can also report progress', () => {
