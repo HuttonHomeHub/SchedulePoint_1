@@ -29,3 +29,5 @@ export {
   type PlanCloneInput,
 } from './model/clone-graph';
 export { refusalMessage } from './model/refusal-copy';
+export { bandMembers, type BandCopyCounts } from './model/band-members';
+export { bandCopyConfirmation, type BandCopyCopy } from './model/confirm-copy';
