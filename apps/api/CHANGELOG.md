@@ -1,5 +1,20 @@
 # @repo/api
 
+## 0.46.0
+
+### Minor Changes
+
+- [#259](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/259) [`1d260f1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1d260f12002f52f7e19477aa1cbf3c72131d5696) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Batch activity operations: placements, bulk delete, and an id-stable batch restore.
+
+  `PATCH …/plans/:planId/activities/placements` moves several activities in time (and
+  optionally lane) all-or-nothing; `POST …/activities/bulk-delete` soft-deletes several as
+  one act under one `deleteBatchId`; `POST …/activities/restore-batch/:batchId` reverses it
+  with the original ids, so the dependencies between the deleted activities come back too.
+
+  Every placement field is required but nullable — an omitted field is a validation error,
+  never a silent clear — and the write seam names four placement columns and no others, so a
+  bulk move cannot reach a definition field. A `WBS_SUMMARY` is refused by both batch routes.
+
 ## 0.45.0
 
 ### Minor Changes
