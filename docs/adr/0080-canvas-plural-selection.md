@@ -38,7 +38,8 @@ selection of something that is gone.
 
 ### 2. The flag is **derived**, because `Shift` was already taken
 
-`CANVAS_MULTI_SELECT_ENABLED = CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOff(…)`. `Shift` is
+`CANVAS_MULTI_SELECT_ENABLED = CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(…)` (it read
+`flagDefaultOff` until the M5 flip). `Shift` is
 the legacy link chord (start-to-start), so a build with the plural selection on and direct
 manipulation off would give one modifier two meanings. Deriving the flag makes that overlap
 **structurally impossible** rather than avoided by care.
@@ -94,9 +95,7 @@ removed a phase and pressed undo would get their bars back with the logic gone, 
 nothing on screen saying so. `POST …/activities/restore-batch/:batchId` puts the ids back, so the
 links come with them. The batch id is re-threaded on every redo, because a redo is a new batch.
 
-### 7. A chain is ordered by **time**, previewed with names and arrows, and cycle-checked against the
-
-**resulting** graph
+### 7. A chain is ordered by **time**, previewed, and cycle-checked against the resulting graph
 
 ADR-0064 was opened on a report that a link had been recorded the wrong way round. A wrong single
 link is one right-click to fix; a wrong chain of twelve is a programme that reads backwards. So:
