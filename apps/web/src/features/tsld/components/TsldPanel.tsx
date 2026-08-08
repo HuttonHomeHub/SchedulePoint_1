@@ -22,6 +22,7 @@ import {
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
+import { type CanvasSelection, clear, EMPTY_SELECTION, replace } from '../model/canvas-selection';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -457,7 +458,22 @@ export function TsldPanel({
   });
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The canvas selection is a SET internally (`docs/specs/canvas-multi-select/` M0-T3), and this
+  // milestone is deliberately **inert**: only `replace` and `clear` are wired, so `ids.length <= 1`
+  // holds after any sequence of events and every consumer below still reads one nullable id.
+  //
+  // `selectedId` stays exactly the name and the type it was, derived from `primaryId`. That is the
+  // whole point of the "set with a primary" shape — roughly forty read sites, the edge handles, the
+  // activity panel and `aria-activedescendant` are all singular by nature, and none of them should
+  // have to learn that a selection can be plural before the milestone that makes it plural.
+  const [selection, setSelection] = useState<CanvasSelection>(EMPTY_SELECTION);
+  const selectedId = selection.primaryId;
+  // A drop-in for the old setter, so no call site changes in this milestone. Stable, because the
+  // reducers are pure and take no closure — which also means the existing effects that list it in a
+  // dependency array keep firing exactly when they did.
+  const setSelectedId = useCallback((id: string | null): void => {
+    setSelection(id === null ? clear() : replace(id));
+  }, []);
   // The selected activity's live viewport geometry, written by the canvas each frame and read by the
   // floating selection bar to follow pan/zoom without per-frame React state (ADR-0026 D3 / ADR-0031).
   const selectionAnchorRef = useRef<SelectionAnchor | null>(null);
@@ -1058,7 +1074,7 @@ export function TsldPanel({
         listboxRef.current?.focus();
       }
     }
-  }, [navState.selectSignal, activities]);
+  }, [navState.selectSignal, activities, setSelectedId]);
 
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
@@ -1167,7 +1183,7 @@ export function TsldPanel({
     const next = activities[Math.min(selectedIndexRef.current, activities.length - 1)];
     setSelectedId(next ? next.id : null);
     announce('Activity removed.');
-  }, [activities, selectedId, announce]);
+  }, [activities, selectedId, announce, setSelectedId]);
 
   // Report the selection to the host on every transition (toolbar quick-wins F0), so the main toolbar's
   // selection-aware items track it. One effect covers all paths — select / chain-nav / focus and the
