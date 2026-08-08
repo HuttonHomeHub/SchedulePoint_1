@@ -764,6 +764,14 @@ decision for the coverage milestone, on a fresh measurement (ADR-0073 "Measured,
   back with its **original id**, so the dependencies between them come back too. Re-creating the
   activities instead would mint new ids and silently drop that logic, which is a different schedule
   wearing the same shape.
+- `DELETE …/activities/:activityId` answers **200 with `{ deleteBatchId }`**, not `204`. The id has
+  always existed — `cascadeSoftDelete` assigns one per delete, covering the whole subtree when the
+  activity is a `WBS_SUMMARY` — but a bodiless response meant a client could not call
+  `POST …/plans/:planId/activities/restore-batch/:batchId` on the rows it had just deleted. That is
+  why undoing a copied WBS band had no redo (`docs/TECH_DEBT.md` #113): the undo deletes the copy's
+  root and lets the cascade run, and the redo needs an id nobody was told. Additive rather than
+  breaking — existing callers ignore the body. It is one of the few `DELETE`s here that is not
+  `204`, and the reason is the §"200 or 204" rule above: the caller genuinely cannot derive this.
 - `POST …/activities/:activityId/dissolve` (**200**) removes a WBS summary's grouping and **keeps
   the work**: its direct children take its own parent, then the now-childless summary is
   soft-deleted, in one transaction. It is a separate endpoint from `DELETE`, not a flag on it,

@@ -344,7 +344,7 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
     // Re-create, then delete the PREDECESSOR activity — the link goes with it.
     await actor.agent.post(base).send({ predecessorId: a, successorId: b }).expect(201);
     expect((await actor.agent.get(base).expect(200)).body.data).toHaveLength(1);
-    await actor.agent.delete(`/api/v1/organizations/acme/activities/${a}`).expect(204);
+    await actor.agent.delete(`/api/v1/organizations/acme/activities/${a}`).expect(200);
     expect((await actor.agent.get(base).expect(200)).body.data).toHaveLength(0);
 
     // Restoring the activity brings its link back (both endpoints active again).

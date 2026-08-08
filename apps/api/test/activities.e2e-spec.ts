@@ -560,12 +560,27 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(201);
     const id = created.body.data.id as string;
 
-    await actor.agent.delete(`/api/v1/organizations/acme/activities/${id}`).expect(204);
+    // 200 with a body, not 204 (`docs/TECH_DEBT.md` #113): the cascade's `deleteBatchId` already
+    // existed server-side, and answering with no body meant a client could not restore what it had
+    // just deleted — which is why undoing a band copy had no redo. Asserted as a real id, and then
+    // USED below, because a field nobody exercises is a field that can quietly stop being right.
+    const deleted = await actor.agent
+      .delete(`/api/v1/organizations/acme/activities/${id}`)
+      .expect(200);
+    const deleteBatchId = deleted.body.data.deleteBatchId as string;
+    expect(deleteBatchId).toMatch(/^[0-9a-f-]{36}$/);
     await actor.agent.get(`/api/v1/organizations/acme/activities/${id}`).expect(404);
     const list = await actor.agent
       .get(`/api/v1/organizations/acme/plans/${planId}/activities`)
       .expect(200);
     expect(list.body.data).toHaveLength(0);
+
+    // The id the DELETE handed back restores exactly what it deleted — the round trip #113 exists
+    // for. Asserted before the per-activity restore below, which is a different route.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities/restore-batch/${deleteBatchId}`)
+      .expect(200);
+    await actor.agent.delete(`/api/v1/organizations/acme/activities/${id}`).expect(200);
 
     await actor.agent.post(`/api/v1/organizations/acme/activities/${id}/restore`).expect(200);
     await actor.agent.get(`/api/v1/organizations/acme/activities/${id}`).expect(200);

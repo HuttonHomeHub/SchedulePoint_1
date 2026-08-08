@@ -13,7 +13,6 @@ import {
   ApiConflictResponse,
   ApiCookieAuth,
   ApiForbiddenResponse,
-  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -32,6 +31,7 @@ import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivitiesService } from './activities.service';
 import { ActivityResponseDto } from './dto/activity-response.dto';
+import { DeleteActivityResultDto } from './dto/delete-activity-result.dto';
 import { DissolveSummaryResponseDto } from './dto/dissolve-summary-response.dto';
 import { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
@@ -138,9 +138,18 @@ export class ActivitiesController {
   }
 
   @Delete(':activityId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete an activity (soft).' })
-  @ApiNoContentResponse()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete an activity (soft).',
+    description:
+      'Cascades to the whole subtree when the activity is a `WBS_SUMMARY` (ADR-0038). Returns the ' +
+      '`deleteBatchId` the cascade assigned, which is what `POST …/activities/restore-batch` ' +
+      'takes — **the reason this answers 200 rather than 204**: the id already existed server-' +
+      'side, but a bodiless response meant a client could not restore what it had just deleted, ' +
+      'so undoing a band copy had no redo (`docs/TECH_DEBT.md` #113). Additive for existing ' +
+      'callers, which ignore the body.',
+  })
+  @ApiOkResponse({ type: DeleteActivityResultDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async remove(
@@ -148,8 +157,8 @@ export class ActivitiesController {
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
     @RequestContext() context: RequestContext,
-  ): Promise<void> {
-    await this.service.remove(principal, orgSlug, activityId, context);
+  ): Promise<DeleteActivityResultDto> {
+    return this.service.remove(principal, orgSlug, activityId, context);
   }
 
   @Post(':activityId/dissolve')

@@ -465,7 +465,7 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     await recalc(actor, planId);
     await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
 
-    await actor.agent.delete(`/api/v1/organizations/acme/activities/${a}`).expect(204);
+    await actor.agent.delete(`/api/v1/organizations/acme/activities/${a}`).expect(200);
 
     const res = await actor.agent.get(varianceUrl(planId)).expect(200);
     expect(res.body.data).toHaveLength(1);

@@ -483,7 +483,12 @@ export function useDeleteActivity(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (activityId: string) =>
-      apiFetch<void>(`/organizations/${orgSlug}/activities/${activityId}`, { method: 'DELETE' }),
+      // Typed to its body now, not `void`: the route answers `200 { deleteBatchId }` so a caller
+      // can restore exactly what it deleted (`docs/TECH_DEBT.md` #113). Callers that ignore the
+      // return are unaffected.
+      apiFetch<{ deleteBatchId: string }>(`/organizations/${orgSlug}/activities/${activityId}`, {
+        method: 'DELETE',
+      }),
     // Removing an activity changes the baseline variance (it reads as "Removed" or drops out).
     onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });

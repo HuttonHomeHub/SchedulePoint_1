@@ -1724,7 +1724,7 @@ and only by activating twice inside one round trip.
 
 ---
 
-## 113. Redo is unavailable after undoing a band copy
+## 113. Redo is unavailable after undoing a band copy **(CLOSED 2026-08-08)**
 
 **Status:** open · **Owner:** api + web · **Raised:** 2026-08-08 (W5 M5, found by the flag-on journey)
 
@@ -1752,3 +1752,17 @@ matters is only testable against the thing that enforces it.
 
 **Risk:** low. The undo works; only the reversal of the undo is missing, and the planner can copy
 the band again.
+
+### Closed 2026-08-08 — the route returns the id
+
+`DELETE …/activities/:activityId` now answers **200 `{ deleteBatchId }`** instead of `204`. Nothing
+about the delete itself changed: the cascade already assigned that id, and the only defect was that
+the response threw it away. `pasteActivitiesCommand` keeps it and hands it to `restoreDeleteBatch`,
+so a band copy's undo is reversible like every other command's.
+
+Additive rather than breaking — existing callers ignore the body — but it **is** a public contract
+change, so `docs/API.md` records it and says why this `DELETE` is not `204`: the caller genuinely
+cannot derive the value, which is the test that section already applies.
+
+The API e2e asserts the id is a real uuid **and then uses it** to restore what it deleted. A field
+that is only asserted present is a field that can quietly stop being right.
