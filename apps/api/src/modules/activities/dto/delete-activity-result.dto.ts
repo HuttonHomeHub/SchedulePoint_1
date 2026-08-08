@@ -10,7 +10,14 @@ import { ApiProperty } from '@nestjs/swagger';
  * copy had no redo: the undo deletes the copy's root and lets the cascade run, and the redo needs
  * an id nobody was told.
  *
- * Additive rather than breaking: 204 → 200 with a body that existing callers ignore.
+ * **Not "additive" — the status code moved, 204 → 200.** This docblock said additive until the API
+ * review pointed at the diff that disproved it: five of this repo's own e2e specs had to change
+ * `.expect(204)` to `.expect(200)`, and any caller branching on the status, or a generated SDK that
+ * treats 204 specially, breaks the same way. It is a non-additive, non-major contract change,
+ * bumped **minor** under the pre-1.0 policy (CLAUDE.md §10) — which is the correct bump for a
+ * different reason than the one first written down (ADR-0076: a claim that decides something
+ * carries what established it, and "callers ignore the body" was never checked against the status
+ * line).
  */
 export class DeleteActivityResultDto {
   @ApiProperty({
@@ -20,4 +27,11 @@ export class DeleteActivityResultDto {
       'rows, including a summary’s whole cascaded subtree and the links between them.',
   })
   deleteBatchId!: string;
+
+  /** Mirrors `BulkDeleteResultDto.from` — the module's established shape for a receipt DTO. */
+  static from(result: { deleteBatchId: string }): DeleteActivityResultDto {
+    const dto = new DeleteActivityResultDto();
+    dto.deleteBatchId = result.deleteBatchId;
+    return dto;
+  }
 }

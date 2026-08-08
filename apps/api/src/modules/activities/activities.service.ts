@@ -1183,19 +1183,18 @@ export class ActivitiesService {
     // under an activity, so there is nothing here for the cascade's own lock to protect.
     const plan = await this.plans.findActiveByIdInOrg(existing.planId, organization.id);
 
-    // Captured from the transaction so it can be RETURNED (`docs/TECH_DEBT.md` #113). A cascade
+    // Returned OUT of the transaction so it reaches the caller (`docs/TECH_DEBT.md` #113) — the
+    // shape `bulkDelete` two methods below already uses, rather than mutating an outer `let`. A cascade
     // already assigns one batch id for the whole subtree; the route answered 204 with no body, so
     // the client never learnt it and could not restore what it had just deleted. That is why
     // undoing a band copy had no redo: `restoreDeleteBatch` needs an id nobody was told.
-    let deleteBatchId = '';
-    await this.prisma.$transaction(async (tx) => {
+    const deleteBatchId = await this.prisma.$transaction(async (tx) => {
       const cascade = await this.lifecycle.cascadeSoftDelete(
         tx,
         'activity',
         activityId,
         principal.userId,
       );
-      deleteBatchId = cascade.batchId;
       // ONE row for the whole subtree, inside the cascade's own transaction. Deleting a WBS
       // summary sweeps its descendants and their links (ADR-0038); forty-one rows would bury the
       // fact that a person did one thing, so the counts ride the payload instead — taken from the
@@ -1218,6 +1217,7 @@ export class ActivitiesService {
         }),
         tx,
       );
+      return cascade.batchId;
     });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },

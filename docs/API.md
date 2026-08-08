@@ -769,9 +769,13 @@ decision for the coverage milestone, on a fresh measurement (ADR-0073 "Measured,
   activity is a `WBS_SUMMARY` — but a bodiless response meant a client could not call
   `POST …/plans/:planId/activities/restore-batch/:batchId` on the rows it had just deleted. That is
   why undoing a copied WBS band had no redo (`docs/TECH_DEBT.md` #113): the undo deletes the copy's
-  root and lets the cascade run, and the redo needs an id nobody was told. Additive rather than
-  breaking — existing callers ignore the body. It is one of the few `DELETE`s here that is not
-  `204`, and the reason is the §"200 or 204" rule above: the caller genuinely cannot derive this.
+  root and lets the cascade run, and the redo needs an id nobody was told. It is one of the few
+  `DELETE`s here that is not `204`, and the reason is the "can the caller derive it?" test the
+  §"200 or 204" rule applies: this caller genuinely cannot. Note what moved — the **status code**,
+  204 → 200. A caller reading the body is unaffected; one branching on the status, or a generated
+  client treating 204 specially, is not, and five of this repository's own e2e specs had to change
+  `.expect(204)` to `.expect(200)`. This entry said "additive rather than breaking" until the API
+  review put that claim next to the diff disproving it (ADR-0076).
 - `POST …/activities/:activityId/dissolve` (**200**) removes a WBS summary's grouping and **keeps
   the work**: its direct children take its own parent, then the now-childless summary is
   soft-deleted, in one transaction. It is a separate endpoint from `DELETE`, not a flag on it,

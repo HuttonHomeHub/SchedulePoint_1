@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
+import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
@@ -78,6 +79,22 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
+/**
+ * The gate object the real host always supplies. `usePlanWorkspaceModel` derives it in an
+ * unconditional `useMemo` and both production callers pass it, so a test that omitted it was
+ * exercising a branch production never takes — and the shading assertions below were therefore
+ * proving the *fallback*, not the thing that ships. Building it from the real deriver also means a
+ * change to the sentences shows up here rather than in a hand-copied string.
+ */
+const gatingFor = (canWrite: boolean, canProgress = false) =>
+  deriveActivityEditorGating({
+    penManaged: true,
+    holdsPen: canWrite,
+    canWrite: true,
+    canProgress,
+    canReadCost: true,
+  });
+
 function renderTable(
   canEditSchedule: boolean,
   data: ActivitySummary[] = [ACTIVITY],
@@ -92,6 +109,7 @@ function renderTable(
         planId="pl1"
         canEditSchedule={canEditSchedule}
         canReportProgress={canReportProgress}
+        editorGating={gatingFor(canEditSchedule, canReportProgress)}
       />
     </QueryClientProvider>,
   );
@@ -148,6 +166,26 @@ describe('ActivitiesTable', () => {
       'aria-disabled',
     );
     expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  /**
+   * **Steps shades too**, and the fact this needed a test is the finding. It was left omitted while
+   * its four neighbours were converted — in the same menu, on the same row, off the same gate
+   * (`deriveActivityEditorGating` makes `steps` the *same object* as `general`), inside the change
+   * that fixed them. Two independent reviewers caught it; nothing in the suite would have, because
+   * the old `expect(items).not.toContain('Steps')` assertion was dropped rather than inverted.
+   */
+  it('SHADES Steps for a non-writer, on the same gate as its neighbours', () => {
+    renderTable(false);
+    openRowMenu('Excavate');
+    const steps = screen.getByRole('menuitem', { name: 'Steps' });
+    expect(steps).toHaveAttribute('aria-disabled', 'true');
+    // The same sentence as Edit — one gate object, so one reason, not two that drift apart.
+    const edit = screen.getByRole('menuitem', { name: 'Edit' });
+    const textOf = (el: HTMLElement) =>
+      document.getElementById(el.getAttribute('aria-describedby') ?? '')?.textContent;
+    expect(textOf(steps)).toBeTruthy();
+    expect(textOf(steps)).toBe(textOf(edit));
   });
 
   it('shows progress plus edit/delete for a writer who can also report progress', () => {

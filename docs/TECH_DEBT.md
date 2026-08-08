@@ -1828,3 +1828,45 @@ sentence to correct rather than two mental models to reconcile.
 
 **Risk:** low. A planner in this state has a lit **Request control** button in the chrome; the
 sentence sends them looking for the wrong one first. Worth a slice, not urgent.
+
+---
+
+## 116. Consolidation-pass findings that were not folded
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
+
+Five specialists reviewed the combined #108/#113/#111 diff. Ten findings were folded with regression
+tests; these are the ones deliberately left, each with the reason, so they are not rediscovered as
+though nobody had looked.
+
+**1. The plural move is pointer-only.** `useCoalescedNudge` commits through the single-activity
+`notedReposition` and has no plural awareness, so a planner with twelve bars selected still nudges
+them one at a time by keyboard while a mouse drag moves all twelve. Not a WCAG 2.1.1 failure — the
+function is available, just not in bulk — which is why no gate flagged it. It is the same defect #108
+fixed for the pointer, one input modality along, and it is the reason the accessibility review scored
+the next item's audience as small: the people who cannot hear the drag hint largely cannot perform
+the gesture either. Fixing it means teaching the nudge hook the selection, which is a slice.
+
+**2. The drag hint is never announced.** `BulkSelectionBar`'s "Dragging any of these moves all N
+activities." is static text with no live region, and `announceSelectionCount` says only the count. A
+screen-reader user is never told the consequence a sighted user reads beside the buttons. Deliberately
+**not** fixed here, because announcing a pointer-only capability while (1) stands would be telling
+that reader about something they cannot do. It should land **with** (1), not before it.
+
+**3. A shaded row-menu item's reason is `sr-only`; the canvas bar's is visible.** ADR-0082's premise
+is that one operation should not teach two mental models, and for a sighted mouse-only user it still
+does: the canvas prints the sentence, the row menu holds it for assistive technology only. The
+honest reason it is not fixed is that there is **no Tooltip primitive** in `components/ui/`, adding
+one is an ADR-level decision (CLAUDE.md §5), and a one-off `title` is what ADR-0082 just removed.
+
+**4. `HierarchyTree` is a third bare-boolean menu.** `tree-actions.ts`'s `nodeActions` returns `[]`
+for a non-writer, so the trigger disappears. ADR-0082 records it as unchanged-by-design, and the
+component review's point stands: it belongs with `plan-actions-menu.tsx` in #114 as the same
+"no reason to show" shape rather than filed apart from it. Treat #114 as covering all three.
+
+**5. `DeleteActivityFn`'s `| void` branch is vestigial.** Since #113 every real caller resolves the
+object, so `pasteActivitiesCommand`'s runtime `if (result && typeof result === 'object')` guard is
+dead weight. Tightening the type is a small cleanup with no behavioural change.
+
+**Risk:** (1) and (2) together are a real capability gap for keyboard-driven planners and should be
+taken as one slice. (3)–(5) are consistency and tidiness.

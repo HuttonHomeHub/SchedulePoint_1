@@ -2041,14 +2041,44 @@ export function TsldPanel({
           dayDelta: intent.startDay === undefined ? 0 : intent.startDay - originStart,
           laneDelta: intent.laneIndex === undefined ? 0 : intent.laneIndex - activity.laneIndex,
         };
+        // **Hold the dragged bar at the drop position while the batch is in flight**, exactly as
+        // the single-bar path below does. Without this the gesture machine clears its own ghost
+        // synchronously at pointer-up, so the bar the planner just dragged snapped *back* to its
+        // stale position and sat there until the refetch landed — reading as "the drag did
+        // nothing" on the one gesture that moves a dozen bars. Two further things ride on the same
+        // state and were therefore also missing: `writeBusy` (the busy cursor, and the visible
+        // refusal of a new grab), and `onIntent`'s own `if (pendingCreate || pendingReposition)`
+        // re-entrancy guard at the top of this function — so a second plural drag could start
+        // while the first batch write was still in flight.
+        //
+        // Only the dragged bar gets a ghost. The other N-1 still jump on release; that is the
+        // preview gap `docs/TECH_DEBT.md` #108 is narrowed to, and it has a painting cost to
+        // measure against ADR-0026 §16 before it moves.
+        const span =
+          activity.earlyStart && activity.earlyFinish
+            ? daysBetween(activity.earlyStart, activity.earlyFinish)
+            : 0;
+        const ghostStart = originStart + delta.dayDelta;
+        setPendingReposition({
+          startDay: ghostStart,
+          endDay: ghostStart + span,
+          laneIndex: activity.laneIndex + delta.laneDelta,
+        });
         pointerRepositionBusyRef.current = true;
         void bulk
           .moveMany(rows, delta)
           .then((outcome) => {
+            setPendingReposition(null);
             if (outcome.conflict) showConflict(outcome.conflict);
             else announce(`${String(rows.length)} activities moved.`);
           })
-          .catch(() => showConflict('Those activities could not be moved.'))
+          .catch((err: unknown) => {
+            setPendingReposition(null);
+            // The real message, like every sibling write in this file. `.catch(() => …)` threw the
+            // server's sentence away and replaced it with a generic one, on the only path that had
+            // no specific conflict sentence of its own.
+            showConflict(err instanceof Error ? err.message : 'Couldn’t move those activities.');
+          })
           .finally(() => {
             pointerRepositionBusyRef.current = false;
           });

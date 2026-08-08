@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
+import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
@@ -43,6 +44,17 @@ function renderTable(rows: Partial<ActivitySummary>[], canEditSchedule = true) {
         orgSlug="acme"
         planId="pl1"
         canEditSchedule={canEditSchedule}
+        // The real host always supplies this (an unconditional `useMemo` in the workspace model),
+        // and without it the write actions are omitted rather than shaded — because a bare boolean
+        // carries no sentence to shade *with*. Passing it means this suite exercises the path that
+        // ships instead of a fallback production never takes.
+        editorGating={deriveActivityEditorGating({
+          penManaged: true,
+          holdsPen: canEditSchedule,
+          canWrite: true,
+          canProgress: false,
+          canReadCost: true,
+        })}
         calendars={[]}
       />
     </QueryClientProvider>,

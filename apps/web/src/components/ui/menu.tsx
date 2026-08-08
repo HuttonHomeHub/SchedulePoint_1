@@ -290,7 +290,11 @@ export function MenuItem({
       {...(describedBy ? { 'aria-describedby': describedBy } : {})}
       tabIndex={-1}
       onClick={() => {
-        if (disabled) return;
+        // `busy` guards too, not only `disabled`. Today's one consumer always pairs them, so this
+        // is defence for the next one: `aria-busy` says "a write is in flight", and a primitive
+        // that announces that while still firing its action on a second click is telling the
+        // reader one thing and doing another.
+        if (disabled || busy) return;
         onSelect();
         close?.();
       }}

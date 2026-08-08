@@ -392,17 +392,6 @@ export function ActivitiesTable({
           hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
       });
     }
-    // Dark surface (ADR-0044 §2): weighted steps are a writer authoring surface whose only effect is
-    // an Earned-Value physical-% input, so gate on BOTH flags (TECH_DEBT #44a). Hidden for a
-    // duration-derived type (milestone / LOE / WBS summary), where steps are inert — matching the form.
-    if (
-      ACTIVITY_STEPS_ENABLED &&
-      EARNED_VALUE_ENABLED &&
-      canEditSchedule &&
-      !isDurationDerivedType(activity.type)
-    ) {
-      actions.push({ key: 'steps', label: 'Steps', onSelect: () => openFor(activity, 'steps') });
-    }
     {
       // **Shaded, not hidden** (ADR-0082, `docs/TECH_DEBT.md` #111). These used to be pushed only
       // `if (canEditSchedule)`, so a Planner who lost the pen mid-session saw Duplicate shaded on
@@ -411,11 +400,41 @@ export function ActivitiesTable({
       // The gate is `editorGating.general` **by identity**, not a second `{ writable, reason }`
       // assembled beside it: two derivations of "may this person write" drift, and the drift is
       // invisible because each surface looks right alone (ADR-0062's argument, pinned by a test).
-      const gate = editorGating?.general ?? {
-        writable: canEditSchedule,
-        reason: canEditSchedule ? null : 'You cannot change this plan right now.',
-      };
-      const shut = gate.writable ? {} : { disabledReason: gate.reason ?? 'Not available.' };
+      //
+      // With **no** gating object there is nothing to shade *with*: `canEditSchedule` is a bare
+      // boolean that cannot say whether the refusal is a role or a missing pen. The first draft
+      // invented a fourth sentence here ("You cannot change this plan right now."), which is the
+      // failure `docs/UX_STANDARDS.md` "Row / node actions" warns about and ADR-0060 records
+      // shipping once. So that case **omits**, exactly as `docs/TECH_DEBT.md` #114 decides for
+      // `plan-actions-menu.tsx` — one rule, not a special case: shading needs a reason to show.
+      const gate = editorGating?.general ?? null;
+      const shut =
+        gate === null || gate.writable ? {} : { disabledReason: gate.reason ?? 'Not available.' };
+      // No gating object and no write right ⇒ nothing to say, so say nothing (above).
+      if (gate === null && !canEditSchedule) return actions;
+
+      // Dark surface (ADR-0044 §2): weighted steps are a writer authoring surface whose only effect
+      // is an Earned-Value physical-% input, so gate on BOTH flags (TECH_DEBT #44a). Omitted for a
+      // duration-derived type (milestone / LOE / WBS summary), where steps are inert — matching the
+      // form, and the "does not apply to this object" row of ADR-0082 §3's table.
+      //
+      // The **permission** half is a shade, not an omission, and it took two independent reviewers
+      // to notice: this action shades from `editorGating.steps`, which `deriveActivityEditorGating`
+      // makes the *same object* as `general` (ADR-0060 §5 pen-gated steps and added the server
+      // assertion). Leaving it hidden reproduced the exact defect ADR-0082 exists to close — Edit
+      // shaded and Steps absent, in one menu, on one row, off one gate — inside the change that
+      // fixed its neighbours. The correct pattern applied to a control and not the one beside it.
+      if (ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED && !isDurationDerivedType(activity.type)) {
+        const stepsGate = editorGating?.steps ?? gate;
+        actions.push({
+          key: 'steps',
+          label: 'Steps',
+          ...(stepsGate === null || stepsGate.writable
+            ? {}
+            : { disabledReason: stepsGate.reason ?? 'Not available.' }),
+          onSelect: () => openFor(activity, 'steps'),
+        });
+      }
       actions.push({
         key: 'edit',
         label: 'Edit',
@@ -747,6 +766,19 @@ export function ActivitiesTable({
         // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
         // the second clause a Viewer would open a menu of nothing but refusals — and it is what
         // keeps the all-disabled focus trap out of reach rather than merely fixed.
+        // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
+        // this component** — established by trying to test it rather than by assuming either way, after
+        // the consolidation pass blocked on it being untested. The column above renders only when
+        // `canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED`, and each of those
+        // four contributes an action that is never shaded (Logic, Resources and Report progress are
+        // reads or non-pen-gated; `canEditSchedule` and `editorGating.general.writable` are the same
+        // predicate — `penManaged ? canWrite && holdsPen : canWrite` — so they cannot disagree).
+        //
+        // A unit test can only reach it by turning all four off, at which point the column is absent and
+        // the test passes for the wrong reason. The first version of that test did exactly that and still
+        // passed with this clause deleted. Kept as a guard against a future action set where it IS
+        // reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
+        // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
         if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
           return null;
         }

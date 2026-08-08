@@ -140,7 +140,7 @@ export function BulkSelectionBar({
   // into it made every action's description read "Dragging any of these moves all 3", which is
   // unrelated to why the button is off. 101 unit tests said so immediately. The caveat is a fact
   // about the selection, not about a control, so it gets its own element and no describedby.
-  const dragHint = `Dragging any of these moves all ${String(count)}.`;
+  const dragHint = `Dragging any of these moves all ${String(count)} activities.`;
   // One id, shared by whichever controls are shut — see `BulkAction`'s `reasonId` docblock.
   const describedBy = status === null ? undefined : statusId;
 

@@ -146,8 +146,8 @@ export class ActivitiesController {
       '`deleteBatchId` the cascade assigned, which is what `POST …/activities/restore-batch` ' +
       'takes — **the reason this answers 200 rather than 204**: the id already existed server-' +
       'side, but a bodiless response meant a client could not restore what it had just deleted, ' +
-      'so undoing a band copy had no redo (`docs/TECH_DEBT.md` #113). Additive for existing ' +
-      'callers, which ignore the body.',
+      'so undoing a band copy had no redo (`docs/TECH_DEBT.md` #113). The status code moves, ' +
+      '204 → 200: a caller reading the body is unaffected, one branching on the status is not.',
   })
   @ApiOkResponse({ type: DeleteActivityResultDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
@@ -158,7 +158,9 @@ export class ActivitiesController {
     @Param('activityId', ParseUuidPipe) activityId: string,
     @RequestContext() context: RequestContext,
   ): Promise<DeleteActivityResultDto> {
-    return this.service.remove(principal, orgSlug, activityId, context);
+    return DeleteActivityResultDto.from(
+      await this.service.remove(principal, orgSlug, activityId, context),
+    );
   }
 
   @Post(':activityId/dissolve')
