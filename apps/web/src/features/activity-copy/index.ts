@@ -30,5 +30,17 @@ export {
   type PlanCloneInput,
 } from './model/clone-graph';
 export { refusalMessage } from './model/refusal-copy';
+export {
+  ASSIGNMENT_FIELD_DECISIONS,
+  projectAssignment,
+  type AssignmentCloneBody,
+} from './model/assignment-projection';
+export { STEP_FIELD_DECISIONS, projectSteps } from './model/step-projection';
+export {
+  useCloneCarriage,
+  type CarriageResult,
+  type CloneCarriage,
+  type SkippedAssignment,
+} from './api/use-clone-carriage';
 export { bandMembers, type BandCopyCounts } from './model/band-members';
 export { bandCopyConfirmation, type BandCopyCopy } from './model/confirm-copy';

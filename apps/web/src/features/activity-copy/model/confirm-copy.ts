@@ -41,9 +41,12 @@ export function bandCopyConfirmation(summaryName: string, plan: ClonePlan): Band
   return {
     title: `Duplicate “${summaryName}”?`,
     description:
-      `This copies “${summaryName}” ${members}${links}. ` +
+      `This copies “${summaryName}” ${members}${links}, with their resource assignments and ` +
+      'weighted steps. ' +
       // Named individually rather than as "some fields": a planner cannot act on a category.
-      'Progress, resource assignments, weighted steps and notes are not copied — the copy is the ' +
-      'same work, not the same history.',
+      // The list shrank when M4 landed: assignments and steps moved from "not copied" to copied,
+      // and a confirmation that still said otherwise would be a false statement on the one screen
+      // whose job is to say what is about to happen.
+      'Progress and notes are not copied — the copy is the same work, not the same history.',
   };
 }

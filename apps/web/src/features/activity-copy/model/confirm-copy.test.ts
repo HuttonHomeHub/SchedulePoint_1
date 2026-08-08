@@ -66,8 +66,18 @@ describe('bandCopyConfirmation', () => {
   it('names what is NOT copied, individually', () => {
     // "Some fields are not copied" is unactionable. A planner needs to know which, before the write.
     const { description } = bandCopyConfirmation('Level 2', plan(5, 2));
-    for (const omitted of ['Progress', 'resource assignments', 'weighted steps', 'notes']) {
+    for (const omitted of ['Progress', 'notes']) {
       expect(description).toContain(omitted);
     }
+  });
+
+  it('says assignments and steps ARE copied, because since M4 they are', () => {
+    // The sentence listed them as omissions until the carriage landed. A confirmation that
+    // describes the previous behaviour is worse than none: it is the one screen whose whole job is
+    // to say what is about to happen, and a planner who reads it will not check.
+    const { description } = bandCopyConfirmation('Level 2', plan(5, 2));
+    expect(description).toContain('resource assignments');
+    expect(description).toContain('weighted steps');
+    expect(description).not.toMatch(/resource assignments[^.]*are not copied/);
   });
 });

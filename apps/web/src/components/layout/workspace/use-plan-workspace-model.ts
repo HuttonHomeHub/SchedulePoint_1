@@ -35,6 +35,10 @@ import {
 } from '@/features/activities/lib/activity-editor-intent';
 import { planClone, refusalMessage, type CloneRefusal } from '@/features/activity-copy';
 import { useCreateClonedActivity } from '@/features/activity-copy/api/use-clone-activities';
+import {
+  useCloneCarriage,
+  type SkippedAssignment,
+} from '@/features/activity-copy/api/use-clone-carriage';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
@@ -113,6 +117,14 @@ export interface DuplicateOutcome {
   /** Set when the server rejected a write (409/422); the copy has already been rolled back. */
   readonly conflict: string | null;
   readonly createdIds?: readonly string[];
+  /**
+   * Assignments the copy could not take because their resource is archived (M4, ADR-0053 §4).
+   *
+   * Not an error — the copy succeeded — but not silence either: the source keeps a live assignment
+   * the clone is refused, so a planner who is not told ends up with a copy that is quietly
+   * short-crewed. Named per activity so the message can say which work lost which resource.
+   */
+  readonly skippedAssignments?: readonly SkippedAssignment[];
 }
 
 /**
@@ -509,6 +521,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // here (not in the dialog) so the command's inverse re-issues through the same authorised endpoints.
   const createActivity = useCreateActivity(orgSlug, planId);
   const createClone = useCreateClonedActivity(orgSlug, planId);
+  const cloneCarriage = useCloneCarriage(orgSlug);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
@@ -1433,6 +1446,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     autoRecalc.hold(holdToken);
     const created: { id: string; version: number }[] = [];
     const idMap = new Map<string, string>();
+    const skippedAssignments: SkippedAssignment[] = [];
     try {
       for (const step of plan_.creates) {
         const parentId = step.parentSourceId === null ? undefined : idMap.get(step.parentSourceId);
@@ -1442,6 +1456,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         });
         idMap.set(step.sourceId, row.id);
         created.push({ id: row.id, version: row.version });
+
+        // Carry the crew and the step breakdown onto this clone before moving to the next (M4).
+        // Inside the same try, so a failure here rolls the whole copy back like any other write —
+        // a clone that exists without the resources it was supposed to carry is a half-copy the
+        // planner has no way to spot, and the confirmation has already promised them otherwise.
+        const source = await cloneCarriage.readSource(step.sourceId);
+        const carried = await cloneCarriage.carry({
+          cloneId: row.id,
+          cloneVersion: row.version,
+          sourceName: step.sourceName,
+          assignments: source.assignments,
+          steps: source.steps,
+        });
+        skippedAssignments.push(...carried.skipped);
       }
       // Links are created SEQUENTIALLY, and the plan's "bound the concurrency, start at 4" is
       // deliberately not followed. Every dependency create runs inside a transaction under
@@ -1504,12 +1532,28 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       );
     }
     notifyRecalc();
+    // The skipped-assignment sentence rides the SAME announcement rather than a second one: two
+    // live-region writes in one frame collapse to the last (the ADR-0073 C1 / TECH_DEBT #104
+    // shape), so a planner would hear only whichever won and never the fact that a resource was
+    // dropped. Success and its caveat are one sentence because they reach one channel.
+    const skippedNote =
+      skippedAssignments.length === 0
+        ? ''
+        : skippedAssignments.length === 1
+          ? ' 1 resource assignment was not copied because its resource is archived.'
+          : ` ${String(skippedAssignments.length)} resource assignments were not copied because their resources are archived.`;
     announce(
-      created.length === 1
+      (created.length === 1
         ? '1 activity duplicated.'
-        : `${String(created.length)} activities duplicated.`,
+        : `${String(created.length)} activities duplicated.`) + skippedNote,
     );
-    return { applied: true, refusal: null, conflict: null, createdIds: created.map((c) => c.id) };
+    return {
+      applied: true,
+      refusal: null,
+      conflict: null,
+      createdIds: created.map((c) => c.id),
+      skippedAssignments,
+    };
   };
 
   /**
