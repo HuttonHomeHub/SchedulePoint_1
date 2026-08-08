@@ -19,6 +19,17 @@
  * plan is built through the same public REST surface (ADR-0066's rule), so what is timed is what a
  * planner's browser would issue.
  *
+ * **What this script is NOT evidence of: that a planner can do any of this.** It issues the request
+ * sequence a band duplicate makes; it never opens the application, presses a control, or touches the
+ * code path the product uses to build that sequence. That distinction is not pedantry — it is the
+ * epic's central process failure written down. Milestone 2 shipped `bandMembers`,
+ * `bandCopyConfirmation`, unit tests for both, and this measurement, and read as landed in the
+ * commit log while **both entry points excluded a WBS summary**, so no planner could reach it and
+ * its unit tests were validating dead code. This harness made that milestone look *more* finished
+ * than any previous one, because it is a stronger artefact than earlier epics had. A better tool
+ * made the hole harder to see. Only the flag-on journey (`apps/web/e2e-copy-paste/`) is evidence
+ * that a capability exists; this is evidence about what it costs once it does.
+ *
  * **What it deliberately does not claim.** These are server-side round trips from this machine to
  * an API on this machine. A planner's latency includes a real network, which this cannot see and
  * must not pretend to — the number to read here is the *shape* (how the cost grows with the band)

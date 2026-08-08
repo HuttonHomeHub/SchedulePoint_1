@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 20 API modules
 > (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 882 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 80 ADRs.
+> 81 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1660,6 +1660,32 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   and chain **alphabetically**, so the fixture needs distinct dates or the direction assertion tests
   the alphabet; and one undo is a restore, a recalculation and a refetch, which outruns Playwright's
   5 s default poll — checked in `psql` rather than reported as "the links did not come back".
+
+- **ADR-0081** _(Proposed)_ — A milestone is its entry point, and the journey is the gate. Written
+  because W5 (activity copy/paste, `docs/specs/activity-copy-paste/`) shipped a **whole milestone
+  that was unreachable**: `bandMembers` and `bandCopyConfirmation` landed with unit tests, a
+  measurement harness timed a band copy against a real API, the milestone read as done in the commit
+  log — and both entry points excluded a `WBS_SUMMARY`, so no planner could reach it and its unit
+  tests were validating dead code. Three independent reviews found it separately. The cause is
+  ADR-0058's rule failing one level up: **a plan is a document too**, and working through its task
+  list is evidence the tasks were done, not that a capability exists. **It is the fourth recorded
+  instance of the class, not the first** — ADR-0080 shipped `bulk` wired into one host and not the
+  layout its flag selects, ADR-0062 M6 hid a form instead of shading it, ADR-0059 M6 lit an inert
+  zoom control — so the ADR treats it as an escalation of a standing pattern rather than a
+  departure, which is what points the fix at the journey rather than at W5's authors. Three decisions: a milestone
+  claiming user-facing capability **names its entry point** or declares itself dark; the **flag-on
+  journey lands with the first user-facing milestone**, not at enablement (the only one of the three
+  that is enforcement rather than intention — M2's hole survived a plan, a spec, a measurement, unit
+  tests and a human read, and died the first time something drove the real product); and a
+  measurement harness **says in its own docblock** where it bypasses the product, because
+  `measure-band-copy` made M2 look _more_ finished than any previous milestone while no UI path
+  existed — a better tool made the hole harder to see. A structural "every barrel export has a
+  non-test caller" gate was **proposed and then rejected on measurement**: 129 findings on one
+  predicate, 49 on a tighter one, and neither would have caught `bandMembers`, whose own tests called
+  it. The defect was never an uncalled symbol; it was a capability with no entry point, which is not
+  a property of a symbol. The ADR records two of its own claims being asserted before they were
+  checked — the rejected gate, and a sentence about a docblock that said close to the opposite — as
+  ADR-0076 Class 3 occurring twice inside the ADR written about it. **No product code changes.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
