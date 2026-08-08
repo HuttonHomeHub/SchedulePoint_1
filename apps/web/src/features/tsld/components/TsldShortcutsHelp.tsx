@@ -1,6 +1,7 @@
 import { Dialog } from '@/components/ui/dialog';
 import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
+  CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
@@ -14,10 +15,30 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
   { keys: '↑ / ↓', action: 'Previous / next activity' },
   { keys: 'Home / End', action: 'First / last activity' },
   { keys: '[ / ]', action: 'Jump to the driving predecessor / successor (then trace the path)' },
-  { keys: 'Space', action: 'Announce logic ties and driving detail for the focused activity' },
+  ...(CANVAS_MULTI_SELECT_ENABLED
+    ? []
+    : [
+        {
+          keys: 'Space',
+          action: 'Announce logic ties and driving detail for the focused activity',
+        },
+      ]),
   { keys: 'Enter', action: 'Open the logic (dependency) editor' },
   { keys: '?', action: 'Show this shortcuts help' },
   { keys: 'Esc', action: 'Cancel the current gesture / close a popover' },
+];
+
+/**
+ * Multi-select bindings (`docs/specs/canvas-multi-select/` M3-T1) — **Space is rebound**, so its
+ * old entry is removed above rather than duplicated. A sheet that lists Space twice, doing two
+ * different things, is worse than one that lists neither.
+ */
+const MULTI_SELECT_SHORTCUTS: readonly Shortcut[] = [
+  { keys: 'Space', action: 'Add / remove the focused activity from the selection' },
+  { keys: 'i', action: 'Announce logic ties and driving detail for the focused activity' },
+  { keys: 'Shift + ↑ / ↓', action: 'Extend the selection to the previous / next activity' },
+  { keys: 'Cmd / Ctrl + A', action: 'Select every activity' },
+  { keys: 'Esc', action: 'Clear the selection (after closing any armed tool)' },
 ];
 
 const EDIT_SHORTCUTS: readonly Shortcut[] = [
@@ -103,6 +124,12 @@ export function TsldShortcutsHelp({
           <h3 className="text-sm font-semibold">Navigate</h3>
           <ShortcutList items={READ_SHORTCUTS} />
         </section>
+        {CANVAS_MULTI_SELECT_ENABLED ? (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Select</h3>
+            <ShortcutList items={MULTI_SELECT_SHORTCUTS} />
+          </section>
+        ) : null}
         {editingEnabled ? (
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">Edit</h3>

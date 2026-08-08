@@ -28,7 +28,9 @@ import {
   type CanvasSelection,
   clear,
   EMPTY_SELECTION,
+  isSelected,
   replace,
+  replaceAll,
   toggle,
 } from '../model/canvas-selection';
 import {
@@ -482,6 +484,20 @@ export function TsldPanel({
   const setSelectedId = useCallback((id: string | null): void => {
     setSelection(id === null ? clear() : replace(id));
   }, []);
+  /**
+   * The listbox's **active option** — the keyboard cursor, which a multi-selectable listbox has to
+   * keep separate from what is selected (`docs/specs/canvas-multi-select/` M3-T1, APG Listbox).
+   *
+   * Before this milestone the two were the same thing, correctly: in a single-select list the
+   * focused option *is* the selection. Space now toggles the focused row **without moving focus**,
+   * and toggling the primary off would otherwise teleport the cursor to whichever row happened to
+   * be added last — a listbox where pressing Space moves you somewhere else.
+   *
+   * Stored raw and **reconciled at read** (the ADR-0063 M4b rule, the same one `reconcile` follows):
+   * a cursor pointing at a row that has left the plan resolves to the primary rather than being
+   * repaired by an effect that can run a frame late.
+   */
+  const [activeIdRaw, setActiveIdRaw] = useState<string | null>(null);
   // The selected activity's live viewport geometry, written by the canvas each frame and read by the
   // floating selection bar to follow pan/zoom without per-frame React state (ADR-0026 D3 / ADR-0031).
   const selectionAnchorRef = useRef<SelectionAnchor | null>(null);
@@ -646,7 +662,9 @@ export function TsldPanel({
       linkArmGenerationRef.current += 1;
       setLinkArmGeneration(linkArmGenerationRef.current);
       announce(modeStatementText({ kind: 'linking', linkType }));
-    } else if (previous === 'add-activity' || previous === 'link') {
+    } else if (mode === 'marquee') {
+      announce(modeStatementText({ kind: 'marquee' }));
+    } else if (previous === 'add-activity' || previous === 'link' || previous === 'marquee') {
       announce('Tool closed. Select mode.');
     }
   }, [mode, announce, createType, linkType]);
@@ -682,34 +700,36 @@ export function TsldPanel({
    */
   const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
     ? null
-    : mode === 'add-activity'
-      ? {
-          kind: 'adding',
-          typeLabel: ACTIVITY_TYPE_LABELS[createType],
-          // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
-          // module reads no domain enum), and this is the same `isMilestone` the gesture machine
-          // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
-          gesture: isMilestone(createType) ? 'click' : 'drag',
-        }
-      : mode === 'loe'
-        ? { kind: 'loe', startPicked: loeStartId !== null }
-        : mode === 'link'
-          ? linkPickedId
-            ? {
-                kind: 'linkPicking',
-                linkType,
-                predecessorName:
-                  activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
-              }
-            : lastLink?.armGeneration === linkArmGeneration
+    : mode === 'marquee'
+      ? { kind: 'marquee' }
+      : mode === 'add-activity'
+        ? {
+            kind: 'adding',
+            typeLabel: ACTIVITY_TYPE_LABELS[createType],
+            // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
+            // module reads no domain enum), and this is the same `isMilestone` the gesture machine
+            // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
+            gesture: isMilestone(createType) ? 'click' : 'drag',
+          }
+        : mode === 'loe'
+          ? { kind: 'loe', startPicked: loeStartId !== null }
+          : mode === 'link'
+            ? linkPickedId
               ? {
-                  kind: 'linked',
-                  predecessorName: lastLink.predecessorName,
-                  successorName: lastLink.successorName,
-                  linkType: lastLink.linkType,
+                  kind: 'linkPicking',
+                  linkType,
+                  predecessorName:
+                    activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
                 }
-              : { kind: 'linking', linkType }
-          : null;
+              : lastLink?.armGeneration === linkArmGeneration
+                ? {
+                    kind: 'linked',
+                    predecessorName: lastLink.predecessorName,
+                    successorName: lastLink.successorName,
+                    linkType: lastLink.linkType,
+                  }
+                : { kind: 'linking', linkType }
+            : null;
 
   /**
    * The pinned WBS band (ADR-0063). Derived HERE rather than inside the canvas because
@@ -1167,7 +1187,21 @@ export function TsldPanel({
     [dataDate, activities, dependencies],
   );
 
+  /**
+   * The resolved keyboard cursor. Flag-off it **is** `selectedId`, expression for expression, so
+   * `aria-activedescendant` and every keyboard branch below are byte-for-byte the prior surface.
+   */
+  const activeId: string | null = !CANVAS_MULTI_SELECT_ENABLED
+    ? selectedId
+    : activeIdRaw && activities.some((a) => a.id === activeIdRaw)
+      ? activeIdRaw
+      : selectedId;
+
   const select = (id: string | null, modifier?: SelectModifier): void => {
+    // Pointing at a row — by click or by arrow — moves the cursor there. Only Space, Ctrl/Cmd+A and
+    // the marquee change the selection without moving it, which is exactly the distinction the
+    // separate cursor exists to hold.
+    if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(id);
     // Flag-off the canvas never passes a modifier, so this is the single-selection handler it has
     // always been, statement for statement.
     if (CANVAS_MULTI_SELECT_ENABLED && modifier && id) {
@@ -1193,6 +1227,22 @@ export function TsldPanel({
       const rowText = rowTextById.get(id);
       if (rowText) announce(rowText);
     }
+  };
+
+  /**
+   * A committed marquee sweep, already resolved to ids by the canvas.
+   *
+   * ONE announcement, on COMMIT — never per frame. A marquee moves ~60 times a second and a polite
+   * live region cannot keep up with that, so a per-frame count would be noise where a single count
+   * is information.
+   */
+  const selectRegion = (ids: readonly string[], additive: boolean): void => {
+    if (!CANVAS_MULTI_SELECT_ENABLED) return;
+    setSelection((current) => {
+      const next = additive ? addAll(current, ids) : replaceAll(ids);
+      announceSelectionCount(next);
+      return next;
+    });
   };
 
   /**
@@ -1415,11 +1465,80 @@ export function TsldPanel({
       announce(announceChainStep(dir, neighbour));
       return;
     }
-    // Space — Tier-2 "tell me more": logic ties + driving for the focused activity (read — no flag).
+    /**
+     * **Space** — Tier-2 "tell me more" flag-off; flag-on it **toggles** the focused row in the
+     * selection and the logic summary moves to `i` (CQ-1, answered "Space toggles").
+     *
+     * Space is the APG binding for toggling an option in a multi-selectable listbox, and a planner
+     * arriving from any other list will press it. The rebinding is recorded in
+     * `docs/DECISIONS.md`, listed in the shortcuts sheet, and pinned in both directions by tests —
+     * because the cost of getting this wrong is silent: the old binding still "works", it just
+     * says something instead of doing what the planner meant.
+     *
+     * The cursor does **not** move: that is the whole reason `activeIdRaw` exists.
+     */
     if (event.key === ' ') {
       event.preventDefault();
+      if (CANVAS_MULTI_SELECT_ENABLED) {
+        if (activeId) {
+          // Computed from the render's own `selection` and announced beside the write, rather than
+          // announcing inside the updater: a `setState` updater must be pure, and React may invoke
+          // it more than once. `select()` uses the updater form because the canvas can call it from
+          // a stale closure; a key handler is re-created every render and has no such problem.
+          const next = toggle(selection, activeId);
+          setSelection(next);
+          announceSelectionCount(next);
+        }
+        return;
+      }
       const current = activities.find((a) => a.id === selectedId);
       if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
+      return;
+    }
+    // `i` — the logic summary Space used to give. Verified free against the current keymap before
+    // it was taken (`Enter`, `?`, `[`, `]`, `Space`, `n`, `Alt+*`, `Shift+←/→`, arrows, Home/End).
+    // Flag-off this branch never runs, so `i` stays unbound and the keymap is byte-for-byte today's.
+    if (CANVAS_MULTI_SELECT_ENABLED && (event.key === 'i' || event.key === 'I')) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === activeId);
+      if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
+      return;
+    }
+    /**
+     * **Ctrl/Cmd+A** — select every activity in the plan.
+     *
+     * Handled on the listbox rather than on `window`, which is what keeps it from swallowing the
+     * browser's select-all in a text context: this handler only runs when the listbox itself has
+     * focus, so the guard is structural rather than a `target.closest('input')` test that has to be
+     * kept in step (the ADR-0079 Escape guard exists precisely because a `window` listener cannot
+     * make that promise).
+     */
+    if (CANVAS_MULTI_SELECT_ENABLED && (event.ctrlKey || event.metaKey) && event.key === 'a') {
+      event.preventDefault();
+      const next = replaceAll(activities.map((a) => a.id));
+      setSelection(next);
+      announceSelectionCount(next);
+      return;
+    }
+    /**
+     * **Escape — the last rung of the ladder** (M3-T2).
+     *
+     * The order is tool → open pick → selection, and it is enforced by guards here rather than by
+     * hoping the two listeners fire in a helpful order: the canvas's `window` handler owns the
+     * first two rungs (ADR-0064), and both handlers see the same keystroke. Clearing the selection
+     * unconditionally would take a planner's tool *and* their selection with one press — the
+     * ADR-0064 defect class, arriving through a door that decision did not have.
+     */
+    if (
+      CANVAS_MULTI_SELECT_ENABLED &&
+      event.key === 'Escape' &&
+      mode === 'select' &&
+      linkPickedId === null &&
+      selection.ids.length > 0
+    ) {
+      event.preventDefault();
+      setSelection(EMPTY_SELECTION);
+      announceSelectionCount(EMPTY_SELECTION);
       return;
     }
     // Shift+←/→ nudges the focused activity's DURATION one day (ADR-0052 M2) — the keyboard
@@ -1482,7 +1601,7 @@ export function TsldPanel({
       });
       return;
     }
-    const index = activities.findIndex((a) => a.id === selectedId);
+    const index = activities.findIndex((a) => a.id === activeId);
     let next = index;
     if (event.key === 'ArrowDown') next = Math.min(activities.length - 1, index + 1);
     else if (event.key === 'ArrowUp') next = Math.max(0, index < 0 ? 0 : index - 1);
@@ -1491,7 +1610,23 @@ export function TsldPanel({
     else return;
     event.preventDefault();
     const target = activities[next];
-    if (target) select(target.id);
+    if (!target) return;
+    /**
+     * **Shift+↑/↓ extends the selection** by one row, the APG contiguous-select binding.
+     *
+     * Vertical only, and that is a constraint rather than a scoping choice: `Shift+←/→` is already
+     * the ADR-0052 duration nudge, and this listbox navigates vertically, so the horizontal chord
+     * is both taken and meaningless here. Taking it would have silently removed a shipped edit
+     * accelerator to add a navigation one nobody asked for.
+     */
+    if (CANVAS_MULTI_SELECT_ENABLED && event.shiftKey && !event.altKey) {
+      setActiveIdRaw(target.id);
+      const grown = addAll(selection, [target.id]);
+      setSelection(grown);
+      announceSelectionCount(grown);
+      return;
+    }
+    select(target.id);
   };
 
   const closeCreate = (): void => {
@@ -2095,6 +2230,12 @@ export function TsldPanel({
               dataDate={dataDate}
               selectedId={selectedId}
               onSelect={select}
+              onSelectRegion={selectRegion}
+              // The plural set only when it IS plural: at one selected the canvas
+              // receives `undefined` and builds the scene it always built.
+              selectedIds={
+                CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : undefined
+              }
               fitSignal={fitSignal}
               editing={editingEnabled}
               mode={mode}
@@ -2201,7 +2342,10 @@ export function TsldPanel({
               {...(CANVAS_DATA_DATE_ENABLED
                 ? { 'aria-describedby': `${listboxId}-data-date` }
                 : {})}
-              aria-activedescendant={selectedId ? optionId(selectedId) : undefined}
+              // Advertised only flag-on: an `aria-multiselectable` listbox whose Space does
+              // nothing plural is a promise the surface does not keep.
+              aria-multiselectable={CANVAS_MULTI_SELECT_ENABLED || undefined}
+              aria-activedescendant={activeId ? optionId(activeId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {
                 // A Next-conflict cycle focused us programmatically and already set the selection — skip
@@ -2224,7 +2368,12 @@ export function TsldPanel({
                   key={a.id}
                   id={optionId(a.id)}
                   role="option"
-                  aria-selected={a.id === selectedId}
+                  // Flag-on this reflects the SET, not the cursor: `aria-selected` is what a
+                  // screen-reader user hears as "selected", and pointing it at the active option
+                  // would report exactly one member of a selection of twelve.
+                  aria-selected={
+                    CANVAS_MULTI_SELECT_ENABLED ? isSelected(selection, a.id) : a.id === selectedId
+                  }
                 >
                   {rowTextById.get(a.id)}
                 </li>

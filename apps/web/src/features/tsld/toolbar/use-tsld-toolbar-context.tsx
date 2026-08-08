@@ -461,6 +461,11 @@ export function useTsldToolbarContext({
       // The LOE span needs two existing activities to hang off; the Add-menu item shades with a reason
       // below `< 2` (B5). Reads the stabilised activities list already memoised for the conflict cluster.
       loeSpanActivityCount: activities.length,
+      // Marquee select (`docs/specs/canvas-multi-select/` M2-T4): a fifth tool mode on the same
+      // arm/disarm contract as the other four (Escape returns to Select, the band states it, the
+      // transition is announced). Not pen-gated — selecting is a read.
+      isMarqueeSelecting: mode === 'marquee',
+      toggleMarqueeMode: () => setMode((m) => (m === 'marquee' ? 'select' : 'marquee')),
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
 

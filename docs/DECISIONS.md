@@ -1864,3 +1864,32 @@ silent since it shipped.
 
 Both were found by `apps/web/e2e-search-nav/` on its first run. Neither is reachable by a unit test
 in this repository.
+
+## 2026-08-08 — Space toggles the selection; the logic summary moves to `i`
+
+The multi-select epic (`docs/specs/canvas-multi-select/`, CQ-1) rebinds a shipped key, which is
+worth recording because it is not visible in a diff of behaviour: **both** bindings do something,
+so nothing looks broken from either side.
+
+Flag-on, `Space` on the TSLD's parallel listbox adds or removes the focused activity from the
+selection — the APG Listbox binding for a multi-selectable list, and the one a planner arriving
+from any other list in the product will press. Its previous job, announcing the focused activity's
+logic ties and driving detail, moves to **`i`**. That key was verified free against the current
+keymap before it was taken (`Enter`, `?`, `[`, `]`, `Space`, `n`, `Alt+*`, `Shift+←/→`, arrows,
+Home/End) rather than assumed free.
+
+Two consequences worth stating, because both were decisions rather than fallout:
+
+**`Shift+Arrow` extends vertically only.** `Shift+←/→` is already the ADR-0052 duration nudge, and
+this listbox navigates vertically, so the horizontal chord is both taken and meaningless here.
+Taking it would have removed a shipped edit accelerator to add a navigation one nobody asked for.
+
+**The keyboard cursor becomes a separate piece of state.** Space toggles the focused row _without
+moving focus_, and until this milestone the focused row and the selection were the same thing — so
+toggling the primary off would have teleported the cursor to whichever row was added last. The
+`activeIdRaw` state exists for that one sentence; flag-off it resolves to `selection.primaryId`,
+expression for expression.
+
+The rollback contract is `TsldPanel.multi-select-keyboard.flag-off.test.tsx`, which pins the old
+binding rather than merely omitting the new one — a rebinding is the easiest kind of change to
+half-revert, and a half-revert leaves `Space` doing nothing with no test failing.

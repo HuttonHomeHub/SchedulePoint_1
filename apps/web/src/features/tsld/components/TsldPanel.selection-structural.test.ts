@@ -36,23 +36,49 @@ function callSites(name: string): number {
   return (CODE.match(new RegExp(`(?<![.\\w])${name}\\s*\\(`, 'g')) ?? []).length;
 }
 
+/**
+ * Every top-level `const name = (…) => { … }` in the file, as `[name, body]`.
+ *
+ * Bodies are cut at the next top-level `const NAME = ` — crude, but the property being asserted is
+ * "the flag is named before the reducer **in the same function**", and an over-long body can only
+ * make that assertion weaker at a boundary, never produce a false pass for a function that has no
+ * guard at all.
+ */
+function topLevelFunctions(): [string, string][] {
+  const starts = [...CODE.matchAll(/\n {2}const (\w+) = /g)];
+  return starts.map((m, i) => {
+    const from = m.index ?? 0;
+    const to = starts[i + 1]?.index ?? CODE.length;
+    return [m[1] ?? '', CODE.slice(from, to)];
+  });
+}
+
 describe('the plural selection reducers are reachable only behind the flag', () => {
   it.each(['toggle', 'addAll', 'replaceAll'])(
-    'guards every call to %s with CANVAS_MULTI_SELECT_ENABLED',
+    'names CANVAS_MULTI_SELECT_ENABLED before every call to %s',
     (plural) => {
       const calls = callSites(plural);
       if (calls === 0) return; // not wired yet — nothing to guard, and that is not a failure
-      // Every plural reducer lives inside `select()`'s flagged branch. The cheapest true statement
-      // about that is a proximity one: each call must have the flag named in the same function, and
-      // `select()` is the only function that names it near a reducer.
-      const guardedRegion =
-        /if \(CANVAS_MULTI_SELECT_ENABLED && modifier && id\) \{([\s\S]*?)\n {4}\}/.exec(
-          CODE,
-        )?.[1] ?? '';
-      expect(guardedRegion, 'select() has a flag-guarded plural branch').not.toBe('');
-      const inGuard = (guardedRegion.match(new RegExp(`(?<![.\\w])${plural}\\s*\\(`, 'g')) ?? [])
-        .length;
-      expect(inGuard).toBe(calls);
+
+      // The property is per-FUNCTION, not per-`if`: two handlers reach the plural reducers
+      // (`select` for the modifier clicks, `selectRegion` for a marquee) and they guard in
+      // different shapes — one an early branch, one an early return. Asserting one shape would
+      // have forced the second handler to copy the first's control flow for the test's benefit,
+      // which is how a gate starts distorting the code it is supposed to protect.
+      let guarded = 0;
+      for (const [name, body] of topLevelFunctions()) {
+        const call = new RegExp(`(?<![.\\w])${plural}\\s*\\(`).exec(body);
+        if (!call) continue;
+        const flag = body.indexOf('CANVAS_MULTI_SELECT_ENABLED');
+        expect(flag, `${name}() names the flag`).toBeGreaterThanOrEqual(0);
+        expect(flag, `${name}() names the flag BEFORE it calls ${plural}`).toBeLessThan(
+          call.index ?? 0,
+        );
+        guarded += (body.match(new RegExp(`(?<![.\\w])${plural}\\s*\\(`, 'g')) ?? []).length;
+      }
+      // …and every call is inside one of those functions: a call at module scope, or in a function
+      // this scan cannot see, would leave the totals apart.
+      expect(guarded).toBe(calls);
     },
   );
 

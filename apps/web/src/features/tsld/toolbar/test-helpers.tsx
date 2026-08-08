@@ -47,6 +47,8 @@ export function makeTsldToolbarContext(
     toggleLoeSpanMode: vi.fn(),
     loeStartPicked: false,
     loeSpanActivityCount: 2,
+    isMarqueeSelecting: false,
+    toggleMarqueeMode: vi.fn(),
     canAutoArrange: false,
     requestAutoArrange: vi.fn(),
     canUndo: false,

@@ -23,7 +23,6 @@ function task(id: string, startDay: number, endDay: number, lane: number): Rende
   const iso = (d: number) => new Date(Date.UTC(2026, 0, 1 + d)).toISOString().slice(0, 10);
   return {
     id,
-    name: id,
     type: 'TASK',
     laneIndex: lane,
     earlyStart: iso(startDay),
@@ -38,7 +37,6 @@ function milestone(id: string, day: number, lane: number): RenderActivity {
   const iso = new Date(Date.UTC(2026, 0, 1 + day)).toISOString().slice(0, 10);
   return {
     id,
-    name: id,
     type: 'START_MILESTONE',
     laneIndex: lane,
     earlyStart: iso,
@@ -53,7 +51,6 @@ function milestone(id: string, day: number, lane: number): RenderActivity {
 function unscheduled(id: string, lane: number): RenderActivity {
   return {
     id,
-    name: id,
     type: 'TASK',
     laneIndex: lane,
     earlyStart: null,

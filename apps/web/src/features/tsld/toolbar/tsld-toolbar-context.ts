@@ -103,6 +103,16 @@ export interface TsldToolbarContext {
   /** How many activities the plan has — the LOE span needs **two** existing activities to hang off, so
    * the Add-menu's Level-of-Effort item shades with a reason when this is `< 2` (spec §Edge cases). */
   loeSpanActivityCount: number;
+  /** True when the **marquee select** tool is armed (`docs/specs/canvas-multi-select/` M2-T4). */
+  isMarqueeSelecting: boolean;
+  /**
+   * Arm / disarm the marquee select tool.
+   *
+   * Deliberately **not** pen-gated, unlike the other four tool modes: selecting is a read (the
+   * ADR-0063 M4b rule), and a Viewer sweeping a rectangle to see what is in it writes nothing. The
+   * bulk actions the selection opens carry their own gates and say why they are shut.
+   */
+  toggleMarqueeMode: () => void;
   /** Whether the auto-arrange-lanes action is offered (editing + an `onAutoArrange` handler). */
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */

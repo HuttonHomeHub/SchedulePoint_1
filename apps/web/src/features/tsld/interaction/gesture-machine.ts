@@ -5,9 +5,11 @@ import {
   lagFromAnchorDay,
   laneRowAt,
   LANE_HEIGHT,
+  rectFromCorners,
   type DayWalk,
   type HitZone,
   type Point,
+  type Rect,
   type Viewport,
 } from '../render/render-model';
 
@@ -35,7 +37,7 @@ import {
  * then a finish driver — the shell composes a `LEVEL_OF_EFFORT` span (SS + FF) from the pair. A single
  * `EditMode` value makes the four tools **mutually exclusive** — arming one leaves any other.
  */
-export type EditMode = 'select' | 'add-activity' | 'link' | 'loe';
+export type EditMode = 'select' | 'add-activity' | 'link' | 'loe' | 'marquee';
 
 /**
  * The minimum pointer travel (CSS px) that turns a body press into a real reposition rather
@@ -220,6 +222,18 @@ export type EditIntent =
       kind: 'loeSpan';
       startDriverId: string;
       finishDriverId: string;
+    }
+  | {
+      /**
+       * A committed marquee sweep (`docs/specs/canvas-multi-select/` M2-T3). The machine reports the
+       * **rectangle**, not a list of ids: resolving a rectangle to bars needs `activityRect`, which
+       * needs the scene, and the machine is deliberately blind to it. The shell runs the shared
+       * `idsIntersecting` predicate — the same one a shift-click span uses.
+       */
+      kind: 'marquee';
+      rect: Rect;
+      /** Ctrl/Cmd was held at PRESS time: add to the selection rather than replace it. */
+      additive: boolean;
     };
 
 /** The live gesture. `idle` means the machine owns nothing — the canvas pans/selects (M1). */
@@ -324,6 +338,24 @@ export type GestureState =
        * mirroring {@link linkPicking}. */
       kind: 'loePicking';
       startId: string;
+    }
+  | {
+      /**
+       * A marquee sweep in progress (`docs/specs/canvas-multi-select/` M2-T3).
+       *
+       * The **only** state that keeps raw screen points rather than day/lane coordinates, and
+       * deliberately so: a marquee selects what it visually covers, so snapping its corners to day
+       * columns would make the rectangle disagree with the pointer at low zoom — where a column is
+       * a couple of pixels wide and the drift is exactly where a planner is trying to be precise.
+       *
+       * `additive` is captured at **press** time, not read at release: a planner who lifts the
+       * modifier before the mouse button would otherwise have their add turn into a replace, losing
+       * a selection they had spent the gesture building.
+       */
+      kind: 'marqueeing';
+      originPoint: Point;
+      currentPoint: Point;
+      additive: boolean;
     };
 
 export const IDLE: GestureState = { kind: 'idle' };
@@ -449,10 +481,34 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
           },
         };
       }
+      // A marquee sweep starts on EMPTY ground — either because the tool is armed, or because
+      // ctrl/cmd is held in `select` mode (M2-T3). The plain empty-ground drag is untouched and
+      // still pans, which is the single most-used gesture on this canvas and has its own
+      // regression test: a marquee that stole the pan would be a far worse trade than no marquee.
+      if (
+        event.hit.kind === 'empty' &&
+        (ctx.mode === 'marquee' || (ctx.mode === 'select' && event.modifiers?.ctrl === true))
+      ) {
+        return {
+          state: {
+            kind: 'marqueeing',
+            originPoint: event.point,
+            currentPoint: event.point,
+            // Captured at PRESS, never re-read at release: a planner who lifts the modifier before
+            // the button would otherwise watch an add turn into a replace.
+            additive: event.modifiers?.ctrl === true,
+          },
+        };
+      }
       // select mode on empty space: the canvas pans/selects (M1), no gesture owned here.
       return { state: IDLE };
     }
     case 'pointerMove': {
+      if (state.kind === 'marqueeing') {
+        // Raw screen points, no snapping: the rectangle must sit under the pointer exactly, or at
+        // low zoom (a day column ~2px) it would visibly lag the cursor.
+        return { state: { ...state, currentPoint: event.point } };
+      }
       if (state.kind === 'creating') {
         const currentDay = dayColumnAt(event.point.x, ctx.view);
         if (currentDay === state.currentDay) return { state };
@@ -547,6 +603,20 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
       return { state };
     }
     case 'pointerUp': {
+      if (state.kind === 'marqueeing') {
+        // A zero-area release — a press that never moved — still commits, and that is deliberate:
+        // it is how a planner clears a plural selection by clicking empty ground, the same way a
+        // plain click always has. `idsIntersecting` returns nothing for it, and `replaceAll([])`
+        // is a clear; an ADDITIVE zero-area release adds nothing, leaving the set alone.
+        return {
+          state: IDLE,
+          intent: {
+            kind: 'marquee',
+            rect: rectFromCorners(state.originPoint, state.currentPoint),
+            additive: state.additive,
+          },
+        };
+      }
       if (state.kind === 'creating') {
         const type = ctx.createType ?? 'TASK';
         // A milestone is a point: collapse to the press day, ignoring any drag span (a drag in
