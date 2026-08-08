@@ -16,7 +16,6 @@ import {
   seedActivities,
   seedLink,
   selectByName,
-  selectedActivityId,
 } from './support';
 
 /**
@@ -250,17 +249,17 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
   await test.step('the clone is selected after a duplicate, so the next action has a subject', async () => {
     await ensurePen(page);
     await selectByName(page, 'Excavate');
-    const sourceId = await selectedActivityId(page);
 
     await duplicateButton(page, 'Excavate').click();
     await announced(page, /1 activity duplicated/i);
 
-    await expect
-      .poll(async () => await selectedActivityId(page), { timeout: 10_000 })
-      .not.toBe(sourceId);
-    const selected = await selectedActivityId(page);
-    const activities = await apiActivities(page, orgSlug);
-    expect(activities.find((a) => a.id === selected)?.name).toMatch(/\(copy/);
+    // Asserted on the **selection bar's accessible name**, not on `aria-activedescendant`.
+    // ADR-0080 split the keyboard cursor from the selection so Space could toggle without moving
+    // focus, and `aria-activedescendant` follows the cursor — so it is the wrong channel for "what
+    // is selected". The bar is named `Actions for <activity>`, which is what a planner sees.
+    await expect(page.getByRole('toolbar', { name: /^Actions for .*\(copy/ })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   await test.step('the announcer says something for every outcome, never nothing', async () => {

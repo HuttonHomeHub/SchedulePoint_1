@@ -15,6 +15,7 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_NAV_ENABLED,
+  ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   TSLD_EDITING_ENABLED,
@@ -1243,7 +1244,13 @@ export function TsldPanel({
     // M1-T2): Enter-to-jump lifts a selection through this same one-shot signal, so gating it on the
     // nav flag alone would leave the search's jump silently selecting nothing in a build with lenses
     // on and nav off. Either flag arms the subscription; neither leaves it exactly as it was.
-    if (!CANVAS_NAV_ENABLED && !CANVAS_SEARCH_NAV_ENABLED) return;
+    // Widened again for copy/paste (`docs/specs/activity-copy-paste/` M1 risk (c)): a completed
+    // duplicate or paste reveals its clone through this same one-shot signal, and without this
+    // clause the reveal is silently inert in any build with both nav flags off — the clone lands
+    // below the plan's lowest lane and nothing moves. Found by the flag-on journey, whose config
+    // deliberately does not set the nav flags: a seam that is itself flag-gated is a dependency, and
+    // this one was invisible until a build existed that did not have it.
+    if (!CANVAS_NAV_ENABLED && !CANVAS_SEARCH_NAV_ENABLED && !ACTIVITY_COPY_PASTE_ENABLED) return;
     const signal = navState.selectSignal;
     if (!signal || signal.nonce === selectSignalSeenRef.current) return;
     selectSignalSeenRef.current = signal.nonce;
