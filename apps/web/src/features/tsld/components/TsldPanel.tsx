@@ -33,6 +33,7 @@ import {
   replaceAll,
   toggle,
 } from '../model/canvas-selection';
+import { planChain } from '../model/chain-order';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -76,9 +77,11 @@ import {
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 
+import { BulkSelectionBar } from './BulkSelectionBar';
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
+import { LinkChainDialog } from './LinkChainDialog';
 import { sceneTopOffset, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
 import { TsldShortcutsHelp } from './TsldShortcutsHelp';
@@ -198,6 +201,23 @@ export interface TsldLoeSpanInput {
 
 export type TsldLoeSpanOutcome = TsldEditOutcome;
 
+/**
+ * What a host must be able to do for the bulk selection bar to appear
+ * (`docs/specs/canvas-multi-select/` M4).
+ *
+ * Every field is required. An optional operation would let a host wire two of three and ship a bar
+ * with a button that silently does nothing — the exact shape the epic's own enablement passes keep
+ * finding, so the type refuses to express it.
+ */
+export interface TsldBulkOperations {
+  /** May the caller write to this plan at all (role + pen), and — when not — why. */
+  gate: { writable: boolean; reason: string | null };
+  /** Delete the given activities as ONE batch; resolves when the write and its command have landed. */
+  deleteMany: (activities: readonly ActivitySummary[]) => Promise<void>;
+  /** Create the chain, in the given order. Rejects with a message; a failure leaves ZERO edges. */
+  linkChain: (edges: readonly { predecessorId: string; successorId: string }[]) => Promise<void>;
+}
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
@@ -226,6 +246,19 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /**
+   * The three bulk operations, supplied by the host that owns the mutations and the command stack
+   * (`docs/specs/canvas-multi-select/` M4).
+   *
+   * One object rather than three props, because they arrive and leave together: a host that can do
+   * none of them passes nothing and the bar never renders, which is what keeps a half-wired bar —
+   * the "lit but inert" shape this repo has now found at four consecutive enablement passes — from
+   * being expressible at all.
+   *
+   * `features/tsld` imports no other feature (ADR-0026 D8), so the panel takes the operations as
+   * plain functions and never reaches for a hook.
+   */
+  bulk?: TsldBulkOperations | undefined;
   /**
    * Undo the last plan edit — the **existing** ADR-0048 inverse, passed in by the host that owns the
    * command stack. The mode band's link confirmation offers it (ADR-0064 T5); absent, the
@@ -429,6 +462,7 @@ export function TsldPanel({
   onOpenLogic,
   onEditActivity,
   onDeleteActivity,
+  bulk,
   onDissolveSummary,
   onResources,
   onProgress,
@@ -498,6 +532,13 @@ export function TsldPanel({
    * repaired by an effect that can run a frame late.
    */
   const [activeIdRaw, setActiveIdRaw] = useState<string | null>(null);
+
+  /** The bulk surfaces' own state (`docs/specs/canvas-multi-select/` M4). */
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [chainOpen, setChainOpen] = useState(false);
+  const [chainReversed, setChainReversed] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   // The selected activity's live viewport geometry, written by the canvas each frame and read by the
   // floating selection bar to follow pan/zoom without per-frame React state (ADR-0026 D3 / ADR-0031).
   const selectionAnchorRef = useRef<SelectionAnchor | null>(null);
@@ -547,6 +588,27 @@ export function TsldPanel({
   // Where the floating selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
+  /**
+   * Focus the listbox **after** a closing modal has released it.
+   *
+   * A native `<dialog>` returns focus to whatever had it when `showModal()` ran, and it does that
+   * inside the effect that calls `close()` — i.e. *after* the handler that asked us to focus. When
+   * the element it returns to has itself unmounted (the bulk bar's Delete button, once the whole
+   * selection is gone) the browser lands on `<body>`, and a synchronous `focus()` from the handler
+   * is silently undone a moment later.
+   *
+   * That is not only a WCAG 2.4.3 failure: the workspace's undo/redo accelerators are a **React**
+   * `onKeyDown` on the workspace root (`use-plan-workspace-key-scope.ts`), so focus on `<body>`
+   * means Ctrl+Z reaches nothing. The flag-on journey found it exactly that way — the bulk delete
+   * landed, the undo keystroke did nothing, and no unit suite could see it because jsdom has no
+   * modal focus restoration to lose the race to.
+   */
+  const focusListboxAfterModal = useCallback((then?: () => void) => {
+    requestAnimationFrame(() => {
+      listboxRef.current?.focus();
+      then?.();
+    });
+  }, []);
   // Set just before a Next-conflict cycle focuses the listbox programmatically, so the listbox's
   // `onFocus` default-select (pick the first row when nothing is selected) doesn't clobber the conflict
   // selection we set in the same tick (the closure's `selectedId` is still stale then). Consumed once.
@@ -745,6 +807,95 @@ export function TsldPanel({
    * picture and the screen cannot disagree about the band's height or about which activities the
    * scene paints.
    */
+  /**
+   * The plural selection's activities, in plan order, reconciled to what still exists.
+   *
+   * Derived at read (the ADR-0063 M4b rule) — an id deleted elsewhere leaves here rather than being
+   * swept by an effect that can run a frame late and let a bulk action name a row that is gone.
+   */
+  const selectedActivities = useMemo(
+    () =>
+      CANVAS_MULTI_SELECT_ENABLED ? activities.filter((a) => selection.ids.includes(a.id)) : [],
+    [activities, selection.ids],
+  );
+
+  /**
+   * What the chain would be, recomputed from the live selection every render.
+   *
+   * Cheap (a sort and a bounded DFS over the plan's edges) and, more to the point, **never stale**:
+   * a stored preview would keep describing a selection the planner has since changed, and the whole
+   * purpose of the preview is that it describes what is about to be written.
+   */
+  const chain = useMemo(
+    () =>
+      planChain({
+        candidates: selectedActivities.map((a) => ({
+          id: a.id,
+          name: a.name,
+          // The bar's start as the canvas draws it, so the chain's order matches the picture.
+          start: (barDateSource === 'visual' ? a.visualEffectiveStart : null) ?? a.earlyStart,
+        })),
+        existing: dependencies.map((d) => ({
+          predecessorId: d.predecessor.id,
+          successorId: d.successor.id,
+        })),
+        reversed: chainReversed,
+      }),
+    [selectedActivities, dependencies, chainReversed, barDateSource],
+  );
+
+  const closeBulkSurfaces = (): void => {
+    setConfirmBulkDelete(false);
+    setChainOpen(false);
+    setBulkError(null);
+    setBulkBusy(false);
+  };
+
+  const runBulkDelete = (): void => {
+    if (!bulk || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    void bulk
+      .deleteMany(selectedActivities)
+      .then(() => {
+        const count = selectedActivities.length;
+        closeBulkSurfaces();
+        // Clear FIRST, then announce: a selection of rows that no longer exist would otherwise
+        // survive one render as a set `reconcile` is about to empty anyway, and the bar would
+        // flicker a count nobody can act on.
+        setSelection(EMPTY_SELECTION);
+        setActiveIdRaw(null);
+        // Announced INSIDE the focus callback, and that ordering is load-bearing: focusing the
+        // listbox fires its `onFocus` default-select, which announces the row it lands on. Announced
+        // first, "2 activities deleted." is spoken and then immediately overwritten by a row
+        // description — so the one fact the planner needs confirmed is the one they never hear.
+        focusListboxAfterModal(() => announce(`${count} activities deleted.`));
+      })
+      .catch((error: unknown) => {
+        setBulkBusy(false);
+        setBulkError(error instanceof Error ? error.message : 'Couldn’t delete. Please try again.');
+      });
+  };
+
+  const runLinkChain = (): void => {
+    if (!bulk || bulkBusy || chain.refusal) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    void bulk
+      .linkChain(chain.edges)
+      .then(() => {
+        const count = chain.edges.length;
+        closeBulkSurfaces();
+        announce(`${count} ${count === 1 ? 'link' : 'links'} created in sequence.`);
+      })
+      .catch((error: unknown) => {
+        setBulkBusy(false);
+        setBulkError(
+          error instanceof Error ? error.message : 'Couldn’t create the links. Please try again.',
+        );
+      });
+  };
+
   const wbsBand = useMemo(
     () =>
       deriveWbsBandSource(activities, {
@@ -2150,6 +2301,59 @@ export function TsldPanel({
       <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
 
       {/*
+        The bulk selection bar (`docs/specs/canvas-multi-select/` M4-T7) — beside the mode band in
+        the SAME reserved chrome, never floating over the scene. Renders nothing below two selected,
+        and nothing at all when the host wired no operations, so a partially-wired host cannot ship
+        a button that does nothing.
+      */}
+      {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
+        <BulkSelectionBar
+          count={selection.ids.length}
+          primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
+          moveCaveat={
+            // Stated BEFORE the drag, and only where it is true. In Visual mode a move pins
+            // nothing, so a caveat there would be a warning about something that does not happen.
+            bulk.gate.writable && barDateSource !== 'visual' && selection.ids.length > 1
+              ? `Moving these will pin a start-no-earlier-than date on all ${selection.ids.length}.`
+              : null
+          }
+          link={{
+            enabled: bulk.gate.writable && chain.refusal === null,
+            reason: !bulk.gate.writable
+              ? bulk.gate.reason
+              : chain.refusal
+                ? 'These can’t be linked in sequence — open the preview to see why.'
+                : null,
+          }}
+          remove={{
+            enabled: bulk.gate.writable,
+            reason: bulk.gate.writable ? null : bulk.gate.reason,
+          }}
+          onLink={() => {
+            setBulkError(null);
+            // Reverse is a choice about THIS preview, so it does not survive it. A sticky reverse
+            // would open the next chain already flipped, with nothing on screen saying it had been
+            // — which is the ADR-0064 report (a link recorded the wrong way round) reappearing as a
+            // state nobody set. Found by the flag-on journey, which cancelled one preview after
+            // pressing Reverse and opened the next.
+            setChainReversed(false);
+            setChainOpen(true);
+          }}
+          onDelete={() => {
+            setBulkError(null);
+            setConfirmBulkDelete(true);
+          }}
+          onClear={() => {
+            setSelection(EMPTY_SELECTION);
+            setActiveIdRaw(null);
+            announce('Selection cleared.');
+            listboxRef.current?.focus();
+          }}
+          busy={bulkBusy}
+        />
+      ) : null}
+
+      {/*
         **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
         completely blank canvas, and nothing on it says what the first gesture is — the surface is
         at its least self-explanatory exactly when the planner knows least.
@@ -2397,6 +2601,41 @@ export function TsldPanel({
           restoreFocus={restoreSelectionFocus}
         />
       ) : null}
+
+      {/*
+        Bulk delete's confirmation. The copy names BOTH what goes: the activities and the links
+        between and into them. The single-activity dialog learnt this the hard way (ADR-0063 M6's
+        "honest WBS delete confirmation") — a count alone lets a planner agree to lose logic they
+        did not know was in scope.
+      */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onClose={() => {
+          setConfirmBulkDelete(false);
+          setBulkError(null);
+        }}
+        onConfirm={runBulkDelete}
+        title={`Delete ${selectedActivities.length} activities?`}
+        description={`Their dependencies go too. You can undo this — one step restores all ${selectedActivities.length} with their links intact.`}
+        confirmLabel={`Delete ${selectedActivities.length}`}
+        pending={bulkBusy}
+        error={bulkError}
+      />
+
+      <LinkChainDialog
+        open={chainOpen}
+        onClose={() => {
+          setChainOpen(false);
+          setBulkError(null);
+        }}
+        ordered={chain.ordered}
+        refusal={chain.refusal}
+        reversed={chainReversed}
+        onToggleReverse={() => setChainReversed((r) => !r)}
+        onConfirm={runLinkChain}
+        pending={bulkBusy}
+        error={bulkError}
+      />
 
       <ConfirmDialog
         open={confirmArrange}

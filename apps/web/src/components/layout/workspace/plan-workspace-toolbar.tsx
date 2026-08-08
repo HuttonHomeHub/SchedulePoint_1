@@ -415,6 +415,12 @@ export function ToolbarPlanWorkspace({
       onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      // The plural selection's three operations (`docs/specs/canvas-multi-select/` M4). This is the
+      // layout the toolbar flag selects, i.e. the one a planner actually gets — wiring only its
+      // sibling `plan-workspace.tsx` left the bar unreachable in the shipped app while every unit
+      // suite passed. Found by the flag-on journey; the same "applied to one host and not its
+      // neighbour" shape ADR-0064 §7 records.
+      bulk={model.bulkOperations}
       onDissolveSummary={model.onDissolveSummary}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
       // toolbar item is flag-gated, so flag-off is byte-for-byte. Progress is role-gated via

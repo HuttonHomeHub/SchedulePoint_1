@@ -65,10 +65,13 @@ beforeEach(() => {
 describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
   it('mounts NO strip layer when inactive — the scene is byte-for-byte today (parity gate)', async () => {
     const { container, queryByTestId } = render(<TsldCanvas {...baseProps()} />);
-    // No third canvas, and the strip painter is never invoked while inactive.
+    // No strip canvas, and the strip painter is never invoked while inactive.
     expect(queryByTestId('tsld-resource-strip')).toBeNull();
-    // Exactly one canvas (the aria-hidden scene) — no interaction layer (not editing), no strip.
-    expect(container.querySelectorAll('canvas')).toHaveLength(1);
+    // Two canvases: the aria-hidden scene and the pointer-transparent interaction layer, which
+    // ADR-0080 §3 mounts without the pen (selecting is a read). NOT three — the strip band is what
+    // this gate is about, and it is absent. Counted rather than asserted as "one", because the
+    // number moved for a reason and pinning the wrong one hides the next layer that appears.
+    expect(container.querySelectorAll('canvas')).toHaveLength(2);
     await waitFor(() => expect(paintScene).toHaveBeenCalled());
     expect(paintResourceStrip).not.toHaveBeenCalled();
   });

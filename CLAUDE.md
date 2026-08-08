@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 848 web
-> source files with 27 flag-scoped Playwright suites beside the base journey, and
-> 79 ADRs.
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 852 web
+> source files with 28 flag-scoped Playwright suites beside the base journey, and
+> 80 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1604,6 +1604,62 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   kept and pinned as the rollback contract. Filed as **0079** rather than the `0078` its own plan
   names, because that number was taken between the plan and the milestone — recorded rather than
   routed around, which is the ADR-0071 lesson the plan itself cited.
+
+- **ADR-0080** _(Accepted; M0–M5 landed, `VITE_CANVAS_MULTI_SELECT` **default-on** 2026-08-08)_ —
+  The canvas plural selection, and what a bulk action owes its
+  subject. Every plan-shaping gesture on the TSLD acted on **exactly one bar**: a planner
+  re-sequencing a phase — twelve activities that all move a fortnight — did it twelve times, and the
+  twelfth was as likely to be dropped a day out as the first. The table had learnt this already
+  (ADR-0063 M4b); the canvas, which is the surface this product exists to be, had not. A selection
+  becomes a **set with a primary** — the primary being the most recently added **survivor**, never
+  an index, because an index into a shrinking set is a bug waiting for the right delete — so the
+  forty singular consumers (edge handles, the activity panel, `aria-activedescendant`) read
+  `primaryId` and get exactly what they had. The flag is **derived** from
+  `VITE_CANVAS_DIRECT_MANIPULATION`, because `Shift` is already the legacy link chord: the overlap
+  is structurally impossible rather than avoided by care.
+  **"Selecting is a read" decided more than it looked like it would.** The marquee is not pen-gated
+  (the ADR-0063 M4b rule), and three consequences followed that no plan named: the canvas's Escape
+  branch is gated on `editing`, so the marquee needed an **ungated** one or the tool arms for a
+  Viewer and traps them; the interaction canvas has to mount **without the pen**, or the sweep is
+  invisible to exactly the person with no other feedback; and the write-busy refusal does not apply,
+  because an in-flight save is no reason to refuse a read. Each is one line; together they are the
+  difference between a tool and a dead end.
+  One `idsIntersecting` predicate serves both the marquee and the shift-click span, pinned by a
+  structural test — the ADR-0065 `routeOrthogonal` argument, where two implementations drift and the
+  drift is **invisible** because each looks right alone. A span is in **plan order, not screen
+  order**: screen order would change with the zoom. `Space` toggles (APG) and the logic summary
+  moves to **`i`**, which forces the keyboard cursor to become separate state — Space must not move
+  focus — and `Shift+Arrow` extends **vertically only**, because `Shift+←/→` is the ADR-0052
+  duration nudge and taking it would remove a shipped accelerator to add a navigation one nobody
+  asked for. `Escape` is the **last rung** (tool → open pick → selection), by guards rather than by
+  hoping two listeners fire in a helpful order.
+  A bulk delete's undo is **one id-stable `restore-batch`**, not N re-creates (CQ-4): re-creating
+  would restore the bars and silently lose the links **between** them. A chain is ordered by **time,
+  not pick order** (a marquee expresses no sequence), previewed with names and arrows before any
+  write, and cycle-checked against the **resulting** graph — A→B and B→C are each legal against a
+  plan holding C→A, and edge-by-edge checking passes them and then fails mid-loop, leaving a partial
+  chain that makes the plan look finished. **The CPM engine is not imported and the ADR-0034 recalc
+  parity gate is untouched.**
+  **Two of this epic's own plan claims were wrong**, both found by checking rather than by failing:
+  M2-T4 specified a split-button on a `Select` toolbar item that **does not exist**, and M2-T5 cited
+  the export scene at lines that are `isAddingActivity`. A spot-check of five decision-bearing
+  citations found two stale — the ADR-0076 Class 2/3 failure inside a document written for this
+  epic, which is why the remaining milestones verified every citation before relying on it.
+  **The flag-on journey earned the flip, and found four more defects doing it** — none visible to
+  any unit suite. `bulk` was wired into `plan-workspace.tsx` and **not** into
+  `plan-workspace-toolbar.tsx`, which is the layout the toolbar flag selects, so the bar was
+  unreachable in the shipped app while every unit test passed (the ADR-0064 §7 "one host and not
+  its neighbour" shape). A bulk delete **dropped focus to `<body>`** — a native `<dialog>` restores
+  focus from inside the effect that closes it, _after_ the handler asked for the listbox, and the
+  element it restored to had unmounted with the selection — which is a WCAG 2.4.3 failure and also
+  silently disables Ctrl+Z, because the accelerators are a React `onKeyDown` on the workspace root.
+  The deletion announcement was then **overwritten by the focus it needed** (the listbox announces
+  the row it lands on), so it now speaks inside the focus frame. And **Reverse was sticky across
+  previews**, opening the next chain already flipped with nothing on screen saying so. Two of the
+  journey's own assumptions were wrong too: five unconstrained activities all start at the data date
+  and chain **alphabetically**, so the fixture needs distinct dates or the direction assertion tests
+  the alphabet; and one undo is a restore, a recalculation and a refetch, which outruns Playwright's
+  5 s default poll — checked in `psql` rather than reported as "the links did not come back".
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -228,23 +228,24 @@ describe('CANVAS_MULTI_SELECT_ENABLED', () => {
     vi.resetModules();
   });
 
-  it('defaults OFF — the epic is mid-build', async () => {
+  it('defaults ON since the M5 gate pass', async () => {
     vi.resetModules();
     const env = await import('./env');
     expect(env.CANVAS_DIRECT_MANIPULATION_ENABLED).toBe(true);
-    expect(env.CANVAS_MULTI_SELECT_ENABLED).toBe(false);
+    expect(env.CANVAS_MULTI_SELECT_ENABLED).toBe(true);
     vi.resetModules();
   });
 
-  it('opts in on "true" or "1", and on nothing else', async () => {
+  it('opts OUT on "false" or "0", and on nothing else', async () => {
     for (const [value, expected] of [
-      ['true', true],
-      ['1', true],
-      // The helper's documented trap: a shouted "TRUE" reads as OFF. Asserted rather than assumed,
-      // because an operator who sets it that way gets silence, not an error.
-      ['TRUE', false],
-      ['yes', false],
       ['false', false],
+      ['0', false],
+      // The helper's documented trap: a shouted "FALSE" reads as ON. Asserted rather than assumed,
+      // because an operator who sets it that way gets silence, not an error — and this is now the
+      // rollback switch, which is the worst place for a value that quietly does nothing.
+      ['FALSE', true],
+      ['no', true],
+      ['true', true],
     ] as const) {
       vi.resetModules();
       vi.stubEnv('VITE_CANVAS_MULTI_SELECT', value);

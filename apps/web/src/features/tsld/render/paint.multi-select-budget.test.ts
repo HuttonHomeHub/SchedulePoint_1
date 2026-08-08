@@ -153,7 +153,11 @@ function visibleCount(): number {
   return n;
 }
 
-describe('plural selection — draw-budget gate at 2,000 activities', () => {
+// 30s, not the 5s default: each case paints a 2,000-activity scene through the real painter against
+// a counting stub, which takes ~4s alone and more when the suite runs in parallel with the rest of
+// the file set. It timed out in the full run and passed on its own — a flake, and a flake in a
+// budget gate is how a budget gate gets deleted rather than fixed (ADR-0058).
+describe('plural selection — draw-budget gate at 2,000 activities', { timeout: 30_000 }, () => {
   it('costs exactly one ring per VISIBLE selected bar, and nothing for the rest', () => {
     // Warm the label-measurement memo: it is module-level and shared across paints, so whichever
     // run goes first pays every `measureText` and a cold-vs-warm comparison would report a

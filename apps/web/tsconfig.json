@@ -42,6 +42,7 @@
     "e2e-audit",
     "e2e-account",
     "e2e-public",
-    "e2e-csp"
+    "e2e-csp",
+    "e2e-multi-select"
   ]
 }

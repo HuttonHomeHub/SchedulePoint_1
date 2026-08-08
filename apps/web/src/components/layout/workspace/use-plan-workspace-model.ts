@@ -20,6 +20,8 @@ import {
   useSetActivityVisualStart,
   useBatchPositions,
   useDeleteActivity,
+  useBulkDeleteActivities,
+  useRestoreDeleteBatch,
   isMilestoneType,
 } from '@/features/activities';
 // Deep import, deliberately (the `@/features/navigator/lib` precedent): these are pure, dependency-
@@ -67,6 +69,7 @@ import {
 import {
   activityDefinitionInput,
   autoArrangeCommand,
+  bulkDeleteCommand,
   createActivityCommand,
   createLoeSpanCommand,
   deleteActivityCommand,
@@ -156,6 +159,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const [editActivityId, setEditActivityId] = useState<string | null>(null);
   const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null);
   const onDeleteActivity = useCallback((a: ActivitySummary) => setDeleteActivityId(a.id), []);
+
   // The summary targeted by **Dissolve** (WBS improvements M2). Deliberately its own state rather
   // than a mode on `deleteActivityId`: the two confirmations say opposite things about the work
   // underneath, and sharing one slot is how they would end up sharing one sentence.
@@ -407,6 +411,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Undo/redo command stack (ADR-0048, dark M1). Records the inverse of each structural edit behind
   // `VITE_UNDO_REDO`; nothing is recorded and no behaviour changes when the flag is off. The store is
   // keyed on `planId` so switching plans resets history. No visible surface yet — M3 wires the UI.
+  const bulkDeleteActivities = useBulkDeleteActivities(orgSlug, planId);
+  const restoreDeleteBatch = useRestoreDeleteBatch(orgSlug, planId);
   const editHistory = usePlanEditHistory(planId);
   // Undo/redo user-visible surface (ADR-0048 M3): wraps the dark M1/M2 store with the conflict +
   // pen-loss contract (409/404 → refetch + clear redo; 423 → clear history + shared pen contract) and
@@ -555,6 +561,124 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // undo/redo inverses (ADR-0048 M2) — undoing a link removes it, undoing a remove re-creates it.
   const createDependency = useCreateDependency(orgSlug);
   const deleteDependency = useDeleteDependency(orgSlug);
+
+  /**
+   * The three bulk operations the canvas's plural selection offers
+   * (`docs/specs/canvas-multi-select/` M4).
+   *
+   * Assembled HERE rather than in the panel because this is where the mutations and the ADR-0048
+   * command stack already live; `features/tsld` imports no other feature (ADR-0026 D8) and takes
+   * these as plain async functions.
+   *
+   * The gate is `canEditSchedule` — the same fused role+pen boolean every other authoring action
+   * uses — with `penReadOnly` deciding which of the two sentences to show. A gate assembled a
+   * second way here would eventually disagree with the toolbar beside it about whether the same
+   * planner may write.
+   */
+  // The four mutations the memo below closes over, taken as plain functions FIRST.
+  // `exhaustive-deps` reports the whole mutation object as missing when the same `.mutateAsync` is
+  // read from more than one nested closure in a single memo — and depending on the objects would
+  // rebuild this on every render, since `useMutation` returns a fresh result each time. Naming the
+  // functions removes the member expression, so the deps say exactly what the memo actually uses.
+  const bulkDelete = bulkDeleteActivities.mutateAsync;
+  const restoreBatch = restoreDeleteBatch.mutateAsync;
+  const createLink = createDependency.mutateAsync;
+  const removeLink = deleteDependency.mutateAsync;
+  const bulkOperations = useMemo(
+    () => ({
+      gate: {
+        writable: canEditSchedule,
+        reason: canEditSchedule
+          ? null
+          : penReadOnly
+            ? 'Take the edit lock to change this plan.'
+            : 'You don’t have permission to change this plan.',
+      },
+      deleteMany: async (rows: readonly ActivitySummary[]): Promise<void> => {
+        if (rows.length === 0) return;
+        const activities = rows.map((a) => ({ id: a.id, version: a.version }));
+        const result = await bulkDelete({ activities });
+        // ONE reversible step for the whole gesture, and its undo is the id-stable batch restore
+        // (CQ-4) — re-creating N activities would silently lose the links BETWEEN them.
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            bulkDeleteCommand({
+              bulkDelete: bulkDelete,
+              restoreBatch: restoreBatch,
+              activities,
+              deleteBatchId: result.deleteBatchId,
+            }),
+          );
+        }
+        autoRecalc.notify();
+      },
+      linkChain: async (
+        edges: readonly { predecessorId: string; successorId: string }[],
+      ): Promise<void> => {
+        // Sequential, and rolled back as a set. There is no batch dependency endpoint, so a
+        // mid-loop failure would otherwise leave a partial chain — half a sequence is worse than
+        // none, because the plan then looks finished (the `createLoeSpanCommand` precedent).
+        const created: string[] = [];
+        try {
+          for (const edge of edges) {
+            const dependency = await createLink({
+              planId,
+              predecessorId: edge.predecessorId,
+              successorId: edge.successorId,
+              type: 'FS',
+              lagDays: 0,
+              lagCalendar: 'PROJECT_DEFAULT',
+            });
+            created.push(dependency.id);
+          }
+        } catch (error) {
+          for (const id of created.reverse()) {
+            // Best-effort: a failed rollback leaves edges the planner can delete, whereas throwing
+            // here would replace the real error with a second one and tell them nothing useful.
+            await removeLink(id).catch(() => undefined);
+          }
+          throw error;
+        }
+        if (UNDO_REDO_ENABLED && created.length > 0) {
+          editHistory.record({
+            label: `Link ${created.length} activities in sequence`,
+            undo: async () => {
+              for (const id of [...created].reverse()) await removeLink(id);
+            },
+            redo: async () => {
+              // A redo creates NEW edges, so the ids the undo will need are re-threaded here — the
+              // same rule as `bulkDeleteCommand`'s batch id, for the same reason.
+              created.length = 0;
+              for (const edge of edges) {
+                const dependency = await createLink({
+                  planId,
+                  predecessorId: edge.predecessorId,
+                  successorId: edge.successorId,
+                  type: 'FS',
+                  lagDays: 0,
+                  lagCalendar: 'PROJECT_DEFAULT',
+                });
+                created.push(dependency.id);
+              }
+            },
+          });
+        }
+        autoRecalc.notify();
+      },
+    }),
+    [
+      canEditSchedule,
+      penReadOnly,
+      bulkDelete,
+      restoreBatch,
+      createLink,
+      removeLink,
+      editHistory,
+      autoRecalc,
+      planId,
+    ],
+  );
+
   // Record an activity DEFINITION edit (rename / duration / constraint / …) on the undo stack (ADR-0048,
   // dark M1). Called by `ActivityCrudDialogs` when the shared edit dialog saves, with the pre-edit row
   // and the server's post-edit row; the inverse re-PATCHes the full definition through the same
@@ -1384,6 +1508,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.
     undoRedo,
+    /** The canvas's plural-selection operations (`docs/specs/canvas-multi-select/` M4). */
+    bulkOperations,
     /** The ADR-0064 T7 quiescence seam + its drop signal, handed to the canvas by the workspace. */
     autoRecalcHold: { hold: autoRecalc.hold, release: autoRecalc.release },
     dropLinkPickSignal,

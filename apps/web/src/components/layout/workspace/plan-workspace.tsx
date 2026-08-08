@@ -154,6 +154,9 @@ function Adr0030PlanWorkspace({
       onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}
       onDeleteActivity={model.onDeleteActivity}
+      // The plural selection's three operations (`docs/specs/canvas-multi-select/` M4). The panel
+      // renders no bulk bar without them, so a partially-wired host cannot ship a dead button.
+      bulk={model.bulkOperations}
       onDissolveSummary={model.onDissolveSummary}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
       // toolbar item is flag-gated, so flag-off is byte-for-byte. Their dialogs are mounted in the

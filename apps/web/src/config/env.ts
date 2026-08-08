@@ -1413,11 +1413,13 @@ export const CANVAS_SEARCH_NAV_ENABLED =
  * start-to-start chord, and this epic gives `Shift`+click the span meaning. The two must never be
  * live at once, so the `&&` makes that unrepresentable instead of documented. A test asserts it.
  *
- * **Default-off** until the M5 gate pass. Flag-off the selection is structurally singular — only
+ * **Default-ON** since 2026-08-08 (M5-T4), once the flag-on journey was green against a real API
+ * with the pen enforced — which is where the epic's last three defects were found, none of them
+ * visible to a unit suite. Flag-off the selection is structurally singular — only
  * `replace` and `clear` are reachable, so `ids.length <= 1` holds after any sequence of events, and
  * a structural test pins exactly that. Nothing else changes: the canvas paint, the toolbar, the
  * a11y tree and the `Space` binding are byte-for-byte today's (the flag-off parity suite is the
  * rollback contract).
  */
 export const CANVAS_MULTI_SELECT_ENABLED =
-  CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOff(import.meta.env.VITE_CANVAS_MULTI_SELECT);
+  CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_MULTI_SELECT);
