@@ -29,6 +29,12 @@ export function refusalMessage(refusal: CloneRefusal): string {
       // much to trim, which is a dead end wearing a message.
       return `That is ${String(refusal.size)} activities — more than the ${String(MAX_CLONE_SET_SIZE)} that can be copied at once. Select fewer and try again.`;
 
+    case 'too-many-links':
+      // Says LINKS, not activities. The set-size sentence would send a planner to delete activities
+      // from a selection that is already small enough — advice that cannot work, on the one screen
+      // that is supposed to explain the problem.
+      return `That selection carries ${String(refusal.links)} links between its activities — more than the ${String(refusal.cap)} that can be copied at once. Copy it in smaller parts.`;
+
     case 'lane-ceiling':
       return `The copy would need lane ${String(refusal.required)}, past the maximum of ${String(refusal.max)}. Move some activities up before copying.`;
 

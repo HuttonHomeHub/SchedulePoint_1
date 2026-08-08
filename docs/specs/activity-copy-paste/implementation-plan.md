@@ -291,6 +291,13 @@ copied activities, in one confirmed action with one undo step — **without any 
   1. Use the seed catalogue (ADR-0066) rather than hand-building a plan.
   2. Record wall clock, per-request p95, and whether any partial paste occurred.
   3. **Feed the result into C-4**: exceeding the p95 gate, or any partial paste, triggers M-B.
+- **Outcome (2026-08-08):** done. `scripts/measure-band-copy.mjs` is the artefact; the numbers are in
+  the feature spec §2 "Set size". Caps set to **50 activities / 90 internal links**, both consumed by
+  `planClone`'s refusal path with tests. **C-4 answered: M-B not taken.** Two notes worth carrying:
+  the first run's two alarming figures were both defects in the measurement script and were verified
+  before anything was escalated (ADR-0076 §19.9); and the run needed one dependency-internals claim
+  about `@nestjs/throttler`'s key derivation, which surfaced that `check:claims` could not see
+  `scripts/` at all and truncated dotted basenames (`docs/TECH_DEBT.md` #101, narrowed).
 
 ---
 
@@ -405,6 +412,15 @@ one audit row — and the partial-paste residual risk disappears.
 > **Trigger (decide, do not drift):** taken if **either** the M2-T4 measurement exceeds the stated
 > p95 gate, **or** the M5 journey observes a single partial paste. Otherwise deferred and recorded
 > in `docs/TECH_DEBT.md` with the measurement attached.
+>
+> **First half fired NO (2026-08-08).** M2-T4 measured **969 ms** against a 2 s gate for 15
+> activities + 21 links, and **no partial paste** at 15/21, 40/58 or 60/90 — see the table in the
+> feature spec's §2 "Set size". M-B is deferred and recorded in `docs/TECH_DEBT.md`. The measurement
+> did change the caps (200 → 50 activities + a new 90-link cap), because it found that the binding
+> constraint is the **per-route-handler** rate limiter rather than latency; those caps are what keep
+> a composite inside the limiter, so they are load-bearing for this deferral rather than incidental
+> to it. **The second half of the trigger is still live** — a single partial paste observed by the
+> M5 journey takes M-B.
 > **If taken, it needs an ADR** (new endpoint shape, the `activity.duplicated` audit action, and why
 > a client composite was not sufficient).
 

@@ -4,7 +4,8 @@
     "better-call": "1.3.7",
     "@better-fetch/fetch": "1.3.1",
     "nodemailer": "9.0.3",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@nestjs/throttler": "6.5.0"
   },
   "claims": [
     {
@@ -420,6 +421,14 @@
         "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
         "docs/specs/account-security/feature-spec.md"
       ]
+    },
+    {
+      "ref": "throttler.guard.js:148-150",
+      "package": "@nestjs/throttler",
+      "path": "dist/throttler.guard.js",
+      "lines": "148-150",
+      "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
+      "citedBy": ["scripts/measure-band-copy.mjs"]
     }
   ]
 }

@@ -43,15 +43,41 @@ import {
 export const MAX_LANE_INDEX = 10_000;
 
 /**
- * The largest set that may be copied in one action.
+ * The largest set that may be copied in one action — **measured, not asserted** (M2-T4,
+ * `scripts/measure-band-copy.mjs`).
  *
- * Provisional, and deliberately an order of magnitude below the `UpdatePositionsDto` 2 000-row
- * precedent: a paste is N sequential writes from a browser, each taking the plan advisory lock, so
- * the ceiling that matters is the planner's patience rather than the server's. The spec (§2 "Set
- * size") defers the real number to the M2-T4 measurement; until that runs this is the figure, and
- * the constant is the single place to change it.
+ * The provisional figure here was 200, chosen as "an order of magnitude below the
+ * `UpdatePositionsDto` 2 000-row precedent" on the theory that the binding constraint was the
+ * planner's patience. **It is not, and 200 would have guaranteed the failure the cap exists to
+ * prevent.** Measured against a real API with the pen held, per-request cost is flat and wall clock
+ * is linear — 969 ms for 15 activities + 21 links, 2 898 ms for 60 + 90 — so patience does not bind
+ * anywhere near 200. What binds is the API's own rate limiter: 100 requests per 60 s **per route
+ * handler** per IP (`RATE_LIMIT_LIMIT`, keyed by class + handler — see the measurement script's
+ * docblock for the evidence). A copy issues `N + 1` writes on the activity-create handler and `M` on
+ * the dependency-create handler, so a 200-activity copy 429s on its 100th create — and the web
+ * client has **no back-off** (`lib/api/client.ts` throws on any non-2xx), so that is a **partial
+ * paste**: half a band, mid-transaction-free, with links dangling.
+ *
+ * Hence 50, and the reasoning is per-handler request budget rather than activity count:
+ *
+ * - 51 creates leaves the create handler's window half free, so a planner may copy **twice** inside
+ *   one minute — which is a thing planners do — without the second one failing.
+ * - {@link MAX_CLONE_LINK_COUNT} bounds the other handler separately, because a dense band has more
+ *   links than activities (the measured 60-activity band carries 90) and the link handler is
+ *   therefore the one that overflows first. Capping activities alone would leave that unguarded.
+ *
+ * At 50 the measured wall clock is ≈1.5 s, comfortably inside the spec's 2 s gate.
  */
-export const MAX_CLONE_SET_SIZE = 200;
+export const MAX_CLONE_SET_SIZE = 50;
+
+/**
+ * The largest number of internal links one copy may recreate.
+ *
+ * A second cap rather than a bigger first one, because the two counts hit **different** rate-limit
+ * counters ({@link MAX_CLONE_SET_SIZE}) and a single number cannot bound both: a 50-activity band is
+ * fine at 40 links and over the line at 140. Set below 100 for the same headroom reason.
+ */
+export const MAX_CLONE_LINK_COUNT = 90;
 
 /** Why a copy cannot proceed. Each case carries what a sentence needs to name the problem. */
 export type CloneRefusal =
@@ -59,6 +85,8 @@ export type CloneRefusal =
   /** Every member was a summary whose subtree is empty, so there is nothing to copy. */
   | { readonly kind: 'empty'; readonly reason: 'no-copyable-members' }
   | { readonly kind: 'too-many'; readonly size: number; readonly cap: number }
+  /** The set is small enough but carries more internal logic than one copy may recreate. */
+  | { readonly kind: 'too-many-links'; readonly links: number; readonly cap: number }
   | {
       readonly kind: 'lane-ceiling';
       /** The highest lane a clone would need. */
@@ -210,6 +238,16 @@ export function planClone(input: PlanCloneInput): ClonePlanResult {
       lagMinutes: d.lagMinutes,
       lagCalendar: d.lagCalendar,
     }));
+
+  // Checked LAST, because it is the only refusal whose input the function has to build first: the
+  // internal-edge filter above is what decides how many links a copy actually recreates, and a
+  // count taken from the selection's raw dependency list would refuse copies that carry far fewer.
+  if (links.length > MAX_CLONE_LINK_COUNT) {
+    return {
+      ok: false,
+      refusal: { kind: 'too-many-links', links: links.length, cap: MAX_CLONE_LINK_COUNT },
+    };
+  }
 
   return { ok: true, creates, links };
 }

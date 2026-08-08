@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_CLONE_SET_SIZE, type CloneRefusal } from './clone-graph';
+import { MAX_CLONE_LINK_COUNT, MAX_CLONE_SET_SIZE, type CloneRefusal } from './clone-graph';
 import { refusalMessage } from './refusal-copy';
 
 /**
@@ -16,6 +16,7 @@ const CASES: CloneRefusal[] = [
   { kind: 'empty', reason: 'nothing-selected' },
   { kind: 'empty', reason: 'no-copyable-members' },
   { kind: 'too-many', size: 250, cap: MAX_CLONE_SET_SIZE },
+  { kind: 'too-many-links', links: 250, cap: MAX_CLONE_LINK_COUNT },
   { kind: 'lane-ceiling', required: 10_001, max: 10_000 },
   { kind: 'archived-calendar', activityNames: ['Night shift'] },
 ];
@@ -34,6 +35,21 @@ describe('refusalMessage', () => {
     const message = refusalMessage({ kind: 'too-many', size: 250, cap: MAX_CLONE_SET_SIZE });
     expect(message).toContain('250');
     expect(message).toContain(String(MAX_CLONE_SET_SIZE));
+  });
+
+  it('sends a planner over the LINK cap to trim links, not activities', () => {
+    // The two caps bound different rate-limit counters, so a selection can be well inside the
+    // activity cap and still refused. Reusing the set-size sentence here would tell that planner to
+    // remove activities from a selection that is already small enough — advice that cannot work.
+    const message = refusalMessage({
+      kind: 'too-many-links',
+      links: 140,
+      cap: MAX_CLONE_LINK_COUNT,
+    });
+    expect(message).toContain('140');
+    expect(message).toContain(String(MAX_CLONE_LINK_COUNT));
+    expect(message).toContain('links');
+    expect(message).not.toMatch(/select fewer/i);
   });
 
   it('names the activity and both remedies for an archived calendar', () => {
