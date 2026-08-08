@@ -1893,3 +1893,25 @@ expression for expression.
 The rollback contract is `TsldPanel.multi-select-keyboard.flag-off.test.tsx`, which pins the old
 binding rather than merely omitting the new one — a rebinding is the easiest kind of change to
 half-revert, and a half-revert leaves `Space` doing nothing with no test failing.
+
+## 2026-08-08 — Copy names disambiguate, and it is deliberately not `disambiguate`
+
+`packages/interchange/src/validate.ts:55-63` already contains a name-disambiguation routine, and
+`features/activity-copy/model/clone-naming.ts` contains a second one. That duplication is a
+decision, not an oversight, so it is recorded here before somebody helpfully removes it.
+
+They answer different questions. `disambiguate` resolves an **accidental** collision in imported
+data — two source rows that happen to share a name — and its output is an apology (`Excavate (2)`);
+it exists to get the import through a unique constraint. `freeCopyName` names a **deliberate** act,
+and its output is a statement the planner made (`Excavate (copy)`, then `Excavate (copy 2)`); the
+word "copy" is the whole point, and a planner reading `Excavate (2)` in their own plan would have
+to work out where it came from.
+
+The ADR-0065 argument for one implementation — "two will drift, and the drift is invisible" — does
+not apply here, because **this** drift is visible the instant a name renders: it is on screen, in
+the table, in the export. What would be invisible is the opposite move, sharing a function and
+having one caller's suffix rule quietly change the other's.
+
+Both truncate to `ACTIVITY_NAME_MAX_LENGTH` (200) before appending, because the constraint they are
+getting past is the same one and exceeding it is a 422 at write time rather than anything the
+reader could have predicted.

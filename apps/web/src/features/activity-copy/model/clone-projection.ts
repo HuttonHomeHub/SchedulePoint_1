@@ -246,6 +246,12 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
   },
 };
 
+/**
+ * The plan's scheduling mode (ADR-0033), named as a type because two modules branch on it and a
+ * repeated string union is how the two eventually stop agreeing.
+ */
+export type CloneMode = 'EARLY' | 'VISUAL';
+
 /** Where the paste puts one clone, and how far in time it moves. */
 export interface ClonePlacement {
   /** The lane the clone lands in. */
@@ -261,7 +267,7 @@ export interface ClonePlacement {
    * The plan's scheduling mode. EARLY pins the clone with an `SNET`; VISUAL writes a `visualStart`
    * and pins nothing — the ADR-0033 split, applied here rather than re-decided per call site.
    */
-  readonly mode: 'EARLY' | 'VISUAL';
+  readonly mode: CloneMode;
   /**
    * The clone's anchor date (`YYYY-MM-DD`), already offset — the source's early start for a
    * duplicate in place. Null when the source has never been scheduled, in which case the clone is
