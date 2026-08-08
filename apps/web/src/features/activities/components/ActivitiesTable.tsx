@@ -30,6 +30,7 @@ import {
   ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_EDITOR_TABS_ENABLED,
+  ACTIVITY_COPY_PASTE_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
@@ -140,6 +141,7 @@ export function ActivitiesTable({
   canReportProgress = false,
   editorGating,
   onOpenLogic,
+  onDuplicate,
   onOpenResources,
   varianceByActivityId,
   noteCountByActivityId,
@@ -165,6 +167,12 @@ export function ActivitiesTable({
   /** Open the logic (predecessors/successors) panel for a row. Available to any
    * member (read); the host owns the panel so this feature stays dependency-free. */
   onOpenLogic?: (activity: ActivitySummary) => void;
+  /**
+   * Duplicate a row (`docs/specs/activity-copy-paste/` M1). Host-owned like {@link onOpenLogic}, so
+   * a host that has not wired it simply does not offer the action — the item cannot appear lit and
+   * do nothing, which is the ADR-0064 §7 dead-end shape.
+   */
+  onDuplicate?: (activity: ActivitySummary) => void;
   /**
    * Open the resource-assignment surface for a row. Like {@link onOpenLogic} the host owns it, so
    * both row actions resolve to the **same** editor the canvas opens rather than to a second one
@@ -383,6 +391,18 @@ export function ActivitiesTable({
     }
     if (canEditSchedule) {
       actions.push({ key: 'edit', label: 'Edit', onSelect: () => openFor(activity, 'edit') });
+      // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
+      // planner reaches for when the row is nearly right. Deliberately NOT offered on a summary:
+      // duplicating one leaf of a band would produce an empty grouping, and copying the band with
+      // its subtree is M2. The check is `type`, the same fact `dissolve` gates on, so the action
+      // cannot reach a state the product would render as breakage.
+      if (ACTIVITY_COPY_PASTE_ENABLED && onDuplicate && activity.type !== 'WBS_SUMMARY') {
+        actions.push({
+          key: 'duplicate',
+          label: 'Duplicate',
+          onSelect: () => onDuplicate(activity),
+        });
+      }
       // Dissolve sits immediately BEFORE Delete, and only on a summary. Adjacency is the point:
       // the two are neighbours in intent ("get rid of this grouping") and opposites in effect, so
       // the non-destructive one has to be visible at the moment the destructive one is chosen.

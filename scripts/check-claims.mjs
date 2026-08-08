@@ -149,22 +149,58 @@ for (const claim of register.claims) {
 // "`dist/api/routes/sign-in.mjs`, lines **234**" — prose the regex never saw. `pnpm check:claims`
 // passed for the wrong reason, on the day it was written, in the epic that widened it. That is the
 // ADR-0076 Class 2 failure the gate exists to stop, inside the gate.
+// The basename class admits `.` so a DOTTED basename is captured whole. It did not, and
+// `dist/throttler.guard.js:148-150` was therefore read as `guard.js:148-150` — a ref that can never
+// match its register entry, so the citation was simultaneously "unregistered" and the entry
+// "uncited". This is a THIRD hole, not one of the two `docs/TECH_DEBT.md` #101 records: it was found
+// by acting on #101's item 2 and would have stayed invisible while the only dotted-basename
+// dependency file nobody had cited yet went uncited. `/` is deliberately absent from the class, so a
+// leading path still falls away.
 const CITATIONS = [
-  // `sign-in.mjs:234` / `dist/api/routes/sign-in.mjs:234-240`
-  /\b([a-z0-9-]+\.m?js):(\d+(?:-\d+)?)\b/g,
+  // `sign-in.mjs:234` / `dist/api/routes/sign-in.mjs:234-240` / `dist/throttler.guard.js:148-150`
+  /\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b/g,
   // `` `dist/api/routes/sign-in.mjs`, lines **234** `` — also "line", "on lines", ``234``, 234–240
-  /`[^`\n]*?([a-z0-9-]+\.m?js)`[,;]?\s*(?:on\s+)?lines?\s*\**`?(\d+(?:\s*[-–]\s*\d+)?)/gi,
+  /`[^`\n]*?([a-z0-9.-]+\.m?js)`[,;]?\s*(?:on\s+)?lines?\s*\**`?(\d+(?:\s*[-–]\s*\d+)?)/gi,
 ];
+/**
+ * This file is not scanned for citations.
+ *
+ * Its comments carry worked EXAMPLES of the two forms above (`sign-in.mjs:234-240`, `file.mjs:234`),
+ * and a gate that reads its own documentation as input demands that every example be a real
+ * registered claim — which would make the format impossible to document. Excluding one file by name
+ * is the smaller cost, and it is the only file in the tree whose job is to describe the notation.
+ */
+const CITATION_SCAN_EXCLUDES = new Set(['scripts/check-claims.mjs']);
 const own = ownJsBasenames();
 const known = new Set(register.claims.map((c) => c.ref));
 const found = new Map();
-for (const dir of ['docs', 'apps/api/src', 'apps/web/src', 'apps/api/test']) {
+// `scripts/` is in the walk because that is where the measurement harnesses live, and a harness is
+// one of the likeliest things in the tree to rest on a dependency's internals — `measure-band-copy`
+// reads `@nestjs/throttler`'s key derivation to know what its own 429 count means. It was outside
+// the scan until then, which is the ADR-0077 M0 blind spot one directory along: the gate cannot
+// register what it does not read. Own-repo basenames are filtered below, so this repository's own
+// `.mjs` files citing each other are not mistaken for dependency claims.
+//
+// `packages/` and `apps/seed-cli/` join it because `docs/TECH_DEBT.md` #101 said the fix was "one
+// array literal plus whatever it turns up", and what they turn up is **nothing** — measured before
+// adding them, so the widening is free rather than hopeful. Root-level markdown is deliberately
+// still out: it would demand two more refs, one of which is CLAUDE.md's own worked example of this
+// notation, and that is a judgement call rather than a free win. #101 stays open for it.
+for (const dir of [
+  'docs',
+  'scripts',
+  'packages',
+  'apps/api/src',
+  'apps/api/test',
+  'apps/web/src',
+  'apps/seed-cli',
+]) {
   (function walk(d) {
     for (const entry of readdirSync(join(root, d), { withFileTypes: true })) {
       const rel = join(d, entry.name);
       if (entry.isDirectory()) {
         walk(rel);
-      } else if (/\.(md|ts|tsx|mjs)$/.test(entry.name)) {
+      } else if (/\.(md|ts|tsx|mjs)$/.test(entry.name) && !CITATION_SCAN_EXCLUDES.has(rel)) {
         const text = readFileSync(join(root, rel), 'utf8');
         for (const pattern of CITATIONS) {
           for (const [, base, lines] of text.matchAll(pattern)) {

@@ -1291,9 +1291,10 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 ---
 
-## 101. `check:claims` completeness has two structural blind spots
+## 101. `check:claims` completeness has structural blind spots
 
-**Status:** open · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2)
+**Status:** open, narrowed · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
+**Narrowed:** 2026-08-08 (W5 M2-T4)
 
 `pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
 green on the day it was written **because it could not see half its input**. ADR-0077's M0-T2 widened
@@ -1316,12 +1317,33 @@ rather than solved, because each trade is a real one:
    can surface unregistered citations that then need a human to read the cited code, which is the
    whole point and also the cost.
 
-**Why not now:** both are bounded and neither can produce a _false_ pass on a claim the register
-already holds — they can only fail to _demand_ a new one. The fix for (2) is one array literal plus
-whatever it turns up.
+   **Mostly done, 2026-08-08.** W5's M2-T4 measurement needed to cite `@nestjs/throttler`'s key
+   derivation from `scripts/measure-band-copy.mjs`, which the gate could not see — so the walk now
+   covers `scripts`, `packages` and `apps/seed-cli` as well. The cost was **measured before the
+   change rather than after**: a standalone scan of those three trees with the live patterns turned
+   up **zero** unregistered citations, so this widening was free, not hopeful. What remains is
+   root-level markdown, which is left out on purpose: it would demand `sign-up.mjs:162` (a real
+   claim, cited in `CLAUDE.md` at a line range that differs from the register's) and one more that is
+   `CLAUDE.md`'s own worked example of this notation. Both need a human, which is exactly the cost
+   this item describes.
+
+3. **A dotted dependency basename was truncated.** _(Found 2026-08-08, fixed the same day — a third
+   hole, not one of the two above.)_ The basename class was `[a-z0-9-]+`, so
+   a citation naming `@nestjs/throttler`'s `throttler.guard.js` was captured as **`guard.js`** — the
+   basename truncated at its last dot rather than taken whole. A register entry keyed on the real
+   basename therefore read as "uncited" while the citation itself read as "unregistered" — the gate
+   reporting both halves of one claim as broken and neither as matching.
+   It surfaced only because acting on item (2) brought the first dotted-basename citation into
+   scope. The class now admits `.`; `/` is still excluded, so a leading path still falls away.
+   `scripts/check-claims.mjs` is also excluded from its own scan, because its comments carry worked
+   examples of the notation and a gate that reads its own documentation as input makes the format
+   impossible to document.
+
+**Why not now:** (1) is bounded and cannot produce a _false_ pass on a claim the register already
+holds — it can only fail to _demand_ a new one.
 
 **Risk:** low. The gate's core property (a registered claim's anchor is verified against the pinned
-version, and a version bump fails CI) is unaffected by either.
+version, and a version bump fails CI) is unaffected.
 
 ---
 
@@ -1555,3 +1577,149 @@ because the cascade helper is per-entity by design.
 `HierarchyLifecycleService`), or to lower `bulk-delete`'s cap well below 2,000 — with the choice
 made on a **measurement** at 500 / 2,000 rows rather than on instinct, since the catalogue's scale
 plans make that cheap to take.
+
+---
+
+## 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
+
+**Status:** open, deferred on a measured trigger · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4)
+
+`docs/specs/activity-copy-paste/` planned an optional **Milestone B** — `POST
+…/plans/:planId/activities/duplicate`, making a band copy atomic: one transaction, one pen
+assertion, one advisory lock, one audit row, and no partial-paste residual risk at all. It was
+deliberately written as a **measured trigger rather than a judgement call**: taken if the M2-T4
+measurement exceeded the stated p95 gate, or if the M5 journey observed a single partial paste.
+
+**The first half did not fire.** Measured against a real API with the pen held
+(`scripts/measure-band-copy.mjs`):
+
+| Band                    | Requests | Wall clock | Create p50/p95/max | Link p50/p95/max | 429s | Partial paste |
+| ----------------------- | -------- | ---------- | ------------------ | ---------------- | ---- | ------------- |
+| 15 activities, 21 links | 37       | 969 ms     | 20 / 50 / 50 ms    | 24 / 46 / 56 ms  | 0    | no            |
+| 40 activities, 58 links | 99       | 2 142 ms   | 19 / 22 / 23 ms    | 22 / 30 / 34 ms  | 0    | no            |
+| 60 activities, 90 links | 151      | 2 898 ms   | 17 / 19 / 37 ms    | 20 / 23 / 27 ms  | 0    | no            |
+
+The gate was p95 < 2 s for 15 activities + 21 links; the measurement is **969 ms**, and no size
+produced a partial paste. Per-request cost is flat and wall clock linear, so the composite does not
+degrade with band size in the range that matters.
+
+**What the measurement did change is the caps, and that is what makes this deferral safe.** The
+binding constraint is not latency but the API's own rate limiter, whose shape is not what the config
+reads like: `ThrottlerGuard.generateKey` hashes the class and handler names into the counter key, so
+the bound is 100 requests per 60 s **per route handler** per IP. A copy issues `N + 1` writes on the
+activity-create handler and `M` on the dependency-create handler, and the web client has **no
+back-off** — so the spec's provisional 200-activity cap would have 429'd on its 100th create and left
+exactly the partial paste M-B exists to remove. The caps are now **50 activities and 90 internal
+links** (two, because the counts hit different counters), measured rather than asserted. Those caps
+are load-bearing for this deferral, not incidental to it: raising either without re-reading this
+entry re-opens the partial-paste risk.
+
+**Why not now:** it is a new endpoint, DTO, service method, census entry, OpenAPI change and
+`@repo/types` change — real backend work with its own review surface — for a capability that is
+proven, shipped and inside its budget without any of it. Taking it would need an ADR (endpoint shape,
+the `activity.duplicated` audit action, and why a client composite was not enough).
+
+**The second half of the trigger is still live.** A single partial paste observed by the M5 journey
+takes M-B. So is a third route: if a planner ever needs to copy a band larger than 50 activities,
+the client composite cannot be stretched to it — the rate limiter is the ceiling, and a server-side
+endpoint is the answer rather than a bigger constant.
+
+**Risk:** low while the caps hold. The residual is a copy interrupted mid-flight (a dropped
+connection, a 423 from a pen taken away) leaving some clones written — bounded by the caps, visible
+on the canvas, and undoable by the ADR-0048 command the composite already registers.
+
+---
+
+## 111. The activities-table row menu hides pen-gated actions instead of shading them
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (W5 M5 enablement gate)
+
+Raised independently by the accessibility and component reviews over the W5 diff. The canvas
+selection bar shades a pen-gated action and now carries an `aria-describedby`-linked reason; the
+activities-table row menu **omits the same actions entirely** — `ActivitiesTable.tsx` pushes Edit,
+Duplicate, Dissolve and Delete only `if (canEditSchedule)`, a boolean that already fuses role and
+pen. So a Planner who loses the pen mid-session (an Org-Admin override) sees Duplicate shaded with a
+reason on the canvas and simply absent from the table, and the same operation teaches two mental
+models depending on which surface they are on. It contradicts the ADR-0062 M6 rule the rest of the
+product follows: present and shaded, never hidden, never a dead end.
+
+**Why it is not fixed in W5, and what makes it more than a one-line change.** `MenuItem` supports
+`disabled`, but `Menu`'s roving focus **deliberately skips** `aria-disabled` items
+(`components/ui/menu.tsx`, the focusables filter). Shading a menu item therefore makes the option
+visible and leaves its reason **unreachable by keyboard** — the exact failure this entry is about,
+moved one layer down. Conveying it properly means deciding how a menu says why: the item's own
+accessible name (`"Duplicate — requires the edit lock"`), a non-focusable description row, or making
+disabled items focusable and revising the APG posture. That is a design-system decision affecting
+every menu in the product, and it lands on four actions W5 does not own — three of which ship
+unflagged today.
+
+W5's own surface is compliant: the selection bar's reason is now genuinely associated rather than
+title-only (that fix is in this epic, at the shared `ToolbarButton`, and repairs Edit/Delete/Dissolve
+there too). The feature spec's US-1 criterion is corrected to describe what ships rather than to
+claim both surfaces behave alike.
+
+**Risk:** low-moderate. Nobody is blocked — the capability is reachable from the canvas — but a
+table-first planner cannot discover why an action is missing.
+
+---
+
+## 112. Copy/paste follow-ups from the W5 enablement gate
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (W5 M5 enablement gate)
+
+Non-blocking findings from the six specialist reviews over the W5 diff, recorded rather than rushed.
+
+1. **No `aria-busy` on the single-activity Duplicate while its write is in flight** (accessibility).
+   US-1 names it. A single duplicate is deliberately confirmation-free, so there is no interstitial
+   UI to carry the state, and the source stays selected — so the button remains mounted, focused and
+   enabled through the whole composite. Two quick activations can fire two composites built from the
+   same pre-write `usedNames` snapshot, and the second reports a generic 409 rather than being
+   prevented. The toolbar primitive already supports `isBusy` (the Recalculate item's precedent).
+2. **`ActivitiesTable` offers no "Duplicate band" for a summary** (accessibility), while the canvas
+   bar now does. Not a dead end — an absence — but it breaks the cross-surface wording convergence
+   the two entry points otherwise keep.
+3. **`projectDuplicate` is exported, uncalled and untested** (component, test-engineer). Either wire
+   it or delete it; `planClone` calls `projectClone` directly.
+4. **No flag-off parity suite for the canvas selection bar's Duplicate** (component), though one
+   exists for the table row menu. The flag-off suites are this repo's stated rollback contract.
+5. **`canEditSchedule` reuse across the two entry points is not pinned by a test** (component). The
+   ADR-0062 precedent pinned its equivalent with an identity assertion; here a future refactor could
+   rebuild the gate differently for one host and nothing would notice until the surfaces disagreed.
+6. **Two untested branches in the clipboard keybindings** (test-engineer): `window.getSelection()`
+   returning `null` rather than a collapsed selection, and `event.target === null`.
+7. **`env.test.ts` has no `ACTIVITY_COPY_PASTE_ENABLED` block** (test-engineer), which M0-T1 asked
+   for; the flag is covered indirectly by the flag-mocked component suites.
+
+**Risk:** low. None changes what the product does today; (1) is the only one a planner could meet,
+and only by activating twice inside one round trip.
+
+---
+
+## 113. Redo is unavailable after undoing a band copy
+
+**Status:** open · **Owner:** api + web · **Raised:** 2026-08-08 (W5 M5, found by the flag-on journey)
+
+Undoing a **band** copy deletes the cloned summary and lets the ADR-0038 cascade take its subtree,
+because `bulkDelete` refuses any batch containing a `WBS_SUMMARY` by design (422
+`SUMMARY_NOT_BULK_ELIGIBLE`) — a bulk delete is always leaf-only, "which is what makes its undo
+honest". That is correct, and it works.
+
+**Redo does not.** A cascade delete does assign a `delete_batch_id` server-side, so the rows are
+restorable in principle — but `DELETE …/activities/:id` answers **204 with no body**, so the client
+never learns the id and has nothing to hand `restoreDeleteBatch`. The command therefore leaves its
+batch id null and `redo` is a no-op: the Redo affordance has nothing to offer, which is the honest
+shape and better than a call that would fail. A flat copy is unaffected — it still undoes and redoes
+through the batch as before.
+
+**The fix is small and it is on the API side:** return the `deleteBatchId` in the delete response
+(or a `204` → `200 { data: { deleteBatchId } }` change), and the existing client restore path works
+unchanged. It is out of scope for a frontend-only epic.
+
+**How it was found is the point.** The journey drove a real band copy against a real API with the
+pen enforced, pressed Ctrl+Z, and read the product's own words back: "Couldn't undo just now. Please
+try again." Every unit test passed throughout — a mocked delete accepts any batch, so nothing below
+the network could see the refusal. It is the ADR-0060 M6 rule in a new costume: the guard that
+matters is only testable against the thing that enforces it.
+
+**Risk:** low. The undo works; only the reversal of the undo is missing, and the planner can copy
+the band again.

@@ -1,7 +1,13 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { MAX_CLONE_SET_SIZE, MAX_LANE_INDEX, planClone, type PlanCloneInput } from './clone-graph';
+import {
+  MAX_CLONE_LINK_COUNT,
+  MAX_CLONE_SET_SIZE,
+  MAX_LANE_INDEX,
+  planClone,
+  type PlanCloneInput,
+} from './clone-graph';
 
 /**
  * **The set-copy plan** (`docs/specs/activity-copy-paste/` M0-T4).
@@ -365,6 +371,47 @@ describe('planClone — refusals', () => {
       activity({ id: `a${String(i)}`, name: `A${String(i)}` }),
     );
     expect(planClone(input({ set })).ok).toBe(true);
+  });
+
+  it('refuses above the LINK cap even when the set is well inside the activity cap', () => {
+    // The second cap exists because the two counts hit different rate-limit counters (M2-T4): a
+    // dense band carries more links than activities, so the link handler overflows first. Without
+    // this the copy would 429 mid-flight and leave a partial paste — the failure the caps prevent.
+    const set = Array.from({ length: 20 }, (_, i) =>
+      activity({ id: `a${String(i)}`, name: `A${String(i)}` }),
+    );
+    const dependencies = [];
+    for (let from = 0; from < 20 && dependencies.length <= MAX_CLONE_LINK_COUNT; from += 1) {
+      for (let to = from + 1; to < 20 && dependencies.length <= MAX_CLONE_LINK_COUNT; to += 1) {
+        dependencies.push(
+          link(`d${String(dependencies.length)}`, `a${String(from)}`, `a${String(to)}`),
+        );
+      }
+    }
+    const result = planClone(input({ set, dependencies }));
+    expect(result).toEqual({
+      ok: false,
+      refusal: {
+        kind: 'too-many-links',
+        links: MAX_CLONE_LINK_COUNT + 1,
+        cap: MAX_CLONE_LINK_COUNT,
+      },
+    });
+  });
+
+  it('counts INTERNAL links against the cap, not the plan’s whole dependency list', () => {
+    // The count is taken after the internal-edge filter. Taking it before would refuse a two-activity
+    // copy inside a densely-linked plan — a refusal a planner could never act on, because trimming
+    // the selection would not change the number the refusal names.
+    const set = [activity({ id: 'a', name: 'A' }), activity({ id: 'b', name: 'B' })];
+    const dependencies = [
+      link('internal', 'a', 'b'),
+      ...Array.from({ length: MAX_CLONE_LINK_COUNT * 2 }, (_, i) =>
+        link(`outside${String(i)}`, `x${String(i)}`, `y${String(i)}`),
+      ),
+    ];
+    const result = planClone(input({ set, dependencies, usedNames: new Set(['A', 'B']) }));
+    expect(result.ok).toBe(true);
   });
 });
 

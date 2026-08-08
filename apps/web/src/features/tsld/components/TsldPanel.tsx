@@ -15,6 +15,7 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_NAV_ENABLED,
+  ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   TSLD_EDITING_ENABLED,
@@ -315,6 +316,14 @@ export interface TsldPanelProps {
    * byte-for-byte.
    */
   onDissolveSummary?: (activity: ActivitySummary) => void;
+  /**
+   * Duplicate the selected activity (`docs/specs/activity-copy-paste/` M1). Host-owned like
+   * {@link onDissolveSummary}; the `duplicate` item is only registered when the flag is on, and an
+   * unwired host makes it a no-op rather than an error.
+   */
+  onDuplicateActivity?: (activity: ActivitySummary) => void;
+  /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
+  onDuplicateBand?: (activity: ActivitySummary) => void;
   /** Open the per-activity resource-assignment editor — the floating selection bar's **Resources**
    * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
@@ -338,6 +347,13 @@ export interface TsldPanelProps {
    * delete-reconcile) so the main toolbar's selection-aware items can read it. Optional: absent ⇒ no
    * behaviour change (the in-panel `SelectionActionContext` is unaffected). */
   onSelectionChange?: (id: string | null) => void;
+  /** Report the **plural** selection to the host (`docs/specs/activity-copy-paste/` M3), so the
+   * workspace-root `Ctrl+C` can copy what the canvas has selected. A sibling of
+   * `onSelectionChange` rather than a widening of it: that callback's `id | null` is read by six
+   * selection-aware toolbar items, and changing its shape would touch all of them to serve one new
+   * caller. Reports `selection.ids` verbatim — plan order, primary included. Optional: absent ⇒ no
+   * behaviour change. */
+  onPluralSelectionChange?: (ids: readonly string[]) => void;
   /** Refetch the plan's server truth (activities/links/variance). Wired to the conflict banner's
    * Refresh so the "this changed elsewhere" cases have a real recovery action, not just copy. */
   onRefresh?: () => void;
@@ -464,12 +480,15 @@ export function TsldPanel({
   onDeleteActivity,
   bulk,
   onDissolveSummary,
+  onDuplicateActivity,
+  onDuplicateBand,
   onResources,
   onProgress,
   onSteps,
   canReportProgress = false,
   isStepsEligible,
   onSelectionChange,
+  onPluralSelectionChange,
   onRefresh,
   calendar = null,
   todayIso,
@@ -1225,7 +1244,13 @@ export function TsldPanel({
     // M1-T2): Enter-to-jump lifts a selection through this same one-shot signal, so gating it on the
     // nav flag alone would leave the search's jump silently selecting nothing in a build with lenses
     // on and nav off. Either flag arms the subscription; neither leaves it exactly as it was.
-    if (!CANVAS_NAV_ENABLED && !CANVAS_SEARCH_NAV_ENABLED) return;
+    // Widened again for copy/paste (`docs/specs/activity-copy-paste/` M1 risk (c)): a completed
+    // duplicate or paste reveals its clone through this same one-shot signal, and without this
+    // clause the reveal is silently inert in any build with both nav flags off — the clone lands
+    // below the plan's lowest lane and nothing moves. Found by the flag-on journey, whose config
+    // deliberately does not set the nav flags: a seam that is itself flag-gated is a dependency, and
+    // this one was invisible until a build existed that did not have it.
+    if (!CANVAS_NAV_ENABLED && !CANVAS_SEARCH_NAV_ENABLED && !ACTIVITY_COPY_PASTE_ENABLED) return;
     const signal = navState.selectSignal;
     if (!signal || signal.nonce === selectSignalSeenRef.current) return;
     selectSignalSeenRef.current = signal.nonce;
@@ -1289,6 +1314,8 @@ export function TsldPanel({
       // A no-op when the host didn't wire it — same shape as the entry-route actions below, and the
       // `dissolve` item is only registered behind its flag anyway.
       onDissolve: () => onDissolveSummary?.(activity),
+      onDuplicate: () => onDuplicateActivity?.(activity),
+      onDuplicateBand: () => onDuplicateBand?.(activity),
       // The entry-route actions (Progress / Resources / Steps). Each is a no-op when the host didn't wire
       // it (the corresponding toolbar item is itself flag-gated, so it only renders when the flag — and
       // this handler — are present); building them unconditionally keeps the fields plain + required.
@@ -1306,6 +1333,8 @@ export function TsldPanel({
     onEditActivity,
     onDeleteActivity,
     onDissolveSummary,
+    onDuplicateActivity,
+    onDuplicateBand,
     onResources,
     onProgress,
     onSteps,
@@ -1460,6 +1489,15 @@ export function TsldPanel({
   useEffect(() => {
     onSelectionChange?.(selectedId);
   }, [selectedId, onSelectionChange]);
+
+  // The plural sibling (M3). Keyed on `selection.ids`, which is a new array identity on every
+  // selection transition — including one that leaves the SET unchanged — so the host's setter must
+  // tolerate being called with an equal list. It does: the workspace stores it in state whose
+  // consumers are a keydown handler and nothing that renders, so a redundant set costs one render
+  // of a hook with no visual output rather than a loop.
+  useEffect(() => {
+    onPluralSelectionChange?.(selection.ids);
+  }, [selection.ids, onPluralSelectionChange]);
 
   /**
    * **The one place an edit is recorded for the settle announcement.**

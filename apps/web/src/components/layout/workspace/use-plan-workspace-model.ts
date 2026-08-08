@@ -33,6 +33,23 @@ import {
   openActivityEditor,
   type ActivityEditorIntent,
 } from '@/features/activities/lib/activity-editor-intent';
+import {
+  bandCopyConfirmation,
+  bandMembers,
+  MAX_CLONE_ASSIGNMENT_COUNT,
+  missingNote,
+  planClone,
+  refusalMessage,
+  resolveClipboard,
+  type BandCopyCopy,
+  type ClipboardContents,
+  type CloneRefusal,
+} from '@/features/activity-copy';
+import { useCreateClonedActivity } from '@/features/activity-copy/api/use-clone-activities';
+import {
+  useCloneCarriage,
+  type SkippedAssignment,
+} from '@/features/activity-copy/api/use-clone-carriage';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
@@ -72,6 +89,7 @@ import {
   bulkDeleteCommand,
   createActivityCommand,
   createLoeSpanCommand,
+  pasteActivitiesCommand,
   deleteActivityCommand,
   dependencyAddCommand,
   dependencyRemoveCommand,
@@ -97,6 +115,28 @@ import {
 } from '@/hooks/use-org-role';
 import { ApiFetchError } from '@/lib/api/client';
 import { minorToMajorInput } from '@/lib/format-money';
+
+/**
+ * What a duplicate attempt did. Three distinguishable outcomes, because a planner needs to know
+ * which happened: a **refusal** (a pre-check said no before any write), a **conflict** (the server
+ * rejected the write and the copy was rolled back), and success.
+ */
+export interface DuplicateOutcome {
+  readonly applied: boolean;
+  /** Set when a pre-check refused. Carries the numbers/names a message needs to be specific. */
+  readonly refusal: CloneRefusal | null;
+  /** Set when the server rejected a write (409/422); the copy has already been rolled back. */
+  readonly conflict: string | null;
+  readonly createdIds?: readonly string[];
+  /**
+   * Assignments the copy could not take because their resource is archived (M4, ADR-0053 §4).
+   *
+   * Not an error — the copy succeeded — but not silence either: the source keeps a live assignment
+   * the clone is refused, so a planner who is not told ends up with a copy that is quietly
+   * short-crewed. Named per activity so the message can say which work lost which resource.
+   */
+  readonly skippedAssignments?: readonly SkippedAssignment[];
+}
 
 /**
  * The single source of a plan surface's route-composed orchestration — every query, the
@@ -165,6 +205,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // underneath, and sharing one slot is how they would end up sharing one sentence.
   const [dissolveActivityId, setDissolveActivityId] = useState<string | null>(null);
   const onDissolveSummary = useCallback((a: ActivitySummary) => setDissolveActivityId(a.id), []);
+  // The summary targeted by **Duplicate band** (`docs/specs/activity-copy-paste/` M2). Its own
+  // state for the same reason Dissolve has its own: the two confirmations describe opposite fates
+  // for the work underneath, and one slot is how they would end up sharing one sentence.
+  const [duplicateBandId, setDuplicateBandId] = useState<string | null>(null);
+  const onDuplicateBand = useCallback((a: ActivitySummary) => setDuplicateBandId(a.id), []);
+  /**
+   * An activity the canvas should select and scroll to, set by a completed duplicate or paste.
+   *
+   * A **one-shot request** rather than a mirror of the selection: the canvas owns its selection and
+   * reports it outward (`onSelectionChange`), so a second inbound source of truth would fight it —
+   * every arrow-key move would be pulled back. The panel clears this the moment it honours it.
+   */
+  const [revealActivityId, setRevealActivityId] = useState<string | null>(null);
+  const onRevealHandled = useCallback(() => setRevealActivityId(null), []);
   /**
    * The tabbed editor's open intent (ADR-0060 §7, M5) — the ONE piece of state the three entry
    * points (**Edit**, **Report progress**, **Steps**) now share, replacing the three that could
@@ -250,6 +304,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // from the live query so it clears when the row is deleted. Inert when nothing reads it (flag off).
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const onSelectionChange = useCallback((id: string | null) => setSelectedActivityId(id), []);
+  // The canvas's PLURAL selection, lifted for `Ctrl+C` (`docs/specs/activity-copy-paste/` M3). Held
+  // in a ref rather than state: its only consumer is a keydown handler, so storing it in state would
+  // re-render the whole workspace on every selection transition — including marquee drags, which
+  // emit one per frame — to feed something that reads it lazily and renders nothing.
+  const pluralSelectionRef = useRef<readonly string[]>([]);
+  const onPluralSelectionChange = useCallback((ids: readonly string[]) => {
+    pluralSelectionRef.current = ids;
+  }, []);
+  // The app clipboard (M3). A ref for the same reason: nothing renders from it, and re-rendering the
+  // workspace on a copy would be a visible cost for an invisible change. Cleared on plan switch —
+  // the ADR-0048 history lifetime, mirrored deliberately rather than coincidentally.
+  const clipboardRef = useRef<ClipboardContents | null>(null);
+  useEffect(() => {
+    clipboardRef.current = null;
+  }, [planId]);
   // The activity targeted by the toolbar's **Update progress…** action (F3), driving the
   // workspace-hosted `ActivityProgressDialog` (beside `ActivityCrudDialogs`). Held as an id like the
   // crud dialogs so a 409 retry re-derives the current version; the derived row (below) closes the
@@ -491,6 +560,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // create deletes it; undoing a leaf delete re-creates its whole definition (a new id). Instantiated
   // here (not in the dialog) so the command's inverse re-issues through the same authorised endpoints.
   const createActivity = useCreateActivity(orgSlug, planId);
+  const createClone = useCreateClonedActivity(orgSlug, planId);
+  const cloneCarriage = useCloneCarriage(orgSlug);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
@@ -1374,9 +1445,370 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     return { applied: true, conflict: null };
   };
 
+  /**
+   * **Duplicate one or more activities** (`docs/specs/activity-copy-paste/` M1-T2, behind
+   * `VITE_ACTIVITY_COPY_PASTE`).
+   *
+   * Pre-checks come from `planClone`'s refusal union rather than from ad-hoc tests here, so a case
+   * cannot be handled in one call site and forgotten in the next. Everything else follows
+   * `createLoeSpan`'s shape: it is NON-ATOMIC across N creates, so any failure rolls the clones back,
+   * refetches server truth, and clears the redo branch (ADR-0048's conflict contract).
+   *
+   * The **recalculation hold** is the part most likely to break quietly. ADR-0064 says in terms that
+   * a leaked hold stalls every later recalculation for the session — there is no error and no
+   * surface, the schedule simply stops updating — so it is released in a `finally`, and the failure
+   * path has its own test rather than an assumption.
+   *
+   * The CPM engine is not imported: this composes creates the product already makes.
+   */
+  /**
+   * The ONE `planClone` input derivation.
+   *
+   * Extracted because the band confirmation and the write that follows it must plan the *same*
+   * copy: a preview built from a second derivation would drift, and it would drift in the one place
+   * a planner cannot check — the sentence says "3 activities and 2 links", the write does something
+   * else, and both look right in isolation. That is the ADR-0065 argument applied to a dialog.
+   */
+  const cloneInputFor = (
+    sources: readonly ActivitySummary[],
+    rows: readonly ActivitySummary[],
+  ): Parameters<typeof planClone>[0] => ({
+    set: sources,
+    dependencies: dependencies.data ?? [],
+    usedNames: new Set(rows.map((a) => a.name)),
+    archivedCalendarIds: new Set(
+      (calendars.data ?? []).filter((c) => c.archivedAt !== null).map((c) => c.id),
+    ),
+    offsetDays: 0,
+    laneOffset:
+      rows.reduce((hi, a) => Math.max(hi, a.laneIndex), -1) +
+      1 -
+      Math.min(...sources.map((a) => a.laneIndex)),
+    mode: isVisualMode ? 'VISUAL' : 'EARLY',
+  });
+
+  const duplicateActivities = async (
+    sources: readonly ActivitySummary[],
+  ): Promise<DuplicateOutcome> => {
+    const rows = activitiesRef.current ?? [];
+    const plan_ = planClone(cloneInputFor(sources, rows));
+    if (!plan_.ok) return { applied: false, refusal: plan_.refusal, conflict: null };
+
+    // Hold the coalesced recalculation for the whole composite so the bars cannot move between the
+    // creates — released in `finally`, never on the happy path alone (ADR-0064).
+    const holdToken = Symbol('duplicate');
+    autoRecalc.hold(holdToken);
+    const created: { id: string; version: number }[] = [];
+    // The clones with no cloned parent. A band's undo deletes these and lets the ADR-0038 cascade
+    // take the subtree, because `bulkDelete` refuses a batch containing a summary by design.
+    const roots: { id: string; version: number }[] = [];
+    const idMap = new Map<string, string>();
+    const skippedAssignments: SkippedAssignment[] = [];
+    try {
+      // **Read every source BEFORE writing anything.** Two reasons, and the second is the one that
+      // made this an ordering rather than a preference.
+      //
+      // `MAX_CLONE_ASSIGNMENT_COUNT` bounds the third rate-limit handler this composite touches,
+      // and `planClone` structurally cannot check it — it never sees an assignment. Counting here,
+      // before the first create, turns "over the cap" into a refusal that costs nothing to recover
+      // from. Counting as we went would mean discovering it half way through a 50-activity band and
+      // rolling the whole copy back, which is the failure the caps exist to prevent rather than a
+      // milder version of it.
+      //
+      // The request count is unchanged: these are the same two GETs per source the carriage made
+      // anyway, moved earlier.
+      const sources = new Map<string, Awaited<ReturnType<typeof cloneCarriage.readSource>>>();
+      let assignmentCount = 0;
+      for (const step of plan_.creates) {
+        const source = await cloneCarriage.readSource(step.sourceId);
+        sources.set(step.sourceId, source);
+        assignmentCount += source.assignments.length;
+      }
+      if (assignmentCount > MAX_CLONE_ASSIGNMENT_COUNT) {
+        return {
+          applied: false,
+          refusal: {
+            kind: 'too-many-assignments',
+            assignments: assignmentCount,
+            cap: MAX_CLONE_ASSIGNMENT_COUNT,
+          },
+          conflict: null,
+        };
+      }
+
+      for (const step of plan_.creates) {
+        const parentId = step.parentSourceId === null ? undefined : idMap.get(step.parentSourceId);
+        const row = await createClone.mutateAsync({
+          ...step.body,
+          ...(parentId === undefined ? {} : { parentId }),
+        });
+        idMap.set(step.sourceId, row.id);
+        created.push({ id: row.id, version: row.version });
+        if (step.parentSourceId === null) roots.push({ id: row.id, version: row.version });
+
+        // Carry the crew and the step breakdown onto this clone before moving to the next (M4).
+        // Inside the same try, so a failure here rolls the whole copy back like any other write —
+        // a clone that exists without the resources it was supposed to carry is a half-copy the
+        // planner has no way to spot, and the confirmation has already promised them otherwise.
+        const source = sources.get(step.sourceId);
+        if (source === undefined) continue;
+        const carried = await cloneCarriage.carry({
+          cloneId: row.id,
+          cloneVersion: row.version,
+          sourceName: step.sourceName,
+          assignments: source.assignments,
+          steps: source.steps,
+        });
+        skippedAssignments.push(...carried.skipped);
+      }
+      // Links are created SEQUENTIALLY, and the plan's "bound the concurrency, start at 4" is
+      // deliberately not followed. Every dependency create runs inside a transaction under
+      // `lockPlanForWrite(plan.id)` — a PLAN-SCOPED advisory lock
+      // (`dependencies.service.ts:213-222`, read before deciding). Concurrent creates on one plan
+      // therefore serialise on that lock server-side: parallelism buys no throughput, and it costs
+      // a worse failure mode, because four in-flight requests failing together make "which one
+      // broke, and what landed" much harder to answer than one at a time does. If M2-T4's
+      // measurement shows the wall clock is the problem, the answer is a batch endpoint
+      // (Milestone B), not client-side fan-out at a lock.
+      for (const link of plan_.links) {
+        const predecessorId = idMap.get(link.predecessorSourceId);
+        const successorId = idMap.get(link.successorSourceId);
+        // Defensive only: `planClone` filters to edges whose BOTH endpoints are in the create set,
+        // and a structural test pins that. A miss here would mean the two have drifted.
+        if (predecessorId === undefined || successorId === undefined) continue;
+        await createDependency.mutateAsync({
+          planId,
+          predecessorId,
+          successorId,
+          type: link.type,
+          lagMinutes: link.lagMinutes,
+          lagCalendar: link.lagCalendar,
+        });
+      }
+    } catch (err) {
+      // Roll the whole copy back. Best-effort: a failed rollback still leaves the refetch below to
+      // re-sync, and the original cause must never be replaced by the rollback's own error.
+      if (created.length > 0) {
+        try {
+          // Roots only when the copy is not flat — a rollback batch holding the band's summary is
+          // refused for the same reason its undo is (422 SUMMARY_NOT_BULK_ELIGIBLE), which would
+          // leave the half-copy in place under a message about the original failure.
+          if (roots.length === created.length) {
+            await bulkDeleteActivities.mutateAsync({ activities: created });
+          } else {
+            for (const root of roots) await deleteActivity.mutateAsync(root.id);
+          }
+        } catch {
+          /* swallow — the refetch re-syncs the client to server truth */
+        }
+      }
+      onTsldRefresh();
+      if (UNDO_REDO_ENABLED) editHistory.clearRedo();
+      if (pen.onWriteRejected(err).kind === 'lock') {
+        return { applied: false, refusal: null, conflict: null };
+      }
+      if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
+        return { applied: false, refusal: null, conflict: err.error.message };
+      }
+      throw err;
+    } finally {
+      autoRecalc.release(holdToken);
+    }
+
+    if (UNDO_REDO_ENABLED) {
+      editHistory.record(
+        pasteActivitiesCommand({
+          created,
+          roots,
+          deleteActivity: deleteActivity.mutateAsync,
+          bulkDelete: bulkDeleteActivities.mutateAsync,
+          restoreBatch: restoreDeleteBatch.mutateAsync,
+          label:
+            sources.length === 1 && sources[0] !== undefined
+              ? `Duplicate \u201c${sources[0].name}\u201d`
+              : `Copy ${String(sources.length)} activities`,
+        }),
+      );
+    }
+    notifyRecalc();
+    // The skipped-assignment sentence rides the SAME announcement rather than a second one: two
+    // live-region writes in one frame collapse to the last (the ADR-0073 C1 / TECH_DEBT #104
+    // shape), so a planner would hear only whichever won and never the fact that a resource was
+    // dropped. Success and its caveat are one sentence because they reach one channel.
+    const skippedNote =
+      skippedAssignments.length === 0
+        ? ''
+        : skippedAssignments.length === 1
+          ? ' 1 resource assignment was not copied because its resource is archived.'
+          : ` ${String(skippedAssignments.length)} resource assignments were not copied because their resources are archived.`;
+    announce(
+      (created.length === 1
+        ? '1 activity duplicated.'
+        : `${String(created.length)} activities duplicated.`) + skippedNote,
+    );
+    // **Reveal the copy.** A clone lands below the plan's lowest lane, so on a 60-lane imported
+    // programme a successful duplicate otherwise produces no visible change at all — the planner
+    // reads "1 activity duplicated." and sees nothing move. The implementation plan named this as
+    // M1's risk (c) and US-1 made it an acceptance criterion; `createdIds` was produced and then
+    // read by nothing but a count until the M5 enablement pass. Selecting the first clone puts the
+    // canvas cursor on it, which is also what scrolls it into view.
+    const anchorId = created[0]?.id ?? null;
+    if (anchorId !== null) setRevealActivityId(anchorId);
+
+    return {
+      applied: true,
+      refusal: null,
+      conflict: null,
+      createdIds: created.map((c) => c.id),
+      skippedAssignments,
+    };
+  };
+
+  /**
+   * **Duplicate a band** — the summary and its whole subtree
+   * (`docs/specs/activity-copy-paste/` M2, US-2).
+   *
+   * The confirmation's counts come off the **plan** `planClone` will execute, never off the
+   * selection, so the sentence a planner reads and the write that follows cannot disagree. Returns
+   * `null` when the band cannot be copied at all, so the caller can announce the refusal instead of
+   * opening a dialog that only says no.
+   *
+   * This is where M2's model finally reaches a planner. `bandMembers` and `bandCopyConfirmation`
+   * shipped with unit tests and **no caller at all** — the enablement review found them validating
+   * dead code, and the toolbar comment beside the excluded summary still read "copying the band
+   * with its subtree is M2" as though M2 were future work. The capability was not lit-but-inert; it
+   * was never offered.
+   */
+  const bandCopyPreview = (summary: ActivitySummary): BandCopyCopy | null => {
+    const rows = activitiesRef.current ?? [];
+    const members = bandMembers(rows, summary.id);
+    if (members.length === 0) return null;
+    const preview = planClone(cloneInputFor(members, rows));
+    if (!preview.ok) return null;
+    return bandCopyConfirmation(summary.name, preview);
+  };
+
+  /**
+   * `Ctrl+C` — capture the canvas's current selection (`docs/specs/activity-copy-paste/` M3).
+   *
+   * Stores **ids**, resolved against the live plan at paste time, so a copy always pastes what those
+   * activities are now rather than what they were when the planner pressed the key. The clipboard is
+   * per plan and cleared on plan switch, mirroring the ADR-0048 history lifetime — the two are the
+   * same mental object to a planner, and separate lifetimes would leave a paste landing work that
+   * can no longer be undone in one step.
+   */
+  const copySelection = (): void => {
+    const ids = pluralSelectionRef.current;
+    if (ids.length === 0) {
+      announce('Select an activity to copy.');
+      return;
+    }
+    clipboardRef.current = { planId, activityIds: [...ids] };
+    announce(ids.length === 1 ? '1 activity copied.' : `${String(ids.length)} activities copied.`);
+  };
+
+  /**
+   * `Ctrl+V` — paste the clipboard by the M2 rules.
+   *
+   * **Paste does not touch any ADR-0064 tool mode.** It arms nothing, disarms nothing and does not
+   * take an open link pick's next click: it composes the same `duplicateActivities` the row action
+   * and the toolbar item already call, and that function's whole surface is mutations plus the
+   * recalculation hold. The non-interaction is structural rather than a rule to remember — there is
+   * no mode setter in reach of this module at all, which `paste-tool-mode.structural.test.ts`
+   * asserts directly (and was verified red by planting one).
+   */
+  const pasteClipboard = async (): Promise<void> => {
+    const contents = clipboardRef.current;
+    if (contents === null) {
+      announce('Nothing has been copied yet.');
+      return;
+    }
+    if (contents.planId !== planId) {
+      // Refused rather than translated. A cross-plan paste needs calendars, resources and a parent
+      // tree resolved into a different org-scoped world; guessing would produce a copy that
+      // schedules differently from its source with nothing saying why.
+      announce('That copy came from a different plan.');
+      return;
+    }
+    const { present, missingCount } = resolveClipboard(contents, activitiesRef.current ?? []);
+    if (present.length === 0) {
+      announce('The activities you copied no longer exist.');
+      return;
+    }
+    const outcome = await duplicateActivities(present);
+    if (outcome.refusal !== null) {
+      announce(refusalMessage(outcome.refusal));
+      return;
+    }
+    if (outcome.conflict !== null) {
+      announce(outcome.conflict);
+      return;
+    }
+    // `duplicateActivities` has already announced the success and any skipped assignments. The
+    // stale-id note is folded in by re-announcing the whole sentence rather than adding a second
+    // live-region write, which would collapse to whichever landed last (TECH_DEBT #104).
+    if (missingCount > 0) {
+      announce(
+        `${String(outcome.createdIds?.length ?? present.length)} activities pasted.` +
+          missingNote(missingCount),
+      );
+    }
+  };
+
+  /**
+   * Run the band copy the confirmation described.
+   *
+   * Re-derives the members from the **live** rows rather than closing over what the preview saw: a
+   * planner can leave the dialog open while a colleague adds an activity to the band, and copying
+   * the band the dialog described rather than the band that exists would be a quietly wrong copy.
+   */
+  const confirmDuplicateBand = async (): Promise<void> => {
+    const summaryId = duplicateBandId;
+    if (summaryId === null) return;
+    const members = bandMembers(activitiesRef.current ?? [], summaryId);
+    setDuplicateBandId(null);
+    if (members.length === 0) {
+      announce('There is nothing in this band to copy.');
+      return;
+    }
+    const outcome = await duplicateActivities(members);
+    if (outcome.refusal !== null) announce(refusalMessage(outcome.refusal));
+    else if (outcome.conflict !== null) announce(outcome.conflict);
+  };
+
+  /**
+   * The single-row entry point both hosts call. Refusals and conflicts are **announced**, because
+   * this is the live region every other canvas action already speaks through and a planner driving
+   * from the keyboard has no other channel; a refusal that only appeared visually would be silent
+   * for exactly the person who cannot see the bar not changing.
+   */
+  const onDuplicateActivity = async (activity: ActivitySummary): Promise<void> => {
+    const outcome = await duplicateActivities([activity]);
+    if (outcome.refusal !== null) {
+      announce(refusalMessage(outcome.refusal));
+      return;
+    }
+    if (outcome.conflict !== null) announce(outcome.conflict);
+  };
+
   return {
     orgSlug,
     planId,
+    duplicateActivities,
+    onDuplicateActivity,
+    /** Duplicate a band (M2): the confirmation's state, its copy, and the run. */
+    duplicateBandId,
+    setDuplicateBandId,
+    onDuplicateBand,
+    bandCopyPreview,
+    confirmDuplicateBand,
+    /** The canvas should select and scroll to this activity, then call `onRevealHandled`. */
+    revealActivityId,
+    onRevealHandled,
+    /** The app clipboard (`docs/specs/activity-copy-paste/` M3): `Ctrl+C` / `Ctrl+V`. */
+    copySelection,
+    pasteClipboard,
+    onPluralSelectionChange,
     // Queries
     plan,
     project,

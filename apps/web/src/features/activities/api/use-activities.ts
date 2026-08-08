@@ -42,8 +42,12 @@ function invalidateActivity(
 /**
  * The list-plus-baseline-variance invalidation a **create/delete** settles into: the variance set
  * itself changed (a new "Added"/"Removed" row), so it is refreshed alongside the activities list.
+ *
+ * Exported for `features/activity-copy`, which posts its own create body (a clone carries a
+ * different field set from the form — see `use-clone-activities.ts`) but must settle into exactly
+ * this invalidation. A second copy of the policy would drift the day a third key joined it.
  */
-function invalidatePlanActivities(
+export function invalidatePlanActivities(
   queryClient: QueryClient,
   orgSlug: string,
   planId: string,

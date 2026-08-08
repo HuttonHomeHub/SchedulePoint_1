@@ -44,6 +44,8 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
   const announce = useAnnounce();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dissolveError, setDissolveError] = useState<string | null>(null);
+  const [bandCopyError, setBandCopyError] = useState<string | null>(null);
+  const [bandCopyPending, setBandCopyPending] = useState(false);
 
   const editing = model.editActivityId
     ? model.activities.data?.find((a) => a.id === model.editActivityId)
@@ -86,6 +88,29 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
       },
       onError: (err) => setDeleteError(err.message),
     });
+  };
+
+  // The band-copy confirmation's copy, derived from the plan `planClone` will actually execute —
+  // never from the selection — so the sentence and the write cannot disagree (M2-T2).
+  const bandCopy = model.duplicateBandId
+    ? model.activities.data?.find((a) => a.id === model.duplicateBandId)
+    : undefined;
+  const bandCopyText = bandCopy ? model.bandCopyPreview(bandCopy) : null;
+
+  const closeBandCopy = (): void => {
+    model.setDuplicateBandId(null);
+    setBandCopyError(null);
+  };
+
+  const confirmBandCopy = (): void => {
+    setBandCopyPending(true);
+    setBandCopyError(null);
+    void model
+      .confirmDuplicateBand()
+      .catch((err: unknown) => {
+        setBandCopyError(err instanceof Error ? err.message : 'The band could not be copied.');
+      })
+      .finally(() => setBandCopyPending(false));
   };
 
   const closeDissolve = (): void => {
@@ -218,6 +243,23 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         wins. The same pairing is used by the table's own Dissolve action, from the same copy
         function, so the two entry points cannot say different things.
       */}
+      {/*
+        Duplicate band (M2). Deliberately NOT `confirmVariant="destructive"`: a band copy creates
+        work, it does not remove any — the same reasoning that keeps Dissolve out of the delete red,
+        and for the same reason (the eye wins over the sentence).
+      */}
+      <ConfirmDialog
+        open={bandCopyText !== null}
+        onClose={closeBandCopy}
+        onConfirm={confirmBandCopy}
+        title={bandCopyText?.title ?? 'Duplicate band'}
+        description={bandCopyText?.description ?? ''}
+        confirmLabel="Duplicate"
+        confirmVariant="default"
+        pending={bandCopyPending}
+        pendingLabel="Duplicating…"
+        error={bandCopyError}
+      />
       <ConfirmDialog
         open={dissolving !== undefined}
         onClose={closeDissolve}

@@ -14,7 +14,19 @@
 /** Anything the API returns in the standard `{ data }` / `{ error }` envelope. */
 interface ApiEnvelope<T> {
   data?: T;
+  meta?: unknown;
   error?: { code: string; message: string; details?: unknown };
+}
+
+/**
+ * The `meta` half of a cursor-paginated list response (`@repo/types` `PageMeta`).
+ *
+ * Restated structurally rather than imported: this package is deliberately dependency-free (see the
+ * file docblock), and one interface is a smaller cost than a workspace edge.
+ */
+export interface SeedPageMeta {
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 /** A non-2xx response, carrying the API's own machine-readable code and message. */
@@ -135,6 +147,27 @@ export class SeedClient {
   /** GET a `{ data }` envelope. */
   get<T>(path: string): Promise<T> {
     return this.envelope<T>('GET', path);
+  }
+
+  /**
+   * GET one page of a cursor-paginated list, returning `meta` **alongside** the rows.
+   *
+   * {@link get} unwraps `data` and discards `meta`, which is right for the seeder's writes and wrong
+   * for anything that has to read a list back: without `nextCursor` a caller cannot tell a complete
+   * list from the first 100 rows of one. That is not hypothetical — `scripts/measure-band-copy.mjs`
+   * reported a partial paste on its first run because it invented a `lastMeta` property this client
+   * has never had, so `page.length === 100` silently became "that is all of them".
+   */
+  async getPage<T>(path: string): Promise<{ rows: T[]; meta: SeedPageMeta }> {
+    const parsed = (await this.raw('GET', path)) as ApiEnvelope<T[]>;
+    if (parsed.data === undefined) {
+      throw new SeedHttpError(200, 'MALFORMED_ENVELOPE', 'response had no `data`', parsed, path);
+    }
+    const meta = (parsed.meta ?? {}) as Partial<SeedPageMeta>;
+    return {
+      rows: parsed.data,
+      meta: { nextCursor: meta.nextCursor ?? null, hasMore: meta.hasMore ?? false },
+    };
   }
 
   /** POST a body and unwrap `{ data }`. */

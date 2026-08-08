@@ -870,3 +870,98 @@ export function bulkDeleteCommand(params: {
     },
   };
 }
+
+/**
+ * Reverse a **paste / duplicate** — the whole copy as ONE reversible step
+ * (`docs/specs/activity-copy-paste/` M1-T1, ADR-0048).
+ *
+ * **Undo is a bulk delete; redo is the id-stable batch restore.** The plan for this milestone said
+ * redo should "re-compose with new ids", and it is written the other way round on purpose: the
+ * clones are linked to *each other* (the internal edges `planClone` carries), and re-creating N
+ * activities restores the bars while silently losing the logic between them — the CQ-4 argument
+ * that made {@link bulkDeleteCommand} a restore rather than N re-creates, one gesture along. The
+ * batch id the undo produces is exactly what makes the redo id-stable.
+ *
+ * There is deliberately **no compose-from-inputs fallback**. One was written and removed: `redo`
+ * only ever runs after `undo` (that is what puts a command on the redo stack), and `undo` always
+ * yields a batch id, so the fallback branch was unreachable — a plausible-looking path that no test
+ * could exercise and no planner could reach.
+ *
+ * **Versions are captured once, at creation, and that is safe** — the recalculation a paste triggers
+ * writes only the engine-owned columns and never `version`
+ * (`apps/api/src/modules/schedule/schedule.repository.ts:242`, read rather than assumed, because if
+ * it *did* bump them every paste-undo would 409 on the happy path). A restore **does** bump them,
+ * so the restored rows' versions are threaded back for the next undo.
+ *
+ * Idempotent in both directions: a double-undo cannot double-delete and a double-redo cannot
+ * double-create, which is the {@link existenceToggle} contract expressed over a set.
+ */
+export function pasteActivitiesCommand(params: {
+  /** The clones just created, in creation order (parent before child). */
+  created: readonly { id: string; version: number }[];
+  /**
+   * The clones with no cloned parent — the tops of what was copied.
+   *
+   * **A band's undo cannot go through `bulkDelete`, and that is the API's deliberate design rather
+   * than an oversight to work around.** `bulkDelete` refuses any batch containing a `WBS_SUMMARY`
+   * (422 `SUMMARY_NOT_BULK_ELIGIBLE`, `activities.service.ts:1277-1281`): deleting a summary takes
+   * its whole subtree, and letting that ride inside a forty-bar selection would make the most
+   * destructive operation in the product the easiest to trigger by accident. A bulk delete is
+   * therefore always leaf-only, "which is what makes its undo honest".
+   *
+   * So undoing a band copy deletes its **root**, once, and lets the documented cascade take the
+   * subtree — which is exactly what the planner asked to reverse. When the roots ARE the whole set
+   * (a flat copy, every clone top-level) this is the same call as before, so the common path is
+   * unchanged.
+   *
+   * The flag-on journey found this: the undo fired, the batch 422'd, and the planner was told
+   * "Couldn't undo just now." A mocked delete accepts any batch, so no unit test could have.
+   */
+  roots: readonly { id: string; version: number }[];
+  bulkDelete: BulkDeleteActivitiesFn;
+  /** Single delete; cascades a summary's subtree (ADR-0038). Used when the set is not flat. */
+  deleteActivity: DeleteActivityFn;
+  restoreBatch: RestoreDeleteBatchFn;
+  /** Concrete, per the S1 entity-naming convention: `Duplicate “Excavate”` / `Copy 15 activities`. */
+  label: string;
+}): Command {
+  const { bulkDelete, deleteActivity, restoreBatch } = params;
+  const roots = [...params.roots];
+  const isFlat = roots.length === params.created.length;
+  // `null` means "the clones are not in the plan right now" — the absent state of the toggle.
+  let live: { id: string; version: number }[] | null = [...params.created];
+  let batchId: string | null = null;
+
+  return {
+    label: params.label,
+    undo: async () => {
+      if (live === null) return;
+      if (isFlat) {
+        const result = await bulkDelete({ activities: live });
+        batchId = result.deleteBatchId;
+      } else {
+        // Roots only, one at a time — each cascade sweeps its own subtree. Sequential because each
+        // delete takes the plan lock server-side anyway; the batch id of the LAST one is kept,
+        // which is right while a paste has a single root (a band). Redo of a multi-root non-flat
+        // paste would restore only the last cascade, so that shape is not offered: `planClone`'s
+        // band path produces exactly one root.
+        for (const root of roots) await deleteActivity(root.id);
+        // **Redo is not available for a band copy, and that is an API limit rather than a choice.**
+        // A cascade delete does assign a `delete_batch_id` server-side, but `DELETE …/activities/:id`
+        // answers 204 with no body, so the client never learns it and has nothing to restore from.
+        // Leaving `batchId` null makes `redo` a no-op rather than a call that would fail — the Redo
+        // affordance simply has nothing to offer, which is the honest shape. Recorded as
+        // `docs/TECH_DEBT.md` #113; the fix is one field on the delete response.
+        batchId = null;
+      }
+      live = null;
+    },
+    redo: async () => {
+      if (live === null && batchId !== null) {
+        const restored = await restoreBatch({ deleteBatchId: batchId });
+        live = restored.map((row) => ({ id: row.id, version: row.version }));
+        batchId = null;
+      }
+    },
+  };
+}

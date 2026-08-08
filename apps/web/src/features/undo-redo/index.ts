@@ -17,6 +17,7 @@ export {
   autoArrangeCommand,
   bulkPlacementCommand,
   bulkDeleteCommand,
+  pasteActivitiesCommand,
   type Command,
   type CommandCoalescing,
   type RepositionLaneFn,

@@ -202,15 +202,15 @@ Nothing was added."). Where the rollback itself fails, it says so and the refetc
 
 ### Success criteria
 
-| Measure                                      | Target                                                                                                         |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Duplicate one activity                       | ≤ 2 user actions from selection; **1** HTTP write; the clone selected and on screen                            |
-| Duplicate a 15-activity band with 21 links   | ≤ 3 user actions; every internal link present and re-pointed; **zero** links to the originals                  |
-| Paste round-trip fidelity                    | Every carried field byte-equal to the source, proven field-by-field by the census test (§4.7)                  |
-| Undo a band duplicate                        | One `Ctrl+Z` removes every clone and every cloned link; active count returns to the pre-paste number           |
-| Band-duplicate wall clock (client composite) | **Measured, not assumed** (M2-T4). Provisional gate: p95 < 2 s for 15 activities + 21 links against a real API |
-| Recalc parity                                | `computeSchedule` **byte-identical**; no engine file changed; structural (§3)                                  |
-| Flag-off parity                              | Every touched surface pinned byte-for-byte by a flag-off suite                                                 |
+| Measure                                      | Target                                                                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Duplicate one activity                       | ≤ 2 user actions from selection; **1** HTTP write; the clone selected and on screen                                                        |
+| Duplicate a 15-activity band with 21 links   | ≤ 3 user actions; every internal link present and re-pointed; **zero** links to the originals                                              |
+| Paste round-trip fidelity                    | Every carried field byte-equal to the source, proven field-by-field by the census test (§4.7)                                              |
+| Undo a band duplicate                        | One `Ctrl+Z` removes every clone and every cloned link; active count returns to the pre-paste number                                       |
+| Band-duplicate wall clock (client composite) | **Measured** (M2-T4): **969 ms** for 15 activities + 21 links against a real API with the pen held, against a 2 s gate. See §2 "Set size". |
+| Recalc parity                                | `computeSchedule` **byte-identical**; no engine file changed; structural (§3)                                                              |
+| Flag-off parity                              | Every touched surface pinned byte-for-byte by a flag-off suite                                                                             |
 
 ### Open questions
 
@@ -241,9 +241,21 @@ is taken now, later-on-measurement, or not at all. Full list with proposed defau
 > - **Given** the duplicate succeeds, **then** exactly **one** command is pushed onto the ADR-0048
 >   stack, whose `undo` deletes the clone and whose `redo` re-creates it with a new id (the
 >   conservative M2 rule the house already uses).
-> - **Given** I do not hold the pen, or hold it but lack `activity:create`, **when** I open the row
->   menu or the selection bar, **then** **Duplicate** is **present and shaded with a reason**
->   linked by `aria-describedby` — never hidden, never a dead end (ADR-0062 M6).
+> - **Given** I do not hold the pen, or hold it but lack `activity:create`, **when** I open the
+>   **selection bar**, **then** **Duplicate** is **present and shaded with a reason** linked by
+>   `aria-describedby` — never hidden, never a dead end (ADR-0062 M6).
+>
+>   **Corrected 2026-08-08 (M5 enablement), and the correction is the finding.** This read "the row
+>   menu **or** the selection bar" and was written as though both behaved alike. They do not: the
+>   activities-table row menu **omits** every pen-gated action, which is pre-existing across Edit,
+>   Duplicate, Dissolve and Delete. Fixing it is not a one-line change — `Menu`'s roving focus
+>   deliberately skips `aria-disabled` items, so shading a menu item makes the option visible and
+>   leaves its reason unreachable by keyboard, which is this criterion's failure one layer down. It
+>   is `docs/TECH_DEBT.md` #111 with the evidence attached. What this epic **did** fix is the half it
+>   owns: the shared `ToolbarButton` carried its `disabledReason` as a `title` only — a hover
+>   tooltip no browser shows on keyboard focus — under a docblock claiming the reason was reachable.
+>   It is now `aria-describedby`-linked, which repairs every pen-gated toolbar item at once.
+>
 > - **Given** the selected activity is a `WBS_SUMMARY`, **then** the item reads **Duplicate band**
 >   and behaves as US-2 — a lone summary clone is never created (a childless summary collapses to
 >   the data date and reads as breakage).
@@ -440,9 +452,41 @@ client is composing calls it could already make one at a time.
     _as a copy_. The ADR-0065 "two implementations drift invisibly" argument does not apply here,
     because this drift is visible the instant a name renders. Both live under one documented
     convention in `docs/DECISIONS.md`; neither is a shared function.
-- **Set size** — capped. The number is **set by measurement in M2-T4**, not asserted here;
-  provisional default **200 activities**, chosen to sit an order of magnitude below the
-  `UpdatePositionsDto` 2 000-row precedent and to keep a client composite inside a few seconds.
+- **Set size** — capped at **50 activities** and, separately, **90 internal links**. Both numbers are
+  **measured** (M2-T4, `scripts/measure-band-copy.mjs`), and the measurement overturned the
+  provisional figure rather than confirming it.
+
+  | Band                    | Requests | Wall clock | Create p50/p95/max | Link p50/p95/max | 429s | Partial paste |
+  | ----------------------- | -------- | ---------- | ------------------ | ---------------- | ---- | ------------- |
+  | 15 activities, 21 links | 37       | 969 ms     | 20 / 50 / 50 ms    | 24 / 46 / 56 ms  | 0    | no            |
+  | 40 activities, 58 links | 99       | 2 142 ms   | 19 / 22 / 23 ms    | 22 / 30 / 34 ms  | 0    | no            |
+  | 60 activities, 90 links | 151      | 2 898 ms   | 17 / 19 / 37 ms    | 20 / 23 / 27 ms  | 0    | no            |
+
+  The provisional 200 rested on the theory that **the planner's patience** was the binding
+  constraint. It is not: per-request cost is flat and wall clock is linear, so patience does not bind
+  anywhere near 200. What binds is **the API's own rate limiter**, and its shape is not what the
+  config reads like. `RATE_LIMIT_LIMIT`/`RATE_LIMIT_TTL` say "100 per 60 s", but
+  `ThrottlerGuard.generateKey` (`dist/throttler.guard.js:148-150`, registered in
+  `scripts/dependency-claims.json`) hashes the **class and handler names** into the counter key, so
+  the real bound is 100 per 60 s **per route handler** per IP. A copy issues `N + 1` writes on the
+  activity-create handler and `M` on the dependency-create handler; a 200-activity copy would
+  therefore 429 on its 100th create, and the web client has **no back-off**
+  (`apps/web/src/lib/api/client.ts` throws on any non-2xx) — so the provisional cap would have
+  **guaranteed the partial paste the cap exists to prevent**.
+
+  Two caps rather than one because the two counts hit **different** counters: a dense band carries
+  more links than activities (the measured 60-activity band carries 90), so the link handler
+  overflows first and an activity-only cap would leave it unguarded. 50 and 90 each leave headroom
+  for a planner to copy twice inside one minute, which is a thing planners do.
+
+  > **Both of the first run's alarming numbers were the measurement script's own defects**, and
+  > saying so is part of the record. It reported a 63.5 s wall clock and a partial paste; the first
+  > was the script paying off its own source-build's throttle debt (the timed section now starts from
+  > a drained window), and the second was a pager reading a `lastMeta` property `SeedClient` has never
+  > had, so it stopped at row 100 of 122. Neither was a product defect. The escalation to Milestone B
+  > was **not** made on those numbers — verifying them first is the ADR-0076 Class 3 rule, and it
+  > changed the answer.
+
 - **Lane ceiling** — `maxLane + setHeight ≤ 10000` (`create-activity.dto.ts:295`).
 - **Internal-edge rule** — an edge is cloned **iff** both endpoints are in the set. No edge crosses
   the boundary, in either direction.
@@ -469,17 +513,17 @@ client is composing calls it could already make one at a time.
 
 ## 3. Technical analysis
 
-| Area           | Impact                                       | Notes                                                                                                                                                                                                 |
-| -------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | **High** (M1–M4) — this is the whole feature | One new feature folder `features/activity-copy/` (pure model + hooks), two toolbar/menu registrations, one keybinding hook, one undo command builder, one composite in `use-plan-workspace-model.ts`. |
-| Backend        | **None** (M1–M4) · **Medium** (M-B only)     | M1–M4 use `POST …/activities`, `POST …/plans/:planId/dependencies`, `POST …/assignments`, `PUT …/steps`, `DELETE …/activities/:id` — all shipped. M-B would add one endpoint + DTO + service method.  |
-| Database       | **None**                                     | No model, column, index or constraint changes at any milestone, including M-B.                                                                                                                        |
-| API            | **None** (M1–M4) · one endpoint (M-B)        | M-B: `POST …/plans/:planId/activities/duplicate` + `@repo/types` response + OpenAPI + a route-census entry (`activity.duplicated`).                                                                   |
-| Security       | **Low**                                      | No new trust boundary: the client composes calls it can already make. The API stays the sole authority; the app clipboard is **in-memory and same-tab**, never the system clipboard (see §4.5).       |
-| Performance    | **Medium** — the honest cost of a composite  | N + M sequential-ish HTTP writes, each taking the plan advisory lock; M audit rows. Bounded concurrency + a cap + a recalculation hold. **Measured in M2-T4**, and the measurement decides M-B (C-4). |
-| Infrastructure | **None**                                     | No new services, env vars beyond the `VITE_` flag, or CI services. One new Playwright project + CI step at M5 (the house pattern).                                                                    |
-| Observability  | **Low** (M1–M4)                              | M audit rows per paste for the links, zero for the activities (§0.6) — an asymmetry M-B would fix with one `activity.duplicated` row. No new logs/metrics/traces.                                     |
-| Testing        | **High**                                     | Pure-model unit tests incl. the **field census**; hook tests for the composite's rollback paths; component tests for both entry points and both flag states; a flag-on Playwright journey at M5.      |
+| Area           | Impact                                       | Notes                                                                                                                                                                                                                                                                                                                            |
+| -------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | **High** (M1–M4) — this is the whole feature | One new feature folder `features/activity-copy/` (pure model + hooks), two toolbar/menu registrations, one keybinding hook, one undo command builder, one composite in `use-plan-workspace-model.ts`.                                                                                                                            |
+| Backend        | **None** (M1–M4) · **Medium** (M-B only)     | M1–M4 use `POST …/activities`, `POST …/plans/:planId/dependencies`, `POST …/assignments`, `PUT …/steps`, `DELETE …/activities/:id` — all shipped. M-B would add one endpoint + DTO + service method.                                                                                                                             |
+| Database       | **None**                                     | No model, column, index or constraint changes at any milestone, including M-B.                                                                                                                                                                                                                                                   |
+| API            | **None** (M1–M4) · one endpoint (M-B)        | M-B: `POST …/plans/:planId/activities/duplicate` + `@repo/types` response + OpenAPI + a route-census entry (`activity.duplicated`).                                                                                                                                                                                              |
+| Security       | **Low**                                      | No new trust boundary: the client composes calls it can already make. The API stays the sole authority; the app clipboard is **in-memory and same-tab**, never the system clipboard (see §4.5).                                                                                                                                  |
+| Performance    | **Low — measured** (M2-T4)                   | N + M sequential HTTP writes, each taking the plan advisory lock; M audit rows. Wall clock is linear and per-request cost flat: 969 ms at 15+21, 2 898 ms at 60+90. The real constraint turned out to be the **per-route-handler** rate limiter, not latency — which set the caps (50 / 90) and answered C-4 as "M-B not taken". |
+| Infrastructure | **None**                                     | No new services, env vars beyond the `VITE_` flag, or CI services. One new Playwright project + CI step at M5 (the house pattern).                                                                                                                                                                                               |
+| Observability  | **Low** (M1–M4)                              | M audit rows per paste for the links, zero for the activities (§0.6) — an asymmetry M-B would fix with one `activity.duplicated` row. No new logs/metrics/traces.                                                                                                                                                                |
+| Testing        | **High**                                     | Pure-model unit tests incl. the **field census**; hook tests for the composite's rollback paths; component tests for both entry points and both flag states; a flag-on Playwright journey at M5.                                                                                                                                 |
 
 ### Dependencies
 
@@ -774,21 +818,21 @@ cheaper answer, and paste-at-cursor stays available as a later, separately-decid
 
 **Critical — an answer changes the design or the scope.**
 
-| #       | Question                                                                                                                         | Proposed default (what happens if you say nothing)                                                                                                                                                                                                      |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **C-1** | Is **Milestone 2 (duplicate a WBS band)** accepted as the multi-activity slice, decoupling this epic from the multi-select epic? | **Yes.** M1 and M2 ship with no dependency on multi-select; only M3 (arbitrary-set copy/paste) is gated on it, and M3 can fall back to the activities table's existing selection column.                                                                |
-| **C-2** | Does a copy carry the activity's **`code`**?                                                                                     | **No — the clone's code is blank.** A suffixed code corrupts a real numbering scheme (`A1010-2` is not an activity ID anyone uses); a blank one is honestly absent. Alternative on request: suffix like the import repair does.                         |
-| **C-3** | Do **resource assignments** carry in the first shipped slice, or in Milestone 4?                                                 | **Milestone 4.** M1–M3 copy the definition only and **say so** in the confirmation and the announcement. Carrying them earlier doubles the write count and pulls in `RESOURCE_ARCHIVED` and the exactly-one-driver invariant before the core is proven. |
-| **C-4** | Is **Milestone B** (the server-side duplicate endpoint) taken now, on a measured trigger, or not at all?                         | **On a measured trigger**, sequenced after M2: taken if the M2-T4 measurement exceeds the p95 gate, or if the M5 journey observes any partial paste. Taking it now is defensible and would need an ADR.                                                 |
+| #       | Question                                                                                                                         | Proposed default (what happens if you say nothing)                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C-1** | Is **Milestone 2 (duplicate a WBS band)** accepted as the multi-activity slice, decoupling this epic from the multi-select epic? | **Yes.** M1 and M2 ship with no dependency on multi-select; only M3 (arbitrary-set copy/paste) is gated on it, and M3 can fall back to the activities table's existing selection column.                                                                                                                                                                                                                                            |
+| **C-2** | Does a copy carry the activity's **`code`**?                                                                                     | **No — the clone's code is blank.** A suffixed code corrupts a real numbering scheme (`A1010-2` is not an activity ID anyone uses); a blank one is honestly absent. Alternative on request: suffix like the import repair does.                                                                                                                                                                                                     |
+| **C-3** | Do **resource assignments** carry in the first shipped slice, or in Milestone 4?                                                 | **Milestone 4.** M1–M3 copy the definition only and **say so** in the confirmation and the announcement. Carrying them earlier doubles the write count and pulls in `RESOURCE_ARCHIVED` and the exactly-one-driver invariant before the core is proven.                                                                                                                                                                             |
+| **C-4** | Is **Milestone B** (the server-side duplicate endpoint) taken now, on a measured trigger, or not at all?                         | **RESOLVED by measurement (M2-T4): not taken.** The trigger was "p95 > 2 s for 15 activities + 21 links, or any partial paste". Measured: **969 ms** and **no partial paste at any of three sizes**. Neither half fires, so M-B is deferred with the measurement attached — and the caps it informed (50 activities / 90 links) are what keep the composite inside the rate limiter. The M5 journey can still fire the second half. |
 
 **Non-critical — defaults stated, proceeding unless told otherwise.**
 
-| #    | Question                                             | Default                                                                                                                                                              |
-| ---- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q-5  | Naming form — `X (copy)` vs `Copy of X` vs `X-2`     | **`X (copy)` / `X (copy 2)`** — it sorts beside its original, which `Copy of X` does not (§2 Validation).                                                            |
-| Q-6  | Paste placement — below everything, or at the cursor | **Below the plan's lowest lane**, relative geometry preserved; Auto-arrange is the tidy-up. Paste-at-cursor is a later slice.                                        |
-| Q-7  | Set-size cap                                         | **Measured in M2-T4**; provisional 200 activities.                                                                                                                   |
-| Q-8  | Is copy pen-gated?                                   | **No** — copy writes nothing; the pen is taken at paste. Copy still requires `activity:create` so it is only offered to someone who could paste.                     |
-| Q-9  | Are **weighted steps** carried?                      | **Milestone 4**, with names + weights carried and every step's percent **zeroed** (name/weight is definition, percent is progress).                                  |
-| Q-10 | Does a copy carry **notes**?                         | **Never**, at any milestone. Re-attributing a person's dated statement to a different activity is a falsification, and the API could not preserve authorship anyway. |
-| Q-11 | Does duplicating a leaf keep its WBS parent?         | **Yes** — one rule covers both cases: remap the parent if it is in the copied set, otherwise carry it verbatim.                                                      |
+| #    | Question                                             | Default                                                                                                                                                                    |
+| ---- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q-5  | Naming form — `X (copy)` vs `Copy of X` vs `X-2`     | **`X (copy)` / `X (copy 2)`** — it sorts beside its original, which `Copy of X` does not (§2 Validation).                                                                  |
+| Q-6  | Paste placement — below everything, or at the cursor | **Below the plan's lowest lane**, relative geometry preserved; Auto-arrange is the tidy-up. Paste-at-cursor is a later slice.                                              |
+| Q-7  | Set-size cap                                         | **Measured (M2-T4): 50 activities and 90 internal links** — two caps, because they bound different rate-limit counters. The provisional 200 was overturned, not confirmed. |
+| Q-8  | Is copy pen-gated?                                   | **No** — copy writes nothing; the pen is taken at paste. Copy still requires `activity:create` so it is only offered to someone who could paste.                           |
+| Q-9  | Are **weighted steps** carried?                      | **Milestone 4**, with names + weights carried and every step's percent **zeroed** (name/weight is definition, percent is progress).                                        |
+| Q-10 | Does a copy carry **notes**?                         | **Never**, at any milestone. Re-attributing a person's dated statement to a different activity is a falsification, and the API could not preserve authorship anyway.       |
+| Q-11 | Does duplicating a leaf keep its WBS parent?         | **Yes** — one rule covers both cases: remap the parent if it is in the copied set, otherwise carry it verbatim.                                                            |

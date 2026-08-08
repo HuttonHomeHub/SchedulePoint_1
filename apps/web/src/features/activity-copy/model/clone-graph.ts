@@ -3,6 +3,10 @@ import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { freeCopyName } from './clone-naming';
 import {
   projectClone,
+  // The ONE date shift. This module had a byte-for-byte copy of it — the "two implementations drift
+  // invisibly" failure (ADR-0065) landed inside one feature, one file apart, in the epic whose own
+  // docblocks cite that rule. Today's two call sites stayed in step by accident, not construction.
+  shiftIsoDay,
   type ClonePlacement,
   type CloneCreateBody,
   type CloneMode,
@@ -43,15 +47,62 @@ import {
 export const MAX_LANE_INDEX = 10_000;
 
 /**
- * The largest set that may be copied in one action.
+ * The largest set that may be copied in one action — **measured, not asserted** (M2-T4,
+ * `scripts/measure-band-copy.mjs`).
  *
- * Provisional, and deliberately an order of magnitude below the `UpdatePositionsDto` 2 000-row
- * precedent: a paste is N sequential writes from a browser, each taking the plan advisory lock, so
- * the ceiling that matters is the planner's patience rather than the server's. The spec (§2 "Set
- * size") defers the real number to the M2-T4 measurement; until that runs this is the figure, and
- * the constant is the single place to change it.
+ * The provisional figure here was 200, chosen as "an order of magnitude below the
+ * `UpdatePositionsDto` 2 000-row precedent" on the theory that the binding constraint was the
+ * planner's patience. **It is not, and 200 would have guaranteed the failure the cap exists to
+ * prevent.** Measured against a real API with the pen held, per-request cost is flat and wall clock
+ * is linear — 969 ms for 15 activities + 21 links, 2 898 ms for 60 + 90 — so patience does not bind
+ * anywhere near 200. What binds is the API's own rate limiter: 100 requests per 60 s **per route
+ * handler** per IP (`RATE_LIMIT_LIMIT`, keyed by class + handler — see the measurement script's
+ * docblock for the evidence). A copy issues `N + 1` writes on the activity-create handler and `M` on
+ * the dependency-create handler, so a 200-activity copy 429s on its 100th create — and the web
+ * client has **no back-off** (`lib/api/client.ts` throws on any non-2xx), so that is a **partial
+ * paste**: half a band, mid-transaction-free, with links dangling.
+ *
+ * Hence 50, and the reasoning is per-handler request budget rather than activity count:
+ *
+ * - 51 creates leaves the create handler's window half free, so a planner may copy **twice** inside
+ *   one minute — which is a thing planners do — without the second one failing.
+ * - {@link MAX_CLONE_LINK_COUNT} bounds the other handler separately, because a dense band has more
+ *   links than activities (the measured 60-activity band carries 90) and the link handler is
+ *   therefore the one that overflows first. Capping activities alone would leave that unguarded.
+ *
+ * At 50 the measured wall clock is ≈1.5 s, comfortably inside the spec's 2 s gate.
  */
-export const MAX_CLONE_SET_SIZE = 200;
+export const MAX_CLONE_SET_SIZE = 50;
+
+/**
+ * The largest number of internal links one copy may recreate.
+ *
+ * A second cap rather than a bigger first one, because the two counts hit **different** rate-limit
+ * counters ({@link MAX_CLONE_SET_SIZE}) and a single number cannot bound both: a 50-activity band is
+ * fine at 40 links and over the line at 140. Set below 100 for the same headroom reason.
+ */
+export const MAX_CLONE_LINK_COUNT = 90;
+
+/**
+ * The largest number of **resource assignments** one copy may recreate.
+ *
+ * A third cap, for the third handler, and it exists because the first two were derived before the
+ * carriage did. The M2-T4 measurement timed a copy as `N + 1` activity creates plus `M` dependency
+ * creates — two handlers — and {@link MAX_CLONE_SET_SIZE} / {@link MAX_CLONE_LINK_COUNT} bound
+ * exactly those. M4 then added `POST …/activities/:id/assignments`, whose count is **the sum of
+ * assignments across the whole set** and is bounded by nothing: at the 50-activity cap, an average
+ * of just over two assignments each — a crew, a plant item, a material, which is ordinary
+ * resourcing — crosses 100 on that one handler and 429s.
+ *
+ * That failure is worse than the partial paste the caps exist to prevent, because the carriage has
+ * no back-off: the throw propagates and the composite rolls the **whole** copy back, late, after
+ * most of the work is done, on exactly the resourced bands M4 was built to serve.
+ *
+ * 90 for the same headroom reason as the link cap. Unlike the other two this cannot be checked by
+ * `planClone`, which never sees an assignment — so it is enforced by the composite, which now reads
+ * every source **before** it writes anything, making the refusal cost nothing to recover from.
+ */
+export const MAX_CLONE_ASSIGNMENT_COUNT = 90;
 
 /** Why a copy cannot proceed. Each case carries what a sentence needs to name the problem. */
 export type CloneRefusal =
@@ -59,6 +110,16 @@ export type CloneRefusal =
   /** Every member was a summary whose subtree is empty, so there is nothing to copy. */
   | { readonly kind: 'empty'; readonly reason: 'no-copyable-members' }
   | { readonly kind: 'too-many'; readonly size: number; readonly cap: number }
+  /** The set is small enough but carries more internal logic than one copy may recreate. */
+  | { readonly kind: 'too-many-links'; readonly links: number; readonly cap: number }
+  /**
+   * The set carries more resource assignments than one copy may recreate.
+   *
+   * Raised by the composite rather than by `planClone`, which never sees an assignment — but it
+   * lives in this union so the exhaustive `refusalMessage` switch still has to answer for it, and
+   * so every refusal a planner can meet is described in one place.
+   */
+  | { readonly kind: 'too-many-assignments'; readonly assignments: number; readonly cap: number }
   | {
       readonly kind: 'lane-ceiling';
       /** The highest lane a clone would need. */
@@ -211,6 +272,16 @@ export function planClone(input: PlanCloneInput): ClonePlanResult {
       lagCalendar: d.lagCalendar,
     }));
 
+  // Checked LAST, because it is the only refusal whose input the function has to build first: the
+  // internal-edge filter above is what decides how many links a copy actually recreates, and a
+  // count taken from the selection's raw dependency list would refuse copies that carry far fewer.
+  if (links.length > MAX_CLONE_LINK_COUNT) {
+    return {
+      ok: false,
+      refusal: { kind: 'too-many-links', links: links.length, cap: MAX_CLONE_LINK_COUNT },
+    };
+  }
+
   return { ok: true, creates, links };
 }
 
@@ -225,13 +296,7 @@ export function planClone(input: PlanCloneInput): ClonePlanResult {
 function anchorOf(source: ActivitySummary, offsetDays: number): string | null {
   const base = source.visualStart ?? source.earlyStart;
   if (base === null) return null;
-  return shiftDay(base, offsetDays);
-}
-
-function shiftDay(iso: string, days: number): string {
-  const at = new Date(`${iso}T00:00:00.000Z`);
-  at.setUTCDate(at.getUTCDate() + days);
-  return at.toISOString().slice(0, 10);
+  return shiftIsoDay(base, offsetDays);
 }
 
 /**

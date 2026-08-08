@@ -18,6 +18,8 @@ export {
   type ClonePlacement,
 } from './model/clone-projection';
 export {
+  MAX_CLONE_ASSIGNMENT_COUNT,
+  MAX_CLONE_LINK_COUNT,
   MAX_CLONE_SET_SIZE,
   MAX_LANE_INDEX,
   planClone,
@@ -28,3 +30,25 @@ export {
   type CloneRefusal,
   type PlanCloneInput,
 } from './model/clone-graph';
+export { refusalMessage } from './model/refusal-copy';
+export {
+  ASSIGNMENT_FIELD_DECISIONS,
+  projectAssignment,
+  type AssignmentCloneBody,
+} from './model/assignment-projection';
+export { STEP_FIELD_DECISIONS, projectSteps } from './model/step-projection';
+export {
+  missingNote,
+  resolveClipboard,
+  type ClipboardContents,
+  type ResolvedClipboard,
+} from './model/clipboard';
+export { useClipboardKeybindings } from './use-clipboard-keybindings';
+export {
+  useCloneCarriage,
+  type CarriageResult,
+  type CloneCarriage,
+  type SkippedAssignment,
+} from './api/use-clone-carriage';
+export { bandMembers, type BandCopyCounts } from './model/band-members';
+export { bandCopyConfirmation, type BandCopyCopy } from './model/confirm-copy';
