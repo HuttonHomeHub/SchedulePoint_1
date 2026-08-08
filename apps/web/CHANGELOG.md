@@ -1,5 +1,59 @@
 # @repo/web
 
+## 0.76.0
+
+### Minor Changes
+
+- [#259](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/259) [`1d260f1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1d260f12002f52f7e19477aa1cbf3c72131d5696) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas multi-select — the bulk-operation foundations (still dark; behind
+  `VITE_CANVAS_MULTI_SELECT`, default off).
+
+  Adds the pure and data-layer half of the three bulk operations: a mode-aware row builder that turns
+  a plural drag into complete placement rows (EARLY pins an `SNET`, Visual writes `visualStart`, a
+  lane-only move leaves every date field alone), a chain planner that orders a selection by time and
+  refuses one that would close a cycle **against the resulting graph**, the client hooks for the
+  placements / bulk-delete / restore-batch endpoints, and the two undo commands — a bulk move that
+  threads versions through every batch response, and a bulk delete whose undo is one id-stable batch
+  restore so the links between the deleted activities survive it.
+
+- [#259](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/259) [`1d260f1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1d260f12002f52f7e19477aa1cbf3c72131d5696) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas multi-select — the bulk operations (`VITE_CANVAS_MULTI_SELECT`, now default on).
+
+  A plural selection can now do the three things it exists for. A bulk selection bar appears at two
+  selected, in the chrome above the diagram rather than floating over it: it names the primary (what
+  single-activity actions still act on), states **before** a drag that an Early-mode move will pin a
+  start-no-earlier-than on every selected activity, and shades each action with a reason it is
+  `aria-describedby`-linked to rather than merely next to.
+
+  **Delete** sweeps the set as one batch and undoes as one step — an id-stable batch restore, so the
+  dependencies _between_ the deleted activities come back with them. **Link in sequence** previews the
+  order with names and arrows before writing anything, offers Reverse, orders by time rather than by
+  which bar a marquee happened to touch first, and refuses a chain that would close a loop against the
+  plan as it stands rather than discovering it half-way through the write.
+
+  **Now on by default.** The flag flipped once the flag-on journey ran green against a real API with
+  the edit lock enforced. It found four things first: the bulk bar was not wired into the layout the
+  app actually renders; a bulk delete dropped keyboard focus to the page body, which failed WCAG 2.4.3
+  and silently disabled Ctrl+Z; the "2 activities deleted" announcement was overwritten by the row the
+  focus landed on; and Reverse persisted into the next preview, so a cancelled reversal could write
+  the following chain backwards. Set `VITE_CANVAS_MULTI_SELECT=false` to roll back — the selection is
+  then structurally singular and the canvas, toolbar and accessibility tree are exactly as before.
+
+- [#259](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/259) [`1d260f1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1d260f12002f52f7e19477aa1cbf3c72131d5696) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas multi-select — pointer gestures and keyboard parity (behind `VITE_CANVAS_MULTI_SELECT`,
+  default off).
+
+  Ctrl/Cmd-click toggles a bar in or out of the selection, Shift-click extends a span in plan order,
+  and a marquee sweep selects what its rectangle covers — armed by holding Ctrl/Cmd on empty ground,
+  or by a new **Marquee select** tool on the diagram toolbar. The tool joins the ADR-0064 arm/disarm
+  contract (Escape returns to Select, the mode band states it, the transition is announced) and is
+  deliberately not pen-gated: selecting is a read, so a Viewer can sweep.
+
+  The parallel activity listbox becomes multi-selectable in step: `Space` toggles the focused
+  activity (its logic summary moves to `i`), `Shift+↑/↓` extends, `Cmd/Ctrl+A` selects everything, and
+  `Escape` clears the selection after any armed tool has been closed. `aria-selected` reflects the
+  whole set rather than the keyboard cursor.
+
+  Flag-off, every one of these paths is unreachable and the canvas paints call-for-call what it did
+  before.
+
 ## 0.75.0
 
 ### Minor Changes
