@@ -166,6 +166,11 @@ once it was green:
    screen saying so — the ADR-0064 report (a link recorded the wrong way round) reappearing as a
    state nobody set.
 
+**The specialist-agent review pass this epic's predecessors all ran was not run here**, and the flip
+went ahead without it — on the journey, the flag-off parity suites, the counting-stub draw budget
+and the full pre-push gate. That is a gap rather than a judgement that the pass was unnecessary, and
+it is `docs/TECH_DEBT.md` **#107**, which says what the remaining gates do and do not cover.
+
 Two of the journey's own assumptions were also wrong and both corrections improved it: the fixture
 needed **distinct start dates**, because five unconstrained activities all start at the data date
 and the chain then orders **alphabetically** — a correct behaviour that would have made the

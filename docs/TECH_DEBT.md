@@ -1472,3 +1472,28 @@ re-exported around it_ — is the thing the next step needs to follow.
 
 **Not urgent.** Nothing is broken: `render-model.ts` is 1,500 lines rather than 1,660 and every
 consumer is unchanged. This is the shape of the remaining work, written down while it is fresh.
+
+## #107 — ADR-0080 shipped without the specialist-agent review pass
+
+**Found:** 2026-08-08, closing the canvas multi-select epic (ADR-0080 M5).
+
+Every enablement milestone since ADR-0060 has run four to six specialist reviewers
+(`accessibility`, `ux`, `component`, `api`, `security`, `performance`) over the combined epic diff
+before the flag flip, and each one found blocking defects that had already passed a human read —
+ADR-0064 §7 records five, ADR-0067 M4 ten, ADR-0073 C4 six. **This epic did not run them**, because
+the session it was built in was instructed not to invoke subagents. That is a real gap, and it is
+recorded rather than glossed: the flip went ahead on the strength of the flag-on journey
+(`apps/web/e2e-multi-select/`), the flag-off parity suites, the counting-stub draw-budget gate and
+the full pre-push gate, all green.
+
+**What that does and does not cover.** The journey drives the whole gesture against a real API with
+the pen enforced, which is where the four defects §9 of the ADR records were found — so the
+"lit but inert / one host and not its neighbour" class was exercised. What no gate here covers is
+the reviewers' own lens: the accessibility pass over the bulk bar's shading and reason wiring beyond
+the `aria-describedby` link asserted in `BulkSelectionBar.test.tsx`, the UX pass over the two
+dialogs' copy and state coverage, and the component pass over `BulkSelectionBar` / `LinkChainDialog`
+as reusable surfaces.
+
+**The fix** is one review pass over the ADR-0080 diff (`10ceb5d..618563b` plus its predecessors) with
+those four reviewers, folding blocking findings as its own slice. Rollback is available meanwhile:
+`VITE_CANVAS_MULTI_SELECT=false` restores the singular selection byte-for-byte.
