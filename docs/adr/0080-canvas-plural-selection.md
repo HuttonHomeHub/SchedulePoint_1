@@ -128,8 +128,13 @@ invalidation for every lane drag in the product.
 - The floating per-object bar is **replaced** above one selected, not joined. Per-object actions
   (Edit, Open logic) have no meaning for twelve bars, so they are **absent** rather than shaded, and
   the bulk bar names the primary instead.
-- An EARLY-mode bulk move pins an `SNET` on every selected activity. At twelve that stops being a
-  side effect and becomes a plan-shaping decision, so the bar states it **before** the drag.
+- An EARLY-mode bulk move would pin an `SNET` on every selected activity — at twelve that stops
+  being a side effect and becomes a plan-shaping decision. **The plural drag is not wired.** Its
+  row builder, its undo command and its `PATCH …/activities/placements` endpoint all landed and are
+  tested; the gesture machine still repositions one bar. The bar carried the caveat sentence anyway
+  until the component review over this diff caught it, which is a false assertion rather than an
+  inert control — removed, and recorded as `docs/TECH_DEBT.md` **#108** with the caveat to be
+  restored alongside the gesture.
 - The interaction canvas now mounts for read-only viewers flag-on (§3). The flag-**off** parity
   suites cannot see that by construction, so the cost was **read out of the loop** rather than
   asserted: `TsldCanvas.tsx:1330-1331` takes the overlay context and then returns unless
@@ -166,10 +171,31 @@ once it was green:
    screen saying so — the ADR-0064 report (a link recorded the wrong way round) reappearing as a
    state nobody set.
 
-**The specialist-agent review pass this epic's predecessors all ran was not run here**, and the flip
-went ahead without it — on the journey, the flag-off parity suites, the counting-stub draw budget
-and the full pre-push gate. That is a gap rather than a judgement that the pass was unnecessary, and
-it is `docs/TECH_DEBT.md` **#107**, which says what the remaining gates do and do not cover.
+**The specialist-agent pass then ran, and found five more defects** — which is why `docs/TECH_DEBT.md`
+#107 is closed rather than standing. Security passed; API found `restore-batch` returning **201**
+while its own decorator and `docs/API.md` said 200, with the e2e having **baked the wrong status in**
+rather than catching it. The other three blocked:
+
+- **The bulk bar asserted a gesture nobody wired** (component) — §Consequences, and TECH_DEBT #108.
+- **The Link trigger disabled itself for exactly the case its preview explains** (ux). Gated on
+  `chain.refusal` as well as the write right, with the reason "open the preview to see why" — on the
+  button that opens the preview. For the two refusals that happen, over the cap and a closed loop,
+  the dialog built to explain them was unreachable. The gate is now the write right only.
+- **`aria-activedescendant` named a different row from the one `Enter` acted on** (accessibility,
+  reproduced). `Ctrl+A` moves the primary to the last row without moving the cursor; every
+  single-activity listbox command now acts on the **cursor**, which is what the attribute promises.
+  A sighted keyboard user never saw it, because the canvas paints no separate cursor ring — its ring
+  and its Enter target agree by construction, which is what let it past a visual read. Fixing it
+  surfaced a second: `[`/`]` moved the selection without the cursor, so a second press re-read the
+  same neighbour.
+- Both ux and accessibility independently found the **orphaned `aria-describedby`**: one status line,
+  two per-button ids, so in the commonest gated state the first control in tab order pointed at an
+  element that was not in the DOM and was shaded with no reason at all. One shared id now.
+- `LinkChainDialog`'s refusal and write-failure notices carried **no `role`**, so they were on screen
+  and silent — `NoticeStrip` deliberately does not derive one from its tone.
+
+Four of the five are the shape this repo keeps finding: one correct pattern applied to a control and
+not its neighbour. Every fix carries a regression test.
 
 Two of the journey's own assumptions were also wrong and both corrections improved it: the fixture
 needed **distinct start dates**, because five unconstrained activities all start at the data date

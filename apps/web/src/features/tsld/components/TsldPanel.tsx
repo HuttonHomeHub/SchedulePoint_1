@@ -1341,6 +1341,15 @@ export function TsldPanel({
   /**
    * The resolved keyboard cursor. Flag-off it **is** `selectedId`, expression for expression, so
    * `aria-activedescendant` and every keyboard branch below are byte-for-byte the prior surface.
+   *
+   * **Every single-activity command issued from this listbox acts on the CURSOR, not the primary.**
+   * The two can diverge — `Ctrl/Cmd+A` moves the primary to the last row in plan order without
+   * moving the cursor, and `Space` can deselect the row the cursor is on — and when they did, the
+   * accessibility review over this epic's diff reproduced `aria-activedescendant` naming "Cure"
+   * while `Enter` opened the logic editor for "Pour". That is WCAG 4.1.2: the exposed active
+   * descendant has to identify what widget operations affect. A sighted keyboard user never saw it,
+   * because the canvas paints no separate cursor ring — the ring and the Enter target agreed by
+   * construction, which is what let it past a visual read.
    */
   const activeId: string | null = !CANVAS_MULTI_SELECT_ENABLED
     ? selectedId
@@ -1530,7 +1539,7 @@ export function TsldPanel({
     // open-logic path below while the tool is armed.
     if (editingEnabled && mode === 'loe' && onLoeSpan && event.key === 'Enter') {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       if (loeStartId === null) {
         setLoeStartId(current.id);
@@ -1564,7 +1573,7 @@ export function TsldPanel({
       event.key === 'Enter'
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       if (linkPickedId === null) {
         setLinkPickedId(current.id);
@@ -1590,7 +1599,7 @@ export function TsldPanel({
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
     // creating links, so link-draw introduces no pointer-only capability (WCAG 2.1.1).
     if (event.key === 'Enter' && onOpenLogic) {
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (current) {
         event.preventDefault();
         onOpenLogic(current);
@@ -1608,11 +1617,15 @@ export function TsldPanel({
     // so driving/logic context is delivered exactly when a planner traces the path (M5 §2/§3).
     if (event.key === '[' || event.key === ']') {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       const dir = event.key === '[' ? 'pred' : 'succ';
       const neighbour = chainNeighbour(current.id, dependencies, dir);
-      if (neighbour) setSelectedId(neighbour.id);
+      // `select`, not `setSelectedId`: this is a NAVIGATION command, so the keyboard cursor has to
+      // follow the selection. Setting only the selection left `aria-activedescendant` on the row
+      // the planner walked away from — and made a second press re-read the same neighbour, because
+      // the walk starts from the cursor. Same root cause as the WCAG 4.1.2 finding above.
+      if (neighbour) select(neighbour.id);
       announce(announceChainStep(dir, neighbour));
       return;
     }
@@ -1642,7 +1655,7 @@ export function TsldPanel({
         }
         return;
       }
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
       return;
     }
@@ -1706,7 +1719,7 @@ export function TsldPanel({
       (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current || !isResizeEligibleType(current.type)) return;
       durationNudge(current, event.key === 'ArrowRight' ? 1 : -1);
       return;
@@ -1724,7 +1737,7 @@ export function TsldPanel({
         event.key === 'ArrowRight')
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       if (event.key === 'ArrowUp') nudge(current, 'lane', -1);
       else if (event.key === 'ArrowDown') nudge(current, 'lane', 1);
@@ -1736,7 +1749,7 @@ export function TsldPanel({
     // in-canvas keyboard parity for create (the activities-table dialog is the 2.1.1 alternative).
     if (editingEnabled && (event.key === 'n' || event.key === 'N')) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       const startDay =
         current?.earlyStart && dataDate ? daysBetween(dataDate, current.earlyStart) : 0;
       clearConflict();
@@ -2310,20 +2323,18 @@ export function TsldPanel({
         <BulkSelectionBar
           count={selection.ids.length}
           primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
-          moveCaveat={
-            // Stated BEFORE the drag, and only where it is true. In Visual mode a move pins
-            // nothing, so a caveat there would be a warning about something that does not happen.
-            bulk.gate.writable && barDateSource !== 'visual' && selection.ids.length > 1
-              ? `Moving these will pin a start-no-earlier-than date on all ${selection.ids.length}.`
-              : null
-          }
           link={{
-            enabled: bulk.gate.writable && chain.refusal === null,
-            reason: !bulk.gate.writable
-              ? bulk.gate.reason
-              : chain.refusal
-                ? 'These can’t be linked in sequence — open the preview to see why.'
-                : null,
+            // Gated on the WRITE RIGHT only, deliberately — never on the chain's own refusal.
+            //
+            // It used to be gated on both, with the reason "open the preview to see why". The
+            // preview is opened by this button, so for the two refusals that actually happen — a
+            // chain over the 50-link cap, and one that would close a cycle — the sentence told a
+            // planner to do the thing the shading prevented, and the dialog built to explain the
+            // refusal was unreachable in exactly the state it exists for. Found by the UX review
+            // over this epic's diff. `LinkChainDialog` owns the refusal: it keeps the ordered
+            // preview on screen and names the reason beside it.
+            enabled: bulk.gate.writable,
+            reason: bulk.gate.writable ? null : bulk.gate.reason,
           }}
           remove={{
             enabled: bulk.gate.writable,

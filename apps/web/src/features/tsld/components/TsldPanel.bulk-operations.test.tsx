@@ -167,6 +167,58 @@ describe('the panel drives the bulk bar', () => {
     );
   });
 
+  /**
+   * The regression test for the UX review's blocking finding. The Link trigger used to be gated on
+   * `chain.refusal === null` as well as the write right, with the reason "open the preview to see
+   * why" — on the very button that opens the preview. For the two refusals that happen (over the
+   * cap, or a chain that would close a loop) the dialog built to explain the refusal was
+   * unreachable in exactly the state it exists for.
+   */
+  it('opens the preview even when the chain is refused — the dialog owns the refusal', () => {
+    const cycle: DependencySummary[] = [
+      {
+        id: 'd1',
+        planId: 'p1',
+        predecessor: { id: 'c', name: 'Cure', code: null },
+        successor: { id: 'a', name: 'Excavate', code: null },
+        type: 'FS',
+        lagDays: 0,
+        lagMinutes: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+        isDriving: true,
+        version: 1,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ];
+    render(
+      <TsldPanel
+        activities={ACTIVITIES}
+        dependencies={cycle}
+        dataDate="2026-01-01"
+        canEdit
+        bulk={{
+          gate: { writable: true, reason: null },
+          deleteMany: vi.fn(() => Promise.resolve()),
+          linkChain: vi.fn(() => Promise.resolve()),
+        }}
+        fill
+      />,
+    );
+    const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+
+    const trigger = screen.getByRole('button', { name: /link in sequence/i });
+    expect(trigger).toHaveAttribute('aria-disabled', 'false');
+    fireEvent.click(trigger);
+
+    // The preview is on screen WITH the reason beside it — not replaced by it, so the planner can
+    // see which two activities closed the loop.
+    expect(screen.getByTestId('chain-preview')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/circular dependency/i);
+  });
+
   it('previews the chain in date order and writes exactly that order', async () => {
     const { list, operations } = renderPanel();
     fireEvent.keyDown(list, { key: 'a', ctrlKey: true });

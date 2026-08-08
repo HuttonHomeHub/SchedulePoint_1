@@ -204,6 +204,12 @@ export class PlanActivitiesController {
   }
 
   @Post('restore-batch/:batchId')
+  // 200, not Nest's POST default of 201: this restores rows that already exist, by their own ids,
+  // and returns them — the `POST :id/<verb>` sub-action rule `docs/API.md` states and the sibling
+  // single-activity `restore` already follows. It shipped as 201 with `@ApiOkResponse` beside it
+  // and `docs/API.md` saying 200, so the generated OpenAPI was wrong; the e2e had baked the wrong
+  // status in rather than catching it. Found by the API review over this epic's diff.
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Restore every activity soft-deleted under one batch id (Planner or Org Admin).',
     description:

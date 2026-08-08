@@ -193,6 +193,38 @@ describe('the parallel listbox is multi-selectable', () => {
     expect(announceSpy).toHaveBeenCalledExactlyOnceWith('0 predecessors, 0 successors');
   });
 
+  /**
+   * The regression test for the accessibility review's WCAG 4.1.2 finding, reproduced against the
+   * real component: `Ctrl+A` moves the primary to the LAST row in plan order without moving the
+   * cursor, and every single-activity command used to act on the primary — so
+   * `aria-activedescendant` named one row while `Enter` opened the logic editor for another. A
+   * sighted keyboard user never saw it: the canvas paints no separate cursor ring, so its ring and
+   * its Enter target agree by construction.
+   */
+  it('Enter acts on the row `aria-activedescendant` names, not on the primary', () => {
+    const opened: string[] = [];
+    render(
+      <TsldPanel
+        activities={ACTIVITIES}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit={false}
+        onOpenLogic={(a) => opened.push(a.name)}
+        fill
+      />,
+    );
+    const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: 'ArrowDown' }); // cursor on "Pour"
+    const cursor = list.getAttribute('aria-activedescendant');
+
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true }); // primary jumps to the last row
+    expect(list.getAttribute('aria-activedescendant')).toBe(cursor); // cursor did NOT move
+
+    fireEvent.keyDown(list, { key: 'Enter' });
+    expect(opened).toEqual(['Pour']);
+  });
+
   it('a plain arrow still replaces the selection — extending is the modifier, not the default', () => {
     const list = renderPanel();
     fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });

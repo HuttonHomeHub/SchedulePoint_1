@@ -1,4 +1,5 @@
 import { ArrowRight, RotateCcw } from 'lucide-react';
+import { useId } from 'react';
 
 import type { ChainCandidate, ChainRefusal } from '../model/chain-order';
 
@@ -59,6 +60,11 @@ export function LinkChainDialog({
 }): React.ReactElement {
   const linkCount = Math.max(0, ordered.length - 1);
   const blocked = refusal !== null || pending;
+  // The Confirm button is shaded whenever a refusal or an error is on screen, so it points at
+  // whichever one is rendered — adjacency is association for a sighted reader and nothing at all
+  // in the accessibility tree.
+  const noticeId = useId();
+  const describedBy = refusal !== null || error !== null ? noticeId : undefined;
 
   return (
     <Dialog
@@ -72,8 +78,22 @@ export function LinkChainDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        {refusal ? <NoticeStrip tone="warning" message={refusalMessage(refusal)} /> : null}
-        {error ? <NoticeStrip tone="warning" message={error} /> : null}
+        {/*
+          `role="alert"` on both: `NoticeStrip` deliberately does not derive a role from its tone
+          ("the role is the caller's"), so without this the refusal and the write failure are plain
+          divs — on screen and silent to assistive tech. Every sibling failure surface in the
+          product passes it (`EditConflictBanner`, `WbsBulkAssignBar`, `ConfirmDialog`'s error
+          path); these two were the exception until the UX review over this epic's diff.
+        */}
+        {refusal ? (
+          <NoticeStrip
+            id={noticeId}
+            role="alert"
+            tone="warning"
+            message={refusalMessage(refusal)}
+          />
+        ) : null}
+        {error ? <NoticeStrip id={noticeId} role="alert" tone="warning" message={error} /> : null}
 
         {/*
           An ordered list, not a paragraph of arrows: the sequence IS the thing being confirmed, and
@@ -108,6 +128,7 @@ export function LinkChainDialog({
               type="button"
               aria-disabled={blocked}
               aria-busy={pending}
+              {...(describedBy ? { 'aria-describedby': describedBy } : {})}
               onClick={(event) => {
                 if (blocked) {
                   event.preventDefault();

@@ -27,7 +27,6 @@ function renderBar(over: Partial<React.ComponentProps<typeof BulkSelectionBar>> 
     <BulkSelectionBar
       count={5}
       primaryName="Pour slab"
-      moveCaveat={null}
       link={open}
       remove={open}
       onLink={onLink}
@@ -114,23 +113,56 @@ describe('inertness is real, not just announced', () => {
   });
 });
 
-describe('the move caveat', () => {
-  it('is stated before the drag, not reported after it', () => {
-    renderBar({ moveCaveat: 'Moving these will pin a start-no-earlier-than date on all 5.' });
-    expect(screen.getByTestId('bulk-selection-bar')).toHaveTextContent(
-      /pin a start-no-earlier-than date on all 5/,
-    );
-  });
-
-  it('yields to a reason that STOPS an action — one line, and the blocking one wins', () => {
-    // A planner who cannot delete needs that before they need to know what a move would pin.
+describe('the reason is reachable from every control it explains', () => {
+  /**
+   * The regression test for a WCAG 4.1.2 failure both the accessibility and the UX review
+   * reproduced. The bar renders ONE status line, but each button used to carry its own `useId()`;
+   * in the commonest gated state — no pen, so both actions shut for the same reason — only the
+   * Delete button's id was rendered, and Link (first in tab order) pointed at an id that was not in
+   * the DOM. A screen-reader user heard "Link in sequence, dimmed" and no reason at all.
+   */
+  it('points BOTH shut actions at the one rendered status line', () => {
     renderBar({
-      moveCaveat: 'Moving these will pin a start-no-earlier-than date on all 5.',
+      link: shut('Take the edit lock to change this plan.'),
       remove: shut('Take the edit lock to change this plan.'),
     });
+    for (const name of [/link in sequence/i, /^delete$/i]) {
+      const id = screen.getByRole('button', { name }).getAttribute('aria-describedby');
+      expect(id, `${String(name)} has no aria-describedby`).not.toBeNull();
+      expect(
+        document.getElementById(id ?? ''),
+        `${String(name)} points at a missing element`,
+      ).not.toBeNull();
+    }
+  });
+
+  it('points at nothing when nothing is shut — an empty reference is worse than none', () => {
+    renderBar({});
+    for (const name of [/link in sequence/i, /^delete$/i]) {
+      expect(screen.getByRole('button', { name })).not.toHaveAttribute('aria-describedby');
+    }
+  });
+});
+
+describe('the status line', () => {
+  it('states the reason that STOPS an action, and states it once', () => {
+    renderBar({ remove: shut('Take the edit lock to change this plan.') });
     const bar = screen.getByTestId('bulk-selection-bar');
     expect(bar).toHaveTextContent(/take the edit lock/i);
-    expect(bar).not.toHaveTextContent(/start-no-earlier-than/);
+  });
+
+  /**
+   * The bar used to carry a third sentence here — "moving these will pin a start-no-earlier-than
+   * date on all N" — for a plural drag that was never wired. Its model, its undo command and its
+   * endpoint all landed; the gesture did not, so the sentence described something a planner could
+   * not do. Removed rather than left (`docs/TECH_DEBT.md` #108), and asserted absent so it cannot
+   * come back ahead of the gesture that makes it true.
+   */
+  it('says nothing about moving, because the plural drag is not wired yet', () => {
+    renderBar({});
+    expect(screen.getByTestId('bulk-selection-bar')).not.toHaveTextContent(
+      /start-no-earlier-than/i,
+    );
   });
 });
 

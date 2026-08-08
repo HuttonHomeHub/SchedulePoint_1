@@ -500,7 +500,10 @@ describe.skipIf(!hasDatabase)('Activity batch operations (e2e)', () => {
       const batchId = deleted.body.data.deleteBatchId as string;
       expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(0);
 
-      const restored = await actor.agent.post(restoreBatchUrl(planId, batchId)).expect(201);
+      // 200, not 201: this restores existing rows by their own ids and returns them (docs/API.md's
+      // `POST :id/<verb>` sub-action rule). The suite asserted 201 for a while, which pinned the
+      // defect rather than catching it.
+      const restored = await actor.agent.post(restoreBatchUrl(planId, batchId)).expect(200);
       expect(restored.body.data).toHaveLength(12);
       // Id-stable — the point of the endpoint.
       expect(new Set((restored.body.data as Array<{ id: string }>).map((r) => r.id))).toEqual(
@@ -526,7 +529,7 @@ describe.skipIf(!hasDatabase)('Activity batch operations (e2e)', () => {
         .expect(200);
       await actor.agent
         .post(restoreBatchUrl(planId, deleted.body.data.deleteBatchId as string))
-        .expect(201);
+        .expect(200);
 
       const events = await prisma.auditEvent.findMany({
         where: { organizationId: orgId, action: 'activity.restored' },

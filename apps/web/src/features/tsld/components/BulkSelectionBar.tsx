@@ -42,14 +42,6 @@ export interface BulkSelectionBarProps {
   count: number;
   /** The primary's name — what the singular affordances elsewhere still act on. */
   primaryName: string | null;
-  /**
-   * The caveat stated **before** the drag, not reported after it.
-   *
-   * In EARLY mode a move pins a Start-No-Earlier-Than on every selected activity. At one bar that
-   * is a side effect; at twelve it is a plan-shaping decision, and a planner is entitled to know
-   * which of those they are about to make. `null` in Visual mode, where a move pins nothing.
-   */
-  moveCaveat: string | null;
   link: BulkActionGate;
   remove: BulkActionGate;
   onLink: () => void;
@@ -74,7 +66,17 @@ function BulkAction({
   onActivate: () => void;
   icon: React.ReactNode;
   label: string;
-  reasonId: string;
+  /**
+   * The id of the ONE status line, or undefined when nothing is on screen to point at.
+   *
+   * Undefined rather than a per-button id, because a per-button id is only valid if that button's
+   * own reason is the one being rendered — and with a single status line at most one of them ever
+   * is. The UX review over this epic's diff found the earlier version pointing the Link button (the
+   * first control in tab order) at an id that was not in the DOM, so the first control a
+   * screen-reader user reached was shaded with **no** exposed reason: exactly the defect this
+   * component's docblock claims to fix. `WbsBulkAssignBar` had it right — one shared status id.
+   */
+  reasonId: string | undefined;
   tone?: 'destructive';
 }): React.ReactElement {
   const blocked = !gate.enabled || busy;
@@ -85,7 +87,7 @@ function BulkAction({
       variant={tone === 'destructive' ? 'destructive' : 'secondary'}
       aria-disabled={blocked}
       aria-busy={busy}
-      {...(gate.reason ? { 'aria-describedby': reasonId } : {})}
+      {...(blocked && reasonId ? { 'aria-describedby': reasonId } : {})}
       onClick={(event) => {
         if (blocked) {
           event.preventDefault();
@@ -104,7 +106,6 @@ function BulkAction({
 export function BulkSelectionBar({
   count,
   primaryName,
-  moveCaveat,
   link,
   remove,
   onLink,
@@ -112,17 +113,24 @@ export function BulkSelectionBar({
   onClear,
   busy = false,
 }: BulkSelectionBarProps): React.ReactElement | null {
-  const linkReasonId = useId();
-  const removeReasonId = useId();
+  const statusId = useId();
   // Below two this is not a plural selection and the floating per-object bar is the right surface.
   // Rendering nothing (rather than an empty strip) is what keeps the flag-off parity claim simple:
   // at one selected, the canvas is exactly what it was.
   if (count < 2) return null;
 
-  // ONE line, and it prefers the sentence that stops an action over the one that merely warns:
-  // a planner who cannot delete needs to know that before they need to know what a move will pin.
-  const status = !remove.enabled ? remove.reason : !link.enabled ? link.reason : moveCaveat;
-  const statusId = !remove.enabled ? removeReasonId : !link.enabled ? linkReasonId : undefined;
+  // ONE line, and it prefers the sentence that stops an action over the one that merely warns.
+  //
+  // It used to fall through to a third sentence — "moving these will pin a start-no-earlier-than
+  // date on all N" — which was **removed rather than kept**: the plural drag that would pin them
+  // was never wired (its model, its command and its endpoint all landed; the gesture did not), so
+  // the bar was telling a planner what a gesture they cannot perform would do. The component
+  // review over this epic's diff caught it. That is worse than the "lit but inert" class this repo
+  // keeps finding — an inert control does nothing, a false sentence asserts something. The prop
+  // comes back with the gesture (`docs/TECH_DEBT.md` #108), not before it.
+  const status = !remove.enabled ? remove.reason : !link.enabled ? link.reason : null;
+  // One id, shared by whichever controls are shut — see `BulkAction`'s `reasonId` docblock.
+  const describedBy = status === null ? undefined : statusId;
 
   return (
     <NoticeStrip
@@ -137,7 +145,7 @@ export function BulkSelectionBar({
       <div className="flex flex-wrap items-center gap-2">
         {status ? (
           <p
-            {...(statusId ? { id: statusId } : {})}
+            id={statusId}
             className="text-muted-foreground text-sm"
             // Announced as it changes: the gates move with the pen, and a planner who has just lost
             // the lock is told once, here, rather than discovering it by pressing a shaded button.
@@ -150,7 +158,7 @@ export function BulkSelectionBar({
           gate={link}
           busy={busy}
           onActivate={onLink}
-          reasonId={linkReasonId}
+          reasonId={describedBy}
           icon={<Link2 aria-hidden="true" className="size-4" />}
           label="Link in sequence…"
         />
@@ -158,7 +166,7 @@ export function BulkSelectionBar({
           gate={remove}
           busy={busy}
           onActivate={onDelete}
-          reasonId={removeReasonId}
+          reasonId={describedBy}
           tone="destructive"
           icon={<Trash2 aria-hidden="true" className="size-4" />}
           label="Delete"

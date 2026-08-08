@@ -1423,3 +1423,27 @@ export const CANVAS_SEARCH_NAV_ENABLED =
  */
 export const CANVAS_MULTI_SELECT_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_MULTI_SELECT);
+
+/**
+ * **Activity copy, paste and duplicate** (spec + plan in `docs/specs/activity-copy-paste/`). When
+ * on, a Planner holding the pen can duplicate one activity, duplicate a whole WBS band with the
+ * logic inside it, and copy/paste an arbitrary selected set — each as one action and one undoable
+ * step, composed entirely from write paths that already ship.
+ *
+ * **Not derived.** Unlike {@link CANVAS_MULTI_SELECT_ENABLED} there is no chord collision to make
+ * unrepresentable: the two accelerators this epic takes (`Ctrl/Cmd+C` / `Ctrl/Cmd+V`) are unbound
+ * in the plan workspace today, and the first two milestones — duplicate one activity, duplicate a
+ * band — need no selection beyond the single one the canvas and the table have always had. Only
+ * the arbitrary-set slice reads a plural selection, and it reads it through the shipped model
+ * rather than through this flag.
+ *
+ * **Default-off** until the epic's M5 gate pass (the specialist reviews plus a flag-on journey
+ * against a real API with the pen enforced). Flag-off there is no Duplicate item in the row menu
+ * or on the canvas selection bar, no keyboard handler is installed, and no clone code is reachable
+ * — the surfaces are byte-for-byte today's, pinned by parity suites that land with each surface
+ * rather than at the end.
+ *
+ * Frontend-only for M0–M4: no API, DTO, schema or migration, and the CPM engine is not imported,
+ * so the ADR-0034 recalculation parity gate is untouched by construction.
+ */
+export const ACTIVITY_COPY_PASTE_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_COPY_PASTE);
