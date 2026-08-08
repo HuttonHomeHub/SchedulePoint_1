@@ -870,3 +870,59 @@ export function bulkDeleteCommand(params: {
     },
   };
 }
+
+/**
+ * Reverse a **paste / duplicate** — the whole copy as ONE reversible step
+ * (`docs/specs/activity-copy-paste/` M1-T1, ADR-0048).
+ *
+ * **Undo is a bulk delete; redo is the id-stable batch restore.** The plan for this milestone said
+ * redo should "re-compose with new ids", and it is written the other way round on purpose: the
+ * clones are linked to *each other* (the internal edges `planClone` carries), and re-creating N
+ * activities restores the bars while silently losing the logic between them — the CQ-4 argument
+ * that made {@link bulkDeleteCommand} a restore rather than N re-creates, one gesture along. The
+ * batch id the undo produces is exactly what makes the redo id-stable.
+ *
+ * There is deliberately **no compose-from-inputs fallback**. One was written and removed: `redo`
+ * only ever runs after `undo` (that is what puts a command on the redo stack), and `undo` always
+ * yields a batch id, so the fallback branch was unreachable — a plausible-looking path that no test
+ * could exercise and no planner could reach.
+ *
+ * **Versions are captured once, at creation, and that is safe** — the recalculation a paste triggers
+ * writes only the engine-owned columns and never `version`
+ * (`apps/api/src/modules/schedule/schedule.repository.ts:242`, read rather than assumed, because if
+ * it *did* bump them every paste-undo would 409 on the happy path). A restore **does** bump them,
+ * so the restored rows' versions are threaded back for the next undo.
+ *
+ * Idempotent in both directions: a double-undo cannot double-delete and a double-redo cannot
+ * double-create, which is the {@link existenceToggle} contract expressed over a set.
+ */
+export function pasteActivitiesCommand(params: {
+  /** The clones just created, in creation order (parent before child). */
+  created: readonly { id: string; version: number }[];
+  bulkDelete: BulkDeleteActivitiesFn;
+  restoreBatch: RestoreDeleteBatchFn;
+  /** Concrete, per the S1 entity-naming convention: `Duplicate “Excavate”` / `Copy 15 activities`. */
+  label: string;
+}): Command {
+  const { bulkDelete, restoreBatch } = params;
+  // `null` means "the clones are not in the plan right now" — the absent state of the toggle.
+  let live: { id: string; version: number }[] | null = [...params.created];
+  let batchId: string | null = null;
+
+  return {
+    label: params.label,
+    undo: async () => {
+      if (live === null) return;
+      const result = await bulkDelete({ activities: live });
+      batchId = result.deleteBatchId;
+      live = null;
+    },
+    redo: async () => {
+      if (live === null && batchId !== null) {
+        const restored = await restoreBatch({ deleteBatchId: batchId });
+        live = restored.map((row) => ({ id: row.id, version: row.version }));
+        batchId = null;
+      }
+    },
+  };
+}
