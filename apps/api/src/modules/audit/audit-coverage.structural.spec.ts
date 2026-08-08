@@ -68,6 +68,15 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'POST /api/v1/organizations/:orgSlug/activities/:activityId/restore': ['activity.restored'],
   'POST /api/v1/organizations/:orgSlug/activities/:activityId/dissolve': ['activity.dissolved'],
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/parents': ['activity.reparented'],
+  // A batch delete and its batch restore reuse the SINGLE-activity actions rather than adding two
+  // to the vocabulary: `subjectType` already tells the two apart (`ACTIVITY` for one row, `PLAN`
+  // for a batch, the `activity.reparented` precedent), and every new action widens the ADR-0073 C4
+  // action-filter cap — which shipped as a literal `20` and was reached by two chips the day the
+  // vocabulary grew.
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/activities/bulk-delete': ['activity.deleted'],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/activities/restore-batch/:batchId': [
+    'activity.restored',
+  ],
   'POST /api/v1/organizations/:orgSlug/plans/:planId/dependencies': ['dependency.created'],
   'DELETE /api/v1/organizations/:orgSlug/dependencies/:dependencyId': ['dependency.deleted'],
   // — ADR-0073 C3.2, family E: the rules other people's work is judged by. The three exception
@@ -215,6 +224,7 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'PATCH /api/v1/organizations/:orgSlug/clients/:clientId': REASONS.DURABLY_ATTRIBUTED,
   'PATCH /api/v1/organizations/:orgSlug/dependencies/:dependencyId': REASONS.PLAN_CONTENT,
   'PATCH /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/placements': REASONS.PLAN_CONTENT,
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/positions': REASONS.PLAN_CONTENT,
   'PATCH /api/v1/organizations/:orgSlug/projects/:projectId': REASONS.DURABLY_ATTRIBUTED,
   'PATCH /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.PLAN_CONTENT,

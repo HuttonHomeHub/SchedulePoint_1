@@ -171,9 +171,12 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
     expect(announceSpy).toHaveBeenCalledWith('No predecessors.');
   });
 
-  it('Space announces the Tier-2 logic summary', () => {
+  // `i`, not Space: ADR-0080 §5 rebound Space to "toggle this row in the selection" (the APG
+  // binding for a multi-selectable listbox) and moved the Tier-2 logic summary here. The old
+  // binding is still pinned — by the flag-OFF parity suite, which is where it now lives.
+  it('`i` announces the Tier-2 logic summary', () => {
     const { listbox } = renderPanel(); // A: 0 preds, drives Excavate
-    fireEvent.keyDown(listbox, { key: ' ' });
+    fireEvent.keyDown(listbox, { key: 'i' });
     expect(announceSpy).toHaveBeenCalledWith('0 predecessors, 1 successor; drives Excavate');
   });
 

@@ -1472,3 +1472,86 @@ re-exported around it_ — is the thing the next step needs to follow.
 
 **Not urgent.** Nothing is broken: `render-model.ts` is 1,500 lines rather than 1,660 and every
 consumer is unchanged. This is the shape of the remaining work, written down while it is fresh.
+
+## #107 — ADR-0080 shipped without the specialist-agent review pass **(CLOSED same day)**
+
+**Closed 2026-08-08**: the pass ran once subagents were approved, and found five blocking defects
+plus one status-code mismatch — all folded with regression tests before the merge (ADR-0080 §9).
+The entry is kept rather than deleted, because the interesting part is not that the gap existed but
+what it would have cost: the pass caught a sentence asserting a gesture nobody wired, a button that
+disabled itself for the case its own dialog explains, and an `aria-activedescendant` naming a
+different row from the one `Enter` acted on. The original text follows.
+
+---
+
+**Found:** 2026-08-08, closing the canvas multi-select epic (ADR-0080 M5).
+
+Every enablement milestone since ADR-0060 has run four to six specialist reviewers
+(`accessibility`, `ux`, `component`, `api`, `security`, `performance`) over the combined epic diff
+before the flag flip, and each one found blocking defects that had already passed a human read —
+ADR-0064 §7 records five, ADR-0067 M4 ten, ADR-0073 C4 six. **This epic did not run them**, because
+the session it was built in was instructed not to invoke subagents. That is a real gap, and it is
+recorded rather than glossed: the flip went ahead on the strength of the flag-on journey
+(`apps/web/e2e-multi-select/`), the flag-off parity suites, the counting-stub draw-budget gate and
+the full pre-push gate, all green.
+
+**What that does and does not cover.** The journey drives the whole gesture against a real API with
+the pen enforced, which is where the four defects §9 of the ADR records were found — so the
+"lit but inert / one host and not its neighbour" class was exercised. What no gate here covers is
+the reviewers' own lens: the accessibility pass over the bulk bar's shading and reason wiring beyond
+the `aria-describedby` link asserted in `BulkSelectionBar.test.tsx`, the UX pass over the two
+dialogs' copy and state coverage, and the component pass over `BulkSelectionBar` / `LinkChainDialog`
+as reusable surfaces.
+
+**The fix** is one review pass over the ADR-0080 diff (`10ceb5d..618563b` plus its predecessors) with
+those four reviewers, folding blocking findings as its own slice. Rollback is available meanwhile:
+`VITE_CANVAS_MULTI_SELECT=false` restores the singular selection byte-for-byte.
+
+## #108 — The plural drag: model, command and endpoint landed; the gesture did not
+
+**Found:** 2026-08-08, by the component review over the ADR-0080 diff.
+
+`model/bulk-move.ts` (`movedPlacement`, `bulkMoveSnapshots`, `isLaneOnly`), `bulkPlacementCommand`
+in `features/undo-redo/commands.ts`, `useBatchPlacements`, and the `PATCH …/activities/placements`
+endpoint with its DTO and API e2e are all built, tested and correct. **Nothing calls them.** The
+gesture machine's `repositioning` state still keys on one `activityId`, so dragging one of twelve
+selected bars moves that one bar, exactly as before the epic — which is the implementation plan's
+own M4-T1 ("`repositioningMany` + N ghosts") and M4-T2 ("the write path"), landed as a data layer
+and never as an interaction.
+
+**What shipped wrong, and what was done about it.** The bulk bar carried a sentence — _"Moving these
+will pin a start-no-earlier-than date on all N"_ — describing the consequence of a gesture a planner
+cannot perform. That is worse than the "lit but inert" class this repo keeps finding (ADR-0059 M6,
+ADR-0064 §7): an inert control does nothing, a false sentence asserts something. The sentence and
+its prop are **removed**, with a test asserting the bar says nothing about moving; ADR-0080's
+Consequences and this repo's CLAUDE.md entry are corrected to say the drag is not wired.
+
+**The dark layer is kept**, deliberately and in line with how this repo ships (M1 "dark, unflagged"
+slices throughout ADR-0053/0072/0080): the endpoint is real, exercised by
+`apps/api/test/activity-batch-ops.e2e-spec.ts`, and is the foundation the gesture will call. What is
+not kept is any claim that it is reachable.
+
+**The fix** is M4-T1/T2 as planned: a `repositioningMany` gesture state carrying N ghosts, the
+batch write through `useBatchPlacements`, one `bulkPlacementCommand` on the undo stack, and the
+caveat prop restored **with** it. Sized as its own slice rather than folded into the enablement
+pass, because it is an interaction change with its own ghost-painting cost to measure.
+
+## #109 — `bulkDelete` cascades one activity at a time under the plan-wide advisory lock
+
+**Found:** 2026-08-08, by the security review over the ADR-0080 diff (non-blocking, hardening).
+
+`ActivitiesService.bulkDelete` loops `cascadeSoftDelete` once per id, each doing several
+`updateMany`/`findMany` calls, **while holding `acquirePlanWriteLock`**. The sibling batch writes
+(`updatePlacements`, `updateLanePositions`, `updateParents`) are single set-based `unnest`
+statements. At the DTO's `@ArrayMaxSize(2000)` that is on the order of 10,000 queries with the
+plan-wide lock held, so any Planner can lock out every other structural writer on that plan for the
+duration. Not an authorisation defect — a self-service availability one.
+
+This is the shape ADR-0053 M6 already fixed once, measuring **~830 ms → ~13 ms** for a 2,000-row
+GROUP delete by batching the per-descendant advisory-lock loop into one `unnest`. Reintroduced here
+because the cascade helper is per-entity by design.
+
+**The fix** is either to batch the cascade's sweeps set-wise (the ADR-0053 M6 move, applied to
+`HierarchyLifecycleService`), or to lower `bulk-delete`'s cap well below 2,000 — with the choice
+made on a **measurement** at 500 / 2,000 rows rather than on instinct, since the catalogue's scale
+plans make that cheap to take.

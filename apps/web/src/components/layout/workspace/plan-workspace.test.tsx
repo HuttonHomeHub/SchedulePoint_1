@@ -115,6 +115,8 @@ vi.mock('@/features/activities', () => ({
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
+  useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),
   useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   ActivitiesTable: ({ canEditSchedule }: { canEditSchedule: boolean }) => (
     <div data-testid="activities-table" data-can-write={String(canEditSchedule)} />

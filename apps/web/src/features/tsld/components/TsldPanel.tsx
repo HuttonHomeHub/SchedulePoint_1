@@ -13,6 +13,7 @@ import {
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
@@ -22,6 +23,17 @@ import {
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
+import {
+  addAll,
+  type CanvasSelection,
+  clear,
+  EMPTY_SELECTION,
+  isSelected,
+  replace,
+  replaceAll,
+  toggle,
+} from '../model/canvas-selection';
+import { planChain } from '../model/chain-order';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -65,10 +77,12 @@ import {
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 
+import { BulkSelectionBar } from './BulkSelectionBar';
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
-import { sceneTopOffset, TsldCanvas, type PendingGhost } from './TsldCanvas';
+import { LinkChainDialog } from './LinkChainDialog';
+import { sceneTopOffset, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
 import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
@@ -187,6 +201,23 @@ export interface TsldLoeSpanInput {
 
 export type TsldLoeSpanOutcome = TsldEditOutcome;
 
+/**
+ * What a host must be able to do for the bulk selection bar to appear
+ * (`docs/specs/canvas-multi-select/` M4).
+ *
+ * Every field is required. An optional operation would let a host wire two of three and ship a bar
+ * with a button that silently does nothing — the exact shape the epic's own enablement passes keep
+ * finding, so the type refuses to express it.
+ */
+export interface TsldBulkOperations {
+  /** May the caller write to this plan at all (role + pen), and — when not — why. */
+  gate: { writable: boolean; reason: string | null };
+  /** Delete the given activities as ONE batch; resolves when the write and its command have landed. */
+  deleteMany: (activities: readonly ActivitySummary[]) => Promise<void>;
+  /** Create the chain, in the given order. Rejects with a message; a failure leaves ZERO edges. */
+  linkChain: (edges: readonly { predecessorId: string; successorId: string }[]) => Promise<void>;
+}
+
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
@@ -215,6 +246,19 @@ export interface TsldPanelProps {
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
    * conflict message on a cycle/duplicate (ADR-0021) or a recalc refusal; rejects on real error. */
   onLink?: (input: TsldLinkInput) => Promise<TsldLinkOutcome>;
+  /**
+   * The three bulk operations, supplied by the host that owns the mutations and the command stack
+   * (`docs/specs/canvas-multi-select/` M4).
+   *
+   * One object rather than three props, because they arrive and leave together: a host that can do
+   * none of them passes nothing and the bar never renders, which is what keeps a half-wired bar —
+   * the "lit but inert" shape this repo has now found at four consecutive enablement passes — from
+   * being expressible at all.
+   *
+   * `features/tsld` imports no other feature (ADR-0026 D8), so the panel takes the operations as
+   * plain functions and never reaches for a hook.
+   */
+  bulk?: TsldBulkOperations | undefined;
   /**
    * Undo the last plan edit — the **existing** ADR-0048 inverse, passed in by the host that owns the
    * command stack. The mode band's link confirmation offers it (ADR-0064 T5); absent, the
@@ -418,6 +462,7 @@ export function TsldPanel({
   onOpenLogic,
   onEditActivity,
   onDeleteActivity,
+  bulk,
   onDissolveSummary,
   onResources,
   onProgress,
@@ -457,7 +502,43 @@ export function TsldPanel({
   });
   const listboxId = useId();
   const optionId = (id: string): string => `${listboxId}-opt-${id}`;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The canvas selection is a SET internally (`docs/specs/canvas-multi-select/` M0-T3), and this
+  // milestone is deliberately **inert**: only `replace` and `clear` are wired, so `ids.length <= 1`
+  // holds after any sequence of events and every consumer below still reads one nullable id.
+  //
+  // `selectedId` stays exactly the name and the type it was, derived from `primaryId`. That is the
+  // whole point of the "set with a primary" shape — roughly forty read sites, the edge handles, the
+  // activity panel and `aria-activedescendant` are all singular by nature, and none of them should
+  // have to learn that a selection can be plural before the milestone that makes it plural.
+  const [selection, setSelection] = useState<CanvasSelection>(EMPTY_SELECTION);
+  const selectedId = selection.primaryId;
+  // A drop-in for the old setter, so no call site changes in this milestone. Stable, because the
+  // reducers are pure and take no closure — which also means the existing effects that list it in a
+  // dependency array keep firing exactly when they did.
+  const setSelectedId = useCallback((id: string | null): void => {
+    setSelection(id === null ? clear() : replace(id));
+  }, []);
+  /**
+   * The listbox's **active option** — the keyboard cursor, which a multi-selectable listbox has to
+   * keep separate from what is selected (`docs/specs/canvas-multi-select/` M3-T1, APG Listbox).
+   *
+   * Before this milestone the two were the same thing, correctly: in a single-select list the
+   * focused option *is* the selection. Space now toggles the focused row **without moving focus**,
+   * and toggling the primary off would otherwise teleport the cursor to whichever row happened to
+   * be added last — a listbox where pressing Space moves you somewhere else.
+   *
+   * Stored raw and **reconciled at read** (the ADR-0063 M4b rule, the same one `reconcile` follows):
+   * a cursor pointing at a row that has left the plan resolves to the primary rather than being
+   * repaired by an effect that can run a frame late.
+   */
+  const [activeIdRaw, setActiveIdRaw] = useState<string | null>(null);
+
+  /** The bulk surfaces' own state (`docs/specs/canvas-multi-select/` M4). */
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [chainOpen, setChainOpen] = useState(false);
+  const [chainReversed, setChainReversed] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   // The selected activity's live viewport geometry, written by the canvas each frame and read by the
   // floating selection bar to follow pan/zoom without per-frame React state (ADR-0026 D3 / ADR-0031).
   const selectionAnchorRef = useRef<SelectionAnchor | null>(null);
@@ -507,6 +588,27 @@ export function TsldPanel({
   // Where the floating selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
+  /**
+   * Focus the listbox **after** a closing modal has released it.
+   *
+   * A native `<dialog>` returns focus to whatever had it when `showModal()` ran, and it does that
+   * inside the effect that calls `close()` — i.e. *after* the handler that asked us to focus. When
+   * the element it returns to has itself unmounted (the bulk bar's Delete button, once the whole
+   * selection is gone) the browser lands on `<body>`, and a synchronous `focus()` from the handler
+   * is silently undone a moment later.
+   *
+   * That is not only a WCAG 2.4.3 failure: the workspace's undo/redo accelerators are a **React**
+   * `onKeyDown` on the workspace root (`use-plan-workspace-key-scope.ts`), so focus on `<body>`
+   * means Ctrl+Z reaches nothing. The flag-on journey found it exactly that way — the bulk delete
+   * landed, the undo keystroke did nothing, and no unit suite could see it because jsdom has no
+   * modal focus restoration to lose the race to.
+   */
+  const focusListboxAfterModal = useCallback((then?: () => void) => {
+    requestAnimationFrame(() => {
+      listboxRef.current?.focus();
+      then?.();
+    });
+  }, []);
   // Set just before a Next-conflict cycle focuses the listbox programmatically, so the listbox's
   // `onFocus` default-select (pick the first row when nothing is selected) doesn't clobber the conflict
   // selection we set in the same tick (the closure's `selectedId` is still stale then). Consumed once.
@@ -622,7 +724,9 @@ export function TsldPanel({
       linkArmGenerationRef.current += 1;
       setLinkArmGeneration(linkArmGenerationRef.current);
       announce(modeStatementText({ kind: 'linking', linkType }));
-    } else if (previous === 'add-activity' || previous === 'link') {
+    } else if (mode === 'marquee') {
+      announce(modeStatementText({ kind: 'marquee' }));
+    } else if (previous === 'add-activity' || previous === 'link' || previous === 'marquee') {
       announce('Tool closed. Select mode.');
     }
   }, [mode, announce, createType, linkType]);
@@ -658,34 +762,36 @@ export function TsldPanel({
    */
   const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
     ? null
-    : mode === 'add-activity'
-      ? {
-          kind: 'adding',
-          typeLabel: ACTIVITY_TYPE_LABELS[createType],
-          // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
-          // module reads no domain enum), and this is the same `isMilestone` the gesture machine
-          // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
-          gesture: isMilestone(createType) ? 'click' : 'drag',
-        }
-      : mode === 'loe'
-        ? { kind: 'loe', startPicked: loeStartId !== null }
-        : mode === 'link'
-          ? linkPickedId
-            ? {
-                kind: 'linkPicking',
-                linkType,
-                predecessorName:
-                  activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
-              }
-            : lastLink?.armGeneration === linkArmGeneration
+    : mode === 'marquee'
+      ? { kind: 'marquee' }
+      : mode === 'add-activity'
+        ? {
+            kind: 'adding',
+            typeLabel: ACTIVITY_TYPE_LABELS[createType],
+            // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
+            // module reads no domain enum), and this is the same `isMilestone` the gesture machine
+            // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
+            gesture: isMilestone(createType) ? 'click' : 'drag',
+          }
+        : mode === 'loe'
+          ? { kind: 'loe', startPicked: loeStartId !== null }
+          : mode === 'link'
+            ? linkPickedId
               ? {
-                  kind: 'linked',
-                  predecessorName: lastLink.predecessorName,
-                  successorName: lastLink.successorName,
-                  linkType: lastLink.linkType,
+                  kind: 'linkPicking',
+                  linkType,
+                  predecessorName:
+                    activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
                 }
-              : { kind: 'linking', linkType }
-          : null;
+              : lastLink?.armGeneration === linkArmGeneration
+                ? {
+                    kind: 'linked',
+                    predecessorName: lastLink.predecessorName,
+                    successorName: lastLink.successorName,
+                    linkType: lastLink.linkType,
+                  }
+                : { kind: 'linking', linkType }
+            : null;
 
   /**
    * The pinned WBS band (ADR-0063). Derived HERE rather than inside the canvas because
@@ -701,6 +807,95 @@ export function TsldPanel({
    * picture and the screen cannot disagree about the band's height or about which activities the
    * scene paints.
    */
+  /**
+   * The plural selection's activities, in plan order, reconciled to what still exists.
+   *
+   * Derived at read (the ADR-0063 M4b rule) — an id deleted elsewhere leaves here rather than being
+   * swept by an effect that can run a frame late and let a bulk action name a row that is gone.
+   */
+  const selectedActivities = useMemo(
+    () =>
+      CANVAS_MULTI_SELECT_ENABLED ? activities.filter((a) => selection.ids.includes(a.id)) : [],
+    [activities, selection.ids],
+  );
+
+  /**
+   * What the chain would be, recomputed from the live selection every render.
+   *
+   * Cheap (a sort and a bounded DFS over the plan's edges) and, more to the point, **never stale**:
+   * a stored preview would keep describing a selection the planner has since changed, and the whole
+   * purpose of the preview is that it describes what is about to be written.
+   */
+  const chain = useMemo(
+    () =>
+      planChain({
+        candidates: selectedActivities.map((a) => ({
+          id: a.id,
+          name: a.name,
+          // The bar's start as the canvas draws it, so the chain's order matches the picture.
+          start: (barDateSource === 'visual' ? a.visualEffectiveStart : null) ?? a.earlyStart,
+        })),
+        existing: dependencies.map((d) => ({
+          predecessorId: d.predecessor.id,
+          successorId: d.successor.id,
+        })),
+        reversed: chainReversed,
+      }),
+    [selectedActivities, dependencies, chainReversed, barDateSource],
+  );
+
+  const closeBulkSurfaces = (): void => {
+    setConfirmBulkDelete(false);
+    setChainOpen(false);
+    setBulkError(null);
+    setBulkBusy(false);
+  };
+
+  const runBulkDelete = (): void => {
+    if (!bulk || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    void bulk
+      .deleteMany(selectedActivities)
+      .then(() => {
+        const count = selectedActivities.length;
+        closeBulkSurfaces();
+        // Clear FIRST, then announce: a selection of rows that no longer exist would otherwise
+        // survive one render as a set `reconcile` is about to empty anyway, and the bar would
+        // flicker a count nobody can act on.
+        setSelection(EMPTY_SELECTION);
+        setActiveIdRaw(null);
+        // Announced INSIDE the focus callback, and that ordering is load-bearing: focusing the
+        // listbox fires its `onFocus` default-select, which announces the row it lands on. Announced
+        // first, "2 activities deleted." is spoken and then immediately overwritten by a row
+        // description — so the one fact the planner needs confirmed is the one they never hear.
+        focusListboxAfterModal(() => announce(`${count} activities deleted.`));
+      })
+      .catch((error: unknown) => {
+        setBulkBusy(false);
+        setBulkError(error instanceof Error ? error.message : 'Couldn’t delete. Please try again.');
+      });
+  };
+
+  const runLinkChain = (): void => {
+    if (!bulk || bulkBusy || chain.refusal) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    void bulk
+      .linkChain(chain.edges)
+      .then(() => {
+        const count = chain.edges.length;
+        closeBulkSurfaces();
+        announce(`${count} ${count === 1 ? 'link' : 'links'} created in sequence.`);
+      })
+      .catch((error: unknown) => {
+        setBulkBusy(false);
+        setBulkError(
+          error instanceof Error ? error.message : 'Couldn’t create the links. Please try again.',
+        );
+      });
+  };
+
   const wbsBand = useMemo(
     () =>
       deriveWbsBandSource(activities, {
@@ -1058,7 +1253,7 @@ export function TsldPanel({
         listboxRef.current?.focus();
       }
     }
-  }, [navState.selectSignal, activities]);
+  }, [navState.selectSignal, activities, setSelectedId]);
 
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
@@ -1143,7 +1338,48 @@ export function TsldPanel({
     [dataDate, activities, dependencies],
   );
 
-  const select = (id: string | null): void => {
+  /**
+   * The resolved keyboard cursor. Flag-off it **is** `selectedId`, expression for expression, so
+   * `aria-activedescendant` and every keyboard branch below are byte-for-byte the prior surface.
+   *
+   * **Every single-activity command issued from this listbox acts on the CURSOR, not the primary.**
+   * The two can diverge — `Ctrl/Cmd+A` moves the primary to the last row in plan order without
+   * moving the cursor, and `Space` can deselect the row the cursor is on — and when they did, the
+   * accessibility review over this epic's diff reproduced `aria-activedescendant` naming "Cure"
+   * while `Enter` opened the logic editor for "Pour". That is WCAG 4.1.2: the exposed active
+   * descendant has to identify what widget operations affect. A sighted keyboard user never saw it,
+   * because the canvas paints no separate cursor ring — the ring and the Enter target agreed by
+   * construction, which is what let it past a visual read.
+   */
+  const activeId: string | null = !CANVAS_MULTI_SELECT_ENABLED
+    ? selectedId
+    : activeIdRaw && activities.some((a) => a.id === activeIdRaw)
+      ? activeIdRaw
+      : selectedId;
+
+  const select = (id: string | null, modifier?: SelectModifier): void => {
+    // Pointing at a row — by click or by arrow — moves the cursor there. Only Space, Ctrl/Cmd+A and
+    // the marquee change the selection without moving it, which is exactly the distinction the
+    // separate cursor exists to hold.
+    if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(id);
+    // Flag-off the canvas never passes a modifier, so this is the single-selection handler it has
+    // always been, statement for statement.
+    if (CANVAS_MULTI_SELECT_ENABLED && modifier && id) {
+      setSelection((current) => {
+        const next =
+          modifier === 'toggle'
+            ? toggle(current, id)
+            : // A span with nothing to span FROM is a plain click, not a no-op: a planner who
+              // shift-clicks first has expressed a selection, and refusing it would be a dead end
+              // whose only cue is that nothing happened.
+              current.primaryId === null
+              ? replace(id)
+              : addAll(current, spanIds(current.primaryId, id));
+        announceSelectionCount(next);
+        return next;
+      });
+      return;
+    }
     setSelectedId(id);
     if (id) {
       // The row's OWN text, not a rebuild of part of it — so what is spoken and what is on screen
@@ -1151,6 +1387,53 @@ export function TsldPanel({
       const rowText = rowTextById.get(id);
       if (rowText) announce(rowText);
     }
+  };
+
+  /**
+   * A committed marquee sweep, already resolved to ids by the canvas.
+   *
+   * ONE announcement, on COMMIT — never per frame. A marquee moves ~60 times a second and a polite
+   * live region cannot keep up with that, so a per-frame count would be noise where a single count
+   * is information.
+   */
+  const selectRegion = (ids: readonly string[], additive: boolean): void => {
+    if (!CANVAS_MULTI_SELECT_ENABLED) return;
+    setSelection((current) => {
+      const next = additive ? addAll(current, ids) : replaceAll(ids);
+      announceSelectionCount(next);
+      return next;
+    });
+  };
+
+  /**
+   * The ids between two activities in the plan's own order — what Shift+click extends over.
+   *
+   * Deliberately the **row order**, not the geometric one: the parallel listbox, the activities
+   * table and the Gantt all walk the plan in this order, so a span means the same run of work
+   * wherever a planner builds it. A span defined by screen position would change with the zoom.
+   */
+  const spanIds = (fromId: string, toId: string): string[] => {
+    const order = activities.map((a) => a.id);
+    const from = order.indexOf(fromId);
+    const to = order.indexOf(toId);
+    if (from < 0 || to < 0) return [toId];
+    const [lo, hi] = from <= to ? [from, to] : [to, from];
+    return order.slice(lo, hi + 1);
+  };
+
+  /** One utterance for a plural selection — the count, not a list nobody can hold in their head. */
+  const announceSelectionCount = (next: CanvasSelection): void => {
+    if (next.ids.length === 0) {
+      announce('Selection cleared.');
+      return;
+    }
+    if (next.ids.length === 1) {
+      const only = next.ids[0];
+      const rowText = only ? rowTextById.get(only) : undefined;
+      announce(rowText ?? '1 activity selected.');
+      return;
+    }
+    announce(`${next.ids.length} activities selected.`);
   };
 
   // Keep the focused activity's list position, so if it's deleted elsewhere (arriving via a
@@ -1167,7 +1450,7 @@ export function TsldPanel({
     const next = activities[Math.min(selectedIndexRef.current, activities.length - 1)];
     setSelectedId(next ? next.id : null);
     announce('Activity removed.');
-  }, [activities, selectedId, announce]);
+  }, [activities, selectedId, announce, setSelectedId]);
 
   // Report the selection to the host on every transition (toolbar quick-wins F0), so the main toolbar's
   // selection-aware items track it. One effect covers all paths — select / chain-nav / focus and the
@@ -1256,7 +1539,7 @@ export function TsldPanel({
     // open-logic path below while the tool is armed.
     if (editingEnabled && mode === 'loe' && onLoeSpan && event.key === 'Enter') {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       if (loeStartId === null) {
         setLoeStartId(current.id);
@@ -1290,7 +1573,7 @@ export function TsldPanel({
       event.key === 'Enter'
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       if (linkPickedId === null) {
         setLinkPickedId(current.id);
@@ -1316,7 +1599,7 @@ export function TsldPanel({
     // Enter on the focused activity opens its logic (dependency) editor — the keyboard path for
     // creating links, so link-draw introduces no pointer-only capability (WCAG 2.1.1).
     if (event.key === 'Enter' && onOpenLogic) {
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (current) {
         event.preventDefault();
         onOpenLogic(current);
@@ -1334,19 +1617,92 @@ export function TsldPanel({
     // so driving/logic context is delivered exactly when a planner traces the path (M5 §2/§3).
     if (event.key === '[' || event.key === ']') {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       const dir = event.key === '[' ? 'pred' : 'succ';
       const neighbour = chainNeighbour(current.id, dependencies, dir);
-      if (neighbour) setSelectedId(neighbour.id);
+      // `select`, not `setSelectedId`: this is a NAVIGATION command, so the keyboard cursor has to
+      // follow the selection. Setting only the selection left `aria-activedescendant` on the row
+      // the planner walked away from — and made a second press re-read the same neighbour, because
+      // the walk starts from the cursor. Same root cause as the WCAG 4.1.2 finding above.
+      if (neighbour) select(neighbour.id);
       announce(announceChainStep(dir, neighbour));
       return;
     }
-    // Space — Tier-2 "tell me more": logic ties + driving for the focused activity (read — no flag).
+    /**
+     * **Space** — Tier-2 "tell me more" flag-off; flag-on it **toggles** the focused row in the
+     * selection and the logic summary moves to `i` (CQ-1, answered "Space toggles").
+     *
+     * Space is the APG binding for toggling an option in a multi-selectable listbox, and a planner
+     * arriving from any other list will press it. The rebinding is recorded in
+     * `docs/DECISIONS.md`, listed in the shortcuts sheet, and pinned in both directions by tests —
+     * because the cost of getting this wrong is silent: the old binding still "works", it just
+     * says something instead of doing what the planner meant.
+     *
+     * The cursor does **not** move: that is the whole reason `activeIdRaw` exists.
+     */
     if (event.key === ' ') {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      if (CANVAS_MULTI_SELECT_ENABLED) {
+        if (activeId) {
+          // Computed from the render's own `selection` and announced beside the write, rather than
+          // announcing inside the updater: a `setState` updater must be pure, and React may invoke
+          // it more than once. `select()` uses the updater form because the canvas can call it from
+          // a stale closure; a key handler is re-created every render and has no such problem.
+          const next = toggle(selection, activeId);
+          setSelection(next);
+          announceSelectionCount(next);
+        }
+        return;
+      }
+      const current = activities.find((a) => a.id === activeId);
       if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
+      return;
+    }
+    // `i` — the logic summary Space used to give. Verified free against the current keymap before
+    // it was taken (`Enter`, `?`, `[`, `]`, `Space`, `n`, `Alt+*`, `Shift+←/→`, arrows, Home/End).
+    // Flag-off this branch never runs, so `i` stays unbound and the keymap is byte-for-byte today's.
+    if (CANVAS_MULTI_SELECT_ENABLED && (event.key === 'i' || event.key === 'I')) {
+      event.preventDefault();
+      const current = activities.find((a) => a.id === activeId);
+      if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
+      return;
+    }
+    /**
+     * **Ctrl/Cmd+A** — select every activity in the plan.
+     *
+     * Handled on the listbox rather than on `window`, which is what keeps it from swallowing the
+     * browser's select-all in a text context: this handler only runs when the listbox itself has
+     * focus, so the guard is structural rather than a `target.closest('input')` test that has to be
+     * kept in step (the ADR-0079 Escape guard exists precisely because a `window` listener cannot
+     * make that promise).
+     */
+    if (CANVAS_MULTI_SELECT_ENABLED && (event.ctrlKey || event.metaKey) && event.key === 'a') {
+      event.preventDefault();
+      const next = replaceAll(activities.map((a) => a.id));
+      setSelection(next);
+      announceSelectionCount(next);
+      return;
+    }
+    /**
+     * **Escape — the last rung of the ladder** (M3-T2).
+     *
+     * The order is tool → open pick → selection, and it is enforced by guards here rather than by
+     * hoping the two listeners fire in a helpful order: the canvas's `window` handler owns the
+     * first two rungs (ADR-0064), and both handlers see the same keystroke. Clearing the selection
+     * unconditionally would take a planner's tool *and* their selection with one press — the
+     * ADR-0064 defect class, arriving through a door that decision did not have.
+     */
+    if (
+      CANVAS_MULTI_SELECT_ENABLED &&
+      event.key === 'Escape' &&
+      mode === 'select' &&
+      linkPickedId === null &&
+      selection.ids.length > 0
+    ) {
+      event.preventDefault();
+      setSelection(EMPTY_SELECTION);
+      announceSelectionCount(EMPTY_SELECTION);
       return;
     }
     // Shift+←/→ nudges the focused activity's DURATION one day (ADR-0052 M2) — the keyboard
@@ -1363,7 +1719,7 @@ export function TsldPanel({
       (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current || !isResizeEligibleType(current.type)) return;
       durationNudge(current, event.key === 'ArrowRight' ? 1 : -1);
       return;
@@ -1381,7 +1737,7 @@ export function TsldPanel({
         event.key === 'ArrowRight')
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       if (event.key === 'ArrowUp') nudge(current, 'lane', -1);
       else if (event.key === 'ArrowDown') nudge(current, 'lane', 1);
@@ -1393,7 +1749,7 @@ export function TsldPanel({
     // in-canvas keyboard parity for create (the activities-table dialog is the 2.1.1 alternative).
     if (editingEnabled && (event.key === 'n' || event.key === 'N')) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === selectedId);
+      const current = activities.find((a) => a.id === activeId);
       const startDay =
         current?.earlyStart && dataDate ? daysBetween(dataDate, current.earlyStart) : 0;
       clearConflict();
@@ -1409,7 +1765,7 @@ export function TsldPanel({
       });
       return;
     }
-    const index = activities.findIndex((a) => a.id === selectedId);
+    const index = activities.findIndex((a) => a.id === activeId);
     let next = index;
     if (event.key === 'ArrowDown') next = Math.min(activities.length - 1, index + 1);
     else if (event.key === 'ArrowUp') next = Math.max(0, index < 0 ? 0 : index - 1);
@@ -1418,7 +1774,23 @@ export function TsldPanel({
     else return;
     event.preventDefault();
     const target = activities[next];
-    if (target) select(target.id);
+    if (!target) return;
+    /**
+     * **Shift+↑/↓ extends the selection** by one row, the APG contiguous-select binding.
+     *
+     * Vertical only, and that is a constraint rather than a scoping choice: `Shift+←/→` is already
+     * the ADR-0052 duration nudge, and this listbox navigates vertically, so the horizontal chord
+     * is both taken and meaningless here. Taking it would have silently removed a shipped edit
+     * accelerator to add a navigation one nobody asked for.
+     */
+    if (CANVAS_MULTI_SELECT_ENABLED && event.shiftKey && !event.altKey) {
+      setActiveIdRaw(target.id);
+      const grown = addAll(selection, [target.id]);
+      setSelection(grown);
+      announceSelectionCount(grown);
+      return;
+    }
+    select(target.id);
   };
 
   const closeCreate = (): void => {
@@ -1942,6 +2314,57 @@ export function TsldPanel({
       <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
 
       {/*
+        The bulk selection bar (`docs/specs/canvas-multi-select/` M4-T7) — beside the mode band in
+        the SAME reserved chrome, never floating over the scene. Renders nothing below two selected,
+        and nothing at all when the host wired no operations, so a partially-wired host cannot ship
+        a button that does nothing.
+      */}
+      {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
+        <BulkSelectionBar
+          count={selection.ids.length}
+          primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
+          link={{
+            // Gated on the WRITE RIGHT only, deliberately — never on the chain's own refusal.
+            //
+            // It used to be gated on both, with the reason "open the preview to see why". The
+            // preview is opened by this button, so for the two refusals that actually happen — a
+            // chain over the 50-link cap, and one that would close a cycle — the sentence told a
+            // planner to do the thing the shading prevented, and the dialog built to explain the
+            // refusal was unreachable in exactly the state it exists for. Found by the UX review
+            // over this epic's diff. `LinkChainDialog` owns the refusal: it keeps the ordered
+            // preview on screen and names the reason beside it.
+            enabled: bulk.gate.writable,
+            reason: bulk.gate.writable ? null : bulk.gate.reason,
+          }}
+          remove={{
+            enabled: bulk.gate.writable,
+            reason: bulk.gate.writable ? null : bulk.gate.reason,
+          }}
+          onLink={() => {
+            setBulkError(null);
+            // Reverse is a choice about THIS preview, so it does not survive it. A sticky reverse
+            // would open the next chain already flipped, with nothing on screen saying it had been
+            // — which is the ADR-0064 report (a link recorded the wrong way round) reappearing as a
+            // state nobody set. Found by the flag-on journey, which cancelled one preview after
+            // pressing Reverse and opened the next.
+            setChainReversed(false);
+            setChainOpen(true);
+          }}
+          onDelete={() => {
+            setBulkError(null);
+            setConfirmBulkDelete(true);
+          }}
+          onClear={() => {
+            setSelection(EMPTY_SELECTION);
+            setActiveIdRaw(null);
+            announce('Selection cleared.');
+            listboxRef.current?.focus();
+          }}
+          busy={bulkBusy}
+        />
+      ) : null}
+
+      {/*
         **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
         completely blank canvas, and nothing on it says what the first gesture is — the surface is
         at its least self-explanatory exactly when the planner knows least.
@@ -2022,6 +2445,12 @@ export function TsldPanel({
               dataDate={dataDate}
               selectedId={selectedId}
               onSelect={select}
+              onSelectRegion={selectRegion}
+              // The plural set only when it IS plural: at one selected the canvas
+              // receives `undefined` and builds the scene it always built.
+              selectedIds={
+                CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : undefined
+              }
               fitSignal={fitSignal}
               editing={editingEnabled}
               mode={mode}
@@ -2128,7 +2557,10 @@ export function TsldPanel({
               {...(CANVAS_DATA_DATE_ENABLED
                 ? { 'aria-describedby': `${listboxId}-data-date` }
                 : {})}
-              aria-activedescendant={selectedId ? optionId(selectedId) : undefined}
+              // Advertised only flag-on: an `aria-multiselectable` listbox whose Space does
+              // nothing plural is a promise the surface does not keep.
+              aria-multiselectable={CANVAS_MULTI_SELECT_ENABLED || undefined}
+              aria-activedescendant={activeId ? optionId(activeId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {
                 // A Next-conflict cycle focused us programmatically and already set the selection — skip
@@ -2151,7 +2583,12 @@ export function TsldPanel({
                   key={a.id}
                   id={optionId(a.id)}
                   role="option"
-                  aria-selected={a.id === selectedId}
+                  // Flag-on this reflects the SET, not the cursor: `aria-selected` is what a
+                  // screen-reader user hears as "selected", and pointing it at the active option
+                  // would report exactly one member of a selection of twelve.
+                  aria-selected={
+                    CANVAS_MULTI_SELECT_ENABLED ? isSelected(selection, a.id) : a.id === selectedId
+                  }
                 >
                   {rowTextById.get(a.id)}
                 </li>
@@ -2175,6 +2612,41 @@ export function TsldPanel({
           restoreFocus={restoreSelectionFocus}
         />
       ) : null}
+
+      {/*
+        Bulk delete's confirmation. The copy names BOTH what goes: the activities and the links
+        between and into them. The single-activity dialog learnt this the hard way (ADR-0063 M6's
+        "honest WBS delete confirmation") — a count alone lets a planner agree to lose logic they
+        did not know was in scope.
+      */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onClose={() => {
+          setConfirmBulkDelete(false);
+          setBulkError(null);
+        }}
+        onConfirm={runBulkDelete}
+        title={`Delete ${selectedActivities.length} activities?`}
+        description={`Their dependencies go too. You can undo this — one step restores all ${selectedActivities.length} with their links intact.`}
+        confirmLabel={`Delete ${selectedActivities.length}`}
+        pending={bulkBusy}
+        error={bulkError}
+      />
+
+      <LinkChainDialog
+        open={chainOpen}
+        onClose={() => {
+          setChainOpen(false);
+          setBulkError(null);
+        }}
+        ordered={chain.ordered}
+        refusal={chain.refusal}
+        reversed={chainReversed}
+        onToggleReverse={() => setChainReversed((r) => !r)}
+        onConfirm={runLinkChain}
+        pending={bulkBusy}
+        error={bulkError}
+      />
 
       <ConfirmDialog
         open={confirmArrange}

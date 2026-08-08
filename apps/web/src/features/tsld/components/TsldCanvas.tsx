@@ -46,6 +46,8 @@ import {
   edgeAnchor,
   fitToContent,
   hitTest,
+  idsIntersecting,
+  rectFromCorners,
   MIN_CONTEXT_DAYS,
   withMinimumSpan,
   lagAnchorDay,
@@ -95,6 +97,7 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
+  CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
@@ -176,12 +179,45 @@ export interface PendingGhost {
   laneIndex: number;
 }
 
+/**
+ * How a click should fold into the selection (`docs/specs/canvas-multi-select/` M2).
+ *
+ * Absent means **replace** — the plain click every version of this canvas has had. Naming only the
+ * two plural cases keeps the flag-off path literally unrepresentable rather than merely unused.
+ */
+export type SelectModifier = 'toggle' | 'span';
+
 export interface TsldCanvasProps {
   activities: readonly RenderActivity[];
   edges: readonly RenderEdge[];
   dataDate: string;
   selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  /**
+   * Report a click's selection target.
+   *
+   * `modifier` is **optional and additive** (`docs/specs/canvas-multi-select/` M2-T2): flag-off the
+   * canvas never passes one, so every existing host reads exactly the signature it always did and
+   * behaves byte-for-byte. A host that does not understand it simply ignores a second argument,
+   * which is why this is a widened parameter rather than a second callback — one selection channel
+   * cannot drift from another.
+   */
+  /**
+   * The whole selection when it is plural (`docs/specs/canvas-multi-select/` M2-T5). Secondary
+   * members get a thinner ring; {@link selectedId} stays the primary and keeps the edge handles.
+   * Absent ⇒ the scene carries no plural field and paints byte-for-byte as today.
+   */
+  selectedIds?: readonly string[] | undefined;
+  onSelect: (id: string | null, modifier?: SelectModifier) => void;
+  /**
+   * A committed marquee sweep, already resolved to ids (`docs/specs/canvas-multi-select/` M2-T3).
+   *
+   * The **canvas** resolves the rectangle rather than the host, because resolving needs the live
+   * viewport and `activityRect`, which the canvas owns and the host would have to reach across a
+   * boundary for. The gesture machine stays blind to the scene and reports the rectangle only.
+   *
+   * `additive` came from the modifier held at **press**. Absent, no marquee is ever committed.
+   */
+  onSelectRegion?: (ids: readonly string[], additive: boolean) => void;
   /** Bump to re-fit the viewport to the content (the toolbar's "Fit" button). */
   fitSignal: number;
   /** M2: enable on-canvas editing. Absent/false → the M1 read-only surface, unchanged. */
@@ -591,7 +627,9 @@ export function TsldCanvas({
   edges,
   dataDate,
   selectedId,
+  selectedIds,
   onSelect,
+  onSelectRegion,
   fitSignal,
   editing = false,
   mode = 'select',
@@ -737,6 +775,16 @@ export function TsldCanvas({
   const resizeArmed =
     CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canResize;
   const lagArmed = CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canLag;
+  /**
+   * Whether the pointer-transparent **interaction** canvas is mounted.
+   *
+   * It was `editing` alone, which was right while every gesture that drew on it was a write. The
+   * marquee is not one: selecting is a read (the ADR-0063 M4b rule), so a Viewer can arm the tool
+   * and sweep — and gated on `editing` the sweep would be invisible to exactly the person who has
+   * no other feedback on this canvas. Flag-off the expression is `editing`, so the read-only
+   * surface is byte-for-byte today's.
+   */
+  const interactionLayerMounted = editing || CANVAS_MULTI_SELECT_ENABLED;
   // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the scene
   // carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4). The user's own
   // `view?.monthBands` preference (F7b, `VITE_CANVAS_TIME_AXIS`) only narrows the flag-on case — it
@@ -754,6 +802,7 @@ export function TsldCanvas({
     edges,
     dataDate,
     selectedId,
+    selectedIds,
     showEdgeHandles,
     view,
     isWorkingDay,
@@ -844,6 +893,7 @@ export function TsldCanvas({
       edges,
       dataDate,
       selectedId,
+      selectedIds,
       showEdgeHandles,
       view,
       isWorkingDay,
@@ -881,6 +931,7 @@ export function TsldCanvas({
     edges,
     dataDate,
     selectedId,
+    selectedIds,
     showEdgeHandles,
     lagArmed,
     view,
@@ -1276,7 +1327,7 @@ export function TsldCanvas({
       // Keep the date ruler pixel-synced to the same viewport snapshot the painter just used, so the
       // labels and the bars can never disagree. Early-returns unless the viewport actually moved.
       syncRuler();
-      const ictx = editing ? interactionCanvasRef.current?.getContext('2d') : null;
+      const ictx = interactionLayerMounted ? interactionCanvasRef.current?.getContext('2d') : null;
       if (ictx && interactionDirtyRef.current) {
         const p = pendingRef.current;
         const overlay: InteractionOverlay = {
@@ -1327,6 +1378,13 @@ export function TsldCanvas({
                 dataDate: sceneRef.current.dataDate,
               })
             : null,
+          // The live marquee sweep (M2-T5). Read straight off the gesture state, which keeps raw
+          // screen points — so the rectangle drawn is the rectangle the release will resolve, with
+          // no second derivation that could disagree at the boundary. Null in every other state.
+          marquee:
+            CANVAS_MULTI_SELECT_ENABLED && gestureRef.current.kind === 'marqueeing'
+              ? rectFromCorners(gestureRef.current.originPoint, gestureRef.current.currentPoint)
+              : null,
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         interactionDirtyRef.current = false;
@@ -1510,6 +1568,12 @@ export function TsldCanvas({
         syncGestureSource();
         interactionDirtyRef.current = true;
         linkPickStepRef.current?.(null);
+      } else if (CANVAS_MULTI_SELECT_ENABLED && modeRef.current === 'marquee') {
+        // The marquee is the one tool mode **not** gated on `editing` — selecting is a read, so a
+        // Viewer can arm it. Its disarm must be ungated for the same reason, or the tool arms for a
+        // reader who then has no way out of it: the plan's "arming a mode nobody can leave" risk,
+        // which the `editing &&` below would have produced by inheritance rather than by decision.
+        exitAddModeRef.current?.();
       } else if (
         editing &&
         (modeRef.current === 'add-activity' ||
@@ -1541,7 +1605,11 @@ export function TsldCanvas({
     // band toggle would leave the scene sized for the wrong offset — the canvas would look right
     // and every pointer y would be out by the band's height. It is a stable `0` when the band is
     // off, so the flag-off loop init is unchanged.
-  }, [editing, selectionAnchorRef, resourceStripActive, wbsBandHeightPx]);
+    // `editing` as well as `interactionLayerMounted`: the two were the same expression until the
+    // marquee made the layer mount without the pen, and this effect's Escape handler still reads
+    // `editing` to decide whether an authoring tool may be disarmed. Dropping it would have closed
+    // over the value from the render that first mounted the layer.
+  }, [interactionLayerMounted, editing, selectionAnchorRef, resourceStripActive, wbsBandHeightPx]);
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
@@ -1577,7 +1645,25 @@ export function TsldCanvas({
     ...(createType ? { createType } : {}),
     ...(linkType ? { linkType } : {}),
   });
-  const modifiersOf = (e: React.PointerEvent): Modifiers => ({ shift: e.shiftKey, alt: e.altKey });
+  // `ctrl` folds Ctrl and Cmd into one field on purpose (M2-T1): they are the same intent on two
+  // platforms, and a downstream consumer that had to check both would eventually check one.
+  const modifiersOf = (e: React.PointerEvent): Modifiers => ({
+    shift: e.shiftKey,
+    alt: e.altKey,
+    ctrl: e.ctrlKey || e.metaKey,
+  });
+  /**
+   * The selection modifier a click carries, or `undefined` for a plain replace.
+   *
+   * Ctrl/Cmd wins over Shift when both are held. Arbitrary but stable, and stated rather than left
+   * to reading order: toggle is the reversible one, so a planner who over-reaches with both fingers
+   * down loses less.
+   */
+  const selectModifierOf = (e: React.PointerEvent): SelectModifier | undefined => {
+    if (e.ctrlKey || e.metaKey) return 'toggle';
+    if (e.shiftKey) return 'span';
+    return undefined;
+  };
   // The plan working-day walk the lag-anchor hit zones + grabs run on — memoised so the walk's own
   // per-(day, n) memo survives across pointer events (the painter builds its walk per frame; the
   // two share `makeWorkingDayWalk`, so they can never place an anchor differently). No calendar ⇒
@@ -1684,7 +1770,13 @@ export function TsldCanvas({
           // The Link tool (M5) AND the LOE tool (Stage D) are click-driven (handled on pointer-up), not
           // drag gestures — so a press must NOT run the gesture reducer here, else it would clear an
           // in-progress pick before the second click's release lands. Panning still works via `drag`.
-          if (editing && mode !== 'link' && mode !== 'loe') {
+          // A marquee sweep is a READ (the ADR-0063 M4b rule), so it arms on a surface that has no
+          // pen — a Viewer, or a writer who has not taken the lock. Everything else in this branch
+          // is an edit gesture and stays gated on `editing`; the reducer itself will only reach the
+          // `marqueeing` state from an empty-ground press in the two armed cases.
+          const marqueeArmable =
+            CANVAS_MULTI_SELECT_ENABLED && (mode === 'marquee' || e.ctrlKey || e.metaKey);
+          if ((editing || marqueeArmable) && mode !== 'link' && mode !== 'loe') {
             // A reposition/resize write is in flight (canvas status & feedback M2): refuse to START
             // another edit gesture. The panel's `onIntent` would drop its result anyway, and a drag
             // that runs, ghosts and then applies nothing is the "lit but inert" shape (ADR-0059 M6 /
@@ -1692,7 +1784,8 @@ export function TsldCanvas({
             // saying why. Returning HERE (after the pan setup above) keeps panning live by
             // construction, and a stationary press still selects through the plain click path on
             // pointer-up.
-            if (writeBusy) return;
+            // …but not a marquee: it writes nothing, so an in-flight save is no reason to refuse it.
+            if (writeBusy && !marqueeArmable) return;
             const p = localPoint(e);
             const rawHit = classifyAt(p, resizeArmed, lagArmed);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
@@ -1876,6 +1969,21 @@ export function TsldCanvas({
             interactionDirtyRef.current = true;
             // The drag is over — the next idle move re-emphasises whatever the pointer rests on.
             setActiveLagId(null);
+            // A marquee is a SELECTION, not an edit, so it leaves through the selection channel:
+            // routing it to `onIntent` would put it behind the host's in-flight-write guard, where
+            // a planner mid-save could not re-select. Resolved here — the canvas owns the viewport.
+            if (intent?.kind === 'marquee') {
+              onSelectRegion?.(
+                idsIntersecting(
+                  sceneRef.current.activities,
+                  intent.rect,
+                  viewRef.current,
+                  dataDate,
+                ),
+                intent.additive,
+              );
+              return;
+            }
             if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
             else if (select) onSelect(select);
             return;
@@ -1904,7 +2012,14 @@ export function TsldCanvas({
             }
             return;
           }
-          onSelect(hitTest(sceneRef.current.activities, p, viewRef.current, dataDate));
+          // Ctrl/Cmd toggles one bar in or out; Shift extends from the primary. Flag-off the
+          // modifier is never computed, so this call is the one-argument call it has always been —
+          // and `Shift` in particular MUST stay unclaimed there, because the legacy link chord
+          // reads it as start-to-start (M0-T1's derived flag makes the overlap impossible).
+          const modifier = CANVAS_MULTI_SELECT_ENABLED ? selectModifierOf(e) : undefined;
+          const target = hitTest(sceneRef.current.activities, p, viewRef.current, dataDate);
+          if (modifier) onSelect(target, modifier);
+          else onSelect(target);
         }}
         onPointerLeave={() => {
           // Drop the hover ring when the pointer leaves the surface (M4). Flag-off the ref is
@@ -1938,7 +2053,7 @@ export function TsldCanvas({
           interactionDirtyRef.current = true;
         }}
       />
-      {editing ? (
+      {interactionLayerMounted ? (
         <canvas
           ref={interactionCanvasRef}
           aria-hidden="true"

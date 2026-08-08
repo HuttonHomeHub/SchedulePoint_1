@@ -44,6 +44,7 @@ import {
   Share2,
   SlidersHorizontal,
   Spline,
+  SquareDashedMousePointer,
   StickyNote,
   TriangleAlert,
   Undo2,
@@ -73,6 +74,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
+  CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -2150,6 +2152,39 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: () => CANVAS_AUTHORING_ENABLED,
       render: (ctx, api) => <LinkControl ctx={ctx} api={api} />,
     },
+    /*
+     * Marquee select (`docs/specs/canvas-multi-select/` M2-T4) — a fifth tool mode.
+     *
+     * **A plain toggle, not a split-button on a `Select` item.** The plan specified the latter
+     * ("the `Select` toolbar item becomes a split-button"), written from a premise nobody had
+     * checked: **there is no `Select` item on this toolbar** and never has been — Select is the
+     * mode you are in when no tool is armed, not a control. Building the specified shape would have
+     * meant inventing a control whose primary region's only job is "stop doing the thing you are
+     * not doing". What the plan's risk row actually asks for is the ADR-0064 arm/disarm contract,
+     * which a toggle carries in full: Escape returns to `select`, the band states the mode, and the
+     * transition is announced.
+     *
+     * **Not `penGated`.** Selecting is a read (the ADR-0063 M4b rule), so a Viewer may sweep; the
+     * bulk actions the selection opens carry their own gates and say why they are shut.
+     *
+     * Flag-off the item is **absent**, not shaded — a "Coming soon" placeholder is for a control
+     * whose slot the planner can see is coming, and nothing in today's toolbar reserves this one.
+     */
+    ...(CANVAS_MULTI_SELECT_ENABLED
+      ? [
+          {
+            id: 'marquee-select',
+            group: 'tools' as const,
+            row: 'do' as const,
+            tier: 2 as const,
+            order: 2,
+            label: 'Marquee select',
+            icon: <SquareDashedMousePointer className="size-4" />,
+            isActive: (ctx: TsldToolbarContext) => ctx.isMarqueeSelecting,
+            onActivate: (ctx: TsldToolbarContext) => ctx.toggleMarqueeMode(),
+          },
+        ]
+      : []),
     {
       id: 'auto-arrange',
       group: 'tools',

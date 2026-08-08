@@ -1401,3 +1401,49 @@ export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  */
 export const CANVAS_SEARCH_NAV_ENABLED =
   CANVAS_LENSES_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_SEARCH_NAV);
+
+/**
+ * TSLD canvas **multi-select and bulk operations** (spec + plan in
+ * `docs/specs/canvas-multi-select/`, approved 2026-08-07). When on, the canvas selection becomes a
+ * set rather than one id: ctrl/cmd-click toggles, shift-click takes the bounding rectangle, a
+ * marquee sweeps, and a bulk bar acts on the whole set in one write and one undo step.
+ *
+ * **Derived** from {@link CANVAS_DIRECT_MANIPULATION_ENABLED}, and the reason is a keyboard
+ * collision rather than a layering preference: the legacy edge-drag reads `Shift` as the
+ * start-to-start chord, and this epic gives `Shift`+click the span meaning. The two must never be
+ * live at once, so the `&&` makes that unrepresentable instead of documented. A test asserts it.
+ *
+ * **Default-ON** since 2026-08-08 (M5-T4), once the flag-on journey was green against a real API
+ * with the pen enforced — which is where the epic's last three defects were found, none of them
+ * visible to a unit suite. Flag-off the selection is structurally singular — only
+ * `replace` and `clear` are reachable, so `ids.length <= 1` holds after any sequence of events, and
+ * a structural test pins exactly that. Nothing else changes: the canvas paint, the toolbar, the
+ * a11y tree and the `Space` binding are byte-for-byte today's (the flag-off parity suite is the
+ * rollback contract).
+ */
+export const CANVAS_MULTI_SELECT_ENABLED =
+  CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_MULTI_SELECT);
+
+/**
+ * **Activity copy, paste and duplicate** (spec + plan in `docs/specs/activity-copy-paste/`). When
+ * on, a Planner holding the pen can duplicate one activity, duplicate a whole WBS band with the
+ * logic inside it, and copy/paste an arbitrary selected set — each as one action and one undoable
+ * step, composed entirely from write paths that already ship.
+ *
+ * **Not derived.** Unlike {@link CANVAS_MULTI_SELECT_ENABLED} there is no chord collision to make
+ * unrepresentable: the two accelerators this epic takes (`Ctrl/Cmd+C` / `Ctrl/Cmd+V`) are unbound
+ * in the plan workspace today, and the first two milestones — duplicate one activity, duplicate a
+ * band — need no selection beyond the single one the canvas and the table have always had. Only
+ * the arbitrary-set slice reads a plural selection, and it reads it through the shipped model
+ * rather than through this flag.
+ *
+ * **Default-off** until the epic's M5 gate pass (the specialist reviews plus a flag-on journey
+ * against a real API with the pen enforced). Flag-off there is no Duplicate item in the row menu
+ * or on the canvas selection bar, no keyboard handler is installed, and no clone code is reachable
+ * — the surfaces are byte-for-byte today's, pinned by parity suites that land with each surface
+ * rather than at the end.
+ *
+ * Frontend-only for M0–M4: no API, DTO, schema or migration, and the CPM engine is not imported,
+ * so the ADR-0034 recalculation parity gate is untouched by construction.
+ */
+export const ACTIVITY_COPY_PASTE_ENABLED = flagDefaultOff(import.meta.env.VITE_ACTIVITY_COPY_PASTE);

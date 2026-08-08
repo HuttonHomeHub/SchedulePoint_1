@@ -90,7 +90,17 @@ function activity(): ActivitySummary {
 const UNSIZED_CANVAS_WIDTH = 300;
 
 describe('TsldCanvas — the interaction canvas is sized when it mounts mid-session', () => {
-  it('sizes it on the edit-mode flip, not only on a container resize', () => {
+  /**
+   * The mount condition widened with ADR-0080 §3: **selecting is a read**, so the pointer-transparent
+   * interaction layer mounts without the pen — otherwise a marquee sweep would be invisible to
+   * exactly the person who has no other feedback on this canvas. So a read-only viewer now has it
+   * too, and the flip this test is named for no longer creates it.
+   *
+   * What the test is actually for survives that unchanged: whatever the state, the layer must be
+   * **sized** — an unsized canvas keeps the HTML default of 300px and every pointer coordinate
+   * computed against it is wrong. Asserted in both states rather than only after the flip.
+   */
+  it('sizes it in both states — read-only (ADR-0080 §3) and after the edit-mode flip', () => {
     const props = {
       activities: [activity()],
       dependencies: NO_DEPS,
@@ -98,8 +108,9 @@ describe('TsldCanvas — the interaction canvas is sized when it mounts mid-sess
       onCreate: vi.fn().mockResolvedValue({ recalcConflict: null }),
     };
     const { container, rerender } = render(<TsldPanel {...props} canEdit={false} />);
-    // Read-only: only the scene canvas exists.
-    expect(container.querySelectorAll('canvas.pointer-events-none')).toHaveLength(0);
+    const readOnly = container.querySelector<HTMLCanvasElement>('canvas.pointer-events-none');
+    expect(readOnly).not.toBeNull();
+    expect(readOnly!.width).not.toBe(UNSIZED_CANVAS_WIDTH);
 
     rerender(<TsldPanel {...props} canEdit />);
 

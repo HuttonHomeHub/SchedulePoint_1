@@ -210,3 +210,49 @@ describe('CANVAS_LINK_ROUTING_ENABLED', () => {
     vi.resetModules();
   });
 });
+
+describe('CANVAS_MULTI_SELECT_ENABLED', () => {
+  // Derived from direct manipulation because of a KEYBOARD COLLISION, not a layering preference:
+  // the legacy edge-drag reads `Shift` as the start-to-start chord, and the multi-select epic gives
+  // `Shift`+click the span meaning (spec `docs/specs/canvas-multi-select/` CQ-2). A standalone flag
+  // would let both be live at once, so the `&&` makes that state unrepresentable — and this test is
+  // what stops the `&&` being "simplified" away by someone who reads it as decoration.
+  it('is off whenever direct manipulation is off, however it is set', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_CANVAS_DIRECT_MANIPULATION', 'false');
+    vi.stubEnv('VITE_CANVAS_MULTI_SELECT', 'true');
+    const env = await import('./env');
+    expect(env.CANVAS_DIRECT_MANIPULATION_ENABLED).toBe(false);
+    expect(env.CANVAS_MULTI_SELECT_ENABLED).toBe(false);
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('defaults ON since the M5 gate pass', async () => {
+    vi.resetModules();
+    const env = await import('./env');
+    expect(env.CANVAS_DIRECT_MANIPULATION_ENABLED).toBe(true);
+    expect(env.CANVAS_MULTI_SELECT_ENABLED).toBe(true);
+    vi.resetModules();
+  });
+
+  it('opts OUT on "false" or "0", and on nothing else', async () => {
+    for (const [value, expected] of [
+      ['false', false],
+      ['0', false],
+      // The helper's documented trap: a shouted "FALSE" reads as ON. Asserted rather than assumed,
+      // because an operator who sets it that way gets silence, not an error — and this is now the
+      // rollback switch, which is the worst place for a value that quietly does nothing.
+      ['FALSE', true],
+      ['no', true],
+      ['true', true],
+    ] as const) {
+      vi.resetModules();
+      vi.stubEnv('VITE_CANVAS_MULTI_SELECT', value);
+      const env = await import('./env');
+      expect(env.CANVAS_MULTI_SELECT_ENABLED, `VITE_CANVAS_MULTI_SELECT=${value}`).toBe(expected);
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+});

@@ -17,6 +17,13 @@ export type CanvasModeStatement =
       gesture: 'click' | 'drag';
     }
   | { kind: 'linking'; linkType: string }
+  /**
+   * The marquee sweep is armed (`docs/specs/canvas-multi-select/` M2-T4).
+   *
+   * It gets the same three things every other armed tool has — a statement, an announcement and
+   * Escape — because the failure ADR-0064 was opened on was a tool that armed and said nothing.
+   */
+  | { kind: 'marquee' }
   | { kind: 'linkPicking'; linkType: string; predecessorName: string }
   | { kind: 'loe'; startPicked: boolean }
   | {
@@ -40,6 +47,10 @@ export function modeStatementText(statement: CanvasModeStatement): string {
         : `Adding ${statement.typeLabel.toLowerCase()} — drag on the diagram to draw its length, or click for one day. Esc to stop.`;
     case 'linking':
       return `Linking ${statement.linkType} — click the predecessor. Esc to stop.`;
+    case 'marquee':
+      // Names the modifier as well as the tool: holding Ctrl/Cmd sweeps without arming anything, and
+      // a planner who never finds that is left toggling a tool for every rectangle they draw.
+      return 'Marquee select — drag on the diagram to select what it covers. Hold Ctrl (Cmd) to add. Esc to stop.';
     case 'linkPicking':
       return `Linking ${statement.linkType} from “${statement.predecessorName}” — click the successor. Esc to drop the pick.`;
     case 'loe':

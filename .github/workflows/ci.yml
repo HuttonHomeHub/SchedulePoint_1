@@ -340,6 +340,15 @@ jobs:
       - name: Web end-to-end tests (search navigation flag on)
         run: pnpm --filter @repo/web test:e2e:search-nav
 
+      # The canvas plural selection (`VITE_CANVAS_MULTI_SELECT`) against a real API with the pen
+      # enforced. What no mocked test can reach: the optimistic-`version` trap (a mocked fetch
+      # accepts any version, so a bulk batch's version threading is only testable here); and that a
+      # bulk delete's undo brings the LINKS back, which is the CQ-4 answer — a re-create would
+      # restore the bars and silently lose the logic between them, and a mock would report success
+      # either way.
+      - name: Web end-to-end tests (multi-select flag on)
+        run: pnpm --filter @repo/web test:e2e:multi-select
+
       # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
       # theme, which is how the Corporate theme shipped with six contrast defects past a green
       # axe run. This one boots the shell once per picker option — light, dark, corporate, and

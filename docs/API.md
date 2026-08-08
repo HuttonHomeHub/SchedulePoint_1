@@ -168,7 +168,8 @@ override needs `plan:override_lock` (Org Admin).
 | DELETE | `…/plans/:planId/edit-lock`           | Release (holder) / force-release (override) · 204, idempotent.           |
 
 **Gated writes.** The structural write endpoints — activity
-create/update/delete/restore, `…/activities/positions`, `…/activities/parents`, dependency
+create/update/delete/restore, `…/activities/positions`, `…/activities/parents`,
+`…/activities/placements`, `…/activities/bulk-delete`, `…/activities/restore-batch/:batchId`, dependency
 create/update/delete, cross-plan dependency create/delete (on the **successor**
 plan), and `…/schedule/recalculate` — additionally require holding the pen and
 return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from the 409 version
@@ -742,6 +743,27 @@ decision for the coverage milestone, on a fresh measurement (ADR-0073 "Measured,
   omitted field is a validation error rather than a silent "top level". Unlike `positions` it is
   **structural**: `parentId` feeds the engine's WBS rollup, so a committed batch leaves the plan's
   computed dates stale until the next recalculation.
+- `PATCH …/plans/:planId/activities/placements` with
+  `{ placements: [{ id, version, constraintType, constraintDate, visualStart, laneIndex }] }` is the
+  third member of the family: where an activity goes **in time**, and optionally in lane. Every
+  field is **required but nullable**, the `parents` rule — an omitted field is a validation error,
+  never a silent clear — with one field where null carries a different meaning: a null `laneIndex`
+  leaves the lane unchanged, because a bulk time shift moves bars along x and must be able to leave
+  y alone. It carries placement fields and nothing else, so a bulk move cannot rename forty
+  activities, and a `WBS_SUMMARY` is `422 SUMMARY_NOT_BULK_ELIGIBLE` (a summary's dates are an
+  engine rollup, so there is nothing on it to place). **Structural**, like `parents`.
+- **A batch delete is a `POST`, not a `DELETE`.** `POST …/plans/:planId/activities/bulk-delete`
+  with `{ activities: [{ id, version }] }` returns **200** with
+  `{ deleteBatchId, activityCount, dependencyCount }`. `DELETE` on the collection has no body in
+  any framework a client can rely on, and the rows carry versions; the batch-write `PATCH` rule
+  above does not extend to deletion. Every swept row shares **one** `deleteBatchId` — that is the
+  point of the endpoint rather than a detail, because it is what makes the undo one restore rather
+  than N, and what keeps a link between two deleted activities restorable at all. Leaf-only: a
+  `WBS_SUMMARY` is `422`, since deleting one cascades to its whole subtree.
+- `POST …/plans/:planId/activities/restore-batch/:batchId` (**200**) reverses it — every activity
+  back with its **original id**, so the dependencies between them come back too. Re-creating the
+  activities instead would mint new ids and silently drop that logic, which is a different schedule
+  wearing the same shape.
 - `POST …/activities/:activityId/dissolve` (**200**) removes a WBS summary's grouping and **keeps
   the work**: its direct children take its own parent, then the now-childless summary is
   soft-deleted, in one transaction. It is a separate endpoint from `DELETE`, not a flag on it,

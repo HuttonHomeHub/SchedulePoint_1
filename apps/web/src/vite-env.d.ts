@@ -119,4 +119,10 @@ interface ImportMetaEnv {
   /** Search that navigates — Enter cycles the matches, centring, selecting and announcing each.
    *  Derived from VITE_CANVAS_LENSES; the search field is a lenses control. Default off. */
   readonly VITE_CANVAS_SEARCH_NAV?: string;
+  /** ADR-0080 — the canvas plural selection and its bulk operations. Derived from
+   *  VITE_CANVAS_DIRECT_MANIPULATION, because Shift is already the legacy link chord. Default on. */
+  readonly VITE_CANVAS_MULTI_SELECT?: string;
+  /** Activity copy, paste & duplicate (docs/specs/activity-copy-paste/) — Duplicate on the row menu
+   *  and the canvas selection bar, band duplication, and Ctrl+C/Ctrl+V over a set. Default off. */
+  readonly VITE_ACTIVITY_COPY_PASTE?: string;
 }

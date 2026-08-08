@@ -193,6 +193,15 @@ export interface TsldScene {
   dataDate: string;
   /** The currently-selected activity id (drawn with a selection ring), if any. */
   selectedId?: string | null;
+  /**
+   * The whole selection when it is plural (`docs/specs/canvas-multi-select/` M2-T5).
+   *
+   * Sits **beside** `selectedId` rather than replacing it, so every non-canvas caller — the export
+   * scene, the printed programme, the golden-log tests — keeps the exact scene it always built and
+   * paints byte-for-byte. `selectedId` remains the PRIMARY: the one the edge handles, the activity
+   * panel and `aria-activedescendant` mean.
+   */
+  selectedIds?: readonly string[] | undefined;
   /** When true (editing + linking enabled), draw the persistent edge-handle affordance on the
    * selected bar. Off for the read-only surface, keeping M1 byte-for-byte unchanged. */
   showEdgeHandles?: boolean;
@@ -1603,6 +1612,27 @@ export function paintScene(
   // is the non-hover affordance advertising that the bar's ends are grabbable to draw a
   // dependency (UX_STANDARDS: hover-only affordances need a non-hover equivalent); selection is
   // keyboard-reachable via the listbox, so the cue isn't pointer-only either.
+  // Layer 4a: the SECONDARY members of a plural selection (`docs/specs/canvas-multi-select/`
+  // M2-T5). Drawn first and thinner, so the primary's heavier ring below paints over any shared
+  // edge and stays the emphatic one.
+  //
+  // The distinction is deliberately **not colour**: the primary keeps the 2px ring AND the edge
+  // handles, a secondary gets 1px and none — two channels, so "which one does Edit act on" is
+  // legible without relying on hue (WCAG 1.4.1). Absent `selectedIds` ⇒ not one extra call ⇒
+  // flag-off is byte-for-byte.
+  if (scene.selectedIds) {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = palette.selection;
+    for (const id of scene.selectedIds) {
+      if (id === scene.selectedId || !visibleIds.has(id)) continue;
+      const rect = rects.get(id);
+      if (!rect) continue;
+      const ring: Rect = { x: rect.x - 2, y: rect.y - 2, w: rect.w + 4, h: rect.h + 4 };
+      if (scene.visualRefresh && beginRoundedRect(ctx, ring, BAR_RADIUS + 2)) ctx.stroke();
+      else ctx.strokeRect(ring.x, ring.y, ring.w, ring.h);
+    }
+  }
+
   if (scene.selectedId && visibleIds.has(scene.selectedId)) {
     const selected = byId.get(scene.selectedId);
     const rect = rects.get(scene.selectedId);
@@ -1723,6 +1753,15 @@ export interface InteractionOverlay {
    * a chip stating its date. Computed by the pure `cursorReadout`, so the number shown is the one
    * the gesture will commit. Absent ⇒ nothing drawn. */
   cursor?: CursorChip | null;
+  // ── Multi-select (`docs/specs/canvas-multi-select/` M2-T5, `VITE_CANVAS_MULTI_SELECT`) ─────
+  /**
+   * The live marquee sweep rectangle, in screen space.
+   *
+   * On the **interaction** layer, not the base one, for the same reason every other in-flight
+   * shape is: a marquee repaints on every pointer move, and the base layer carries the whole
+   * scene. Absent ⇒ not one call ⇒ byte-for-byte parity with the flag off.
+   */
+  marquee?: Rect | null;
 }
 
 /** The cursor date readout's screen shape (ADR-0054 §2) — see `render/cursor-readout.ts`. */
@@ -1778,6 +1817,25 @@ export function paintInteractionLayer(
 
   const { live, pending, link, linkPick, resize, lag } = overlay;
   const refresh = overlay.visualRefresh === true;
+
+  // The marquee sweep (M2-T5). Drawn before every other overlay shape so a ghost or chip that
+  // happens to sit inside it still reads on top — the marquee is a region, not an object.
+  // A translucent fill plus a dashed outline: the fill says "these bars", the outline says "and
+  // this is exactly where the edge is", which matters at the boundary where a bar is half in.
+  if (overlay.marquee) {
+    const { x, y, w, h } = overlay.marquee;
+    // `Ctx2D` is the narrow subset this painter is typed against (so a counting stub can implement
+    // it) and has no save/restore — alpha is set and put back by hand, as everywhere else here.
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = palette.selection;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = palette.selection;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.setLineDash([]);
+  }
 
   // The cursor date readout (ADR-0054 §2), drawn FIRST so every ghost, ring and chip paints over
   // it — it is a reference line, not a foreground object. A full-height dashed rule marks the day

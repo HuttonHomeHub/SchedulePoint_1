@@ -89,7 +89,10 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   // for [ / ] is covered by the component test; here we prove the keys are wired + announced).
   const announcer = page.getByTestId('announcer');
   await page.keyboard.press('Home'); // → Excavate (no logic ties yet)
-  await page.keyboard.press('Space'); // Tier-2 detail on demand
+  // `i` — not Space. ADR-0080 gave Space its APG meaning (toggle this row's membership of the
+  // selection) and moved the tier-2 logic summary to `i`; pressing Space here toggles the only
+  // selected row out and announces "Selection cleared.", which is what this journey caught.
+  await page.keyboard.press('i'); // Tier-2 detail on demand
   await expect(announcer).toHaveText('0 predecessors, 0 successors');
   await page.keyboard.press(']'); // no successor to trace
   await expect(announcer).toHaveText('No successors.');
