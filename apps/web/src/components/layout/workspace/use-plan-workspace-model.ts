@@ -33,6 +33,8 @@ import {
   openActivityEditor,
   type ActivityEditorIntent,
 } from '@/features/activities/lib/activity-editor-intent';
+import { planClone, type CloneRefusal } from '@/features/activity-copy';
+import { useCreateClonedActivity } from '@/features/activity-copy/api/use-clone-activities';
 import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
@@ -72,6 +74,7 @@ import {
   bulkDeleteCommand,
   createActivityCommand,
   createLoeSpanCommand,
+  pasteActivitiesCommand,
   deleteActivityCommand,
   dependencyAddCommand,
   dependencyRemoveCommand,
@@ -97,6 +100,20 @@ import {
 } from '@/hooks/use-org-role';
 import { ApiFetchError } from '@/lib/api/client';
 import { minorToMajorInput } from '@/lib/format-money';
+
+/**
+ * What a duplicate attempt did. Three distinguishable outcomes, because a planner needs to know
+ * which happened: a **refusal** (a pre-check said no before any write), a **conflict** (the server
+ * rejected the write and the copy was rolled back), and success.
+ */
+export interface DuplicateOutcome {
+  readonly applied: boolean;
+  /** Set when a pre-check refused. Carries the numbers/names a message needs to be specific. */
+  readonly refusal: CloneRefusal | null;
+  /** Set when the server rejected a write (409/422); the copy has already been rolled back. */
+  readonly conflict: string | null;
+  readonly createdIds?: readonly string[];
+}
 
 /**
  * The single source of a plan surface's route-composed orchestration — every query, the
@@ -491,6 +508,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // create deletes it; undoing a leaf delete re-creates its whole definition (a new id). Instantiated
   // here (not in the dialog) so the command's inverse re-issues through the same authorised endpoints.
   const createActivity = useCreateActivity(orgSlug, planId);
+  const createClone = useCreateClonedActivity(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
   const recalculate = useRecalculate(orgSlug, planId);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
@@ -1374,9 +1392,121 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     return { applied: true, conflict: null };
   };
 
+  /**
+   * **Duplicate one or more activities** (`docs/specs/activity-copy-paste/` M1-T2, behind
+   * `VITE_ACTIVITY_COPY_PASTE`).
+   *
+   * Pre-checks come from `planClone`'s refusal union rather than from ad-hoc tests here, so a case
+   * cannot be handled in one call site and forgotten in the next. Everything else follows
+   * `createLoeSpan`'s shape: it is NON-ATOMIC across N creates, so any failure rolls the clones back,
+   * refetches server truth, and clears the redo branch (ADR-0048's conflict contract).
+   *
+   * The **recalculation hold** is the part most likely to break quietly. ADR-0064 says in terms that
+   * a leaked hold stalls every later recalculation for the session — there is no error and no
+   * surface, the schedule simply stops updating — so it is released in a `finally`, and the failure
+   * path has its own test rather than an assumption.
+   *
+   * The CPM engine is not imported: this composes creates the product already makes.
+   */
+  const duplicateActivities = async (
+    sources: readonly ActivitySummary[],
+  ): Promise<DuplicateOutcome> => {
+    const rows = activitiesRef.current ?? [];
+    const archivedCalendarIds = new Set(
+      (calendars.data ?? []).filter((c) => c.archivedAt !== null).map((c) => c.id),
+    );
+    const maxLane = rows.reduce((hi, a) => Math.max(hi, a.laneIndex), -1);
+    const plan_ = planClone({
+      set: sources,
+      dependencies: dependencies.data ?? [],
+      usedNames: new Set(rows.map((a) => a.name)),
+      archivedCalendarIds,
+      offsetDays: 0,
+      laneOffset: maxLane + 1 - Math.min(...sources.map((a) => a.laneIndex)),
+      mode: isVisualMode ? 'VISUAL' : 'EARLY',
+    });
+    if (!plan_.ok) return { applied: false, refusal: plan_.refusal, conflict: null };
+
+    // Hold the coalesced recalculation for the whole composite so the bars cannot move between the
+    // creates — released in `finally`, never on the happy path alone (ADR-0064).
+    const holdToken = Symbol('duplicate');
+    autoRecalc.hold(holdToken);
+    const created: { id: string; version: number }[] = [];
+    const idMap = new Map<string, string>();
+    try {
+      for (const step of plan_.creates) {
+        const parentId = step.parentSourceId === null ? undefined : idMap.get(step.parentSourceId);
+        const row = await createClone.mutateAsync({
+          ...step.body,
+          ...(parentId === undefined ? {} : { parentId }),
+        });
+        idMap.set(step.sourceId, row.id);
+        created.push({ id: row.id, version: row.version });
+      }
+      for (const link of plan_.links) {
+        const predecessorId = idMap.get(link.predecessorSourceId);
+        const successorId = idMap.get(link.successorSourceId);
+        // Defensive only: `planClone` filters to edges whose BOTH endpoints are in the create set,
+        // and a structural test pins that. A miss here would mean the two have drifted.
+        if (predecessorId === undefined || successorId === undefined) continue;
+        await createDependency.mutateAsync({
+          planId,
+          predecessorId,
+          successorId,
+          type: link.type,
+          lagMinutes: link.lagMinutes,
+          lagCalendar: link.lagCalendar,
+        });
+      }
+    } catch (err) {
+      // Roll the whole copy back. Best-effort: a failed rollback still leaves the refetch below to
+      // re-sync, and the original cause must never be replaced by the rollback's own error.
+      if (created.length > 0) {
+        try {
+          await bulkDeleteActivities.mutateAsync({ activities: created });
+        } catch {
+          /* swallow — the refetch re-syncs the client to server truth */
+        }
+      }
+      onTsldRefresh();
+      if (UNDO_REDO_ENABLED) editHistory.clearRedo();
+      if (pen.onWriteRejected(err).kind === 'lock') {
+        return { applied: false, refusal: null, conflict: null };
+      }
+      if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
+        return { applied: false, refusal: null, conflict: err.error.message };
+      }
+      throw err;
+    } finally {
+      autoRecalc.release(holdToken);
+    }
+
+    if (UNDO_REDO_ENABLED) {
+      editHistory.record(
+        pasteActivitiesCommand({
+          created,
+          bulkDelete: bulkDeleteActivities.mutateAsync,
+          restoreBatch: restoreDeleteBatch.mutateAsync,
+          label:
+            sources.length === 1 && sources[0] !== undefined
+              ? `Duplicate \u201c${sources[0].name}\u201d`
+              : `Copy ${String(sources.length)} activities`,
+        }),
+      );
+    }
+    notifyRecalc();
+    announce(
+      created.length === 1
+        ? '1 activity duplicated.'
+        : `${String(created.length)} activities duplicated.`,
+    );
+    return { applied: true, refusal: null, conflict: null, createdIds: created.map((c) => c.id) };
+  };
+
   return {
     orgSlug,
     planId,
+    duplicateActivities,
     // Queries
     plan,
     project,
