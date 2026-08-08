@@ -207,6 +207,44 @@ and does not block.
 > `docs/BACKEND_ARCHITECTURE.md`; escalated to an ADR only if the answer turns out to be a policy
 > rather than a number.
 
+### Decisions received (product owner, 2026-08-08)
+
+All seven answered. Five took the recommended default; **CQ-1 and CQ-3 did not**, and both are
+recorded here with the consequence made _observable_ rather than argued, because the decision is the
+product owner's to make and the job of this section is to keep it honest rather than to re-open it.
+
+| CQ  | Decision                                                           | vs. recommendation |
+| --- | ------------------------------------------------------------------ | ------------------ |
+| 1   | **Backfill every pre-existing account** at the verification flip   | **Differs**        |
+| 2   | Do **not** build privacy operations; ADR framing the options only  | As recommended     |
+| 3   | Flag retirement targets **reducing the flag count**                | **Differs**        |
+| 4   | The shaded-field ruling is filed as an **ADR**                     | As recommended     |
+| 5   | Fix the **shared** zoom control once; re-check both surfaces       | As recommended     |
+| 6   | **Global** transaction timeout + per-operation overrides           | As recommended     |
+| 7   | Backfill `ROADMAP.md` by hand; **scope** the gate, do not build it | As recommended     |
+
+**CQ-1's consequence, named precisely.** The members-only predicate exists to exclude exactly one
+case: an address that registered an account and holds a **pending** invitation but no membership.
+Backfilling everyone marks that account verified, so it can accept the invitation without ever
+proving mailbox ownership — the account-squatting path enforcement exists to close.
+
+This does not change the decision; it changes what M5-T6 must report. **The count step now reports
+three figures, not one**: total unverified accounts, of those how many hold a membership, and of the
+remainder how many hold a **pending invitation**. That last number _is_ the risk set. It is very
+likely zero, in which case both CQ-1 options are identical and there was nothing to decide. If it is
+not zero, the rows are named before the backfill runs, and the product owner decides on real names
+rather than on a hypothetical. The backfill still dry-runs first either way.
+
+**CQ-3's consequence, named precisely.** Targeting flag _count_ rather than dead branches means some
+retirements will delete a parity suite for a feature that has not soaked. The sharpest case is
+`VITE_CANVAS_MULTI_SELECT`, default-on for **eight days** at the time of this decision.
+
+Two mitigations are adopted that do not weaken the goal, because neither trades away flag count:
+retirement runs **oldest-first in dated batches**, so a regression is bisectable to a batch rather
+than to a 58-flag commit; and a **derived flag is always retired with its parent in one commit**,
+since a derived flag whose parent is gone is a branch that reads as live and is not. D1's policy ADR
+records the count-reduction goal as the stated intent, so the next flag ships knowing the terms.
+
 ---
 
 ## 2. Functional requirements
