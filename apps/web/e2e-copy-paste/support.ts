@@ -27,6 +27,16 @@ export async function onboard(page: Page, stamp: number): Promise<string> {
   return orgSlug;
 }
 
+/**
+ * The project screen's URL, captured once by {@link createHierarchy}.
+ *
+ * `newPlan` navigates here rather than hunting for a "Riverside" link, because after the first test
+ * the suite is on a plan workspace and the link it used to click is a navigator tree item that does
+ * not land where the helper assumed. That cost the second test a 30-second timeout on a "New plan"
+ * button that was never going to appear.
+ */
+let projectUrl: string | null = null;
+
 /** Create the client and project this suite's plans hang off, landing on the project screen. */
 export async function createHierarchy(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Clients', exact: true }).click();
@@ -39,12 +49,14 @@ export async function createHierarchy(page: Page): Promise<void> {
   await page.getByRole('dialog').getByLabel('Name').fill('Riverside');
   await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
   await page.getByRole('link', { name: 'Riverside' }).click();
+  await expect(page.getByRole('button', { name: 'New plan' })).toBeVisible();
+  projectUrl = page.url();
 }
 
 /** Create a plan under the suite's project and open it (mounts the canvas workspace). */
 export async function newPlan(page: Page, planName: string): Promise<void> {
-  const project = page.getByRole('link', { name: 'Riverside', exact: true });
-  if ((await project.count()) > 0) await project.first().click();
+  if (projectUrl === null) throw new Error('createHierarchy must run before newPlan');
+  await page.goto(projectUrl);
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(planName);
   await page
@@ -338,5 +350,19 @@ export function selectionToolbar(page: Page, activityName: string): Locator {
 
 /** The Duplicate control on the selection-actions bar for `activityName`. */
 export function duplicateButton(page: Page, activityName: string): Locator {
-  return selectionToolbar(page, activityName).getByRole('button', { name: 'Duplicate' });
+  return selectionToolbar(page, activityName).getByRole('button', {
+    name: 'Duplicate',
+    exact: true,
+  });
+}
+
+/**
+ * The **Duplicate band** control, which a summary gets instead of Duplicate.
+ *
+ * A separate locator because it is a separate item with a different name — and `{ exact: true }` on
+ * both, because without it "Duplicate" matches "Duplicate band" too and the two assertions stop
+ * being able to tell each other apart.
+ */
+export function duplicateBandButton(page: Page, summaryName: string): Locator {
+  return selectionToolbar(page, summaryName).getByRole('button', { name: 'Duplicate band' });
 }

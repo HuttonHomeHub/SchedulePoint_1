@@ -37,13 +37,17 @@ function harness(
   const restoreBatch = vi.fn(() =>
     Promise.resolve(created.map((c) => restored(c.id, c.version + 1))),
   );
+  // A FLAT paste: every clone is top-level, so `roots === created` and undo takes the batch path.
+  const deleteActivity = vi.fn(() => Promise.resolve());
   const command = pasteActivitiesCommand({
     created,
+    roots: created,
+    deleteActivity,
     bulkDelete,
     restoreBatch,
     label: 'Duplicate “Excavate”',
   });
-  return { command, bulkDelete, restoreBatch };
+  return { command, bulkDelete, restoreBatch, deleteActivity };
 }
 
 describe('pasteActivitiesCommand', () => {
@@ -113,6 +117,8 @@ describe('pasteActivitiesCommand', () => {
     const bulkDelete = vi.fn(() => Promise.reject(new Error('423')));
     const command = pasteActivitiesCommand({
       created: [{ id: 'c1', version: 1 }],
+      roots: [{ id: 'c1', version: 1 }],
+      deleteActivity: vi.fn(() => Promise.resolve()),
       bulkDelete,
       restoreBatch: vi.fn(() => Promise.resolve([])),
       label: 'Duplicate “Excavate”',
@@ -126,5 +132,59 @@ describe('pasteActivitiesCommand', () => {
   it('carries a concrete label rather than a generic one', () => {
     const { command } = harness();
     expect(command.label).toBe('Duplicate “Excavate”');
+  });
+});
+
+describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
+  it('deletes the ROOT and lets the cascade take the subtree, never a batch', async () => {
+    // `bulkDelete` refuses any batch containing a WBS_SUMMARY (422 SUMMARY_NOT_BULK_ELIGIBLE,
+    // `activities.service.ts:1277-1281`) — deliberately, because deleting one cascades. So a band
+    // copy's undo can never go through it. The flag-on journey found this: the undo fired, the
+    // batch 422'd, and the planner was told "Couldn't undo just now." A mocked delete accepts any
+    // batch, which is why no unit test caught it first and why this one is written from the failure.
+    const created = [
+      { id: 'summary', version: 1 },
+      { id: 'child-1', version: 1 },
+      { id: 'child-2', version: 1 },
+    ];
+    const bulkDelete = vi.fn(() =>
+      Promise.reject(new Error('SUMMARY_NOT_BULK_ELIGIBLE')),
+    ) as unknown as Parameters<typeof pasteActivitiesCommand>[0]['bulkDelete'];
+    const deleteActivity = vi.fn(() => Promise.resolve());
+    const command = pasteActivitiesCommand({
+      created,
+      roots: [{ id: 'summary', version: 1 }],
+      deleteActivity,
+      bulkDelete,
+      restoreBatch: vi.fn(() => Promise.resolve([])),
+      label: 'Duplicate band “Level 2”',
+    });
+
+    await command.undo();
+    expect(deleteActivity).toHaveBeenCalledExactlyOnceWith('summary');
+    expect(bulkDelete).not.toHaveBeenCalled();
+  });
+
+  it('offers no redo, because a cascade delete tells the client no batch id', async () => {
+    // `DELETE …/activities/:id` answers 204 with no body, so there is nothing to restore from. A
+    // no-op redo is the honest shape — better than a call that would fail (TECH_DEBT #113).
+    const restoreBatch = vi.fn(() => Promise.resolve([]));
+    const command = pasteActivitiesCommand({
+      created: [
+        { id: 'summary', version: 1 },
+        { id: 'child-1', version: 1 },
+      ],
+      roots: [{ id: 'summary', version: 1 }],
+      deleteActivity: vi.fn(() => Promise.resolve()),
+      bulkDelete: vi.fn(() =>
+        Promise.resolve({ deleteBatchId: 'b', activityCount: 0, dependencyCount: 0 }),
+      ),
+      restoreBatch,
+      label: 'Duplicate band “Level 2”',
+    });
+
+    await command.undo();
+    await command.redo();
+    expect(restoreBatch).not.toHaveBeenCalled();
   });
 });

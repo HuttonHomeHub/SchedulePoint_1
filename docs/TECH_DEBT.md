@@ -1692,3 +1692,34 @@ Non-blocking findings from the six specialist reviews over the W5 diff, recorded
 
 **Risk:** low. None changes what the product does today; (1) is the only one a planner could meet,
 and only by activating twice inside one round trip.
+
+---
+
+## 113. Redo is unavailable after undoing a band copy
+
+**Status:** open · **Owner:** api + web · **Raised:** 2026-08-08 (W5 M5, found by the flag-on journey)
+
+Undoing a **band** copy deletes the cloned summary and lets the ADR-0038 cascade take its subtree,
+because `bulkDelete` refuses any batch containing a `WBS_SUMMARY` by design (422
+`SUMMARY_NOT_BULK_ELIGIBLE`) — a bulk delete is always leaf-only, "which is what makes its undo
+honest". That is correct, and it works.
+
+**Redo does not.** A cascade delete does assign a `delete_batch_id` server-side, so the rows are
+restorable in principle — but `DELETE …/activities/:id` answers **204 with no body**, so the client
+never learns the id and has nothing to hand `restoreDeleteBatch`. The command therefore leaves its
+batch id null and `redo` is a no-op: the Redo affordance has nothing to offer, which is the honest
+shape and better than a call that would fail. A flat copy is unaffected — it still undoes and redoes
+through the batch as before.
+
+**The fix is small and it is on the API side:** return the `deleteBatchId` in the delete response
+(or a `204` → `200 { data: { deleteBatchId } }` change), and the existing client restore path works
+unchanged. It is out of scope for a frontend-only epic.
+
+**How it was found is the point.** The journey drove a real band copy against a real API with the
+pen enforced, pressed Ctrl+Z, and read the product's own words back: "Couldn't undo just now. Please
+try again." Every unit test passed throughout — a mocked delete accepts any batch, so nothing below
+the network could see the refusal. It is the ADR-0060 M6 rule in a new costume: the guard that
+matters is only testable against the thing that enforces it.
+
+**Risk:** low. The undo works; only the reversal of the undo is missing, and the planner can copy
+the band again.

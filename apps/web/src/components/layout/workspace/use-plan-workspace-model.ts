@@ -1499,6 +1499,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     const holdToken = Symbol('duplicate');
     autoRecalc.hold(holdToken);
     const created: { id: string; version: number }[] = [];
+    // The clones with no cloned parent. A band's undo deletes these and lets the ADR-0038 cascade
+    // take the subtree, because `bulkDelete` refuses a batch containing a summary by design.
+    const roots: { id: string; version: number }[] = [];
     const idMap = new Map<string, string>();
     const skippedAssignments: SkippedAssignment[] = [];
     try {
@@ -1541,6 +1544,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         });
         idMap.set(step.sourceId, row.id);
         created.push({ id: row.id, version: row.version });
+        if (step.parentSourceId === null) roots.push({ id: row.id, version: row.version });
 
         // Carry the crew and the step breakdown onto this clone before moving to the next (M4).
         // Inside the same try, so a failure here rolls the whole copy back like any other write —
@@ -1586,7 +1590,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       // re-sync, and the original cause must never be replaced by the rollback's own error.
       if (created.length > 0) {
         try {
-          await bulkDeleteActivities.mutateAsync({ activities: created });
+          // Roots only when the copy is not flat — a rollback batch holding the band's summary is
+          // refused for the same reason its undo is (422 SUMMARY_NOT_BULK_ELIGIBLE), which would
+          // leave the half-copy in place under a message about the original failure.
+          if (roots.length === created.length) {
+            await bulkDeleteActivities.mutateAsync({ activities: created });
+          } else {
+            for (const root of roots) await deleteActivity.mutateAsync(root.id);
+          }
         } catch {
           /* swallow — the refetch re-syncs the client to server truth */
         }
@@ -1608,6 +1619,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       editHistory.record(
         pasteActivitiesCommand({
           created,
+          roots,
+          deleteActivity: deleteActivity.mutateAsync,
           bulkDelete: bulkDeleteActivities.mutateAsync,
           restoreBatch: restoreDeleteBatch.mutateAsync,
           label:
