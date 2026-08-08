@@ -33,7 +33,12 @@ export function refusalMessage(refusal: CloneRefusal): string {
       // Says LINKS, not activities. The set-size sentence would send a planner to delete activities
       // from a selection that is already small enough — advice that cannot work, on the one screen
       // that is supposed to explain the problem.
-      return `That selection carries ${String(refusal.links)} links between its activities — more than the ${String(refusal.cap)} that can be copied at once. Copy it in smaller parts.`;
+      return `That selection carries ${String(refusal.links)} links between its activities — more than the ${String(refusal.cap)} that can be copied at once. Select a smaller group of activities and copy again.`;
+
+    case 'too-many-assignments':
+      // Names ASSIGNMENTS, and says the one thing that actually reduces them. A planner cannot act
+      // on "too many" when the number is a sum over a set they chose by activity.
+      return `Those activities carry ${String(refusal.assignments)} resource assignments between them — more than the ${String(refusal.cap)} that can be copied at once. Select a smaller group of activities and copy again.`;
 
     case 'lane-ceiling':
       return `The copy would need lane ${String(refusal.required)}, past the maximum of ${String(refusal.max)}. Move some activities up before copying.`;

@@ -34,10 +34,14 @@ import {
   type ActivityEditorIntent,
 } from '@/features/activities/lib/activity-editor-intent';
 import {
+  bandCopyConfirmation,
+  bandMembers,
+  MAX_CLONE_ASSIGNMENT_COUNT,
   missingNote,
   planClone,
   refusalMessage,
   resolveClipboard,
+  type BandCopyCopy,
   type ClipboardContents,
   type CloneRefusal,
 } from '@/features/activity-copy';
@@ -201,6 +205,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // underneath, and sharing one slot is how they would end up sharing one sentence.
   const [dissolveActivityId, setDissolveActivityId] = useState<string | null>(null);
   const onDissolveSummary = useCallback((a: ActivitySummary) => setDissolveActivityId(a.id), []);
+  // The summary targeted by **Duplicate band** (`docs/specs/activity-copy-paste/` M2). Its own
+  // state for the same reason Dissolve has its own: the two confirmations describe opposite fates
+  // for the work underneath, and one slot is how they would end up sharing one sentence.
+  const [duplicateBandId, setDuplicateBandId] = useState<string | null>(null);
+  const onDuplicateBand = useCallback((a: ActivitySummary) => setDuplicateBandId(a.id), []);
+  /**
+   * An activity the canvas should select and scroll to, set by a completed duplicate or paste.
+   *
+   * A **one-shot request** rather than a mirror of the selection: the canvas owns its selection and
+   * reports it outward (`onSelectionChange`), so a second inbound source of truth would fight it —
+   * every arrow-key move would be pulled back. The panel clears this the moment it honours it.
+   */
+  const [revealActivityId, setRevealActivityId] = useState<string | null>(null);
+  const onRevealHandled = useCallback(() => setRevealActivityId(null), []);
   /**
    * The tabbed editor's open intent (ADR-0060 §7, M5) — the ONE piece of state the three entry
    * points (**Edit**, **Report progress**, **Steps**) now share, replacing the three that could
@@ -1443,23 +1461,37 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    *
    * The CPM engine is not imported: this composes creates the product already makes.
    */
+  /**
+   * The ONE `planClone` input derivation.
+   *
+   * Extracted because the band confirmation and the write that follows it must plan the *same*
+   * copy: a preview built from a second derivation would drift, and it would drift in the one place
+   * a planner cannot check — the sentence says "3 activities and 2 links", the write does something
+   * else, and both look right in isolation. That is the ADR-0065 argument applied to a dialog.
+   */
+  const cloneInputFor = (
+    sources: readonly ActivitySummary[],
+    rows: readonly ActivitySummary[],
+  ): Parameters<typeof planClone>[0] => ({
+    set: sources,
+    dependencies: dependencies.data ?? [],
+    usedNames: new Set(rows.map((a) => a.name)),
+    archivedCalendarIds: new Set(
+      (calendars.data ?? []).filter((c) => c.archivedAt !== null).map((c) => c.id),
+    ),
+    offsetDays: 0,
+    laneOffset:
+      rows.reduce((hi, a) => Math.max(hi, a.laneIndex), -1) +
+      1 -
+      Math.min(...sources.map((a) => a.laneIndex)),
+    mode: isVisualMode ? 'VISUAL' : 'EARLY',
+  });
+
   const duplicateActivities = async (
     sources: readonly ActivitySummary[],
   ): Promise<DuplicateOutcome> => {
     const rows = activitiesRef.current ?? [];
-    const archivedCalendarIds = new Set(
-      (calendars.data ?? []).filter((c) => c.archivedAt !== null).map((c) => c.id),
-    );
-    const maxLane = rows.reduce((hi, a) => Math.max(hi, a.laneIndex), -1);
-    const plan_ = planClone({
-      set: sources,
-      dependencies: dependencies.data ?? [],
-      usedNames: new Set(rows.map((a) => a.name)),
-      archivedCalendarIds,
-      offsetDays: 0,
-      laneOffset: maxLane + 1 - Math.min(...sources.map((a) => a.laneIndex)),
-      mode: isVisualMode ? 'VISUAL' : 'EARLY',
-    });
+    const plan_ = planClone(cloneInputFor(sources, rows));
     if (!plan_.ok) return { applied: false, refusal: plan_.refusal, conflict: null };
 
     // Hold the coalesced recalculation for the whole composite so the bars cannot move between the
@@ -1470,6 +1502,37 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     const idMap = new Map<string, string>();
     const skippedAssignments: SkippedAssignment[] = [];
     try {
+      // **Read every source BEFORE writing anything.** Two reasons, and the second is the one that
+      // made this an ordering rather than a preference.
+      //
+      // `MAX_CLONE_ASSIGNMENT_COUNT` bounds the third rate-limit handler this composite touches,
+      // and `planClone` structurally cannot check it — it never sees an assignment. Counting here,
+      // before the first create, turns "over the cap" into a refusal that costs nothing to recover
+      // from. Counting as we went would mean discovering it half way through a 50-activity band and
+      // rolling the whole copy back, which is the failure the caps exist to prevent rather than a
+      // milder version of it.
+      //
+      // The request count is unchanged: these are the same two GETs per source the carriage made
+      // anyway, moved earlier.
+      const sources = new Map<string, Awaited<ReturnType<typeof cloneCarriage.readSource>>>();
+      let assignmentCount = 0;
+      for (const step of plan_.creates) {
+        const source = await cloneCarriage.readSource(step.sourceId);
+        sources.set(step.sourceId, source);
+        assignmentCount += source.assignments.length;
+      }
+      if (assignmentCount > MAX_CLONE_ASSIGNMENT_COUNT) {
+        return {
+          applied: false,
+          refusal: {
+            kind: 'too-many-assignments',
+            assignments: assignmentCount,
+            cap: MAX_CLONE_ASSIGNMENT_COUNT,
+          },
+          conflict: null,
+        };
+      }
+
       for (const step of plan_.creates) {
         const parentId = step.parentSourceId === null ? undefined : idMap.get(step.parentSourceId);
         const row = await createClone.mutateAsync({
@@ -1483,7 +1546,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // Inside the same try, so a failure here rolls the whole copy back like any other write —
         // a clone that exists without the resources it was supposed to carry is a half-copy the
         // planner has no way to spot, and the confirmation has already promised them otherwise.
-        const source = await cloneCarriage.readSource(step.sourceId);
+        const source = sources.get(step.sourceId);
+        if (source === undefined) continue;
         const carried = await cloneCarriage.carry({
           cloneId: row.id,
           cloneVersion: row.version,
@@ -1569,6 +1633,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         ? '1 activity duplicated.'
         : `${String(created.length)} activities duplicated.`) + skippedNote,
     );
+    // **Reveal the copy.** A clone lands below the plan's lowest lane, so on a 60-lane imported
+    // programme a successful duplicate otherwise produces no visible change at all — the planner
+    // reads "1 activity duplicated." and sees nothing move. The implementation plan named this as
+    // M1's risk (c) and US-1 made it an acceptance criterion; `createdIds` was produced and then
+    // read by nothing but a count until the M5 enablement pass. Selecting the first clone puts the
+    // canvas cursor on it, which is also what scrolls it into view.
+    const anchorId = created[0]?.id ?? null;
+    if (anchorId !== null) setRevealActivityId(anchorId);
+
     return {
       applied: true,
       refusal: null,
@@ -1576,6 +1649,30 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       createdIds: created.map((c) => c.id),
       skippedAssignments,
     };
+  };
+
+  /**
+   * **Duplicate a band** — the summary and its whole subtree
+   * (`docs/specs/activity-copy-paste/` M2, US-2).
+   *
+   * The confirmation's counts come off the **plan** `planClone` will execute, never off the
+   * selection, so the sentence a planner reads and the write that follows cannot disagree. Returns
+   * `null` when the band cannot be copied at all, so the caller can announce the refusal instead of
+   * opening a dialog that only says no.
+   *
+   * This is where M2's model finally reaches a planner. `bandMembers` and `bandCopyConfirmation`
+   * shipped with unit tests and **no caller at all** — the enablement review found them validating
+   * dead code, and the toolbar comment beside the excluded summary still read "copying the band
+   * with its subtree is M2" as though M2 were future work. The capability was not lit-but-inert; it
+   * was never offered.
+   */
+  const bandCopyPreview = (summary: ActivitySummary): BandCopyCopy | null => {
+    const rows = activitiesRef.current ?? [];
+    const members = bandMembers(rows, summary.id);
+    if (members.length === 0) return null;
+    const preview = planClone(cloneInputFor(members, rows));
+    if (!preview.ok) return null;
+    return bandCopyConfirmation(summary.name, preview);
   };
 
   /**
@@ -1646,6 +1743,27 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   };
 
   /**
+   * Run the band copy the confirmation described.
+   *
+   * Re-derives the members from the **live** rows rather than closing over what the preview saw: a
+   * planner can leave the dialog open while a colleague adds an activity to the band, and copying
+   * the band the dialog described rather than the band that exists would be a quietly wrong copy.
+   */
+  const confirmDuplicateBand = async (): Promise<void> => {
+    const summaryId = duplicateBandId;
+    if (summaryId === null) return;
+    const members = bandMembers(activitiesRef.current ?? [], summaryId);
+    setDuplicateBandId(null);
+    if (members.length === 0) {
+      announce('There is nothing in this band to copy.');
+      return;
+    }
+    const outcome = await duplicateActivities(members);
+    if (outcome.refusal !== null) announce(refusalMessage(outcome.refusal));
+    else if (outcome.conflict !== null) announce(outcome.conflict);
+  };
+
+  /**
    * The single-row entry point both hosts call. Refusals and conflicts are **announced**, because
    * this is the live region every other canvas action already speaks through and a planner driving
    * from the keyboard has no other channel; a refusal that only appeared visually would be silent
@@ -1665,6 +1783,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     planId,
     duplicateActivities,
     onDuplicateActivity,
+    /** Duplicate a band (M2): the confirmation's state, its copy, and the run. */
+    duplicateBandId,
+    setDuplicateBandId,
+    onDuplicateBand,
+    bandCopyPreview,
+    confirmDuplicateBand,
+    /** The canvas should select and scroll to this activity, then call `onRevealHandled`. */
+    revealActivityId,
+    onRevealHandled,
     /** The app clipboard (`docs/specs/activity-copy-paste/` M3): `Ctrl+C` / `Ctrl+V`. */
     copySelection,
     pasteClipboard,

@@ -3,6 +3,10 @@ import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { freeCopyName } from './clone-naming';
 import {
   projectClone,
+  // The ONE date shift. This module had a byte-for-byte copy of it — the "two implementations drift
+  // invisibly" failure (ADR-0065) landed inside one feature, one file apart, in the epic whose own
+  // docblocks cite that rule. Today's two call sites stayed in step by accident, not construction.
+  shiftIsoDay,
   type ClonePlacement,
   type CloneCreateBody,
   type CloneMode,
@@ -79,6 +83,27 @@ export const MAX_CLONE_SET_SIZE = 50;
  */
 export const MAX_CLONE_LINK_COUNT = 90;
 
+/**
+ * The largest number of **resource assignments** one copy may recreate.
+ *
+ * A third cap, for the third handler, and it exists because the first two were derived before the
+ * carriage did. The M2-T4 measurement timed a copy as `N + 1` activity creates plus `M` dependency
+ * creates — two handlers — and {@link MAX_CLONE_SET_SIZE} / {@link MAX_CLONE_LINK_COUNT} bound
+ * exactly those. M4 then added `POST …/activities/:id/assignments`, whose count is **the sum of
+ * assignments across the whole set** and is bounded by nothing: at the 50-activity cap, an average
+ * of just over two assignments each — a crew, a plant item, a material, which is ordinary
+ * resourcing — crosses 100 on that one handler and 429s.
+ *
+ * That failure is worse than the partial paste the caps exist to prevent, because the carriage has
+ * no back-off: the throw propagates and the composite rolls the **whole** copy back, late, after
+ * most of the work is done, on exactly the resourced bands M4 was built to serve.
+ *
+ * 90 for the same headroom reason as the link cap. Unlike the other two this cannot be checked by
+ * `planClone`, which never sees an assignment — so it is enforced by the composite, which now reads
+ * every source **before** it writes anything, making the refusal cost nothing to recover from.
+ */
+export const MAX_CLONE_ASSIGNMENT_COUNT = 90;
+
 /** Why a copy cannot proceed. Each case carries what a sentence needs to name the problem. */
 export type CloneRefusal =
   | { readonly kind: 'empty'; readonly reason: 'nothing-selected' }
@@ -87,6 +112,14 @@ export type CloneRefusal =
   | { readonly kind: 'too-many'; readonly size: number; readonly cap: number }
   /** The set is small enough but carries more internal logic than one copy may recreate. */
   | { readonly kind: 'too-many-links'; readonly links: number; readonly cap: number }
+  /**
+   * The set carries more resource assignments than one copy may recreate.
+   *
+   * Raised by the composite rather than by `planClone`, which never sees an assignment — but it
+   * lives in this union so the exhaustive `refusalMessage` switch still has to answer for it, and
+   * so every refusal a planner can meet is described in one place.
+   */
+  | { readonly kind: 'too-many-assignments'; readonly assignments: number; readonly cap: number }
   | {
       readonly kind: 'lane-ceiling';
       /** The highest lane a clone would need. */
@@ -263,13 +296,7 @@ export function planClone(input: PlanCloneInput): ClonePlanResult {
 function anchorOf(source: ActivitySummary, offsetDays: number): string | null {
   const base = source.visualStart ?? source.earlyStart;
   if (base === null) return null;
-  return shiftDay(base, offsetDays);
-}
-
-function shiftDay(iso: string, days: number): string {
-  const at = new Date(`${iso}T00:00:00.000Z`);
-  at.setUTCDate(at.getUTCDate() + days);
-  return at.toISOString().slice(0, 10);
+  return shiftIsoDay(base, offsetDays);
 }
 
 /**

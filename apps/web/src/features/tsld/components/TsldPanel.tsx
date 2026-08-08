@@ -321,6 +321,8 @@ export interface TsldPanelProps {
    * unwired host makes it a no-op rather than an error.
    */
   onDuplicateActivity?: (activity: ActivitySummary) => void;
+  /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
+  onDuplicateBand?: (activity: ActivitySummary) => void;
   /** Open the per-activity resource-assignment editor — the floating selection bar's **Resources**
    * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
@@ -478,6 +480,7 @@ export function TsldPanel({
   bulk,
   onDissolveSummary,
   onDuplicateActivity,
+  onDuplicateBand,
   onResources,
   onProgress,
   onSteps,
@@ -1305,6 +1308,7 @@ export function TsldPanel({
       // `dissolve` item is only registered behind its flag anyway.
       onDissolve: () => onDissolveSummary?.(activity),
       onDuplicate: () => onDuplicateActivity?.(activity),
+      onDuplicateBand: () => onDuplicateBand?.(activity),
       // The entry-route actions (Progress / Resources / Steps). Each is a no-op when the host didn't wire
       // it (the corresponding toolbar item is itself flag-gated, so it only renders when the flag — and
       // this handler — are present); building them unconditionally keeps the fields plain + required.
@@ -1323,6 +1327,7 @@ export function TsldPanel({
     onDeleteActivity,
     onDissolveSummary,
     onDuplicateActivity,
+    onDuplicateBand,
     onResources,
     onProgress,
     onSteps,

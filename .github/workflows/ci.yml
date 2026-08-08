@@ -349,6 +349,15 @@ jobs:
       - name: Web end-to-end tests (multi-select flag on)
         run: pnpm --filter @repo/web test:e2e:multi-select
 
+      # Activity copy / paste / duplicate (`VITE_ACTIVITY_COPY_PASTE`) against a real API with the
+      # pen enforced. What no mocked test can reach: that a copy carries what the census says, read
+      # back from the API rather than from the DOM under test (ADR-0070 M6); that the internal-edge
+      # rule holds against a real graph, with zero links from a clone to an original; that one
+      # Ctrl+Z removes the whole paste WITH its links; and that Ctrl+C stands down for a real text
+      # selection — `window.getSelection` is stubbed in the unit suite, so only a browser has one.
+      - name: Web end-to-end tests (copy/paste flag on)
+        run: pnpm --filter @repo/web test:e2e:copy-paste
+
       # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
       # theme, which is how the Corporate theme shipped with six contrast defects past a green
       # axe run. This one boots the shell once per picker option — light, dark, corporate, and

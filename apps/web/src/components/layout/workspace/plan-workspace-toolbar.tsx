@@ -227,7 +227,10 @@ export function ToolbarPlanWorkspace({
     model.editActivityId !== null ||
     model.editorIntent !== null ||
     model.deleteActivityId !== null ||
-    model.dissolveActivityId !== null;
+    model.dissolveActivityId !== null ||
+    // The band-copy confirmation is a modal like the rest: Ctrl+Z or Ctrl+V beneath it would mutate
+    // the plan the dialog is asking about.
+    model.duplicateBandId !== null;
 
   // Below `md` the vertical split can't give the canvas and the table useful height at once, so
   // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
@@ -430,6 +433,7 @@ export function ToolbarPlanWorkspace({
       bulk={model.bulkOperations}
       onDissolveSummary={model.onDissolveSummary}
       onDuplicateActivity={(a) => void model.onDuplicateActivity(a)}
+      onDuplicateBand={model.onDuplicateBand}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
       // toolbar item is flag-gated, so flag-off is byte-for-byte. Progress is role-gated via
       // `canReportProgress`; Steps hides for a duration-derived selection via `isStepsEligible`.
@@ -638,6 +642,29 @@ export function ToolbarPlanWorkspace({
       }}
     />
   ) : null;
+
+  // **Reveal a completed copy.** A clone lands below the plan's lowest lane, so on a 60-lane
+  // imported programme a successful duplicate otherwise produces no visible change at all — the
+  // planner reads "1 activity duplicated." and sees nothing move. The implementation plan named
+  // this as M1's risk (c) and US-1 made it an acceptance criterion; `createdIds` was produced and
+  // read by nothing but a count until the M5 enablement pass found it.
+  //
+  // Reuses the seam Next-conflict and search navigation already use — centre, then lift the
+  // selection — rather than a new inbound prop on `TsldPanel`. A second way to say "select this"
+  // would fight the panel's own selection, which is the thing that owns it.
+  useEffect(() => {
+    const id = model.revealActivityId;
+    if (id === null) return;
+    const activity = (model.activities.data ?? []).find((a) => a.id === id);
+    // Only once the row has arrived in the refetched list — a clone the client has not seen yet has
+    // no date to centre on, and selecting an unknown id would be a no-op the effect never retries.
+    if (activity === undefined) return;
+    if (activity.earlyStart !== null)
+      canvasUi.canvasControlRef.current?.centerOnDate(activity.earlyStart);
+    canvasUi.requestSelectActivity(id);
+    model.onSelectionChange(id);
+    model.onRevealHandled();
+  }, [model, canvasUi]);
 
   // Breadcrumb ends at the plan name (the current page) so the whole trail — Clients → client →
   // project → plan — reads on one header line (ADR-0031 two-row amendment). A visually-hidden <h1>

@@ -18,6 +18,7 @@ export {
   type ClonePlacement,
 } from './model/clone-projection';
 export {
+  MAX_CLONE_ASSIGNMENT_COUNT,
   MAX_CLONE_LINK_COUNT,
   MAX_CLONE_SET_SIZE,
   MAX_LANE_INDEX,

@@ -159,6 +159,7 @@ function Adr0030PlanWorkspace({
       bulk={model.bulkOperations}
       onDissolveSummary={model.onDissolveSummary}
       onDuplicateActivity={(a) => void model.onDuplicateActivity(a)}
+      onDuplicateBand={model.onDuplicateBand}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
       // toolbar item is flag-gated, so flag-off is byte-for-byte. Their dialogs are mounted in the
       // shared `PlanDialogs` below, so they work in this ADR-0030 layout too.

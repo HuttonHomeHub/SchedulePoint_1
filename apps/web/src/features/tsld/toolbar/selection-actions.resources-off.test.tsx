@@ -35,6 +35,7 @@ function ctx(): SelectionActionContext {
     isSummary: false,
     onDissolve: vi.fn(),
     onDuplicate: vi.fn(),
+    onDuplicateBand: vi.fn(),
   };
 }
 

@@ -54,6 +54,15 @@ export interface SelectionActionContext {
    * flag; the `duplicate` item that calls it is only registered when the flag is on.
    */
   onDuplicate: () => void;
+  /**
+   * Duplicate the selected **summary and its whole subtree** (M2, US-2) — a confirmed action,
+   * because it creates as many activities as the band holds.
+   *
+   * A separate callback rather than a branch inside `onDuplicate`, for the reason Dissolve is
+   * separate from Delete: the two operations differ in what they create, what they confirm and what
+   * they announce, and one entry point is how they end up sharing one sentence.
+   */
+  onDuplicateBand: () => void;
   /** Open the per-activity resource-assignment editor (entry-route win 2, `VITE_ENTRY_ROUTES`). Wired
    * regardless of the flag; the `resources` item that calls it is only registered when the flag is on. */
   onResources: () => void;
@@ -167,11 +176,18 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       disabledReason: () => PEN_REASON,
       onActivate: (ctx) => ctx.onEdit(),
     },
-    // Duplicate — after Edit, and hidden on a summary. Both facts mirror the activities-table row
-    // menu exactly, so the same operation reads the same on the canvas and in the table (the
-    // wording-convergence rule this bar already follows). `isSummary` is a context fact rather than
-    // a check inside the handler, so a summary selection cannot reach an action that would create
-    // an empty band — copying a band with its subtree is M2.
+    // Duplicate — after Edit, and present for EVERY selection including a summary.
+    //
+    // It read `isVisible: (ctx) => !ctx.isSummary` until the M5 enablement pass, with a comment
+    // saying "copying a band with its subtree is M2" — M2 whose model, tests and measurement had
+    // all shipped, and whose only missing piece was this line. Three independent reviews found the
+    // capability unreachable and its unit tests validating dead code. A summary now gets the action
+    // under its own name, which is what US-1's acceptance criterion always said.
+    //
+    // TWO items on inverse `isSummary` predicates, which is this bar's established shape (Dissolve
+    // and Delete already do exactly that) rather than one item that branches. `ToolbarItem.label` is
+    // a plain string — only `icon` takes a context function, and deliberately so — so a single item
+    // could not rename itself without widening a shared primitive for one caller.
     ...(ACTIVITY_COPY_PASTE_ENABLED
       ? [
           {
@@ -187,6 +203,22 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
             isVisible: (ctx: SelectionActionContext) => !ctx.isSummary,
             onActivate: (ctx: SelectionActionContext) => {
               ctx.onDuplicate();
+            },
+          } satisfies ToolbarItem<SelectionActionContext>,
+          {
+            id: 'duplicate-band',
+            group: 'object',
+            tier: 1,
+            showLabel: 'always',
+            order: 4.5,
+            label: 'Duplicate band',
+            description: 'Copies the summary and every activity in it',
+            icon: <Copy className="size-4" />,
+            penGated: true,
+            disabledReason: () => PEN_REASON,
+            isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
+            onActivate: (ctx: SelectionActionContext) => {
+              ctx.onDuplicateBand();
             },
           } satisfies ToolbarItem<SelectionActionContext>,
         ]
