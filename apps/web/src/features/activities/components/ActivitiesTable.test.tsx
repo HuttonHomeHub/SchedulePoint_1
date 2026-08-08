@@ -116,22 +116,38 @@ describe('ActivitiesTable', () => {
     expect(openRowMenu('Excavate')).toContain('Edit');
   });
 
-  it('hides write actions for non-writers', () => {
-    // Resources is a member-level action (VITE_RESOURCES defaults on), so the row still has a
-    // trigger/menu for a non-writer — but the write-only actions (Edit/Delete/Steps) must be absent.
+  /**
+   * **These two were inverted deliberately (ADR-0082 / `docs/TECH_DEBT.md` #111), not bent to fit.**
+   *
+   * They used to require that write actions be ABSENT for a non-writer. That is what made the row
+   * menu teach a different mental model from the canvas selection bar, which shades the same actions
+   * and says why — and it left a planner who lost the pen mid-session unable to discover that the
+   * capability exists at all. The house rule is ADR-0062 M6: present and shaded, never hidden.
+   *
+   * What has NOT changed, and is still asserted below: an action that does not apply to this row, or
+   * whose flag is off, is still omitted. "Shade, never hide" is not "shade everything".
+   */
+  it('SHADES write actions for a non-writer rather than hiding them', () => {
     renderTable(false);
     const items = openRowMenu('Excavate');
-    expect(items).not.toContain('Edit');
-    expect(items).not.toContain('Delete');
-    expect(items).not.toContain('Steps');
+    expect(items).toContain('Edit');
+    expect(items).toContain('Delete');
+    const edit = screen.getByRole('menuitem', { name: 'Edit' });
+    expect(edit).toHaveAttribute('aria-disabled', 'true');
+    // The reason is a description, not part of the name — the ToolbarButton trap.
+    expect(edit).toHaveAccessibleName('Edit');
+    expect(edit.getAttribute('aria-describedby')).not.toBeNull();
   });
 
-  it('shows only the progress action for a progress-reporter who cannot write', () => {
+  it('shades write actions for a progress-reporter, keeping progress actionable', () => {
     renderTable(false, [ACTIVITY], true);
     const items = openRowMenu('Excavate');
     expect(items).toContain('Report progress');
-    expect(items).not.toContain('Edit');
-    expect(items).not.toContain('Delete');
+    // Actionable, because progress is deliberately NOT pen-gated (ADR-0060 Q-C).
+    expect(screen.getByRole('menuitem', { name: 'Report progress' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('shows progress plus edit/delete for a writer who can also report progress', () => {

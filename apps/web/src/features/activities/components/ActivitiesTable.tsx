@@ -345,7 +345,21 @@ export function ActivitiesTable({
   // The per-row action list, role-/flag-gated (ADR-0039/0044). Feeds both the decision to show a
   // row's "⋯" trigger and the items in its overflow `Menu` (TECH_DEBT #38: dense row actions belong
   // behind the APG `Menu`, never a spread of hover-only ghost buttons — docs/UX_STANDARDS.md).
-  type RowAction = { key: string; label: string; destructive?: boolean; onSelect: () => void };
+  type RowAction = {
+    key: string;
+    label: string;
+    destructive?: boolean;
+    onSelect: () => void;
+    /**
+     * Present but shut, with why (ADR-0082 §3). Absent ⇒ actionable.
+     *
+     * Only for a reason the reader can DO something about — the pen, a role. An action that does
+     * not apply to this row (Dissolve off a non-summary), or whose flag is off, is still **omitted**:
+     * shading those would imply a capability that does not exist, and the flag-off parity suites
+     * depend on absence.
+     */
+    disabledReason?: string;
+  };
   const actionsFor = (activity: ActivitySummary): RowAction[] => {
     const actions: RowAction[] = [];
     if (onOpenLogic) {
@@ -389,8 +403,25 @@ export function ActivitiesTable({
     ) {
       actions.push({ key: 'steps', label: 'Steps', onSelect: () => openFor(activity, 'steps') });
     }
-    if (canEditSchedule) {
-      actions.push({ key: 'edit', label: 'Edit', onSelect: () => openFor(activity, 'edit') });
+    {
+      // **Shaded, not hidden** (ADR-0082, `docs/TECH_DEBT.md` #111). These used to be pushed only
+      // `if (canEditSchedule)`, so a Planner who lost the pen mid-session saw Duplicate shaded on
+      // the canvas and simply absent here — one operation teaching two mental models.
+      //
+      // The gate is `editorGating.general` **by identity**, not a second `{ writable, reason }`
+      // assembled beside it: two derivations of "may this person write" drift, and the drift is
+      // invisible because each surface looks right alone (ADR-0062's argument, pinned by a test).
+      const gate = editorGating?.general ?? {
+        writable: canEditSchedule,
+        reason: canEditSchedule ? null : 'You cannot change this plan right now.',
+      };
+      const shut = gate.writable ? {} : { disabledReason: gate.reason ?? 'Not available.' };
+      actions.push({
+        key: 'edit',
+        label: 'Edit',
+        ...shut,
+        onSelect: () => openFor(activity, 'edit'),
+      });
       // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
       // planner reaches for when the row is nearly right. Deliberately NOT offered on a summary:
       // duplicating one leaf of a band would produce an empty grouping, and copying the band with
@@ -400,6 +431,7 @@ export function ActivitiesTable({
         actions.push({
           key: 'duplicate',
           label: 'Duplicate',
+          ...shut,
           onSelect: () => onDuplicate(activity),
         });
       }
@@ -410,6 +442,7 @@ export function ActivitiesTable({
         actions.push({
           key: 'dissolve',
           label: 'Dissolve',
+          ...shut,
           onSelect: () => {
             setDissolveError(null);
             setDissolving(activity);
@@ -420,6 +453,7 @@ export function ActivitiesTable({
         key: 'delete',
         label: 'Delete',
         destructive: true,
+        ...shut,
         onSelect: () => {
           setDeleteError(null);
           setDeleting(activity);
@@ -710,7 +744,12 @@ export function ActivitiesTable({
       cellClassName: 'py-2 text-right whitespace-nowrap',
       cell: (activity) => {
         const actions = actionsFor(activity);
-        if (actions.length === 0) return null;
+        // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
+        // the second clause a Viewer would open a menu of nothing but refusals — and it is what
+        // keeps the all-disabled focus trap out of reach rather than merely fixed.
+        if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
+          return null;
+        }
         const openHere = menu?.activity.id === activity.id;
         return (
           <Button
@@ -942,6 +981,10 @@ export function ActivitiesTable({
             <MenuItem
               key={action.key}
               destructive={action.destructive ?? false}
+              disabled={action.disabledReason !== undefined}
+              {...(action.disabledReason === undefined
+                ? {}
+                : { disabledReason: action.disabledReason })}
               onSelect={action.onSelect}
             >
               {action.label}

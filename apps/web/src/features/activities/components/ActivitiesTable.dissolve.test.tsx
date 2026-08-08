@@ -79,12 +79,16 @@ describe('ActivitiesTable — Dissolve row action (flag on)', () => {
 
   // Dissolve is a pen-gated structural write (it reparents rows and soft-deletes one), so it rides
   // the same `canEditSchedule` gate as Edit and Delete rather than a rule of its own.
-  it('does not offer Dissolve without edit rights', () => {
+  it('SHADES Dissolve without edit rights rather than hiding it', () => {
+    // Inverted deliberately (ADR-0082 / `docs/TECH_DEBT.md` #111): a destructive-adjacent action a
+    // planner cannot currently take is still worth them knowing exists — and knowing why it is off,
+    // which is the half hiding it could never deliver. The row menu opens either way (Logic is
+    // read-only), so this assertion really runs rather than passing on an absent trigger.
     renderTable(SUMMARY_WITH_CHILDREN, false);
-    // The row menu still opens without edit rights (Logic is read-only), so this assertion really
-    // runs rather than vacuously passing on an absent trigger.
     const menu = openMenuFor('Substructure');
-    expect(within(menu).queryByRole('menuitem', { name: 'Dissolve' })).not.toBeInTheDocument();
+    const dissolve = within(menu).getByRole('menuitem', { name: 'Dissolve' });
+    expect(dissolve).toHaveAttribute('aria-disabled', 'true');
+    expect(dissolve.getAttribute('aria-describedby')).not.toBeNull();
   });
 
   it('confirms with copy that says the work is kept and where it goes', () => {

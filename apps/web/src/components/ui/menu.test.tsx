@@ -63,7 +63,17 @@ describe('Menu', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('a disabled item is aria-disabled, inert on click, and skipped by roving focus', () => {
+  /**
+   * **This assertion was inverted deliberately (ADR-0082), not bent to fit new code.**
+   *
+   * It used to require that roving focus SKIP a disabled item. That skip is why a shaded menu item's
+   * reason was unreachable by keyboard — which is why `docs/TECH_DEBT.md` #111 could not be fixed at
+   * its call site — and it also produced two live bugs asserted below. The APG's *Developing a
+   * Keyboard Interface* practice names "Menu items in a Menu or menu bar" among the controls that
+   * should stay focusable when disabled, so including them returns this primitive to the pattern it
+   * implements.
+   */
+  it('a disabled item is aria-disabled and inert on click, but KEEPS its place in roving focus', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
     render(
@@ -84,11 +94,70 @@ describe('Menu', () => {
     fireEvent.click(hammock);
     expect(onSelect).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-    // Roving focus jumps over the disabled item: first → last, skipping Hammock.
+    // Roving focus REACHES it — the point of the change. Without this the reason below is
+    // announced to nobody.
     expect(task).toHaveFocus();
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(hammock).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
     expect(milestone).toHaveFocus();
-    expect(hammock).not.toHaveFocus();
+  });
+
+  it('announces a disabled reason as a DESCRIPTION, leaving the name alone', () => {
+    // The `ToolbarButton` trap, asserted rather than commented: an sr-only reason rendered inside
+    // the button leaks into the accessible NAME as well as the description. Here the span is a
+    // sibling, so the name is exactly what the children say.
+    render(
+      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Row actions">
+        <MenuItem
+          disabled
+          disabledReason="Start editing to change this activity."
+          onSelect={vi.fn()}
+        >
+          Duplicate
+        </MenuItem>
+      </Menu>,
+    );
+    const item = screen.getByRole('menuitem', { name: 'Duplicate' });
+    expect(item).toHaveAccessibleName('Duplicate');
+    expect(item).toHaveAccessibleDescription('Start editing to change this activity.');
+  });
+
+  it('wraps ArrowUp onto the LAST item even when focus sits on a disabled one', () => {
+    // Regression for a live bug the skip caused: `items.indexOf(activeElement)` was -1 for a
+    // filtered-out item, so ArrowUp computed `items[(-1 - 1 + n) % n]` — the SECOND-to-last.
+    // Reachable today wherever an item becomes disabled while focused (account-chip's Sign out
+    // during its own pending write).
+    render(
+      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Wrap">
+        <MenuItem disabled disabledReason="Nope." onSelect={vi.fn()}>
+          First
+        </MenuItem>
+        <MenuItem onSelect={vi.fn()}>Middle</MenuItem>
+        <MenuItem onSelect={vi.fn()}>Last</MenuItem>
+      </Menu>,
+    );
+    const menu = screen.getByRole('menu');
+    expect(screen.getByRole('menuitem', { name: 'First' })).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    expect(screen.getByRole('menuitem', { name: 'Last' })).toHaveFocus();
+  });
+
+  it('focuses its first item on open even when every item is disabled', () => {
+    // The other live bug: `itemsOf(...)[0]` was `undefined`, so focus stayed on the trigger —
+    // which is OUTSIDE the portal, so the container's React onKeyDown never saw the arrows and only
+    // Escape worked. A focus trap in a menu of refusals.
+    render(
+      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="All shut">
+        <MenuItem disabled disabledReason="Take the edit lock." onSelect={vi.fn()}>
+          Edit
+        </MenuItem>
+        <MenuItem disabled disabledReason="Take the edit lock." onSelect={vi.fn()}>
+          Delete
+        </MenuItem>
+      </Menu>,
+    );
+    expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveFocus();
   });
 
   it('a `selected` item becomes a radio menu item conveying its checked state to AT', () => {
