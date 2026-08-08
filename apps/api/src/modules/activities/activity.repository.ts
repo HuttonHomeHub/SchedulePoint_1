@@ -219,6 +219,69 @@ export class ActivityRepository {
     });
   }
 
+  /**
+   * Batch **placement** write: one set-based UPDATE moving a plan's activities in time, and
+   * optionally in lane, keyed by `id + version` (ADR-0033 constraints + `visualStart`).
+   *
+   * The parameter type is the whole guarantee that a bulk move cannot rename anything: it names
+   * four placement columns and no others, so no definition field is reachable from this seam even
+   * by accident. A structural test pins that signature.
+   *
+   * `laneIndex: null` means **leave the lane alone** — `COALESCE` in the SQL, not a write of null,
+   * because `lane_index` is `NOT NULL`. Every other null is a genuine clear.
+   *
+   * One statement, never a per-row loop: the ADR-0053 M6 lesson (830 ms → 13 ms for 2,000 rows),
+   * and here it is also held under the plan advisory lock, where a loop's cost is everyone's.
+   */
+  async updatePlacements(
+    organizationId: string,
+    planId: string,
+    placements: readonly {
+      id: string;
+      version: number;
+      constraintType: ConstraintType | null;
+      constraintDate: string | null;
+      visualStart: string | null;
+      laneIndex: number | null;
+    }[],
+    updatedBy: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (placements.length === 0) return 0;
+    const ids = placements.map((p) => p.id);
+    const versions = placements.map((p) => p.version);
+    // Enum and date arrays travel as text and are cast in the statement: `unnest` needs a concrete
+    // element type, and a nullable enum[] parameter round-trips more reliably as text[] here.
+    const constraintTypes = placements.map((p) => p.constraintType);
+    const constraintDates = placements.map((p) => p.constraintDate);
+    const visualStarts = placements.map((p) => p.visualStart);
+    const laneIndexes = placements.map((p) => p.laneIndex);
+
+    return db.$executeRaw`
+      UPDATE activities AS a
+      SET constraint_type = v.constraint_type::"ConstraintType",
+          constraint_date = v.constraint_date::date,
+          visual_start = v.visual_start::date,
+          lane_index = COALESCE(v.lane_index, a.lane_index),
+          version = a.version + 1,
+          updated_by = ${updatedBy}::text,
+          updated_at = now()
+      FROM unnest(
+        ${ids}::uuid[],
+        ${versions}::int[],
+        ${constraintTypes}::text[],
+        ${constraintDates}::text[],
+        ${visualStarts}::text[],
+        ${laneIndexes}::int[]
+      ) AS v(id, version, constraint_type, constraint_date, visual_start, lane_index)
+      WHERE a.id = v.id
+        AND a.version = v.version
+        AND a.plan_id = ${planId}::uuid
+        AND a.organization_id = ${organizationId}::uuid
+        AND a.deleted_at IS NULL
+    `;
+  }
+
   async updateLanePositions(
     organizationId: string,
     planId: string,

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
@@ -41,10 +43,12 @@ import {
   resolveDayFactorMinutes,
   type WithDayFactor,
 } from './day-factor';
+import type { BulkDeleteActivitiesDto } from './dto/bulk-delete-activities.dto';
 import type { CreateActivityDto } from './dto/create-activity.dto';
 import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
 import type { UpdateActivityDto } from './dto/update-activity.dto';
 import type { UpdateParentsDto } from './dto/update-parents.dto';
+import type { UpdatePlacementsDto } from './dto/update-placements.dto';
 import type { UpdatePositionsDto } from './dto/update-positions.dto';
 
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
@@ -752,6 +756,94 @@ export class ActivitiesService {
   }
 
   /**
+   * Batch **placement** write: move one or more of a plan's activities in time — and optionally in
+   * lane — in a single **all-or-nothing** transaction. The third member of the complete-row batch
+   * family, after {@link ActivitiesService.updatePositions} (lane only) and
+   * {@link ActivitiesService.updateParents} (WBS membership), and built to the same shape.
+   *
+   * Every id must be an active activity in this plan+org (anti-IDOR) and still match its
+   * optimistic-lock `version`, or the whole batch is rejected and **nothing moves**. That is the
+   * point rather than a nicety: a partially-applied time shift is not a failed edit, it is a
+   * plausible-looking fragnet with wrong logic — a schedule a planner would read as deliberate.
+   *
+   * **Structural**, like the parents batch: constraints and `visualStart` feed the CPM engine, so a
+   * committed batch leaves the plan's computed dates stale until the next recalculation. It writes
+   * placement fields only — a bulk move cannot reach a definition field, which the repository
+   * signature enforces rather than this comment.
+   *
+   * A `WBS_SUMMARY` is refused (422): a summary's dates are an engine rollup of its children, so
+   * there is nothing on it to place and no honest answer to what placing one would mean.
+   */
+  async updatePlacements(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    dto: UpdatePlacementsDto,
+  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:update', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
+    await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
+    await this.editLock.assertHoldsPen(principal, planId, organization.id);
+
+    const ids = dto.placements.map((p) => p.id);
+    if (new Set(ids).size !== ids.length) {
+      throw new ValidationError('Each activity may appear at most once in a placements batch.', {
+        reason: 'DUPLICATE_PLACEMENT_ID',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Read the batch's rows once — the summary refusal and the 404-vs-409 distinction below are
+      // both answered from it, and it is bounded by the batch, not by the plan.
+      const existing = await tx.activity.findMany({
+        where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+        select: { id: true, type: true },
+      });
+      const byId = new Map(existing.map((a) => [a.id, a]));
+      // 404 BEFORE the type check, so a caller naming a foreign id is told it is not here rather
+      // than what type it is — the no-existence-oracle rule the rest of the module follows.
+      if (ids.some((id) => !byId.has(id))) {
+        throw new NotFoundError('Activity not found in this plan.');
+      }
+      if (existing.some((a) => a.type === 'WBS_SUMMARY')) {
+        throw new ValidationError(
+          'A WBS summary cannot be placed: its dates roll up from its children.',
+          {
+            reason: 'SUMMARY_NOT_BULK_ELIGIBLE',
+          },
+        );
+      }
+
+      // One set-based UPDATE keyed by id+version and re-asserting plan/org/active scope. Every id
+      // was just proven present, so a shortfall here can only be a stale version.
+      const updated = await this.activities.updatePlacements(
+        organization.id,
+        planId,
+        dto.placements,
+        principal.userId,
+        tx,
+      );
+      if (updated !== dto.placements.length) {
+        throw new ConflictError(
+          'This plan changed since you opened it — nothing was moved. Refresh and try again.',
+        );
+      }
+    });
+
+    this.logger.info(
+      { organizationId: organization.id, planId, userId: principal.userId, count: ids.length },
+      'activity placements updated',
+    );
+
+    // Return the moved rows with their fresh versions so the client can reconcile optimistic state.
+    const items = await this.prisma.activity.findMany({
+      where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+    });
+    return { items: await this.withDayFactors(items), canReadCost };
+  }
+
+  /**
    * Batch WBS membership write: file one or more of a plan's activities under a summary — or, on a
    * null `parentId`, back at the top level — in a single **all-or-nothing** transaction. Every id
    * must be an active activity in this plan+org (anti-IDOR) and still match its optimistic-lock
@@ -1125,6 +1217,206 @@ export class ActivitiesService {
       { organizationId: organization.id, activityId, userId: principal.userId },
       'activity deleted',
     );
+  }
+
+  /**
+   * Bulk delete: soft-delete several of a plan's activities as **one act**.
+   *
+   * The whole design is in the batch id. Twelve separate `remove` calls would mint twelve
+   * `deleteBatchId`s, so undoing the gesture would be twelve restores and — worse — a link between
+   * two of the deleted activities would be endpoint-guarded back out on all but the last
+   * (`restoreLinksInBatch`). One injected batch id makes the delete and its undo symmetrical, which
+   * is why {@link HierarchyLifecycleService.cascadeSoftDelete} grew the parameter.
+   *
+   * **One audit row**, subject = the PLAN, following `activity.reparented`: a batch has no single
+   * activity it happened to, and ADR-0073 C3.1's rule is one row per user action and never one per
+   * swept row. `subjectType` is what distinguishes this from a single delete when reading the log —
+   * `ACTIVITY` for one, `PLAN` for a batch — so no new action name is needed and the ADR-0073 C4
+   * action-filter cap is untouched.
+   *
+   * A `WBS_SUMMARY` is refused (422). Deleting one takes its whole subtree with it (ADR-0038);
+   * letting that ride along inside a forty-bar selection would make the most destructive operation
+   * in the product the easiest one to trigger by accident. So a bulk delete is always leaf-only,
+   * and therefore always cascade-shallow — which is what makes its undo honest.
+   */
+  async bulkDelete(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    dto: BulkDeleteActivitiesDto,
+    context?: RequestContext,
+  ): Promise<{ deleteBatchId: string; activityCount: number; dependencyCount: number }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:delete', organization.id);
+    const plan = await this.loadActivePlan(planId, organization.id); // 404 if foreign/deleted
+    await this.editLock.assertHoldsPen(principal, planId, organization.id);
+
+    const ids = dto.activities.map((a) => a.id);
+    if (new Set(ids).size !== ids.length) {
+      throw new ValidationError('Each activity may appear at most once in a bulk delete.', {
+        reason: 'DUPLICATE_DELETE_ID',
+      });
+    }
+
+    const batchId = randomUUID();
+    const totals = await this.prisma.$transaction(async (tx) => {
+      // Serialise against the other structural writers: a cascade reads a subtree and then writes
+      // it, and this one does that N times.
+      await acquirePlanWriteLock(tx, planId);
+
+      const existing = await tx.activity.findMany({
+        where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+        select: { id: true, type: true, version: true },
+      });
+      const byId = new Map(existing.map((a) => [a.id, a]));
+      // 404 before the type check and before the version check, so a foreign id is never told
+      // anything about the row it named.
+      if (ids.some((id) => !byId.has(id))) {
+        throw new NotFoundError('Activity not found in this plan.');
+      }
+      if (existing.some((a) => a.type === 'WBS_SUMMARY')) {
+        throw new ValidationError(
+          'A WBS summary cannot be deleted in a batch: deleting one removes everything inside it.',
+          { reason: 'SUMMARY_NOT_BULK_ELIGIBLE' },
+        );
+      }
+      // All-or-nothing on the optimistic version, checked BEFORE the first sweep rather than by a
+      // count shortfall afterwards: `cascadeSoftDelete` takes no version, so there is no count to
+      // fall short. Under the plan lock nothing else can move these rows between here and the
+      // sweep.
+      if (dto.activities.some((a) => byId.get(a.id)?.version !== a.version)) {
+        throw new ConflictError(
+          'This plan changed since you opened it — nothing was deleted. Refresh and try again.',
+        );
+      }
+
+      let activityCount = 0;
+      let dependencyCount = 0;
+      for (const id of ids) {
+        const cascade = await this.lifecycle.cascadeSoftDelete(
+          tx,
+          'activity',
+          id,
+          principal.userId,
+          batchId,
+        );
+        activityCount += cascade.counts.activities;
+        dependencyCount += cascade.counts.dependencies;
+      }
+
+      // Scalars only — the redactor reduces any non-scalar to a type marker by design, which is
+      // how a delete of 412 activities once recorded the batch id and not the size (ADR-0073 C3.1
+      // §0.1). Counts come from the cascade's RETURN VALUE, so they are what happened.
+      await this.audit.record(
+        {
+          action: 'activity.deleted',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'PLAN',
+          subjectId: planId,
+          subjectLabel: plan.name,
+          after: {
+            planName: plan.name,
+            deleteBatchId: batchId,
+            activityCount,
+            dependencyCount,
+          },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+
+      return { activityCount, dependencyCount };
+    });
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        planId,
+        userId: principal.userId,
+        deleteBatchId: batchId,
+        count: ids.length,
+      },
+      'activities bulk deleted',
+    );
+    return { deleteBatchId: batchId, ...totals };
+  }
+
+  /**
+   * Restore everything soft-deleted under one `deleteBatchId` — **id-stable, links intact**.
+   *
+   * ADR-0048's already-designed, long-deferred M4 restore, built now because CQ-4 was answered
+   * "build it": without it, undoing a bulk delete means re-creating the activities, which mints new
+   * ids, which silently drops every dependency that touched them. That is not a cosmetic loss on an
+   * undo — it is a schedule with different logic than the one the planner had a moment ago, and it
+   * looks deliberate.
+   *
+   * Implemented by handing one member of the batch to the existing
+   * {@link HierarchyLifecycleService.restoreBatch}, which keys the whole restore on that row's
+   * batch id. Deliberately not a second restore path: every guard the single restore has —
+   * top-down parent-active, the name/code uniques, the dependency endpoint guard — applies
+   * unchanged, and a parallel implementation would drift from them invisibly.
+   */
+  async restoreDeleteBatch(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    deleteBatchId: string,
+    context?: RequestContext,
+  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:restore', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
+    const plan = await this.loadActivePlan(planId, organization.id); // 404 if foreign/deleted
+    await this.editLock.assertHoldsPen(principal, planId, organization.id);
+
+    // Scoped to org + plan, so a batch id from another tenant — or from a delete of a different
+    // plan — reads as a batch that is not here rather than as a permission failure.
+    const members = await this.prisma.activity.findMany({
+      where: { organizationId: organization.id, planId, deleteBatchId, deletedAt: { not: null } },
+      select: { id: true },
+    });
+    if (members.length === 0) throw new NotFoundError('Deleted batch not found in this plan.');
+    const ids = members.map((m) => m.id);
+    const anchorId = ids[0];
+    if (anchorId === undefined) throw new NotFoundError('Deleted batch not found in this plan.');
+
+    await this.prisma.$transaction(async (tx) => {
+      await acquirePlanWriteLock(tx, planId);
+      // ONE call restores the whole batch: `restoreBatch` reads the anchor's `deleteBatchId` and
+      // sweeps every table on it, then reactivates the links whose BOTH endpoints are live again.
+      // Calling it per member would be N redundant sweeps of the same batch.
+      const counts = await this.lifecycle.restoreBatch(tx, 'activity', anchorId, principal.userId);
+      await this.audit.record(
+        {
+          action: 'activity.restored',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'PLAN',
+          subjectId: planId,
+          subjectLabel: plan.name,
+          after: { deleteBatchId, activityCount: counts.activities },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+    });
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        planId,
+        userId: principal.userId,
+        deleteBatchId,
+        count: ids.length,
+      },
+      'activity delete-batch restored',
+    );
+
+    const items = await this.prisma.activity.findMany({
+      where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+    });
+    return { items: await this.withDayFactors(items), canReadCost };
   }
 
   /**

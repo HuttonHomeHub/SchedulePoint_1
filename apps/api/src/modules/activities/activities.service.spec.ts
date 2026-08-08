@@ -161,6 +161,7 @@ describe('ActivitiesService', () => {
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
     findPlanWbsTree: ReturnType<typeof vi.fn>;
     updateParents: ReturnType<typeof vi.fn>;
+    updatePlacements: ReturnType<typeof vi.fn>;
   };
   let lifecycle: {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
@@ -181,6 +182,9 @@ describe('ActivitiesService', () => {
   // The destination summary's name, read inside the reparent transaction for the audit row
   // (ADR-0073 C3.1). Named so a test can assert the batch looked one up at all.
   let txParentFindFirst: ReturnType<typeof vi.fn>;
+  // The in-transaction membership read the batch placement / bulk-delete paths do before writing —
+  // hoisted so a test can put a summary, a stale version or a ghost id in front of them.
+  let txActivityFindMany: ReturnType<typeof vi.fn>;
   // Hoisted so a test can assert WHICH advisory locks a write path took. Both the plan write lock
   // (ADR-0038 parent-tree serialisation) and the calendar scope guard's lock go through
   // `tx.$executeRaw` as tagged templates, distinguishable by their namespace argument.
@@ -212,6 +216,7 @@ describe('ActivitiesService', () => {
       updateIfVersionMatches: vi.fn(),
       findPlanWbsTree: vi.fn().mockResolvedValue([]),
       updateParents: vi.fn(),
+      updatePlacements: vi.fn(),
     };
     lifecycle = {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
@@ -223,13 +228,14 @@ describe('ActivitiesService', () => {
     txDrivingUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     txExecuteRaw = vi.fn();
     txParentFindFirst = vi.fn().mockResolvedValue({ name: 'Phase 1' });
+    txActivityFindMany = vi.fn().mockResolvedValue([]);
     prisma = {
       // The post-transaction re-read of the rows a batch write moved.
       activity: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,
-          activity: { findFirst: txParentFindFirst },
+          activity: { findFirst: txParentFindFirst, findMany: txActivityFindMany },
           resourceAssignment: {
             findFirst: txDrivingFindFirst,
             updateMany: txDrivingUpdateMany,
@@ -1366,6 +1372,197 @@ describe('ActivitiesService', () => {
         NotFoundError,
       );
       expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * The batch operations a canvas multi-select needs (`docs/specs/canvas-multi-select/` M1).
+   *
+   * These assert the **guard ordering** and the **no-write-on-refusal** property, which is what a
+   * unit spec can prove and an e2e cannot cheaply: that a refused batch never reached the writer at
+   * all, rather than reaching it and being rolled back. The behaviour against a real Postgres —
+   * all-or-nothing, the shared batch id, the single audit row — is `activity-batch-ops.e2e-spec.ts`.
+   */
+  describe('updatePlacements (batch placement write)', () => {
+    const row = (id: string, version = 1) => ({
+      id,
+      version,
+      constraintType: null,
+      constraintDate: null,
+      visualStart: null,
+      laneIndex: null,
+    });
+    const call = (placements: ReturnType<typeof row>[]) =>
+      service.updatePlacements(principalWith(ALL), 'acme', PLAN_ID, { placements });
+
+    it('writes the batch through the repository when every id is in the plan', async () => {
+      txActivityFindMany.mockResolvedValue([{ id: 'a', type: 'TASK', version: 1 }]);
+      activities.updatePlacements.mockResolvedValue(1);
+      await call([row('a')]);
+      expect(activities.updatePlacements).toHaveBeenCalledWith(
+        ORG_ID,
+        PLAN_ID,
+        [row('a')],
+        USER_ID,
+        expect.anything(),
+      );
+    });
+
+    it('422s a duplicate id without writing (DUPLICATE_PLACEMENT_ID)', async () => {
+      await expect(call([row('a'), row('a')])).rejects.toBeInstanceOf(ValidationError);
+      expect(activities.updatePlacements).not.toHaveBeenCalled();
+    });
+
+    it('404s an id that is not in this plan, and does not write (anti-IDOR)', async () => {
+      txActivityFindMany.mockResolvedValue([]);
+      await expect(call([row('ghost')])).rejects.toBeInstanceOf(NotFoundError);
+      expect(activities.updatePlacements).not.toHaveBeenCalled();
+    });
+
+    it('404s a foreign id BEFORE it can learn the type of anything', async () => {
+      // The ordering matters: telling a caller "that is a summary" about an id they cannot see
+      // would answer "does this activity exist" — the existence oracle the module avoids.
+      txActivityFindMany.mockResolvedValue([{ id: 'a', type: 'WBS_SUMMARY', version: 1 }]);
+      await expect(call([row('a'), row('ghost')])).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('422s a WBS summary without writing (SUMMARY_NOT_BULK_ELIGIBLE)', async () => {
+      txActivityFindMany.mockResolvedValue([{ id: 's', type: 'WBS_SUMMARY', version: 1 }]);
+      await expect(call([row('s')])).rejects.toBeInstanceOf(ValidationError);
+      expect(activities.updatePlacements).not.toHaveBeenCalled();
+    });
+
+    it('409s when the set-based write moves fewer rows than the batch names', async () => {
+      txActivityFindMany.mockResolvedValue([
+        { id: 'a', type: 'TASK', version: 1 },
+        { id: 'b', type: 'TASK', version: 1 },
+      ]);
+      activities.updatePlacements.mockResolvedValue(1); // one stale
+      await expect(call([row('a'), row('b')])).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it('423s without the pen, before any read or write', async () => {
+      penGuard.assertHoldsPen.mockRejectedValue(new LockedError('no pen'));
+      await expect(call([row('a')])).rejects.toBeInstanceOf(LockedError);
+      expect(txActivityFindMany).not.toHaveBeenCalled();
+      expect(activities.updatePlacements).not.toHaveBeenCalled();
+    });
+
+    it('403s a principal without activity:update', async () => {
+      await expect(
+        service.updatePlacements(principalWith([]), 'acme', PLAN_ID, { placements: [row('a')] }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe('bulkDelete', () => {
+    const ref = (id: string, version = 1) => ({ id, version });
+    const call = (activitiesToDelete: ReturnType<typeof ref>[]) =>
+      service.bulkDelete(principalWith(ALL), 'acme', PLAN_ID, { activities: activitiesToDelete });
+
+    it('sweeps every row under ONE injected batch id', async () => {
+      // The whole reason `cascadeSoftDelete` grew a batch-id parameter: N minted ids would mean the
+      // undo restores one activity, silently.
+      txActivityFindMany.mockResolvedValue([
+        { id: 'a', type: 'TASK', version: 1 },
+        { id: 'b', type: 'TASK', version: 1 },
+      ]);
+      lifecycle.cascadeSoftDelete.mockResolvedValue({
+        batchId: 'ignored',
+        counts: { activities: 1, dependencies: 0 },
+      });
+      const result = await call([ref('a'), ref('b')]);
+
+      expect(lifecycle.cascadeSoftDelete).toHaveBeenCalledTimes(2);
+      const injected = lifecycle.cascadeSoftDelete.mock.calls.map((c) => c[4] as string);
+      expect(new Set(injected).size).toBe(1);
+      expect(injected[0]).toBe(result.deleteBatchId);
+      expect(result).toMatchObject({ activityCount: 2, dependencyCount: 0 });
+    });
+
+    it('takes the plan write lock', async () => {
+      txActivityFindMany.mockResolvedValue([{ id: 'a', type: 'TASK', version: 1 }]);
+      lifecycle.cascadeSoftDelete.mockResolvedValue({
+        batchId: 'b',
+        counts: { activities: 1, dependencies: 0 },
+      });
+      await call([ref('a')]);
+      expect(locksTaken()).toContain('dependency-plan');
+    });
+
+    it('409s a stale version without deleting anything', async () => {
+      txActivityFindMany.mockResolvedValue([{ id: 'a', type: 'TASK', version: 7 }]);
+      await expect(call([ref('a', 1)])).rejects.toBeInstanceOf(ConflictError);
+      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+
+    it('422s a WBS summary without deleting anything', async () => {
+      txActivityFindMany.mockResolvedValue([
+        { id: 'a', type: 'TASK', version: 1 },
+        { id: 's', type: 'WBS_SUMMARY', version: 1 },
+      ]);
+      await expect(call([ref('a'), ref('s')])).rejects.toBeInstanceOf(ValidationError);
+      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+
+    it('422s a duplicate id without deleting anything', async () => {
+      await expect(call([ref('a'), ref('a')])).rejects.toBeInstanceOf(ValidationError);
+      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+
+    it('404s an id not in this plan without deleting anything', async () => {
+      txActivityFindMany.mockResolvedValue([]);
+      await expect(call([ref('ghost')])).rejects.toBeInstanceOf(NotFoundError);
+      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+    });
+
+    it('423s without the pen, before the transaction opens', async () => {
+      penGuard.assertHoldsPen.mockRejectedValue(new LockedError('no pen'));
+      await expect(call([ref('a')])).rejects.toBeInstanceOf(LockedError);
+      expect(txActivityFindMany).not.toHaveBeenCalled();
+    });
+
+    it('403s a principal without activity:delete', async () => {
+      await expect(
+        service.bulkDelete(principalWith([]), 'acme', PLAN_ID, { activities: [ref('a')] }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe('restoreDeleteBatch', () => {
+    const BATCH = 'batch-1';
+    const call = () => service.restoreDeleteBatch(principalWith(ALL), 'acme', PLAN_ID, BATCH);
+
+    it('restores the whole batch with ONE lifecycle call, anchored on any member', async () => {
+      // Not one call per member: `restoreBatch` sweeps every table by the anchor's batch id, so N
+      // calls would be N redundant sweeps of rows the first one already brought back.
+      prisma.activity.findMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+      await call();
+      expect(lifecycle.restoreBatch).toHaveBeenCalledTimes(1);
+      expect(lifecycle.restoreBatch).toHaveBeenCalledWith(
+        expect.anything(),
+        'activity',
+        'a',
+        USER_ID,
+      );
+    });
+
+    it('404s a batch id no deleted row in this plan carries', async () => {
+      prisma.activity.findMany.mockResolvedValue([]);
+      await expect(call()).rejects.toBeInstanceOf(NotFoundError);
+      expect(lifecycle.restoreBatch).not.toHaveBeenCalled();
+    });
+
+    it('423s without the pen, before it looks the batch up', async () => {
+      penGuard.assertHoldsPen.mockRejectedValue(new LockedError('no pen'));
+      await expect(call()).rejects.toBeInstanceOf(LockedError);
+      expect(prisma.activity.findMany).not.toHaveBeenCalled();
+    });
+
+    it('403s a principal without activity:restore', async () => {
+      await expect(
+        service.restoreDeleteBatch(principalWith([]), 'acme', PLAN_ID, BATCH),
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
   });
 

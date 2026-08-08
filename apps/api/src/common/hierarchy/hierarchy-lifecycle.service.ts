@@ -80,14 +80,22 @@ export class HierarchyLifecycleService {
   /**
    * Soft-delete `entity` #id and its active descendants under one batch id.
    * The caller must have verified the row exists, is active, and is in scope.
+   *
+   * `batchId` is an **optional injection**, added for the bulk-delete path: deleting twelve
+   * activities is one user action and must restore as one, so all twelve calls share a batch id
+   * the caller minted. It is a parameter rather than a loop over N ids because
+   * {@link HierarchyLifecycleService.restoreBatch} keys the whole restore on that one value — N
+   * batches would mean N restores, and "undo the delete" would only ever bring back one activity.
+   * Omitted, it mints its own exactly as before, so every existing caller is unchanged.
    */
   async cascadeSoftDelete(
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
     id: string,
     actorId: string,
+    injectedBatchId?: string,
   ): Promise<CascadeDeleteResult> {
-    const batchId = randomUUID();
+    const batchId = injectedBatchId ?? randomUUID();
     const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
     const counts: CascadeCounts = {
       clients: 0,
