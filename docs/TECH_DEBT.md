@@ -1558,6 +1558,35 @@ batch write through `useBatchPlacements`, one `bulkPlacementCommand` on the undo
 caveat prop restored **with** it. Sized as its own slice rather than folded into the enablement
 pass, because it is an interaction change with its own ghost-painting cost to measure.
 
+### Narrowed 2026-08-08 — the write path is wired; the N-ghost preview is not
+
+**Status: open, narrowed.** The functional half is done and proven end to end. Dragging one of a
+plural selection now moves every selected activity by the same delta, as **one** batch
+(`PATCH …/activities/placements`) and **one** undoable step, mode-aware through `bulkMoveSnapshots`
+so EARLY pins and VISUAL hand-places exactly as the single-bar drag does. A lane-only move still
+skips the recalculation. `moveMany` joins `deleteMany`/`linkChain` on the host-supplied
+`TsldBulkOperations`, which is where the mutation and the ADR-0048 command stack already live.
+
+The caveat sentence comes back, **but not the one that was removed**. The original — "moving these
+will pin a start-no-earlier-than date on all N" — is true only in EARLY mode, so restoring it
+verbatim would re-introduce a false statement for every VISUAL plan: the same defect wearing a
+different hat. It now reads "Dragging any of these moves all N", which is true in both modes and is
+the fact a planner needs _before_ they drag. The test asserting the old wording absent is **kept**,
+alongside a new one asserting the replacement present.
+
+**What is still open: the N ghosts.** The gesture machine's `repositioning` state remains
+single-`activityId`, so during the drag the planner sees one ghost and the other bars jump on
+release. That is a preview gap, not a correctness one — the write, the undo and the announcement all
+cover the whole set — but it is the half of M4-T1 with a painting cost to measure (ADR-0026 §16),
+and it is not done. Recorded rather than quietly dropped.
+
+**How it was proven**: this is the first slice built under ADR-0081. The journey step
+(`e2e-multi-select`, "dragging one of a plural selection moves them ALL") was written **before** any
+implementation and **verified red** — 1 of 3 bars moved, which is the defect exactly — then green
+after. Writing it first also caught its own bug: the shared plan's bars have been dragged and linked
+by earlier steps, so the one-column probe found one bar rather than three, which would have read as
+a product defect had the step been written after the fix.
+
 ## #109 — `bulkDelete` cascades one activity at a time under the plan-wide advisory lock
 
 **Found:** 2026-08-08, by the security review over the ADR-0080 diff (non-blocking, hardening).

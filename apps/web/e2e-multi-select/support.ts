@@ -301,3 +301,84 @@ export async function showDiagram(page: Page): Promise<void> {
 export function ganttGrid(page: Page): Locator {
   return page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
 }
+
+/** Probe column and step for {@link mapBars} — one bounded pass, the `e2e-authoring-flow` shape. */
+const PROBE_X = 120;
+const PROBE_STEP_Y = 8;
+const PROBE_MAX_Y = 250;
+
+/**
+ * Walk one column of the canvas in `select` mode and return, for every activity the canvas reports
+ * under it, the point that hit it.
+ *
+ * **Measured, not assumed**, and borrowed verbatim in shape from `e2e-authoring-flow/support.ts`:
+ * a drag that lands on the wrong bar and a drag that is dropped are only distinguishable if you
+ * know independently which bar each pixel was. Bounded to one column because every unconstrained
+ * task starts at the data date, so the bars stack at the left one lane apart.
+ */
+export async function mapBars(page: Page): Promise<Map<string, { x: number; y: number }>> {
+  const found = new Map<string, { x: number; y: number }>();
+  for (let y = 16; y <= PROBE_MAX_Y; y += PROBE_STEP_Y) {
+    await canvas(page).click({ position: { x: PROBE_X, y } });
+    const hit = await selectedActivityId(page);
+    if (hit !== null && !found.has(hit)) found.set(hit, { x: PROBE_X, y });
+  }
+  return found;
+}
+
+/**
+ * Drag a bar from `from` to `to` in canvas coordinates, past the reposition pixel threshold.
+ *
+ * Three moves rather than one: the gesture machine arms `repositioning` on pointer-down and only
+ * treats the drag as a move once the pointer has travelled past `REPOSITION_THRESHOLD_PX`, so a
+ * single jump can be delivered as one event that the machine reads as a click. Stepping also gives
+ * the ghost layer frames to paint, which is what a planner sees and what the plural drag adds to.
+ */
+export async function dragBar(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): Promise<void> {
+  const box = await canvas(page).boundingBox();
+  if (!box) throw new Error('the canvas has no bounding box');
+  await page.mouse.move(box.x + from.x, box.y + from.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + (from.x + to.x) / 2, box.y + (from.y + to.y) / 2, { steps: 5 });
+  await page.mouse.move(box.x + to.x, box.y + to.y, { steps: 5 });
+  await page.mouse.up();
+}
+
+/** Every activity's `earlyStart` and `laneIndex`, read from the API — the oracle for a move. */
+export async function placements(
+  page: Page,
+  orgSlug: string,
+): Promise<Map<string, { earlyStart: string | null; laneIndex: number }>> {
+  const planId = openPlanId(page);
+  const rows = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const r = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities?limit=100`, {
+        credentials: 'include',
+      });
+      if (!r.ok) throw new Error(`activities ${String(r.status)}`);
+      const b = (await r.json()) as {
+        data: { id: string; earlyStart: string | null; laneIndex: number }[];
+      };
+      return b.data;
+    },
+    { org: orgSlug, id: planId },
+  );
+  return new Map(rows.map((a) => [a.id, { earlyStart: a.earlyStart, laneIndex: a.laneIndex }]));
+}
+
+/**
+ * Drop any canvas selection by clicking below the last lane.
+ *
+ * Not tidiness: a selected bar mounts the floating selection-actions bar over the scene
+ * (TECH_DEBT #31a), which can come to rest on a point a later step means to click — the failure
+ * then surfaces as "the drag did nothing", several assertions away from its cause.
+ */
+export async function clearSelection(page: Page): Promise<void> {
+  await canvas(page).press('Escape');
+  await canvas(page).click({ position: { x: PROBE_X, y: PROBE_MAX_Y } });
+  await expect.poll(async () => await selectedActivityId(page)).toBe(null);
+}

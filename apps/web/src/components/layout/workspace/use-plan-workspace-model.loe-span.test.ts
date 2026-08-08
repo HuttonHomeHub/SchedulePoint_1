@@ -185,6 +185,7 @@ vi.mock('@/features/activities', () => ({
   useRepositionLane: () => ({ mutateAsync: vi.fn() }),
   useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
+  useBatchPlacements: () => ({ mutateAsync: vi.fn(() => Promise.resolve([])) }),
   useDeleteActivity: () => ({ mutateAsync: h.deleteActivity }),
   useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
   useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),

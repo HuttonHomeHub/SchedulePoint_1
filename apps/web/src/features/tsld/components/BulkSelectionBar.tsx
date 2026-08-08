@@ -124,11 +124,23 @@ export function BulkSelectionBar({
   // It used to fall through to a third sentence — "moving these will pin a start-no-earlier-than
   // date on all N" — which was **removed rather than kept**: the plural drag that would pin them
   // was never wired (its model, its command and its endpoint all landed; the gesture did not), so
-  // the bar was telling a planner what a gesture they cannot perform would do. The component
-  // review over this epic's diff caught it. That is worse than the "lit but inert" class this repo
-  // keeps finding — an inert control does nothing, a false sentence asserts something. The prop
-  // comes back with the gesture (`docs/TECH_DEBT.md` #108), not before it.
+  // the bar was telling a planner what a gesture they cannot perform would do. That is worse than
+  // the "lit but inert" class this repo keeps finding — an inert control does nothing, a false
+  // sentence asserts something.
+  //
+  // **The gesture is now wired (`docs/TECH_DEBT.md` #108), so a sentence comes back — but not that
+  // sentence.** The original was only true in EARLY mode: a plural move pins an SNET there and
+  // writes `visualStart` in VISUAL (ADR-0033), so restoring it verbatim would re-introduce a false
+  // statement for half the plans in the product, which is the defect it was removed for wearing a
+  // different hat. What replaces it is true in both modes and is the fact a planner actually needs
+  // before they drag — that the gesture is plural at all.
   const status = !remove.enabled ? remove.reason : !link.enabled ? link.reason : null;
+  // A **separate** line from `status`, and deliberately so. `status` is the reason a control is
+  // SHUT, and it is what `aria-describedby` points the shut buttons at; folding the drag caveat
+  // into it made every action's description read "Dragging any of these moves all 3", which is
+  // unrelated to why the button is off. 101 unit tests said so immediately. The caveat is a fact
+  // about the selection, not about a control, so it gets its own element and no describedby.
+  const dragHint = `Dragging any of these moves all ${String(count)}.`;
   // One id, shared by whichever controls are shut — see `BulkAction`'s `reasonId` docblock.
   const describedBy = status === null ? undefined : statusId;
 
@@ -154,6 +166,7 @@ export function BulkSelectionBar({
             {status}
           </p>
         ) : null}
+        <p className="text-muted-foreground text-sm">{dragHint}</p>
         <BulkAction
           gate={link}
           busy={busy}

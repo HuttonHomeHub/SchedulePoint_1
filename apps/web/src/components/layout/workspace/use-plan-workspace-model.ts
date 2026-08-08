@@ -19,6 +19,7 @@ import {
   useRepositionLane,
   useSetActivityVisualStart,
   useBatchPositions,
+  useBatchPlacements,
   useDeleteActivity,
   useBulkDeleteActivities,
   useRestoreDeleteBatch,
@@ -83,10 +84,12 @@ import {
   type TsldResizeInput,
   type TsldEditOutcome,
 } from '@/features/tsld';
+import { bulkMoveSnapshots, isLaneOnly, isNoOp } from '@/features/tsld/model/bulk-move';
 import {
   activityDefinitionInput,
   autoArrangeCommand,
   bulkDeleteCommand,
+  bulkPlacementCommand,
   createActivityCommand,
   createLoeSpanCommand,
   pasteActivitiesCommand,
@@ -651,10 +654,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // read from more than one nested closure in a single memo — and depending on the objects would
   // rebuild this on every render, since `useMutation` returns a fresh result each time. Naming the
   // functions removes the member expression, so the deps say exactly what the memo actually uses.
+  const batchPlacementsMutation = useBatchPlacements(orgSlug, planId);
   const bulkDelete = bulkDeleteActivities.mutateAsync;
   const restoreBatch = restoreDeleteBatch.mutateAsync;
   const createLink = createDependency.mutateAsync;
+  // Taken as a plain function for the same `exhaustive-deps` reason as its siblings above.
+  const batchPlacements = batchPlacementsMutation.mutateAsync;
   const removeLink = deleteDependency.mutateAsync;
+  // Declared here, above the memo that depends on it: `moveMany` must write the field the plan's
+  // CURRENT mode calls for, and a memo cannot list a binding declared below itself.
+  const isVisualMode = SCHEDULING_MODES_ENABLED && plan.data?.schedulingMode === 'VISUAL';
   const bulkOperations = useMemo(
     () => ({
       gate: {
@@ -682,6 +691,70 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           );
         }
         autoRecalc.notify();
+      },
+      /**
+       * Move every selected activity by one delta — ONE batch write, ONE undoable step
+       * (`docs/TECH_DEBT.md` #108).
+       *
+       * Every piece below this shipped with ADR-0080 and had **no caller**: `bulkMoveSnapshots`
+       * builds the before/after and the version map, `useBatchPlacements` sends the single
+       * `PATCH …/activities/placements`, and `bulkPlacementCommand` makes the pair reversible. The
+       * gesture kept moving one bar, so the data layer was correct and unreachable.
+       *
+       * Mode-aware through `bulkMoveSnapshots`, never inline: the single-bar drag branches on the
+       * plan's scheduling mode (EARLY pins an SNET, VISUAL writes `visualStart`), and doing that
+       * branch a second time here is how the two come to disagree — invisibly, because each looks
+       * right alone and only a planner who moved one bar and then twelve would ever see it.
+       */
+      moveMany: async (
+        rows: readonly ActivitySummary[],
+        delta: { dayDelta: number; laneDelta: number },
+      ): Promise<{ conflict: string | null }> => {
+        if (rows.length === 0 || isNoOp(delta)) return { conflict: null };
+        const { before, after, versions } = bulkMoveSnapshots({
+          activities: rows,
+          delta,
+          mode: isVisualMode ? 'visual' : 'early',
+        });
+        // Hold the coalesced recalculation across the write so the bars cannot move under the
+        // planner mid-batch, released in `finally` — a leaked hold stalls every later
+        // recalculation for the session with no error and no surface (ADR-0064).
+        const holdToken = Symbol('bulk-move');
+        autoRecalc.hold(holdToken);
+        try {
+          const saved = await batchPlacements({
+            placements: after.flatMap((placement) => {
+              const version = versions.get(placement.id);
+              return version === undefined ? [] : [{ ...placement, version }];
+            }),
+          });
+          for (const row of saved) versions.set(row.id, row.version);
+          if (UNDO_REDO_ENABLED) {
+            editHistory.record(
+              bulkPlacementCommand({
+                batchPlacements,
+                before,
+                after,
+                versions,
+                label:
+                  rows.length === 1 && rows[0] !== undefined
+                    ? `Move \u201c${rows[0].name}\u201d`
+                    : `Move ${String(rows.length)} activities`,
+              }),
+            );
+          }
+        } finally {
+          // Released on every path including a throw — a leaked hold stalls every later
+          // recalculation for the session, with no error and no surface (ADR-0064).
+          autoRecalc.release(holdToken);
+        }
+        // A lane-only move changes no date, so it needs no recalculation — the same minimal-write
+        // rule the single-bar drag already follows. `autoRecalc.notify()` rather than the
+        // `notifyRecalc` wrapper, and no pen/refresh handling here, because both are declared after
+        // this memo — and because `deleteMany` beside it already lets a rejection propagate to the
+        // panel, which shows the conflict. Two error postures in one object is how they drift.
+        if (!isLaneOnly(delta)) autoRecalc.notify();
+        return { conflict: null };
       },
       linkChain: async (
         edges: readonly { predecessorId: string; successorId: string }[],
@@ -747,6 +820,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       editHistory,
       autoRecalc,
       planId,
+      // `moveMany`'s five. `isVisualMode` is the one that matters: without it the memo would keep
+      // a stale mode and a plural move on a plan switched to Visual would go on writing SNET
+      // constraints — wrong dates, silently, on exactly the plans where placement is hand-made.
+      batchPlacements,
+      isVisualMode,
     ],
   );
 
@@ -841,7 +919,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
   // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
   // EARLY mode) the schedule mode is always EARLY, so today's SNET path is byte-for-byte unchanged.
-  const isVisualMode = SCHEDULING_MODES_ENABLED && plan.data?.schedulingMode === 'VISUAL';
   const moveConflict =
     'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.';
   const onTsldReposition = async ({
