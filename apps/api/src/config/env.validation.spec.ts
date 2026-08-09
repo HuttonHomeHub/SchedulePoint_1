@@ -128,3 +128,52 @@ describe('mail transport configuration (Theme B1)', () => {
     ).toThrow(/MAIL_FROM/);
   });
 });
+
+/**
+ * Operational alerting (staff console M1). Two outbound webhooks whose failures are, by design,
+ * swallowed to a log line — so the schema is the only place a misconfiguration can be caught while
+ * somebody is watching. Absent must mean *absent* rather than "posts nowhere", because once both
+ * are silent nothing observable distinguishes them.
+ */
+describe('operational alerting configuration (staff console M1)', () => {
+  it('defaults to no alerting at all — today’s behaviour exactly', () => {
+    const parsed = validateEnv({ ...prodBase });
+    expect(parsed.MAIL_ALERT_URL).toBeUndefined();
+    expect(parsed.HEARTBEAT_URL).toBeUndefined();
+  });
+
+  it('treats an EMPTY webhook variable as absent, the MAIL_SMTP_URL rule', () => {
+    // `MAIL_ALERT_URL: ${MAIL_ALERT_URL:-}` in a compose file always DEFINES the variable. If empty
+    // parsed as present, every mail failure would `fetch('')` — swallowed, so the operator sees a
+    // configured alerter that has never delivered anything. That is the failure this milestone
+    // exists to remove, not to reproduce one layer along.
+    const parsed = validateEnv({ ...prodBase, MAIL_ALERT_URL: '', HEARTBEAT_URL: '   ' });
+    expect(parsed.MAIL_ALERT_URL).toBeUndefined();
+    expect(parsed.HEARTBEAT_URL).toBeUndefined();
+  });
+
+  it('refuses to boot on a value that is not a URL', () => {
+    // The whole point of validating here: a typo'd webhook fails silently forever otherwise.
+    expect(() => validateEnv({ ...prodBase, MAIL_ALERT_URL: 'ntfy.sh/my-topic' })).toThrow();
+    expect(() => validateEnv({ ...prodBase, HEARTBEAT_URL: 'not a url' })).toThrow();
+  });
+
+  it('accepts a plain-http receiver on the local network', () => {
+    // Deliberately NOT constrained to https: a receiver on the same Docker network is a legitimate
+    // and common configuration and has no certificate. What is on the other end is the operator's
+    // decision; that it is a URL at all is not.
+    expect(() =>
+      validateEnv({ ...prodBase, MAIL_ALERT_URL: 'http://ntfy:80/schedulepoint' }),
+    ).not.toThrow();
+  });
+
+  it('defaults the windows, and rejects values that would silently disable them', () => {
+    const parsed = validateEnv({ ...prodBase });
+    expect(parsed.MAIL_ALERT_WINDOW_MINUTES).toBe(10);
+    expect(parsed.HEARTBEAT_INTERVAL_MINUTES).toBe(5);
+    // A heartbeat interval longer than any check's tolerance disables the switch while looking
+    // configured — the same class of defect as an unparseable URL, so it is refused the same way.
+    expect(() => validateEnv({ ...prodBase, HEARTBEAT_INTERVAL_MINUTES: '90' })).toThrow();
+    expect(() => validateEnv({ ...prodBase, MAIL_ALERT_WINDOW_MINUTES: '0' })).toThrow();
+  });
+});

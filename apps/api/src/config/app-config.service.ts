@@ -113,6 +113,41 @@ export class AppConfigService {
     return absentIfBlank(this.config.get('MAIL_FROM', { infer: true }));
   }
 
+  /**
+   * Where to POST when mail stops working, or `undefined` for today's behaviour exactly (staff
+   * console M1). **Its presence is the switch**, the {@link mailSmtpUrl} pattern — there is no
+   * separate flag to fall out of step with the URL.
+   *
+   * `absentIfBlank` for the reason {@link mailSmtpUrl} records at length, and it matters *more*
+   * here: an empty string reaching the alerter does not crash the boot the way `createTransport('')`
+   * did, it produces a `fetch('')` that rejects on every mail failure — swallowed to a log line, by
+   * design. So the failure mode is an operator who believes they are covered and a channel that
+   * never receives anything, which is the exact defect this milestone exists to remove rather than
+   * reproduce one layer along.
+   */
+  get mailAlertUrl(): string | undefined {
+    return absentIfBlank(this.config.get('MAIL_ALERT_URL', { infer: true }));
+  }
+
+  /** How long one mail alert speaks for, in milliseconds. See `env.validation.ts` for the window's reasoning. */
+  get mailAlertWindowMs(): number {
+    return this.config.get('MAIL_ALERT_WINDOW_MINUTES', { infer: true }) * 60_000;
+  }
+
+  /**
+   * Dead-man's-switch target, or `undefined` for **no timer at all** — not a timer that posts
+   * nowhere. That distinction is the whole rollback contract of the heartbeat and is asserted by a
+   * unit test, because nothing observable distinguishes the two once both are silent.
+   */
+  get heartbeatUrl(): string | undefined {
+    return absentIfBlank(this.config.get('HEARTBEAT_URL', { infer: true }));
+  }
+
+  /** Heartbeat period in milliseconds. */
+  get heartbeatIntervalMs(): number {
+    return this.config.get('HEARTBEAT_INTERVAL_MINUTES', { infer: true }) * 60_000;
+  }
+
   get rateLimit(): { ttlMs: number; limit: number } {
     return {
       ttlMs: this.config.get('RATE_LIMIT_TTL', { infer: true }) * 1000,
