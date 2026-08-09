@@ -59,7 +59,17 @@ describe.skipIf(!hasDatabase)('CSP report sink (e2e)', () => {
 
   it('accepts a report with NO session and records it', async () => {
     // Unauthenticated by necessity: a browser cannot authenticate a violation report.
-    await request(server()).post('/api/v1/csp-report').send(legacy('inline')).expect(204);
+    //
+    // **`Content-Type: application/csp-report`, which is what a browser actually sends.** This
+    // suite used supertest's `.send(obj)` default of `application/json` — a type no browser uses
+    // for a violation report — and every test passed against an endpoint that recorded nothing at
+    // all, because the parser was registered for `application/json` only. A test that sends
+    // something the real client never sends measures the wrong thing however green it is.
+    await request(server())
+      .post('/api/v1/csp-report')
+      .set('Content-Type', 'application/csp-report')
+      .send(JSON.stringify(legacy('inline')))
+      .expect(204);
 
     const rows = await prisma.cspReport.findMany();
     expect(rows).toHaveLength(1);
@@ -67,7 +77,9 @@ describe.skipIf(!hasDatabase)('CSP report sink (e2e)', () => {
       effectiveDirective: 'script-src-elem',
       blockedUri: 'inline',
       count: 1,
-      disposition: 'report',
+      // NULL, not 'report': the legacy body carries no disposition in every engine, and inventing
+      // one would read a real block as hypothetical — see `csp-report-body.ts`.
+      disposition: null,
     });
   });
 
@@ -92,7 +104,21 @@ describe.skipIf(!hasDatabase)('CSP report sink (e2e)', () => {
     // The reason the dedup key is a hash. A btree index row caps near 2704 bytes, so indexing the
     // URI directly would make this INSERT fail — on an unauthenticated endpoint, which would let a
     // hostile report deny the reporting this table exists to collect.
-    const huge = `https://evil.example/${'a'.repeat(8_192)}`;
+    // **INCOMPRESSIBLE, and that is the whole point.** This test used `'a'.repeat(8_192)` and its
+    // comment claimed it proved the hazard. It did not: a btree compresses index tuples, so 8 KB of
+    // one character fits comfortably and the test would have passed with no hash at all. Measured
+    // during the schema review — a plain three-column unique index accepts the repeated string and
+    // fails at 2,700 characters of RANDOM text with "index row size 2776 exceeds btree version 4
+    // maximum 2704". A test that cannot fail against the defect it names is worse than no test.
+    // Alphanumerics only, in a non-repeating order. Both halves matter: incompressible, AND free of
+    // `?`/`#`, which `clean()` correctly treats as the start of a query or fragment and truncates
+    // at — the first attempt at this string included them and produced an 81-character URI, so it
+    // measured the stripper rather than the index.
+    const ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const huge = `https://evil.example/${Array.from(
+      { length: 8_192 },
+      (_v, i) => ALPHABET[(i * 31 + ((i * i) % 61)) % ALPHABET.length] ?? 'x',
+    ).join('')}`;
 
     await request(server()).post('/api/v1/csp-report').send(legacy(huge)).expect(204);
     await request(server()).post('/api/v1/csp-report').send(legacy(huge)).expect(204);
@@ -126,6 +152,40 @@ describe.skipIf(!hasDatabase)('CSP report sink (e2e)', () => {
     await request(server()).post('/api/v1/csp-report').send(body).expect(204);
 
     expect(await prisma.cspReport.count()).toBe(0);
+  });
+
+  it('loses nothing when a NEW violation arrives from several browsers at once', async () => {
+    // The regression test for a defect that silently lost reports, and the loss fell entirely on a
+    // violation's FIRST burst — exactly when a newly-shipped policy breaks something for several
+    // people at once, and exactly the count that decides whether to enforce.
+    //
+    // The cause was two clocks in one statement: `first_seen_at` stamped by the Prisma engine as it
+    // built the INSERT, `last_seen_at` a `new Date()` taken a millisecond earlier in the process.
+    // The loser of the insert race wrote a `last_seen_at` older than the winner's `first_seen_at`,
+    // `ck_csp_reports_seen_order` refused it, and the endpoint swallowed the failure. Measured
+    // before the fix: 16 concurrent reports recorded `count = 1`.
+    // Driven at the SERVICE rather than through HTTP, deliberately. Sixteen concurrent supertest
+    // requests reset the connection and — worse — their in-flight writes leaked past `beforeEach`
+    // into the following test, so the harness was measuring itself. The defect is in the statement,
+    // not the transport, so this is where it belongs.
+    const { CspReportService } = await import('../src/modules/csp/csp-report.service');
+    const service = app.get(CspReportService);
+    const report = {
+      effectiveDirective: 'script-src',
+      blockedUri: 'https://cdn.example/burst.js',
+      documentUri: 'https://app.example/plans/42',
+      disposition: null,
+      sourceFile: null,
+      lineNumber: null,
+      columnNumber: null,
+    };
+
+    const burst = 16;
+    await Promise.all(Array.from({ length: burst }, () => service.record([report])));
+
+    const rows = await prisma.cspReport.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.count).toBe(burst);
   });
 
   it('strips the query string, so a share token cannot land in this table', async () => {

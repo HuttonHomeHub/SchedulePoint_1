@@ -2921,25 +2921,54 @@ model MailEvent {
  * it stands today, not a hypothetical:
  * 1. `effective_directive` must be normalised to a BARE TOKEN before insert. The legacy
  * `violated-directive` field carries the serialised directive — value and all, e.g.
- * `script-src 'self'` — and `csp-report-body.ts` falls back to it verbatim. Stored that way the
+ * `script-src 'self'` — and `csp-report-body.ts` fell back to it verbatim. Stored that way the
  * same violation keys differently depending on which engine reported it, so the count that
  * decides whether to enforce is split across two rows that look like two problems.
- * `ck_csp_reports_directive_shape` refuses the malformed value; taking the first token is what
- * makes the row appear at all.
+ * This obligation was originally backed by `ck_csp_reports_directive_shape`, and that pairing
+ * was the defect rather than the guard: measured through the real route, a legacy report was
+ * answered 204 and recorded NOTHING, because the CHECK refused the value and the producer
+ * swallowed the error. See `20260809170000_csp_reports_refusable_constraints` — the constraint
+ * is gone, the normalisation is the whole of the fix, and the residual is a duplicate row.
  * 2. `disposition` must be `null` when the report did not say, and must never be defaulted — see
- * the field.
+ * the field. Also unbacked by a CHECK now, and for the same reason: a value list refuses the
+ * disposition we did not anticipate, on the table that exists to report what we did not
+ * anticipate.
  * 3. `source_file`/`line_number`/`column_number` must be read from both wire formats. They are the
  * only columns that say WHICH CODE caused a violation, and ADR-0074's own finding is the
  * argument: `blocked_uri = 'eval'` names what broke and nothing about what to change.
  * 4. `line_number`/`column_number` must be clamped to safe integers or dropped to null. A JSON
  * number outside int4 fails at CAST time, before any CHECK can see it.
  * 5. The write swallows its own failure, because the endpoint answers 204 whatever happens and a
- * rejected insert must never become a response.
+ * rejected insert must never become a response. Note what that costs, since it is the reason
+ * every other obligation here is load-bearing: it converts EVERY constraint on this table from
+ * a guard into a silent delete. A CHECK nobody can see fire is not enforcement.
+ * 6. **Both timestamps must be stamped by the DATABASE, not by the service.** This is the one
+ * obligation that is reachable with no hostile input at all, and it is currently unmet.
+ * `record()` passes `lastSeenAt: new Date()` for the DO UPDATE branch while `first_seen_at` on
+ * the INSERT branch is stamped by the Prisma query engine ~1 ms LATER, so a request that loses
+ * the insert race updates with an instant older than the winner's `first_seen_at` and
+ * `ck_csp_reports_seen_order` correctly refuses it. Measured: 16 concurrent reports of one NEW
+ * violation record ONE (15 lost); a burst of 2 loses 1; the identical statement written by hand
+ * with `now()` on both branches records all 16. It is NOT a race on the unique index — Prisma
+ * emits a correct `INSERT … ON CONFLICT (dedupe_hash) DO UPDATE` — and repeats against an
+ * ALREADY-EXISTING row are correct, so the loss falls entirely on a violation's first burst,
+ * which is when a newly-shipped policy breaks something for several people at once.
  */
 model CspReport {
   id                 String   @id @default(uuid(7)) @db.Uuid
-  /// `sha256Hex(effective_directive | blocked_uri | document_uri)` over the STORED values, so the
-  /// hash is always reproducible from the row it sits in. TEXT rather than `char(64)`, matching the
+  /// `sha256Hex(effective_directive ␟ blocked_uri ␟ document_uri)` over the STORED values, joined
+  /// on U+001F UNIT SEPARATOR, so the hash is always reproducible from the row it sits in.
+  ///
+  /// The separator is load-bearing and was originally `|`, which can occur in a URL: joined on a
+  /// pipe, `('https://cdn/a|b.js', 'https://app/x')` and `('https://cdn/a', 'b.js|https://app/x')`
+  /// produce the SAME digest — verified, both hash to 40223a8b… — so two genuinely different
+  /// violations would share one row and one count on a table an operator reads to decide what to
+  /// fix. A control character cannot appear in a directive name or a URI, so the join is
+  /// unambiguous. (The original docblock argued the collision was harmless because forging a row on
+  /// an unauthenticated endpoint is already free, which is true of the HOSTILE case and says
+  /// nothing about the accidental one.)
+  ///
+  /// TEXT rather than `char(64)`, matching the
   /// two sha256-hex columns this schema already has (`Invitation.tokenHash`, `PlanShare.tokenHash`,
   /// hashed by `common/tokens/token.ts:21`); `char(n)` buys nothing in Postgres and brings
   /// blank-padding comparison semantics with it. `ck_csp_reports_dedupe_hash_shape` pins the shape,
@@ -2952,13 +2981,15 @@ model CspReport {
   /// one row per report. The same rule pins `blockedUri`/`documentUri`, and it is why the producer
   /// substitutes `'unknown'` rather than leaving a field out.
   ///
-  /// Guarded by a SHAPE check, never a value list. The question is worth answering explicitly
-  /// because the vocabulary looks closed and is not: `script-src-elem`, `require-trusted-types-for`
-  /// and `upgrade-insecure-requests` are all newer than the directives this policy names, browsers
-  /// add more, and a value list would silently discard the reports about whatever arrives next —
-  /// on the one table whose purpose is to tell us about things we did not anticipate. The shape
-  /// still refuses a URL, a sentence, or 8 KB of junk in the one key column that cannot be
-  /// truncated without changing what "the same violation" means.
+  /// **Unconstrained in the database, and that is the corrected position.** It shipped with a shape
+  /// CHECK (`^[a-z][a-z0-9-]{0,63}$`) whose reasoning — never a value list, because the directive
+  /// vocabulary looks closed and is not — was right and did not go far enough. A shape is still a
+  /// refusal, and a refusal on this table is a silent delete: the shipped producer stored the
+  /// legacy `violated-directive` verbatim, so `script-src 'self'` was answered 204 and recorded
+  /// NOTHING, on the one table whose purpose is to tell us about things we did not anticipate.
+  /// Normalisation belongs in the producer (obligation 1); the database's job here is the same as
+  /// for the URI columns — make bad input HARMLESS rather than refuse it, which `dedupe_hash`
+  /// already does by keeping every key column out of the index.
   effectiveDirective String   @map("effective_directive")
   /// What was blocked — a URL, or one of the browser's sentinels (`inline`, `eval`, `data`).
   /// Attacker-controlled, and deliberately bounded by the producer rather than by a CHECK: see the
@@ -2979,11 +3010,23 @@ model CspReport {
   /// engines and not others. Defaulting a missing value to `report` invents the answer, and invents
   /// it in the direction that reads a real block as a hypothetical one — on exactly the transition
   /// the column exists to inform. `null` says "the report did not say", which is true and is a
-  /// different fact from both values.
+  /// different fact from both values. This paragraph shipped describing a producer that did the
+  /// opposite (`clean(disposition ?? 'report')`, asserted by the e2e suite), so the column could
+  /// not be null and the third fact did not exist; the producer is corrected to pass null through.
   ///
-  /// It is NOT part of the dedup key (that key is a decided input), so it is last-writer-wins and
-  /// means "as of `lastSeenAt`, this was the disposition". That is the honest reading, and the
-  /// reason the two columns are read together.
+  /// No value-list CHECK. It shipped with one and it was reachable: `disposition: 'enforcing'` from
+  /// an unauthenticated POST — or from any future browser that adds a third disposition — refused
+  /// the row, which on this table means the report vanishes at 204. Dropped in
+  /// `20260809170000_csp_reports_refusable_constraints`.
+  ///
+  /// It is NOT part of the dedup key, so it is last-writer-wins and means "as of `lastSeenAt`, this
+  /// was the disposition". **Read that literally, because the honest reading is unflattering**: a
+  /// violation reported 500 times during a report-only window and once after enforcement shows
+  /// `disposition = 'enforce'` with `count = 501`, and nothing distinguishes it from 501 real
+  /// blocks. If the report-only → enforce transition is the decision this table serves, the
+  /// disposition belongs IN the dedup key, where the two phases are two rows and the comparison is
+  /// the answer. Changing it costs no migration — the key is a producer-computed hash — and the
+  /// transition is benign: existing rows simply stop matching and dedup restarts.
   disposition        String?
   /// Where the offending code was, when the reporter says. Not in the key, so last-writer-wins —
   /// one worked example, which is all it needs to be. These three earn their place on ADR-0074's
@@ -3006,6 +3049,22 @@ model CspReport {
   /// order, the retention predicate and the qualifier on `disposition`; it is set explicitly by the
   /// upsert rather than by `@updatedAt`, because it means "a browser reported this" and not "the
   /// row changed", and an administrative UPDATE must not move it.
+  ///
+  /// **`ck_csp_reports_seen_order` (`last_seen_at >= first_seen_at`) is currently reachable, and it
+  /// is the one constraint here that needs no hostile input to fire** — see obligation 6. The pair
+  /// must be stamped by ONE clock; today the INSERT branch takes the query engine's and the DO
+  /// UPDATE branch takes the service's, ~1 ms apart, so a simultaneous burst on a NEW violation
+  /// records one report and loses the rest. The constraint is kept rather than relaxed because it
+  /// is true: `last_seen_at < first_seen_at` would leave the two columns an operator reads as
+  /// "started then, still happening" in an order that cannot happen, and `last_seen_at` is also
+  /// what the retention sweep ranges over.
+  ///
+  /// The retention period is stated as 30 days and is a claim about ROWS, not about data age: a
+  /// deduped row's `last_seen_at` keeps moving, so a violation still happening never expires and
+  /// its `document_uri` — which may carry a plan or organisation id in its path — is retained for
+  /// as long as the violation lasts. That is deliberate (a live finding must not expire out from
+  /// under the decision it informs) and it is the reason `first_seen_at` can be far older than the
+  /// period suggests.
   firstSeenAt        DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(3)
   lastSeenAt         DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
 
@@ -3028,6 +3087,19 @@ model CspReport {
   // unindexed sort costs **1.32-1.36 ms at 5,000 rows**, itself generous when a correct policy
   // yields tens, and the 50 ms case is a staff-only read behind a throttle. Ship it when a
   // measurement asks; the numbers are here so that is one step and not a rediscovery (ADR-0073 C1).
+  //
+  // **The write side, which the read measurement above does not cover.** `last_seen_at` is indexed
+  // AND rewritten on every repeat, so no repeat can ever be a HOT update: measured on this database,
+  // 2,000 repeats with a distinct millisecond each gave `n_tup_hot_upd = 0` and grew
+  // `csp_reports_last_seen_at_id_idx` 16 kB -> 96 kB and `csp_reports_dedupe_hash_key` 16 kB -> 32 kB
+  // for ONE row. Each repeat writes a new heap tuple plus an entry in every index, reclaimed by
+  // autovacuum. (Beware the obvious test: repeats inside the same millisecond ARE HOT, because
+  // `timestamptz(3)` rounds them to an equal value and Postgres then sees the column as unmodified —
+  // a tight loop measures 93% HOT and tells you nothing about production, where repeats are
+  // milliseconds apart.) That cost buys the newest-first read and the sweep, so it is worth paying;
+  // it is recorded because it also settles the `count` question from the other side — a `(count, id)`
+  // index would add a fourth index entry per repeat but would NOT newly break HOT, since indexing
+  // `last_seen_at` already did.
   @@index([lastSeenAt, id])
   @@map("csp_reports")
 }

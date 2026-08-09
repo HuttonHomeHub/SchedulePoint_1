@@ -1353,9 +1353,18 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   disagree with it. So the hash is `sha256Hex` in Node — the `Invitation.tokenHash` /
   `PlanShare.tokenHash` precedent (`common/tokens/token.ts:21`), already used twice in this
   schema for exactly this shape.
-- **A CHECK that recomputes the hash was tried, works, and is deliberately not shipped.**
-  Postgres does not enforce immutability inside a `CHECK`, so the recompute was verified here
-  to accept a correct hash and reject `repeat('0',64)`. It would make the separator and field
+- **The hash joins on `\x1f` (UNIT SEPARATOR), not `|`.** The first version used a pipe and
+  argued the collision was harmless. It is not: joined on a pipe,
+  `('https://cdn/a|b.js', 'https://app/x')` and `('https://cdn/a', 'b.js|https://app/x')` produce
+  the **same** digest — verified, both `40223a8b…` — so two genuinely different violations share
+  one row and one count on a table an operator reads to decide what to fix. A control character
+  cannot occur in a directive name or a URI. (The original argument, that forging a row on an
+  unauthenticated endpoint is free anyway, holds for the **hostile** case and says nothing about
+  the accidental one.) Note the migration comment below quoted a `\x1f` join while the producer
+  used `|`, so the recompute it describes as "verified" could not have accepted a producer hash;
+  the separator now matches what that comment always claimed.
+- **A CHECK that recomputes the hash was tried and is deliberately not shipped.**
+  Postgres does not enforce immutability inside a `CHECK`. It would make the separator and field
   order a database constant, so changing either in the producer refuses **every** row — and
   because this endpoint swallows its own write failures by design, the symptom is total, silent
   loss of reports rather than a failing test. A benign duplicate row from a producer bug is the
@@ -1378,22 +1387,57 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   to. It also narrows the dedup key to the thing that identifies the violation, so one broken
   asset does not become one row per query string. `first_seen_at` likewise never moves on a
   repeat: it is what makes "this started when we deployed X" answerable.
-- **`effective_directive` gets a SHAPE check, never a value list.** The vocabulary looks closed
-  and is not — `script-src-elem`, `require-trusted-types-for` and `upgrade-insecure-requests`
-  are all newer than the directives this policy names, browsers add more, and a value list would
-  silently discard the reports about whatever arrives next, on the one table whose purpose is to
-  tell us about things we did not anticipate. `^[a-z][a-z0-9-]{0,63}$` still refuses a URL, a
-  sentence, or 8 KB of junk in the one key column that **cannot** be truncated without changing
-  what "the same violation" means.
+- **No CHECK on this table may be able to REFUSE a row, and two of the originals could.** This is
+  the rule the first migration applied to the URI columns and then contradicted twice, and it is
+  the correction in `20260809170000_csp_reports_refusable_constraints`. Because the endpoint
+  answers 204 and the producer swallows the write, a rejected `INSERT` is not an error anyone
+  sees — it is a report that never existed, and browsers do not retry.
+  - `ck_csp_reports_directive_shape` (`^[a-z][a-z0-9-]{0,63}$`) — **dropped.** Its stated
+    reasoning (a shape, never a value list, because the directive vocabulary looks closed and is
+    not) was right and stopped one step short: a shape is still a refusal. The shipped producer
+    fell back to the legacy `violated-directive` **verbatim**, so `script-src 'self'` — the value
+    several engines are the only ones to send — was answered 204 and recorded **nothing**.
+    Measured through the real route: 204, zero rows. Normalising the directive to a bare token is
+    the fix and belongs in the producer; the residual is a duplicate row, which the same migration
+    already called "the better residual" when it rejected the hash-recomputing CHECK.
+  - `ck_csp_reports_disposition` (`IN ('enforce','report')`) — **dropped.** Reachable from an
+    unauthenticated POST (`disposition: 'enforcing'` → row refused → report gone) and from any
+    future browser that adds a third value. A value list refuses what we did not anticipate, which
+    is the argument used against a value list on `effective_directive` one bullet earlier.
+  - Nothing replaces them, not even a length backstop: the URI columns beside them are unbounded
+    on the same reasoning, and a length CHECK near `MAX_FIELD_LENGTH` becomes reachable the moment
+    the cap and the constraint disagree. **The four CHECKs that remain are ones the producer
+    structurally cannot violate** — a sha256 hex digest, a count that only increments, clamped
+    int4 positions — with one exception, next.
+- **`ck_csp_reports_seen_order` is kept, and it is currently reachable with no hostile input.**
+  Measured: **16 concurrent reports of the same NEW violation record one, losing 15**; a burst of
+  two loses one. It is **not** a race on the unique index — Prisma emits a correct
+  `INSERT … ON CONFLICT (dedupe_hash) DO UPDATE`, and the same statement written by hand with
+  `now()` on both branches records all 16 with zero errors. It is two clocks in one statement:
+  `first_seen_at` is stamped by the Prisma query engine as it builds the INSERT, `last_seen_at` on
+  the DO UPDATE branch is the `new Date()` the service took ~1 ms earlier, so the loser of the
+  insert race updates with an instant older than the winner's `first_seen_at`. Repeats against an
+  existing row are correct, so the loss falls entirely on a violation's **first burst** — which is
+  when a newly-shipped policy breaks something for several people at once. The constraint is kept
+  because it is true and because it is what surfaced the defect; **the fix is in the producer**
+  (let the database stamp both instants).
 - **`disposition` is nullable, and the null is the interesting case.** `enforce` vs `report` is
   the difference between "this **did** break" and "this **would have**", which is the whole
   transition the table informs. It is **absent by format, not by accident**: the Reporting API
   body always carries it, the legacy `application/csp-report` body carries it in some engines
   and not others. Defaulting a missing value to `report` invents the answer, and invents it in
   the direction that reads a real block as hypothetical. `NULL` says "the report did not say",
-  which is true and is a third fact. It is **not** part of the dedup key, so it is
-  last-writer-wins and reads as "as of `last_seen_at`, this was the disposition" — which is why
-  the two columns are read together.
+  which is true and is a third fact. **This paragraph shipped describing a producer that did the
+  opposite** — `clean(disposition ?? 'report')`, with the e2e suite asserting `disposition:
+'report'` for a body that carried none — so the column could not be null and the third fact did
+  not exist. The producer is corrected to pass null through.
+  It is **not** part of the dedup key, so it is last-writer-wins and reads as "as of
+  `last_seen_at`, this was the disposition". Read that literally: a violation seen 500 times in
+  report-only and once after enforcement shows `disposition = 'enforce'`, `count = 501`, and
+  nothing separates it from 501 real blocks. **If the report-only → enforce transition is the
+  decision this table serves, the disposition belongs in the dedup key**, where the two phases are
+  two rows and the comparison is the answer. It costs no migration (the key is a producer-computed
+  hash) and the transition is benign — old rows stop matching and dedup restarts.
 - **No `original_policy`.** Both wire formats carry it; it is several hundred bytes,
   byte-identical on every row, and describes something `docker-compose.yml` already states and
   `apps/web/e2e-csp` already parses. It is also not in the dedup key, so the stored copy would
@@ -1430,6 +1474,13 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   no Redis), so the period is a **ceiling, not a promise** and the true retention today is
   _forever_ — the `mail_events` phrasing, inherited with the caveat. When a sweep lands it is one
   ranged `DELETE … WHERE last_seen_at < now() - interval '30 days'` on the leading index column.
+  **Read "30 days" as a claim about ROWS, not about data age.** Because `last_seen_at` moves on
+  every repeat, a violation that keeps happening never expires, and its `document_uri` — which may
+  carry a plan or organisation id in its path — is retained for as long as it lasts, with a
+  `first_seen_at` arbitrarily older than the period. That is the intended behaviour and not an
+  oversight in the predicate (a live finding must not expire out from under the decision it
+  informs), but it means the period bounds **staleness**, not retention, and the sentence "URLs are
+  kept for 30 days" is not one this table supports.
 - **One index beyond the unique key, `(last_seen_at, id)`** — full, not partial, and therefore
   declared in `schema.prisma`: every row is in the read set, so none of the `audit_events`
   partial-index reasoning applies. ASC read backwards (measured `Index Scan Backward`, 0.44 ms
@@ -1444,18 +1495,40 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   is already generous when a correct policy yields tens. The 50 ms case needs a sustained
   hostile flood **and** is a staff-only read behind a throttle. The numbers are in the migration
   so adding it later is one step rather than a rediscovery (the ADR-0073 C1 rule).
+- **The write side of that index, which the read measurement does not cover.** `last_seen_at` is
+  indexed **and** rewritten on every repeat, so **no repeat can ever be a HOT update**: measured,
+  2,000 repeats at a distinct millisecond each gave `n_tup_hot_upd = 0` and grew
+  `csp_reports_last_seen_at_id_idx` 16 kB → 96 kB and `csp_reports_dedupe_hash_key` 16 kB → 32 kB
+  for **one row**, each repeat writing a new heap tuple plus an entry in every index (reclaimed by
+  autovacuum). Beware the obvious test: repeats inside the **same millisecond are HOT**, because
+  `timestamptz(3)` rounds them to an equal value and Postgres then sees the column as unmodified —
+  a tight loop measures 93% HOT and tells you nothing about production. The cost buys the
+  newest-first read and the sweep, so it is worth paying; it also settles the `count` question
+  from the other side, since a `(count, id)` index would add a fourth index entry per repeat but
+  would **not** newly break HOT — indexing `last_seen_at` already did.
 - **Service-layer obligations the DB can't enforce (M4).** Each is a real gap in the producer as
   it stands, not a hypothetical. (1) `effective_directive` must be normalised to a **bare
   token**: the legacy `violated-directive` field carries the serialised directive, value and all
   (`script-src 'self'`), and `csp-report-body.ts` falls back to it verbatim — stored that way the
   same violation keys differently per engine and the count that decides whether to enforce is
-  split across two rows that read as two problems. `ck_csp_reports_directive_shape` refuses the
-  malformed value; taking the first token is what makes the row appear at all. (2) `disposition`
-  must be `null` when the report did not say, and must never be defaulted. (3) The three
-  source-location fields must be read from both wire formats. (4) `line_number`/`column_number`
-  must be clamped to safe integers or dropped to null — a JSON number outside `int4` fails at
-  **cast** time, before any CHECK can see it. (5) The write swallows its own failure, because the
-  endpoint answers 204 whatever happens and a rejected insert must never become a response.
+  split across two rows that read as two problems — and, until the CHECK was dropped, no row at
+  all. (2) `disposition` must be `null` when the report did not say, and must never be defaulted.
+  (3) The three source-location fields must be read from both wire formats — the shipped
+  `NormalisedCspReport` carried no such fields, so `source_file`, `line_number` and
+  `column_number` had **no writer at all** and were permanently null. (4)
+  `line_number`/`column_number` must be clamped to safe integers or dropped to null — a JSON
+  number outside `int4` fails at **cast** time, before any CHECK can see it. (5) The write
+  swallows its own failure, because the endpoint answers 204 whatever happens and a rejected
+  insert must never become a response — which is what converts every constraint on this table
+  from a guard into a silent delete. (6) **Both timestamps must be stamped by the database**, or
+  the first simultaneous burst of a new violation records one report and loses the rest; see
+  `ck_csp_reports_seen_order` above.
+- **The one thing to check before any of the above matters.** `app.use(json())` parses only
+  `application/json`, and browsers post CSP reports as `application/csp-report` (report-uri) and
+  `application/reports+json` (Reporting API). Measured against the real route: both real content
+  types return **204 with zero rows recorded**; only `application/json` — which no browser sends,
+  and which is what the e2e suite sends — records anything. The table cannot currently receive a
+  report from a browser at all.
 
 ## Testing & performance
 

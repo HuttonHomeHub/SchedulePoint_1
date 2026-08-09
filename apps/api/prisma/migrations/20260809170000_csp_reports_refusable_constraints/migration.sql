@@ -1,0 +1,86 @@
+-- csp_reports: remove the two CHECK constraints a browser can reach (staff console M4 review).
+--
+-- Corrective. `20260809160000_csp_reports` is applied and pushed, so it is not edited — Prisma
+-- records a checksum per migration and rewriting an applied one corrupts the history of every
+-- other environment. This is the forward-only repair.
+--
+-- THE RULE THIS TABLE NEEDS, AND THE ONE THE ORIGINAL MIGRATION APPLIED TO ONLY HALF OF ITSELF:
+--
+--   On `csp_reports`, a constraint that can REFUSE a row is a constraint that SILENTLY DELETES
+--   EVIDENCE. `POST /api/v1/csp-report` answers 204 whatever happens and `CspReportService.record`
+--   swallows its own write failures by design, so a rejected INSERT is not an error anybody sees —
+--   it is a violation report that never existed. Nothing is retried; a browser sends a report once.
+--
+-- The original migration made exactly this argument twice and then shipped two constraints that
+-- contradict it. It left `blocked_uri`/`document_uri` deliberately unbounded ("the database's job
+-- here is to make a hostile length HARMLESS, not to refuse it"), and it REJECTED a hash-verifying
+-- CHECK on the grounds that a producer change would make "the symptom … total, silent loss of
+-- reports rather than a failing test. A benign duplicate row from a producer bug is the better
+-- residual." Both sentences apply verbatim to the two constraints dropped below. They were the only
+-- two constraints on the table a browser could actually reach.
+--
+-- MEASURED against this database (PostgreSQL 16.13) before writing this, using the values the
+-- SHIPPED producer (`csp-report-body.ts` at 1588a23) actually produces:
+--
+--   * `effective_directive = 'script-src ''self'''` — the value `violated-directive` carries in the
+--     legacy `application/csp-report` body, which several engines are the only ones to send, and
+--     which the shipped `fromViolationFields` stored VERBATIM:
+--       ERROR: new row for relation "csp_reports" violates check constraint
+--              "ck_csp_reports_directive_shape"
+--     Through the real route: 204, and zero rows recorded. Every report from those engines was
+--     being dropped in silence — on the table whose entire purpose is to say what we did not
+--     anticipate. The producer is being corrected to store the directive NAME, which removes the
+--     common case; the constraint is dropped because the FAILURE MODE is unacceptable regardless of
+--     how likely it is, and it is still reachable (`effective-directive: "script_src"` normalises to
+--     `script_src`, which the regex refuses).
+--
+--   * `disposition = 'enforcing'` — anything outside the two-value list, from an unauthenticated
+--     POST or from a future browser that adds a third disposition:
+--       ERROR: new row for relation "csp_reports" violates check constraint
+--              "ck_csp_reports_disposition"
+--     A value list here refuses the reports we did not anticipate, which is the argument the
+--     original migration used to REFUSE a value list on `effective_directive` one constraint
+--     earlier. It is the same argument and it points the same way.
+--
+-- Nothing replaces them, deliberately — not even a length backstop. The two URI columns next to
+-- them are already unbounded on a stated decision, the producer caps every field at
+-- MAX_FIELD_LENGTH, and a length CHECK set near that cap is reachable the moment the two disagree,
+-- which is the original migration's own objection to bounding the URIs. `dedupe_hash` is a fixed 64
+-- hex characters, so no length here can reach an index.
+--
+-- WHAT IS DELIBERATELY KEPT, and why the set that survives is coherent: the remaining four CHECKs
+-- are all ones the producer STRUCTURALLY CANNOT violate.
+--
+--   * ck_csp_reports_dedupe_hash_shape — the producer computes a SHA-256 hex digest; there is no
+--     input that makes `createHash('sha256').digest('hex')` return something else.
+--   * ck_csp_reports_count_positive    — the column defaults to 1 and is only ever incremented.
+--   * ck_csp_reports_source_position   — the producer clamps to int4 and rejects negatives before
+--                                        the write.
+--   * ck_csp_reports_seen_order        — KEPT, and it is the one constraint on this table that is
+--     currently REACHABLE WITHOUT HOSTILE INPUT. Measured: 16 concurrent reports of the same NEW
+--     violation record ONE, losing 15; a burst of 2 loses 1. The cause is two clocks in one
+--     statement, not a race on the unique index — Prisma emits a correct
+--     `INSERT … ON CONFLICT (dedupe_hash) DO UPDATE`, and the identical statement written by hand
+--     with `now()` on both branches records all 16 with zero errors. `first_seen_at` is stamped by
+--     the Prisma query engine when it builds the INSERT; `last_seen_at` on the DO UPDATE branch is
+--     the `new Date()` the service took ~1 ms EARLIER, so a request that loses the insert race
+--     updates with a timestamp older than the winner's `first_seen_at` and this CHECK correctly
+--     refuses it.
+--     It is kept rather than relaxed because it is TRUE and because it is what surfaced the defect.
+--     Dropping it would keep the count and leave `last_seen_at < first_seen_at` on the row — a
+--     nonsense pair on the two columns an operator reads as "this started then, and is still
+--     happening", and `last_seen_at` is also the retention predicate. The fix belongs in the
+--     producer: let the database stamp both instants. Until that lands, the first simultaneous
+--     burst of any NEW violation is under-counted, which is recorded here rather than papered over.
+--
+-- Fully additive in effect: no column, index or row is touched, and dropping a CHECK takes only a
+-- brief ACCESS EXCLUSIVE lock on a table nothing reads on the request path. No table rewrite, no
+-- validation scan. The CPM engine never reads `csp_reports`, so the ADR-0034 recalculation parity
+-- gate is structurally unaffected.
+--
+-- Not expressible in schema.prisma: Prisma has no CHECK-constraint syntax, so these live here as
+-- raw SQL with the reasoning carried in the model docblock — and, per the standing rule, with NO
+-- `@@index`/attribute declared for them, so `prisma:check-drift` stays clean (TECH_DEBT #54).
+
+ALTER TABLE "csp_reports" DROP CONSTRAINT "ck_csp_reports_directive_shape";
+ALTER TABLE "csp_reports" DROP CONSTRAINT "ck_csp_reports_disposition";

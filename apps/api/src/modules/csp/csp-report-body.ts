@@ -25,14 +25,33 @@
 
 /** One violation, in the shape the table stores. */
 export interface NormalisedCspReport {
-  /** The directive that was actually enforced, e.g. `script-src-elem`. */
+  /** The directive NAME only, e.g. `script-src-elem` — see {@link directiveNameOf}. */
   readonly effectiveDirective: string;
   /** What was blocked. Often a URL; often a keyword like `inline` or `eval`. */
   readonly blockedUri: string;
   /** The document the violation happened in. */
   readonly documentUri: string;
-  /** `enforce` when the policy was live, `report` during a report-only window. */
-  readonly disposition: string;
+  /**
+   * `enforce` when the policy was live, `report` during a report-only window, **`null` when the
+   * reporter did not say**.
+   *
+   * Null rather than a default, and that is the correction that matters most here. The field is
+   * absent **by format** — the Reporting API body carries it, the legacy body does not in every
+   * engine — so defaulting invents the answer, and defaulting to `report` invents it in the
+   * direction that reads a real, user-facing block as hypothetical. That inverts the one
+   * distinction this column exists to make.
+   */
+  readonly disposition: string | null;
+  /**
+   * Where in the bundle it happened, when the reporter says.
+   *
+   * Added on ADR-0074's own experience: the violation its report-only window found came from Zod's
+   * `allowsEval()` probe — code in a **dependency**, absent from `apps/web/src` entirely — so
+   * `blocked_uri = 'eval'` named what broke and nothing about what to change.
+   */
+  readonly sourceFile: string | null;
+  readonly lineNumber: number | null;
+  readonly columnNumber: number | null;
 }
 
 /** Caps applied before anything reaches the database. Attacker-controlled input, so bounded here. */
@@ -42,6 +61,30 @@ export const MAX_REPORTS_PER_REQUEST = 20;
 
 /** What we call a field we could not find. Never null: the dedup key is three NOT NULL columns. */
 export const UNKNOWN = 'unknown';
+
+/**
+ * The directive **name**, never its value.
+ *
+ * `effective-directive` is already a bare name; `violated-directive` — the fallback several engines
+ * are the only ones to send — carries the whole serialised directive, `script-src 'self'`. Stored
+ * verbatim, the same violation keys differently per engine and one problem reads as two.
+ *
+ * It is also a **hard** requirement rather than tidiness: `ck_csp_reports_directive_shape` refuses
+ * anything but `^[a-z][a-z0-9-]{0,63}$`, and this endpoint swallows its write failures — so without
+ * the split, legacy-shaped reports are refused by the database and dropped in silence, which on a
+ * table whose whole job is to tell us what we did not anticipate is the worst possible failure.
+ */
+export function directiveNameOf(value: string): string {
+  return (value.trim().split(/\s+/)[0] ?? '').toLowerCase();
+}
+
+/** Clamp to something Postgres can store as `int4` — an out-of-range JSON number fails at CAST time, before any CHECK sees it. */
+function safeInt(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const rounded = Math.trunc(value);
+  if (rounded < 0 || rounded > 2_147_483_647) return null;
+  return rounded;
+}
 
 function firstString(source: Record<string, unknown>, keys: readonly string[]): string | null {
   for (const key of keys) {
@@ -77,14 +120,21 @@ function fromViolationFields(body: Record<string, unknown>): NormalisedCspReport
   const blocked = firstString(body, ['blockedURL', 'blockedUrl', 'blocked-uri', 'blockedURI']);
   const document = firstString(body, ['documentURL', 'documentUrl', 'document-uri', 'documentURI']);
   const disposition = firstString(body, ['disposition']);
+  const source = firstString(body, ['sourceFile', 'source-file']);
+
+  const name = directiveNameOf(directive ?? '');
 
   return {
-    effectiveDirective: clean(directive ?? UNKNOWN),
+    // `UNKNOWN` only when nothing usable arrived — and it satisfies the directive-shape CHECK, which
+    // a raw `violated-directive` value would not.
+    effectiveDirective: name === '' ? UNKNOWN : name.slice(0, 64),
     blockedUri: clean(blocked ?? UNKNOWN),
     documentUri: clean(document ?? UNKNOWN),
-    // Defaulting to `report` rather than `enforce`: the policy ships report-only, and guessing the
-    // stricter value would make a report-only finding look like something that had already broken.
-    disposition: clean(disposition ?? 'report'),
+    // Passed through as null when absent — see the interface for why defaulting is wrong here.
+    disposition: disposition === null ? null : clean(disposition).slice(0, 32),
+    sourceFile: source === null ? null : clean(source),
+    lineNumber: safeInt(body['lineNumber'] ?? body['line-number']),
+    columnNumber: safeInt(body['columnNumber'] ?? body['column-number']),
   };
 }
 
