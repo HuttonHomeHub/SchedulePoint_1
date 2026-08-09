@@ -8,7 +8,26 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { NormalisedCspReport } from './csp-report-body';
 
 /**
- * The dedup key: SHA-256 of the three identifying values.
+ * The dedup key: SHA-256 of the four identifying values.
+ *
+ * **`disposition` is in the key, and the reason is that conflation and fragmentation are not
+ * symmetric failures.** Left out, a violation seen 500 times during a report-only window and once
+ * after enforcement collapses into one row reading `count = 501, disposition = 'enforce'` — which
+ * says 501 people were blocked when one was, on precisely the transition this table exists to
+ * inform, and a reader cannot recover the truth from it. Put in, the worst case is the same
+ * violation split across rows that a reader can add up.
+ *
+ * One error is invisible and overstates harm; the other is visible and additive. Safe means erring
+ * toward the recoverable one.
+ *
+ * The accepted cost is that a `null` disposition — the legacy body carries none in every engine —
+ * is its own bucket, so one violation observed during one phase by two different browsers can be
+ * two rows. That is the same fragmentation, in its mildest form, and it is still the safe
+ * direction: two rows that add up beat one row that overstates.
+ *
+ * It costs **no migration**: the hash is computed by this service, so the column and index are
+ * unchanged. Existing rows simply stop matching and deduplication restarts — harmless on telemetry
+ * that is retention-bounded anyway, and stated so nobody reads the discontinuity as data loss.
  *
  * **Hashed rather than indexed directly**, because a btree index row caps near 2704 bytes and both
  * URI values arrive from an unauthenticated POST. An 8 KB `blocked_uri` indexed directly would make
@@ -28,7 +47,15 @@ export function dedupeHashOf(report: NormalisedCspReport): string {
       // `\u001f` (UNIT SEPARATOR) rather than `|`, which can occur in a URL: `('a|b','c')` and
       // `('a','b|c')` join to the same string and would share a row. The control character cannot
       // appear in a directive name or a URI, so the join is unambiguous for one character's cost.
-      .update([report.effectiveDirective, report.blockedUri, report.documentUri].join('\u001f'))
+      .update(
+        [
+          report.effectiveDirective,
+          report.blockedUri,
+          report.documentUri,
+          // `disposition` IS part of the identity — see the docblock.
+          report.disposition ?? '',
+        ].join('\u001f'),
+      )
       .digest('hex')
   );
 }

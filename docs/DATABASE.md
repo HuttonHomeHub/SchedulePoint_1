@@ -1304,18 +1304,31 @@ now() - interval '12 months'` on the leading index column. The spec's §4.10 def
 
 The `csp_reports` table (staff-console M4, `docs/TECH_DEBT.md` #8) is where browser evidence
 lands instead of being discarded. The web origin ships its Content-Security-Policy in
-**report-only** mode and `CSP_POLICY` carries no `report-uri`, no `report-to` and no
-`Reporting-Endpoints` (`docker-compose.yml:126`, `docker-compose.release.yml:145`), so today a
-violation exists only in whichever browser console happens to be open; the documented way to
-enforce is to flip the header and walk six surfaces watching DevTools. ADR-0074 records that
+**report-only** mode. Until 2026-08-09 `CSP_POLICY` carried no `report-uri`, no `report-to` and no
+`Reporting-Endpoints`, so a violation existed only in whichever browser console happened to be open
+and the documented way to enforce was to flip the header and walk six surfaces watching DevTools.
+**All three now ship** (`acd035a`) — this paragraph described the state the table was designed
+against and was already out of date when it was written, which is the drift ADR-0058 exists for. ADR-0074 records that
 the one violation found that way was found **in production, after release**, by a person
 watching a console — and that it came from a **dependency** (Zod 4's `allowsEval()` probe),
 which appears nowhere in `apps/web/src`. **Non-scheduling** — the CPM engine never reads it —
 so the migration is byte-parity (a single additive table create).
 
 **One row per DISTINCT violation, not per report.** The key is
-`(effective_directive, blocked_uri, document_uri)`; a repeat increments `count` and moves
-`last_seen_at`. Ten thousand identical violations are one row with `count = 10000`. Dedup is
+`(effective_directive, blocked_uri, document_uri, disposition)`; a repeat increments `count` and moves
+`last_seen_at`. Ten thousand identical violations are one row with `count = 10000`. **`disposition` is in the key** (2026-08-09, on the schema review's recommendation). Left out, a
+violation seen 500× during a report-only window and once after enforcement collapsed into one row
+reading `count = 501, disposition = 'enforce'` — claiming 501 people were blocked when one was, on
+exactly the transition this table exists to inform, with no way for a reader to recover the truth.
+**Conflation and fragmentation are not symmetric failures**: one is invisible and overstates harm,
+the other is visible and adds up, so the key errs toward the recoverable one. The accepted cost is
+that a `null` disposition — the legacy body carries none in every engine — is its own bucket, so one
+violation seen in one phase by two browsers can be two rows; that is the same fragmentation in its
+mildest form and still the safe direction. It cost **no migration**: the hash is producer-computed,
+so the column and index are unchanged and existing rows simply stopped matching, which is harmless
+on retention-bounded telemetry and is said here so nobody reads the discontinuity as data loss.
+
+Dedup is
 the design rather than a later optimisation: it makes volume a property of the **policy**
 (distinct violations) instead of a property of **traffic**, which on an unauthenticated
 endpoint is a property of whoever is pointing at us.

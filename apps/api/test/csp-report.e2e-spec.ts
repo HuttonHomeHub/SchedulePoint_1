@@ -188,6 +188,42 @@ describe.skipIf(!hasDatabase)('CSP report sink (e2e)', () => {
     expect(rows[0]?.count).toBe(burst);
   });
 
+  it('keeps a report-only observation separate from a real enforced block', async () => {
+    // `disposition` is part of the dedup key, and this is the assertion that says why. Without it,
+    // 500 report-only observations and one real block collapse into `count = 501,
+    // disposition = 'enforce'` — which claims 501 people were blocked when one was, on exactly the
+    // transition this table exists to inform, and a reader cannot recover the truth from it.
+    //
+    // Conflation and fragmentation are not symmetric: one is invisible and overstates harm, the
+    // other is visible and adds up. This pins the safe direction.
+    const violation = (disposition: string) => ({
+      'csp-report': {
+        'document-uri': 'https://app.example/plans/42',
+        'effective-directive': 'script-src-elem',
+        'blocked-uri': 'inline',
+        disposition,
+      },
+    });
+
+    for (let i = 0; i < 3; i += 1) {
+      await request(server())
+        .post('/api/v1/csp-report')
+        .set('Content-Type', 'application/csp-report')
+        .send(JSON.stringify(violation('report')))
+        .expect(204);
+    }
+    await request(server())
+      .post('/api/v1/csp-report')
+      .set('Content-Type', 'application/csp-report')
+      .send(JSON.stringify(violation('enforce')))
+      .expect(204);
+
+    const rows = await prisma.cspReport.findMany({ orderBy: { count: 'desc' } });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ disposition: 'report', count: 3 });
+    expect(rows[1]).toMatchObject({ disposition: 'enforce', count: 1 });
+  });
+
   it('strips the query string, so a share token cannot land in this table', async () => {
     await request(server())
       .post('/api/v1/csp-report')
