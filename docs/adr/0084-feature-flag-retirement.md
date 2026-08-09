@@ -108,18 +108,34 @@ config costs six specs to convert rather than a line.
 
 **Two of the three inputs are measured and one is not, and the difference is stated rather than
 blurred.** The file and pin counts are real. The weighting (`files + 3 × pins`), the per-batch cap
-(45) and the fortnightly cadence are extrapolated from **one** completed retirement, which is not
-enough to justify a seventeen-batch schedule reaching into 2027 — asserting otherwise would be the
+(45) and the cadence are extrapolated from **one** completed retirement, which is not enough to
+justify a seventeen-batch schedule reaching most of a year out — asserting otherwise would be the
 ADR-0076 Class 3 failure this repository keeps recording, committed inside the ADR that cites it.
 
-They are therefore a **hypothesis the gate tests for us**: if batch 2 takes longer than its
-fortnight, the next batch's date fails and forces a re-fit against a second data point. Re-fit it
-then. Do not defend it.
+They are therefore a **hypothesis the gate tests for us**: if a batch takes longer than its slot, the
+next batch's date fails and forces a re-fit against a second data point. Re-fit it then. Do not
+defend it.
 
 **And the horizon and the batch date are now visibly different things**, which the original draft
 conflated: the horizon says when a flag stops earning its keep, the batch date says when we can
 afford to remove it. The gap between them **is** the debt, and it is large. That is worth knowing
 rather than hiding behind a schedule that pretends otherwise.
+
+### D4b — The cadence is weekly, and it is the knob that was actually reached for
+
+Added 2026-08-09. The register as first fitted was fortnightly and ran to **2027-03-23** — seven and
+a half months for 57 flags. Put to the product owner as a choice between three levers, the one
+declined is the informative one: **raising the horizon from 30 days to 90** would have stopped
+`check:flags` reporting most of the estate as past its horizon, and it was rejected precisely
+because D4a says the gap between horizon and batch date **is** the debt. Making the report calmer
+without making the debt smaller is hiding it.
+
+So the horizon stays at 30 days and the cadence halves. Nothing is re-sized: batch composition is
+unchanged and every batch still sits at or after its flags' earliest date, so the schedule now
+finishes **2026-12-01**. What that does to the estimate is stated rather than absorbed — the cap of
+45 was fitted against a fortnight and now has a week, so the cap is the part under test, and D4a's
+own instruction applies to it: when a batch slips, re-fit against the second data point rather than
+defending the first.
 
 ### D5 — Retiring a flag deletes its flag-off parity suite, and that is the point
 

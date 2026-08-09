@@ -6,52 +6,52 @@
       "due": "2026-08-11"
     },
     "batch-2": {
-      "due": "2026-08-25"
+      "due": "2026-08-18"
     },
     "batch-3": {
-      "due": "2026-09-08"
+      "due": "2026-08-25"
     },
     "batch-4": {
-      "due": "2026-09-22"
+      "due": "2026-09-01"
     },
     "batch-5": {
-      "due": "2026-10-06"
+      "due": "2026-09-08"
     },
     "batch-6": {
-      "due": "2026-10-20"
+      "due": "2026-09-15"
     },
     "batch-7": {
-      "due": "2026-11-03"
+      "due": "2026-09-22"
     },
     "batch-8": {
-      "due": "2026-11-17"
+      "due": "2026-09-29"
     },
     "batch-9": {
-      "due": "2026-12-01"
+      "due": "2026-10-06"
     },
     "batch-10": {
-      "due": "2026-12-15"
+      "due": "2026-10-13"
     },
     "batch-11": {
-      "due": "2026-12-29"
+      "due": "2026-10-20"
     },
     "batch-12": {
-      "due": "2027-01-12"
+      "due": "2026-10-27"
     },
     "batch-13": {
-      "due": "2027-01-26"
+      "due": "2026-11-03"
     },
     "batch-14": {
-      "due": "2027-02-09"
+      "due": "2026-11-10"
     },
     "batch-15": {
-      "due": "2027-02-23"
+      "due": "2026-11-17"
     },
     "batch-16": {
-      "due": "2027-03-09"
+      "due": "2026-11-24"
     },
     "batch-17": {
-      "due": "2027-03-23"
+      "due": "2026-12-01"
     }
   },
   "retired": [
@@ -227,8 +227,8 @@
       "constant": "CANVAS_TOOLBAR_ENABLED",
       "enabled": "2026-07-13",
       "enabledSource": "docblock",
-      "batch": "batch-4",
-      "note": "Moved out of batch-1 on 2026-08-09, with the reason recorded rather than the date quietly slipped. This flag is not an `if`: flag-off selects `Adr0030PlanWorkspace`, a ~270-line alternative layout with two suites of its own, and retiring it is a deletion slice rather than a line change. ADR-0080 \u00a7\"the flag-on journey\" records that layout causing a SHIPPED defect \u2014 `bulk` was wired into it and not into the layout the flag actually selects \u2014 which is an argument for retiring it, not for keeping it."
+      "batch": "batch-2",
+      "note": "Moved out of batch-1 on 2026-08-09, with the reason recorded rather than the date quietly slipped. This flag is not an `if`: flag-off selects `Adr0030PlanWorkspace`, a ~270-line alternative layout with two suites of its own, and retiring it is a deletion slice rather than a line change. ADR-0080 §\"the flag-on journey\" records that layout causing a SHIPPED defect — `bulk` was wired into it and not into the layout the flag actually selects. PULLED FORWARD from batch-4 to batch-2 by the product owner on 2026-08-09, on exactly that evidence: it is the only flag in the register whose flag-off branch has a user-facing defect attributed to it, which makes it the estate's highest-risk second product rather than merely its largest."
     },
     "VITE_CANVAS_VISUAL_LANGUAGE": {
       "constant": "CANVAS_VISUAL_LANGUAGE_ENABLED",
@@ -337,7 +337,7 @@
       "enabled": "2026-07-12",
       "enabledSource": "docblock",
       "batch": "batch-2",
-      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world \u2014 they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
+      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world — they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
     },
     "VITE_PROGRAMME_SCHEDULING": {
       "constant": "PROGRAMME_SCHEDULING_ENABLED",
@@ -399,7 +399,7 @@
       "enabled": "2026-07-12",
       "enabledSource": "docblock",
       "batch": "batch-3",
-      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world \u2014 they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
+      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world — they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
     },
     "VITE_UNDO_REDO": {
       "constant": "UNDO_REDO_ENABLED",
@@ -414,6 +414,6 @@
       "batch": "batch-10"
     }
   },
-  "$schema-note": "enabledSource: \"docblock\" = the date the flag itself records; \"floor\" = the earliest date this repository can prove, used for the fourteen flags whose real flip is recorded NOWHERE (ADR-0084). A floor can only make a flag look YOUNGER than it is, so retiring on one is conservative \u2014 never premature. It is not corrected by guessing.",
-  "sizing": "A batch is sized by BLAST RADIUS. The enablement cohort only sets the EARLIEST date a flag may fall on (enabled + horizonDays); it does not set the batch. Re-spaced 2026-08-09 after the original cohort-only split put 17 flags and ~75 production files into a batch due in nine days \u2014 the largest batch on the second-earliest date.\nMEASURED per flag: production files referencing the constant, and the number of playwright*.config.ts files that PIN it. The pin count is the one nobody had: VITE_CANVAS_AUTHORING is pinned in 14 configs and VITE_SCHEDULING_MODES in 13, and CI proved a single pinned config costs six specs to convert, not a line.\nESTIMATED, and labelled as such: weight = files + 3x pins, a cap of 45 per batch, and a fortnightly cadence. Those three numbers come from ONE completed retirement, so they are a hypothesis rather than a plan. `check:flags` tests it for us \u2014 if batch 2 takes longer than a fortnight, the next batch date fails and forces a re-fit against a second data point. Re-fit it then; do not defend it."
+  "$schema-note": "enabledSource: \"docblock\" = the date the flag itself records; \"floor\" = the earliest date this repository can prove, used for the fourteen flags whose real flip is recorded NOWHERE (ADR-0084). A floor can only make a flag look YOUNGER than it is, so retiring on one is conservative — never premature. It is not corrected by guessing.",
+  "sizing": "A batch is sized by BLAST RADIUS. The enablement cohort only sets the EARLIEST date a flag may fall on (enabled + horizonDays); it does not set the batch. Re-spaced 2026-08-09 after the original cohort-only split put 17 flags and ~75 production files into a batch due in nine days — the largest batch on the second-earliest date.\nMEASURED per flag: production files referencing the constant, and the number of playwright*.config.ts files that PIN it. The pin count is the one nobody had: VITE_CANVAS_AUTHORING is pinned in 14 configs and VITE_SCHEDULING_MODES in 13, and CI proved a single pinned config costs six specs to convert, not a line.\nESTIMATED, and labelled as such: weight = files + 3x pins and a cap of 45 per batch. The cadence was fortnightly and is WEEKLY from batch-2 (product owner, 2026-08-09), which finishes the queue 2026-12-01 rather than 2027-03-23. Note what that does to the estimate: the batch COMPOSITION was fitted against a fortnight and now has a week, so the cap is the part now under test — halving the cadence doubles the rate of work without re-sizing a single batch. The weighting, the cap and the cadence all come from ONE completed retirement, so they are a hypothesis rather than a plan. `check:flags` tests it for us — if batch 2 takes longer than its week, the next batch date fails and forces a re-fit against a second data point. Re-fit it then; do not defend it."
 }
