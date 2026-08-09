@@ -91,6 +91,36 @@ what no longer exists.
 > asserted and not checked — caught by the gate written in the same commit, which is the strongest
 > case this repository has yet produced for computing a rule rather than stating one.
 
+### D4a — A batch is sized by blast radius; the cohort only sets the earliest date
+
+Added 2026-08-09, because the first register was split by enablement cohort **alone** and that put
+**17 flags and ~75 production files into a batch due in nine days** — the largest batch on the
+second-earliest date. A schedule that front-loads its heaviest work is the same failure as a cliff,
+one step along: it fails, and the response is to move the date, which is how a gate becomes
+decoration.
+
+So the cohort answers only "when may this flag retire at the earliest?" (`enabled + horizonDays`).
+**What batch it lands in is a question about cost**, and cost is now measured: production files
+referencing the constant, **and the number of `playwright*.config.ts` files that pin it**. The
+second number is the one nobody had — `VITE_CANVAS_AUTHORING` is pinned in **14** configs and
+`VITE_SCHEDULING_MODES` in **13**, and D5's note below records CI proving that a single pinned
+config costs six specs to convert rather than a line.
+
+**Two of the three inputs are measured and one is not, and the difference is stated rather than
+blurred.** The file and pin counts are real. The weighting (`files + 3 × pins`), the per-batch cap
+(45) and the fortnightly cadence are extrapolated from **one** completed retirement, which is not
+enough to justify a seventeen-batch schedule reaching into 2027 — asserting otherwise would be the
+ADR-0076 Class 3 failure this repository keeps recording, committed inside the ADR that cites it.
+
+They are therefore a **hypothesis the gate tests for us**: if batch 2 takes longer than its
+fortnight, the next batch's date fails and forces a re-fit against a second data point. Re-fit it
+then. Do not defend it.
+
+**And the horizon and the batch date are now visibly different things**, which the original draft
+conflated: the horizon says when a flag stops earning its keep, the batch date says when we can
+afford to remove it. The gap between them **is** the debt, and it is large. That is worth knowing
+rather than hiding behind a schedule that pretends otherwise.
+
 ### D5 — Retiring a flag deletes its flag-off parity suite, and that is the point
 
 The parity suites exist to prove the rollback is byte-for-byte. Once there is no rollback they are
