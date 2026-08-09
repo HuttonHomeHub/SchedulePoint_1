@@ -25,7 +25,7 @@ import {
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
-import { PrismaService } from '../../prisma/prisma.service';
+import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
@@ -1266,75 +1266,93 @@ export class ActivitiesService {
     }
 
     const batchId = randomUUID();
-    const totals = await this.prisma.$transaction(async (tx) => {
-      // Serialise against the other structural writers: a cascade reads a subtree and then writes
-      // it, and this one does that N times.
-      await acquirePlanWriteLock(tx, planId);
+    const totals = await this.prisma.$transaction(
+      async (tx) => {
+        // Serialise against the other structural writers: a cascade reads a subtree and then writes
+        // it, and this one does that N times.
+        await acquirePlanWriteLock(tx, planId);
 
-      const existing = await tx.activity.findMany({
-        where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
-        select: { id: true, type: true, version: true },
-      });
-      const byId = new Map(existing.map((a) => [a.id, a]));
-      // 404 before the type check and before the version check, so a foreign id is never told
-      // anything about the row it named.
-      if (ids.some((id) => !byId.has(id))) {
-        throw new NotFoundError('Activity not found in this plan.');
-      }
-      if (existing.some((a) => a.type === 'WBS_SUMMARY')) {
-        throw new ValidationError(
-          'A WBS summary cannot be deleted in a batch: deleting one removes everything inside it.',
-          { reason: 'SUMMARY_NOT_BULK_ELIGIBLE' },
-        );
-      }
-      // All-or-nothing on the optimistic version, checked BEFORE the first sweep rather than by a
-      // count shortfall afterwards: `cascadeSoftDelete` takes no version, so there is no count to
-      // fall short. Under the plan lock nothing else can move these rows between here and the
-      // sweep.
-      if (dto.activities.some((a) => byId.get(a.id)?.version !== a.version)) {
-        throw new ConflictError(
-          'This plan changed since you opened it — nothing was deleted. Refresh and try again.',
-        );
-      }
+        const existing = await tx.activity.findMany({
+          where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+          select: { id: true, type: true, version: true },
+        });
+        const byId = new Map(existing.map((a) => [a.id, a]));
+        // 404 before the type check and before the version check, so a foreign id is never told
+        // anything about the row it named.
+        if (ids.some((id) => !byId.has(id))) {
+          throw new NotFoundError('Activity not found in this plan.');
+        }
+        if (existing.some((a) => a.type === 'WBS_SUMMARY')) {
+          throw new ValidationError(
+            'A WBS summary cannot be deleted in a batch: deleting one removes everything inside it.',
+            { reason: 'SUMMARY_NOT_BULK_ELIGIBLE' },
+          );
+        }
+        // All-or-nothing on the optimistic version, checked BEFORE the first sweep rather than by a
+        // count shortfall afterwards: `cascadeSoftDelete` takes no version, so there is no count to
+        // fall short. Under the plan lock nothing else can move these rows between here and the
+        // sweep.
+        if (dto.activities.some((a) => byId.get(a.id)?.version !== a.version)) {
+          throw new ConflictError(
+            'This plan changed since you opened it — nothing was deleted. Refresh and try again.',
+          );
+        }
 
-      let activityCount = 0;
-      let dependencyCount = 0;
-      for (const id of ids) {
-        const cascade = await this.lifecycle.cascadeSoftDelete(
+        // **One set-wise sweep, not one per id** (`docs/TECH_DEBT.md` #109). This loop used to call
+        // `cascadeSoftDelete` per activity — five statements each, so ~10,000 round trips at the
+        // `@ArrayMaxSize(2000)` ceiling, every one of them holding the plan-wide advisory lock taken
+        // above. Any other structural write on the plan waited for all of them, which made a large
+        // bulk delete a self-service denial of service against your own collaborators.
+        //
+        // It is safe to batch because the guard above **refuses a `WBS_SUMMARY`**: every id here is a
+        // leaf, and a leaf's subtree is itself, so the per-id subtree walk was resolving a
+        // single-element set two thousand times. The lifecycle method re-asserts that rather than
+        // trusting this caller.
+        const cascade = await this.lifecycle.cascadeSoftDeleteActivityLeaves(
           tx,
-          'activity',
-          id,
+          ids,
           principal.userId,
           batchId,
         );
-        activityCount += cascade.counts.activities;
-        dependencyCount += cascade.counts.dependencies;
-      }
+        const activityCount = cascade.activities;
+        const dependencyCount = cascade.dependencies;
 
-      // Scalars only — the redactor reduces any non-scalar to a type marker by design, which is
-      // how a delete of 412 activities once recorded the batch id and not the size (ADR-0073 C3.1
-      // §0.1). Counts come from the cascade's RETURN VALUE, so they are what happened.
-      await this.audit.record(
-        {
-          action: 'activity.deleted',
-          outcome: 'SUCCESS',
-          organizationId: organization.id,
-          subjectType: 'PLAN',
-          subjectId: planId,
-          subjectLabel: plan.name,
-          after: {
-            planName: plan.name,
-            deleteBatchId: batchId,
-            activityCount,
-            dependencyCount,
+        // Scalars only — the redactor reduces any non-scalar to a type marker by design, which is
+        // how a delete of 412 activities once recorded the batch id and not the size (ADR-0073 C3.1
+        // §0.1). Counts come from the cascade's RETURN VALUE, so they are what happened.
+        await this.audit.record(
+          {
+            action: 'activity.deleted',
+            outcome: 'SUCCESS',
+            organizationId: organization.id,
+            subjectType: 'PLAN',
+            subjectId: planId,
+            subjectLabel: plan.name,
+            after: {
+              planName: plan.name,
+              deleteBatchId: batchId,
+              activityCount,
+              dependencyCount,
+            },
+            ...auditActor(principal, context),
           },
-          ...auditActor(principal, context),
-        },
-        tx,
-      );
+          tx,
+        );
 
-      return { activityCount, dependencyCount };
-    });
+        return { activityCount, dependencyCount };
+      },
+      {
+        // **A deliberately batched write gets the batch ceiling** (`docs/TECH_DEBT.md` #109/#74,
+        // CQ-6). The global default is 15 s, which is right for an ordinary write and wrong for a
+        // 2,000-activity sweep — and before this change there was no explicit timeout anywhere in
+        // `apps/api`, so every transaction in the application ran on Prisma's 5-second default.
+        //
+        // The override is per-call rather than a raised global on purpose: a global sized for the
+        // worst case stops protecting the common one, and a P2028 on an ordinary write is a signal
+        // worth keeping.
+        timeout: BATCH_TRANSACTION_TIMEOUT_MS,
+      },
+    );
 
     this.logger.info(
       {

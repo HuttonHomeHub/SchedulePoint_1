@@ -328,6 +328,21 @@ the ADR-0063 M6 component gate.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
 
+> **Narrowed 2026-08-09 (programme M5), and the largest input changed.** This row asked what happens
+> when a writer waits on a plan lock held by a long transaction. The longest such transaction — a
+> 2,000-activity bulk delete — went from ~10,000 statements to four (#109), so the thing being waited
+> on is an order of magnitude shorter than when this was written.
+>
+> **Transaction timeouts now exist at all.** There was no explicit timeout anywhere in `apps/api`,
+> so every transaction ran on Prisma's 5-second default, including the ones that take the plan lock
+> and sweep thousands of rows: `prisma.service.ts` sets a **15 s global** ceiling and the bulk paths
+> override to **60 s** (CQ-6 — a global sized for the worst case stops protecting the common one).
+>
+> **What is still unmeasured, and it is the row's actual subject:** the wall-clock hold time on a
+> seeded 2,000-activity plan, and how a concurrent writer behaves against it. The numbers above are
+> a statement count and a citation to ADR-0053 M6's measurement of the same shape — neither is a
+> reading taken on this path. That measurement is the whole of what remains.
+
 Five write paths now serialise on the same per-plan advisory key — activity create/update (parent
 branch), the batch membership write, dissolve, and recalculate — and none of the `$transaction`
 calls sets an explicit timeout, so they share Prisma's 5 s default. At the ~2,000-activity ceiling,
