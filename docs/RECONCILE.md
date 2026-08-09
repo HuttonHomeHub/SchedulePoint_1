@@ -41,18 +41,18 @@ day of the change.
 These run in CI on every push. If one is red, fix it there — the manual pass
 below assumes they are green.
 
-| Gate                                       | Catches                                                                      |
-| ------------------------------------------ | ---------------------------------------------------------------------------- |
-| `pnpm format:check` / `lint` / `typecheck` | The ordinary things.                                                         |
-| `pnpm check:doc-links`                     | A relative link to a file that no longer exists.                             |
-| `prisma:check-drift`                       | `schema.prisma` disagreeing with the migrations.                             |
-| `pnpm test` (coverage thresholds)          | Coverage sliding below the recorded floor.                                   |
-| `surface-seams.structural.test.ts`         | Application code reaching past a design-system seam.                         |
-| `styles/token-contrast.test.ts`            | A colour pair below its WCAG ratio, across themes × surfaces.                |
-| Flag-off parity suites                     | A flagged change altering the rollback path.                                 |
-| `pnpm check:counts`                        | The stage-banner figures going stale — in `CLAUDE.md` **and** `README.md`.   |
-| `pnpm check:claims`                        | A citation into a dependency's internals that has moved.                     |
-| `pnpm check:flags`                         | A feature flag with no enablement date, or a retirement batch past its date. |
+| Gate                                       | Catches                                                                                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm format:check` / `lint` / `typecheck` | The ordinary things.                                                                                                                |
+| `pnpm check:doc-links`                     | A relative link to a file that no longer exists.                                                                                    |
+| `prisma:check-drift`                       | `schema.prisma` disagreeing with the migrations.                                                                                    |
+| `pnpm test` (coverage thresholds)          | Coverage sliding below the recorded floor.                                                                                          |
+| `surface-seams.structural.test.ts`         | Application code reaching past a design-system seam.                                                                                |
+| `styles/token-contrast.test.ts`            | A colour pair below its WCAG ratio, across themes × surfaces.                                                                       |
+| Flag-off parity suites                     | A flagged change altering the rollback path.                                                                                        |
+| `pnpm check:counts`                        | The stage-banner figures going stale — in `CLAUDE.md`, `README.md` **and** `docs/ARCHITECTURE.md`, at **every** occurrence in each. |
+| `pnpm check:claims`                        | A citation into a dependency's internals that has moved.                                                                            |
+| `pnpm check:flags`                         | A feature flag with no enablement date, or a retirement batch past its date.                                                        |
 
 **Prefer adding a gate to adding a checklist item.** A gate that computes runs
 every push; a checklist item runs when someone remembers. Every row above

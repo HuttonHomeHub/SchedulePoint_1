@@ -68,14 +68,22 @@ const actual = {
  */
 const phrase = (text) => new RegExp(text.replace(/ /g, '\\s*>?\\s*'));
 
-// Each entry is the number the prose states and the label it states it under.
+/**
+ * Each entry is a figure and **every wording the prose uses for it**.
+ *
+ * Aliases exist because the same number is written differently in different places — the stage
+ * banner says "22 API modules" and both `CLAUDE.md`'s repository-layout tree and
+ * `docs/ARCHITECTURE.md` say "22 feature modules under `src/modules/`". A gate that knew only the
+ * banner's phrasing reported OK while the architecture document said 20, which is how that file
+ * drifted and no other did (found 2026-08-09, by reading it rather than by this script).
+ */
 const claimed = {
-  'API modules': phrase('(\\d+) API modules'),
-  'Prisma models': phrase('(\\d+) Prisma models'),
-  migrations: phrase('across (\\d+) migrations'),
-  'web source files': phrase('(\\d+) web source files'),
-  'flag-scoped Playwright suites': phrase('(\\d+) flag-scoped Playwright suites'),
-  ADRs: phrase('(\\d+) ADRs'),
+  'API modules': [phrase('(\\d+) API modules'), phrase('(\\d+) feature modules')],
+  'Prisma models': [phrase('(\\d+) Prisma models')],
+  migrations: [phrase('across (\\d+) migrations'), phrase('\\+ (\\d+) migrations')],
+  'web source files': [phrase('(\\d+) web source files')],
+  'flag-scoped Playwright suites': [phrase('(\\d+) flag-scoped Playwright suites')],
+  ADRs: [phrase('(\\d+) ADRs')],
 };
 
 /**
@@ -85,25 +93,32 @@ const claimed = {
  * so an absent figure there is simply not claimed.
  */
 const documents = [
-  { path: 'CLAUDE.md', label: "CLAUDE.md's stage banner", required: true },
+  { path: 'CLAUDE.md', label: 'CLAUDE.md', required: true },
   { path: 'README.md', label: "README.md's status paragraph", required: false },
+  { path: 'docs/ARCHITECTURE.md', label: 'docs/ARCHITECTURE.md', required: false },
 ];
 
 const problems = [];
 for (const { path, label: where, required } of documents) {
   const text = read(path);
-  for (const [label, pattern] of Object.entries(claimed)) {
-    const match = text.match(pattern);
-    if (!match) {
-      if (required) {
-        problems.push(`${where} — ${label}: no longer states this figure (pattern ${pattern} found nothing).
-    If the sentence was reworded, update this script — do not delete the claim.`);
+  for (const [label, patterns] of Object.entries(claimed)) {
+    // **Every occurrence, not the first.** A document states a figure more than once — CLAUDE.md
+    // carries the module count in its stage banner AND in its repository-layout tree — and checking
+    // only the first match leaves the second free to rot while the gate reports OK. That is the
+    // shape of failure this whole script exists to remove, so it must not have it internally.
+    let found = false;
+    for (const pattern of patterns) {
+      for (const match of text.matchAll(new RegExp(pattern.source, 'g'))) {
+        found = true;
+        const stated = Number(match[1]);
+        if (stated !== actual[label]) {
+          problems.push(`${where} — ${label}: says ${stated}, the repository has ${actual[label]}`);
+        }
       }
-      continue;
     }
-    const stated = Number(match[1]);
-    if (stated !== actual[label]) {
-      problems.push(`${where} — ${label}: says ${stated}, the repository has ${actual[label]}`);
+    if (!found && required) {
+      problems.push(`${where} — ${label}: no longer states this figure (patterns ${patterns.join(', ')} found nothing).
+    If the sentence was reworded, update this script — do not delete the claim.`);
     }
   }
 }
@@ -118,7 +133,7 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `Stated counts OK in CLAUDE.md and README.md (${Object.entries(actual)
+  `Stated counts OK in ${documents.map((d) => d.path).join(', ')} (${Object.entries(actual)
     .map(([k, v]) => `${v} ${k}`)
     .join(', ')}).`,
 );

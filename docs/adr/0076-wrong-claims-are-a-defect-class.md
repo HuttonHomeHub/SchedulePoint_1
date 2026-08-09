@@ -112,6 +112,17 @@ stays a judgement. What it forbids is a number nobody re-derived. It also fails 
 sentence stops stating a figure at all, with a message saying to update the script rather than
 delete the claim — otherwise the cheapest way to make it pass is to remove the number.
 
+**Twice widened, both times because it passed while a copy of the same number was wrong.** The 2026-08-09
+reconciliation pass added `README.md` (the front door said 73 ADRs against 85) and deleted two
+internal copies that had no reason to hold a figure they did not own. Later the same day
+`docs/ARCHITECTURE.md` was found saying **20 feature modules** against 22 — by reading it, not by
+the gate, because it was not scanned and because its wording ("feature modules") differed from the
+banner's ("API modules"). So the entries now carry **aliases**, and each pattern is matched against
+**every occurrence** in a document rather than the first: `CLAUDE.md` states the module count twice,
+and checking only the first left the second free to rot behind a green check — which is the exact
+failure this ADR exists to remove, sitting inside its own gate. Both cases were verified red before
+the fix landed.
+
 ### 2. Dependency-internal claims are registered and pinned (`pnpm check:claims`)
 
 `scripts/dependency-claims.json` records every citation: package, path, line range, a short
