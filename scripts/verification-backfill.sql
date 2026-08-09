@@ -6,9 +6,19 @@
 -- which rows were already true, so re-running the inverse would un-verify accounts that had earned
 -- it honestly. Every other step in this programme is reversible; this one is not.
 --
--- Usage on the host:
---   docker compose exec -T db psql -U app -d app -v ON_ERROR_STOP=1 -f verification-backfill.sql
--- (the file only SELECTs; the UPDATE is commented out and has to be run deliberately).
+-- Usage on the host — note the REDIRECT, not `-f`:
+--   docker compose -f docker-compose.release.yml exec -T db \
+--     psql -U app -d app -v ON_ERROR_STOP=1 < scripts/verification-backfill.sql
+--
+-- `-f` would make psql look for the file INSIDE the db container, and the compose service mounts
+-- only `db-data:/var/lib/postgresql/data` — there is no host mount carrying this file, so `-f`
+-- fails with "could not open file". Redirecting feeds it through the exec's stdin from the host
+-- instead, which is what `-T` (no TTY) is there for. This line said `-f` until 2026-08-09 and had
+-- never been run.
+--
+-- `-U`/`-d` are the compose defaults (POSTGRES_USER/POSTGRES_DB, both `app`); use your own values
+-- if the host's .env overrides them. The file only SELECTs — the UPDATE is commented out and has
+-- to be uncommented deliberately.
 
 \echo ''
 \echo '=== 1. Total accounts that have not verified their address ==='

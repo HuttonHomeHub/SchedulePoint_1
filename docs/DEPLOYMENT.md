@@ -553,8 +553,18 @@ missing is the count and the decision it informs.
 running the inverse would un-verify accounts that earned it honestly. Do the CSP flip first
 (above): it rehearses the same edit-a-variable-and-recreate loop where a mistake costs seconds.
 
-1. **Count.** `docker compose exec -T db psql -U app -d app -v ON_ERROR_STOP=1 -f
-scripts/verification-backfill.sql`. It only SELECTs; the UPDATE is commented out.
+1. **Count.** Note the **redirect**, not `-f`:
+
+   ```bash
+   docker compose -f docker-compose.release.yml exec -T db \
+     psql -U app -d app -v ON_ERROR_STOP=1 < scripts/verification-backfill.sql
+   ```
+
+   `-f` would make psql look for the file **inside** the db container, which mounts only
+   `db-data:/var/lib/postgresql/data` — there is no host mount carrying it, so `-f` fails with
+   "could not open file". This step said `-f` until 2026-08-09 and had never been run; it would
+   have failed at the most delicate point in the programme. It only SELECTs; the UPDATE is
+   commented out.
 
    It reports **three** figures rather than one, and the third is the one to read carefully:
 
@@ -569,7 +579,7 @@ scripts/verification-backfill.sql`. It only SELECTs; the UPDATE is commented out
      which case both options were identical; if it is not, the query names the rows, and the
      decision should be taken on real addresses.
 
-2. **Backfill.** Uncomment the `UPDATE` in that file and re-run.
+2. **Backfill.** Uncomment the `UPDATE` in that file and re-run the same command.
 3. **Flip.** Set `AUTH_REQUIRE_EMAIL_VERIFICATION=true` and recreate the API.
 4. **Smoke it.** Sign up a throwaway address, confirm the email arrives, follow the link, confirm
    it lands on the app rather than the "still waiting" screen — that last step is the ADR-0074 M5
@@ -622,8 +632,15 @@ organisation, with the first signal being someone who cannot get in telling some
 `scripts/watch-mail-failures.sh` closes that. Run it from cron on the host:
 
 ```cron
-*/5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic /opt/schedulepoint/scripts/watch-mail-failures.sh
+*/5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic SP_API_CONTAINER=schedulepoint-release-api-1 /opt/schedulepoint/scripts/watch-mail-failures.sh
 ```
+
+**Check the container name first.** Neither compose file sets `container_name`, so Compose names
+the container `<project>-<service>-<index>` — `schedulepoint-release-api-1` for the release stack,
+`schedulepoint-api-1` for a local build, and something else again if Dockge names the project after
+its stack directory. Confirm with `docker ps --format '{{.Names}}' | grep api`. A wrong name is not
+silent — the script alerts "cannot read logs" — but then it alerts every five minutes about itself
+rather than about the mail.
 
 **The alert must not be email.** The one transport it exists to report on is the broken one. An
 ntfy topic, a Slack or Discord webhook, or a phone push all work; the script only needs a URL that
