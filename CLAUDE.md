@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 20 API modules
 > (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 893 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 84 ADRs.
+> 85 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1782,6 +1782,31 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   register shipped in the same commit: a _child_ must not retire before its parent, because the
   child's retirement declares the feature permanent while the surviving parent can still switch it
   off. ADR-0076 Class 3, caught by the gate written beside it.
+
+- **ADR-0085** _(Accepted; decision only — nothing is built)_ — Erasure collides with the audit log,
+  and that collision is the decision. `docs/BACKLOG.md` carried "Privacy operations" as an `M`
+  sized as work — "a hard-delete path and a data-export path". It is not work yet; it is a genuine
+  conflict, and picking it up as a ticket means resolving that conflict by whichever half the
+  implementer opened first. **`audit_events` refuses `UPDATE` and `DELETE` in the database**, by
+  `BEFORE UPDATE OR DELETE` / `BEFORE TRUNCATE` triggers declared `ENABLE ALWAYS` so the application
+  role cannot bypass them — and it deliberately holds the address a failed sign-in named
+  (ADR-0073 C2 keeps the caller's own casing). A right-to-erasure request therefore meets a
+  guarantee this product made on purpose, three ADRs ago, at the strongest layer available. So
+  erasure is **anonymisation of the actor** — the `users` row is tombstoned, the unique index is
+  preserved by a non-routable address, and all **54** attribution columns keep pointing at the same
+  id — never deletion of the record. **Relaxing the triggers is rejected**: it converts a
+  _structural_ guarantee into a _procedural_ one, changing the answer to "could these rows have been
+  altered?" from "not by the application role" to "only by the erasure path, which we believe was
+  used correctly". Reading the schema first also found what a plan written from the backlog line
+  would have missed — `invitations` holds addresses for people who **never became users**, the
+  clearest-cut case in the system and the one case that IS a hard delete. The `auth.*`
+  `subject_label` is bounded by **retention** rather than per-subject deletion (a rule applied to all
+  rows alike cannot be aimed), with the period left unset because it is a legal question and
+  inventing a number would be ADR-0076 Class 3. Export is **organisation-scoped** first, not
+  subject-scoped: a subject export here is a name, an email and a list of ids, which tells its reader
+  almost nothing. **Build trigger named** — the first organisation outside the product owner's own,
+  or a real subject request — because an unconditioned `M` stays exactly one priority below whatever
+  is being done.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

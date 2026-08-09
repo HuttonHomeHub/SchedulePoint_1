@@ -219,12 +219,20 @@ remaining ADR-0072 items are tracked in [`TECH_DEBT.md`](TECH_DEBT.md).
   logger — see [`OBSERVABILITY.md`](OBSERVABILITY.md)). The application stores
   little personal data: an account's name and email, and authorship attribution
   on the rows a user creates.
-- **Erasure/export for privacy requests is _not yet implemented_.** Deletion
-  throughout the app is a **soft** delete (recoverable by design — see
-  [`DATABASE.md`](DATABASE.md)); there is no hard-delete path and no export
-  endpoint. Both are needed before the product handles a subject-access or
-  erasure request, and neither should be bolted on without an explicit,
-  audited path.
+- **Erasure/export for privacy requests is _not yet implemented_, and
+  [ADR-0085](adr/0085-privacy-operations.md) says why and what shape it must
+  take.** Deletion throughout the app is a **soft** delete (recoverable by
+  design — see [`DATABASE.md`](DATABASE.md)); there is no hard-delete path and
+  no export endpoint.
+
+  The constraint to know before writing either: **`audit_events` refuses
+  `UPDATE` and `DELETE` in the database**, by `ENABLE ALWAYS` triggers the
+  application role cannot bypass, and it holds the address a failed sign-in
+  named. An erasure path that relaxes those triggers converts ADR-0072's
+  structural tamper-resistance into a procedural claim, which is a different
+  product. So erasure is **anonymisation of the actor** — the `users` row is
+  tombstoned and all 54 attribution columns keep pointing at the same id — never
+  deletion of the record. See ADR-0085 D1/D3.
 
 ## Secure-by-default checklist (per endpoint/feature)
 
