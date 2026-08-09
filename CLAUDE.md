@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 20 API modules
 > (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 890 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 82 ADRs.
+> 83 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1725,6 +1725,37 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   citation is corrected rather than quietly dropped. No feature flag (ADR-0061's reasoning, stronger
   here: a primitive's accessibility posture plus a gating derivation, with no new capability).
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0083** _(Proposed)_ — A gated form field is **read-only, not disabled**, and the mechanism
+  differs per control because the platform does not offer the same states — not because we prefer
+  variety. Text and textarea take `readOnly`; a checkbox takes `aria-disabled` plus a
+  `preventDefault` guard; a native `<select>` keeps native `disabled` as a **named exception with
+  its cost stated**; our own `Combobox` takes `readOnly` because we control it. The discriminator is
+  clean: a control whose only operation is changing its value gets `aria-disabled` and a guard; a
+  control with operations beyond that — caret, selection, copy — gets `readOnly`. Extends ADR-0082
+  from the menu tier, and for the **inverse** reason, which is the part worth keeping: a menu item's
+  content _is_ its function, so a menu of refusals renders no trigger; a field's content is its
+  **value**, so a form of shaded fields is exactly what the reader came for.
+  **The finding nobody had noticed is a trap in the other direction.** Making a gated field
+  _readable_ removes its WCAG 1.4.3/1.4.11 exemption — `disabled:opacity-50` is lawful today only
+  because the control is inactive. So the treatment dims the **chrome** and never the **value**
+  (`--field` → `--muted`, border stays `--input`, value keeps full contrast), and
+  `token-contrast.test.ts` must carry the new pair **before** the CSS is written, not after.
+  It **narrows rather than overturns** `DESIGN_SYSTEM.md`'s "native `disabled` is fine when nothing
+  flips underneath the user" clause: that clause's own example ("no permission") is not static,
+  because the ADR-0028 pen flips under a reader who did nothing — and static-vs-flipping is the
+  wrong axis for a field anyway, since a button's loss is operability and a field's is readability.
+  The button ruling is untouched. It also found that `disabled` on a field means **five different
+  things** today and one of them is legitimate: an unloaded picker has nothing to read, so native
+  `disabled` keeps that job — a blanket ban would have been wrong.
+  **Blast radius settled with its method recorded** (38 props on a `*Field` across 8 files, two
+  files carrying 30), because three passes had produced three numbers and the disagreement was
+  never about the code: the larger figures counted `disabled=` on any component. `AssignmentRow`'s
+  case is a **different** fix — it _unmounts_ its editors rather than disabling them, a guaranteed
+  focus drop to `<body>`, and needs a read-only render. Two claims are marked **reasoned from
+  specification, not observed** (real AT announcement of `readonly` + `aria-describedby`, and
+  whether Chrome/Safari suppress the picker on a `readonly` date input) and must be checked before
+  this is Accepted. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -1,12 +1,50 @@
-# ADR-XXXX — A gated field is read-only, not disabled, and the reason belongs to the group
+# ADR-0083 — A gated form field is read-only, not disabled
 
-**Status:** Draft (number unassigned — assign at filing, and update `docs/adr/README.md` in the
-same commit; ADR-0071 and ADR-0079 both record what happens when that is skipped)
+**Status:** Proposed (filed as 0083 on 2026-08-09, registered in `docs/adr/README.md` and
+CLAUDE.md §16 in the same commit — ADR-0071 sat uncited in the register for a whole epic and
+ADR-0079 had its number taken between plan and milestone; both are why this is one commit)
 **Date:** 2026-08-08
 **Extends:** ADR-0082 (present and shaded, never a dead end) from the menu tier into the form tier.
 **Amends:** `docs/DESIGN_SYSTEM.md` "Buttons" — its static-versus-flipping clause, narrowed and
 partly overturned for fields (§D1). ADR-0061's form-layout vocabulary gains one member (§D4).
 **Supersedes:** nothing.
+
+## The proposed fill FAILS its own gate — measured 2026-08-09, before any CSS
+
+This ruling says the treatment must dim the **chrome** and never the **value**, and that
+`token-contrast.test.ts` should carry the new pair _before_ the CSS is written. That was done, and
+the gate refused the mechanism the ruling proposed:
+
+| Pair                                                          | Surface | Measured   | Needs |
+| ------------------------------------------------------------- | ------- | ---------- | ----- |
+| `--muted` / `--field-foreground` (the value in a gated field) | brand   | **1.01:1** | 4.5:1 |
+| `--muted` / `--input` (its outline)                           | panel   | **2.88:1** | 3:1   |
+
+1.01:1 is not marginal — on the fixed-navy brand surface `--muted` and `--field-foreground` are
+very nearly the same colour, so a gated field's value would be invisible on the login screens. The
+outline miss is small and still a miss.
+
+**So `--field` → `--muted` is rejected**, and the ruling is wrong on that specific point. Everything
+else stands: read-only over disabled, the per-control mechanisms, the five meanings of `disabled`,
+the exemption argument that produced this check in the first place. It is the exemption argument
+that _caught_ it — the reason to add the pair before the CSS was precisely that a dimmed fill might
+not clear 4.5:1, and it does not.
+
+**What has to happen before the primitive is built** (this is now M6's first task, not its last):
+
+1. Decide the gated fill. Three candidates, none free: a **19th rebound name** (`--field-gated`,
+   which §"a family is complete or it is a trap" argues against adding lightly); **no fill change at
+   all**, carrying gated-ness on the border, cursor and the linked reason, which keeps the value
+   legible by construction but makes a gated field look editable; or a **per-surface** value, which
+   is what ADR-0055's scope machinery exists for and is the most likely answer given the failure is
+   surface-specific (brand and panel, not page).
+2. Re-add both pairs to `token-contrast.test.ts` and watch them pass.
+3. Then write the CSS.
+
+The two pairs are **not** left in the matrix meanwhile. A gate that is red on the day it lands gets
+deleted rather than fixed (ADR-0058), and they would be asserting about a treatment no code
+implements yet. They are recorded here instead, with their numbers, which is the thing that makes
+step 2 checkable.
 
 ## Blast radius — settled, with the method recorded
 
