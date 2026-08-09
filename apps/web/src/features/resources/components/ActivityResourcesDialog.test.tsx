@@ -149,9 +149,13 @@ describe('ActivityResourcesDialog', () => {
   it('disables the driving toggle on an assigned MATERIAL row and unassigns it', async () => {
     renderDialog([assignment({ resourceId: 'res-2' })]);
 
-    // The row for the MATERIAL resource (Concrete) can never drive.
+    // The row for the MATERIAL resource (Concrete) can never drive. `aria-disabled` + a click
+    // guard, not the native attribute (ADR-0083 D1): a checkbox's only operation is changing its
+    // value, so there is nothing for `readOnly` to preserve — but it stays in the tab order, which
+    // is how the reader reaches the sentence explaining why a material cannot drive.
     const drivingToggles = screen.getAllByLabelText('Driving resource');
-    expect(drivingToggles[0]).toBeDisabled();
+    expect(drivingToggles[0]).toHaveAttribute('aria-disabled', 'true');
+    expect(drivingToggles[0]).toBeEnabled();
 
     vi.mocked(apiFetch).mockResolvedValue(undefined);
     fireEvent.click(screen.getByRole('button', { name: 'Unassign Concrete' }));

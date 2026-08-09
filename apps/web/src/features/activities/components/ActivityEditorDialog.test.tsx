@@ -197,9 +197,31 @@ describe('ActivityEditorDialog — gating', () => {
     expect(screen.getByText(/start editing to change this activity/i)).toBeInTheDocument();
   });
 
-  it('disables the fields too, not only the Save', () => {
+  it('shuts the fields too, not only the Save — and leaves their values readable', () => {
     mount({ gating: PLANNER_NO_PEN });
-    expect(screen.getByLabelText('Name')).toBeDisabled();
+    const name = screen.getByLabelText('Name');
+    // `readOnly`, NOT `disabled` (ADR-0083 D1). The distinction is the whole ruling: a disabled
+    // field leaves the tab order and takes its value out of reach of a keyboard user and of copy,
+    // so "you may not edit this" was being implemented as "you may not read it either".
+    expect(name).toHaveAttribute('readonly');
+    expect(name).toBeEnabled();
+    // And NOT `aria-disabled`, which would be a false statement about a control that is operable.
+    expect(name).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('states the reason ONCE, and every shut field points at that one node', () => {
+    mount({ gating: PLANNER_NO_PEN });
+    // The duplication this replaces was real and shipped for exactly one test run: the group
+    // provider printed the sentence above the fields while `ScopeSaveBar` printed it again beside
+    // Save (ADR-0077 §9 — a field's problem belongs to the field; the alert belongs to the form).
+    const reasons = screen.getAllByText(/start editing to change this activity/i);
+    expect(reasons).toHaveLength(1);
+    const reasonId = reasons[0]!.id;
+    expect(screen.getByLabelText('Name')).toHaveAttribute('aria-describedby', reasonId);
+    expect(screen.getByRole('button', { name: /save general/i })).toHaveAttribute(
+      'aria-describedby',
+      reasonId,
+    );
   });
 
   it('keeps Save disabled until the scope is dirty', () => {
@@ -395,7 +417,9 @@ describe('ActivityEditorDialog — weighted steps panel', () => {
     STEPS = [{ name: 'Formwork', weight: 1, percentComplete: 60 }];
     await openSteps();
     const physical = await screen.findByLabelText('Physical % complete');
-    expect(physical).toBeDisabled();
+    // `readOnly`, not `disabled` (ADR-0083 D1): the rolled-up figure is precisely what the reader
+    // came to see, and a disabled field takes it out of the tab order and out of copy.
+    expect(physical).toHaveAttribute('readonly');
     // The reason names what would re-enable it — a bare "Read-only" is the dead end this epic
     // exists to remove, and this field was previously editable while being silently ignored.
     expect(screen.getByText(/weighted steps are setting this to 60%/i)).toBeInTheDocument();

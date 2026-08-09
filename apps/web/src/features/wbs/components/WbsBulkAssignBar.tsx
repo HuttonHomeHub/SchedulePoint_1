@@ -107,7 +107,9 @@ export function WbsBulkAssignBar({
             setError(null);
             setTargetId(event.target.value);
           }}
-          disabled={!gate.writable}
+          // `reason: null` because the status paragraph below already carries `gate.reason`, and
+          // this select is `aria-describedby` it — one node, N references (ADR-0083 D4).
+          gate={{ writable: gate.writable, reason: null }}
           aria-describedby={statusId}
         >
           <option value={TOP_LEVEL}>None (top-level)</option>

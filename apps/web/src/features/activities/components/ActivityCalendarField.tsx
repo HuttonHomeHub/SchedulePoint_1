@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from 'react';
 import { INHERIT_CALENDAR_LABEL } from '../schemas/activity-schemas';
 
 import { Combobox } from '@/components/ui/combobox';
+import { FieldGateLock, useFieldGate } from '@/components/ui/field-gate';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
@@ -43,7 +44,6 @@ export function ActivityCalendarField({
   loading = false,
   errored = false,
   activityType,
-  disabled = false,
 }: {
   /** The bound `calendarId`, `''` meaning inherit the plan's. */
   value: string;
@@ -54,8 +54,6 @@ export function ActivityCalendarField({
   errored?: boolean;
   /** Drives the `RESOURCE_DEPENDENT` shaded-with-a-reason state. */
   activityType: ActivityType | undefined;
-  /** The scope's own gate (role/pen). Composes with the type rule — either one shades the field. */
-  disabled?: boolean;
 }): React.ReactElement {
   const baseId = useId();
   const fieldId = `${baseId}-calendar`;
@@ -66,7 +64,12 @@ export function ActivityCalendarField({
   // ADR-0039), so its own `calendarId` is resolved and then overridden by the service. Leaving the
   // picker live would be a control that saves a value with no effect.
   const resourceDependent = activityType === 'RESOURCE_DEPENDENT';
-  const shaded = disabled || resourceDependent;
+  // The scope's own gate (role/pen) now arrives through the enclosing `FieldGateProvider` rather
+  // than a `disabled` prop the caller had to remember to pass (ADR-0083 D4). Either rule shades the
+  // field; the RESOURCE_DEPENDENT sentence below is the more specific one and is what the reader
+  // sees, which is exactly the nearest-reason rule the ADR states.
+  const penShut = useFieldGate()?.writable === false;
+  const shaded = penShut || resourceDependent;
   // A bound value that matches no option (the list is still loading, or failed): inject a synthetic
   // option so the Select shows it as selected — never blank, which would read as "inherit".
   const missing = Boolean(value) && !calendars.some((c) => c.id === value);
@@ -88,7 +91,10 @@ export function ActivityCalendarField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={fieldId}>Calendar</Label>
+      <Label htmlFor={fieldId} className={shaded ? 'flex items-center gap-1.5' : undefined}>
+        Calendar
+        {shaded ? <FieldGateLock /> : null}
+      </Label>
       {LIBRARY_SCOPING_ENABLED ? (
         <Combobox
           id={fieldId}
@@ -100,7 +106,9 @@ export function ActivityCalendarField({
           selectedLabel={calendars.find((c) => c.id === value)?.name}
           groupLabels={CALENDAR_TIER_GROUP_LABELS}
           emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
-          disabled={shaded}
+          // `readOnly`, not `disabled`: the picker still shows which calendar this activity is on,
+          // and that value stays focusable and copyable (ADR-0083 D1 row 4).
+          readOnly={shaded}
           loading={loading}
           errored={errored}
           describedBy={describedBy}

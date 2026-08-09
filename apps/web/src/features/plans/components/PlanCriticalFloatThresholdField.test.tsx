@@ -214,14 +214,18 @@ describe('PlanCriticalFloatThresholdField', () => {
     expect(screen.getByText('4h')).toBeInTheDocument();
   });
 
-  it('disables the field while its save is in flight', async () => {
+  it('shuts the field while its save is in flight, without taking the value away', async () => {
     let resolve: (plan: unknown) => void = () => {};
     vi.mocked(apiFetch).mockReturnValue(new Promise((r) => (resolve = r)));
     renderField();
     fireEvent.change(field(), { target: { value: '5d' } });
     fireEvent.blur(field());
 
-    await waitFor(() => expect(field()).toBeDisabled());
+    // `readOnly`, not `disabled` (ADR-0083 D2): an in-flight save flips under a reader who is not
+    // the one causing it, and the native attribute would throw a keyboard user to `<body>` and back
+    // twice per save — the `ScopeSaveBar` lesson, applied to the field tier.
+    await waitFor(() => expect(field()).toHaveAttribute('readonly'));
+    expect(field()).toBeEnabled();
     expect(field()).toHaveAttribute('aria-busy', 'true');
     resolve({ ...PLAN, criticalFloatThresholdMinutes: 2400, version: 5 });
   });

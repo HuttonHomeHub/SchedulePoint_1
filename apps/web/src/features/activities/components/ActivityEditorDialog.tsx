@@ -50,6 +50,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
+import { FieldGateProvider } from '@/components/ui/field-gate';
 import {
   CheckboxField,
   FormErrorSummary,
@@ -492,113 +493,107 @@ export function ActivityEditorDialog({
                   <FormErrorSummary errors={general.form.formState.errors} />
                   {scopeError('general')}
 
-                  <FormSection title="Identity">
-                    <FieldGrid columns="lead">
-                      <TextField
-                        label="Name"
-                        disabled={!gating.general.writable}
-                        error={general.form.formState.errors.name?.message}
-                        {...general.form.register('name')}
-                      />
-                      <TextField
-                        label="Code"
-                        autoComplete="off"
-                        disabled={!gating.general.writable}
-                        error={general.form.formState.errors.code?.message}
-                        {...general.form.register('code')}
-                      />
-                      <FieldGridFull>
-                        <TextareaField
-                          label="Description"
-                          disabled={!gating.general.writable}
-                          error={general.form.formState.errors.description?.message}
-                          {...general.form.register('description')}
-                        />
-                      </FieldGridFull>
-                    </FieldGrid>
-                  </FormSection>
-
-                  <FormSection
-                    title="Work"
-                    description="What kind of activity this is, and how long it takes."
-                  >
-                    <FieldGrid>
-                      <SelectField
-                        label="Type"
-                        disabled={!gating.general.writable}
-                        error={general.form.formState.errors.type?.message}
-                        {...general.form.register('type')}
-                      >
-                        {selectableActivityTypes(
-                          ADVANCED_ACTIVITY_TYPES_ENABLED,
-                          activity?.type,
-                        ).map((value) => (
-                          <option key={value} value={value}>
-                            {ACTIVITY_TYPE_LABELS[value]}
-                          </option>
-                        ))}
-                      </SelectField>
-                      {/* A derived type computes its own duration, so both controls disappear
-                          together — the pair has always been one decision. */}
-                      {!isDurationDerivedType(type) ? (
+                  <FieldGateProvider gate={gating.general}>
+                    <FormSection title="Identity">
+                      <FieldGrid columns="lead">
                         <TextField
-                          label={durationLabel(hoursPerDay)}
-                          {...durationInputProps(hoursPerDay)}
-                          {...(durationHelp(hoursPerDay) === undefined
-                            ? {}
-                            : { hint: durationHelp(hoursPerDay) })}
-                          disabled={!gating.general.writable}
-                          error={general.form.formState.errors.duration?.message}
-                          {...general.form.register('duration')}
+                          label="Name"
+                          error={general.form.formState.errors.name?.message}
+                          {...general.form.register('name')}
                         />
-                      ) : null}
-                      {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
+                        <TextField
+                          label="Code"
+                          autoComplete="off"
+                          error={general.form.formState.errors.code?.message}
+                          {...general.form.register('code')}
+                        />
                         <FieldGridFull>
-                          <SelectField
-                            label="Duration type"
-                            hint="Sets how editing one of duration, units or units/time recomputes the others, so units = duration × units/time stays true. A crew installing a fixed quantity takes longer if its rate drops."
-                            disabled={!gating.general.writable}
-                            {...general.form.register('durationType')}
-                          >
-                            {DURATION_TYPES.map((value) => (
-                              <option key={value} value={value}>
-                                {DURATION_TYPE_LABELS[value]}
-                              </option>
-                            ))}
-                          </SelectField>
+                          <TextareaField
+                            label="Description"
+                            error={general.form.formState.errors.description?.message}
+                            {...general.form.register('description')}
+                          />
                         </FieldGridFull>
-                      ) : null}
-                    </FieldGrid>
-                  </FormSection>
-
-                  {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-                    <FormSection
-                      title="Breakdown"
-                      aside={parentOptions.length === 0 ? 'No summaries in this plan' : undefined}
-                    >
-                      <SelectField
-                        label="Parent WBS summary"
-                        hint="Groups this activity under a WBS summary, whose dates roll up from its members."
-                        disabled={!gating.general.writable}
-                        {...general.form.register('parentId')}
-                      >
-                        <option value="">None (top level)</option>
-                        {parentOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.name}
-                          </option>
-                        ))}
-                      </SelectField>
+                      </FieldGrid>
                     </FormSection>
-                  ) : null}
 
-                  <ScopeSaveBar
-                    gate={gating.general}
-                    dirty={general.isDirty}
-                    pending={update.isPending}
-                    saved={savedScope === 'general'}
-                    label="Save general"
-                  />
+                    <FormSection
+                      title="Work"
+                      description="What kind of activity this is, and how long it takes."
+                    >
+                      <FieldGrid>
+                        <SelectField
+                          label="Type"
+                          error={general.form.formState.errors.type?.message}
+                          {...general.form.register('type')}
+                        >
+                          {selectableActivityTypes(
+                            ADVANCED_ACTIVITY_TYPES_ENABLED,
+                            activity?.type,
+                          ).map((value) => (
+                            <option key={value} value={value}>
+                              {ACTIVITY_TYPE_LABELS[value]}
+                            </option>
+                          ))}
+                        </SelectField>
+                        {/* A derived type computes its own duration, so both controls disappear
+                          together — the pair has always been one decision. */}
+                        {!isDurationDerivedType(type) ? (
+                          <TextField
+                            label={durationLabel(hoursPerDay)}
+                            {...durationInputProps(hoursPerDay)}
+                            {...(durationHelp(hoursPerDay) === undefined
+                              ? {}
+                              : { hint: durationHelp(hoursPerDay) })}
+                            error={general.form.formState.errors.duration?.message}
+                            {...general.form.register('duration')}
+                          />
+                        ) : null}
+                        {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
+                          <FieldGridFull>
+                            <SelectField
+                              label="Duration type"
+                              hint="Sets how editing one of duration, units or units/time recomputes the others, so units = duration × units/time stays true. A crew installing a fixed quantity takes longer if its rate drops."
+                              {...general.form.register('durationType')}
+                            >
+                              {DURATION_TYPES.map((value) => (
+                                <option key={value} value={value}>
+                                  {DURATION_TYPE_LABELS[value]}
+                                </option>
+                              ))}
+                            </SelectField>
+                          </FieldGridFull>
+                        ) : null}
+                      </FieldGrid>
+                    </FormSection>
+
+                    {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
+                      <FormSection
+                        title="Breakdown"
+                        aside={parentOptions.length === 0 ? 'No summaries in this plan' : undefined}
+                      >
+                        <SelectField
+                          label="Parent WBS summary"
+                          hint="Groups this activity under a WBS summary, whose dates roll up from its members."
+                          {...general.form.register('parentId')}
+                        >
+                          <option value="">None (top level)</option>
+                          {parentOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.name}
+                            </option>
+                          ))}
+                        </SelectField>
+                      </FormSection>
+                    ) : null}
+                    <ScopeSaveBar
+                      gate={gating.general}
+                      dirty={general.isDirty}
+                      pending={update.isPending}
+                      saved={savedScope === 'general'}
+                      label="Save general"
+                    />
+                  </FieldGateProvider>
                 </form>
               ) : null}
 
@@ -618,168 +613,159 @@ export function ActivityEditorDialog({
                   <FormErrorSummary errors={scheduling.form.formState.errors} />
                   {scopeError('scheduling')}
 
-                  {ACTIVITY_CALENDAR_ENABLED ? (
-                    <FormSection
-                      title="Working time"
-                      description="Which calendar's working days this activity's duration is measured in."
-                    >
-                      <ActivityCalendarField
-                        value={scheduling.form.watch('calendarId') ?? ''}
-                        onChange={(calendarId) =>
-                          scheduling.form.setValue('calendarId', calendarId, {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          })
-                        }
-                        calendars={calendars}
-                        loading={calendarsLoading}
-                        errored={calendarsError}
-                        activityType={type}
-                        disabled={!gating.scheduling.writable}
-                      />
-                    </FormSection>
-                  ) : null}
-
-                  <FormSection
-                    title="Constraints"
-                    description="Dates you impose on the network. A constraint overrides what the logic would otherwise decide."
-                    aside={constraintType ? undefined : 'None set'}
-                  >
-                    {/* The pair that made the flat list unreadable: a constraint type and its date
-                        are one decision, and stacking them made them look like two. */}
-                    <FieldGrid columns="lead">
-                      <SelectField
-                        label="Constraint"
-                        hint="Pins the activity’s start or finish to a date. Only constraints the scheduler applies exactly as named are listed."
-                        disabled={!gating.scheduling.writable}
-                        {...scheduling.form.register('constraintType')}
+                  <FieldGateProvider gate={gating.scheduling}>
+                    {ACTIVITY_CALENDAR_ENABLED ? (
+                      <FormSection
+                        title="Working time"
+                        description="Which calendar's working days this activity's duration is measured in."
                       >
-                        <option value="">None</option>
-                        {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                          <option key={value} value={value}>
-                            {CONSTRAINT_TYPE_LABELS[value]}
-                          </option>
-                        ))}
-                      </SelectField>
-                      {constraintType ? (
-                        <TextField
-                          label="Constraint date"
-                          type="date"
-                          disabled={!gating.scheduling.writable}
-                          error={scheduling.form.formState.errors.constraintDate?.message}
-                          {...scheduling.form.register('constraintDate')}
+                        <ActivityCalendarField
+                          value={scheduling.form.watch('calendarId') ?? ''}
+                          onChange={(calendarId) =>
+                            scheduling.form.setValue('calendarId', calendarId, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                          calendars={calendars}
+                          loading={calendarsLoading}
+                          errored={calendarsError}
+                          activityType={type}
                         />
-                      ) : null}
-                      {ADVANCED_CONSTRAINTS_ENABLED ? (
-                        <>
-                          <SelectField
-                            label="Secondary constraint"
-                            hint="A second date constraint that drives the activity’s late dates. The primary constraint drives its early dates."
-                            disabled={!gating.scheduling.writable}
-                            {...scheduling.form.register('secondaryConstraintType')}
-                          >
-                            <option value="">None</option>
-                            {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                              <option key={value} value={value}>
-                                {CONSTRAINT_TYPE_LABELS[value]}
-                              </option>
-                            ))}
-                          </SelectField>
-                          {secondaryConstraintType ? (
-                            <TextField
-                              label="Secondary constraint date"
-                              type="date"
-                              disabled={!gating.scheduling.writable}
-                              error={
-                                scheduling.form.formState.errors.secondaryConstraintDate?.message
-                              }
-                              {...scheduling.form.register('secondaryConstraintDate')}
-                            />
-                          ) : null}
-                        </>
-                      ) : null}
-                    </FieldGrid>
-                  </FormSection>
+                      </FormSection>
+                    ) : null}
 
-                  <FormSection
-                    title="Placement &amp; targets"
-                    description="How the activity is positioned once its dates are known."
-                  >
-                    <FieldGrid>
-                      <CheckboxField
-                        label="Schedule as late as possible"
-                        hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
-                        disabled={!gating.scheduling.writable}
-                        {...scheduling.form.register('scheduleAsLateAsPossible')}
-                      />
-                      {ADVANCED_CONSTRAINTS_ENABLED && !isDurationDerivedType(type) ? (
-                        <TextField
-                          label="Expected finish"
-                          type="date"
-                          hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
-                          disabled={!gating.scheduling.writable}
-                          {...scheduling.form.register('expectedFinish')}
-                        />
-                      ) : null}
-                    </FieldGrid>
-                  </FormSection>
-
-                  {INTER_PROJECT_DATES_ENABLED ? (
                     <FormSection
-                      title="External interfaces"
-                      description="Dates imported from another plan or programme. They bound this activity but never pin it."
-                      aside={
-                        activity?.externalDriven === true ? 'Driving this activity' : undefined
-                      }
+                      title="Constraints"
+                      description="Dates you impose on the network. A constraint overrides what the logic would otherwise decide."
+                      aside={constraintType ? undefined : 'None set'}
                     >
-                      <FieldGrid>
-                        <TextField
-                          label="External early start"
-                          type="date"
-                          hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins."
-                          disabled={!gating.scheduling.writable}
-                          {...scheduling.form.register('externalEarlyStart')}
-                        />
-                        <TextField
-                          label="External late finish"
-                          type="date"
-                          hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
-                          disabled={!gating.scheduling.writable}
-                          error={scheduling.form.formState.errors.externalLateFinish?.message}
-                          {...scheduling.form.register('externalLateFinish')}
-                        />
+                      {/* The pair that made the flat list unreadable: a constraint type and its date
+                        are one decision, and stacking them made them look like two. */}
+                      <FieldGrid columns="lead">
+                        <SelectField
+                          label="Constraint"
+                          hint="Pins the activity’s start or finish to a date. Only constraints the scheduler applies exactly as named are listed."
+                          {...scheduling.form.register('constraintType')}
+                        >
+                          <option value="">None</option>
+                          {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+                            <option key={value} value={value}>
+                              {CONSTRAINT_TYPE_LABELS[value]}
+                            </option>
+                          ))}
+                        </SelectField>
+                        {constraintType ? (
+                          <TextField
+                            label="Constraint date"
+                            type="date"
+                            error={scheduling.form.formState.errors.constraintDate?.message}
+                            {...scheduling.form.register('constraintDate')}
+                          />
+                        ) : null}
+                        {ADVANCED_CONSTRAINTS_ENABLED ? (
+                          <>
+                            <SelectField
+                              label="Secondary constraint"
+                              hint="A second date constraint that drives the activity’s late dates. The primary constraint drives its early dates."
+                              {...scheduling.form.register('secondaryConstraintType')}
+                            >
+                              <option value="">None</option>
+                              {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+                                <option key={value} value={value}>
+                                  {CONSTRAINT_TYPE_LABELS[value]}
+                                </option>
+                              ))}
+                            </SelectField>
+                            {secondaryConstraintType ? (
+                              <TextField
+                                label="Secondary constraint date"
+                                type="date"
+                                error={
+                                  scheduling.form.formState.errors.secondaryConstraintDate?.message
+                                }
+                                {...scheduling.form.register('secondaryConstraintDate')}
+                              />
+                            ) : null}
+                          </>
+                        ) : null}
                       </FieldGrid>
                     </FormSection>
-                  ) : null}
 
-                  {RESOURCE_LEVELLING_ENABLED ? (
                     <FormSection
-                      title="Levelling"
-                      description="Used only when the plan is levelled."
+                      title="Placement &amp; targets"
+                      description="How the activity is positioned once its dates are known."
                     >
                       <FieldGrid>
-                        <TextField
-                          label="Levelling priority"
-                          type="number"
-                          min={0}
-                          hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
-                          disabled={!gating.scheduling.writable}
-                          error={scheduling.form.formState.errors.levelingPriority?.message}
-                          {...scheduling.form.register('levelingPriority', {
-                            setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                          })}
+                        <CheckboxField
+                          label="Schedule as late as possible"
+                          hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
+                          {...scheduling.form.register('scheduleAsLateAsPossible')}
                         />
+                        {ADVANCED_CONSTRAINTS_ENABLED && !isDurationDerivedType(type) ? (
+                          <TextField
+                            label="Expected finish"
+                            type="date"
+                            hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
+                            {...scheduling.form.register('expectedFinish')}
+                          />
+                        ) : null}
                       </FieldGrid>
                     </FormSection>
-                  ) : null}
 
-                  <ScopeSaveBar
-                    gate={gating.scheduling}
-                    dirty={scheduling.isDirty}
-                    pending={update.isPending}
-                    saved={savedScope === 'scheduling'}
-                    label="Save scheduling"
-                  />
+                    {INTER_PROJECT_DATES_ENABLED ? (
+                      <FormSection
+                        title="External interfaces"
+                        description="Dates imported from another plan or programme. They bound this activity but never pin it."
+                        aside={
+                          activity?.externalDriven === true ? 'Driving this activity' : undefined
+                        }
+                      >
+                        <FieldGrid>
+                          <TextField
+                            label="External early start"
+                            type="date"
+                            hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins."
+                            {...scheduling.form.register('externalEarlyStart')}
+                          />
+                          <TextField
+                            label="External late finish"
+                            type="date"
+                            hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
+                            error={scheduling.form.formState.errors.externalLateFinish?.message}
+                            {...scheduling.form.register('externalLateFinish')}
+                          />
+                        </FieldGrid>
+                      </FormSection>
+                    ) : null}
+
+                    {RESOURCE_LEVELLING_ENABLED ? (
+                      <FormSection
+                        title="Levelling"
+                        description="Used only when the plan is levelled."
+                      >
+                        <FieldGrid>
+                          <TextField
+                            label="Levelling priority"
+                            type="number"
+                            min={0}
+                            hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
+                            error={scheduling.form.formState.errors.levelingPriority?.message}
+                            {...scheduling.form.register('levelingPriority', {
+                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
+                            })}
+                          />
+                        </FieldGrid>
+                      </FormSection>
+                    ) : null}
+                    <ScopeSaveBar
+                      gate={gating.scheduling}
+                      dirty={scheduling.isDirty}
+                      pending={update.isPending}
+                      saved={savedScope === 'scheduling'}
+                      label="Save scheduling"
+                    />
+                  </FieldGateProvider>
                 </form>
               ) : null}
 
@@ -909,65 +895,65 @@ export function ActivityEditorDialog({
                 >
                   <FormErrorSummary errors={cost.form.formState.errors} />
                   {scopeError('cost')}
-                  {EARNED_VALUE_ENABLED ? (
-                    <FormSection
-                      title="Expenses"
-                      description="Lump sums carried directly on this activity, on top of any resource-derived cost."
-                    >
-                      <FieldGrid>
-                        <TextField
-                          label="Budgeted expense"
-                          type="number"
-                          step="0.01"
-                          hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost."
-                          disabled={!gating.cost.writable}
-                          error={cost.form.formState.errors.budgetedExpense?.message}
-                          {...cost.form.register('budgetedExpense', {
-                            setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                          })}
-                        />
-                        <TextField
-                          label="Actual expense"
-                          type="number"
-                          step="0.01"
-                          hint="The lump-sum cost booked against this activity so far, in the plan’s currency."
-                          disabled={!gating.cost.writable}
-                          error={cost.form.formState.errors.actualExpense?.message}
-                          {...cost.form.register('actualExpense', {
-                            setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                          })}
-                        />
-                      </FieldGrid>
-                    </FormSection>
-                  ) : null}
-                  {COST_ACCRUAL_ENABLED ? (
-                    <FormSection
-                      title="Recognition"
-                      description="Changes only when cost is recognised in Earned value — never a date."
-                    >
-                      <FieldGrid>
-                        <SelectField
-                          label="Cost accrual"
-                          hint="Sets when this activity’s cost is recognised: Start (all at the start), Uniform (spread evenly), or End (all at the finish)."
-                          disabled={!gating.cost.writable}
-                          {...cost.form.register('accrualType')}
-                        >
-                          {ACCRUAL_TYPE_OPTIONS.map((value) => (
-                            <option key={value} value={value}>
-                              {ACCRUAL_TYPE_LABELS[value]}
-                            </option>
-                          ))}
-                        </SelectField>
-                      </FieldGrid>
-                    </FormSection>
-                  ) : null}
-                  <ScopeSaveBar
-                    gate={gating.cost}
-                    dirty={cost.isDirty}
-                    pending={update.isPending}
-                    saved={savedScope === 'cost'}
-                    label="Save cost"
-                  />
+
+                  <FieldGateProvider gate={gating.cost}>
+                    {EARNED_VALUE_ENABLED ? (
+                      <FormSection
+                        title="Expenses"
+                        description="Lump sums carried directly on this activity, on top of any resource-derived cost."
+                      >
+                        <FieldGrid>
+                          <TextField
+                            label="Budgeted expense"
+                            type="number"
+                            step="0.01"
+                            hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost."
+                            error={cost.form.formState.errors.budgetedExpense?.message}
+                            {...cost.form.register('budgetedExpense', {
+                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
+                            })}
+                          />
+                          <TextField
+                            label="Actual expense"
+                            type="number"
+                            step="0.01"
+                            hint="The lump-sum cost booked against this activity so far, in the plan’s currency."
+                            error={cost.form.formState.errors.actualExpense?.message}
+                            {...cost.form.register('actualExpense', {
+                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
+                            })}
+                          />
+                        </FieldGrid>
+                      </FormSection>
+                    ) : null}
+                    {COST_ACCRUAL_ENABLED ? (
+                      <FormSection
+                        title="Recognition"
+                        description="Changes only when cost is recognised in Earned value — never a date."
+                      >
+                        <FieldGrid>
+                          <SelectField
+                            label="Cost accrual"
+                            hint="Sets when this activity’s cost is recognised: Start (all at the start), Uniform (spread evenly), or End (all at the finish)."
+                            {...cost.form.register('accrualType')}
+                          >
+                            {ACCRUAL_TYPE_OPTIONS.map((value) => (
+                              <option key={value} value={value}>
+                                {ACCRUAL_TYPE_LABELS[value]}
+                              </option>
+                            ))}
+                          </SelectField>
+                        </FieldGrid>
+                      </FormSection>
+                    ) : null}
+                    <ScopeSaveBar
+                      gate={gating.cost}
+                      dirty={cost.isDirty}
+                      pending={update.isPending}
+                      saved={savedScope === 'cost'}
+                      label="Save cost"
+                    />
+                  </FieldGateProvider>
                 </form>
               ) : null}
             </FieldGridContainer>

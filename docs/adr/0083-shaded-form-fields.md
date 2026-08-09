@@ -46,6 +46,45 @@ deleted rather than fixed (ADR-0058), and they would be asserting about a treatm
 implements yet. They are recorded here instead, with their numbers, which is the thing that makes
 step 2 checkable.
 
+### RESOLVED — there is no gated fill, and the reason is structural
+
+The three candidates collapse to two, because in ADR-0055's architecture a "per-surface value" **is**
+a rebound name: `[data-surface]` rebinding is the only mechanism that gives a token a per-surface
+value at all. So the question was whether **any** fill can work, and it was settled by measurement
+rather than by argument.
+
+**Method.** A throwaway probe under `apps/web/src/styles/`, reusing `token-contrast.test.ts`'s own
+`resolve()`/`ratio()` — the real cascade replay, not a second implementation — swept each family's
+`--field` by ±0.04…0.12 in oklch L across 3 themes × 5 surface scopes × 2 flag states, and reported
+the candidate's ratio against `--field-foreground` (needs 4.5:1) and against `--input` (needs 3:1).
+
+**Result.** Darkening the fill spends the _outline's_ headroom, not the value's, and there is barely
+any:
+
+| Theme / scope       | `--field`                | `--input` vs `--field` | at L − 0.04 | at L − 0.06 |
+| ------------------- | ------------------------ | ---------------------- | ----------- | ----------- |
+| Light, page / panel | `oklch(1 0 0)`           | 3.36:1                 | **2.99:1**  | **2.82:1**  |
+| `auth`, every theme | `oklch(0.962 0.005 252)` | 3.35:1                 | **2.67:1**  | **2.51:1**  |
+
+Every light-theme surface fails WCAG 1.4.11 at a shift of 0.04 — a difference so slight it is barely
+a treatment. The `auth` family has no margin at all **by construction**: ADR-0077 M7 derived
+`--auth-input` specifically to land at 3.01–3.36:1 on exactly the current `--field`, because the old
+app's own outline measured 2.22:1 and had to be repaired. Lightening is not available either — on
+four of the five families `--field` is already `oklch(1 0 0)`.
+
+**So the fill does not change, and D6 is corrected below.** A treatment that could only appear on the
+Dark theme would teach a cue that is not there on the other two, which is worse than no cue.
+
+**What this buys.** The 18-name vocabulary stays intact, and the gated field's pairs are
+`--field`/`--field-foreground` and `--field`/`--input` — **already in `TEXT_PAIRS` and
+`NON_TEXT_PAIRS`**, lines 95 and 121. Step 2 is therefore satisfied by the pairs that were already
+there, which is the tidiest possible outcome and not one anybody predicted: the treatment is covered
+by the matrix _because_ it reuses the tokens the matrix already gates.
+
+**What replaces the fill** is in the corrected D6: the value at full contrast, the outline untouched,
+`readOnly`, a linked reason sentence, and a **lock glyph beside the label** — a shape rather than a
+colour, which is what WCAG 1.4.1 asks for and what the fill was never going to deliver anyway.
+
 ## Blast radius — settled, with the method recorded
 
 **38 `disabled=` props passed to a `*Field` component, across 8 files.** Two files carry 30 of them.
@@ -349,21 +388,26 @@ Because §5 removes the inactive-component exemption:
 
 - The **value** keeps `--field-foreground` at full opacity. It is content now, and it is gated at
   4.5:1.
-- The **fill** moves from `--field` to `--muted` — already in ADR-0055's 18-name rebound vocabulary,
-  so it follows the surface scope and **no new token is added** (a 19th name would mean five
-  families × three theme blocks plus the set-equality gate in `token-architecture.test.ts:173`).
+- The **fill** stays `--field`. ~~moves from `--field` to `--muted`~~ — struck, and the reason is in
+  §"RESOLVED" above: darkening a gated field's fill spends the outline's 1.4.11 headroom, of which
+  every light-theme surface has 0.36 and the `auth` family has none. **No token is added and none
+  changes**, so the 18-name vocabulary and its set-equality gate are untouched.
 - The **border** stays `--input`, which ADR-0055 gates at 3:1 as a control boundary and which
   ADR-0077 M7 re-derived after the computed matrix caught two real 1.4.11 failures. Do not dim it:
-  the boundary is what identifies the thing as a control at all.
-- The **label** takes `--muted-foreground`.
-- The state is signalled by fill **and** by the visible reason sentence, so it is not carried by
-  colour alone (WCAG 1.4.1).
+  the boundary is what identifies the thing as a control at all. (This is now doing more work than
+  the original draft realised — it is the constraint that killed the fill.)
+- The **label** keeps its own colour and gains a **lock glyph** beside it (`FieldGateLock`),
+  `aria-hidden` because the state is already announced twice: `readonly` maps to `aria-readonly`
+  through HTML-AAM, and the reason is linked by `aria-describedby`.
+- The state is therefore signalled by a **shape** and by the visible reason sentence — two channels,
+  neither of them colour, which clears WCAG 1.4.1 more convincingly than a fill would have.
 - `disabled:opacity-50` stays exactly as it is for D2's two native cases — those components really
   are inactive and really are exempt.
 
-`token-contrast.test.ts` gains `['--muted', '--field-foreground', 'the value in a read-only field']`
-to `TEXT_PAIRS`. **Add it before writing the CSS**, not after: it is a computed gate over three
-themes and four surface scopes, and it is cheaper to be told than to check by eye.
+`token-contrast.test.ts` needs **no new pair**: the gated field's fill/ink and fill/outline pairs are
+`--field`/`--field-foreground` (line 95) and `--field`/`--input` (line 121), both already asserted
+across every theme, scope and flag state. The treatment is covered by the matrix because it reuses
+the tokens the matrix already gates.
 
 ### D7 — This is a `docs/DESIGN_SYSTEM.md` rule _and_ an API _and_ a structural test
 

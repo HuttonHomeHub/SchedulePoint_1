@@ -33,6 +33,7 @@ import { seedMeasure } from './activity-editor-seeds';
 import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
+import { FieldGateProvider } from '@/components/ui/field-gate';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
@@ -133,93 +134,85 @@ export function ReportedProgressPanel({
       }}
       className="flex flex-col gap-4"
     >
-      <PanelHeading title="Reported progress" effect="Moves the activity’s dates." />
-      <FormErrorSummary errors={form.formState.errors} />
-      {mutation.isError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {mutation.error.message}
-        </p>
-      ) : null}
-      {/* Two decisions, two groups: how far along it is, and when it actually happened. Flat, the
-          six controls read as one undifferentiated list of numbers and dates. */}
-      <FieldGrid>
-        <TextField
-          label="Percent complete"
-          type="number"
-          min={0}
-          max={100}
-          disabled={!gate.writable}
-          error={form.formState.errors.percentComplete?.message}
-          {...form.register('percentComplete', { valueAsNumber: true })}
-        />
-        {PROGRESS_INGESTION_ENABLED ? (
-          <TextField
-            label={remainingLabel(hoursPerDay)}
-            {...durationInputProps(hoursPerDay)}
-            hint={remainingHelp(hoursPerDay)}
-            disabled={!gate.writable}
-            error={
-              form.formState.errors.remaining?.message ??
-              (remainingWriteFields(values.remaining ?? '', hoursPerDay) === null
-                ? REMAINING_NEEDS_WHOLE_DAYS
-                : undefined)
-            }
-            {...form.register('remaining')}
-          />
+      <FieldGateProvider gate={gate}>
+        <PanelHeading title="Reported progress" effect="Moves the activity’s dates." />
+        <FormErrorSummary errors={form.formState.errors} />
+        {mutation.isError ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {mutation.error.message}
+          </p>
         ) : null}
-        <TextField
-          label="Actual start"
-          type="date"
-          disabled={!gate.writable}
-          {...form.register('actualStart')}
-        />
-        <TextField
-          label="Actual finish"
-          type="date"
-          disabled={!gate.writable}
-          error={form.formState.errors.actualFinish?.message}
-          {...form.register('actualFinish')}
-        />
-        {PROGRESS_INGESTION_ENABLED ? (
-          <>
-            {/* Suspend is a RECORD, resume is the schedule input, and the two look identical
+        {/* Two decisions, two groups: how far along it is, and when it actually happened. Flat, the
+          six controls read as one undifferentiated list of numbers and dates. */}
+        <FieldGrid>
+          <TextField
+            label="Percent complete"
+            type="number"
+            min={0}
+            max={100}
+            error={form.formState.errors.percentComplete?.message}
+            {...form.register('percentComplete', { valueAsNumber: true })}
+          />
+          {PROGRESS_INGESTION_ENABLED ? (
+            <TextField
+              label={remainingLabel(hoursPerDay)}
+              {...durationInputProps(hoursPerDay)}
+              hint={remainingHelp(hoursPerDay)}
+              error={
+                form.formState.errors.remaining?.message ??
+                (remainingWriteFields(values.remaining ?? '', hoursPerDay) === null
+                  ? REMAINING_NEEDS_WHOLE_DAYS
+                  : undefined)
+              }
+              {...form.register('remaining')}
+            />
+          ) : null}
+          <TextField label="Actual start" type="date" {...form.register('actualStart')} />
+          <TextField
+            label="Actual finish"
+            type="date"
+            error={form.formState.errors.actualFinish?.message}
+            {...form.register('actualFinish')}
+          />
+          {PROGRESS_INGESTION_ENABLED ? (
+            <>
+              {/* Suspend is a RECORD, resume is the schedule input, and the two look identical
                 sitting side by side — so each says which it is (surface audit F1, ADR-0035 §4).
                 Only the resume date reaches the engine: it floors the remaining work at
                 `max(data date, resume date)`. The suspend date is stored, shown and exported, and
                 the recalculation does not read it. Saying so here is the whole fix: a planner who
                 sets a suspend date and sees no dates move should be able to find out why from the
                 field rather than from the source. */}
-            <TextField
-              label="Suspend date"
-              type="date"
-              hint="Recorded only — it does not move any dates."
-              disabled={!gate.writable}
-              {...form.register('suspendDate')}
-            />
-            <TextField
-              label="Resume date"
-              type="date"
-              hint="Remaining work is scheduled from this date, or the data date if later."
-              disabled={!gate.writable}
-              error={form.formState.errors.resumeDate?.message}
-              {...form.register('resumeDate')}
-            />
-          </>
-        ) : null}
-      </FieldGrid>
-      {/* The consequence of the six fields above, given the same weight as a field rather than
+              <TextField
+                label="Suspend date"
+                type="date"
+                hint="Recorded only — it does not move any dates."
+                {...form.register('suspendDate')}
+              />
+              <TextField
+                label="Resume date"
+                type="date"
+                hint="Remaining work is scheduled from this date, or the data date if later."
+                error={form.formState.errors.resumeDate?.message}
+                {...form.register('resumeDate')}
+              />
+            </>
+          ) : null}
+        </FieldGrid>
+        {/* The consequence of the six fields above, given the same weight as a field rather than
           trailing off as a sentence — it is the answer to "what did I just say happened?". */}
-      <div className="bg-muted flex items-center justify-between gap-3 rounded-md px-3 py-2">
-        <span className="text-muted-foreground text-sm">Resulting status</span>
-        <strong className="text-sm font-semibold">{deriveStatusLabel(values)}</strong>
-      </div>
-      <ScopeSaveBar
-        gate={gate}
-        dirty={isDirty}
-        pending={mutation.isPending}
-        saved={mutation.isSuccess}
-        label="Save progress"
-      />
+        <div className="bg-muted flex items-center justify-between gap-3 rounded-md px-3 py-2">
+          <span className="text-muted-foreground text-sm">Resulting status</span>
+          <strong className="text-sm font-semibold">{deriveStatusLabel(values)}</strong>
+        </div>
+        <ScopeSaveBar
+          gate={gate}
+          dirty={isDirty}
+          pending={mutation.isPending}
+          saved={mutation.isSuccess}
+          label="Save progress"
+        />
+      </FieldGateProvider>
     </form>
   );
 }
@@ -276,77 +269,86 @@ export function ValueMeasurePanel({
       }}
       className="flex flex-col gap-4"
     >
-      <PanelHeading
-        title="How value is measured"
-        effect="Earns value in Earned Value. Changes no dates."
-      />
-      <FormErrorSummary errors={form.formState.errors} />
-      {EARNED_VALUE_ENABLED ? (
-        <>
-          {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
+      <FieldGateProvider gate={gate}>
+        <PanelHeading
+          title="How value is measured"
+          effect="Earns value in Earned Value. Changes no dates."
+        />
+        <FormErrorSummary errors={form.formState.errors} />
+        {EARNED_VALUE_ENABLED ? (
+          <>
+            {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
               overriding this" legible at a glance instead of two rows apart. */}
-          <FieldGrid columns="lead">
-            <SelectField
-              label="Earn value from"
-              hint={PERCENT_COMPLETE_TYPE_LABELS[measure].description}
-              disabled={!gate.writable}
-              {...form.register('percentCompleteType')}
-            >
-              {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-                </option>
-              ))}
-            </SelectField>
+            <FieldGrid columns="lead">
+              <SelectField
+                label="Earn value from"
+                hint={PERCENT_COMPLETE_TYPE_LABELS[measure].description}
+                {...form.register('percentCompleteType')}
+              >
+                {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {PERCENT_COMPLETE_TYPE_LABELS[value].label}
+                  </option>
+                ))}
+              </SelectField>
 
-            <TextField
-              label="Physical % complete"
-              type="number"
-              min={0}
-              max={100}
-              // The reason, never a bare "Read-only" — a disabled control that does not say what
-              // would re-enable it is the dead end this epic set out to remove.
-              hint={
-                stepsWin
-                  ? `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`
-                  : 'The hand-entered physical progress that earns value when the measure is Physical.'
-              }
-              disabled={!gate.writable || stepsWin}
-              error={form.formState.errors.physicalPercentComplete?.message}
-              {...form.register('physicalPercentComplete', {
-                setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-              })}
-            />
-          </FieldGrid>
+              <TextField
+                label="Physical % complete"
+                type="number"
+                min={0}
+                max={100}
+                hint={
+                  'The hand-entered physical progress that earns value when the measure is Physical.'
+                }
+                // A field-level gate, which the nearest-reason rule prefers over the panel's
+                // (ADR-0083 D4): "weighted steps are driving this" is a domain rule the reader can
+                // act on, and it is strictly more useful than "start editing to report progress".
+                // `undefined` — not `null` — so the panel's gate still applies when steps are not
+                // winning; `null` would opt this field out of the pen entirely.
+                gate={
+                  stepsWin
+                    ? {
+                        writable: false,
+                        reason: `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`,
+                      }
+                    : undefined
+                }
+                error={form.formState.errors.physicalPercentComplete?.message}
+                {...form.register('physicalPercentComplete', {
+                  setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
+                })}
+              />
+            </FieldGrid>
 
-          {measure === 'UNITS' ? (
-            <p className="text-muted-foreground text-sm">
-              Units come from resource assignments.{' '}
-              {onOpenResources ? (
-                <Button type="button" variant="ghost" onClick={onOpenResources}>
-                  Open Resources to change them
-                </Button>
-              ) : (
-                'Open Resources to change them.'
-              )}
-            </p>
-          ) : null}
+            {measure === 'UNITS' ? (
+              <p className="text-muted-foreground text-sm">
+                Units come from resource assignments.{' '}
+                {onOpenResources ? (
+                  <Button type="button" variant="ghost" onClick={onOpenResources}>
+                    Open Resources to change them
+                  </Button>
+                ) : (
+                  'Open Resources to change them.'
+                )}
+              </p>
+            ) : null}
 
-          {stepsWin ? (
-            <p className="text-muted-foreground text-sm">
-              From weighted steps:{' '}
-              <strong className="text-foreground">{Math.round(rolled)}%</strong>
-            </p>
-          ) : null}
-        </>
-      ) : null}
-      <ScopeSaveBar
-        gate={gate}
-        dirty={isDirty}
-        pending={pending}
-        saved={saved}
-        label="Save measure"
-      />
+            {stepsWin ? (
+              <p className="text-muted-foreground text-sm">
+                From weighted steps:{' '}
+                <strong className="text-foreground">{Math.round(rolled)}%</strong>
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        <ScopeSaveBar
+          gate={gate}
+          dirty={isDirty}
+          pending={pending}
+          saved={saved}
+          label="Save measure"
+        />
+      </FieldGateProvider>
     </form>
   );
 }
@@ -548,124 +550,123 @@ export function WeightedStepsPanel({
           }}
           className="flex flex-col gap-4"
         >
-          <FormErrorSummary errors={errors} />
-          {replace.isError ? (
-            <p role="alert" className="text-destructive-text text-sm">
-              {replace.error.message}
-            </p>
-          ) : null}
+          <FieldGateProvider gate={gate}>
+            <FormErrorSummary errors={errors} />
+            {replace.isError ? (
+              <p role="alert" className="text-destructive-text text-sm">
+                {replace.error.message}
+              </p>
+            ) : null}
 
-          {fields.length === 0 ? (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-              No steps yet. Add a step to build a weighted checklist; until then the physical %
-              complete is whatever is typed above.
+            {fields.length === 0 ? (
+              <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+                No steps yet. Add a step to build a weighted checklist; until then the physical %
+                complete is whatever is typed above.
+              </div>
+            ) : (
+              <ul ref={listRef} className="flex flex-col gap-3">
+                {fields.map((field, index) => {
+                  const rowErrors = errors.steps?.[index];
+                  return (
+                    <li
+                      key={field.id}
+                      className="border-border flex flex-col gap-3 rounded-md border p-3"
+                    >
+                      <div className="flex flex-wrap items-end gap-3">
+                        <div className="min-w-48 flex-1">
+                          <TextField
+                            label={`Step ${index + 1} name`}
+                            error={rowErrors?.name?.message}
+                            {...register(`steps.${index}.name`)}
+                          />
+                        </div>
+                        <div className="w-28">
+                          <TextField
+                            label={`Step ${index + 1} weight`}
+                            type="number"
+                            min={0}
+                            step="any"
+                            error={rowErrors?.weight?.message}
+                            {...register(`steps.${index}.weight`, { valueAsNumber: true })}
+                          />
+                        </div>
+                        <div className="w-28">
+                          <TextField
+                            label={`Step ${index + 1} % complete`}
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            error={rowErrors?.percentComplete?.message}
+                            {...register(`steps.${index}.percentComplete`, { valueAsNumber: true })}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          data-step-up=""
+                          disabled={!gate.writable || index === 0}
+                          aria-label={`Move up, step ${index + 1}`}
+                          onClick={() => moveStep(index, -1)}
+                        >
+                          Move up
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          data-step-down=""
+                          disabled={!gate.writable || index === fields.length - 1}
+                          aria-label={`Move down, step ${index + 1}`}
+                          onClick={() => moveStep(index, 1)}
+                        >
+                          Move down
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          data-step-remove=""
+                          disabled={!gate.writable}
+                          aria-label={`Remove step ${index + 1}`}
+                          onClick={() => removeStep(index)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                ref={addButtonRef}
+                type="button"
+                variant="outline"
+                disabled={!gate.writable}
+                onClick={addStep}
+              >
+                Add step
+              </Button>
             </div>
-          ) : (
-            <ul ref={listRef} className="flex flex-col gap-3">
-              {fields.map((field, index) => {
-                const rowErrors = errors.steps?.[index];
-                return (
-                  <li
-                    key={field.id}
-                    className="border-border flex flex-col gap-3 rounded-md border p-3"
-                  >
-                    <div className="flex flex-wrap items-end gap-3">
-                      <div className="min-w-48 flex-1">
-                        <TextField
-                          label={`Step ${index + 1} name`}
-                          disabled={!gate.writable}
-                          error={rowErrors?.name?.message}
-                          {...register(`steps.${index}.name`)}
-                        />
-                      </div>
-                      <div className="w-28">
-                        <TextField
-                          label={`Step ${index + 1} weight`}
-                          type="number"
-                          min={0}
-                          step="any"
-                          disabled={!gate.writable}
-                          error={rowErrors?.weight?.message}
-                          {...register(`steps.${index}.weight`, { valueAsNumber: true })}
-                        />
-                      </div>
-                      <div className="w-28">
-                        <TextField
-                          label={`Step ${index + 1} % complete`}
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={1}
-                          disabled={!gate.writable}
-                          error={rowErrors?.percentComplete?.message}
-                          {...register(`steps.${index}.percentComplete`, { valueAsNumber: true })}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        data-step-up=""
-                        disabled={!gate.writable || index === 0}
-                        aria-label={`Move up, step ${index + 1}`}
-                        onClick={() => moveStep(index, -1)}
-                      >
-                        Move up
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        data-step-down=""
-                        disabled={!gate.writable || index === fields.length - 1}
-                        aria-label={`Move down, step ${index + 1}`}
-                        onClick={() => moveStep(index, 1)}
-                      >
-                        Move down
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        data-step-remove=""
-                        disabled={!gate.writable}
-                        aria-label={`Remove step ${index + 1}`}
-                        onClick={() => removeStep(index)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button
-              ref={addButtonRef}
-              type="button"
-              variant="outline"
-              disabled={!gate.writable}
-              onClick={addStep}
-            >
-              Add step
-            </Button>
-          </div>
-
-          {/* `saved` is what makes a successful save visible: without it the helper text goes from
+            {/* `saved` is what makes a successful save visible: without it the helper text goes from
               "Unsaved changes in this section." to blank and the button greys — pixel-identical to a
               panel nobody has touched. The mutation's own success flag is the honest source, and
               editing again re-dirties the form, which takes precedence in the bar. */}
-          <ScopeSaveBar
-            gate={gate}
-            dirty={isDirty}
-            pending={replace.isPending}
-            saved={replace.isSuccess}
-            label="Save steps"
-          />
+            <ScopeSaveBar
+              gate={gate}
+              dirty={isDirty}
+              pending={replace.isPending}
+              saved={replace.isSuccess}
+              label="Save steps"
+            />
+          </FieldGateProvider>
         </form>
       )}
     </section>

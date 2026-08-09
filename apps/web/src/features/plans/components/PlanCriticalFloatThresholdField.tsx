@@ -118,7 +118,11 @@ export function PlanCriticalFloatThresholdField({
       <TextField
         label="Critical float threshold"
         value={text}
-        disabled={setOption.isPending}
+        // A gate, not the native attribute (ADR-0083 D2): an in-flight save still leaves a value
+        // worth reading and copying, and it flips under a reader who is not the one causing it.
+        // `reason: null` because `hintFor` already renders "Saving…" — a second sentence saying
+        // the same thing is the duplication ADR-0077 §9 removed from the auth forms.
+        gate={{ writable: !setOption.isPending, reason: null }}
         aria-busy={setOption.isPending}
         hint={hintFor(hoursPerDay, setOption.isPending)}
         {...(message === undefined ? {} : { error: message })}

@@ -329,10 +329,64 @@ link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
   M2 (`TECH_DEBT` #17a) — it is a rule, not a judgement call. Native `disabled`
   remains correct for a control that is **statically** unavailable (no
   permission, nothing selected), where nothing flips underneath the user.
+  **This clause is narrowed for _fields_ — see "Forms & inputs" below, and read
+  the two together.** ADR-0083 D2 corrects it twice: "no permission" is not
+  static (the ADR-0028 pen can be taken by a peer mid-session, so the clause
+  names as its example the one case that disproves it), and static-versus-
+  flipping is the wrong axis for a field anyway. It is the right axis for a
+  button, whose only loss on being disabled is operability. **The button ruling
+  above is untouched and correct.**
 - **Forms & inputs** — label, optional description, error, and required
   indicator standardised via the `Form` primitive (ADR-0007). Consistent field
-  heights (sizing scale); `aria-invalid` + linked error text; disabled/readonly
-  styles defined once.
+  heights (sizing scale); `aria-invalid` + linked error text.
+
+  **A gated field is read-only, not disabled** (ADR-0083). A field's loss on
+  being disabled is not operability but **readability**: the value leaves the
+  tab order, cannot be copied, and — until this rule — was exempt from the
+  contrast floor, so "you may not edit this" was implemented as "you may not
+  read this either". Native `disabled` keeps exactly **two** jobs on a field:
+  the options have not loaded, and a field above this one has not been answered.
+  Both hold no value, and both resolve by the reader's own next action.
+  Everything else — permission, pen, in-flight save, domain rule — is a `gate`.
+
+  | Control                              | Gated treatment                                                                                             |
+  | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+  | Text-ish `input`, `textarea`         | `readOnly`. **No `aria-disabled`** — the field _is_ operable, and saying otherwise is a false announcement. |
+  | `checkbox`                           | `aria-disabled` + `preventDefault()` on `click`. Stays in the tab order.                                    |
+  | Native `select`                      | Native `disabled` — a named exception: there is no read-only `<select>`.                                    |
+  | `Combobox`                           | `readOnly` on its text input, `aria-disabled` on its toggle, listbox refuses to open.                       |
+  | `Button` / `MenuItem` / toolbar item | Unchanged — `aria-disabled` + guard (above, and ADR-0082).                                                  |
+
+  The discriminator, so the next control is not a judgement call: **a control
+  whose only operation is to change its value takes `aria-disabled` plus a guard
+  on the one event that changes it; a control with operations beyond changing
+  its value — caret placement, selection, copy — takes `readOnly`, because that
+  removes mutation and keeps the rest.**
+
+  **How.** Wrap the group in `FieldGateProvider gate={…}` (`components/ui/field-gate.tsx`)
+  and pass **nothing** to the fields: the reason renders once, above them, and
+  every field inside describes itself with that node. A field needing its own
+  sentence passes `gate={…}` (nearest reason wins); a field that must stay live
+  inside a read-only region passes `gate={null}`.
+
+  **Shade what has something to read; omit what does not.** An edit form shades
+  its fields, all of them, plus the Save. A **create** form — whose fields are
+  empty by definition — collapses to its heading plus the reason, because a row
+  of blank shaded controls is neither readable nor fillable.
+
+  **There is no gated fill.** The draft proposed moving the fill to `--muted`
+  and the computed contrast matrix refused it; a follow-up probe showed the
+  failure is structural rather than `--muted`'s (ADR-0083 §"RESOLVED"). The state
+  is carried by a **lock glyph** beside the label and by the visible reason —
+  a shape and a sentence, neither of them colour (WCAG 1.4.1).
+
+  `field-gate.structural.test.ts` enforces this: no governed control may take a
+  `disabled` whose expression mentions `writable`, `canWrite`, `holdsPen`,
+  `gate`, `gating`, `isPending` or `readOnly`. The rule needs the gate because
+  the rule alone is what the codebase already had — 38 call sites each deciding
+  independently — and the API alone is what ADR-0082 and ADR-0064 both record
+  failing: a correct pattern applied to one control and not its neighbour.
+
 - **Tables (DataTable)** — one table component: sortable headers, pagination,
   row selection, sticky header, per-column alignment (numbers right-aligned,
   tabular numerals), loading (skeleton rows), empty, and error states. Semantic

@@ -1,6 +1,7 @@
 import { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useFieldGate } from '@/components/ui/field-gate';
 
 /**
  * One write scope's Save, with its reason when it cannot be used (ADR-0060 §6).
@@ -81,7 +82,23 @@ export function ScopeSaveBar({
 }): React.ReactElement {
   const reasonId = useId();
   const blocked = !gate.writable || !dirty || pending;
-  const reason = gate.writable ? (dirty ? dirtyMessage : saved ? savedMessage : null) : gate.reason;
+  // A `FieldGateProvider` above this bar has ALREADY rendered this scope's reason, above the fields
+  // (ADR-0083 D4 — one node, N references). Printing it again beside Save is the same sentence
+  // twice on one screen, which is exactly what ADR-0077 §9 removed from the auth forms; the unit
+  // suite caught it here the first time the two landed together. So: point at that node instead.
+  // The dirty/saved messages are untouched — they are this bar's own, and no provider renders them.
+  const inherited = useFieldGate();
+  const groupReasonId = gate.writable ? undefined : inherited?.reasonId;
+  const reason = gate.writable
+    ? dirty
+      ? dirtyMessage
+      : saved
+        ? savedMessage
+        : null
+    : groupReasonId
+      ? null
+      : gate.reason;
+  const describedBy = groupReasonId ?? (reason ? reasonId : undefined);
 
   return (
     <div className="border-border flex items-center justify-between gap-4 border-t pt-4">
@@ -92,7 +109,7 @@ export function ScopeSaveBar({
         type="submit"
         aria-disabled={blocked}
         aria-busy={pending}
-        {...(reason ? { 'aria-describedby': reasonId } : {})}
+        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
         // `pointer-events-none` covers the mouse; this covers the keyboard, where Enter on a focused
         // button dispatches a click that would otherwise submit the form.
         onClick={(event) => {
