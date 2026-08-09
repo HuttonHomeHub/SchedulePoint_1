@@ -43,6 +43,15 @@ services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
+    # Bound the logs (`docs/TECH_DEBT.md` #100). Docker's default json-file driver has **no
+    # rotation**, so a container that logs steadily fills the host disk until something else fails
+    # first — and the API's structured Pino output is exactly that. 10 MB × 3 is enough history to
+    # investigate an incident from the previous day without keeping a month nobody reads.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     # Belt-and-braces: never auto-updated even if WATCHTOWER_LABEL_ENABLE is ever dropped
     # (the updater already only touches enable=true containers; ADR-0047).
     labels:
@@ -64,6 +73,15 @@ services:
   api:
     image: ghcr.io/huttonhomehub/schedulepoint_1/api:${API_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
+    # Bound the logs (`docs/TECH_DEBT.md` #100). Docker's default json-file driver has **no
+    # rotation**, so a container that logs steadily fills the host disk until something else fails
+    # first — and the API's structured Pino output is exactly that. 10 MB × 3 is enough history to
+    # investigate an incident from the previous day without keeping a month nobody reads.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     # Opt-in auto-redeploy (ADR-0047): only label-enabled containers are updated by
     # the optional `watchtower` service, so Postgres is never recreated by it.
     labels:
@@ -102,6 +120,15 @@ services:
   web:
     image: ghcr.io/huttonhomehub/schedulepoint_1/web:${WEB_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
+    # Bound the logs (`docs/TECH_DEBT.md` #100). Docker's default json-file driver has **no
+    # rotation**, so a container that logs steadily fills the host disk until something else fails
+    # first — and the API's structured Pino output is exactly that. 10 MB × 3 is enough history to
+    # investigate an incident from the previous day without keeping a month nobody reads.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     labels:
       com.centurylinklabs.watchtower.enable: 'true'
     depends_on:
@@ -136,6 +163,15 @@ services:
     image: containrrr/watchtower:1.7.1
     profiles: ['autodeploy']
     restart: unless-stopped
+    # Bound the logs (`docs/TECH_DEBT.md` #100). Docker's default json-file driver has **no
+    # rotation**, so a container that logs steadily fills the host disk until something else fails
+    # first — and the API's structured Pino output is exactly that. 10 MB × 3 is enough history to
+    # investigate an incident from the previous day without keeping a month nobody reads.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DOCKER_CONFIG_DIR:-/root/.docker}/config.json:/config.json:ro

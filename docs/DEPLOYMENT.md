@@ -543,6 +543,63 @@ the reason it is label-scoped and opt-in (ADR-0047).
 version, not `latest`) is not moved by Watchtower — pin to roll back or to hold a
 host on a known version.
 
+## Turning the CSP from report-only to enforce
+
+`docs/TECH_DEBT.md` #8. The policy itself is finished and gated: `apps/web/e2e-csp/` serves the
+**real** policy — parsed out of `docker-compose.yml`, never restated — over the **production**
+build, in a real browser, on its own CI step. What is left is one operator variable.
+
+It is a variable and not a build constant on purpose: hard-coding the mode would make a rollback a
+release (ADR-0074). Report-only is the default so a policy error cannot take the app down before
+anyone has watched it.
+
+The observation window has already run and found its violations. There was one real
+`script-src`/`eval` report on the deployed origin — Zod 4's `allowsEval()` probe, a swallowed
+`new Function('')` whose _attempt_ the browser still reports — fixed by `config/zod-jitless.ts`
+rather than by adding `'unsafe-eval'`, which would have re-opened string-to-code across the whole
+origin to buy JIT speed on a few login forms.
+
+**To enforce:**
+
+1. Set `CSP_HEADER_NAME=Content-Security-Policy` in the host's `.env` (it defaults to
+   `Content-Security-Policy-Report-Only` in both compose files).
+2. Recreate the web container only — `docker compose up -d web`. The API is untouched.
+3. **Walk the routes with the console open.** This is the step that matters, and it cannot be
+   automated away: the e2e suite covers the sign-in and app shell paths, and states plainly what it
+   does **not** — canvas export, the printed programme, and `upgrade-insecure-requests`, which
+   report-only ignores by specification. So visit, in one sitting: a plan workspace (TSLD **and**
+   Gantt), an export to PNG/PDF, the printed programme, the guest share view, and `/account`.
+4. Any violation appears in the console as a blocked resource. **Roll back by unsetting the
+   variable and recreating** — one variable, one recreate, seconds. That reversibility is why this
+   is sequenced before the email-verification flip, whose backfill does not roll back.
+
+## Alerting on mail failures
+
+`docs/TECH_DEBT.md` #100. ADR-0075 decided a failed send is the **operator's** signal, not the
+caller's — telling the caller would make "that address was free" distinguishable from "that address
+is taken" on an unauthenticated endpoint. The application emits one alertable line,
+`event: 'mail.send_failed'`. Until now nothing watched it, which meant a broken relay produced
+silently unrecoverable accounts: every sign-up, invitation and password reset failing, for every
+organisation, with the first signal being someone who cannot get in telling somebody.
+
+`scripts/watch-mail-failures.sh` closes that. Run it from cron on the host:
+
+```cron
+*/5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic /opt/schedulepoint/scripts/watch-mail-failures.sh
+```
+
+**The alert must not be email.** The one transport it exists to report on is the broken one. An
+ntfy topic, a Slack or Discord webhook, or a phone push all work; the script only needs a URL that
+accepts a POST. It refuses to run with no `SP_ALERT_URL` rather than watching silently.
+
+It is **not** wired into `/health/ready`, and that is deliberate: the host recreates containers
+unattended (ADR-0047), so a readiness probe failing on a 03:00 relay blip would take the API down
+and keep it down. Same reasoning as the boot-time SMTP handshake being warn-only.
+
+Both compose files now set `logging: json-file, max-size 10m, max-file 3` on every service. Docker's
+default has **no rotation**, so a steadily-logging container fills the host disk until something
+else fails first — and the API's structured Pino output is exactly that.
+
 ## Pre-release checklist
 
 - [ ] CI green on `main` (lint, typecheck, unit, e2e)
