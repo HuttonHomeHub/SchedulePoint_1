@@ -157,9 +157,18 @@ is a claim about the product and not about the flag.
 > editing specs (`activities`, `baselines`, `dependencies` ×2, `schedule` ×2) sat clicking controls
 > the pen now shades until they timed out.
 >
-> Both flags are **put back**, into batch 2, with the reason recorded rather than the date quietly
-> slipped — the same call `VITE_CANVAS_TOOLBAR` got, for the same reason: retiring them is a slice
-> that converts six specs to take the pen, not a line deletion. And `pnpm check:flags` gained a
+> Both flags are **put back**, with the reason recorded rather than the date quietly slipped — the
+> same call `VITE_CANVAS_TOOLBAR` got, for the same reason: retiring them is a slice that converts
+> six specs to take the pen, not a line deletion. They go into **different** batches —
+> `VITE_PLAN_EDIT_LOCK` into batch 2, `VITE_TSLD_EDITING` into batch 3 — which this note recorded as
+> "both into batch 2" until 2026-08-09, from before D4a re-spaced the register by blast radius. D4a
+> is why they are split, and the split is right: they gate different things, so they are two
+> conversions rather than one. Removing the `VITE_PLAN_EDIT_LOCK` pin makes the **pen** live in the
+> base journey and the six specs must acquire it; removing the `VITE_TSLD_EDITING` pin then makes
+> **on-canvas editing** appear in a suite that has never seen it. Doing both in one batch would mean
+> rewriting those specs twice against two different worlds in a single slice.
+>
+> And `pnpm check:flags` gained a
 > fifth assertion reading the `env:` blocks of every `playwright*.config.ts`, so a retirement that
 > would strand a pinned harness fails **before** it is pushed. Verified red first: it reports 22
 > configs.

@@ -377,7 +377,13 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
     graceful peer request→grace→take-over hand-off (Org-Admin immediate override),
     serialised by the existing plan advisory lock; the third concurrency layer above
     optimistic 409 and the advisory lock. Unblocked on-canvas editing, whose flag
-    (`VITE_TSLD_EDITING`) retired in ADR-0084 batch 1 — the pen is unconditional.
+    (`VITE_TSLD_EDITING`) is **still live** (`apps/web/src/config/env.ts:114`,
+    consumed at `TsldPanel.tsx:1311`) and sits in ADR-0084 batch 3. This line said it
+    "retired in batch 1 — the pen is unconditional" until 2026-08-09: it was retired
+    in batch 1 and **put back the same day**, because CI found the base Playwright
+    config pins it off for six editing specs. The banner was written from the plan
+    rather than from the outcome, which is ADR-0076 Class 1 inside the register's own
+    first batch.
 - **ADR-0029** — Persistent app-shell & hierarchy navigator: evolve `_authed` into
   a mounted-once shell (top bar + Project Explorer rail + single workspace region),
   URL-derived selection, and a hand-rolled ARIA `tree` with lazy-load + virtualization.
