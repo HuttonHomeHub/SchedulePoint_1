@@ -204,7 +204,7 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
     renderRows(ctx({ schedulingMode: 'VISUAL', canEditSchedule: false }));
     expect(screen.getByRole('button', { name: 'Snap to grid' })).toHaveAttribute(
       'title',
-      'Snap to grid — Start editing to snap placements',
+      'Snap to grid — Start editing to snap placements.',
     );
   });
 

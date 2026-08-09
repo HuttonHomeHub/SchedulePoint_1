@@ -240,6 +240,13 @@ export interface TsldPanelProps {
   dataDate: string | null;
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
   canEdit?: boolean;
+  /**
+   * Why a pen-gated selection action is shut, given a phrase naming what it does — `null` when it
+   * is open. Supplied by the host because only the plan model can tell a role refusal from a pen
+   * held elsewhere; `canEdit` above has already fused the two (`docs/TECH_DEBT.md` #114.1).
+   * Defaults to a fixed sentence so a host that has not been wired yet is no worse than today.
+   */
+  scheduleRefusal?: (action: string) => string | null;
   /** Route-composed create handler (owns the mutation + recalc, ADR-0026 D8). Its presence + the
    * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
@@ -477,6 +484,7 @@ export function TsldPanel({
   dependencies,
   dataDate: dataDateProp,
   canEdit = false,
+  scheduleRefusal = (action) => `Start editing to ${action}.`,
   onCreate,
   onReposition,
   onResize,
@@ -1315,6 +1323,7 @@ export function TsldPanel({
     return {
       targetName: activity.name,
       canEditSchedule: canEdit,
+      scheduleRefusal,
       canReportProgress,
       // Whether this selection can carry weighted steps (host predicate; false when absent) — matching
       // the activities-table's `!isDurationDerivedType` gate. Read by the Steps item's `isVisible`.
@@ -1341,6 +1350,7 @@ export function TsldPanel({
     selectedId,
     activities,
     canEdit,
+    scheduleRefusal,
     canReportProgress,
     isStepsEligible,
     onOpenLogic,

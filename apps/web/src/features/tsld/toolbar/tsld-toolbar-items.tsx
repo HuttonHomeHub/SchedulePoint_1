@@ -245,7 +245,14 @@ function GoToDateControl({
  * reuse the canonical {@link ACTIVITY_TYPE_LABELS} so the toolbar copy can't drift from the rest of
  * the app (e.g. under localisation). */
 const ADD_ACTIVITY_TYPES = ['TASK', 'START_MILESTONE', 'FINISH_MILESTONE'] as const;
-const ADD_DISABLED_REASON = 'Start editing to add activities';
+/**
+ * The phrase this command completes: "…to add activities". Passed to `ctx.scheduleRefusal`, which
+ * decides the FRAME around it — "Start editing to …" when the pen is free, "<Name> is editing this
+ * plan. Request control to …" when a peer holds it, "Your role cannot …" for a Viewer. The literal
+ * sentence lived here until `docs/TECH_DEBT.md` #115: it named **Start editing** to readers whose
+ * screen shows **Request control** and no Start-editing button at all.
+ */
+const ADD_ACTION = 'add activities';
 /** The LOE span hangs off two existing driver activities; with fewer than two present the Add-menu's
  * Level-of-Effort item shades with this reason (Stage D spec §Edge cases). */
 const LOE_TOO_FEW_REASON = 'Add activities to span between them';
@@ -335,7 +342,7 @@ function AddActivityControl({
         disabled={disabled}
         title={
           disabled
-            ? ADD_DISABLED_REASON
+            ? (ctx.scheduleRefusal(ADD_ACTION) ?? '')
             : ctx.isLoeSpanning
               ? 'Stop the level-of-effort pick'
               : ctx.isAddingActivity
@@ -432,7 +439,9 @@ const LINK_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   LINK_TYPES.map(({ type, label }) => [type, label]),
 );
 
-const LINK_DISABLED_REASON = 'Start editing to link activities';
+/** As {@link ADD_ACTION} — the verb is what differs between these nine, which is why a shared
+ * constant could not have fixed #115 and a shared *builder* could. */
+const LINK_ACTION = 'link activities';
 
 /**
  * The **Link split-button** (ADR-0032 M5, ADR-0031 amendment) — the canvas-first two-click dependency
@@ -485,7 +494,7 @@ function LinkControl({
         disabled={disabled}
         title={
           disabled
-            ? LINK_DISABLED_REASON
+            ? (ctx.scheduleRefusal(LINK_ACTION) ?? '')
             : ctx.isLinking
               ? 'Stop linking'
               : `Link with ${LINK_TYPE_LABELS[ctx.linkType]}`
@@ -1821,7 +1830,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: () => SCHEDULING_MODES_ENABLED,
       isEnabled: (ctx) => ctx.setSchedulingMode !== null,
       disabledReason: (ctx) =>
-        ctx.setSchedulingMode === null ? 'Start editing to change the scheduling mode' : undefined,
+        ctx.setSchedulingMode === null
+          ? (ctx.scheduleRefusal('change the scheduling mode') ?? undefined)
+          : undefined,
       isActive: (ctx) => ctx.schedulingMode === 'EARLY',
       onActivate: (ctx) => ctx.setSchedulingMode?.('EARLY'),
     },
@@ -1837,7 +1848,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isVisible: () => SCHEDULING_MODES_ENABLED,
       isEnabled: (ctx) => ctx.setSchedulingMode !== null,
       disabledReason: (ctx) =>
-        ctx.setSchedulingMode === null ? 'Start editing to change the scheduling mode' : undefined,
+        ctx.setSchedulingMode === null
+          ? (ctx.scheduleRefusal('change the scheduling mode') ?? undefined)
+          : undefined,
       isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
       onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
     },
@@ -2129,7 +2142,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Add activity',
       icon: <Plus className="size-4" />,
       penGated: true,
-      disabledReason: () => ADD_DISABLED_REASON,
+      disabledReason: (ctx) => ctx.scheduleRefusal(ADD_ACTION) ?? undefined,
       ...(CANVAS_AUTHORING_ENABLED
         ? { render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} /> }
         : {
@@ -2148,7 +2161,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 1,
       label: 'Link activities',
       penGated: true,
-      disabledReason: () => LINK_DISABLED_REASON,
+      disabledReason: (ctx) => ctx.scheduleRefusal(LINK_ACTION) ?? undefined,
       isVisible: () => CANVAS_AUTHORING_ENABLED,
       render: (ctx, api) => <LinkControl ctx={ctx} api={api} />,
     },
@@ -2194,7 +2207,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Auto-arrange lanes',
       icon: <AlignVerticalSpaceAround className="size-4" />,
       penGated: true,
-      disabledReason: () => 'Start editing to auto-arrange',
+      disabledReason: (ctx) => ctx.scheduleRefusal('auto-arrange') ?? undefined,
       // Shade-don't-hide (ADR-0031): the tool stays on the bar and greys with the rest of the
       // authoring cluster when the pen isn't held, rather than appearing/disappearing across
       // view↔edit. `canAutoArrange` gates it as enabled (via isEnabled), penGating greys it.
@@ -2244,7 +2257,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             ctx.schedulingMode !== 'VISUAL'
               ? 'Only available in Visual mode'
               : !ctx.canEditSchedule
-                ? 'Start editing to snap placements'
+                ? (ctx.scheduleRefusal('snap placements') ?? undefined)
                 : ctx.lateOverlayActive
                   ? 'Turn off the Late-start overlay to snap placements'
                   : undefined,
@@ -2278,7 +2291,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             ctx.schedulingMode !== 'VISUAL'
               ? 'Only available in Visual mode'
               : !ctx.canEditSchedule
-                ? 'Start editing to clear the placement'
+                ? (ctx.scheduleRefusal('clear the placement') ?? undefined)
                 : ctx.lateOverlayActive
                   ? 'Turn off the Late-start overlay to clear the placement'
                   : ctx.selectedActivity == null
@@ -2323,7 +2336,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           ? 'Recalculating…'
           : ctx.canRecalc
             ? undefined
-            : 'Start editing to recalculate',
+            : (ctx.scheduleRefusal('recalculate') ?? undefined),
       onActivate: (ctx) => ctx.recalculate(),
     },
     // Undo / Redo close the pen-gated authoring cluster (ADR-0048 M3.2). Flag-off these are the

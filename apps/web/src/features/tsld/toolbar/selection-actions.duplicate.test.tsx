@@ -45,6 +45,7 @@ function ctx(over: Partial<SelectionActionContext> = {}): SelectionActionContext
   return {
     targetName: 'Excavate',
     canEditSchedule: true,
+    scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
     stepsEligible: true,
     isSummary: false,

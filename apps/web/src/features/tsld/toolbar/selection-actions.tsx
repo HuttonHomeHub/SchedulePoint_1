@@ -31,6 +31,13 @@ export interface SelectionActionContext {
   targetName: string;
   /** Whether schedule edits are allowed now (role + pen); gates the mutating actions. */
   canEditSchedule: boolean;
+  /**
+   * Why a mutating action is shut, given a phrase naming what it does — `null` when it is open.
+   * The same seam the main toolbar takes (`docs/TECH_DEBT.md` #114.1/#115): `canEditSchedule` has
+   * already fused role and pen, so a sentence built from it alone is false for one of the two
+   * readers it addresses.
+   */
+  scheduleRefusal: (action: string) => string | null;
   /** Whether the viewer may report progress (Contributor upward, role only — NOT pen-gated); gates the
    * `progress` item exactly like the toolbar's Update-progress command (`canProgress`). */
   canReportProgress: boolean;
@@ -75,7 +82,9 @@ export interface SelectionActionContext {
   onSteps: () => void;
 }
 
-const PEN_REASON = 'Start editing to change this activity';
+/** The phrase these five actions complete: "…to change this activity". The FRAME is chosen by
+ * `ctx.scheduleRefusal` from the live role/pen state — see {@link SelectionActionContext}. */
+const PEN_ACTION = 'change this activity';
 const PROGRESS_REASON = 'You don’t have permission to report progress';
 
 /**
@@ -173,7 +182,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       label: 'Edit',
       icon: <SquarePen className="size-4" />,
       penGated: true,
-      disabledReason: () => PEN_REASON,
+      disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
       onActivate: (ctx) => ctx.onEdit(),
     },
     // Duplicate — after Edit, and present for EVERY selection including a summary.
@@ -199,7 +208,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
             label: 'Duplicate',
             icon: <Copy className="size-4" />,
             penGated: true,
-            disabledReason: () => PEN_REASON,
+            disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
             isVisible: (ctx: SelectionActionContext) => !ctx.isSummary,
             onActivate: (ctx: SelectionActionContext) => {
               ctx.onDuplicate();
@@ -215,7 +224,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
             description: 'Copies the summary and every activity in it',
             icon: <Copy className="size-4" />,
             penGated: true,
-            disabledReason: () => PEN_REASON,
+            disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
             isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
             onActivate: (ctx: SelectionActionContext) => {
               ctx.onDuplicateBand();
@@ -238,7 +247,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
             label: 'Dissolve',
             icon: <Ungroup className="size-4" />,
             penGated: true,
-            disabledReason: () => PEN_REASON,
+            disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
             // Registered for every selection but only VISIBLE on a summary: `isSummary` is a
             // context fact, so a non-summary selection cannot reach an action that would 422.
             isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
@@ -255,7 +264,7 @@ export const selectionActionItems: ToolbarItem<SelectionActionContext>[] =
       label: 'Delete',
       icon: <Trash2 className="size-4" />,
       penGated: true,
-      disabledReason: () => PEN_REASON,
+      disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
       onActivate: (ctx) => ctx.onDelete(),
     },
   ]);

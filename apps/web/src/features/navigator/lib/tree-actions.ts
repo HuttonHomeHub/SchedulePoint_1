@@ -28,6 +28,14 @@ export interface NodeAction {
  * at all). A client can spawn a project, a project can spawn a plan; every node can
  * be renamed or deleted. Order: create-child first, then rename, then the
  * destructive delete last.
+ *
+ * **The empty return is ADR-0082's all-shaded clause, not an oversight** (`docs/TECH_DEBT.md`
+ * #116.4, which asked for this to be grouped with #114 rather than changed). Every action here is
+ * a write, so for a Viewer every item would shade — and that ADR's rule is that a menu whose
+ * *every* item would be shaded renders no trigger at all. Shading them instead would give a Viewer
+ * a menu of nothing but refusals on every row of the Project Explorer, and would also reintroduce
+ * the focus trap the clause exists to remove. The distinction #114 is about — role versus pen —
+ * does not arise: `canWrite` here is role only, and there is no pen on a hierarchy node.
  */
 export function nodeActions(kind: NodeKind, canWrite: boolean): NodeAction[] {
   if (!canWrite) return [];

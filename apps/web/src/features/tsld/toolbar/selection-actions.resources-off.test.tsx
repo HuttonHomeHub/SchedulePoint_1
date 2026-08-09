@@ -24,6 +24,7 @@ function ctx(): SelectionActionContext {
   return {
     targetName: 'Excavate',
     canEditSchedule: true,
+    scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
     stepsEligible: true,
     onOpenLogic: vi.fn(),

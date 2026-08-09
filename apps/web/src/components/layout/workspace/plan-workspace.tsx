@@ -138,6 +138,7 @@ function Adr0030PlanWorkspace({
         SCHEDULING_MODES_ENABLED ? barDateSourceFor(plan.schedulingMode, false) : 'early'
       }
       canEdit={model.canEditSchedule}
+      scheduleRefusal={model.scheduleRefusal}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       // Bar-end resize (ADR-0052 M2/M3) + lag-anchor drag (M3); armed only under the flag,

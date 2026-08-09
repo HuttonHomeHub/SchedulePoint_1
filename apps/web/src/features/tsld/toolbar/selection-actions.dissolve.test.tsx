@@ -40,6 +40,7 @@ function ctx(over: Partial<SelectionActionContext> = {}): SelectionActionContext
   return {
     targetName: 'Substructure',
     canEditSchedule: true,
+    scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
     stepsEligible: true,
     isSummary: true,
@@ -92,7 +93,7 @@ describe('SelectionActionsBar — Dissolve (VITE_WBS_IMPROVEMENTS on)', () => {
     // keyboard — the toolbar's established convention (see the base suite's pen-gating test).
     const button = within(bar()).getByRole('button', { name: 'Dissolve' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
-    expect(button).toHaveAttribute('title', 'Start editing to change this activity');
+    expect(button).toHaveAttribute('title', 'Start editing to change this activity.');
     fireEvent.click(button);
     expect(spies.onDissolve).not.toHaveBeenCalled();
   });

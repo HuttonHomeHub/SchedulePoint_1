@@ -1677,7 +1677,27 @@ that is only asserted present is a field that can quietly stop being right.
 
 ## 114. Two menus still hide rather than shade, for want of a reason to show
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (ADR-0082)
+**Status:** **114.1/114.2 closed 2026-08-09** (ADR-0083 M7 — `scheduleRefusal`); 114.3 open ·
+**Owner:** web · **Raised:** 2026-08-08 (ADR-0082)
+
+> **Closed, and the blocker turned out not to exist.** This entry says the fix needs "a small piece
+> of gating work" because `canWrite` "cannot say whether the planner lacks the role or merely lacks
+> the pen". `derivePlanGating` has returned **`penReadOnly`** — exactly that distinction — since
+> ADR-0028. What was missing was never the data; it was that every caller assembled its own string
+> from the **fused** `canEditSchedule` and could therefore only guess. One shared
+> `scheduleRefusal(gating, holder, action)` now picks the frame from the live state, and eleven
+> hand-written sentences across the TSLD toolbar and the selection bar were deleted in favour of it.
+>
+> And the `plan-actions-menu` case is **more** exact than this entry allowed for: `model.canWrite`
+> is `canManageHierarchy(role)`, role only and never pen-gated, so there is no pen branch there to
+> get wrong. That was checkable in one grep, and the entry's own premise had not been checked —
+> ADR-0076 Class 3, in the register rather than in a spec.
+>
+> `#116.4` (the `HierarchyTree` row menu, filed as the third case) is closed **as correct by
+> design**: every action on a hierarchy node is a write, so for a Viewer _every_ item would shade,
+> and ADR-0082's own clause says such a menu renders no trigger. Changing it would give a Viewer a
+> menu of nothing but refusals on every row and reintroduce the focus trap the clause removes. The
+> rule is now written at `tree-actions.ts` so it is not rediscovered as an oversight a third time.
 
 ADR-0082 made a shaded menu item keep its place in the keyboard order and carry an
 `aria-describedby` reason, and applied it to the activities-table row menu. Two consumers are
@@ -1706,6 +1726,12 @@ against ADR-0062 M6, which is a real reason to close them and not an urgent one.
 ---
 
 ## 115. The pen sentence names a button the reader cannot see when a peer holds the lock
+
+> **Closed 2026-08-09** (ADR-0083 M7). `penReason(action, holder)` landed first for the activity
+> editor; M7 routed the remaining eleven sites — nine on the TSLD toolbar, five on the selection
+> bar (sharing one phrase) — through `scheduleRefusal`, which wraps it and adds the **role** branch
+> this entry did not cover. The verb stayed per-site, because the nine never said the same thing:
+> a shared constant could not have fixed it and a shared builder could.
 
 **Status:** open · **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
 
@@ -1765,7 +1791,8 @@ does: the canvas prints the sentence, the row menu holds it for assistive techno
 honest reason it is not fixed is that there is **no Tooltip primitive** in `components/ui/`, adding
 one is an ADR-level decision (CLAUDE.md §5), and a one-off `title` is what ADR-0082 just removed.
 
-**4. `HierarchyTree` is a third bare-boolean menu.** `tree-actions.ts`'s `nodeActions` returns `[]`
+**4. `HierarchyTree` is a third bare-boolean menu.** _(Closed 2026-08-09 as correct by design —
+see #114's banner; the rule is now stated at `tree-actions.ts` rather than inferred.)_ `tree-actions.ts`'s `nodeActions` returns `[]`
 for a non-writer, so the trigger disappears. ADR-0082 records it as unchanged-by-design, and the
 component review's point stands: it belongs with `plan-actions-menu.tsx` in #114 as the same
 "no reason to show" shape rather than filed apart from it. Treat #114 as covering all three.

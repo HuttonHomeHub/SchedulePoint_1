@@ -404,6 +404,7 @@ export function ToolbarPlanWorkspace({
       }
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
       canEdit={model.canEditSchedule && !lateOverlayActive}
+      scheduleRefusal={model.scheduleRefusal}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       // Bar-end resize (ADR-0052 M2/M3) + lag-anchor drag (M3). Always passed like onReposition;

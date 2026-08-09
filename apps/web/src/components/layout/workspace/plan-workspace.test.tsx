@@ -246,11 +246,21 @@ describe('PlanWorkspace — header overflow menu (M3)', () => {
     expect(screen.getByRole('heading', { name: 'Working-day calendar' })).toBeInTheDocument();
   });
 
-  it('hides Edit plan for a non-writer but keeps Plan details / Baselines / Schedule settings', () => {
+  it('shades Edit plan for a non-writer, with a reason, and keeps the read items', () => {
     h.role = 'VIEWER';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: 'Plan actions' }));
-    expect(screen.queryByRole('menuitem', { name: /Edit plan/ })).not.toBeInTheDocument();
+    // Shaded, not hidden (ADR-0082, `docs/TECH_DEBT.md` #114.2). It used to vanish, which makes the
+    // menu look different to different people with nothing saying why. The reason is stated as a
+    // ROLE refusal and that is exact rather than a guess: `canWrite` is `canManageHierarchy(role)`,
+    // never pen-gated, so there is no "start editing" case here to get wrong.
+    const edit = screen.getByRole('menuitem', { name: /Edit plan/ });
+    expect(edit).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByText(/your role cannot edit this plan’s details/i),
+      // A description, never folded into the name — otherwise the item announces as
+      // "Edit plan… Your role cannot…" and the reason becomes part of what it is called.
+    ).toHaveAttribute('id', edit.getAttribute('aria-describedby'));
     // A read-only role can still read the plan's details/description here — no capability lost.
     expect(screen.getByRole('menuitem', { name: /Plan details/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Baselines/ })).toBeInTheDocument();
