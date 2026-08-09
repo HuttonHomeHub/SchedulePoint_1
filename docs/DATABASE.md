@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 27
-> models across 47 committed migrations (counted 2026-08-04, `grep -c '^model '` /
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 28
+> models across 48 committed migrations (counted 2026-08-09, `grep -c '^model '` /
 > `ls migrations`, not memory) — is the single source of truth for the data model.
 > See ADR-0008.
 
@@ -1145,6 +1145,157 @@ IS NULL OR expires_at > now()`) **AND** the referenced plan is itself active. An
   equality, unit-tested like every sibling); asserting `plan:share` (Planner/Org-Admin)
   on create/list/revoke; returning the raw token **once** on create and **never** in the
   list; and the guest guard's uniform-404 resolution + live-plan re-check.
+
+### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
+
+`mail_events` records one row per failed or abandoned send, making
+`event: 'mail.send_failed'` durable instead of a log line nobody reads
+(`docs/TECH_DEBT.md` #100). It is the **first table in this schema that deliberately follows
+almost none of the conventions above**, and every departure is a decision rather than an
+oversight — which is why it is documented here at length rather than listed.
+
+- **It is NOT the audit shape, and that is load-bearing.** The reflex after ADR-0072 is to
+  model a new "things that happened" table on `audit_events`. Here that would be a defect:
+  `audit_events` refuses `UPDATE` and `DELETE` **in the database** (`ENABLE ALWAYS`
+  triggers), and this row holds a **customer's full email address** (staff-console CQ-1,
+  which overruled the domain-only proposal). The audit shape would therefore write customer
+  addresses into a permanently unerasable table — the exact collision ADR-0085 D3 spent an
+  entire decision avoiding for **one** column, repeated for every failed send. `mail_events`
+  is **ordinary**: updatable (so ADR-0085 D1's tombstone can scrub `recipient` in place),
+  deletable and expirable. **Do not add a trigger to this table.**
+- **No `created_at`/`updated_at`**, against the rule in "Auditing" above. The producer writes
+  inside the `catch` block that observes the failure, so `created_at` would equal
+  `occurred_at` to the millisecond; and the only `UPDATE` this table will ever see is an
+  erasure scrub, which is an audited act whose record belongs in `audit_events` — a stamp
+  here would invite the row to be read as edited data rather than as a captured instant.
+- **No `version`** (nothing edits a mail event concurrently — the `AuditEvent` reasoning) and
+  **no `deleted_at`**: a soft delete that leaves the address in place defeats the single
+  property that makes this table ordinary.
+- **No `organization_id`**, against "Denormalised `organization_id`" above. Verification and
+  password-reset mail is sent **before and outside** any membership — a sign-up verification
+  precedes every organisation — so the column would be null for exactly the rows most often
+  read and present only for invitations. The staff read is installation-wide by design;
+  `correlation_id` reaches the Pino line where the request's org context lives. It would also
+  drag a telemetry row into the organisation FK graph, where a `RESTRICT` can block an
+  organisation delete.
+- **`kind` / `outcome` are TEXT + value-list CHECKs, not Postgres enums** — the
+  `audit_events.action` precedent, for its stated reason (Postgres needs **two** migrations to
+  add an enum label and use it). This vocabulary is _observed_ to grow rather than suspected
+  to: `test` is already specified for the CQ-3 staff send and is not a member of
+  `MailFailureKind` today, so it is permitted from the start and M3 needs no migration.
+  Values are `lower_snake` to equal `MailFailureKind` **value for value**, so the producer
+  needs no mapping table — a mapping table is where two vocabularies drift.
+- **`error_class`, never `error.message`.** A transport error's message routinely embeds the
+  address it failed to reach in whatever shape the relay chose. There is deliberately no
+  `message`/`detail` column, and `ck_mail_events_error_class_shape` makes the remaining hole
+  structural rather than procedural: a constructor name or errno matches, anything long or
+  punctuated enough to carry an address does not. `ck_mail_events_recipient_length` bounds the
+  address at RFC 5321's 320 octets — a **length** check and not a format one, because a send
+  can fail precisely _because_ the address was malformed, and rejecting that row would lose
+  the record that explains the failure.
+- **Retention is 12 months, and nothing enforces it.** The number is deliberately the same as
+  ADR-0085 D3's `auth.*` `subject_label` period rather than a second one. It is a **ceiling,
+  not a promise**: this application has no scheduler (no `@nestjs/schedule`, no BullMQ, no
+  Redis), so no sweep runs and the true retention today is forever. When one is built it is a
+  single ranged `DELETE … WHERE occurred_at < now() - interval '12 months'`, served by the
+  leading column of the one index.
+- **One index, `(occurred_at, id)`** — full, not partial, and therefore declared in
+  `schema.prisma` rather than as raw SQL: every row is in the read set (no soft delete, no org
+  scope, no nullable leading column), so none of the `audit_events` partial-index reasoning
+  applies. ASC read backwards, because both keys descend together. **No index on
+  `recipient`** — an index on a plaintext address is a second copy of the address.
+- **Service-layer obligations the DB can't enforce (M1-T2):** `kind` must be threaded into
+  `SmtpMailService`'s private `send()` so the `ABANDONED` row can carry one (it is generic
+  today and knows only the recipient, so a null there would blank the read's primary axis for
+  precisely the hardest failures); the producer normalises `error_class` to a constructor name
+  or errno **before** the insert (the CHECK is a backstop, and reaching it is a bug); and the
+  write runs inside a `catch` block, so it **swallows its own failure** — a rejected insert
+  must never become the second error of a failed send.
+
+## Operational telemetry (installation-wide, not organisation-scoped)
+
+One table so far. It is **not** part of the `Organization → Client → … → Activity` hierarchy
+above, carries no `organization_id`, and is read by a staff member about the installation
+rather than by a member about their own data.
+
+### MailEvent: failed and abandoned sends (staff console M1)
+
+The `mail_events` table (staff-console M1-T1, `docs/TECH_DEBT.md` #100) is the durable half of
+a signal that today reaches nobody: `SmtpMailService` emits `event: 'mail.send_failed'` at four
+sites and nothing acts on it. One row per failed or abandoned send, so a staff member can read a
+history and the alerter has something to count. **Non-scheduling** — the CPM engine never reads
+it — so the migration is byte-parity (a single additive table create).
+
+**It is an ordinary table, and that is a requirement rather than a default.** The reflex after
+ADR-0072 is to model a new "things that happened" table on `audit_events`; here that would be a
+defect. `audit_events` refuses `UPDATE` and `DELETE` in the database (`BEFORE UPDATE OR DELETE` +
+`BEFORE TRUNCATE`, `ENABLE ALWAYS`), and this row holds a **customer's full email address**
+(staff-console CQ-1, which overruled the domain-only proposal). The audit shape would therefore
+write customer addresses into a permanently unerasable table — exactly the collision ADR-0085 D3
+spent a whole decision avoiding for a single column, repeated for every failed send. So the table
+is **updatable** (ADR-0085 D1's tombstone can scrub `recipient` in place), **deletable** and
+**expirable**. Do not add a trigger to it.
+
+- **Retention: 12 months**, deliberately ADR-0085 D3's number and not a second one — two periods
+  for one class of data is a question nobody can answer later. **Nothing enforces it yet.** There
+  is no scheduler in this application (no `@nestjs/schedule`, no BullMQ, no Redis), so the period
+  is a **ceiling, not a promise**, and the true retention today is _forever_ — D3's own caveat,
+  inherited with the number. When a sweep lands it is one ranged `DELETE … WHERE occurred_at <
+now() - interval '12 months'` on the leading index column. The spec's §4.10 defaults table still
+  says 90 days; that row predates CQ-1 and is stale.
+- **`kind` and `outcome` are TEXT + a value-list CHECK, not Postgres enums** — the
+  `audit_events.action` precedent, for its stated reason: an enum label costs **two** migrations
+  (Postgres forbids adding and using one in a single transaction), a CHECK costs one. This
+  vocabulary is _observed_ to grow rather than suspected — `test` is specified for the CQ-3 staff
+  send and is not a member of `MailFailureKind` today — so it is permitted from the start and M3
+  needs no migration at all. Deliberately **not** the `AuditOutcome` precedent: that enum is
+  closed by construction (every act succeeds, is denied or fails), while `FAILED`/`ABANDONED`
+  enumerate today's failure modes on a table named for _events_. `kind`'s values are lower_snake
+  (not the SCREAMING enum convention) so they equal `MailFailureKind` value for value and the
+  producer needs no mapping table — a mapping table is where two vocabularies drift.
+- **`error_class`, never `error.message`.** A transport error's message routinely embeds the
+  address it failed to reach in whatever shape the relay chose; storing the address in a column is
+  a decision, storing it again inside a free-text blob is a leak wearing the decision's clothes.
+  There is no `message`/`detail` column, and `ck_mail_events_error_class_shape` makes that
+  structural rather than procedural: a constructor name or errno (`Error`, `ECONNREFUSED`)
+  matches, a sentence with a space or an `@` does not. `ck_mail_events_recipient_length` bounds
+  the one PII column at RFC 5321's 320 octets — a **length** check, not a format one, because a
+  send can fail precisely _because_ the address was malformed and rejecting that row would lose
+  the record that explains the failure.
+- **Nullability.** `kind` and `outcome` are `NOT NULL` (every row is one of the two branches, and
+  a null `kind` would blank the read's primary axis). `recipient` is nullable **as the erasure
+  affordance**, not because a producer omits it: with no unique index to preserve, NULL is the
+  honest scrub where `users.email` needs a non-routable tombstone. `error_class` is nullable
+  because a rejection is `unknown` and a thrown null has no class to name — writing `'Unknown'`
+  would dress an absence as a fact. `correlation_id` is nullable because
+  `RequestContext.correlationId` is itself `string | null` and the ABANDONED site fires from a
+  detached `.catch()` after the response has gone.
+- **No `organization_id`, and that is a decision.** Verification and password-reset mail is sent
+  before and outside any membership — a sign-up verification precedes every organisation — so the
+  column would be null for exactly the rows most often read and present only for invitations,
+  reading as a fact about the failure when it is only a fact about which message it was. The staff
+  read is installation-wide by design and never filters on it, `correlation_id` reaches the log
+  line where the request's org context lives, and an FK would drag a telemetry row into the
+  organisation graph where a `RESTRICT` can block an organisation delete.
+- **No `created_at`/`updated_at`/`version`/`deleted_at`.** The producer writes inside the catch
+  block that observes the failure, so `created_at` would equal `occurred_at` on every row; the
+  only `UPDATE` this table will see is an ADR-0085 scrub, which is an audited act whose record
+  belongs in `audit_events`; nothing edits a row concurrently; and a soft delete that leaves the
+  address in place defeats the single property that makes this table ordinary.
+- **One index, `(occurred_at, id)`, declared in Prisma** — full, not partial, because every row
+  is in the read set (no soft delete, no org scope, no nullable leading column), so none of the
+  `audit_events` partial-index reasoning applies. Declared **ASC and read backwards**: the spec
+  proposed `(occurred_at DESC, id DESC)`, but both keys descend together, so the newest-first
+  cursor read is a plain backward scan of this one (the `activities`/`notes` `(…, created_at, id)`
+  argument). `audit_events` spells `DESC` only because its indexes are raw SQL anyway. `recipient`,
+  `kind` and `outcome` are **unindexed**; the numbers behind that are in the migration.
+- **Service-layer obligations the DB can't enforce (M1-T2):** `kind` must be threaded into the
+  private `send()` so an ABANDONED row can carry one; `error_class` must be normalised to a
+  constructor name or errno before the insert (the CHECK is a backstop — reaching it is a bug);
+  and the write runs inside a catch block, so it must swallow its own failure rather than turn a
+  failed send into a second error. Note that an abandoned send legitimately writes **two** rows —
+  the timeout (`FAILED`) and the late transport error (`ABANDONED`) — which is the distinction
+  ADR-0075's `send()` docblock exists to preserve.
 
 ## Testing & performance
 

@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 893 web
+> (`apps/api/src/modules/`), 28 Prisma models across 48 migrations, 893 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
 > 85 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -108,7 +108,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   20 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (27 models) + 47 migrations
+│   │   ├── prisma/           #   Schema (28 models) + 48 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
