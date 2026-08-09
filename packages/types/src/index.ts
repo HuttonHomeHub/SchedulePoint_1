@@ -2056,6 +2056,7 @@ export const AUDIT_ACTIONS = [
   //   every one of these operations happens over `psql` on the host and leaves no record at all,
   //   so this narrows the unaudited surface rather than widening the audited one.
   'staff.session_started',
+  'staff.panel_read',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -2164,6 +2165,7 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   // existing reference keeps working — so filing it under "what disappeared" would answer the
   // wrong question. A tier move is the same class of fact: who may use this, from now on.
   'staff.session_started': 'access',
+  'staff.panel_read': 'access',
   'calendar.archived': 'settings',
   'calendar.unarchived': 'settings',
   'calendar.scope_changed': 'settings',

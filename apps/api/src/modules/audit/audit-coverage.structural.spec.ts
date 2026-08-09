@@ -55,6 +55,7 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   // seventh assertion below, which derives from the path rather than from this list, so a staff
   // route added later is covered the day it is written.
   'GET /api/v1/staff/me': ['staff.session_started'],
+  'GET /api/v1/staff/health': ['staff.panel_read'],
   'DELETE /api/v1/organizations/:orgSlug/clients/:clientId': ['client.deleted'],
   'DELETE /api/v1/organizations/:orgSlug/invitations/:invitationId': ['invitation.revoked'],
   'DELETE /api/v1/organizations/:orgSlug/members/:memberId': ['member.removed'],

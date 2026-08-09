@@ -163,6 +163,7 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   decision avoiding, and what M1's deliberately-ordinary `mail_events` exists to keep erasable.
   //   The actor, the action and the instant are the evidence; the contents are not.
   'staff.session_started': [],
+  'staff.panel_read': [],
 };
 
 /**

@@ -1,4 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { StaffPrincipal } from '../../common/auth/staff-principal';
@@ -6,8 +7,10 @@ import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { AuditService } from '../audit/audit.service';
 
+import { StaffHealthDto } from './dto/staff-health.dto';
 import { StaffIdentityDto } from './dto/staff-identity.dto';
 import { StaffGuard } from './staff.guard';
+import { StaffHealthService } from './staff-health.service';
 
 /**
  * The staff console's API surface (ADR-0086). **M2 ships exactly one route, and ships dark**: no
@@ -25,9 +28,17 @@ import { StaffGuard } from './staff.guard';
  */
 @ApiTags('staff')
 @Controller({ path: 'staff', version: '1' })
+// Tighter than the global 100/60 s — the ADR-0051 precedent this ADR invokes and did not apply.
+// Two reasons: this is the most privileged surface in the product, and every successful hit writes
+// a durable audit row, so a compromised staff session could otherwise flood the one table that
+// cannot be pruned. Thirty a minute is far above any human use of a console with two panels.
+@Throttle({ default: { limit: 30, ttl: 60_000 } })
 @UseGuards(StaffGuard)
 export class StaffController {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly health: StaffHealthService,
+  ) {}
 
   @Get('me')
   @ApiOperation({
@@ -41,7 +52,7 @@ export class StaffController {
   async me(
     @CurrentStaff() staff: StaffPrincipal,
     @RequestContext() context: RequestContext,
-  ): Promise<{ data: StaffIdentityDto }> {
+  ): Promise<StaffIdentityDto> {
     // `record`, NOT `recordBestEffort`, and the choice is the milestone's argument applied to
     // itself. The auth family is best-effort because refusing a sign-in when the audit table is
     // unavailable turns a logging fault into an outage for everyone. Here the trade inverts: the
@@ -62,6 +73,37 @@ export class StaffController {
       ...context,
     });
 
-    return { data: { userId: staff.userId, email: staff.email } };
+    // The bare DTO: `TransformInterceptor` wraps every response in the standard `{ data }`
+    // envelope, so returning one here would double-wrap it. Caught by the e2e, which is the only
+    // place the real interceptor runs — a controller unit test sees whatever the method returns.
+    return { userId: staff.userId, email: staff.email };
+  }
+
+  @Get('health')
+  @ApiOperation({
+    summary: 'Is mail working?',
+    description:
+      'Mail-failure counts and the most recent failures, plus whether a transport, alerting and a ' +
+      'heartbeat are configured at all. Zero failures with no transport configured is NOT health.',
+  })
+  @ApiOkResponse({ type: StaffHealthDto })
+  async healthPanel(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+  ): Promise<StaffHealthDto> {
+    // A read, and audited — see the class docblock. The row names the panel, never its contents:
+    // this response carries customer addresses, and the audit table refuses DELETE.
+    await this.audit.record({
+      action: 'staff.panel_read',
+      outcome: 'SUCCESS',
+      actorType: 'STAFF',
+      actorUserId: staff.userId,
+      actorLabel: staff.email,
+      subjectType: 'staff_panel',
+      subjectLabel: 'health',
+      ...context,
+    });
+
+    return await this.health.read();
   }
 }

@@ -711,6 +711,37 @@ Treat that URL as a credential: anyone holding it can suppress the alarm. It is 
 > `docs/TECH_DEBT.md` #100's operator half stays **open** — the code existing does not close it,
 > because a signal nobody receives is the failure that entry records in the first place.
 
+## The staff console
+
+SchedulePoint staff operate the **installation** — mail health, and in later milestones CSP reports
+and version state. They reach **no customer data at all**: `StaffPrincipal` carries no memberships
+and no permissions, so a staff request reaching a member service is a compile error rather than a
+check somebody has to remember (ADR-0086).
+
+```yaml
+api:
+  environment:
+    STAFF_EMAILS: ops@schedulepoint.example,second@schedulepoint.example
+```
+
+Empty — the default — means **nobody**. An allowlisted address must also have a **verified email**,
+unconditionally and regardless of `AUTH_REQUIRE_EMAIL_VERIFICATION`: without that, an allowlisted
+address that has never signed up is squattable, and whoever registers it first becomes staff.
+
+Provisioning is deliberately out-of-band. Changing this needs host access and a container recreate —
+the same bar as reading the database, which is the point: it creates no new privilege path, because
+anyone who could edit it could already do everything the console offers, unaudited, over `psql`.
+
+**A dedicated staff account is recommended, not required.** Dual-hatting — one address that is both
+allowlisted and an organisation member — is permitted, because refusing it would lock the only staff
+member out on day one, and because staff-ness confers nothing inside any organisation by
+construction. At boot the API logs `event: 'staff.allowlist_resolved'` with counts (never
+addresses): how many entries have no account, how many are unverified, and how many are dual-hatted.
+Watch that line after changing the list — an entry with no account is usually a typo.
+
+Every staff request is **audited, including reads**, because on this surface the read is the
+privileged act. The row records that a panel was reached, never what was on it.
+
 ## Pre-release checklist
 
 - [ ] CI green on `main` (lint, typecheck, unit, e2e)

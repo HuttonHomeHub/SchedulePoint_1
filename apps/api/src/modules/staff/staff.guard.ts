@@ -18,7 +18,9 @@ import { PrismaService } from '../../prisma/prisma.service';
  *      {@link normalizeEmail} — `toLowerCase()` and **nothing else**, through the one shared
  *      function, because two implementations of one library's rule drift invisibly;
  *   2. the account's `emailVerified` is true;
- *   3. the account exists and is not soft-deleted.
+ *   3. the account still exists — a hard check, because Better Auth users are hard-deleted and the
+ *      `User` model carries no `deleted_at` at all. An earlier version of this comment claimed
+ *      "not soft-deleted", describing a mechanism this schema does not have.
  *
  * **(2) is not defence in depth, it is the control that makes the allowlist safe.**
  * `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to `false`, so without this check an allowlisted
@@ -48,8 +50,12 @@ export class StaffGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<StaffRequest & AuthenticatedRequest>();
     const principal = request.principal;
 
-    // No session at all. The session guard should already have refused, so this is belt-and-braces
-    // — but it must be the uniform 404 like every other branch, not a 401 that distinguishes.
+    // No session at all. **Unreachable in the wired app**, and the earlier comment here overstated
+    // what it buys: the global `AuthenticationGuard` runs first and answers an anonymous caller
+    // with 401, so this branch cannot make that response a 404. It is kept as a fail-closed default
+    // for a future route wired differently, not as part of the uniform-404 guarantee — which holds
+    // for AUTHENTICATED callers, which is the population that matters, since telling an anonymous
+    // prober "sign in first" reveals nothing about whether any address is staff.
     if (!principal) throw this.notFound();
 
     const allowlist = this.config.staffEmails;

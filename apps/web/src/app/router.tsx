@@ -330,6 +330,50 @@ const ShareGuestScreen = lazy(() =>
   import('@/routes/share').then((m) => ({ default: m.ShareGuestScreen })),
 );
 
+/**
+ * The staff console (ADR-0086), code-split for the same reason `/share` is: almost nobody who loads
+ * this app is staff, and the console has no business in the main entry chunk.
+ */
+const StaffConsoleScreen = lazy(() =>
+  import('@/routes/staff').then((m) => ({ default: m.StaffConsoleScreen })),
+);
+
+/**
+ * `/staff` is a **sibling of the authenticated shell, not a child of it**, and registered
+ * **unconditionally**. Both are decisions rather than conveniences.
+ *
+ * Outside `_authed`, because the shell's home resolver sends an account with no organisations to
+ * `/onboarding` — and a dedicated staff account, which `docs/DEPLOYMENT.md` recommends, is exactly
+ * that account. Under the shell, the recommended configuration would have been met with an
+ * invitation to create an organisation and become its Org Admin.
+ *
+ * Unconditional, because staff-ness is a **server** fact read from `STAFF_EMAILS`, which a `VITE_`
+ * constant cannot see (the ADR-0060 M0 rule, generalised by ADR-0074). A flag here would be worse
+ * than none: it would strand a staff member on a flag-off bundle against a flag-on server. The
+ * screen gates itself on runtime evidence instead, and a non-staff caller sees the same "not found"
+ * the API gives them — never "access denied", which would confirm the surface is worth attacking.
+ *
+ * It carries no session guard of its own: the screen's first act is an authenticated request, and
+ * an unauthenticated caller gets the same 404 as an authenticated non-staff one. One answer for
+ * every non-staff caller is the property; adding a redirect-to-sign-in here would break it by
+ * telling an anonymous prober that signing in is worth trying.
+ */
+const staffConsoleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/staff',
+  component: () => (
+    <Suspense
+      fallback={
+        <main className="flex min-h-dvh items-center justify-center p-4" aria-busy="true">
+          <Spinner label="Loading…" />
+        </main>
+      }
+    >
+      <StaffConsoleScreen />
+    </Suspense>
+  ),
+});
+
 const shareGuestRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/share',
@@ -439,6 +483,8 @@ const routeTree = rootRoute.addChildren([
   // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
   // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
   ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
+  // Unconditional and outside the shell — see the route's docblock for both reasons.
+  staffConsoleRoute,
   authedRoute.addChildren([
     indexRoute,
     onboardingRoute,

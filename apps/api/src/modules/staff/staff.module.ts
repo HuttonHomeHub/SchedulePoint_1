@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { StaffController } from './staff.controller';
 import { StaffGuard } from './staff.guard';
+import { StaffBootstrapService } from './staff-bootstrap.service';
+import { StaffHealthService } from './staff-health.service';
 
 /**
  * The staff console (ADR-0086). Ships dark in M2 — one route, no web surface.
@@ -13,6 +15,6 @@ import { StaffGuard } from './staff.guard';
  */
 @Module({
   controllers: [StaffController],
-  providers: [StaffGuard],
+  providers: [StaffGuard, StaffHealthService, StaffBootstrapService],
 })
 export class StaffModule {}

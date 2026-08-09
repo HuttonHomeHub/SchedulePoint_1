@@ -144,6 +144,22 @@ One write exists in v1: "send a test message", addressed only to the requesting 
 verified address. The recipient is **not a parameter**, so it cannot be used as a relay — a
 structural property rather than a validation rule.
 
+### D7 — Two claims in this ADR were overstated, and they are corrected here rather than quietly edited
+
+The security review that gated M2 found both. Recording them is the ADR-0076 rule applied to this
+document.
+
+**"Every refusal is a uniform 404" is true of _authenticated_ callers, and only those.** The global
+`AuthenticationGuard` runs before `StaffGuard`, so an **anonymous** caller gets 401 — the guard's own
+no-session branch is unreachable in the wired app and cannot make it a 404. The guarantee that
+matters is intact: no authenticated caller can distinguish "I am not staff" from "there is no such
+route", so the surface is not an oracle for **which addresses are staff**. But the blanket phrasing
+was wrong, and "sign in first" is not a fact about anybody's staff status.
+
+**D4's promised boot warning did not exist.** This ADR said staff-membership overlap would be logged
+at boot; nothing did. It is built now (`StaffBootstrapService`) rather than the sentence being
+deleted, because that observability was the whole compensation for permitting dual-hatting.
+
 ## Consequences
 
 - The API gains a second guard and a second principal type. Both are small and both are pinned by a
