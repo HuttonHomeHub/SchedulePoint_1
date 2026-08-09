@@ -7,6 +7,7 @@ import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { AuditService } from '../audit/audit.service';
 
+import { CspReportRowDto } from './dto/staff-csp-reports.dto';
 import { StaffHealthDto } from './dto/staff-health.dto';
 import { StaffIdentityDto } from './dto/staff-identity.dto';
 import { StaffGuard } from './staff.guard';
@@ -105,5 +106,32 @@ export class StaffController {
     });
 
     return await this.health.read();
+  }
+
+  @Get('csp-reports')
+  @ApiOperation({
+    summary: 'What the Content-Security-Policy is blocking',
+    description:
+      'Distinct violations reported by browsers, most recent activity first. An EMPTY list is not ' +
+      'proof the policy is clean — end-to-end delivery from a browser is unverified ' +
+      '(docs/TECH_DEBT.md #102), so silence here means "nothing arrived", not "nothing happened".',
+  })
+  @ApiOkResponse({ type: [CspReportRowDto] })
+  async cspReports(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+  ): Promise<CspReportRowDto[]> {
+    await this.audit.record({
+      action: 'staff.panel_read',
+      outcome: 'SUCCESS',
+      actorType: 'STAFF',
+      actorUserId: staff.userId,
+      actorLabel: staff.email,
+      subjectType: 'staff_panel',
+      subjectLabel: 'security',
+      ...context,
+    });
+
+    return await this.health.cspReports();
   }
 }

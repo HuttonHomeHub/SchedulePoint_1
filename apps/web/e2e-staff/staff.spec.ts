@@ -175,6 +175,13 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // with padding and mixed case, so seeing the lower-case form proves both halves of the asymmetry.
   await expect(staff.getByText(STAFF_EMAIL)).toBeVisible();
   await expect(staff.getByRole('heading', { name: 'Mail' })).toBeVisible();
+  await expect(staff.getByRole('heading', { name: 'Content-Security-Policy' })).toBeVisible();
+  // **Only that the panel renders — not which state it is in.** The empty-state caveat ("not yet
+  // proof the policy is clean") is pinned by `staff.test.tsx`, where the payload is controlled.
+  // Asserting it here couples this journey to whether `csp_reports` happens to be empty, and it is
+  // not: the API e2e suite writes rows into the same database and this suite has no way to clear
+  // them. A test that passes or fails on what an unrelated suite left behind is measuring the
+  // harness. Both states are covered — this proves the panel is wired, that proves what it says.
 
   // 4. NOT bounced to onboarding. This account has no organisation — which is the recommended
   // configuration — and `/staff` sits outside `_authed` precisely so the shell's home resolver

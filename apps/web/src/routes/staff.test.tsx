@@ -29,6 +29,26 @@ function notFound(): ApiFetchError {
   return new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Not found' });
 }
 
+/** Render the console with staff identity resolved and the given panel payloads. */
+function renderStaffWith(payloads: Record<string, unknown>): void {
+  vi.mocked(apiFetch).mockImplementation((path: string) => {
+    if (path === '/staff/me') {
+      return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
+    }
+    if (path in payloads) return Promise.resolve(payloads[path]);
+    return Promise.resolve({
+      failuresLast24h: 0,
+      failuresLastHour: 0,
+      lastFailureAt: null,
+      transportConfigured: true,
+      alertingConfigured: true,
+      heartbeatConfigured: true,
+      recentFailures: [],
+    });
+  });
+  renderScreen();
+}
+
 function renderScreen(): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -70,6 +90,23 @@ describe('StaffConsoleScreen', () => {
       if (path === '/staff/me') {
         return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
       }
+      if (path === '/staff/csp-reports') {
+        return Promise.resolve([
+          {
+            id: 'c1',
+            effectiveDirective: 'script-src-elem',
+            blockedUri: 'inline',
+            documentUri: 'https://app.example/sign-in',
+            disposition: 'report',
+            count: 12,
+            firstSeenAt: '2026-08-09T09:00:00.000Z',
+            lastSeenAt: '2026-08-09T10:00:00.000Z',
+            sourceFile: 'https://app.example/assets/index-abc.js',
+            lineNumber: 42,
+            columnNumber: 7,
+          },
+        ]);
+      }
       return Promise.resolve({
         failuresLast24h: 3,
         failuresLastHour: 1,
@@ -102,6 +139,42 @@ describe('StaffConsoleScreen', () => {
     expect(screen.getByText('someone@example.test')).toBeInTheDocument();
   });
 
+  it('shows what the policy is blocking, and where the code is', async () => {
+    renderStaffWith({
+      '/staff/csp-reports': [
+        {
+          id: 'c1',
+          effectiveDirective: 'script-src-elem',
+          blockedUri: 'inline',
+          documentUri: 'https://app.example/sign-in',
+          disposition: 'report',
+          count: 12,
+          firstSeenAt: '2026-08-09T09:00:00.000Z',
+          lastSeenAt: '2026-08-09T10:00:00.000Z',
+          sourceFile: 'https://app.example/assets/index-abc.js',
+          lineNumber: 42,
+          columnNumber: 7,
+        },
+      ],
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Content-Security-Policy' })).toBeVisible();
+    expect(screen.getByText('script-src-elem')).toBeInTheDocument();
+    // The source location is the part that names what to CHANGE — the blocked URI often cannot.
+    expect(screen.getByText(/index-abc\.js:42/)).toBeInTheDocument();
+  });
+
+  it('says an empty policy table is NOT proof the policy is clean', async () => {
+    // The assertion that matters most on this panel. Delivery from a browser to the sink has never
+    // been verified end to end (TECH_DEBT #102), so silence means "nothing arrived", not "nothing
+    // happened" — and a reader who took an empty table as evidence would be misled on exactly the
+    // decision the panel exists to inform.
+    renderStaffWith({ '/staff/csp-reports': [] });
+
+    expect(await screen.findByText(/No violations recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/not yet proof the policy is clean/i)).toBeInTheDocument();
+  });
+
   it('says a missing transport is NOT health', async () => {
     // Zero failures with no transport configured means every send is being logged rather than
     // delivered — identical in a count, and the state a stock deployment is actually in. A panel
@@ -110,6 +183,7 @@ describe('StaffConsoleScreen', () => {
       if (path === '/staff/me') {
         return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
       }
+      if (path === '/staff/csp-reports') return Promise.resolve([]);
       return Promise.resolve({
         failuresLast24h: 0,
         failuresLastHour: 0,
