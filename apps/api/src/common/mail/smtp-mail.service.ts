@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { createTransport, type Transporter } from 'nodemailer';
 
+import type { OperationalAlertService } from '../operational/operational-alert.service';
+
 import {
   type EmailVerificationEmail,
   type InvitationEmail,
@@ -82,13 +84,30 @@ export const SEND_TIMEOUT_MS = 10_000;
 export class SmtpMailService extends MailService {
   private readonly transporter: Transporter;
 
+  /**
+   * `alerts` is **optional**, and that is the rollback contract rather than laziness: without it
+   * this adapter behaves exactly as it did before staff-console M1 — the failure is logged and
+   * nothing else. Every existing test that constructs this class by hand therefore keeps compiling
+   * and keeps asserting the same thing, which is what makes those suites a before/after oracle for
+   * this change rather than casualties of it.
+   */
   constructor(
     private readonly from: string,
     smtpUrl: string,
     @InjectPinoLogger(SmtpMailService.name) private readonly logger: PinoLogger,
+    private readonly alerts?: OperationalAlertService,
   ) {
     super();
     this.transporter = createTransport(smtpUrl);
+  }
+
+  /**
+   * One place the three public methods hand a failure to the operational record, so the three
+   * records agree — the `MAIL_SEND_FAILED` reasoning applied one layer out. Three call sites
+   * assembling this object independently is how two of them end up carrying a different `kind`.
+   */
+  private recordFailure(kind: MailFailureKind, to: string, error: unknown): void {
+    this.alerts?.recordMailFailure({ kind, outcome: 'FAILED', recipient: to, error });
   }
 
   /**
@@ -138,6 +157,7 @@ export class SmtpMailService extends MailService {
   async sendInvitation(email: InvitationEmail): Promise<void> {
     try {
       await this.send({
+        kind: 'invitation',
         to: email.to,
         subject: `You have been invited to ${email.organizationName} on SchedulePoint`,
         text: invitationText(email),
@@ -158,6 +178,7 @@ export class SmtpMailService extends MailService {
         },
         'invitation email failed to send; the invitation itself was created and its accept URL is available in the app',
       );
+      this.recordFailure('invitation', email.to, error);
     }
   }
 
@@ -189,6 +210,7 @@ export class SmtpMailService extends MailService {
     try {
       // Never log `verifyUrl` — it carries the token, and logs are retained and shipped.
       await this.send({
+        kind: 'email_verification',
         to: email.to,
         subject: 'Confirm your email address for SchedulePoint',
         text: verificationText(email),
@@ -199,6 +221,7 @@ export class SmtpMailService extends MailService {
         { event: MAIL_SEND_FAILED, kind: 'email_verification', err: error, to: email.to },
         'email-verification email failed to send; the account exists but cannot be verified until a resend succeeds',
       );
+      this.recordFailure('email_verification', email.to, error);
     }
   }
 
@@ -220,6 +243,7 @@ export class SmtpMailService extends MailService {
     try {
       // Never log `resetUrl` — it is a live single-use credential, and logs are retained/shipped.
       await this.send({
+        kind: 'password_reset',
         to: email.to,
         subject: 'Reset your SchedulePoint password',
         text: passwordResetText(email),
@@ -230,6 +254,7 @@ export class SmtpMailService extends MailService {
         { event: MAIL_SEND_FAILED, kind: 'password_reset', err: error, to: email.to },
         'password-reset email failed to send; the caller was answered uniformly and cannot tell',
       );
+      this.recordFailure('password_reset', email.to, error);
     }
   }
 
@@ -247,8 +272,14 @@ export class SmtpMailService extends MailService {
    * later failed anyway" and "it succeeded four minutes after we gave up" are different facts and
    * an operator reading `mail.send_failed` deserves to know which happened.
    */
-  private async send(message: { to: string; subject: string; text: string }): Promise<void> {
-    const pending = this.transporter.sendMail({ from: this.from, ...message });
+  private async send(message: {
+    kind: MailFailureKind;
+    to: string;
+    subject: string;
+    text: string;
+  }): Promise<void> {
+    const { kind, ...envelope } = message;
+    const pending = this.transporter.sendMail({ from: this.from, ...envelope });
     let timedOut = false;
     // Attached up-front, before anything can reject, so the rejection is handled whichever way the
     // race settles. Attaching it inside the catch would be too late in principle and would also
@@ -256,9 +287,15 @@ export class SmtpMailService extends MailService {
     pending.catch((late: unknown) => {
       if (!timedOut) return;
       this.logger.warn(
-        { event: MAIL_SEND_FAILED, abandoned: true, err: late, to: message.to },
+        { event: MAIL_SEND_FAILED, abandoned: true, kind, err: late, to: message.to },
         'an abandoned send later failed; the caller was already answered',
       );
+      this.alerts?.recordMailFailure({
+        kind,
+        outcome: 'ABANDONED',
+        recipient: message.to,
+        error: late,
+      });
     });
 
     let timer: NodeJS.Timeout | undefined;

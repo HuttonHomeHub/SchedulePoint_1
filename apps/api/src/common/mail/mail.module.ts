@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { getLoggerToken, PinoLogger } from 'nestjs-pino';
 
 import { AppConfigService } from '../../config/app-config.service';
+import { OperationalAlertService } from '../operational/operational-alert.service';
 
 import { LoggingMailService } from './logging-mail.service';
 import { MailBootstrapService } from './mail-bootstrap.service';
@@ -28,22 +29,28 @@ import { SmtpMailService } from './smtp-mail.service';
         AppConfigService,
         getLoggerToken(SmtpMailService.name),
         getLoggerToken(LoggingMailService.name),
+        OperationalAlertService,
       ],
       useFactory: (
         config: AppConfigService,
         smtpLogger: PinoLogger,
         stubLogger: PinoLogger,
+        alerts: OperationalAlertService,
       ): MailService => {
         const smtpUrl = config.mailSmtpUrl;
         const from = config.mailFrom;
         // `from` is guaranteed present alongside `smtpUrl` by the env schema's cross-field rule, so
         // this is a type narrowing rather than a second policy — the app refuses to boot otherwise.
         return smtpUrl !== undefined && from !== undefined
-          ? new SmtpMailService(from, smtpUrl, smtpLogger)
+          ? new SmtpMailService(from, smtpUrl, smtpLogger, alerts)
           : // The stub is told whether it is running in production, because "no transport is
             // configured" and "this is a developer's laptop" are NOT the same condition — the stub
             // is what runs on a production host whose operator has not set `MAIL_SMTP_URL` yet, and
             // that is the state of a real deployment today (`docs/TECH_DEBT.md` #16).
+            //
+            // The stub is deliberately NOT given the alerter. It does not send, so it cannot fail,
+            // so there is nothing to record — and a `mail_events` row written by the stub would say
+            // a send failed when no send was attempted, which is worse than no row.
             new LoggingMailService(stubLogger, config.isProduction);
       },
     },

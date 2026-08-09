@@ -121,4 +121,18 @@ ALTER TABLE "mail_events" ADD CONSTRAINT "ck_mail_events_recipient_length" CHECK
 -- breaks, and an index on a plaintext address is a second copy of the address. No index
 -- on `kind`/`outcome` either — a filtered read scans a table bounded by the same thing.
 -- Add one when a measurement asks for it, with the numbers in the migration (ADR-0073 C1).
+--
+-- MEASURED before it was written (PostgreSQL 16, 200,000 rows spread over 400 days — two
+-- orders of magnitude past anything this table should hold, since it grows only when mail
+-- breaks; 41 MB table, 10 MB index; EXPLAIN (ANALYZE, BUFFERS)):
+--
+--   * newest-first first page (LIMIT 50)  — 0.32 ms, `Index Scan Backward`, 49 buffers.
+--     The backward scan is the claim above, observed rather than assumed.
+--   * keyset next page, `(occurred_at, id) < (…)` — 3.4 ms, `Index Only Scan Backward`.
+--   * "failures in the last 24 hours" (M3) — 24.7 ms for 527 matching rows.
+--   * the 12-month sweep, when it is built — 176 ms deleting 17,565 rows.
+--   * the ADR-0085 D1 scrub `WHERE recipient = $1` — 30 ms, sequential scan, which IS the
+--     cost of leaving `recipient` unindexed and is the reason it stays unindexed: a rare
+--     administrative write is the one place 30 ms is worth less than a second copy of
+--     every customer address, on a table two orders of magnitude smaller than this.
 CREATE INDEX "mail_events_occurred_at_id_idx" ON "mail_events"("occurred_at", "id");

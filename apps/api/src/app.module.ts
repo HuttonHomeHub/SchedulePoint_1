@@ -12,6 +12,7 @@ import { AuthenticationGuard } from './common/guards/authentication.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { MailModule } from './common/mail/mail.module';
+import { OperationalModule } from './common/operational/operational.module';
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
@@ -100,6 +101,8 @@ function isPrettyLoggingAvailable(): boolean {
     }),
     PrismaModule,
     AuthModule,
+    // Before MailModule: its transport factory injects OperationalAlertService.
+    OperationalModule,
     MailModule,
     // Global, like MailModule: the producers live in nine feature modules and an audit call must
     // never be skipped for want of an import (ADR-0072).

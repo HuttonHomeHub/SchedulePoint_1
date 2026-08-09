@@ -800,17 +800,33 @@ the transaction that added it — the constraint is stated in this schema's own 
 
 **2. `mail_events`** — ordinary, expirable telemetry about the transport.
 
-| Column           | Type        | Note                                                                                                                       |
-| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | uuid v7 PK  | House standard                                                                                                             |
-| `occurred_at`    | timestamptz | Event instant                                                                                                              |
-| `kind`           | text        | `invitation` \| `email_verification` \| `password_reset` \| `test` — mirrors `MailFailureKind` (`smtp-mail.service.ts:33`) |
-| `outcome`        | text        | `FAILED` \| `ABANDONED` (the `abandoned: true` case, `smtp-mail.service.ts:256-262`)                                       |
-| `recipient`      | text        | **The full address** (CQ-1, overruling the domain-only proposal). See the note below.                                      |
-| `error_class`    | text        | The error's constructor name / code — **not** the message, which can carry an address in an uncontrolled shape             |
-| `correlation_id` | text        | Joins to the Pino line where the full context lives                                                                        |
+| Column           | Type        | Note                                                                                                                                                                                                           |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | uuid v7 PK  | House standard                                                                                                                                                                                                 |
+| `occurred_at`    | timestamptz | Event instant                                                                                                                                                                                                  |
+| `kind`           | text        | `invitation` \| `email_verification` \| `password_reset` \| `test` — mirrors `MailFailureKind` (`smtp-mail.service.ts:33`) **plus `test`, which that union does not contain today** (see the M1-T1 note below) |
+| `outcome`        | text        | `FAILED` \| `ABANDONED` (the `abandoned: true` case, `smtp-mail.service.ts:256-262`)                                                                                                                           |
+| `recipient`      | text        | **The full address** (CQ-1, overruling the domain-only proposal). See the note below.                                                                                                                          |
+| `error_class`    | text        | The error's constructor name / code — **not** the message, which can carry an address in an uncontrolled shape                                                                                                 |
+| `correlation_id` | text        | Joins to the Pino line where the full context lives                                                                                                                                                            |
 
-Index `(occurred_at DESC, id DESC)` for the exact cursor order. **Explicitly not the audit shape**,
+**Two corrections folded in when M1-T1 was designed (2026-08-09), recorded here rather than left
+for a later reader to trip over:**
+
+1. **`test` is not a member of `MailFailureKind`.** That union is
+   `'invitation' | 'email_verification' | 'password_reset'` — three members, verified by reading
+   `smtp-mail.service.ts:33`. `test` is the CQ-3 staff send, which does not exist yet. The table
+   permits it from the start (it is in `ck_mail_events_kind`), so M3 adds the fourth member to the
+   TS union with **no migration at all** — which is also the decisive argument for `kind` being
+   TEXT + CHECK rather than a Postgres enum: this vocabulary is _observed_ to grow, and an enum
+   label costs two migrations where a CHECK costs one.
+2. **The index shipped as `(occurred_at, id)` ASC, not DESC**, and serves the same read. Both keys
+   descend together, so the newest-first cursor is a plain backward scan — measured, `Index Scan
+Backward`, 0.32 ms for the first page at 200,000 rows. Declaring it ASC keeps it expressible in
+   `schema.prisma` (the model stays the whole truth about the index), where a DESC index would
+   have introduced this schema's first `sort:`/`map:` for no gain.
+
+**Explicitly not the audit shape**,
 and the migration comment says so — but the reason is now stronger than the original one. It was
 "this is telemetry about a machine, meant to be expired, not evidence about a person", which is the
 right instinct to resist the ADR-0072 reflex. After CQ-1 it is also the only thing that keeps the
@@ -914,17 +930,17 @@ Alternatives considered and rejected:
 
 **Stated defaults for everything that is not a critical question:**
 
-| Decision                    | Default                                                                                                                                                                                        |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CSP report retention        | **30 days**, swept on the same lifecycle hook as the heartbeat                                                                                                                                 |
-| `mail_events` retention     | **90 days** — longer, because it is smaller and its value is trend ("has the relay been flaky since March?")                                                                                   |
-| Alert coalescing window     | **10 minutes**, matching `watch-mail-failures.sh`'s `SP_MAIL_WINDOW` default (`:48`)                                                                                                           |
-| Heartbeat interval          | **5 minutes**                                                                                                                                                                                  |
-| Alert channel               | Anything accepting a POST; `WATCHTOWER_NOTIFICATION_URL` already exists in the release compose (`docs/TECH_DEBT.md:1186-1189`) and the same URL serves here                                    |
-| Staff console default panel | **Health**                                                                                                                                                                                     |
-| Staff console theme/surface | The ordinary page surface (ADR-0055). **Not** a new surface scope — it is an internal tool, and a fifth scope would need a complete 17-token family and a contrast matrix pass for four panels |
-| Staff route path            | `/staff`, a sibling of `_authed`                                                                                                                                                               |
-| Pagination                  | Cursor, the house standard                                                                                                                                                                     |
+| Decision                    | Default                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSP report retention        | **30 days**, swept on the same lifecycle hook as the heartbeat                                                                                                                                          |
+| `mail_events` retention     | **12 months** — this row said 90 days and was **stale**: it predates CQ-1, whose consequence 2 binds this table to ADR-0085 D3's period. Corrected 2026-08-09 when M1-T1 shipped; §4.7 is the authority |
+| Alert coalescing window     | **10 minutes**, matching `watch-mail-failures.sh`'s `SP_MAIL_WINDOW` default (`:48`)                                                                                                                    |
+| Heartbeat interval          | **5 minutes**                                                                                                                                                                                           |
+| Alert channel               | Anything accepting a POST; `WATCHTOWER_NOTIFICATION_URL` already exists in the release compose (`docs/TECH_DEBT.md:1186-1189`) and the same URL serves here                                             |
+| Staff console default panel | **Health**                                                                                                                                                                                              |
+| Staff console theme/surface | The ordinary page surface (ADR-0055). **Not** a new surface scope — it is an internal tool, and a fifth scope would need a complete 17-token family and a contrast matrix pass for four panels          |
+| Staff route path            | `/staff`, a sibling of `_authed`                                                                                                                                                                        |
+| Pagination                  | Cursor, the house standard                                                                                                                                                                              |
 
 **Follow-ups deliberately not built here** (each would be its own decision): step-up
 re-authentication or MFA on the staff surface; in-application revocation of staff status; a bounce
