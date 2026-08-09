@@ -1,7 +1,7 @@
 # Feature Spec: SchedulePoint staff console
 
-- **Status:** Draft — awaiting approval (docs/PROCESS.md stages 1–4). **No application code is
-  written until this and the implementation plan are approved.**
+- **Status:** **Approved 2026-08-09** (docs/PROCESS.md stages 1–4). All four critical questions are
+  answered below; three took the proposed default and **CQ-1 did not**.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-09
 - **Tracking issue / epic:** _(to be created on approval)_
@@ -198,38 +198,63 @@ the external heartbeat check, because the script runs **on the same host** and s
 host outage either — it is a weaker instrument than the thing that replaces it. Decision recorded in
 M1-T4; `docs/TECH_DEBT.md` #100's operator half closes when the heartbeat is wired, not before.
 
-### Open questions
+### Critical questions — all four answered 2026-08-09
 
-Only the four below change design or scope. Everything else has a stated default in §4.10 and is not
-a question.
+The four below were the ones that changed design or scope; everything else has a stated default in
+§4.10 and was never a question. **All four are now decided by the product owner and are inputs, not
+options.** Three took the proposed default. **One did not, and that one is written up at length,
+because a decision that overrides its own recommendation is exactly the decision a later reader will
+assume was an oversight.**
 
-- **CQ-1 (CRITICAL) — Does a staff screen ever render a person's email address?** Three surfaces want
-  one: a failed send's recipient, an unverified account, an audited actor label. All three are
-  addresses belonging to a **customer's** people. _Proposed default: **no**._ Mail failures store and
-  show the **domain** only plus a `correlation_id`; unverified accounts show **counts per
-  organisation**, not names; the staff audit feed shows staff actors (who are staff) and never a
-  member's label. A full address remains reachable by `psql` with the correlation id. This decides
-  the shape of M1's table, M3's Health screen and M5's accounts panel, which is why it is critical
-  rather than a preference.
-- **CQ-2 (CRITICAL) — Is a dual-hatted account the expected steady state, or is a dedicated staff
-  account required?** The product owner's address is almost certainly both allowlisted and an
-  organisation member. _Proposed default: **dual-hatting is permitted and warned, never refused**._
-  Refusing would lock the only staff member out of the console on day one; the security argument does
-  not need refusal, because staff-ness confers no organisation capability by construction (§4.4). The
-  answer decides whether `docs/DEPLOYMENT.md` _recommends_ or _requires_ a separate account, and
-  whether the boot check logs `warn` or refuses to boot.
-- **CQ-3 (CRITICAL) — Does the console get any write in v1?** _Proposed default: **exactly one** —
-  "send a test message", addressed only to the requesting staff member's own verified address._ It is
-  the single most useful action for the stated motivation ("is mail working _now_?") and it cannot be
-  used as a spam relay, because the recipient is not a parameter. Every other staff surface is a
-  read. The alternative — read-only v1 — is cheaper and defensible; it just leaves the question the
-  epic exists to answer needing a shell.
-- **CQ-4 (CRITICAL) — What watches the heartbeat?** This is a fact about the product owner's
-  infrastructure that only he can supply: is there a second machine, or an acceptable third-party
-  dead-man's-switch? _Proposed default: a free healthchecks.io check._ If the answer is "neither",
-  M1-T3 should not be built, the liveness half stays uncovered, and the spec should say so rather
-  than shipping a heartbeat nobody receives — which is precisely the failure `docs/TECH_DEBT.md` #100
-  records ADR-0075 making.
+- **CQ-1 — Does a staff screen ever render a person's email address? → YES, wherever it helps
+  support.** The proposal was **no** (domains, counts and correlation ids only, with the full address
+  reachable by `psql`); it was **overruled**, and the reasoning that lost is preserved rather than
+  deleted so the trade is legible: three surfaces want an address — a failed send's recipient, an
+  unverified account, an audited actor label — and all three belong to a **customer's** people, so
+  showing them widens what a staff session exposes beyond "operate the installation".
+
+  What the decision changes, concretely: `mail_events` stores the **full recipient address**, not
+  `recipient_domain`; M3's Health panel may render it; M5's Accounts panel may list unverified
+  members by address rather than by count.
+
+  **Three consequences that are now requirements rather than observations**, because this is the one
+  place the epic's own boundary moved:
+
+  1. **`mail_events` is an ordinary table and that is now load-bearing, not incidental.** It is
+     updatable and expirable, so ADR-0085's erasure path reaches it — a tombstoned user's address can
+     actually be scrubbed here. Had this been modelled on `audit_events` (the reflex M1-T1 already
+     warns against) the same decision would have written customer addresses into a table that refuses
+     `UPDATE` **and** `DELETE`, permanently, which ADR-0085 D3 spent a whole decision avoiding for one
+     column. The migration comment must say this in these terms.
+  2. **It inherits ADR-0085 D3's retention**, and for the same reason: an address held about a person
+     is bounded by time or it is held forever. Twelve months, matching the `auth.*` `subject_label`
+     period set on 2026-08-09 — one number, not two, because two periods for the same class of data
+     is a question nobody can answer later.
+  3. **Reading one is an audited act.** §2.6 already requires every staff route to be audited
+     including reads; this decision is why that requirement is not merely tidy. The audit row records
+     that a staff member read a panel, never the address they saw — auditing PII into the append-only
+     table would recreate consequence (1) through the back door.
+
+- **CQ-2 — Dual-hatted account? → Permitted and warned, never refused** (the proposed default).
+  Refusing would lock the only staff member out of the console on day one, and the security argument
+  never needed refusal: staff-ness confers no organisation capability by construction (§4.4). So
+  `docs/DEPLOYMENT.md` **recommends** a dedicated account rather than requiring one, the boot check
+  logs `warn` rather than refusing to boot, and the console carries a banner naming which hat is
+  active — the one thing a dual-hatted session should always say.
+
+- **CQ-3 — Any write in v1? → Exactly one: "send a test message"** (the proposed default), addressed
+  only to the requesting staff member's own verified address. The recipient is **not a parameter**,
+  so it cannot be used as a relay — a structural property, not a validation rule. Every other staff
+  surface is a read.
+
+- **CQ-4 — What watches the heartbeat? → Nothing yet; build it anyway, dormant.** The proposal was a
+  free healthchecks.io check, and the stated fallback was to **drop** M1-T3 rather than ship a signal
+  nobody receives (`docs/TECH_DEBT.md` #100). The product owner chose to build it and wire the
+  receiver later, which is a defensible third answer the spec had not offered — but it only stays
+  defensible if the dormancy is real, so it becomes a requirement: **with `HEARTBEAT_URL` absent, no
+  timer is created at all**, asserted by a unit test rather than assumed. And #100's operator half
+  **stays open** until an external check exists; merging M1-T3 does not close it, and M1-T4 must not
+  say it does.
 
 ---
 
@@ -252,7 +277,7 @@ a question.
 > - **Given** `MAIL_ALERT_URL` is unset **then** behaviour is byte-identical to today: the log line,
 >   and nothing else.
 > - **Given** a send fails **then** a `mail_events` row is written recording the kind, the instant,
->   the error class, the recipient **domain** and the correlation id.
+>   the error class, the **full recipient address** (CQ-1) and the correlation id.
 
 > **US-2** — As **staff**, I want an external service to notice if the API stops running, so that
 > "the app is down" is not something I learn from a customer.
@@ -388,20 +413,20 @@ call site a place where staff might be granted something, and the grant would be
 Stated as a list so the boundary is a decision rather than an omission. Each is enforced structurally
 where the column "How" says so, and by review where it does not.
 
-| #   | Prohibition                                                                                           | How                                                                                                                                     |
-| --- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Read any client, project, plan, activity, dependency, note, resource, baseline, calendar or share row | `StaffPrincipal` has no `memberships`/`can()`; member services take `Principal` → **compile error** (§4.3)                              |
-| 2   | Read an `audit_events.changes` payload belonging to an organisation                                   | The staff audit read is filtered to `actor_type = 'STAFF'`; enforced in the repository and pinned by a test                             |
-| 3   | Impersonate a user, mint a session, or read a session token                                           | No such endpoint exists and none is proposed. Structural test: no staff service imports the auth instance for anything but `getSession` |
-| 4   | Create, join, leave or modify an organisation, membership, role or invitation                         | Prohibition #1; no staff route carries an `:orgSlug`                                                                                    |
-| 5   | Mint, read or revoke a plan share link                                                                | Prohibition #1                                                                                                                          |
-| 6   | Take, override or release the pen (ADR-0028)                                                          | Prohibition #1                                                                                                                          |
-| 7   | Trigger a recalculation, import or export, or reach the CPM engine at all                             | Prohibition #1; and §3 — the engine is not imported                                                                                     |
-| 8   | Delete, restore, or hard-delete anything                                                              | No staff route mutates a domain row. Erasure is ADR-0085's, and is deliberately not built here                                          |
-| 9   | Alter, delete or truncate `audit_events`                                                              | **The database refuses it** — ADR-0072's `ENABLE ALWAYS` triggers apply to the application role                                         |
-| 10  | Change `STAFF_EMAILS`, or any environment variable, from inside the application                       | Not implemented, and named as deliberate: the allowlist's whole value is that changing it needs host access                             |
-| 11  | Read a mail recipient's full address, a password, a token or a hash                                   | Storage is domain-only (CQ-1); the audit redactor's `NEVER_RECORD` substring ban already covers `token`/`hash`                          |
-| 12  | Grant staff status to another account from inside the application                                     | Same as #10                                                                                                                             |
+| #   | Prohibition                                                                                           | How                                                                                                                                                                                                                                                   |
+| --- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Read any client, project, plan, activity, dependency, note, resource, baseline, calendar or share row | `StaffPrincipal` has no `memberships`/`can()`; member services take `Principal` → **compile error** (§4.3)                                                                                                                                            |
+| 2   | Read an `audit_events.changes` payload belonging to an organisation                                   | The staff audit read is filtered to `actor_type = 'STAFF'`; enforced in the repository and pinned by a test                                                                                                                                           |
+| 3   | Impersonate a user, mint a session, or read a session token                                           | No such endpoint exists and none is proposed. Structural test: no staff service imports the auth instance for anything but `getSession`                                                                                                               |
+| 4   | Create, join, leave or modify an organisation, membership, role or invitation                         | Prohibition #1; no staff route carries an `:orgSlug`                                                                                                                                                                                                  |
+| 5   | Mint, read or revoke a plan share link                                                                | Prohibition #1                                                                                                                                                                                                                                        |
+| 6   | Take, override or release the pen (ADR-0028)                                                          | Prohibition #1                                                                                                                                                                                                                                        |
+| 7   | Trigger a recalculation, import or export, or reach the CPM engine at all                             | Prohibition #1; and §3 — the engine is not imported                                                                                                                                                                                                   |
+| 8   | Delete, restore, or hard-delete anything                                                              | No staff route mutates a domain row. Erasure is ADR-0085's, and is deliberately not built here                                                                                                                                                        |
+| 9   | Alter, delete or truncate `audit_events`                                                              | **The database refuses it** — ADR-0072's `ENABLE ALWAYS` triggers apply to the application role                                                                                                                                                       |
+| 10  | Change `STAFF_EMAILS`, or any environment variable, from inside the application                       | Not implemented, and named as deliberate: the allowlist's whole value is that changing it needs host access                                                                                                                                           |
+| 11  | Read a password, a token or a hash                                                                    | The audit redactor's `NEVER_RECORD` substring ban already covers `token`/`hash`. **A mail recipient's address was on this list and CQ-1 removed it** — staff may read one on a mail-failure row. Nothing else about the message body is stored at all |
+| 12  | Grant staff status to another account from inside the application                                     | Same as #10                                                                                                                                                                                                                                           |
 
 ### 2.6 Auditing — the non-negotiable requirement
 
@@ -775,19 +800,40 @@ the transaction that added it — the constraint is stated in this schema's own 
 
 **2. `mail_events`** — ordinary, expirable telemetry about the transport.
 
-| Column             | Type        | Note                                                                                                                       |
-| ------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `id`               | uuid v7 PK  | House standard                                                                                                             |
-| `occurred_at`      | timestamptz | Event instant                                                                                                              |
-| `kind`             | text        | `invitation` \| `email_verification` \| `password_reset` \| `test` — mirrors `MailFailureKind` (`smtp-mail.service.ts:33`) |
-| `outcome`          | text        | `FAILED` \| `ABANDONED` (the `abandoned: true` case, `smtp-mail.service.ts:256-262`)                                       |
-| `recipient_domain` | text        | **The domain only** (CQ-1). Never the local part.                                                                          |
-| `error_class`      | text        | The error's constructor name / code — not the message, which can carry the address                                         |
-| `correlation_id`   | text        | Joins to the Pino line where the full context lives                                                                        |
+| Column           | Type        | Note                                                                                                                       |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | uuid v7 PK  | House standard                                                                                                             |
+| `occurred_at`    | timestamptz | Event instant                                                                                                              |
+| `kind`           | text        | `invitation` \| `email_verification` \| `password_reset` \| `test` — mirrors `MailFailureKind` (`smtp-mail.service.ts:33`) |
+| `outcome`        | text        | `FAILED` \| `ABANDONED` (the `abandoned: true` case, `smtp-mail.service.ts:256-262`)                                       |
+| `recipient`      | text        | **The full address** (CQ-1, overruling the domain-only proposal). See the note below.                                      |
+| `error_class`    | text        | The error's constructor name / code — **not** the message, which can carry an address in an uncontrolled shape             |
+| `correlation_id` | text        | Joins to the Pino line where the full context lives                                                                        |
 
 Index `(occurred_at DESC, id DESC)` for the exact cursor order. **Explicitly not the audit shape**,
-and the migration comment says so, because the reflex in this repository after ADR-0072 is to reach
-for it: this is telemetry about a machine, meant to be expired, not evidence about a person.
+and the migration comment says so — but the reason is now stronger than the original one. It was
+"this is telemetry about a machine, meant to be expired, not evidence about a person", which is the
+right instinct to resist the ADR-0072 reflex. After CQ-1 it is also the only thing that keeps the
+table **erasable**: the row now holds a customer's address, and `audit_events` refuses `UPDATE` and
+`DELETE` at the database level. Modelling this on the audit shape would have written customer
+addresses into a permanently unerasable table — the exact collision ADR-0085 D3 spent an entire
+decision avoiding for a single column.
+
+So three properties are requirements rather than defaults, and the migration comment states all
+three:
+
+1. **Ordinary table.** Updatable and deletable, so ADR-0085 D1's actor tombstone can reach it.
+2. **Retention: 12 months**, matching the `auth.*` `subject_label` period. One number for one class
+   of data — two would be a question nobody can answer later.
+3. **`error_class`, never `error.message`.** A transport error's message routinely embeds the
+   address it failed to reach, in whatever shape the relay chose. Storing the address in a **column**
+   is a decision; storing it again inside a free-text blob is a leak wearing the decision's clothes.
+
+**The alert POST is a separate question and keeps the stricter answer.** CQ-1 permits an address on a
+**staff screen** — inside the product, behind the staff guard, audited. The `MAIL_ALERT_URL` message
+goes to a **third-party chat service**, which is data egress, and this spec already rejects exactly
+that for CSP reports on exactly that ground (§4.10). The alert therefore names counts, window and
+kinds and **never an address**; the address lives in the row a staff member reads deliberately.
 
 **3. `csp_reports`** — as designed in `docs/specs/operational-self-service/` A1, which is sound and
 carried forward unchanged: deduplicated on `(effective_directive, blocked_uri, document_uri)` with

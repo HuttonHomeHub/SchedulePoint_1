@@ -1,7 +1,9 @@
 # Implementation Plan: SchedulePoint staff console
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
-- **Status:** Draft — awaiting approval
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **approved 2026-08-09**
+- **Status:** **Approved 2026-08-09** — in implementation. All four critical questions are answered
+  (spec §1 "Critical questions"); **CQ-1 was overruled** and the consequences are folded into M1-T1,
+  M3 and M5 below rather than left in the spec.
 - **Owner:** _(to be assigned on approval)_
 - **ADR:** **ADR-0086** must be written and Accepted before M2 merges (see M2-T5). Next free number
   verified: `docs/adr/` ends at `0085-privacy-operations.md`; `docs/adr/README.md:111` is the last row.
@@ -71,14 +73,19 @@ The first Playwright journey lands in M3 with the first user-facing surface (ADR
 ##### Task M1-T1 — `mail_events` table + migration (≈ one PR)
 
 - **Description:** a new ordinary (updatable, expirable) table recording each failed or abandoned
-  send: `kind`, `outcome`, `recipient_domain`, `error_class`, `correlation_id`, `occurred_at`.
+  send: `kind`, `outcome`, `recipient`, `error_class`, `correlation_id`, `occurred_at`.
 - **Complexity:** S
 - **Dependencies:** none
 - **Risks:** the reflex after ADR-0072 is to reach for the append-only audit shape → the migration
   comment states explicitly that this is telemetry about a machine, meant to be expired, not evidence
-  about a person. · Storing a full recipient address would put customer PII in a new table read by
-  staff → **domain only** (spec CQ-1); if CQ-1 is answered the other way, this task changes and
-  nothing downstream does.
+  about a person. **CQ-1 makes that comment load-bearing rather than explanatory:** the row now holds
+  a customer's full address (the domain-only proposal was overruled), and `audit_events` refuses
+  `UPDATE` and `DELETE` in the database — so the audit shape here would write customer addresses into
+  a permanently unerasable table, which is the collision ADR-0085 D3 spent a whole decision avoiding
+  for one column. · The address must reach the table **only** through the `recipient` column →
+  `error_class`, never `error.message`, because a transport error routinely embeds the address it
+  failed to reach and a free-text blob is a leak wearing a decision's clothes. · The row inherits
+  ADR-0085 D3's **12-month** retention, deliberately the same number rather than a second one.
 - **Testing:** `pnpm prisma:check-drift` clean; a repository unit test for the write; a migration
   review by **database-architect** before it is written (CLAUDE.md §20).
 - **Development steps:**
@@ -121,9 +128,11 @@ count }`, the `smtpEndpoint` rule (`mail-bootstrap.service.ts:14-24`).
   alerts on its **absence**. The one thing an application can honestly do about its own liveness.
 - **Complexity:** S
 - **Dependencies:** none
-- **Risks:** **blocked on CQ-4.** If nothing external will watch it, this ships a signal nobody
-  receives — which is verbatim the failure `docs/TECH_DEBT.md` #100 records ADR-0075 making, and the
-  task should be dropped rather than built. · A leaked interval keeps the process alive in tests →
+- **Risks:** **CQ-4 answered: build it, wire the receiver later.** The spec offered only "build it"
+  or "drop it"; the product owner took a third answer, which stays defensible only if the dormancy is
+  real — so **absent `HEARTBEAT_URL` must create no timer at all**, asserted by a unit test rather
+  than assumed, and `docs/TECH_DEBT.md` #100's operator half **stays open** until an external check
+  exists. Merging this task does not close it and M1-T4 must not claim otherwise. · A leaked interval keeps the process alive in tests →
   cleared in `OnApplicationShutdown`. · Multi-replica means N pings; harmless for a dead-man's-switch
   and stated so.
 - **Testing:** unit with fake timers (pings at the interval; a failure logs and does not throw; absent
@@ -485,15 +494,24 @@ without a shell.
   (`apps/web/src/config/env.ts:26`, a compile-time constant — so the **client** reports it, not the
   API, which cannot know it); effective flag state; allow-listed config; panel.
 
-##### Task M5-T2 — `GET /api/v1/staff/accounts` (counts only)
+##### Task M5-T2 — `GET /api/v1/staff/accounts` (counts, and the unverified list)
 
-- **Complexity:** S · **Dependencies:** M2-T4
-- **Risks:** **CQ-1.** The default is **counts per organisation, no addresses**. If CQ-1 is answered
-  the other way this task grows a list and a privacy review; nothing else in the plan changes. · An
-  unindexed count over `users` → measure at the installation's real size before adding an index (the
-  ADR-0053 M4 / ADR-0073 C1 pattern: measure, then decide).
-- **Testing:** unit; API e2e; a measured `EXPLAIN` recorded in the PR.
-- **Steps:** the count query; DTO; panel; audit row + census entry.
+- **Complexity:** M (was S — **CQ-1 grew this task**) · **Dependencies:** M2-T4
+- **Risks:** **CQ-1 answered: addresses are permitted.** The proposal was counts per organisation
+  with no addresses and it was overruled, so this route returns a **cursor-paginated list of
+  unverified accounts by address** as well as the counts. Three consequences follow and none is
+  optional: the read is **audited like every other staff route** (§2.6), and the audit row records
+  **that the panel was read**, never the addresses on it — writing them into `audit_events` would put
+  customer PII in the one table that refuses `DELETE`, re-creating through the back door exactly what
+  M1-T1's ordinary-table choice avoids. The list is **paginated, never unbounded**, because "every
+  unverified address in the installation" is a bulk export of customer PII if it arrives in one
+  response. And it is scoped to `email_verified = false` **in the repository**, not by a query
+  parameter — the M5-T3 rule, for the same reason. · An unindexed count and an unindexed keyset scan
+  over `users` → measure at the installation's real size before adding an index (the ADR-0053 M4 /
+  ADR-0073 C1 pattern: measure, then decide).
+- **Testing:** unit; API e2e (including: the audit row carries no address); a measured `EXPLAIN`
+  recorded in the PR.
+- **Steps:** the count query; the keyset list query; DTOs; panel; audit row + census entry.
 
 ##### Task M5-T3 — `GET /api/v1/staff/audit-events` (staff actions only)
 
@@ -599,23 +617,23 @@ Three of them are called out because this epic makes them sharper:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                    | Likelihood | Impact   | Mitigation                                                                                                                                                           |
-| ---------------------------------------------------------------------------------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A new principal type is a new trust boundary.** Get it wrong and it is a cross-tenant read.        | low        | **high** | The compile-error property (spec §4.3), a structural seam test, `security-reviewer` on M2 rather than M6, and an API e2e that proves the boundary against a real DB. |
-| The env-var allowlist has **no in-application revocation** — removal needs a container recreate.     | **high**   | medium   | Accepted (a settled input) and stated in the spec §2.8. Mitigated by the console being read-only plus one self-addressed write.                                      |
-| **No MFA / no step-up auth on the staff surface.** A stolen staff session yields installation reads. | low        | medium   | Named, not solved. First follow-up in spec §4.10. Bounded today by what the console can do (§2.5).                                                                   |
-| **No per-staff capability differentiation** — every allowlisted address gets everything.             | **high**   | low      | Acceptable at 1–3 staff. It becomes an ADR the day a support person needs Health but not Accounts.                                                                   |
-| **The heartbeat is a signal nobody receives** if nothing external watches it.                        | medium     | medium   | **CQ-4 gates M1-T3.** If the answer is "nothing will watch it", the task is dropped rather than built — that is verbatim the failure #100 records ADR-0075 making.   |
-| **The liveness half of the motivation is not delivered by this epic at all.**                        | certain    | medium   | Stated plainly in spec §1 with a table of what is and is not covered, rather than being implied away.                                                                |
-| Auditing staff **reads** could make `audit_events` grow unexpectedly.                                | low        | medium   | Estimated (1–3 staff × tens of requests/day) and **marked as an estimate**; the falsifier is named — a polling screen — and polling is forbidden by M3-T2's test.    |
-| `audit_events` **cannot be cleaned** if that estimate is wrong (ADR-0085).                           | low        | **high** | Which is why the estimate and its falsifier are both written down before the first producer ships — the ADR-0073 C3.0 pattern.                                       |
-| **The CSP report body shapes are assumed, not observed.**                                            | medium     | low      | Explicitly carried forward as unverified; M4-T2 establishes it by observation before claiming coverage.                                                              |
-| **`apps/web/e2e-csp/` breaks on the new directives.**                                                | medium     | low      | M4-T3 owns it; that suite parses the real policy, which is what makes it valuable and what makes it sensitive.                                                       |
-| A dedicated staff account is pushed into `/onboarding` and invited to create an organisation.        | **high**   | medium   | Found by reading `router.tsx:152-164` against `auth-context.service.ts:39-59`; handled in M3-T1 rather than discovered after the recommendation ships.               |
-| **The enum label needs two migrations** and a single one fails at deploy, not at review.             | medium     | medium   | Called out in M2-T4 with the precedent (ADR-0053 M3) and confirmed with **database-architect**.                                                                      |
-| Scope creep toward customer data ("just show the plan").                                             | medium     | **high** | The prohibition list is a spec section (§2.5), not a preamble, and eleven of its twelve rows are structural.                                                         |
-| **The product owner asked for the canvas; declining it may read as scope reduction.**                | medium     | low      | It is the largest simplification in the design and the reason the boundary is a compile error. Stated in spec §4.10 as a decision with its reasoning.                |
-| This plan's own citations go stale.                                                                  | medium     | low      | Every one was re-verified for this draft (spec §0). ADR-0080 found two of its own plan's citations stale on a spot-check of five — so re-verify before relying.      |
+| Risk / assumption                                                                                    | Likelihood | Impact   | Mitigation                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------- | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A new principal type is a new trust boundary.** Get it wrong and it is a cross-tenant read.        | low        | **high** | The compile-error property (spec §4.3), a structural seam test, `security-reviewer` on M2 rather than M6, and an API e2e that proves the boundary against a real DB.                                                                                                                            |
+| The env-var allowlist has **no in-application revocation** — removal needs a container recreate.     | **high**   | medium   | Accepted (a settled input) and stated in the spec §2.8. Mitigated by the console being read-only plus one self-addressed write.                                                                                                                                                                 |
+| **No MFA / no step-up auth on the staff surface.** A stolen staff session yields installation reads. | low        | medium   | Named, not solved. First follow-up in spec §4.10. Bounded today by what the console can do (§2.5).                                                                                                                                                                                              |
+| **No per-staff capability differentiation** — every allowlisted address gets everything.             | **high**   | low      | Acceptable at 1–3 staff. It becomes an ADR the day a support person needs Health but not Accounts.                                                                                                                                                                                              |
+| **The heartbeat is a signal nobody receives** if nothing external watches it.                        | medium     | medium   | **Accepted, knowingly.** CQ-4 was answered "build it, wire it later", so this risk is live rather than mitigated. It is bounded by making dormancy structural (absent config ⇒ no timer, unit-tested) and by keeping `docs/TECH_DEBT.md` #100's operator half **open** until a receiver exists. |
+| **The liveness half of the motivation is not delivered by this epic at all.**                        | certain    | medium   | Stated plainly in spec §1 with a table of what is and is not covered, rather than being implied away.                                                                                                                                                                                           |
+| Auditing staff **reads** could make `audit_events` grow unexpectedly.                                | low        | medium   | Estimated (1–3 staff × tens of requests/day) and **marked as an estimate**; the falsifier is named — a polling screen — and polling is forbidden by M3-T2's test.                                                                                                                               |
+| `audit_events` **cannot be cleaned** if that estimate is wrong (ADR-0085).                           | low        | **high** | Which is why the estimate and its falsifier are both written down before the first producer ships — the ADR-0073 C3.0 pattern.                                                                                                                                                                  |
+| **The CSP report body shapes are assumed, not observed.**                                            | medium     | low      | Explicitly carried forward as unverified; M4-T2 establishes it by observation before claiming coverage.                                                                                                                                                                                         |
+| **`apps/web/e2e-csp/` breaks on the new directives.**                                                | medium     | low      | M4-T3 owns it; that suite parses the real policy, which is what makes it valuable and what makes it sensitive.                                                                                                                                                                                  |
+| A dedicated staff account is pushed into `/onboarding` and invited to create an organisation.        | **high**   | medium   | Found by reading `router.tsx:152-164` against `auth-context.service.ts:39-59`; handled in M3-T1 rather than discovered after the recommendation ships.                                                                                                                                          |
+| **The enum label needs two migrations** and a single one fails at deploy, not at review.             | medium     | medium   | Called out in M2-T4 with the precedent (ADR-0053 M3) and confirmed with **database-architect**.                                                                                                                                                                                                 |
+| Scope creep toward customer data ("just show the plan").                                             | medium     | **high** | The prohibition list is a spec section (§2.5), not a preamble, and eleven of its twelve rows are structural.                                                                                                                                                                                    |
+| **The product owner asked for the canvas; declining it may read as scope reduction.**                | medium     | low      | It is the largest simplification in the design and the reason the boundary is a compile error. Stated in spec §4.10 as a decision with its reasoning.                                                                                                                                           |
+| This plan's own citations go stale.                                                                  | medium     | low      | Every one was re-verified for this draft (spec §0). ADR-0080 found two of its own plan's citations stale on a spot-check of five — so re-verify before relying.                                                                                                                                 |
 
 ## What this plan does not claim
 
