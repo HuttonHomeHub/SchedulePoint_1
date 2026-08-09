@@ -1,5 +1,41 @@
 # @repo/web
 
+## 0.79.0
+
+### Minor Changes
+
+- [#266](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/266) [`3cf27de`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3cf27de4ea1fe34a4dbcd56038c03c3b8fa53fb3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A gated form field is read-only, not disabled (ADR-0083). A field's loss on being disabled is not
+  operability but **readability** — the value leaves the tab order, cannot be copied, and was exempt
+  from the contrast floor — so "you may not edit this" was implemented as "you may not read it
+  either" at 39 call sites. Text and textarea take `readOnly`; a checkbox takes `aria-disabled` plus
+  a click guard; a native `<select>` keeps the attribute as a named exception; `Combobox` gains a
+  `readOnly` mode. The reason renders once per group and every field points at it.
+
+### Patch Changes
+
+- [#266](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/266) [`3cf27de`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3cf27de4ea1fe34a4dbcd56038c03c3b8fa53fb3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The canvas link tool no longer loses its quiescence, and its confirmation offers Undo.
+
+  The workspace layout that actually ships was passing three fewer props to the canvas than the
+  layout beside it. The recalculation hold — built so bars cannot move between the two clicks of a
+  link pick — was inert, which is the defect that work was commissioned to fix. The link
+  confirmation's Undo button had never rendered at all.
+
+  Also: `/sign-in`'s `?redirect=` is now same-origin by shape, and the guest share view no longer
+  scrolls sideways on a 320px phone (WCAG 1.4.10).
+
+- [#266](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/266) [`3cf27de`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3cf27de4ea1fe34a4dbcd56038c03c3b8fa53fb3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A shut control now names a button you actually have.
+
+  When someone else holds the plan's edit lock, shaded actions said "Start editing to change this
+  activity" — but that reader's screen shows **Request control** and no Start-editing button at all.
+  A Viewer got the same sentence, pointing at a button their role will never produce. The refusal now
+  names the holder and the control that would help, says "your role" when the role is what is missing,
+  and still says "Start editing" when the lock is simply free.
+
+  Applied across all eleven sites that had written their own copy of it — the TSLD toolbar, the canvas
+  selection bar and the activity editor — from one shared derivation, so they cannot drift. **Edit
+  plan** in the header menu is now shaded with its reason instead of vanishing. Closes
+  `docs/TECH_DEBT.md` [#114](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/114), [#115](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/115) and [#116](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/116).4.
+
 ## 0.78.0
 
 ### Minor Changes
