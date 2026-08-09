@@ -1,0 +1,12 @@
+-- The second half of the STAFF actor type (ADR-0086 D5) — see the sibling migration
+-- `20260809140000_audit_actor_staff` for why this is split.
+--
+-- Nothing to do at the schema level: `audit_events.action` is TEXT with a format CHECK rather than
+-- an enum (ADR-0072), precisely so a new action vocabulary costs no migration at all. The staff
+-- actions (`staff.session_started`, `staff.panel_read`, …) are added to `@repo/types`' AUDIT_ACTIONS
+-- and are accepted by `ck_audit_events_action_format` on the day they are written.
+--
+-- This migration exists so the transaction boundary above is explicit in the migration history
+-- rather than implied by a gap, and so a reader who finds only one of the pair knows one is missing.
+-- It is deliberately a no-op with a comment rather than an absent file.
+SELECT 1;

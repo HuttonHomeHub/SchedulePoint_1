@@ -153,6 +153,21 @@ export const envSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
+    /**
+     * Comma-separated addresses that may reach the staff console (ADR-0086 D3). Empty = **nobody**,
+     * which is the default and the safe direction: an unset variable cannot accidentally grant.
+     *
+     * Provisioning is deliberately out-of-band. Changing this needs host access and a container
+     * recreate — the **same bar as reading the database**, which is the point: it creates no new
+     * privilege path, because anyone who could edit it could already do everything the console
+     * offers, unaudited, over `psql`.
+     *
+     * Its weaknesses are real and recorded rather than discovered later: no revocation without a
+     * recreate, no per-staff capability split, and a list keyed on an address — which is why the
+     * guard also requires `emailVerified` unconditionally. Without that, an allowlisted address
+     * that has not yet signed up is squattable, and whoever registers it first becomes staff.
+     */
+    STAFF_EMAILS: z.string().default(''),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),

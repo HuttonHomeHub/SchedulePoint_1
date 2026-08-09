@@ -2595,6 +2595,11 @@ enum AuditActorType {
   GUEST
   SYSTEM
   ANONYMOUS
+  /// SchedulePoint staff operating the installation (ADR-0086). Structurally distinct from USER:
+  /// a staff principal holds no membership and no permission, so an act recorded under this type
+  /// can never have touched customer data. Added across TWO migrations, because Postgres cannot
+  /// use a new enum label in the transaction that added it.
+  STAFF
 
   @@map("audit_actor_type")
 }

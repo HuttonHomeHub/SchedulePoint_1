@@ -1,0 +1,11 @@
+-- Add the STAFF audit actor type (ADR-0086 D5).
+--
+-- **This migration adds the label and NOTHING ELSE, and that is required rather than tidy.**
+-- Postgres cannot use a new enum label in the same transaction that added it, and Prisma wraps each
+-- migration in one — so a migration that added `STAFF` and then referenced it would fail with
+-- "unsafe use of new value of enum type". The ADR-0053 M3 precedent, where the same constraint
+-- split the resource `GROUP` kind across two migrations for the same reason.
+--
+-- The sibling `20260809140100_staff_audit_actions` is the second half. If you are reading this
+-- because you are adding an enum label somewhere else: yes, it needs two.
+ALTER TYPE "audit_actor_type" ADD VALUE IF NOT EXISTS 'STAFF';

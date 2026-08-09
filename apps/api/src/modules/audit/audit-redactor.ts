@@ -156,6 +156,13 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
     'resourceCount',
     'findingCount',
   ],
+  // — Staff (ADR-0086). Deliberately EMPTY, and that is the decision rather than an omission.
+  //   A staff row records THAT a staff member reached a surface, never what was on it: the console
+  //   reads customer addresses (CQ-1), and recording those here would put customer PII into the one
+  //   table that refuses DELETE — recreating through the back door exactly what ADR-0085 D3 spent a
+  //   decision avoiding, and what M1's deliberately-ordinary `mail_events` exists to keep erasable.
+  //   The actor, the action and the instant are the evidence; the contents are not.
+  'staff.session_started': [],
 };
 
 /**

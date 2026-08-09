@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+
+import { normalizeEmail } from '../common/auth/normalize-email';
 import { ConfigService } from '@nestjs/config';
 
 import type { Env } from './env.validation';
@@ -146,6 +148,28 @@ export class AppConfigService {
   /** Heartbeat period in milliseconds. */
   get heartbeatIntervalMs(): number {
     return this.config.get('HEARTBEAT_INTERVAL_MINUTES', { infer: true }) * 60_000;
+  }
+
+  /**
+   * Addresses permitted to reach the staff console, normalised and de-duplicated (ADR-0086 D3).
+   * Empty by default, which is the safe direction — an unset variable grants nothing.
+   *
+   * Entries are **trimmed** because the separator is ours: `a@x.com, b@x.com` is how a person
+   * writes a list, and the whitespace is an artefact of our own format. The address itself is then
+   * normalised with the shared `normalizeEmail`, which is `toLowerCase()` and nothing else. That
+   * asymmetry is deliberate and easy to get backwards: trim OUR list's entries, never the session
+   * value the guard compares against them.
+   */
+  get staffEmails(): readonly string[] {
+    return [
+      ...new Set(
+        this.config
+          .get('STAFF_EMAILS', { infer: true })
+          .split(',')
+          .map((entry) => normalizeEmail(entry.trim()))
+          .filter(Boolean),
+      ),
+    ];
   }
 
   get rateLimit(): { ttlMs: number; limit: number } {

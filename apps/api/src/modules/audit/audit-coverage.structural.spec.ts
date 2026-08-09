@@ -49,6 +49,12 @@ import { AppModule } from '../../app.module';
 
 /** Every route that records at least one event, and which events it records. */
 const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
+  // The staff console (ADR-0086 D5). A READ, and audited — which inverts the ordinary rule
+  // deliberately: on this surface the read IS the privileged act, so applying the usual
+  // "reads earn nothing" test would audit the entire console at nothing at all. Pinned by the
+  // seventh assertion below, which derives from the path rather than from this list, so a staff
+  // route added later is covered the day it is written.
+  'GET /api/v1/staff/me': ['staff.session_started'],
   'DELETE /api/v1/organizations/:orgSlug/clients/:clientId': ['client.deleted'],
   'DELETE /api/v1/organizations/:orgSlug/invitations/:invitationId': ['invitation.revoked'],
   'DELETE /api/v1/organizations/:orgSlug/members/:memberId': ['member.removed'],
@@ -442,6 +448,23 @@ describe('audit coverage census (ADR-0072)', () => {
     expect(
       AUDITED_ROUTES['POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit'],
     ).toEqual(['interchange.imported']);
+  });
+
+  it('audits EVERY staff route, including reads', () => {
+    // The seventh positive assertion (ADR-0086 D5), and the only one that inverts the durability
+    // test rather than applying it. Normally a read earns no row; here the read is the privileged
+    // act, so the ordinary rule would leave the most privileged surface in the product recording
+    // nothing — which is the argument the whole epic rests on.
+    //
+    // Derived from the PATH, not from a list, so it covers a staff route somebody adds in M3/M4/M5
+    // on the day they write it rather than when they remember this file exists. The brief assumed
+    // the census FORBIDS auditing a read; it does not — all six assertions above force a route TO
+    // BE audited and none forbids it, which is what makes this buildable as a gate at all.
+    const staffRoutes = [...declared].filter((route) => route.includes(' /api/v1/staff/'));
+    expect(staffRoutes.length, 'the staff console must have at least one route').toBeGreaterThan(0);
+    for (const route of staffRoutes) {
+      expect(AUDITED_ROUTES[route], `${route} must audit — every staff route does`).toBeDefined();
+    }
   });
 
   it('leaves no route parked as "coverage decided later"', () => {

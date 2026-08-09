@@ -118,6 +118,12 @@ services:
       # Unset = no timer at all. Treat the URL as a credential; it is never logged.
       HEARTBEAT_URL: ${HEARTBEAT_URL:-}
       HEARTBEAT_INTERVAL_MINUTES: ${HEARTBEAT_INTERVAL_MINUTES:-5}
+      # SchedulePoint staff console (ADR-0086). Comma-separated addresses that may reach
+      # /api/v1/staff/*. Empty = nobody, which is the default and the safe direction.
+      # Changing it needs host access and a container recreate — deliberately the same bar
+      # as reading the database, so it creates no new privilege path. An allowlisted address
+      # must ALSO have a verified email, unconditionally, or it would be squattable.
+      STAFF_EMAILS: ${STAFF_EMAILS:-}
       PLAN_EDIT_LOCK_ENFORCED: ${PLAN_EDIT_LOCK_ENFORCED:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Declared in the env schema and .env.example, so they must be listed here too —
