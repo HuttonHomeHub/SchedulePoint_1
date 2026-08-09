@@ -654,6 +654,63 @@ Both compose files now set `logging: json-file, max-size 10m, max-file 3` on eve
 default has **no rotation**, so a steadily-logging container fills the host disk until something
 else fails first — and the API's structured Pino output is exactly that.
 
+### The API can now do this itself — `MAIL_ALERT_URL`
+
+Staff console M1. The cron above greps `docker logs` from outside the container; the API can send
+the same signal from inside it, which needs no Docker socket, no container name and no host script:
+
+```yaml
+api:
+  environment:
+    MAIL_ALERT_URL: https://ntfy.sh/your-topic
+    MAIL_ALERT_WINDOW_MINUTES: 10
+```
+
+Recreate the API container and it takes effect. **Unset, behaviour is exactly what it was** — the
+failure is logged and nothing else — which is the rollback: clear the variable and recreate.
+
+The message names the failure count, the window and which kinds of message failed. It **never names
+a recipient**, deliberately: the alert leaves for a third-party chat service, and the address lives
+in `mail_events` where reading it is an audited act behind the staff guard. The first failure alerts
+immediately; the window bounds the **repeats**, so a broken relay produces one alert and one summary
+rather than one per send.
+
+The URL is validated at boot — a typo refuses the boot rather than producing a channel that silently
+never delivers. Any endpoint accepting a JSON POST works; the body carries `text`, which Slack and
+Mattermost render directly.
+
+**This replaces the cron's mail-failure half, not the cron.** Keep the script running until you have
+watched the new path alert on the real host at least once — see "the liveness half" below for what
+the script still covers that this cannot.
+
+### The liveness half — `HEARTBEAT_URL`
+
+**An application cannot alert that it is down.** Everything above is a signal the API sends when
+something is wrong, and the API sends nothing when the API is what is wrong. The cron does not escape
+this either: it runs on the host it is watching, so a host outage silences the watcher and the thing
+watched together.
+
+The only construction that survives the failure it reports is an inverted one — the API pings
+outward on a schedule and an external service alerts on the **absence** of pings:
+
+```yaml
+api:
+  environment:
+    HEARTBEAT_URL: https://hc-ping.com/<your-check-uuid>
+    HEARTBEAT_INTERVAL_MINUTES: 5
+```
+
+Create the check first (healthchecks.io has a free tier; any dead-man's-switch works), set its
+**period a little longer than the interval** so an ordinary slow ping is not an alarm, and paste its
+URL in. The API pings once at boot and then on the interval; unset, **no timer is created at all**.
+
+Treat that URL as a credential: anyone holding it can suppress the alarm. It is never logged.
+
+> **Nothing is watching this yet.** It ships built and dormant by choice (2026-08-09) so wiring a
+> receiver is a compose edit rather than a release. Until you create the check,
+> `docs/TECH_DEBT.md` #100's operator half stays **open** — the code existing does not close it,
+> because a signal nobody receives is the failure that entry records in the first place.
+
 ## Pre-release checklist
 
 - [ ] CI green on `main` (lint, typecheck, unit, e2e)

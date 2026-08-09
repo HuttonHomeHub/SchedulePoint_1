@@ -106,6 +106,18 @@ services:
       # is refused at boot: the verify link would exist only in the API's log.
       MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Operational alerting (staff console M1). Unset = today's behaviour exactly: a mail
+      # failure is logged and nothing else. Set MAIL_ALERT_URL to any endpoint accepting a
+      # JSON POST and a broken relay produces a message instead of a silence. The body names
+      # counts, the window and the message kinds — never a recipient, because it leaves for a
+      # third party. See docs/DEPLOYMENT.md "Alerting on mail failures".
+      MAIL_ALERT_URL: ${MAIL_ALERT_URL:-}
+      MAIL_ALERT_WINDOW_MINUTES: ${MAIL_ALERT_WINDOW_MINUTES:-10}
+      # Dead-man's-switch: the API pings out on an interval so an external check can alert on
+      # the ABSENCE of pings — the only signal that survives the API being what is broken.
+      # Unset = no timer at all. Treat the URL as a credential; it is never logged.
+      HEARTBEAT_URL: ${HEARTBEAT_URL:-}
+      HEARTBEAT_INTERVAL_MINUTES: ${HEARTBEAT_INTERVAL_MINUTES:-5}
       PLAN_EDIT_LOCK_ENFORCED: ${PLAN_EDIT_LOCK_ENFORCED:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Declared in the env schema and .env.example, so they must be listed here too —

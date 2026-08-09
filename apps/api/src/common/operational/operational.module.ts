@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 
+import { HeartbeatService } from './heartbeat.service';
 import { OperationalAlertService } from './operational-alert.service';
 
 /**
@@ -18,7 +19,10 @@ import { OperationalAlertService } from './operational-alert.service';
  */
 @Global()
 @Module({
-  providers: [OperationalAlertService],
+  providers: [OperationalAlertService, HeartbeatService],
+  // `HeartbeatService` is deliberately NOT exported: nothing injects it, it exists for its
+  // lifecycle hooks, and exporting it would invite a caller that then has to reason about whether
+  // the timer is running — the `MailBootstrapService` precedent.
   exports: [OperationalAlertService],
 })
 export class OperationalModule {}
