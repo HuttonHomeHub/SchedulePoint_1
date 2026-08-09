@@ -189,3 +189,55 @@ describe('deriveActivityEditorGating — every blocked path explains itself', ()
     }
   });
 });
+
+describe('the pen refusal names a control the reader actually has (#115)', () => {
+  /**
+   * The defect this closes was found by the ADR-0082 journey step, which asserts — within a few
+   * lines of each other, on one page — that a peer-locked reader sees a **Request control** button
+   * and that the row menu explains the refusal with "Start editing to change this activity."
+   * There is no Start-editing button on that screen. The app named a control they do not have and
+   * stayed silent about the one that would help.
+   *
+   * Both branches are asserted, because the previous sentence was not wrong — it was wrong *in one
+   * state*, and a fix that only checked the peer case could regress the common one. ADR-0060
+   * records an earlier draft that did exactly that in reverse: it invented "Someone else is editing
+   * this plan…", which was false whenever nobody held the pen.
+   */
+  const base = {
+    penManaged: true,
+    holdsPen: false,
+    canWrite: true,
+    canProgress: true,
+    canReadCost: true,
+  };
+
+  it('says "Start editing" when the pen is free', () => {
+    const gating = deriveActivityEditorGating({ ...base, holder: null });
+    expect(gating.general.reason).toBe('Start editing to change this activity.');
+  });
+
+  it('names the holder and Request control when a peer holds the pen', () => {
+    const gating = deriveActivityEditorGating({
+      ...base,
+      holder: { id: 'u2', name: 'Dana Okafor', email: 'dana@example.com' },
+    });
+    // **First name only** — `lockCopy.heldByOther` renders `firstName(holder)`, and reusing that
+    // helper rather than formatting a name here is the point: the pen banner and this refusal are
+    // describing one state, so they must not address the same person two ways. My first assertion
+    // expected the full name; the code was right and the test was wrong.
+    expect(gating.general.reason).toBe(
+      'Dana is editing this plan. Request control to change this activity.',
+    );
+    // It must NOT tell a peer-locked reader to press a button their screen does not show.
+    expect(gating.general.reason).not.toMatch(/Start editing/);
+  });
+
+  it('leaves the role refusal alone — it is not about the pen', () => {
+    const gating = deriveActivityEditorGating({
+      ...base,
+      canWrite: false,
+      holder: { id: 'u2', name: 'Dana Okafor', email: 'dana@example.com' },
+    });
+    expect(gating.general.reason).toBe('Your role cannot edit activity details.');
+  });
+});

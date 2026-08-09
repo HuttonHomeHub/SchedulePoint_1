@@ -17,3 +17,4 @@ export {
 } from './api/use-plan-edit-lock';
 export { classifyLockError, isLockError } from './lib/lock-error';
 export { derivePlanGating, type PlanGating, type PlanGatingInput } from './lib/plan-gating';
+export { penReason } from './lib/pen-reason';

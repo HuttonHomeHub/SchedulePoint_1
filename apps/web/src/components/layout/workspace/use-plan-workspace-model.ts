@@ -421,8 +421,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // Client-derived from the role, because the DTO returns `null` for both "unset" and "not
         // permitted" (TECH_DEBT #62). Sound while `cost:read` and `activity:update` share a role set.
         canReadCost: canWrite,
+        // Who holds the pen, when it is not this reader (`docs/TECH_DEBT.md` #115). Without it the
+        // refusal says "Start editing to …" to somebody whose screen shows **Request control** and
+        // no Start-editing button — naming a control they do not have. The pen layer already knows
+        // (`lock-view.ts` reads the same `status.holder`), so this is threading, not new data.
+        holder: pen.status?.holder ?? null,
       }),
-    [pen.penManaged, pen.holdsPen, canWrite, canProgress],
+    [pen.penManaged, pen.holdsPen, canWrite, canProgress, pen.status?.holder],
   );
 
   // Per-activity note counts for the activities-table row badge (ADR-0046), route-composed like
