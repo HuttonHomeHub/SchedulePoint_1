@@ -543,6 +543,43 @@ the reason it is label-scoped and opt-in (ADR-0047).
 version, not `latest`) is not moved by Watchtower — pin to roll back or to hold a
 host on a known version.
 
+## Turning email verification on
+
+`docs/TECH_DEBT.md` #16, ADR-0074 M5-T6/T7. The code has been ready since 2026-08-05; what has been
+missing is the count and the decision it informs.
+
+**Order matters, and this is the one irreversible step in the programme.** The backfill writes
+`email_verified = true` and cannot be undone — nothing records which rows were already true, so
+running the inverse would un-verify accounts that earned it honestly. Do the CSP flip first
+(above): it rehearses the same edit-a-variable-and-recreate loop where a mistake costs seconds.
+
+1. **Count.** `docker compose exec -T db psql -U app -d app -v ON_ERROR_STOP=1 -f
+scripts/verification-backfill.sql`. It only SELECTs; the UPDATE is commented out.
+
+   It reports **three** figures rather than one, and the third is the one to read carefully:
+
+   - total unverified accounts — if this is small, the strict option (nobody backfilled, everyone
+     re-verifies) costs almost nothing and is cleaner;
+   - of those, how many already hold an organisation membership;
+   - **of the remainder, how many hold a _pending invitation_.** This is the risk set. The product
+     owner chose to backfill everyone, and the members-only predicate existed to exclude exactly
+     this case: an address that registered an account and has an invitation waiting but no
+     membership yet. Backfilling it lets that account accept without ever proving mailbox
+     ownership — the squatting path enforcement exists to close. It is very likely **zero**, in
+     which case both options were identical; if it is not, the query names the rows, and the
+     decision should be taken on real addresses.
+
+2. **Backfill.** Uncomment the `UPDATE` in that file and re-run.
+3. **Flip.** Set `AUTH_REQUIRE_EMAIL_VERIFICATION=true` and recreate the API.
+4. **Smoke it.** Sign up a throwaway address, confirm the email arrives, follow the link, confirm
+   it lands on the app rather than the "still waiting" screen — that last step is the ADR-0074 M5
+   defect, where a verification that had succeeded rendered the pending state because the router
+   JSON-parsed `?verified=1` into a number.
+
+Note what the flip arms: `invitations.service.ts` begins refusing unverified invitees, and the
+verification link is a bare acting GET, so a link-prefetching mail scanner can consume it
+(`docs/TECH_DEBT.md` #88 — narrowed, and the invitation path is already safe behind a real button).
+
 ## Turning the CSP from report-only to enforce
 
 `docs/TECH_DEBT.md` #8. The policy itself is finished and gated: `apps/web/e2e-csp/` serves the
