@@ -53,11 +53,25 @@ There is deliberately **no cache, queue, or object store in the running system**
 
 - Layered: **controllers** (HTTP + validation) → **services** (business logic)
   → **repositories** → **Prisma** (persistence). One Nest module per feature;
-  20 feature modules under `src/modules/`.
+  22 feature modules under `src/modules/` (this said 20 until the 2026-08-09
+  pass — `pnpm check:counts` gates the same figure in `CLAUDE.md` and
+  `README.md` and has never covered this file, which is why it drifted here and
+  nowhere else).
+- **Two of those modules are not domain features and are worth knowing apart.**
+  `staff/` is the operations console (ADR-0086): it resolves a `StaffPrincipal`,
+  which carries no memberships and no permissions, so passing one to a member
+  service is a compile error rather than a rule — that is the whole boundary,
+  and a structural suite asserts nothing under it imports an org-scoped module
+  or reads a customer entity through the global `PrismaService`. `csp/` is an
+  unauthenticated sink for browser Content-Security-Policy violation reports; it
+  is the only public write path in the API and it answers 204 whatever happens,
+  because a report endpoint that returns errors tells a prober their probe was
+  interesting and there is no caller who could act on the answer.
 - Cross-cutting concerns live in `src/common/`: `auth/` (principal, permissions,
-  guest principal), `guards/`, `filters/`, `interceptors/`, `db/` (advisory-lock
-  helpers), `hierarchy/` (the soft-delete cascade/restore lifecycle service),
-  `dto/`, `query/`, `tokens/`, `validation/`, `mail/`.
+  guest principal, staff principal), `guards/`, `filters/`, `interceptors/`,
+  `db/` (advisory-lock helpers), `hierarchy/` (the soft-delete cascade/restore
+  lifecycle service), `operational/` (the mail-failure alert window and the
+  outward heartbeat), `dto/`, `query/`, `tokens/`, `validation/`, `mail/`.
 - Exposes an OpenAPI document via `@nestjs/swagger` (see [API.md](API.md)).
 
 ### The scheduling engine — `apps/api/src/modules/schedule/engine/`

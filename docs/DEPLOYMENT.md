@@ -629,6 +629,13 @@ is taken" on an unauthenticated endpoint. The application emits one alertable li
 silently unrecoverable accounts: every sign-up, invitation and password reset failing, for every
 organisation, with the first signal being someone who cannot get in telling somebody.
 
+> **Read the two subsections below before setting any of this up.** `scripts/watch-mail-failures.sh`
+> is **superseded** (2026-08-09) by `MAIL_ALERT_URL` and `HEARTBEAT_URL`, which do the same two jobs
+> from inside the container. It is kept in-tree for one release as the fallback, and this section is
+> kept because an operator running it today needs it to keep making sense. **If you are setting this
+> up for the first time, skip to "The API can now do this itself" and do not install the cron at
+> all.** What follows describes the path being retired.
+
 `scripts/watch-mail-failures.sh` closes that. Run it from cron on the host:
 
 ```cron
@@ -681,7 +688,8 @@ Mattermost render directly.
 
 **This replaces the cron's mail-failure half, not the cron.** Keep the script running until you have
 watched the new path alert on the real host at least once — see "the liveness half" below for what
-the script still covers that this cannot.
+the script still covers that this cannot, and "retiring the cron" below for how to get that
+observation without waiting for a genuine outage.
 
 ### The liveness half — `HEARTBEAT_URL`
 
@@ -710,6 +718,37 @@ Treat that URL as a credential: anyone holding it can suppress the alarm. It is 
 > receiver is a compose edit rather than a release. Until you create the check,
 > `docs/TECH_DEBT.md` #100's operator half stays **open** — the code existing does not close it,
 > because a signal nobody receives is the failure that entry records in the first place.
+
+### Retiring the cron
+
+**Remove the cron line only after you have watched the new path alert on this host.** Not after the
+release notes say it shipped, and not after the tests pass — the code has passed unit tests, an API
+end-to-end suite and a real migration, and none of that is evidence that _this_ host's outbound
+network lets _this_ container reach _your_ receiver. That is the one thing the cron was covering and
+the one thing no test in the repository can establish.
+
+The trap is the word "watched". A relay does not break to a schedule, so waiting for a genuine
+failure means the cron is retired either never or on a day nobody is paying attention. **Cause one
+instead**, which takes about two minutes and is fully reversible:
+
+1. Set `MAIL_ALERT_URL` and `HEARTBEAT_URL` as above and recreate the API container. Confirm the
+   heartbeat first — the dead-man's-switch check should go green within one interval. That proves
+   outbound POSTs leave this container at all, which is the shared prerequisite; if it fails, the
+   mail alert was never going to work either and you have learned it without breaking mail.
+2. Point `MAIL_SMTP_URL` at a port with nothing on it — `smtp://127.0.0.1:1` is enough — and
+   recreate. Sends now fail at connect, immediately, with no message going anywhere by accident.
+3. Trigger one send: request a password reset for a throwaway address on your own installation.
+4. Watch your receiver. You should get one alert naming the count, the window and the kind of
+   message. Then open `/staff` and confirm the failure is in the Mail panel with an error class —
+   that is the durable half, and it proves the row was written as well as the alert sent.
+5. Restore the real `MAIL_SMTP_URL`, recreate, and send one more reset to confirm mail works again.
+   **Do this before step 6** — a half-finished retirement that leaves mail pointed at nothing is
+   strictly worse than the cron you were removing.
+6. Now remove the cron line, and delete `scripts/watch-mail-failures.sh` from the host.
+
+If step 4 produces nothing, the cron stays. The script is not elegant, but it is the alerting you
+actually have until something replaces it, and removing it on the strength of a merged pull request
+is how an installation ends up with no alerting at all and no one aware of it.
 
 ## The staff console
 
