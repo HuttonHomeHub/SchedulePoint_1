@@ -31,7 +31,7 @@ export interface StaffHealth {
 export function useStaffHealth(): UseQueryResult<StaffHealth> {
   return useQuery({
     queryKey: ['staff', 'health'],
-    queryFn: () => apiFetch<StaffHealth>('/api/v1/staff/health'),
+    queryFn: () => apiFetch<StaffHealth>('/staff/health'),
     refetchOnWindowFocus: false,
     retry: false,
   });

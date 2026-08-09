@@ -453,6 +453,17 @@ jobs:
       - name: Web end-to-end tests (email verification enforced)
         run: pnpm --filter @repo/web test:e2e:account-verify
 
+      # ADR-0086, staff-console M3. **Not a flag-on suite** — every sibling pins a `VITE_` constant
+      # and this one pins a SERVER variable, `STAFF_EMAILS`, because staff-ness is a server fact the
+      # bundle cannot see. It lands with M3 because M3 is the first milestone with a user-facing
+      # entry point (ADR-0081 §2), and this epic had already paid for that rule: M2 passed 1,589
+      # unit tests and could not serve one request. This suite earned its keep on its first green
+      # run too — it caught `apiFetch('/api/v1/staff/me')` against an `API_BASE_URL` that is already
+      # `/api/v1`, which the component tests could not see because they mock `apiFetch` and assert
+      # back whatever path the code passed them.
+      - name: Web end-to-end tests (staff console)
+        run: pnpm --filter @repo/web test:e2e:staff
+
       # The public screens, **measured** rather than reasoned about (ADR-0077 M6-T1): ten
       # URL-reachable states × six viewports × three themes, plus a real invitation carrying a
       # 100-character organisation name and a fulfilled 429. It earned its place before it was ever

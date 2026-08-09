@@ -7,6 +7,15 @@ import { StaffConsoleScreen } from './staff';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
 /**
+ * A note on the paths below, because this suite got it wrong and could not tell.
+ *
+ * `apiFetch` prefixes `API_BASE_URL`, which is already `/api/v1` — so a caller passes `/staff/me`,
+ * not `/api/v1/staff/me`. The first version of this feature passed the full path, producing
+ * `/api/v1/api/v1/staff/me`, and **these tests agreed with it**: they mock `apiFetch` and branch on
+ * whatever string the code under test happens to pass, so a wrong path is self-consistent and
+ * invisible here. Only the Playwright journey, which lets a real request reach a real API, could
+ * see it — which is the argument for that journey landing with this milestone.
+ *
  * **The gate is the test.** ADR-0086's whole surface argument is that a non-staff caller cannot
  * tell this console exists — so the assertions that matter are about what a 404 renders, not about
  * what a staff member sees.
@@ -58,7 +67,7 @@ describe('StaffConsoleScreen', () => {
 
   it('renders the console and the mail panel for a staff caller', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path === '/api/v1/staff/me') {
+      if (path === '/staff/me') {
         return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
       }
       return Promise.resolve({
@@ -98,7 +107,7 @@ describe('StaffConsoleScreen', () => {
     // delivered — identical in a count, and the state a stock deployment is actually in. A panel
     // that showed the number alone would report a broken installation as a healthy one.
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path === '/api/v1/staff/me') {
+      if (path === '/staff/me') {
         return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
       }
       return Promise.resolve({

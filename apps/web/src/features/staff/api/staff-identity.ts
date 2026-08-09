@@ -29,7 +29,7 @@ export function useStaffIdentity(): UseQueryResult<StaffIdentity | null> {
     queryKey: staffIdentityKey,
     queryFn: async (): Promise<StaffIdentity | null> => {
       try {
-        return await apiFetch<StaffIdentity>('/api/v1/staff/me');
+        return await apiFetch<StaffIdentity>('/staff/me');
       } catch (error) {
         if (error instanceof ApiFetchError && error.status === 404) return null;
         throw error;

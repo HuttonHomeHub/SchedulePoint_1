@@ -41,6 +41,7 @@
     "e2e-search-nav",
     "e2e-audit",
     "e2e-account",
+    "e2e-staff",
     "e2e-public",
     "e2e-csp",
     "e2e-multi-select",
