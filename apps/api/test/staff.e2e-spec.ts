@@ -7,6 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearAuditEvents } from './audit-reset';
+
 /**
  * **This suite exists because M2 shipped unable to complete a single request, and 1,589 unit tests
  * said it was fine.**
@@ -65,12 +67,19 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
   beforeEach(async () => {
     await prisma.mailEvent.deleteMany();
     await prisma.orgMember.deleteMany();
+    // **Before the organisations, and this suite failed for three runs without it.**
+    // `audit_events.organization_id` is `ON DELETE RESTRICT`, so any row another suite left behind
+    // blocks the organisation delete — and the append-only trigger refuses to let the spec remove
+    // those rows itself. `clearAuditEvents` is the sanctioned escape hatch ADR-0072 documents
+    // rather than hides: it disables the trigger as the table's owner and restores `ENABLE ALWAYS`
+    // afterwards.
+    //
+    // The failure was intermittent because it depended on what earlier suites had written, which is
+    // why it read as flake for three runs before it was diagnosed. It was not flake.
+    await clearAuditEvents(prisma);
     await prisma.organization.deleteMany();
     await prisma.verification.deleteMany();
     await prisma.user.deleteMany();
-    // `audit_events` is append-only in the database and CANNOT be cleared — the triggers refuse
-    // both DELETE and TRUNCATE. So assertions below count rows created DURING a test rather than
-    // asserting a total, which is the only honest way to read this table.
   });
 
   const server = () => app.getHttpServer();
@@ -89,6 +98,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     return agent;
   }
 
+  /** Counts are still read as deltas within a test: `clearAuditEvents` runs per test, not per assertion. */
   const staffAuditCount = () => prisma.auditEvent.count({ where: { actorType: 'STAFF' } });
 
   it('answers /staff/me for a verified allowlisted account AND writes the audit row', async () => {
@@ -181,6 +191,82 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     expect(await prisma.auditEvent.count({ where: { action: 'staff.panel_read' } })).toBe(
       before + 1,
     );
+  });
+
+  it('NEVER puts a configured secret in the installation response', async () => {
+    // The assertion this panel's design exists for. `MAIL_SMTP_URL` is
+    // `smtps://user:PASSWORD@host:port`, and a response assembled by spreading the config object
+    // and deleting what somebody remembered leaks the password the first time a field is added.
+    // Asserted against the SERIALISED response rather than field by field, because the failure mode
+    // is a field nobody thought about — checking the fields you know about cannot catch it.
+    const agent = await signedInStaff();
+
+    const response = await agent
+      .get('/api/v1/staff/installation')
+      .set('Origin', ORIGIN)
+      .expect(200);
+    const body = JSON.stringify(response.body);
+
+    expect(body).not.toContain('correct-horse-battery');
+    for (const secret of [process.env.MAIL_SMTP_URL, process.env.BETTER_AUTH_SECRET]) {
+      if (secret !== undefined && secret !== '') expect(body).not.toContain(secret);
+    }
+    // And it still says something useful.
+    expect(response.body.data).toMatchObject({ environment: expect.any(String) });
+  });
+
+  it('lists unverified accounts, bounded, with a total', async () => {
+    const agent = await signedInStaff();
+    // `unverified@schedulepoint.test` is created by the guard tests above and never verified.
+    const response = await agent.get('/api/v1/staff/accounts').set('Origin', ORIGIN).expect(200);
+
+    expect(response.body.data.unverifiedTotal).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(response.body.data.unverified)).toBe(true);
+    expect(response.body.data.unverified.length).toBeLessThanOrEqual(25);
+  });
+
+  it('records reading the accounts panel WITHOUT recording any address', async () => {
+    // The rule that keeps CQ-1 from leaking into the one table that refuses DELETE. The panel may
+    // show addresses; the audit row may not carry them, or erasure could never reach them.
+    const agent = await signedInStaff();
+    await prisma.user.updateMany({
+      where: { email: MEMBER_EMAIL },
+      data: { emailVerified: false },
+    });
+
+    await agent.get('/api/v1/staff/accounts').set('Origin', ORIGIN).expect(200);
+
+    const row = await prisma.auditEvent.findFirst({
+      where: { action: 'staff.panel_read', subjectLabel: 'accounts' },
+      orderBy: { occurredAt: 'desc' },
+    });
+    expect(row).not.toBeNull();
+    expect(JSON.stringify(row)).not.toContain(MEMBER_EMAIL);
+    expect(row?.changes).toBeNull();
+  });
+
+  it("returns staff actions only — never a member's audit row", async () => {
+    // The route most likely to become a cross-tenant leak by accident: `audit_events` holds every
+    // organisation's activity, and one caller-supplied filter would turn a staff self-audit into a
+    // read of everybody's. The filter is in the repository; this pins it.
+    const agent = await signedInStaff();
+
+    const response = await agent.get('/api/v1/staff/activity').set('Origin', ORIGIN).expect(200);
+
+    expect(response.body.data.length).toBeGreaterThan(0);
+    for (const row of response.body.data) {
+      expect(String(row.action).startsWith('staff.')).toBe(true);
+    }
+  });
+
+  it('refuses every M5 panel to a non-staff member', async () => {
+    const agent = request.agent(server());
+    await signUp(agent, MEMBER_EMAIL).expect(200);
+    await prisma.user.updateMany({ where: { email: MEMBER_EMAIL }, data: { emailVerified: true } });
+
+    for (const path of ['/installation', '/accounts', '/activity']) {
+      await agent.get(`/api/v1/staff${path}`).set('Origin', ORIGIN).expect(404);
+    }
   });
 
   it('refuses the health panel to a non-staff member too', async () => {

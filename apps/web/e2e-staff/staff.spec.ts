@@ -173,7 +173,11 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await expect(staff.getByRole('heading', { name: 'Staff console' })).toBeVisible();
   // The address that matched, rendered NORMALISED — the config pinned ' Ops@SchedulePoint.test '
   // with padding and mixed case, so seeing the lower-case form proves both halves of the asymmetry.
-  await expect(staff.getByText(STAFF_EMAIL)).toBeVisible();
+  // Scoped to the header sentence. A bare `getByText(STAFF_EMAIL)` matched two places once the M5
+  // Staff activity panel landed — the greeting and the actor column of the console's own audit
+  // trail — and Playwright's strict mode failed it. Which is the panel working: the console records
+  // that staff read it, and the reader's own address is what it records.
+  await expect(staff.getByText(`Signed in as ${STAFF_EMAIL}.`)).toBeVisible();
   await expect(staff.getByRole('heading', { name: 'Mail' })).toBeVisible();
   await expect(staff.getByRole('heading', { name: 'Content-Security-Policy' })).toBeVisible();
   // **Only that the panel renders — not which state it is in.** The empty-state caveat ("not yet

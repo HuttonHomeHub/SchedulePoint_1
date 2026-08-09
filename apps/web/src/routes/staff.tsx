@@ -5,6 +5,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
 import { useStaffHealth } from '@/features/staff/api/staff-health';
 import { useStaffIdentity } from '@/features/staff/api/staff-identity';
+import {
+  useStaffAccounts,
+  useStaffActivity,
+  useStaffInstallation,
+} from '@/features/staff/api/staff-panels';
 
 /**
  * The staff console (ADR-0086) — SchedulePoint's own operations surface.
@@ -64,6 +69,9 @@ export function StaffConsoleScreen(): React.ReactElement {
       </header>
       <MailHealthPanel />
       <SecurityPanel />
+      <InstallationPanel />
+      <AccountsPanel />
+      <ActivityPanel />
     </main>
   );
 }
@@ -263,6 +271,184 @@ function SecurityPanel(): React.ReactElement {
                   </td>
                   <td className="py-1 tabular-nums">{row.count}</td>
                   <td className="py-1">{new Date(row.lastSeenAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** What this installation is running. Never the mail credential — the API sends host and port only. */
+function InstallationPanel(): React.ReactElement {
+  const installation = useStaffInstallation();
+
+  if (installation.isPending || installation.isError) {
+    return (
+      <Card>
+        <div className="p-4" aria-busy={installation.isPending}>
+          {installation.isPending ? (
+            <Spinner label="Loading installation…" />
+          ) : (
+            <Alert tone="error">Could not read installation state.</Alert>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  const data = installation.data;
+
+  return (
+    <Card>
+      <div className="space-y-4 p-4">
+        <h2 className="text-lg font-medium">Installation</h2>
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Stat label="API version" value={data.apiVersion} />
+          <Stat label="Environment" value={data.environment} />
+          <Stat label="Mail host" value={data.mailHost ?? 'Not configured'} />
+          <Stat label="Staff addresses" value={String(data.staffCount)} />
+        </dl>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant={data.requireEmailVerification ? 'neutral' : 'warning'}>
+            {data.requireEmailVerification
+              ? 'Email verification: enforced'
+              : 'Email verification: off'}
+          </Badge>
+          <Badge variant={data.planEditLockEnforced ? 'neutral' : 'warning'}>
+            {data.planEditLockEnforced ? 'Edit lock: enforced' : 'Edit lock: off'}
+          </Badge>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Who cannot sign in.
+ *
+ * The total sits beside the page because it answers a different question — "is this
+ * deployment-wide or one person?" — and a reader should not have to page to the end to learn it.
+ */
+function AccountsPanel(): React.ReactElement {
+  const accounts = useStaffAccounts();
+
+  if (accounts.isPending || accounts.isError) {
+    return (
+      <Card>
+        <div className="p-4" aria-busy={accounts.isPending}>
+          {accounts.isPending ? (
+            <Spinner label="Loading accounts…" />
+          ) : (
+            <Alert tone="error">Could not read accounts.</Alert>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  const data = accounts.data;
+
+  return (
+    <Card>
+      <div className="space-y-4 p-4">
+        <h2 className="text-lg font-medium">Unverified accounts</h2>
+        <p className="text-muted-foreground text-sm">
+          {data.unverifiedTotal === 0
+            ? 'Every account has verified its address.'
+            : `${String(data.unverifiedTotal)} account${data.unverifiedTotal === 1 ? '' : 's'} cannot complete verification-gated sign-in.`}
+        </p>
+        {data.unverified.length > 0 && (
+          <>
+            <table className="w-full text-sm">
+              <caption className="sr-only">Unverified accounts, oldest first</caption>
+              <thead>
+                <tr className="text-muted-foreground text-left">
+                  <th scope="col" className="py-1 font-medium">
+                    Address
+                  </th>
+                  <th scope="col" className="py-1 font-medium">
+                    Registered
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.unverified.map((row) => (
+                  <tr key={row.id} className="border-border border-t">
+                    <td className="py-1 break-all">{row.email}</td>
+                    <td className="py-1">{new Date(row.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {data.hasMore && (
+              <p className="text-muted-foreground text-xs">
+                Showing the oldest {data.unverified.length}. More exist.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * What staff have done.
+ *
+ * The console's own accountability, and the reason the epic is a security improvement rather than a
+ * new hole: before it, every one of these operations happened over `psql` and left no record at all.
+ */
+function ActivityPanel(): React.ReactElement {
+  const activity = useStaffActivity();
+
+  if (activity.isPending || activity.isError) {
+    return (
+      <Card>
+        <div className="p-4" aria-busy={activity.isPending}>
+          {activity.isPending ? (
+            <Spinner label="Loading staff activity…" />
+          ) : (
+            <Alert tone="error">Could not read staff activity.</Alert>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <div className="space-y-4 p-4">
+        <h2 className="text-lg font-medium">Staff activity</h2>
+        {activity.data.length === 0 ? (
+          <p className="text-muted-foreground text-sm">Nothing recorded yet.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <caption className="sr-only">Staff actions, most recent first</caption>
+            <thead>
+              <tr className="text-muted-foreground text-left">
+                <th scope="col" className="py-1 font-medium">
+                  When
+                </th>
+                <th scope="col" className="py-1 font-medium">
+                  Who
+                </th>
+                <th scope="col" className="py-1 font-medium">
+                  What
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {activity.data.map((row) => (
+                <tr key={row.id} className="border-border border-t">
+                  <td className="py-1">{new Date(row.occurredAt).toLocaleString()}</td>
+                  <td className="py-1 break-all">{row.actorLabel ?? '—'}</td>
+                  <td className="py-1">
+                    {row.action.replace('staff.', '').replace(/_/g, ' ')}
+                    {row.subjectLabel !== null && ` · ${row.subjectLabel}`}
+                  </td>
                 </tr>
               ))}
             </tbody>

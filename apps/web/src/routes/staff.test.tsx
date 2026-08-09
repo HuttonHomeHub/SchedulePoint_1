@@ -29,6 +29,32 @@ function notFound(): ApiFetchError {
   return new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Not found' });
 }
 
+/**
+ * Empty-but-valid payloads for the panels a given test is not about.
+ *
+ * The console renders five panels, and a test interested in one of them should not have to know the
+ * shape of the other four — but it does have to return something valid, because a query that
+ * resolves to the wrong shape renders an error state and fails the test for a reason that has
+ * nothing to do with what it asserts. Two existing tests broke exactly that way when the M5 panels
+ * landed, which is what this is for.
+ */
+function otherPanels(path: string): Promise<unknown> {
+  if (path === '/staff/csp-reports' || path === '/staff/activity') return Promise.resolve([]);
+  if (path === '/staff/accounts') {
+    return Promise.resolve({ unverifiedTotal: 0, unverified: [], hasMore: false });
+  }
+  return Promise.resolve({
+    apiVersion: '0.47.1',
+    environment: 'production',
+    requireEmailVerification: true,
+    planEditLockEnforced: false,
+    mailHost: 'smtp.example:465',
+    mailAlertingConfigured: true,
+    heartbeatConfigured: false,
+    staffCount: 2,
+  });
+}
+
 /** Render the console with staff identity resolved and the given panel payloads. */
 function renderStaffWith(payloads: Record<string, unknown>): void {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
@@ -36,6 +62,7 @@ function renderStaffWith(payloads: Record<string, unknown>): void {
       return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
     }
     if (path in payloads) return Promise.resolve(payloads[path]);
+    if (path !== '/staff/health') return otherPanels(path);
     return Promise.resolve({
       failuresLast24h: 0,
       failuresLastHour: 0,
@@ -90,6 +117,7 @@ describe('StaffConsoleScreen', () => {
       if (path === '/staff/me') {
         return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
       }
+      if (path !== '/staff/health' && path !== '/staff/csp-reports') return otherPanels(path);
       if (path === '/staff/csp-reports') {
         return Promise.resolve([
           {
@@ -164,6 +192,53 @@ describe('StaffConsoleScreen', () => {
     expect(screen.getByText(/index-abc\.js:42/)).toBeInTheDocument();
   });
 
+  it('shows the installation without ever showing a credential', async () => {
+    // The panel's whole design constraint. `MAIL_SMTP_URL` is `smtps://user:PASSWORD@host:port`;
+    // the API sends host and port as named scalars, so the password cannot reach the screen even if
+    // somebody later adds a field to the config object.
+    renderStaffWith({});
+
+    expect(await screen.findByRole('heading', { name: 'Installation' })).toBeVisible();
+    expect(screen.getByText('smtp.example:465')).toBeInTheDocument();
+    expect(screen.queryByText(/PASSWORD|password@/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Email verification: enforced')).toBeInTheDocument();
+  });
+
+  it('lists unverified accounts with the total beside the page', async () => {
+    // The total answers a different question from the page — "deployment-wide, or one person?" —
+    // and a reader should not have to page to the end to learn it.
+    renderStaffWith({
+      '/staff/accounts': {
+        unverifiedTotal: 3,
+        hasMore: false,
+        unverified: [
+          { id: 'u1', email: 'stuck@example.test', createdAt: '2026-08-01T00:00:00.000Z' },
+        ],
+      },
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Unverified accounts' })).toBeVisible();
+    expect(screen.getByText(/3 accounts cannot complete/i)).toBeInTheDocument();
+    expect(screen.getByText('stuck@example.test')).toBeInTheDocument();
+  });
+
+  it('shows staff activity, which is the console holding itself to account', async () => {
+    renderStaffWith({
+      '/staff/activity': [
+        {
+          id: 'a1',
+          occurredAt: '2026-08-09T10:00:00.000Z',
+          action: 'staff.panel_read',
+          actorLabel: 'ops@schedulepoint.test',
+          subjectLabel: 'accounts',
+        },
+      ],
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Staff activity' })).toBeVisible();
+    expect(screen.getByText(/panel read · accounts/i)).toBeInTheDocument();
+  });
+
   it('says an empty policy table is NOT proof the policy is clean', async () => {
     // The assertion that matters most on this panel. Delivery from a browser to the sink has never
     // been verified end to end (TECH_DEBT #102), so silence means "nothing arrived", not "nothing
@@ -183,7 +258,7 @@ describe('StaffConsoleScreen', () => {
       if (path === '/staff/me') {
         return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
       }
-      if (path === '/staff/csp-reports') return Promise.resolve([]);
+      if (path !== '/staff/health') return otherPanels(path);
       return Promise.resolve({
         failuresLast24h: 0,
         failuresLastHour: 0,

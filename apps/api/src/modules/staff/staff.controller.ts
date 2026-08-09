@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -8,6 +8,11 @@ import { RequestContext } from '../../common/decorators/request-context.decorato
 import { AuditService } from '../audit/audit.service';
 
 import { CspReportRowDto } from './dto/staff-csp-reports.dto';
+import {
+  StaffAccountsDto,
+  StaffActivityRowDto,
+  StaffInstallationDto,
+} from './dto/staff-installation.dto';
 import { StaffHealthDto } from './dto/staff-health.dto';
 import { StaffIdentityDto } from './dto/staff-identity.dto';
 import { StaffGuard } from './staff.guard';
@@ -133,5 +138,82 @@ export class StaffController {
     });
 
     return await this.health.cspReports();
+  }
+
+  @Get('installation')
+  @ApiOperation({
+    summary: 'What this installation is running',
+    description:
+      'Versions, effective switches and an ALLOW-LISTED view of configuration. Never the mail ' +
+      'credential: the response is built from named scalars rather than by omission from the ' +
+      'config object, so a field added later cannot arrive by accident.',
+  })
+  @ApiOkResponse({ type: StaffInstallationDto })
+  async installation(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+  ): Promise<StaffInstallationDto> {
+    await this.recordPanelRead(staff, context, 'installation');
+    return this.health.installation();
+  }
+
+  @Get('accounts')
+  @ApiOperation({
+    summary: 'Who cannot sign in',
+    description:
+      'Accounts with an unverified address, oldest first, with the total. Paginated because the ' +
+      'page carries addresses, and scoped in the repository rather than by a query parameter.',
+  })
+  @ApiOkResponse({ type: StaffAccountsDto })
+  async accounts(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+    @Query('cursor') cursor?: string,
+  ): Promise<StaffAccountsDto> {
+    // The audit row names the panel and NEVER its contents. This response carries customer
+    // addresses, and `audit_events` refuses DELETE — recording them here would put customer PII in
+    // the one table erasure cannot reach, which is exactly what M1's ordinary `mail_events` table
+    // exists to avoid.
+    await this.recordPanelRead(staff, context, 'accounts');
+    return await this.health.accounts(cursor);
+  }
+
+  @Get('activity')
+  @ApiOperation({
+    summary: 'What staff have done',
+    description:
+      "Staff actions only, filtered in the repository. A member's row is never returned.",
+  })
+  @ApiOkResponse({ type: [StaffActivityRowDto] })
+  async activity(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+  ): Promise<StaffActivityRowDto[]> {
+    await this.recordPanelRead(staff, context, 'activity');
+    return await this.health.activity();
+  }
+
+  /**
+   * One place every panel records that it was read.
+   *
+   * Extracted once there were four: four call sites assembling this object independently is how two
+   * of them end up with a different `actorType` or a missing correlation id — the `recordFailure`
+   * reasoning in `SmtpMailService`, one surface along.
+   */
+  private async recordPanelRead(
+    staff: StaffPrincipal,
+    context: RequestContext,
+    panel: string,
+  ): Promise<void> {
+    await this.audit.record({
+      action: 'staff.panel_read',
+      outcome: 'SUCCESS',
+      actorType: 'STAFF',
+      actorUserId: staff.userId,
+      actorLabel: staff.email,
+      subjectType: 'staff_panel',
+      subjectLabel: panel,
+      ...context,
+    });
   }
 }
