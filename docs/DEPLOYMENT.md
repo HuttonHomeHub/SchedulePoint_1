@@ -553,8 +553,18 @@ missing is the count and the decision it informs.
 running the inverse would un-verify accounts that earned it honestly. Do the CSP flip first
 (above): it rehearses the same edit-a-variable-and-recreate loop where a mistake costs seconds.
 
-1. **Count.** `docker compose exec -T db psql -U app -d app -v ON_ERROR_STOP=1 -f
-scripts/verification-backfill.sql`. It only SELECTs; the UPDATE is commented out.
+1. **Count.** Note the **redirect**, not `-f`:
+
+   ```bash
+   docker compose -f docker-compose.release.yml exec -T db \
+     psql -U app -d app -v ON_ERROR_STOP=1 < scripts/verification-backfill.sql
+   ```
+
+   `-f` would make psql look for the file **inside** the db container, which mounts only
+   `db-data:/var/lib/postgresql/data` — there is no host mount carrying it, so `-f` fails with
+   "could not open file". This step said `-f` until 2026-08-09 and had never been run; it would
+   have failed at the most delicate point in the programme. It only SELECTs; the UPDATE is
+   commented out.
 
    It reports **three** figures rather than one, and the third is the one to read carefully:
 
@@ -569,7 +579,7 @@ scripts/verification-backfill.sql`. It only SELECTs; the UPDATE is commented out
      which case both options were identical; if it is not, the query names the rows, and the
      decision should be taken on real addresses.
 
-2. **Backfill.** Uncomment the `UPDATE` in that file and re-run.
+2. **Backfill.** Uncomment the `UPDATE` in that file and re-run the same command.
 3. **Flip.** Set `AUTH_REQUIRE_EMAIL_VERIFICATION=true` and recreate the API.
 4. **Smoke it.** Sign up a throwaway address, confirm the email arrives, follow the link, confirm
    it lands on the app rather than the "still waiting" screen — that last step is the ADR-0074 M5
