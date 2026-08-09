@@ -208,9 +208,14 @@ This narrows the unaudited surface; it does not close it, and saying otherwise w
   the host. Until they exist the signals reach nobody, which is the failure `#100` records.
 - **Verify CSP delivery end to end** (`docs/TECH_DEBT.md` #117) — closable only by deploying,
   visiting a page and reading the Security panel.
-- **A retention sweep.** Both new tables document a period (30 days for CSP reports, 12 months for
-  mail events) and **nothing enforces either**; there is no scheduler in this application, so the
-  periods are ceilings and today's true retention is forever.
+- **A retention sweep — and it belongs first in this list, not last.** Both new tables document a
+  period (30 days for CSP reports, 12 months for mail events) and **nothing enforces either**; there
+  is no scheduler in this application, so the periods are ceilings and today's true retention is
+  forever. The M6 security review moved it up on two facts rather than on tidiness: `csp_reports` is
+  written by an **unauthenticated** endpoint that strips only the query string from the two URI
+  columns, so a caller who wants unique rows gets them at 20 per request; and `mail_events.recipient`
+  retains a real customer address indefinitely, which is exactly what ADR-0085 D3 spent a decision
+  keeping erasable. The other two items in this list are compose edits on a host; this one is code.
 
 ## Next
 

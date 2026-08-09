@@ -1825,6 +1825,26 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   registered for `application/json` alone — and lost a violation's first burst to two clocks in one
   statement. Each was found by something that ran the real thing, and each is recorded where it
   happened rather than in a postmortem.
+  **M6 is the fifth time, and the largest — the epic's own thesis landing on it (ADR-0086 D8).** The
+  approved spec called an audited **denial** non-negotiable in five separate places; the code shipped
+  silence, with a test asserting the silence and a comment justifying it — "recording one would make
+  the log an inventory of who tried". The security review found it. The argument is answerable and
+  was answering the wrong question: an inventory of who tried to reach the most privileged surface in
+  the product is precisely the evidence this epic exists to create, and the part that would be an
+  oracle — **which** of the three conditions failed — was already withheld by the redactor's empty
+  allow-list. The reversal had also never been written back into the ADR, which is the ADR-0071
+  failure one document along. Two consequences worth carrying: the row is `recordBestEffort` behind a
+  `.catch()`, because `record()` would answer an unwritable `audit_events` with a **500** and make the
+  staff surface distinguishable from an unmapped route by status code — an oracle bought with the
+  mechanism meant to close one; and its actor is `USER`, never `STAFF`, which forced the activity
+  panel to filter on the **`staff.` action namespace** rather than actor type, or it would hide the
+  one row a reader most needs to see. Seven more blocking findings folded with it, including a
+  declared-but-uncompletable cursor pagination found **independently by two reviewers**, a dual-hat
+  banner D4 decided and nobody built, and an activity read that sequentially scanned a table which
+  grows forever — measured 23–40 ms at 500,334 rows against 0.02–0.13 ms indexed. That index taught
+  something worth keeping: Postgres matches a partial index by **expression equality, not pattern
+  containment**, so a strictly _narrower_ predicate also seq-scans, and the filter literal is now
+  pinned by a structural test because changing it reverts the read with nothing failing anywhere.
   A `csp_reports` table was hand-written after a launched design agent returned nothing; the review
   that followed found four defects, two of them fatal. **That is why "every schema change goes
   through the database-architect agent" is now unconditional in §19 and §20** — including the clause
@@ -1884,7 +1904,11 @@ A lighter-weight running log of smaller decisions is in
   opposite of the mistake the bullet below this one records.
 - **Two new tables document a retention period and nothing enforces either** — 30 days for
   `csp_reports`, 12 months for `mail_events`. There is no scheduler in this application, so both
-  are **ceilings, not promises**, and today's true retention is forever.
+  are **ceilings, not promises**, and today's true retention is forever. The M6 security review
+  sharpened why that matters sooner than its place in the roadmap suggests: `csp_reports` is written
+  by an **unauthenticated** endpoint that strips only the query string, so unique rows are trivially
+  mintable, and `mail_events.recipient` holds a real customer address — the thing ADR-0085 spent a
+  decision keeping erasable (`docs/TECH_DEBT.md` #118).
 - **Four accepted ADRs have no implementation** — background jobs + Redis
   (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
   tracing (0013, of which only Pino is wired). Nothing in the running system

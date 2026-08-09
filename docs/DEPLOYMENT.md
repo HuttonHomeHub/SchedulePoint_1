@@ -713,10 +713,11 @@ Treat that URL as a credential: anyone holding it can suppress the alarm. It is 
 
 ## The staff console
 
-SchedulePoint staff operate the **installation** — mail health, and in later milestones CSP reports
-and version state. They reach **no customer data at all**: `StaffPrincipal` carries no memberships
-and no permissions, so a staff request reaching a member service is a compile error rather than a
-check somebody has to remember (ADR-0086).
+SchedulePoint staff operate the **installation** — mail health, Content-Security-Policy reports,
+what this installation is running, which accounts cannot verify, and what staff themselves have
+done. They reach **no customer data at all**: `StaffPrincipal` carries no memberships and no
+permissions, so a staff request reaching a member service is a compile error rather than a check
+somebody has to remember (ADR-0086). The console is at `/staff`; nothing links to it.
 
 ```yaml
 api:
@@ -727,6 +728,11 @@ api:
 Empty — the default — means **nobody**. An allowlisted address must also have a **verified email**,
 unconditionally and regardless of `AUTH_REQUIRE_EMAIL_VERIFICATION`: without that, an allowlisted
 address that has never signed up is squattable, and whoever registers it first becomes staff.
+
+**A malformed entry fails the boot**, loudly, rather than being ignored. That is deliberate: a typo
+here fails _closed_ — nobody becomes staff, the console 404s for the person it was configured for,
+and every diagnostic points at the guard rather than at this line. Spacing is tolerated
+(`' a@b.test , c@d.test '` is fine); a missing `@`, a semicolon separator or a display name is not.
 
 Provisioning is deliberately out-of-band. Changing this needs host access and a container recreate —
 the same bar as reading the database, which is the point: it creates no new privilege path, because
@@ -741,6 +747,12 @@ Watch that line after changing the list — an entry with no account is usually 
 
 Every staff request is **audited, including reads**, because on this surface the read is the
 privileged act. The row records that a panel was reached, never what was on it.
+
+**So is every refusal.** An authenticated caller who is not staff — a member, an Org Admin, an
+allowlisted address that has not verified — gets the same 404 an unmapped route gives, and leaves a
+`staff.access_denied` row naming them. The row never says _which_ condition failed, because that
+difference is what the uniform 404 exists to withhold. Those rows appear in the console's own Staff
+activity panel, which is where you would notice somebody probing.
 
 ## Pre-release checklist
 
