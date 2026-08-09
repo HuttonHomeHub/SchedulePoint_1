@@ -1336,7 +1336,7 @@ rushed. Each is real; none blocks the epic.
    announces on navigation."** That is unreliable for **client-side** route changes unless paired
    with a focus move, and none of the six public routes move focus on navigation — an app-wide SPA
    gap, not one this epic introduced. The hook is correct and worth having; the sentence overstates
-   what it delivers, which is exactly the ADR-0076 §19.9 failure applied to this epic's own artefact.
+   what it delivers, which is exactly the ADR-0076 / CLAUDE.md §19.10 failure applied to this epic's own artefact.
 
 **Why not now:** (1) and (2) are hardening on pre-existing behaviour with no live exploit; (3) is an
 architecture-sized change that wants its own measurement and its own decision; (4)–(6) are small and

@@ -1441,7 +1441,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   `scripts/dependency-claims.json`, so **a Dependabot bump of either package fails CI**, which is
   the intended cost: the bump is exactly when the citations need re-reading. All 34 were verified
   accurate while seeding. Class 3 is **not computable** and gets a process rule instead, labelled as
-  the weak one (§19.9): a decision-bearing claim names the command, file or test that established
+  the weak one (§19.10): a decision-bearing claim names the command, file or test that established
   it, and **a claim inherited from the brief is checked like any other** — both Class 3 failures
   entered through a brief. The CPM engine is not imported and no product behaviour changes.
 
@@ -1910,15 +1910,22 @@ When operating in this repo, Claude Code should:
    **Do not diverge from those cross-cutting patterns without a documented
    architectural reason — an ADR** (ADR-0057, superseding ADR-0015). There is no
    template to keep in step: the exemplars are real modules under real tests.
-3. **Prefer the smallest change that fully solves the task.** Do not scaffold
+3. **Every schema change goes through the database-architect agent — always.**
+   A model, a column, an index, a constraint, a data migration: no exceptions, and
+   no self-assessment of whether this one is big enough to need it. If the agent
+   returns nothing, fails, or is slow, **re-run it**; an unavailable agent is a
+   reason to wait, never a reason to proceed. A migration is checksummed the moment
+   it lands and applies to a real database, so a mistake costs a second migration in
+   every environment rather than an edit. Product-owner instruction, 2026-08-09.
+4. **Prefer the smallest change that fully solves the task.** Do not scaffold
    application features unless explicitly asked.
-4. **Match existing conventions** (this file + `docs/`). If a convention is
+5. **Match existing conventions** (this file + `docs/`). If a convention is
    missing, propose one here rather than inventing an undocumented one.
-5. **Keep docs in lock-step** with code. Update the ADRs/CLAUDE.md/`docs/` when
+6. **Keep docs in lock-step** with code. Update the ADRs/CLAUDE.md/`docs/` when
    you change architecture, standards, or process.
-6. **Never commit secrets**, disable TLS verification, or weaken security/a11y
+7. **Never commit secrets**, disable TLS verification, or weaken security/a11y
    gates to make CI pass.
-7. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
+8. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
    push" — `pnpm lint && pnpm typecheck && pnpm test` (plus `pnpm check:playbook`
    when you add or rename a seed plan, and `pnpm check:build-contract` when you
    add a shared `packages/*` workspace package — a local checkout has its
@@ -1933,26 +1940,27 @@ When operating in this repo, Claude Code should:
    rather than the product, every one visible in the first local run. **A local
    database is available and always has been** — that gap was a process gap, not
    a tooling one.
-8. **Use Conventional Commits** and add a changeset for user-visible change.
+9. **Use Conventional Commits** and add a changeset for user-visible change.
    Meet the Feature Completion Criteria (§21) before calling work done.
-9. **A claim that decides something must carry its evidence** (ADR-0076). When a
-   spec, ADR, plan, risk table or docblock asserts a fact about behaviour — a
-   cost, a guarantee, a failure mode, "there is no oracle here", "this is not on
-   the request path" — say what was **run or read** to establish it: the command,
-   the file and line, or the test. Not a pointer to another document.
-   - **The brief is not evidence.** A claim inherited from the task that started
-     the work gets checked like any other. Both recorded instances of this
-     failure entered through a brief and were repeated into three or four
-     artefacts before anyone opened the file that disproved them.
-   - **Claims about a dependency's internals are registered**, not just cited:
-     add the package, path, line range and an anchor to
-     `scripts/dependency-claims.json`. `pnpm check:claims` fails on a citation
-     that is not there, so this is a gate rather than a habit.
-   - This applies to the **decision-bearing** claims, not every sentence. A rule
-     that applies everywhere is followed nowhere, and both failures were in the
-     small set of statements that changed what got built.
+10. **A claim that decides something must carry its evidence** (ADR-0076). When a
+    spec, ADR, plan, risk table or docblock asserts a fact about behaviour — a
+    cost, a guarantee, a failure mode, "there is no oracle here", "this is not on
+    the request path" — say what was **run or read** to establish it: the command,
+    the file and line, or the test. Not a pointer to another document.
 
-10. **Approved work runs to completion. A status report is not a stopping point.**
+- **The brief is not evidence.** A claim inherited from the task that started
+  the work gets checked like any other. Both recorded instances of this
+  failure entered through a brief and were repeated into three or four
+  artefacts before anyone opened the file that disproved them.
+- **Claims about a dependency's internals are registered**, not just cited:
+  add the package, path, line range and an anchor to
+  `scripts/dependency-claims.json`. `pnpm check:claims` fails on a citation
+  that is not there, so this is a gate rather than a habit.
+- This applies to the **decision-bearing** claims, not every sentence. A rule
+  that applies everywhere is followed nowhere, and both failures were in the
+  small set of statements that changed what got built.
+
+11. **Approved work runs to completion. A status report is not a stopping point.**
     When the product owner has approved a plan or said "drive this to completion",
     the only two reasons to stop are: **every milestone is done**, or **an answer is
     needed that only they can give**. Nothing else qualifies — not a finished
@@ -2002,8 +2010,17 @@ Subagents live in [`.claude/agents/`](.claude/agents/) (see its
 
 **Backend:**
 
-- **database-architect** — design schema/migrations/indexes; run **before**
-  writing a migration.
+- **database-architect** — design schema/migrations/indexes. **Every schema change goes through
+  this agent, without exception** — a new model, a new column, a new index, a new constraint, a data
+  migration. This is not "run it when the change looks significant": the judgement about whether a
+  change is significant is the judgement the agent exists to make, so making it yourself is skipping
+  the step. **Product-owner instruction, 2026-08-09**, after `csp_reports` was hand-written when a
+  launched agent returned nothing — the honest failure there was deciding that an unavailable agent
+  meant proceeding rather than re-running it, which is exactly the shortcut that only ever gets
+  taken under time pressure. **If the agent fails, is empty, or is slow, re-run it. Waiting is the
+  cheap option; a migration is the expensive one**, because it applies to a real database, it is
+  checksummed the moment it lands, and correcting it costs a second migration in every environment
+  rather than an edit.
 - **api-reviewer** — REST/OpenAPI conventions, status codes, envelopes,
   pagination.
 - **security-reviewer** — auth, RBAC + resource scoping (IDOR), validation,

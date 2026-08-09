@@ -1214,9 +1214,12 @@ oversight — which is why it is documented here at length rather than listed.
 
 ## Operational telemetry (installation-wide, not organisation-scoped)
 
-One table so far. It is **not** part of the `Organization → Client → … → Activity` hierarchy
-above, carries no `organization_id`, and is read by a staff member about the installation
-rather than by a member about their own data.
+Two tables. Neither is part of the `Organization → Client → … → Activity` hierarchy above,
+neither carries an `organization_id`, and both are read by a staff member about the
+installation rather than by a member about their own data. Both are **ordinary** tables —
+updatable, deletable, expirable — and both migrations say so at length, because the reflex in
+this repository after ADR-0072 is to model a new "things that happened" table on
+`audit_events` and in both cases that would be a defect rather than a style choice.
 
 ### MailEvent: failed and abandoned sends (staff console M1)
 
@@ -1297,35 +1300,162 @@ now() - interval '12 months'` on the leading index column. The spec's §4.10 def
   the timeout (`FAILED`) and the late transport error (`ABANDONED`) — which is the distinction
   ADR-0075's `send()` docblock exists to preserve.
 
-### CspReport: deduplicated policy telemetry (staff console M4)
+### CspReport: deduplicated CSP violation reports (staff console M4)
 
-`csp_reports` holds one row per **distinct** Content-Security-Policy violation, with a `count`. It
-is the second table under this heading and follows `MailEvent`'s reasoning, with two differences
-worth stating because both are easy to get wrong.
+The `csp_reports` table (staff-console M4, `docs/TECH_DEBT.md` #8) is where browser evidence
+lands instead of being discarded. The web origin ships its Content-Security-Policy in
+**report-only** mode and `CSP_POLICY` carries no `report-uri`, no `report-to` and no
+`Reporting-Endpoints` (`docker-compose.yml:126`, `docker-compose.release.yml:145`), so today a
+violation exists only in whichever browser console happens to be open; the documented way to
+enforce is to flip the header and walk six surfaces watching DevTools. ADR-0074 records that
+the one violation found that way was found **in production, after release**, by a person
+watching a console — and that it came from a **dependency** (Zod 4's `allowsEval()` probe),
+which appears nowhere in `apps/web/src`. **Non-scheduling** — the CPM engine never reads it —
+so the migration is byte-parity (a single additive table create).
 
-- **The dedup key is a HASH, not the three identifying columns.** A btree index row caps near 2704
-  bytes, and `blocked_uri`/`document_uri` arrive from an **unauthenticated** POST. Indexed directly,
-  an 8 KB URI would make the INSERT _fail_ rather than deduplicate — so a hostile report could deny
-  the reporting the table exists to collect. `dedupe_hash` is a SHA-256 of the three values, fixed
-  width whatever arrives. Verified against a real database: two 8 KB reports produce one row with
-  `count = 2`.
-- **Retention is 30 days**, not `mail_events`' twelve months, because the content is different —
-  URLs from our own origin rather than a customer's address — and a CSP finding is only interesting
-  while the policy it describes is current. As there, **nothing enforces it**: this application has
-  no scheduler, so the period is a ceiling and today's true retention is forever. `last_seen_at` is
-  the sweep predicate.
+**One row per DISTINCT violation, not per report.** The key is
+`(effective_directive, blocked_uri, document_uri)`; a repeat increments `count` and moves
+`last_seen_at`. Ten thousand identical violations are one row with `count = 10000`. Dedup is
+the design rather than a later optimisation: it makes volume a property of the **policy**
+(distinct violations) instead of a property of **traffic**, which on an unauthenticated
+endpoint is a property of whoever is pointing at us.
 
-Ordinary, updatable and deletable — the dedup upsert **is** an UPDATE, which the `audit_events`
-append-only triggers would make impossible. **Do not add a trigger to this table.** A repeat moves
-`count` and `last_seen_at` only: `first_seen_at` never moves, because it is what makes "this started
-when we deployed X" answerable.
-
-No `original_policy` column, deliberately: every report carries the whole policy string, it is
-identical on every row, and `docker-compose.yml` already says what our policy is.
-
-The query string and fragment are stripped from every URL **before** the write
-(`csp-report-body.ts`), because a document URL's query carries share tokens and search terms — this
-is telemetry about a policy, not an access log with better retention than the one anyone agreed to.
+- **The dedup key is a hash column, and that is the decision the table turns on.** A unique
+  index over the three columns directly is not merely inelegant — it is a write path an
+  unauthenticated caller can make **fail**. Measured before it was written (PostgreSQL 16.13,
+  incompressible input, plain btree over the three text columns): 2,600 chars accepted;
+  **2,700 chars → `ERROR: index row size 2776 exceeds btree version 4 maximum 2704`**; 8,192
+  chars → `ERROR: index row requires 8264 bytes`. So a hostile URI does not merely fail to
+  deduplicate, it errors, and the report is lost — on exactly the input the table exists to
+  survive. `dedupe_hash` puts a fixed 64 hex characters in the index and length stops being
+  reachable. Proved end to end on a freshly-migrated database: three inserts of the same 8 KB
+  incompressible `blocked_uri` produce **one row with `count = 3`**, and the same value in a
+  plain three-column unique index raises `index row requires 8264 bytes`.
+- **A hostile-length test built from a repeated character proves nothing**, and that is worth
+  knowing before writing one. The same experiment with `repeat('a', 8192)` was **accepted** by
+  the plain three-column index: a btree compresses an index tuple that would not otherwise fit,
+  and 8 KB of one character compresses to nothing. Use incompressible input.
+- **The hash is computed by the producer, not the database**, and the alternatives were tried
+  rather than reasoned about. A `GENERATED ALWAYS AS (…) STORED` column and an index expression
+  both require `IMMUTABLE` functions, and `convert_to(text,'UTF8')` is **STABLE**
+  (`pg_proc.provolatile = 's'`), so `sha256(convert_to(…))` is refused outright
+  (`generation expression is not immutable` / `functions in index expression must be marked
+IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not superuser
+  (`pg_user.usesuper = f`), and pgcrypto is not trusted, so a migration cannot install it.
+  **This database cannot compute a strong hash.** It can compute `md5` — and md5 over
+  attacker-controlled input, on a table whose purpose is to be evidence, hands a prober a way
+  to merge a real violation into another row by collision. A generated column also **drifts**:
+  declared as an ordinary column, `prisma migrate diff` reports `Altered column dedupe_hash
+(changed from Nullable to Required, default changed from Some(DbGenerated(…)) to None)` and
+  exits 2 — the CI failure TECH_DEBT #54 was. Silencing it needs
+  `String? @default(dbgenerated("md5(…)"))`, i.e. a client type of `string | null` for a column
+  that is never null, plus the SQL restated in the model where a later migration can quietly
+  disagree with it. So the hash is `sha256Hex` in Node — the `Invitation.tokenHash` /
+  `PlanShare.tokenHash` precedent (`common/tokens/token.ts:21`), already used twice in this
+  schema for exactly this shape.
+- **A CHECK that recomputes the hash was tried, works, and is deliberately not shipped.**
+  Postgres does not enforce immutability inside a `CHECK`, so the recompute was verified here
+  to accept a correct hash and reject `repeat('0',64)`. It would make the separator and field
+  order a database constant, so changing either in the producer refuses **every** row — and
+  because this endpoint swallows its own write failures by design, the symptom is total, silent
+  loss of reports rather than a failing test. A benign duplicate row from a producer bug is the
+  better residual. `ck_csp_reports_dedupe_hash_shape` asserts only that the value **is** a
+  sha256 hex digest, which is a fact about the column rather than about the producer.
+- **The two URI columns are deliberately unbounded by any CHECK**, and this is the sharpest
+  departure from the `mail_events` precedent. That table's `ck_mail_events_recipient_length`
+  bounds a value **our own code** produces; here the producer transforms untrusted input, the
+  endpoint answers **204 whatever happens**, and the write is swallowed — so a refused row is a
+  **silently dropped report**. On the two columns that are themselves the evidence, losing the
+  row is worse than losing the tail of a URL, and a length constraint would be reachable by
+  exactly the hostile input the table exists to survive the moment the producer's cap and the
+  constraint disagreed. The bound belongs at the boundary (`MAX_FIELD_LENGTH` = 1,024 and the
+  body cap in `csp-report-body.ts`); the database's job is to make a hostile length **harmless**
+  rather than to refuse it, which is what `dedupe_hash` buys.
+- **The query string and fragment are stripped from every URL before the write**
+  (`csp-report-body.ts`), and that is worth keeping for its own reason rather than as tidying: a
+  URL's query is where identifiers live — a search term, an email in a redirect — and this is
+  telemetry about a policy, not an access log with better retention than the one anyone agreed
+  to. It also narrows the dedup key to the thing that identifies the violation, so one broken
+  asset does not become one row per query string. `first_seen_at` likewise never moves on a
+  repeat: it is what makes "this started when we deployed X" answerable.
+- **`effective_directive` gets a SHAPE check, never a value list.** The vocabulary looks closed
+  and is not — `script-src-elem`, `require-trusted-types-for` and `upgrade-insecure-requests`
+  are all newer than the directives this policy names, browsers add more, and a value list would
+  silently discard the reports about whatever arrives next, on the one table whose purpose is to
+  tell us about things we did not anticipate. `^[a-z][a-z0-9-]{0,63}$` still refuses a URL, a
+  sentence, or 8 KB of junk in the one key column that **cannot** be truncated without changing
+  what "the same violation" means.
+- **`disposition` is nullable, and the null is the interesting case.** `enforce` vs `report` is
+  the difference between "this **did** break" and "this **would have**", which is the whole
+  transition the table informs. It is **absent by format, not by accident**: the Reporting API
+  body always carries it, the legacy `application/csp-report` body carries it in some engines
+  and not others. Defaulting a missing value to `report` invents the answer, and invents it in
+  the direction that reads a real block as hypothetical. `NULL` says "the report did not say",
+  which is true and is a third fact. It is **not** part of the dedup key, so it is
+  last-writer-wins and reads as "as of `last_seen_at`, this was the disposition" — which is why
+  the two columns are read together.
+- **No `original_policy`.** Both wire formats carry it; it is several hundred bytes,
+  byte-identical on every row, and describes something `docker-compose.yml` already states and
+  `apps/web/e2e-csp` already parses. It is also not in the dedup key, so the stored copy would
+  be whichever report arrived most recently — the cost of storing it and none of the certainty.
+  Absent for reasons of their own: `referrer` (a URL carrying identifiers, telling us nothing
+  `document_uri` does not), `status_code` (has never decided anything here), `script_sample`
+  (empty unless the policy carries `'report-sample'`, which it does not, and it echoes our own
+  script text into a table read over the network), and `user_agent` (varies by version, so as a
+  non-key column it preserves one arbitrary sample — and "enforcing breaks Safari" is not a
+  different decision from "enforcing breaks").
+- **`source_file` / `line_number` / `column_number` are kept**, on ADR-0074's own experience:
+  `blocked_uri = 'eval'` names what broke and says nothing about what to change, and the code
+  that caused that violation was in a dependency. Not in the key, so last-writer-wins — one
+  worked example, which is all they need to be.
+- **Nullability, per column.** The three key columns are `NOT NULL`, and that is a **dedup
+  requirement rather than a preference**: in a Postgres unique index a NULL is distinct from
+  every other NULL, so one nullable key column would silently turn the table back into one row
+  per report — which is why the producer substitutes `'unknown'` rather than omitting a field.
+  `dedupe_hash`, `count`, `first_seen_at`, `last_seen_at` are `NOT NULL` because the producer
+  always knows them. `disposition` and the three source-location columns are nullable because
+  they are **absent by format**: the two wire formats carry different field sets, so a missing
+  value means "this reporter does not send it", not "something went wrong".
+- **`count` is `INT`, not `BIGINT`**, and the arithmetic is recorded because an `integer`
+  overflow **throws** on the one write this table performs. At the per-IP throttle this endpoint
+  carries, saturating `int4` on a single row needs on the order of fifty thousand address-days
+  aimed at one identical triple, against a 30-day retention that keeps resetting it. `BIGINT`
+  would also put a `bigint` on the read, which does not survive `JSON.stringify`.
+- **Retention: 30 days**, on `last_seen_at` and **not** `first_seen_at` — a violation that is
+  still happening must not expire out from under the decision it informs. Deliberately a
+  different number from `mail_events`' twelve months: that table holds a customer's address and
+  inherits ADR-0085 D3's period, this one holds URLs, and a CSP finding is only interesting
+  while the policy it describes is current. **Nothing enforces it.** There is no scheduler in
+  this application (verified against `apps/api/package.json`: no `@nestjs/schedule`, no BullMQ,
+  no Redis), so the period is a **ceiling, not a promise** and the true retention today is
+  _forever_ — the `mail_events` phrasing, inherited with the caveat. When a sweep lands it is one
+  ranged `DELETE … WHERE last_seen_at < now() - interval '30 days'` on the leading index column.
+- **One index beyond the unique key, `(last_seen_at, id)`** — full, not partial, and therefore
+  declared in `schema.prisma`: every row is in the read set, so none of the `audit_events`
+  partial-index reasoning applies. ASC read backwards (measured `Index Scan Backward`, 0.44 ms
+  for the first page at 500,000 rows), which keeps this schema free of its first `sort:`. It is
+  **not discretionary** — it also serves the retention sweep on its leftmost prefix.
+- **No index on `count`, and that is measured rather than omitted.** The panel also wants
+  most-frequent-first. At **500,000 rows** (174 MB — past any honest expectation, inside the
+  hostile band) `ORDER BY count DESC, id DESC LIMIT 50` costs **49.8–55.1 ms** as a parallel seq
+  scan plus a top-N heapsort over 22,404 buffers; a `(count, id)` index takes it to
+  **0.30–0.39 ms** for **19 MB**. A 130–180× speed-up, and still not worth shipping: at
+  **5,000 rows** the same unindexed sort costs **1.32–1.36 ms**, and 5,000 distinct violations
+  is already generous when a correct policy yields tens. The 50 ms case needs a sustained
+  hostile flood **and** is a staff-only read behind a throttle. The numbers are in the migration
+  so adding it later is one step rather than a rediscovery (the ADR-0073 C1 rule).
+- **Service-layer obligations the DB can't enforce (M4).** Each is a real gap in the producer as
+  it stands, not a hypothetical. (1) `effective_directive` must be normalised to a **bare
+  token**: the legacy `violated-directive` field carries the serialised directive, value and all
+  (`script-src 'self'`), and `csp-report-body.ts` falls back to it verbatim — stored that way the
+  same violation keys differently per engine and the count that decides whether to enforce is
+  split across two rows that read as two problems. `ck_csp_reports_directive_shape` refuses the
+  malformed value; taking the first token is what makes the row appear at all. (2) `disposition`
+  must be `null` when the report did not say, and must never be defaulted. (3) The three
+  source-location fields must be read from both wire formats. (4) `line_number`/`column_number`
+  must be clamped to safe integers or dropped to null — a JSON number outside `int4` fails at
+  **cast** time, before any CHECK can see it. (5) The write swallows its own failure, because the
+  endpoint answers 204 whatever happens and a rejected insert must never become a response.
 
 ## Testing & performance
 
