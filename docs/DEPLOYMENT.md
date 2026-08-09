@@ -632,8 +632,15 @@ organisation, with the first signal being someone who cannot get in telling some
 `scripts/watch-mail-failures.sh` closes that. Run it from cron on the host:
 
 ```cron
-*/5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic /opt/schedulepoint/scripts/watch-mail-failures.sh
+*/5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic SP_API_CONTAINER=schedulepoint-release-api-1 /opt/schedulepoint/scripts/watch-mail-failures.sh
 ```
+
+**Check the container name first.** Neither compose file sets `container_name`, so Compose names
+the container `<project>-<service>-<index>` — `schedulepoint-release-api-1` for the release stack,
+`schedulepoint-api-1` for a local build, and something else again if Dockge names the project after
+its stack directory. Confirm with `docker ps --format '{{.Names}}' | grep api`. A wrong name is not
+silent — the script alerts "cannot read logs" — but then it alerts every five minutes about itself
+rather than about the mail.
 
 **The alert must not be email.** The one transport it exists to report on is the broken one. An
 ntfy topic, a Slack or Discord webhook, or a phone push all work; the script only needs a URL that

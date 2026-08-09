@@ -24,13 +24,25 @@
 #
 # Usage (as a cron entry, every five minutes):
 #
-#   */5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic /path/to/watch-mail-failures.sh
+#   */5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic SP_API_CONTAINER=schedulepoint-release-api-1 /path/to/watch-mail-failures.sh
+#
+# **Set SP_API_CONTAINER explicitly and check it first.** Neither compose file sets
+# `container_name`, so Docker Compose names the container `<project>-<service>-<index>` — which is
+# `schedulepoint-release-api-1` for the release stack and `schedulepoint-api-1` for the local build,
+# and something else again if Dockge names the project after its stack directory. Confirm with:
+#
+#   docker ps --format '{{.Names}}' | grep api
+#
+# A wrong name does not fail silently — the branch below alerts "cannot read logs" — but it alerts
+# every five minutes about the watcher rather than about the mail, which is its own kind of useless.
 #
 # It is stateless between runs except for a cursor file, so it reports each failure once. A run with
 # no new failures prints nothing and exits 0 — silence means the transport is working.
 set -euo pipefail
 
-CONTAINER="${SP_API_CONTAINER:-schedulepoint-api}"
+# The release stack's name. Overridden by SP_API_CONTAINER, which is what the usage note above
+# tells operators to set — this default is a plausible starting point, not a safe assumption.
+CONTAINER="${SP_API_CONTAINER:-schedulepoint-release-api-1}"
 ALERT_URL="${SP_ALERT_URL:-}"
 CURSOR="${SP_MAIL_CURSOR:-/var/tmp/schedulepoint-mail-watch.cursor}"
 WINDOW="${SP_MAIL_WINDOW:-10m}"
