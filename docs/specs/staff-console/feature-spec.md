@@ -722,11 +722,11 @@ So the decision is: **dual-hatting is permitted, and staff-ness confers nothing 
 organisation — by construction, not by policy.** The same human, holding the same session cookie,
 gets:
 
-| Route                              | Principal resolved                              | What they can do                                               |
-| ---------------------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
-| `/api/v1/organizations/acme/plans` | `Principal` with his real memberships           | Exactly his `ORG_ADMIN`/`PLANNER` role in Acme — **unchanged** |
-| `/api/v1/staff/health`             | `StaffPrincipal` with **no memberships at all** | Installation reads only                                        |
-| `/api/v1/organizations/other/…`    | `Principal` with no membership in `other`       | **404** — the cross-org invariant is untouched                 |
+| Route                              | Principal resolved                              | What they can do                                                 |
+| ---------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
+| `/api/v1/organizations/acme/plans` | `Principal` with their real memberships         | Exactly their `ORG_ADMIN`/`PLANNER` role in Acme — **unchanged** |
+| `/api/v1/staff/health`             | `StaffPrincipal` with **no memberships at all** | Installation reads only                                          |
+| `/api/v1/organizations/other/…`    | `Principal` with no membership in `other`       | **404** — the cross-org invariant is untouched                   |
 
 The two never coexist on one request, because they are resolved by different guards on disjoint route
 sets. There is no request on which "being staff" widens what the member principal may do — and

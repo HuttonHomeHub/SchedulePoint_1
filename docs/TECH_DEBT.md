@@ -1150,6 +1150,29 @@ register exists for.
 > (`docs/DEPLOYMENT.md` "Alerting on mail failures") and pick the channel. Until that runs, the
 > signal still reaches nobody — so this row stays open on the operator half rather than being
 > closed on the code.
+>
+> **Update, staff console M1 (2026-08-09): both halves now have an in-application replacement, and
+> the operator half is STILL OPEN.** That combination is the point of this update, so it is stated
+> before the improvements.
+>
+> `MAIL_ALERT_URL` makes the API post the mail-failure signal from inside the container — no Docker
+> socket, no container name to get wrong, no log window to tune, coalesced so a broken relay
+> produces one alert and one summary rather than one per send. `HEARTBEAT_URL` replaces the script's
+> "cannot read logs" branch, which could never have worked in the case that matters: the cron runs
+> on the host it is watching, so a host outage stops the watcher and emits nothing, and that silence
+> looks exactly like health. An outward heartbeat inverts the signal so silence **is** the alarm.
+>
+> **Neither closes this row, and writing the code is not the closing act.** Nothing is watching the
+> heartbeat: it ships built and dormant by choice (CQ-4, 2026-08-09 — the product owner chose to
+> build it and wire a receiver later, over the spec's own fallback of not building it at all). Until
+> a dead-man's-switch check exists and a `MAIL_ALERT_URL` is set on the host, the signal still
+> reaches nobody — which is the exact failure this row records, and shipping a second mechanism
+> nobody receives would be committing it twice rather than fixing it.
+>
+> **Closing conditions**, so this is a test rather than a judgement: (1) `MAIL_ALERT_URL` set on the
+> deployed host and observed alerting on a genuinely broken relay — the observation is the evidence,
+> not the unit suite; (2) an external dead-man's-switch created and `HEARTBEAT_URL` pointed at it.
+> `scripts/watch-mail-failures.sh` stays in-tree as the fallback until (1) has been observed.
 
 **Found:** 2026-08-06, immediately after releasing ADR-0075, by the product owner asking how to
 action the release note's instruction to "update your mail alerting".
