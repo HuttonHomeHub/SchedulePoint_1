@@ -40,11 +40,28 @@ describe('the geometry core is a leaf', () => {
     expect(specifiers.sort()).toEqual(['./working-time', '@/lib/constraint-format', '@repo/types']);
   });
 
+  it('no extracted module imports the barrel', () => {
+    // The rule generalises past the core: `render-model.ts` re-exports all four, so ANY import back
+    // through it rebuilds the cycle. Extending this as the modules land is cheaper than discovering
+    // which one reached back — and each of these was written to import `./geometry` directly.
+    for (const module of ['link-routing.ts', 'hit-test.ts', 'viewport.ts']) {
+      const source = readFileSync(join(RENDER, module), 'utf8');
+      expect(source, module).not.toMatch(/from\s+['"][^'"]*render-model(\.js|\.ts)?['"]/);
+    }
+  });
+
   it('the barrel re-exports the core, so no consumer import changed', () => {
     // The barrel-preserving rule (ADR-0078 §3): a refactor that moves code must not move imports.
     // Thirty consumers import from `render-model`; none of them was touched by #106, and this is
     // what keeps that true.
     const barrel = readFileSync(join(RENDER, 'render-model.ts'), 'utf8');
-    expect(barrel).toMatch(/export \* from '\.\/geometry';/);
+    for (const re of [
+      /export \* from '\.\/geometry';/,
+      /export \* from '\.\/hit-test';/,
+      /export \* from '\.\/link-routing';/,
+      /export \* from '\.\/viewport';/,
+    ]) {
+      expect(barrel).toMatch(re);
+    }
   });
 });
