@@ -93,9 +93,21 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await expect(lockedEdit).toHaveAttribute('aria-disabled', 'true');
   const reasonId = await lockedEdit.getAttribute('aria-describedby');
   expect(reasonId).not.toBeNull();
-  // The reason is a real sentence naming a next step, not a bare "Read-only" — and it is the
-  // app's existing pen sentence rather than a fourth variant invented for this surface.
-  await expect(b.locator(`#${reasonId ?? ''}`)).toHaveText(/Start editing to change this activity/);
+  // The reason is a real sentence naming a next step, not a bare "Read-only" — and it names the
+  // control THIS reader can actually see. That is `docs/TECH_DEBT.md` #115, and this assertion is
+  // where it was found: the sentence used to read "Start editing to change this activity" while
+  // the same page showed **Request control** and no Start-editing button at all, a few lines from
+  // the `requestBtn` this test clicks next. ADR-0083 M7 routed all eleven such sites through one
+  // `scheduleRefusal`, so the frame is chosen from the live pen state and the peer is named.
+  const reason = b.locator(`#${reasonId ?? ''}`);
+  // "Holder", not "Holder A": `lockCopy.heldByOther` renders the FIRST NAME only, which is what
+  // the pen banner shows, so the two surfaces cannot describe one state two ways.
+  await expect(reason).toHaveText(
+    /Holder is editing this plan\. Request control to change this activity\./,
+  );
+  // Stated negatively too, because the defect was a plausible-looking sentence rather than a
+  // missing one: nothing here may offer a control this reader does not have.
+  await expect(reason).not.toHaveText(/Start editing/);
   // A shaded item stays an arrow-key stop, which is the only way that sentence is reachable by
   // keyboard. `itemsOf` filtered disabled items until ADR-0082, so this line is the primitive's
   // posture change observed through the product rather than through the primitive's own suite.
@@ -135,8 +147,11 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await b.keyboard.press('Escape');
 
   // The other surface's sentence for the same state, so the two cannot drift into two mental
-  // models — which is the defect `docs/TECH_DEBT.md` #111 actually described. A's toolbar is now
-  // the locked-out one, and its pen-gated commands shade with the same "Start editing to …" form.
+  // models — which is the defect `docs/TECH_DEBT.md` #111 actually described. The pen has moved,
+  // so A is now the locked-out one and B is the named holder: the mirror image of the assertion
+  // above, and the proof that the sentence follows the live state rather than a constant. It named
+  // "Start editing" for BOTH readers until ADR-0083 M7, which is exactly how a constant fails —
+  // it is right for whoever it was written about and wrong for everybody else.
   await refetchLock(a);
   await a.bringToFront();
   await a.getByRole('button', { name: 'Actions for Excavate' }).click();
@@ -144,7 +159,8 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await expect(aEdit).toHaveAttribute('aria-disabled', 'true', CROSS_ACTOR);
   const aReasonId = await aEdit.getAttribute('aria-describedby');
   await expect(a.locator(`#${aReasonId ?? ''}`)).toHaveText(
-    /Start editing to change this activity/,
+    /Peer is editing this plan\. Request control to change this activity\./,
+    CROSS_ACTOR,
   );
   await a.keyboard.press('Escape');
 

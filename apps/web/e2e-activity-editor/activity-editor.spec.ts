@@ -114,8 +114,13 @@ test('weighted steps save, then take over the physical % with a reason', async (
   await editor.getByRole('button', { name: 'Save steps' }).click();
 
   // Once saved, the steps WIN — and the manual field says so rather than silently being ignored,
-  // which is the defect that started this epic.
-  await expect(editor.getByLabel('Physical % complete')).toBeDisabled();
+  // which is the defect that started this epic. `readOnly`, not `disabled` (ADR-0083 D1): the
+  // rolled-up figure is exactly what the reader came to see, and a disabled field takes it out of
+  // the tab order and out of copy. Asserted both ways round, because "not disabled" alone would
+  // also pass against a field that had simply come unlocked.
+  const physical = editor.getByLabel('Physical % complete');
+  await expect(physical).toHaveAttribute('readonly', '');
+  await expect(physical).toBeEnabled();
   await expect(editor.getByText(/Weighted steps are setting this to 60%/)).toBeVisible();
 });
 
@@ -143,10 +148,18 @@ test('losing the pen shuts the definition scopes and leaves progress open', asyn
   await expect(editor.getByRole('button', { name: 'Save measure' })).toBeDisabled();
   await expect(editor.getByRole('button', { name: 'Save steps' })).toBeDisabled();
   await expect(editor.getByRole('button', { name: 'Add step' })).toBeDisabled();
+  // Nobody holds the pen here — `releasePen` above — so the frame is "Start editing", the one this
+  // reader can act on. The peer-holds-it frame is proven in `e2e-edit/pen-handoff.spec.ts`, which
+  // is the only place two real actors exist (ADR-0083 M7, `docs/TECH_DEBT.md` #115).
   await expect(editor.getByText(/Start editing to change this activity/i).first()).toBeVisible();
 
   await editor.getByRole('tab', { name: 'General' }).click();
-  await expect(editor.getByLabel('Name')).toBeDisabled();
+  // Shut, and still readable: the name is the one field a reader most needs while the scope is
+  // closed to them, and `disabled` would have taken it out of the tab order (ADR-0083 D1).
+  const name = editor.getByLabel('Name');
+  await expect(name).toHaveAttribute('readonly', '');
+  await expect(name).toBeEnabled();
+  await expect(name).toHaveValue('Strip formwork');
   await expect(editor.getByRole('button', { name: 'Save general' })).toBeDisabled();
 });
 
