@@ -1,22 +1,31 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  ApiCookieAuth,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiTooManyRequestsResponse,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { StaffPrincipal } from '../../common/auth/staff-principal';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { AuditService } from '../audit/audit.service';
 
+import { StaffAccountsQueryDto } from './dto/staff-accounts-query.dto';
 import { CspReportRowDto } from './dto/staff-csp-reports.dto';
+import { StaffHealthDto } from './dto/staff-health.dto';
+import { StaffIdentityDto } from './dto/staff-identity.dto';
 import {
   StaffAccountsDto,
   StaffActivityRowDto,
   StaffInstallationDto,
 } from './dto/staff-installation.dto';
-import { StaffHealthDto } from './dto/staff-health.dto';
-import { StaffIdentityDto } from './dto/staff-identity.dto';
-import { StaffGuard } from './staff.guard';
 import { StaffHealthService } from './staff-health.service';
+import { StaffGuard } from './staff.guard';
 
 /**
  * The staff console's API surface (ADR-0086). **M2 ships exactly one route, and ships dark**: no
@@ -33,6 +42,21 @@ import { StaffHealthService } from './staff-health.service';
  * recording nothing.
  */
 @ApiTags('staff')
+@ApiCookieAuth('session')
+@ApiUnauthorizedResponse({
+  description: 'No session at all. The global authentication guard answers before this controller.',
+})
+// **The defining behaviour of this surface, and it was undeclared.** Every non-staff caller — an
+// authenticated member, an Org Admin, an allowlisted address that has not verified — gets the same
+// 404 an unmapped route gives, never 403, so the console is no oracle for which addresses are
+// staff. The generated spec said these routes were open and always succeeded, which is the
+// opposite of what they do.
+@ApiNotFoundResponse({
+  description:
+    'Uniform refusal for every non-staff caller. Never 403: a 403 would tell a prober their guess ' +
+    'was interesting.',
+})
+@ApiTooManyRequestsResponse({ description: 'Throttled tighter than the global limit (30/60 s).' })
 @Controller({ path: 'staff', version: '1' })
 // Tighter than the global 100/60 s — the ADR-0051 precedent this ADR invokes and did not apply.
 // Two reasons: this is the most privileged surface in the product, and every successful hit writes
@@ -82,7 +106,11 @@ export class StaffController {
     // The bare DTO: `TransformInterceptor` wraps every response in the standard `{ data }`
     // envelope, so returning one here would double-wrap it. Caught by the e2e, which is the only
     // place the real interceptor runs — a controller unit test sees whatever the method returns.
-    return { userId: staff.userId, email: staff.email };
+    return {
+      userId: staff.userId,
+      email: staff.email,
+      dualHatted: await this.health.isDualHatted(staff.userId),
+    };
   }
 
   @Get('health')
@@ -119,7 +147,7 @@ export class StaffController {
     description:
       'Distinct violations reported by browsers, most recent activity first. An EMPTY list is not ' +
       'proof the policy is clean — end-to-end delivery from a browser is unverified ' +
-      '(docs/TECH_DEBT.md #102), so silence here means "nothing arrived", not "nothing happened".',
+      '(docs/TECH_DEBT.md #117), so silence here means "nothing arrived", not "nothing happened".',
   })
   @ApiOkResponse({ type: [CspReportRowDto] })
   async cspReports(
@@ -168,14 +196,14 @@ export class StaffController {
   async accounts(
     @CurrentStaff() staff: StaffPrincipal,
     @RequestContext() context: RequestContext,
-    @Query('cursor') cursor?: string,
+    @Query() query: StaffAccountsQueryDto,
   ): Promise<StaffAccountsDto> {
     // The audit row names the panel and NEVER its contents. This response carries customer
     // addresses, and `audit_events` refuses DELETE — recording them here would put customer PII in
     // the one table erasure cannot reach, which is exactly what M1's ordinary `mail_events` table
     // exists to avoid.
     await this.recordPanelRead(staff, context, 'accounts');
-    return await this.health.accounts(cursor);
+    return await this.health.accounts(query.cursor);
   }
 
   @Get('activity')

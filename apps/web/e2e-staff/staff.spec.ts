@@ -193,6 +193,22 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await expect(staff).toHaveURL(/\/staff$/);
   await expect(staff.getByRole('heading', { name: /create your organisation/i })).toHaveCount(0);
 
+  // 5. **The member's refusal, seventy lines up, left a row the console can see.** This shipped as
+  // silence and the M6 security review found it; it is asserted here rather than only in the API
+  // suite because it spans the whole chain — a guard writes it, the panel's repository filter has
+  // to be the ACTION namespace to return it (an actor-type filter hides it, since the prober is
+  // typed `USER` and not `STAFF`), and the copy has to render an action nobody has read before.
+  // Nothing short of the real product exercises all three.
+  await expect(staff.getByRole('heading', { name: 'Staff activity' })).toBeVisible();
+  const activity = staff.getByRole('region', { name: /staff actions/i });
+  await expect(activity.getByText(memberEmail)).toBeVisible();
+  // And the row says only THAT it was refused, never WHICH of the three conditions failed — the
+  // difference the uniform 404 withholds, and a screen that spelt it out would be the oracle the
+  // guard is built to deny. An exact-text match is the assertion: a first draft searched the whole
+  // region for reason words and failed on the squatter's own address, `unverified@…`, which is the
+  // panel working correctly and the test reading it wrongly.
+  await expect(activity.getByText('access denied', { exact: true }).first()).toBeVisible();
+
   // The console is a real screen and gets the same accessibility bar as every other one.
   const results = await new AxeBuilder({ page: staff })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])

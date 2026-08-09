@@ -164,6 +164,11 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   The actor, the action and the instant are the evidence; the contents are not.
   'staff.session_started': [],
   'staff.panel_read': [],
+  //   A denial records the actor, the instant and the request evidence — never WHICH of the three
+  //   conditions failed. "Not on the allowlist" and "allowlisted but unverified" are different
+  //   facts, and a table a member can cause rows in is the wrong place to keep the difference: it
+  //   would make the log the oracle the uniform 404 exists to deny.
+  'staff.access_denied': [],
 };
 
 /**

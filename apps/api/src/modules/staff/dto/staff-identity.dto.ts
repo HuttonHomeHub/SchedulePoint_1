@@ -14,4 +14,13 @@ export class StaffIdentityDto {
 
   @ApiProperty({ description: 'The normalised address that matched the allowlist.' })
   email!: string;
+
+  @ApiProperty({
+    description:
+      'Whether this account ALSO holds an organisation membership. ADR-0086 D4 permits dual-hatting ' +
+      'rather than refusing it — refusing would lock the only staff member out on day one — and ' +
+      'the compensation it named was that the console says which hat is active. That banner was ' +
+      'decided and never shipped; this field is what makes it possible.',
+  })
+  dualHatted!: boolean;
 }

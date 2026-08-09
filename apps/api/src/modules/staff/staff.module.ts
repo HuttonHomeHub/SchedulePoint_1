@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 
-import { StaffController } from './staff.controller';
-import { StaffGuard } from './staff.guard';
 import { VersionService } from '../../version/version.service';
 
 import { StaffBootstrapService } from './staff-bootstrap.service';
 import { StaffHealthService } from './staff-health.service';
+import { StaffController } from './staff.controller';
+import { StaffGuard } from './staff.guard';
 
 /**
  * The staff console (ADR-0086). Ships dark in M2 — one route, no web surface.

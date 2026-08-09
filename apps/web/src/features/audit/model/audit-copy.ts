@@ -87,6 +87,10 @@ const TITLES: Record<AuditAction, string> = {
   // not imply there is.
   'staff.session_started': 'Staff console opened',
   'staff.panel_read': 'Staff console panel read',
+  // Not "access denied to the staff console" — the reader of an organisation log should not learn
+  // from a label that a staff console exists. "Refused" is what happened; the surface is the
+  // subject, and the subject is not spelt out here.
+  'staff.access_denied': 'Staff surface refused',
 };
 
 function field(side: Record<string, unknown> | undefined, key: string): string | null {
@@ -231,8 +235,13 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
     // No detail line: `staff.session_started`'s allow-list is EMPTY by design — the row records
     // that a surface was reached, never what was on it, because the console reads customer
     // addresses and `audit_events` refuses DELETE. Falls through to the `default` null.
+    //
+    // `staff.access_denied` is empty for a second reason: WHICH of the three conditions failed is
+    // exactly what the uniform 404 withholds, so a detail line here would be the oracle the guard
+    // spends its whole design avoiding.
     case 'staff.session_started':
     case 'staff.panel_read':
+    case 'staff.access_denied':
       return null;
     case 'interchange.imported': {
       // The filename first — it is the only surviving link to the source, and the upload itself is

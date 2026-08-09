@@ -1,0 +1,92 @@
+-- ADR-0086: serve the staff console's "Staff activity" panel
+-- (`StaffHealthService.activity()`, staff-health.service.ts:202).
+--
+-- That read is `WHERE action LIKE 'staff.%' ORDER BY occurred_at DESC, id DESC LIMIT 50`, and NONE
+-- of the three existing partial indexes can serve it: all three lead with a column this query does
+-- not constrain (`organization_id`, `actor_user_id`, `subject_id`), and a staff row has no
+-- organisation at all. So it fell off to a Parallel Seq Scan whose cost is O(the whole
+-- installation's audit volume) — a table that, by ADR-0072, refuses DELETE and has no retention
+-- sweep, so it only ever grows. The panel gets slower forever, at a rate set by everybody else's
+-- activity rather than by staff's.
+--
+-- The predicate is the ACTION NAMESPACE, deliberately NOT `actor_type = 'STAFF'`. A refusal is
+-- recorded as `staff.access_denied` with `actor_type = 'USER'`, because a denied caller is not
+-- staff and staff.guard.ts:135 types them honestly. An actor-type index would therefore have
+-- excluded the single row a staff reader most needs to see. Verified rather than reasoned: with
+-- both candidate predicates built side by side and one denial row inserted, the namespace predicate
+-- returned it as the newest row and the actor-type predicate did not contain it at all.
+--
+-- MEASURED before it was written (Postgres 16.13 local, 500,334 rows: 500,000 `member.role_changed`
+-- + 318 `staff.*`). `EXPLAIN (ANALYZE, BUFFERS)` on the SQL Prisma actually emits — verified from
+-- the client's own query log, `WHERE "action"::text LIKE $1 ORDER BY ... LIMIT $2 OFFSET $3`, not
+-- from the schema:
+--
+--   before, literal `LIKE 'staff.%'`      34–40 ms   Parallel Seq Scan, 14,724 buffers (114 MB heap)
+--   before, prepared `LIKE $1` (x7)       23–33 ms   Parallel Seq Scan — every execution
+--   after,  literal                       0.125 ms   Index Scan, 47 buffers
+--   after,  prepared `LIKE $1` (x7)     0.022–0.056 ms  Index Scan — including executions 6 and 7
+--   after,  forced generic plan           27 ms      Parallel Seq Scan (see the plan-cache note)
+--
+-- And end to end through the real Prisma client rather than through psql, 20 runs each, because a
+-- server-side plan is not what the panel waits on:
+--
+--   before   median 25.63 ms   p95 35.21 ms
+--   after    median  1.48 ms   p95  1.65 ms
+--
+-- The residual 1.5 ms is client and query-engine overhead, not the query; it is the floor this read
+-- was always going to have, and it is now what the panel costs.
+--
+-- Cost: 32 kB. The predicate excludes 500,016 of 500,334 rows, so 99.94% of inserts do NO index
+-- maintenance at all — Postgres evaluates the predicate and skips. That asymmetry is the whole
+-- argument for a partial index on an append-only table: the read is bounded by staff volume while
+-- the write cost stays bounded by staff volume too, instead of both being bounded by everything.
+--
+-- WHY THE INDEX IS MATCHED AT ALL, since it is not obvious and the next reader will need it.
+-- Prisma parameterises the prefix, and a partial index is chosen by PREDICATE IMPLICATION, not by
+-- an index condition — the planner must prove the query's WHERE implies this index's WHERE. It can,
+-- because for a custom plan Postgres folds the bound parameter to a constant before proving, and
+-- the resulting expression is EQUAL to this predicate. (The `::text` cast Prisma emits is a no-op
+-- on a `text` column and is elided at parse time; the plan prints `action ~~ 'staff.%'::text`.)
+-- The plan cache does not take that away: at executions 6 and 7, where a generic plan becomes
+-- eligible, Postgres kept the custom plan — the costs are 202 against 18,336, and `plan_cache_mode
+-- = auto` keeps the cheaper one. That margin WIDENS as the table grows, because the generic
+-- sequential scan grows and this index scan does not. Under `force_generic_plan` the read reverts
+-- to 27 ms, i.e. exactly today's behaviour: the failure mode of the fragility is losing the
+-- improvement, never being worse than before it.
+--
+-- WHAT THIS DOES NOT COVER, stated so nobody has to re-measure to find out:
+--
+--   * The implication is EXPRESSION EQUALITY and nothing cleverer. Postgres does not reason about
+--     LIKE-pattern containment, which was checked because the opposite is the intuitive guess:
+--     `LIKE 'staff.panel%'` — strictly NARROWER than this predicate — is NOT implied and seq-scans
+--     at 32 ms, and so do `LIKE 'staff%'`, `LIKE '%staff.%'` and `action = 'staff.access_denied'`.
+--     So this index serves EXACTLY `startsWith: 'staff.'` and nothing else. Changing that string in
+--     staff-health.service.ts, or narrowing the filter, or adding an `action` chip to this panel,
+--     silently reverts it to a sequential scan with no error and no failing test. If that read
+--     changes, this index changes with it, in the same commit.
+--   * It does not serve the other three staff reads (`mail_events`, `csp_reports`, `users`) — they
+--     have their own access paths and their own measurements.
+--   * There are deliberately NO `INCLUDE` columns, so this is an index scan and not an index-only
+--     scan. Covering the projection would mean storing `actor_label` and `subject_label` — customer
+--     email addresses — a second time, inside the one table that refuses DELETE. 47 buffers is not
+--     worth a second permanent copy of an address (the `mail_events.recipient` reasoning).
+--   * It is not `CREATE INDEX CONCURRENTLY`. Prisma runs each migration in a transaction, which
+--     forbids it. So this takes a SHARE lock on `audit_events` — reads continue, WRITES BLOCK — for
+--     the length of the build, which is the honest cost and not `ACCESS SHARE`. Measured at 51 ms
+--     on 500,334 rows, and the build only ever scans to find the 318 rows the predicate keeps.
+--     A blocked write here is an audit insert, which every producer either awaits inside its own
+--     transaction or fires best-effort, so 51 ms of it is not observable; on this installation's
+--     real audit volume it is smaller again. Revisit only if this table reaches tens of millions.
+--
+-- NOT SHIPPED, and recorded here so the question is not reopened from scratch: a partial
+-- `(created_at, id) WHERE NOT email_verified` on `users`, for `StaffHealthService.accounts()`. It
+-- was measured on this same database. `users` holds FIVE rows in ONE heap page; the paginated read
+-- is a 0.036 ms sequential scan and the exact count 0.019 ms, and an index cannot beat reading one
+-- page. The 43 ms figure that motivated the suggestion came from a synthetic million-row population
+-- that no longer exists — the deleted rows left 141 MB of bloat behind in `users_pkey` and
+-- `users_email_key`, which is the evidence it was there and also the reason not to size a real
+-- decision from it. Deferred, with a trigger rather than a date: build it when unverified accounts
+-- on the deployed installation reach five figures, and measure again then.
+CREATE INDEX "idx_audit_events_staff_occurred"
+  ON "audit_events" ("occurred_at" DESC, "id" DESC)
+  WHERE "action" LIKE 'staff.%';

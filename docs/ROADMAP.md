@@ -206,7 +206,7 @@ This narrows the unaudited surface; it does not close it, and saying otherwise w
 
 - **Wire the two receivers.** `MAIL_ALERT_URL` and a dead-man's-switch check are compose edits on
   the host. Until they exist the signals reach nobody, which is the failure `#100` records.
-- **Verify CSP delivery end to end** (`docs/TECH_DEBT.md` #102) — closable only by deploying,
+- **Verify CSP delivery end to end** (`docs/TECH_DEBT.md` #117) — closable only by deploying,
   visiting a page and reading the Security panel.
 - **A retention sweep.** Both new tables document a period (30 days for CSP reports, 12 months for
   mail events) and **nothing enforces either**; there is no scheduler in this application, so the

@@ -1827,7 +1827,7 @@ dead weight. Tightening the type is a small cleanup with no behavioural change.
 **Risk:** (1) and (2) together are a real capability gap for keyboard-driven planners and should be
 taken as one slice. (3)–(5) are consistency and tidiness.
 
-### 102. CSP report delivery is unverified end to end
+### 117. CSP report delivery is unverified end to end
 
 **Found:** 2026-08-09, while writing the gate that was supposed to verify it (staff console M4).
 
@@ -1866,3 +1866,55 @@ blank while the policy kept `report-to`, reporting would die with no error anywh
 origin serving both the app and the API, which is the deployed stack and not a preview server —
 the same shape as `docs/TECH_DEBT.md` #100's operator half, and closable the same way: by
 observation on the host, not by a test.
+
+## 118. Staff-console M6 review findings that were not folded
+
+Six specialists reviewed the combined M1–M5 diff. Eight blocking findings were folded with
+regression tests verified red first (the denial audit row, the missing `nextCursor`, the undeclared
+OpenAPI auth/404/429, the absent document title, four hand-rolled tables, the un-announced settled
+panels, the never-built dual-hat banner, the unindexed activity read). These four survive as debt
+rather than being rushed:
+
+**1. `csp_reports` and `mail_events` have no retention sweep, and one of them is written by an
+unauthenticated endpoint.** ADR-0085 D3 settled the period at 12 months and nothing enforces it —
+`apps/api/prisma/migrations/20260809160000_csp_reports/migration.sql` says so in its own comment
+("the true retention today is forever"). The security review's point sharpens the priority rather
+than adding a new fact: the CSP write path needs **no credential**, and stripping only the query
+string from `blocked_uri`/`document_uri` leaves the path, so unique rows are trivially mintable at
+20 per request × 60 requests/minute per IP. Separately, `mail_events.recipient` retains a real
+customer address indefinitely, which is the thing ADR-0085 spent a decision keeping erasable.
+**Close it by building the sweep**, and treat it as ahead of its current place in `ROADMAP.md`'s
+"next in this theme" ordering, because the write side is internet-facing.
+
+**2. A CSP row's `source_file`/`line_number`/`column_number` are last-writer-wins with no auth.**
+Anyone who can reproduce a row's four key fields — all observable from the page that produced the
+violation — can replace its recorded source location. Bounded at 1,024 characters, stored and
+rendered as text, so the ceiling is misdirection of an investigation, not disclosure. Documented in
+the `ON CONFLICT` clause rather than closed: first-writer-wins pins the row to the least informative
+report, and keying on the location shatters one violation into a row per call site. **Accepted, not
+open** — recorded here so the trade is findable, and so "a source location is a lead, not evidence"
+is written down somewhere other than one SQL comment.
+
+**3. `Alert tone="info"` gives a live-region role to two static first-paint caveats.** The
+no-transport note and the no-violations note are permanent documentation of what an empty result
+means, not something that just happened — so wrapping them in a polite live region risks an
+unsolicited announcement on load, and now that each panel announces its own settled state (WCAG
+4.1.3), risks overlapping with it. The fix belongs in the primitive, not this screen: `Alert` infers
+its role from `tone` alone, and the distinction it is missing is "reporting a change" vs "stating a
+standing fact". Not blocking — nothing is unreachable, and the copy is correct.
+
+**4. `--card` / `--muted-foreground` is not in the contrast matrix.** The staff console puts
+`text-muted-foreground` directly on `Card` rather than through `CardDescription`, and
+`token-contrast.test.ts` pins `--muted-foreground` only against `--background`. Recomputed
+independently at the OKLCH→sRGB level: the worst case is dark theme at **6.91:1**, comfortably above
+4.5, so **there is no failure today** — but it is ungated, and it is _less_ contrasty than the pair
+that is gated (7.63:1), so the gate is currently reassuring about the wrong pair. Add the case.
+
+**Not a finding, recorded because it was measured and the measurement inverted the recommendation:**
+a partial index `(created_at, id) WHERE NOT email_verified` on `users`, serving the accounts panel.
+The reviewer measured 43 ms → 0.05 ms and recommended it; the database-architect re-measured against
+the **real** table (five rows, one heap page) at 0.036 ms and recommended deferring, because the
+43 ms came from a synthetic million-row population that no longer exists. Deferred against a trigger
+rather than a date — build it when unverified accounts on the deployed installation reach five
+figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` so the question is
+not reopened from scratch.

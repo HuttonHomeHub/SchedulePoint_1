@@ -63,6 +63,16 @@ export class StaffAccountsDto {
 
   @ApiProperty({ description: 'True when more rows exist beyond this page.' })
   hasMore!: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Pass as `?cursor=` to fetch the next page. Null on the last page. **This field is why the ' +
+      'route is genuinely paginated**: `hasMore` alone told a caller more rows existed and gave ' +
+      'them no way to ask for them — a capability declared and not honoured, which is TECH_DEBT ' +
+      "#19's class of defect. Two independent reviews found it.",
+  })
+  nextCursor!: string | null;
 }
 
 /** One recorded staff action. */

@@ -2663,9 +2663,11 @@ model AuditEvent {
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  // Both read indexes are PARTIAL and therefore raw SQL in the migration (Prisma cannot express
+  // All FOUR read indexes are PARTIAL and therefore raw SQL in the migration (Prisma cannot express
   // a WHERE predicate), and are deliberately NOT declared as @@index here — declaring them would
-  // create a conflicting FULL index, the calendar_id / delete_batch_id precedent:
+  // create a conflicting FULL index, the calendar_id / delete_batch_id precedent. (This comment
+  // said "Both" while listing three, from when there were two; it is a count, so it is now stated
+  // in a form that a fifth index cannot leave quietly wrong.)
   //
   //   * idx_audit_events_org_occurred   (organization_id, occurred_at DESC, id DESC)
   //       WHERE organization_id IS NOT NULL — the organization_id FK RESTRICT check AND the
@@ -2678,6 +2680,20 @@ model AuditEvent {
   //       actor index EXCLUDES exactly the rows this one covers, which is why the widened read
   //       needed a second index rather than a wider one. Measured before it was written; the
   //       numbers are in the migration.
+  //   * idx_audit_events_staff_occurred (occurred_at DESC, id DESC)
+  //       WHERE action LIKE 'staff.%' — the staff console's activity panel (ADR-0086). The only
+  //       one of the four with NO leading scope column, because that read has no scope: a staff
+  //       row has no organisation and a REFUSAL has no staff actor. Predicated on the ACTION
+  //       NAMESPACE and deliberately not on `actor_type = 'STAFF'` — `staff.access_denied` is
+  //       recorded with actor_type USER (staff.guard.ts:135), so an actor-type predicate would
+  //       have hidden exactly the row that panel exists to show.
+  //       It is also the only index here chosen by PREDICATE IMPLICATION against a LIKE rather
+  //       than by a leading equality, which makes it the only one that can be silently lost:
+  //       Postgres proves the implication by expression EQUALITY, so it serves `startsWith:
+  //       'staff.'` and literally nothing else — not a narrower prefix, not an equality on a
+  //       staff action. If StaffHealthService.activity()'s filter changes, this index changes
+  //       with it. The measurements, the negative cases and the plan-cache argument are in
+  //       migrations/20260809180000_audit_events_staff_index.
   @@map("audit_events")
 }
 

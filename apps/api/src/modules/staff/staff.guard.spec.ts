@@ -6,6 +6,7 @@ import { Principal } from '../../common/auth/principal';
 import { NotFoundError } from '../../common/errors/domain-errors';
 import type { AppConfigService } from '../../config/app-config.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditService } from '../audit/audit.service';
 
 import { StaffGuard } from './staff.guard';
 
@@ -21,6 +22,11 @@ import { StaffGuard } from './staff.guard';
 const STAFF_ID = 'user-staff';
 
 function contextFor(request: Partial<StaffRequest & AuthenticatedRequest>): ExecutionContext {
+  // `headers` is supplied because the guard now builds a request context for the denial row, and a
+  // request object without them is a shape Express never produces.
+  // Assigned onto the caller's own object rather than a copy — the guard's success path attaches
+  // `staff` to the request, and a spread would leave those assertions inspecting a different object.
+  Object.assign(request, { headers: {}, socket: {} });
   return {
     switchToHttp: () => ({ getRequest: () => request }),
   } as unknown as ExecutionContext;
@@ -33,14 +39,21 @@ function principal(userId = STAFF_ID): Principal {
 function build(options: {
   allowlist?: readonly string[];
   user?: { id: string; email: string; emailVerified: boolean } | null;
-}): { guard: StaffGuard; findFirst: ReturnType<typeof vi.fn> } {
+}): {
+  guard: StaffGuard;
+  findFirst: ReturnType<typeof vi.fn>;
+  recordBestEffort: ReturnType<typeof vi.fn>;
+} {
   const findFirst = vi.fn().mockResolvedValue(options.user ?? null);
   const config = {
     staffEmails: options.allowlist ?? ['staff@schedulepoint.test'],
-  } as AppConfigService;
+    trustedProxyIps: [],
+  } as unknown as AppConfigService;
   const prisma = { user: { findFirst } } as unknown as PrismaService;
+  const recordBestEffort = vi.fn().mockResolvedValue(undefined);
+  const audit = { recordBestEffort } as unknown as AuditService;
 
-  return { guard: new StaffGuard(config, prisma), findFirst };
+  return { guard: new StaffGuard(config, prisma, audit), findFirst, recordBestEffort };
 }
 
 const VERIFIED_STAFF = { id: STAFF_ID, email: 'staff@schedulepoint.test', emailVerified: true };
@@ -153,5 +166,46 @@ describe('StaffGuard', () => {
     await guard.canActivate(contextFor({ principal: principal() }));
 
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: STAFF_ID } }));
+  });
+
+  it('records every refusal as a denial by a USER, and admits without one', async () => {
+    // The M6 security review found this surface refusing in silence while the approved spec called
+    // an audited denial non-negotiable in five places. The actor type is the part worth pinning:
+    // `STAFF` would be a lie about a prober AND would place them in the console's own "what staff
+    // have done" panel, which reads the `staff.` action namespace.
+    const refusals = [
+      build({ user: { ...VERIFIED_STAFF, emailVerified: false } }),
+      build({ user: { id: 'x', email: 'nobody@acme.test', emailVerified: true } }),
+      build({ allowlist: [], user: VERIFIED_STAFF }),
+      build({ user: null }),
+    ];
+
+    for (const { guard, recordBestEffort } of refusals) {
+      await guard.canActivate(contextFor({ principal: principal() })).catch(() => undefined);
+      expect(recordBestEffort).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'staff.access_denied',
+          outcome: 'DENIED',
+          actorType: 'USER',
+        }),
+      );
+    }
+
+    // And an admitted caller writes nothing here — the session row is the controller's job.
+    const admitted = build({ user: VERIFIED_STAFF });
+    await admitted.guard.canActivate(contextFor({ principal: principal() }));
+    expect(admitted.recordBestEffort).not.toHaveBeenCalled();
+  });
+
+  it('never fails the request when the audit write fails', async () => {
+    // `recordBestEffort` swallowing is what keeps the uniform 404 uniform: `record()` would answer
+    // an unwritable audit table with a 500, making the staff surface distinguishable from an
+    // unmapped route by status code — an oracle bought with the mechanism meant to close one.
+    const { guard, recordBestEffort } = build({ user: null });
+    recordBestEffort.mockRejectedValue(new Error('audit_events is unavailable'));
+
+    await expect(guard.canActivate(contextFor({ principal: principal() }))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });

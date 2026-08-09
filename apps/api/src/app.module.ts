@@ -22,6 +22,7 @@ import { BaselinesModule } from './modules/baselines/baselines.module';
 import { CalendarsModule } from './modules/calendars/calendars.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { CrossPlanDependenciesModule } from './modules/cross-plan-dependencies/cross-plan-dependencies.module';
+import { CspModule } from './modules/csp/csp.module';
 import { DependenciesModule } from './modules/dependencies/dependencies.module';
 import { InterchangeModule } from './modules/interchange/interchange.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
@@ -35,9 +36,8 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
-import { CspModule } from './modules/csp/csp.module';
-import { StaffModule } from './modules/staff/staff.module';
 import { ShareModule } from './modules/share/share.module';
+import { StaffModule } from './modules/staff/staff.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { VersionModule } from './version/version.module';
 

@@ -108,6 +108,13 @@ export function errorClassOf(error: unknown): string | null {
  * **With `MAIL_ALERT_URL` absent, no POST is ever attempted** — but the row is still written, which
  * is deliberate: the durable history is useful on its own and costs nothing, while the alert is the
  * part that needs somewhere to go.
+ *
+ * **The coalescing window is per process, so N replicas would send N summaries for one incident.**
+ * `HeartbeatService` already records the same caveat for pings and calls it harmless; here it is
+ * less obviously so — an operator would get one message per replica rather than the single summary
+ * the window exists to produce, which is a worse outcome than no coalescing at all if it ever
+ * became the norm. Not reachable today: this deploys as one container (`CLAUDE.md` §17). Stated so
+ * that whoever adds the second replica meets the consequence here rather than in their inbox.
  */
 @Injectable()
 export class OperationalAlertService implements OnApplicationShutdown {

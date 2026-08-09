@@ -1,8 +1,8 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 
 import type { StaffRequest } from '../auth/authenticated-request';
-import { NotFoundError } from '../errors/domain-errors';
 import { StaffPrincipal } from '../auth/staff-principal';
+import { NotFoundError } from '../errors/domain-errors';
 
 /**
  * Injects the {@link StaffPrincipal} into a handler parameter. Only valid on staff routes behind

@@ -23,6 +23,8 @@ export interface StaffAccounts {
   unverifiedTotal: number;
   unverified: UnverifiedAccount[];
   hasMore: boolean;
+  /** The cursor for the next page, or `null` at the end. Without it `hasMore` was unactionable. */
+  nextCursor: string | null;
 }
 
 export interface StaffActivityRow {
@@ -49,10 +51,22 @@ export function useStaffInstallation(): UseQueryResult<StaffInstallation> {
   });
 }
 
-export function useStaffAccounts(): UseQueryResult<StaffAccounts> {
+/**
+ * One page of unverified accounts.
+ *
+ * The cursor is part of the key rather than held outside it, so paging back to a page already
+ * fetched is served from the cache and writes **no** second audit row — every read here is audited,
+ * and a reader stepping through pages should not be able to inflate that log by going backwards.
+ */
+export function useStaffAccounts(cursor?: string): UseQueryResult<StaffAccounts> {
   return useQuery({
-    queryKey: ['staff', 'accounts'],
-    queryFn: () => apiFetch<StaffAccounts>('/staff/accounts'),
+    queryKey: ['staff', 'accounts', cursor ?? null],
+    queryFn: () =>
+      apiFetch<StaffAccounts>(
+        cursor === undefined
+          ? '/staff/accounts'
+          : `/staff/accounts?cursor=${encodeURIComponent(cursor)}`,
+      ),
     refetchOnWindowFocus: false,
     retry: false,
   });

@@ -160,6 +160,40 @@ was wrong, and "sign in first" is not a fact about anybody's staff status.
 at boot; nothing did. It is built now (`StaffBootstrapService`) rather than the sentence being
 deleted, because that observability was the whole compensation for permitting dual-hatting.
 
+### D8 — A refusal is audited, and the argument that shipped against it was answering a different question
+
+The approved spec called an audited denial non‑negotiable in five separate places (US‑3, US‑8's
+acceptance criterion, the success criteria, the edge-case table, the workflow text). The code shipped
+**silence**, with a test asserting the silence and a comment justifying it: recording a denial "would
+make the log an inventory of who tried". The M6 security review found it, and the reversal was never
+written back into this ADR — which is the ADR‑0071 failure exactly, one document along: noticing that
+a decision changed and stepping over the register leaves it as wrong as never noticing.
+
+The argument is answerable, and it was answering the wrong question. An inventory of who tried to
+reach the most privileged surface in the product is precisely the evidence this epic exists to
+create. What must not leak is **which of the three conditions failed** — "not on the allowlist" and
+"allowlisted but unverified" are different facts, and the uniform 404 exists to withhold the
+difference. That is held by the redactor's **empty allow‑list** for `staff.access_denied`, not by the
+absence of a row, and the empty allow-list was already there.
+
+Two properties make the row safe to write **from a guard**, and both are load-bearing rather than
+convenient:
+
+- It is `recordBestEffort`, defended by a `.catch()` at the call site. `record()` would answer an
+  unwritable `audit_events` with a 500 — making the staff surface distinguishable from an unmapped
+  route by status code, an oracle bought with the mechanism meant to close one. The `.catch()` is
+  belt over braces deliberately: the uniform 404 must not depend on another class keeping a promise.
+- The actor is `USER`, never `STAFF`. A denied caller is not staff; typing them as staff would
+  misrepresent them **and** place them in the console's own "what staff have done" panel.
+
+That panel consequently filters on the **`staff.` action namespace** rather than `actorType: 'STAFF'`
+— equally repository-side, equally incapable of returning a member's own work, and the only version
+that can show the row a reader most needs to see.
+
+The cost is stated rather than discovered: `audit_events` refuses `DELETE`, so an authenticated
+member can add rows nobody can remove until the retention sweep exists. The bound is the controller's
+30/60 s throttle and nothing else.
+
 ## Consequences
 
 - The API gains a second guard and a second principal type. Both are small and both are pinned by a

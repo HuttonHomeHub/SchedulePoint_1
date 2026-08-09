@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StaffConsoleScreen } from './staff';
@@ -41,7 +41,12 @@ function notFound(): ApiFetchError {
 function otherPanels(path: string): Promise<unknown> {
   if (path === '/staff/csp-reports' || path === '/staff/activity') return Promise.resolve([]);
   if (path === '/staff/accounts') {
-    return Promise.resolve({ unverifiedTotal: 0, unverified: [], hasMore: false });
+    return Promise.resolve({
+      unverifiedTotal: 0,
+      unverified: [],
+      hasMore: false,
+      nextCursor: null,
+    });
   }
   return Promise.resolve({
     apiVersion: '0.47.1',
@@ -59,7 +64,7 @@ function otherPanels(path: string): Promise<unknown> {
 function renderStaffWith(payloads: Record<string, unknown>): void {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path === '/staff/me') {
-      return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
+      return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test', dualHatted: false });
     }
     if (path in payloads) return Promise.resolve(payloads[path]);
     if (path !== '/staff/health') return otherPanels(path);
@@ -115,7 +120,11 @@ describe('StaffConsoleScreen', () => {
   it('renders the console and the mail panel for a staff caller', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
       if (path === '/staff/me') {
-        return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
+        return Promise.resolve({
+          userId: 'u1',
+          email: 'ops@schedulepoint.test',
+          dualHatted: false,
+        });
       }
       if (path !== '/staff/health' && path !== '/staff/csp-reports') return otherPanels(path);
       if (path === '/staff/csp-reports') {
@@ -187,7 +196,7 @@ describe('StaffConsoleScreen', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Content-Security-Policy' })).toBeVisible();
-    expect(screen.getByText('script-src-elem')).toBeInTheDocument();
+    expect(await screen.findByText('script-src-elem')).toBeInTheDocument();
     // The source location is the part that names what to CHANGE — the blocked URI often cannot.
     expect(screen.getByText(/index-abc\.js:42/)).toBeInTheDocument();
   });
@@ -199,7 +208,7 @@ describe('StaffConsoleScreen', () => {
     renderStaffWith({});
 
     expect(await screen.findByRole('heading', { name: 'Installation' })).toBeVisible();
-    expect(screen.getByText('smtp.example:465')).toBeInTheDocument();
+    expect(await screen.findByText('smtp.example:465')).toBeInTheDocument();
     expect(screen.queryByText(/PASSWORD|password@/i)).not.toBeInTheDocument();
     expect(screen.getByText('Email verification: enforced')).toBeInTheDocument();
   });
@@ -211,6 +220,7 @@ describe('StaffConsoleScreen', () => {
       '/staff/accounts': {
         unverifiedTotal: 3,
         hasMore: false,
+        nextCursor: null,
         unverified: [
           { id: 'u1', email: 'stuck@example.test', createdAt: '2026-08-01T00:00:00.000Z' },
         ],
@@ -218,8 +228,8 @@ describe('StaffConsoleScreen', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Unverified accounts' })).toBeVisible();
-    expect(screen.getByText(/3 accounts cannot complete/i)).toBeInTheDocument();
-    expect(screen.getByText('stuck@example.test')).toBeInTheDocument();
+    expect(await screen.findByText(/3 accounts cannot complete/i)).toBeInTheDocument();
+    expect(await screen.findByText('stuck@example.test')).toBeInTheDocument();
   });
 
   it('shows staff activity, which is the console holding itself to account', async () => {
@@ -236,12 +246,12 @@ describe('StaffConsoleScreen', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Staff activity' })).toBeVisible();
-    expect(screen.getByText(/panel read · accounts/i)).toBeInTheDocument();
+    expect(await screen.findByText(/panel read · accounts/i)).toBeInTheDocument();
   });
 
   it('says an empty policy table is NOT proof the policy is clean', async () => {
     // The assertion that matters most on this panel. Delivery from a browser to the sink has never
-    // been verified end to end (TECH_DEBT #102), so silence means "nothing arrived", not "nothing
+    // been verified end to end (TECH_DEBT #117), so silence means "nothing arrived", not "nothing
     // happened" — and a reader who took an empty table as evidence would be misled on exactly the
     // decision the panel exists to inform.
     renderStaffWith({ '/staff/csp-reports': [] });
@@ -256,7 +266,11 @@ describe('StaffConsoleScreen', () => {
     // that showed the number alone would report a broken installation as a healthy one.
     vi.mocked(apiFetch).mockImplementation((path: string) => {
       if (path === '/staff/me') {
-        return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test' });
+        return Promise.resolve({
+          userId: 'u1',
+          email: 'ops@schedulepoint.test',
+          dualHatted: false,
+        });
       }
       if (path !== '/staff/health') return otherPanels(path);
       return Promise.resolve({
@@ -275,5 +289,91 @@ describe('StaffConsoleScreen', () => {
     expect(await screen.findByText(/No mail transport is configured/i)).toBeInTheDocument();
     expect(screen.getByText('Failure alerting: off')).toBeInTheDocument();
     expect(screen.getByText('Heartbeat: off')).toBeInTheDocument();
+  });
+
+  it('names itself in the document title, on both landable states', async () => {
+    // `/staff` is reached only by typing the address — there is deliberately no link to it — so the
+    // title is the first thing a screen reader announces on arrival (WCAG 2.4.2). This was the one
+    // sibling of the authenticated shell that skipped the hook every other public route calls.
+    renderStaffWith({});
+    expect(await screen.findByRole('heading', { name: 'Staff console' })).toBeVisible();
+    expect(document.title).toContain('Staff console');
+  });
+
+  it('says which hat is active when the account is also a member', async () => {
+    // ADR-0086 D4 permits dual-hatting rather than refusing it, and the compensation it named was
+    // that the console says so. That was decided and never built until the UX review found it.
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === '/staff/me') {
+        return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test', dualHatted: true });
+      }
+      if (path === '/staff/health') {
+        return Promise.resolve({
+          failuresLast24h: 0,
+          failuresLastHour: 0,
+          lastFailureAt: null,
+          transportConfigured: true,
+          alertingConfigured: true,
+          heartbeatConfigured: true,
+          recentFailures: [],
+        });
+      }
+      return otherPanels(path);
+    });
+
+    renderScreen();
+
+    expect(await screen.findByText(/also an organisation member/i)).toBeInTheDocument();
+  });
+
+  it('offers a way to reach the accounts it says exist', async () => {
+    // The API declared `hasMore` and the screen printed "More exist" with no way to get there — a
+    // capability declared and not honoured, found independently by the API and UX reviews.
+    const pages: Record<string, unknown> = {
+      '/staff/accounts': {
+        unverifiedTotal: 30,
+        hasMore: true,
+        nextCursor: 'u25',
+        unverified: [
+          { id: 'u1', email: 'first@example.test', createdAt: '2026-08-01T00:00:00.000Z' },
+        ],
+      },
+      '/staff/accounts?cursor=u25': {
+        unverifiedTotal: 30,
+        hasMore: false,
+        nextCursor: null,
+        unverified: [
+          { id: 'u26', email: 'later@example.test', createdAt: '2026-08-02T00:00:00.000Z' },
+        ],
+      },
+    };
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === '/staff/me') {
+        return Promise.resolve({
+          userId: 'u1',
+          email: 'ops@schedulepoint.test',
+          dualHatted: false,
+        });
+      }
+      if (path in pages) return Promise.resolve(pages[path]);
+      if (path === '/staff/health') {
+        return Promise.resolve({
+          failuresLast24h: 0,
+          failuresLastHour: 0,
+          lastFailureAt: null,
+          transportConfigured: true,
+          alertingConfigured: true,
+          heartbeatConfigured: true,
+          recentFailures: [],
+        });
+      }
+      return otherPanels(path);
+    });
+
+    renderScreen();
+
+    fireEvent.click(await screen.findByRole('button', { name: /show older/i }));
+
+    expect(await screen.findByText('later@example.test')).toBeInTheDocument();
   });
 });

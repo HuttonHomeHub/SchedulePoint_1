@@ -6,6 +6,13 @@ import { ApiFetchError, apiFetch } from '@/lib/api/client';
 export interface StaffIdentity {
   userId: string;
   email: string;
+  /**
+   * Whether this account also holds an organisation membership.
+   *
+   * ADR-0086 D4 permits dual-hatting and compensates by making the console say which hat is active.
+   * The compensation was decided and not built until the UX review found it.
+   */
+  dualHatted: boolean;
 }
 
 export const staffIdentityKey = ['staff', 'me'] as const;

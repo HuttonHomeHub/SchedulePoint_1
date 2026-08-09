@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { normalizeEmail } from '../common/auth/normalize-email';
-import { ConfigService } from '@nestjs/config';
 
 import type { Env } from './env.validation';
 

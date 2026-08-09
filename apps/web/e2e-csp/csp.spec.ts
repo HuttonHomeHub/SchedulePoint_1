@@ -170,7 +170,7 @@ test('the authenticated shell raises no CSP violation', async ({ page }) => {
  * headers below, and hence the structural test that pins them together.
  *
  * The residual — end-to-end delivery from a real browser to the real sink — is `docs/TECH_DEBT.md`
- * #102. It needs a real origin serving both the app and the API, which is the deployed stack.
+ * #117. It needs a real origin serving both the app and the API, which is the deployed stack.
  */
 test('the report directives do not break the policy, and a violation still fires', async ({
   page,

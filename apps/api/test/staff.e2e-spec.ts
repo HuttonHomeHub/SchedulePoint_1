@@ -153,17 +153,31 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     await agent.get('/api/v1/staff/me').set('Origin', ORIGIN).expect(404);
   });
 
-  it('writes no audit row for a refused caller', async () => {
-    // A refusal is not a staff act, and recording one would make the log an inventory of who tried
-    // — which on this surface is a list of addresses somebody probed.
+  it('records a refused caller as a denial — attributed, and never as staff', async () => {
+    // This asserted the OPPOSITE until the M6 security review: that a refusal wrote nothing, on the
+    // reasoning that a denial log becomes an inventory of who tried. It does, and that is the
+    // point — the approved spec called it non-negotiable in five places and the code shipped
+    // silence. What must not leak is WHICH condition failed, and the redactor's empty allow-list
+    // for this action is what holds that, not the absence of the row.
     const agent = request.agent(server());
     await signUp(agent, MEMBER_EMAIL).expect(200);
     await prisma.user.updateMany({ where: { email: MEMBER_EMAIL }, data: { emailVerified: true } });
-    const before = await staffAuditCount();
 
     await agent.get('/api/v1/staff/me').set('Origin', ORIGIN).expect(404);
 
-    expect(await staffAuditCount()).toBe(before);
+    const row = await prisma.auditEvent.findFirst({
+      where: { action: 'staff.access_denied' },
+      orderBy: { occurredAt: 'desc' },
+    });
+    expect(row).not.toBeNull();
+    // Typed as the caller really is. `STAFF` would be a lie about a prober, and would put them in
+    // the console's own "what staff have done" panel.
+    expect(row?.actorType).toBe('USER');
+    expect(row?.outcome).toBe('DENIED');
+    expect(row?.actorLabel).toBe(MEMBER_EMAIL);
+    // No `changes` at all: "not allowlisted" and "allowlisted but unverified" are the difference
+    // the uniform 404 exists to withhold, and a member can cause rows in this table.
+    expect(row?.changes).toBeNull();
   });
 
   it('serves the health panel and records reading it', async () => {

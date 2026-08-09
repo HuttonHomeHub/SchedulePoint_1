@@ -176,4 +176,24 @@ describe('operational alerting configuration (staff console M1)', () => {
     expect(() => validateEnv({ ...prodBase, HEARTBEAT_INTERVAL_MINUTES: '90' })).toThrow();
     expect(() => validateEnv({ ...prodBase, MAIL_ALERT_WINDOW_MINUTES: '0' })).toThrow();
   });
+
+  it('refuses to boot on a STAFF_EMAILS entry that is not an address', () => {
+    // An approved acceptance criterion that silently did not ship. The failure it catches is quiet
+    // by nature: a typo fails CLOSED — nobody becomes staff, the console 404s for the person it was
+    // configured for, and every diagnostic points at the guard rather than at the environment.
+    expect(() => validateEnv({ ...prodBase, STAFF_EMAILS: 'ops' })).toThrow();
+    expect(() =>
+      validateEnv({ ...prodBase, STAFF_EMAILS: 'ops@schedulepoint.test;a@b.test' }),
+    ).toThrow();
+    expect(() => validateEnv({ ...prodBase, STAFF_EMAILS: 'Ops Person <ops@b.test>' })).toThrow();
+  });
+
+  it('accepts an empty list, and tolerates the spacing an operator actually types', () => {
+    // Empty is the shipped default and means "no staff console at all" — a configuration, not a
+    // mistake. Trailing commas and spaces around entries are how a hand-edited list looks.
+    expect(() => validateEnv({ ...prodBase })).not.toThrow();
+    expect(() =>
+      validateEnv({ ...prodBase, STAFF_EMAILS: ' Ops@SchedulePoint.test , second@b.test , ' }),
+    ).not.toThrow();
+  });
 });

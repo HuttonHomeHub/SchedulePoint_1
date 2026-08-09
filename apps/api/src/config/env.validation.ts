@@ -167,7 +167,32 @@ export const envSchema = z
      * guard also requires `emailVerified` unconditionally. Without that, an allowlisted address
      * that has not yet signed up is squattable, and whoever registers it first becomes staff.
      */
-    STAFF_EMAILS: z.string().default(''),
+    /**
+     * …and an entry that is not a plausible address **fails the boot**.
+     *
+     * This was an approved acceptance criterion that silently did not ship — the security review
+     * found it — and the reason to build rather than delete it is the shape of the failure it
+     * catches. A typo fails **closed**: nobody becomes staff, the console 404s for the person it
+     * was configured for, and every diagnostic points at the guard. Loud at boot is the honest
+     * version of the same fact, and this is a value an operator hand-edits on a host.
+     *
+     * The check is deliberately shallow — a non-empty local part, an `@`, a dot-bearing domain, no
+     * whitespace. Address syntax is not decidable by regex and pretending otherwise would refuse
+     * real addresses; this rejects the mistakes people actually make (a stray comma, a name, a
+     * missing `@`).
+     */
+    STAFF_EMAILS: z
+      .string()
+      .default('')
+      .refine(
+        (value) =>
+          value
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter((entry) => entry !== '')
+            .every((entry) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry)),
+        { message: 'STAFF_EMAILS must be a comma-separated list of email addresses' },
+      ),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),

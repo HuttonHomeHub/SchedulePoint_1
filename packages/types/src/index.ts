@@ -2057,6 +2057,11 @@ export const AUDIT_ACTIONS = [
   //   so this narrows the unaudited surface rather than widening the audited one.
   'staff.session_started',
   'staff.panel_read',
+  //   And the refusals. This one is not a read at all: it is an authenticated caller who is NOT
+  //   staff reaching a staff route, and it is the only row in the vocabulary whose actor is
+  //   deliberately `USER` rather than `STAFF` — recording a prober as staff would be a lie, and it
+  //   would put them in the console's own "what staff have done" panel.
+  'staff.access_denied',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -2166,6 +2171,7 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   // wrong question. A tier move is the same class of fact: who may use this, from now on.
   'staff.session_started': 'access',
   'staff.panel_read': 'access',
+  'staff.access_denied': 'access',
   'calendar.archived': 'settings',
   'calendar.unarchived': 'settings',
   'calendar.scope_changed': 'settings',

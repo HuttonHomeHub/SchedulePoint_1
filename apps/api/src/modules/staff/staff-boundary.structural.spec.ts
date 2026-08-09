@@ -138,4 +138,22 @@ describe('the staff boundary (ADR-0086)', () => {
 
     expect(offenders, 'the staff console must not read a customer entity').toEqual([]);
   });
+
+  it('keeps the activity filter byte-identical to the partial index that serves it', () => {
+    // `idx_audit_events_staff_occurred` is partial on `action LIKE 'staff.%'`, and Postgres matches
+    // a partial index by **expression equality**, not by pattern containment — measured, not
+    // assumed: a strictly NARROWER predicate (`LIKE 'staff.panel%'`) seq-scans just as a wider one
+    // does. So `startsWith: 'staff.'` is not a stylistic choice; it is the index's only key.
+    //
+    // Changing it to anything else — a longer prefix, an `in` list, an equality — silently reverts
+    // this read to a full scan of a table that grows forever and has no retention sweep. There is
+    // no error, nothing fails, and the panel simply gets slower every month. Measured at 500,334
+    // rows: 0.02–0.13 ms indexed against 23–40 ms scanning.
+    const source = code(join(STAFF_DIR, 'staff-health.service.ts'));
+
+    expect(
+      source,
+      "the activity filter must stay `startsWith: 'staff.'` — see the migration",
+    ).toContain("action: { startsWith: 'staff.' }");
+  });
 });

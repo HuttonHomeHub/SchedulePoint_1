@@ -75,6 +75,25 @@ export class CspReportService {
     @InjectPinoLogger(CspReportService.name) private readonly logger: PinoLogger,
   ) {}
 
+  /**
+   * **Sequential and one statement per report, deliberately — this reads like an oversight and is
+   * not one.** Both properties were re-derived and measured by the M6 backend-performance review;
+   * recorded here because the next reader's instinct will be to batch it.
+   *
+   * - `await` in a loop rather than `Promise.all`, for **pool discipline**. Sequentially, one CSP
+   *   POST holds exactly one Prisma connection whatever the batch size. Concurrently it would take
+   *   up to {@link MAX_REPORTS_PER_REQUEST}, on a **public, unauthenticated** endpoint — the
+   *   difference between many IPs posting harmlessly and twenty of them starving the pool.
+   * - One statement per report, for **fault isolation** — and the obvious multi-row rewrite is a
+   *   correctness regression, verified against this schema rather than assumed: two reports in one
+   *   batch sharing a `dedupe_hash` (the Reporting API can queue duplicates before a flush) make
+   *   Postgres raise `ON CONFLICT DO UPDATE command cannot affect row a second time`, and because
+   *   this endpoint swallows write failures to answer 204, that would silently drop the **whole**
+   *   batch instead of one row. A correct batched version needs a `GROUP BY dedupe_hash` CTE first.
+   *
+   * The measured prize for getting all that right is 3–5 ms per maximal batch on a same-host
+   * database (~7–8 ms sequential against 3.2 ms batched, 20 rows), which is not worth the risk.
+   */
   async record(reports: readonly NormalisedCspReport[]): Promise<void> {
     for (const report of reports) {
       try {
@@ -107,6 +126,17 @@ export class CspReportService {
             -- Last-writer-wins on the three non-key columns: they are not part of the identity, and
             -- one worked example of where the code was is all they need to be. COALESCE so a later
             -- report that omitted them cannot erase what an earlier one supplied.
+            --
+            -- **The hostile reading, stated because the endpoint is unauthenticated.** Anyone who
+            -- can reproduce an existing row's four key fields — all four are observable from the
+            -- page that produced the violation — can replace its recorded source location with
+            -- values of their choosing. The ceiling is misdirection of an investigation: the
+            -- values are capped at 1,024 characters, stored as text and rendered as text, so there
+            -- is no injection and nothing is disclosed. Accepted rather than closed, because the
+            -- alternatives are first-writer-wins (which pins the row to whichever report arrived
+            -- first, usually the least informative) or keying on the location too (which shatters
+            -- one violation into a row per call site — the fragmentation the dedupe key exists to
+            -- prevent). Treat a source location here as a lead, never as evidence.
             disposition = COALESCE(EXCLUDED.disposition, csp_reports.disposition),
             source_file = COALESCE(EXCLUDED.source_file, csp_reports.source_file),
             line_number = COALESCE(EXCLUDED.line_number, csp_reports.line_number),
