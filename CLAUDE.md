@@ -1860,6 +1860,32 @@ When operating in this repo, Claude Code should:
      that applies everywhere is followed nowhere, and both failures were in the
      small set of statements that changed what got built.
 
+10. **Approved work runs to completion. A status report is not a stopping point.**
+    When the product owner has approved a plan or said "drive this to completion",
+    the only two reasons to stop are: **every milestone is done**, or **an answer is
+    needed that only they can give**. Nothing else qualifies — not a finished
+    milestone, not a good moment to summarise, not a long turn.
+
+    - **The failure mode is ending the turn, and it is silent.** On 2026-08-08 an
+      approved programme lost **seven and a half hours** between two milestones
+      (`ce4e6c5` at 23:33, `b710cbd` at 07:03). Nothing failed and nothing was
+      blocked: a milestone landed, a progress report was written, the turn ended,
+      and the session sat idle until the product owner typed. From the inside that
+      is indistinguishable from working — which is exactly why it needs a rule
+      rather than an intention.
+    - **So chain the work inside the turn.** Finish a slice, commit it, push it,
+      and start the next one **in the same turn**. Report at the end of the turn,
+      not instead of continuing.
+    - **And arm a wake-up before the turn can end** (`send_later`, ~25 minutes),
+      carrying the remaining milestone list and re-arming itself each turn while
+      work remains. A turn boundary is a real limit; being unable to cross it
+      alone is not a reason to stop, because the tool to cross it exists. This
+      session used that tool to babysit a pull request and not to continue the
+      work — which is the whole lesson.
+    - **If something genuinely needs an answer**, ask it, then **keep working on
+      everything that does not depend on it**. A blocking question blocks one
+      milestone, not the programme.
+
 ## 20. Specialised agents
 
 Subagents live in [`.claude/agents/`](.claude/agents/) (see its

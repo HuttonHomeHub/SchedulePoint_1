@@ -237,6 +237,23 @@ typecheck && pnpm test`, plus `scripts/e2e-local.sh api` for an `apps/api`
 
 This list is mirrored in the pull-request template.
 
+### Finishing a milestone is not finishing the work
+
+A milestone that satisfies every box above is **done**; the _programme_ it belongs to is
+not. When a multi-milestone plan has been approved, the next slice starts immediately —
+in the same working turn — and the only two reasons to stop are that **every milestone
+is complete** or that **a question needs an answer only the product owner can give**.
+
+Written after an approved programme lost seven and a half hours between two milestones
+with nothing failing and nothing blocked: a slice landed, a progress summary was
+written, and the work simply did not resume until the product owner asked why. The
+summary was the problem — it read like a natural end. It is not one. Report at the end
+of a turn, not instead of continuing; and where a turn boundary would otherwise end the
+work, schedule the resumption before it can (CLAUDE.md §19.10).
+
+A blocking question blocks **one milestone**, not the programme. Ask it, then carry on
+with everything that does not depend on the answer.
+
 ## Change management
 
 For **architectural changes**, create an [ADR](adr/) capturing:
