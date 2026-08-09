@@ -1,5 +1,19 @@
 # @repo/api
 
+## 0.47.1
+
+### Patch Changes
+
+- [#266](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/266) [`3cf27de`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3cf27de4ea1fe34a4dbcd56038c03c3b8fa53fb3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A large bulk delete no longer blocks everyone else on the plan.
+
+  Deleting activities in bulk swept them one at a time — five statements per activity, up to about
+  ten thousand of them, every one holding the lock that serialises structural writes on the plan. For
+  the duration, nobody else could recalculate, edit or regroup anything in that plan. It is now four
+  statements for the whole batch.
+
+  Transactions also gained explicit timeouts, which the API had never had: a 15-second ceiling
+  generally, and 60 seconds on the deliberately batched writes.
+
 ## 0.47.0
 
 ### Minor Changes
