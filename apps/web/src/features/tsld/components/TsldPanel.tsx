@@ -18,7 +18,6 @@ import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
-  TSLD_EDITING_ENABLED,
   UNDO_REDO_ENABLED,
 } from '../../../config/env';
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
@@ -1308,7 +1307,7 @@ export function TsldPanel({
   // draw-ready** canvas before any recalc so the first activity can be placed on it; uncalculated
   // bars simply don't paint (`paint.ts` skips `earlyStart === null`).
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
-  const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
+  const editingEnabled = showDiagram && canEdit && onCreate !== undefined;
 
   // The floating selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
   // (open-logic + edit + delete). Its mutating actions are pen-gated as a set via `canEditSchedule`,

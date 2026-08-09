@@ -10,7 +10,6 @@ vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    TSLD_EDITING_ENABLED: false,
     CANVAS_AUTHORING_ENABLED: false,
     CANVAS_NAV_ENABLED: false,
   };

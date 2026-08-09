@@ -26,7 +26,7 @@ vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }))
 
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_AUTHORING_ENABLED: true, TSLD_EDITING_ENABLED: true };
+  return { ...actual, CANVAS_AUTHORING_ENABLED: true };
 });
 
 const NO_DEPS: DependencySummary[] = [];

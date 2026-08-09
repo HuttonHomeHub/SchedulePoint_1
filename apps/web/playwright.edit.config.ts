@@ -65,8 +65,6 @@ export default defineConfig({
             // page (Edit plan button, stacked activities section); the workspace-on
             // editing path is covered by playwright.workspace.config.ts.
             env: {
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
               VITE_CANVAS_WORKSPACE: 'false',
             },
           },

@@ -68,8 +68,6 @@ export default defineConfig({
               VITE_CANVAS_WORKSPACE: 'false',
               // The pen must be real, because every write here is pen-gated (ADR-0028) and a
               // duration that saves without the lock is not the thing being tested.
-              VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_TSLD_EDITING: 'true',
               // The flag-off activity dialog, not the tabbed editor: one Save, one duration field,
               // one place for this suite's assertions to look.
               VITE_ACTIVITY_EDITOR_TABS: 'false',

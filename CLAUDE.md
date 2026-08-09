@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 20 API modules
 > (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 893 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 83 ADRs.
+> 84 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -376,7 +376,8 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   - explicit release) with a 423 `LockedError` write-gate (`assertHoldsPen`),
     graceful peer request→grace→take-over hand-off (Org-Admin immediate override),
     serialised by the existing plan advisory lock; the third concurrency layer above
-    optimistic 409 and the advisory lock. Unblocks `VITE_TSLD_EDITING`.
+    optimistic 409 and the advisory lock. Unblocked on-canvas editing, whose flag
+    (`VITE_TSLD_EDITING`) retired in ADR-0084 batch 1 — the pen is unconditional.
 - **ADR-0029** — Persistent app-shell & hierarchy navigator: evolve `_authed` into
   a mounted-once shell (top bar + Project Explorer rail + single workspace region),
   URL-derived selection, and a hand-rolled ARIA `tree` with lazy-load + virtualization.
@@ -1756,6 +1757,31 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   specification, not observed** (real AT announcement of `readonly` + `aria-describedby`, and
   whether Chrome/Safari suppress the picker on a `readonly` date input) and must be checked before
   this is Accepted. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0084** _(Accepted)_ — A feature flag is a rollback contract with an expiry date. `env.ts`
+  declares 58 `VITE_` flags and `flagDefaultOff` is called **zero** times: every one is default-on,
+  i.e. a rollback contract left behind by the epic that shipped it. That is right on the day a
+  feature flips — the enablement milestones keep finding defects a human read missed — and wrong a
+  month later, when the flag-off branch has never been run by anybody and its parity suite asserts
+  that an unused configuration still works. **The cost is not the `if`; it is that every flag-off
+  branch is a second product, maintained on every change to the code around it forever.** So: a
+  machine-read `@enabled YYYY-MM-DD` tag on every declaration, a 30-day horizon (≈ a dozen releases
+  on a host that auto-pulls each one — ADR-0047 — which is the real unit of confidence), and
+  `pnpm check:flags` enforcing a **dated schedule rather than a cliff**, because a 30-day horizon
+  with no schedule fails on day one twenty-seven times and a gate that does that gets deleted
+  rather than fixed (ADR-0058). **Fourteen flags reached the gate with no enablement date recorded
+  anywhere** — not the docblock, not the ADR, not recoverable from git; they take the earliest date
+  the repository can prove, marked as a **floor**, which can only make a flag look younger than it
+  is and is therefore never premature. Batch 1 retired `VITE_TSLD_EDITING`, `VITE_PLAN_EDIT_LOCK`
+  and `VITE_NAV_TREE_CRUD` (one production line each — the pen is now unconditional; the
+  **server-side** `PLAN_EDIT_LOCK_ENFORCED` is a separate operator switch and is untouched), with
+  the flag-off parity case deleted alongside (D5). `VITE_CANVAS_TOOLBAR` moved to batch 2 **with
+  the reason written down**: it is not an `if` but a ~270-line alternative layout, and ADR-0080
+  records that layout causing a shipped defect — an argument for retiring it, not for keeping it.
+  **The ADR's own D4 was drafted backwards and `check:flags` failed on its first run**, against the
+  register shipped in the same commit: a _child_ must not retire before its parent, because the
+  child's retirement declares the feature permanent while the surviving parent can still switch it
+  off. ADR-0076 Class 3, caught by the gate written beside it.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

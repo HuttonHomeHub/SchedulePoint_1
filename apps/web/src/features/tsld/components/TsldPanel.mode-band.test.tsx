@@ -21,7 +21,6 @@ vi.mock('../../../config/env', async (importOriginal) => {
   return {
     ...actual,
     CANVAS_AUTHORING_ENABLED: true,
-    TSLD_EDITING_ENABLED: true,
     CANVAS_AUTHORING_FLOW_ENABLED: true,
   };
 });

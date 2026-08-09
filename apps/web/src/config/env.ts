@@ -55,65 +55,16 @@ export function flagDefaultOff(value: string | undefined): boolean {
 }
 
 /**
- * On-canvas TSLD structural editing (M2). **ON by default** (2026-07-12) now that
- * every pre-enablement gate is green — see below. Set `VITE_TSLD_EDITING=false` to
- * fall back to the M1 read-only surface, byte-for-byte (rollback / opt-out).
- *
- * CONCURRENCY PRECONDITION — MET. The plan edit-lock (ADR-0028) has landed: the
- * `features/plan-lock` "pen" (behind {@link PLAN_EDIT_LOCK_ENABLED}, also on by
- * default) makes a Planner take an exclusive lock before the canvas editing
- * affordances go live. NB the server-side write-gate `PLAN_EDIT_LOCK_ENFORCED`
- * remains **default-off** and is enabled by config as a separate, deliberate step
- * AFTER the web pen is confirmed deployed (ADR-0028 §9 rollout ordering) — never
- * flip enforcement ahead of the web bundle or non-holder writes would 423.
- *
- * PRE-ENABLEMENT GATES — ALL GREEN. The `Alt+←/→` time-nudge must NOT trigger
- * native Back/Forward history navigation (preventDefault is the mitigation, but
- * browser-chrome accelerators aren't guaranteed suppressible everywhere): asserted
- * automatically on **Chromium** by the flag-on Playwright suite (`keyboard-edit.spec.ts`
- * via `pnpm --filter @repo/web test:e2e:edit`) and MANUALLY CONFIRMED PASSING on
- * **Firefox / Safari / Edge** (2026-07-12, docs/TECH_DEBT.md #25a). Procedure:
- * docs/runbooks/tsld-editing-enablement.md.
- */
-export const TSLD_EDITING_ENABLED = flagDefaultOn(import.meta.env.VITE_TSLD_EDITING);
-
-/**
- * The plan edit-lock "pen" front-end layer (ADR-0028, edit-lock M2). **ON by
- * default** (2026-07-12). Set `VITE_PLAN_EDIT_LOCK=false` to ship the pen inert:
- * `usePlanPen` then reports `penManaged: false` — the lock-status query never polls,
- * no heartbeat runs, the `EditLockBanner` renders nothing, and schedule-editing
- * affordances fall back to role-only gating (rollback / opt-out).
- *
- * ROLLOUT ORDERING (ADR-0028 §9): the web pen is on by default; the API's
- * `PLAN_EDIT_LOCK_ENFORCED` is NOT (it stays a deliberate config switch). Keep that
- * order — enable enforcement only once a bundle with the pen on is live, so users
- * are already acquiring the pen on every editing entry point (harmless while the
- * backend still accepts non-holder writes). Flipping enforcement first would 423 the
- * activities-table / dependency / recalculate flows.
- */
-export const PLAN_EDIT_LOCK_ENABLED = flagDefaultOn(import.meta.env.VITE_PLAN_EDIT_LOCK);
-
-/**
  * The persistent app-shell + hierarchy navigator (ADR-0029). **ON by default** now
  * that M1 (shell) and M2 (the accessible Client → Project → Plan tree) have landed
  * with their journeys and a11y gates green — the mounted-once shell (top bar +
  * collapsible/resizable Project Explorer rail + single workspace region) is the
  * default navigation surface. Set `VITE_NAV_TREE=false` to fall back to the previous
  * header-only layout, byte-for-byte (emergency rollback / opt-out).
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
-
-/**
- * In-tree CRUD for the Project Explorer (ADR-0029 Phase 2). **ON by default**
- * (2026-07-12) now that the create/rename/delete affordances, the specialist-review
- * a11y fixes, and the flag-on Playwright journeys (`e2e/navigator-crud.spec.ts`) are
- * all green. Writers (Planner/Org Admin) get the row context menu (⋯ button,
- * right-click, ContextMenu/Shift+F10 key, touch long-press) and the rail-header
- * "New client" control; Contributors/Viewers keep a read-only tree (additional write
- * RBAC gate). Set `VITE_NAV_TREE_CRUD=false` to fall back to the navigation-only tree,
- * byte-for-byte (rollback / opt-out).
- */
-export const NAV_TREE_CRUD_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE_CRUD);
 
 /**
  * Canvas-first plan workspace (ADR-0030, spec `docs/specs/canvas-first-plan-workspace.md`).
@@ -124,6 +75,8 @@ export const NAV_TREE_CRUD_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE
  * shell's workspace region) with the activity table as a draggable, collapsible bottom panel.
  * Set `VITE_CANVAS_WORKSPACE=false` to fall back to the legacy long stacked plan-detail page,
  * byte-for-byte (emergency rollback / opt-out).
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_WORKSPACE);
 
@@ -139,6 +92,8 @@ export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  * popovers and the `⋯` overflow. Layers on {@link CANVAS_WORKSPACE_ENABLED} (ADR-0030) — meaningful
  * only when the canvas-first workspace is on. Set `VITE_CANVAS_TOOLBAR=false` to fall back to the
  * ADR-0030 workspace, byte-for-byte (emergency rollback / opt-out). Remaining fast-follows: TECH_DEBT #31.
+ *
+ * @enabled 2026-07-13
  */
 export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TOOLBAR);
 
@@ -160,6 +115,8 @@ export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_
  * workspace were off, edge-drag would be gone with no Link tool to replace it — a dead end for
  * on-canvas dependency creation (a11y review). So this flag is gated on both host flags: turning
  * either host off turns authoring off too (and edge-drag returns, byte-for-byte).
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const CANVAS_AUTHORING_ENABLED =
   flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING) &&
@@ -177,6 +134,8 @@ export const CANVAS_AUTHORING_ENABLED =
  * flag.) Layered on the canvas authoring host — the mode selector and Go-to-date live in the
  * toolbar-hosted workspace — so it is meaningful only when that surface is on; turning the host off
  * turns this off too.
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const SCHEDULING_MODES_ENABLED =
   flagDefaultOn(import.meta.env.VITE_SCHEDULING_MODES) && CANVAS_AUTHORING_ENABLED;
@@ -191,6 +150,8 @@ export const SCHEDULING_MODES_ENABLED =
  * hide it. The engine schedules each activity on its resolved calendar
  * (`activity.calendarId → plan.calendarId → 24/7`) regardless of this flag; the flag only governs
  * whether a planner can *pick* it in the web UI.
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_CALENDAR);
 
@@ -203,6 +164,8 @@ export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTI
  * is already live; the flag only governs whether a planner can *edit* the new fields in the web UI
  * (percent + actual dates were always editable). Set `VITE_PROGRESS_INGESTION=false` to roll back to
  * the percent-plus-actual-dates editor.
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PROGRESS_INGESTION);
 
@@ -218,6 +181,8 @@ export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PRO
  * the settable API fields, the engine's constraint passes, and the conformance proof (S12/N10) — is
  * already live; the flag only governs whether a planner can *edit and see* the new fields in the web UI.
  * Set `VITE_ADVANCED_CONSTRAINTS=false` to roll back to the moderate-constraint editor.
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ADVANCED_CONSTRAINTS,
@@ -232,6 +197,8 @@ export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
  * settable API fields, the engine's float & critical computation, and the conformance proof
  * (S07/S08/S11/S13) — is already live; the flag only governs whether a planner can *edit and see* the
  * three options in the web UI. Set `VITE_FLOAT_CRITICAL_SETTINGS=false` to hide them (rollback / opt-out).
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_FLOAT_CRITICAL_SETTINGS,
@@ -248,6 +215,8 @@ export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOn(
  * are live (F1–F7); the flag only governs whether a planner can *pick* them. Set
  * `VITE_ADVANCED_ACTIVITY_TYPES=false` to hide them (rollback / opt-out). The deferred canvas summary/LOE
  * span-bars and navigator visual nesting (TECH_DEBT #37) are independent of this picker.
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ADVANCED_ACTIVITY_TYPES,
@@ -262,6 +231,8 @@ export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
  * Everything behind it — the resource library + assignment API and the driving-resource-calendar
  * engine wiring — is already live; the flag only governs whether the web UI exposes it. Set
  * `VITE_RESOURCES=false` to disable it (rollback / opt-out).
+ *
+ * @enabled 2026-07-18
  */
 export const RESOURCES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCES);
 
@@ -277,6 +248,8 @@ export const RESOURCES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCES);
  * field is meaningful only alongside the resource surface, so it appears only when BOTH this flag and
  * {@link RESOURCES_ENABLED} are on; the duration-type picker (a plain activity attribute) needs only
  * this flag. Set `VITE_DURATION_TYPES=false` to disable it (rollback / opt-out).
+ *
+ * @enabled 2026-07-18
  */
 export const DURATION_TYPES_ENABLED = flagDefaultOn(import.meta.env.VITE_DURATION_TYPES);
 
@@ -298,6 +271,8 @@ export const DURATION_TYPES_ENABLED = flagDefaultOn(import.meta.env.VITE_DURATIO
  * `maxUnitsPerHour`, activity `levelingPriority`, the opt-in second engine pass and its engine-owned
  * levelled overlay + summary counts — is already live; the flag only governs whether the web UI exposes
  * it. Set `VITE_RESOURCE_LEVELLING=false` to disable it (rollback / opt-out).
+ *
+ * @enabled 2026-07-18
  */
 export const RESOURCE_LEVELLING_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCE_LEVELLING);
 
@@ -320,6 +295,8 @@ export const RESOURCE_LEVELLING_ENABLED = flagDefaultOn(import.meta.env.VITE_RES
  * `earned-value` read endpoint — is already live; the flag only governs whether the web UI exposes it.
  * Money on the wire is **integer minor units** in the plan's `currencyCode` (see `lib/format-money`).
  * Set `VITE_EARNED_VALUE=false` to disable it (rollback / opt-out).
+ *
+ * @enabled 2026-07-18
  */
 export const EARNED_VALUE_ENABLED = flagDefaultOn(import.meta.env.VITE_EARNED_VALUE);
 
@@ -337,6 +314,8 @@ export const EARNED_VALUE_ENABLED = flagDefaultOn(import.meta.env.VITE_EARNED_VA
  * PV time-phasing in the `earned-value` read — is already live; the flag only governs whether the web
  * UI exposes the picker. The cost **S-curve chart** (the period-trend series) is a later, separate
  * slice. Set `VITE_COST_ACCRUAL=false` to disable it (rollback / opt-out).
+ *
+ * @enabled 2026-07-18
  */
 export const COST_ACCRUAL_ENABLED = flagDefaultOn(import.meta.env.VITE_COST_ACCRUAL);
 
@@ -355,6 +334,8 @@ export const COST_ACCRUAL_ENABLED = flagDefaultOn(import.meta.env.VITE_COST_ACCR
  * Everything behind it — the settable `ActivityStep` rows, the bulk-replace endpoint, and the read-time
  * `rollupPhysicalPercent` resolver — is already live; the flag only governs whether the web UI exposes
  * the editor. Set `VITE_ACTIVITY_STEPS=false` to disable it (rollback / opt-out).
+ *
+ * @enabled 2026-07-18
  */
 export const ACTIVITY_STEPS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_STEPS);
 
@@ -375,6 +356,8 @@ export const ACTIVITY_STEPS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVIT
  * Everything behind it — the settable `curveType`, the pure `resource-histogram.ts` read-model, and the
  * `GET …/schedule/resource-histogram` endpoint — is already live; the flag only governs whether the web
  * UI exposes the picker + histogram. Set `VITE_RESOURCE_CURVES=false` to disable it (rollback / opt-out).
+ *
+ * @enabled 2026-07-18
  */
 export const RESOURCE_CURVES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCE_CURVES);
 
@@ -397,6 +380,8 @@ export const RESOURCE_CURVES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOUR
  * engine's two soft clamps and the engine-owned `externalDrivenCount` summary — is already live; the
  * flag only governs whether the web UI exposes it. Set `VITE_INTER_PROJECT_DATES=true` to enable it in
  * an environment.
+ *
+ * @enabled 2026-07-18
  */
 export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_INTER_PROJECT_DATES);
 
@@ -425,6 +410,8 @@ export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_IN
  * CRUD, the derivation seam, the programme-recalc orchestration and the staleness read — is already
  * live on the API (F2–F7); the flag only governs whether the web UI exposes it. Set
  * `VITE_PROGRAMME_SCHEDULING=false` for a byte-for-byte rollback.
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOn(
   import.meta.env.VITE_PROGRAMME_SCHEDULING,
@@ -446,6 +433,8 @@ export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOn(
  * `version` giving a 409 "updated elsewhere" path. Everything behind it — the notes CRUD + the batch
  * counts read — is already live on the API (M2); the flag only governs whether the web UI exposes it.
  * Set `VITE_NOTES=false` to hide the web surface in an environment (the API is unaffected).
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
 
@@ -466,6 +455,8 @@ export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
  * green. Each of the five ids resolves to its real {@link ToolbarItem} when on, and to its existing
  * `placeholderItem()` "Coming soon" stub when off — so `VITE_TOOLBAR_QUICK_WINS=false` restores the
  * placeholders byte-for-byte (emergency rollback / opt-out).
+ *
+ * @enabled 2026-07-19
  */
 export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOn(import.meta.env.VITE_TOOLBAR_QUICK_WINS);
 
@@ -481,7 +472,7 @@ export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOn(import.meta.env.VITE_TOO
  * exactly like a first-class edit: every inverse flows through the unchanged `assertHoldsPen` (423) +
  * RBAC + org-scope + optimistic `version` gates, so the client stack can never escalate.
  *
- * BACK/FORWARD SUPPRESSION (the pre-flip gate, cf. {@link TSLD_EDITING_ENABLED}): that `Cmd/Ctrl+Z`
+ * BACK/FORWARD SUPPRESSION (the pre-flip gate, the pre-flip gate ADR-0084 batch 1 retired): that `Cmd/Ctrl+Z`
  * doesn't trigger the browser's Back is asserted on **Chromium** by the flag-on Playwright journey
  * (`e2e-undo/undo.spec.ts` via `pnpm --filter @repo/web test:e2e:undo`); the **Firefox / Safari / Edge**
  * manual sweep is the same operator gate `VITE_TSLD_EDITING` used (docs/TECH_DEBT.md #25) — do it before
@@ -489,6 +480,8 @@ export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOn(import.meta.env.VITE_TOO
  *
  * Set `VITE_UNDO_REDO=false` to ship it inert (no store, no keybindings, placeholder toolbar items) —
  * byte-for-byte the prior behaviour (emergency rollback / opt-out).
+ *
+ * @enabled 2026-07-19
  */
 export const UNDO_REDO_ENABLED = flagDefaultOn(import.meta.env.VITE_UNDO_REDO);
 
@@ -518,6 +511,8 @@ export const UNDO_REDO_ENABLED = flagDefaultOn(import.meta.env.VITE_UNDO_REDO);
  * the canvas paint byte-for-byte (emergency rollback / opt-out). The driving-resource Colour-by mode is a
  * deferred fast-follow (needs `VITE_RESOURCES`); the colour machinery is mode-generic so it drops in
  * additively.
+ *
+ * @enabled 2026-07-19
  */
 export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_LENSES);
 
@@ -544,6 +539,8 @@ export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_L
  * contribution and the Visual drag path is unchanged — so `VITE_CANVAS_NAV=false` restores the toolbar
  * AND the canvas paint AND the a11y tree byte-for-byte (emergency rollback / opt-out). Isolate/Next-
  * conflict are view-only (every role); Snap is an authoring aid (pen + Visual mode).
+ *
+ * @enabled 2026-07-20
  */
 export const CANVAS_NAV_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_NAV);
 
@@ -572,6 +569,8 @@ export const CANVAS_NAV_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_NAV)
  * `VITE_EXPORT_PRINT=false` restores the toolbar, canvas paint and a11y tree byte-for-byte (emergency
  * rollback / opt-out); no export module or jsPDF chunk loads. `share` (ADR-0012 guest link) + XER/MSP
  * interchange are C2, out of scope; app-handled `Ctrl/Cmd+P` is a documented deferred fast-follow.
+ *
+ * @enabled 2026-07-20
  */
 export const EXPORT_PRINT_ENABLED = flagDefaultOn(import.meta.env.VITE_EXPORT_PRINT);
 
@@ -593,6 +592,8 @@ export const EXPORT_PRINT_ENABLED = flagDefaultOn(import.meta.env.VITE_EXPORT_PR
  * commit, Escape announcement, cross-modality pick, armed-trigger state, <2-activities gate). Flag-off ⇒
  * the Add menu keeps today's disabled "Soon" placeholders byte-for-byte and the LOE tool-mode is
  * unreachable (`VITE_CANVAS_ACTIVITY_TYPES=false` = emergency rollback / opt-out).
+ *
+ * @enabled 2026-07-20
  */
 export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_ACTIVITY_TYPES,
@@ -619,6 +620,8 @@ export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
  * to strip, so `resource-view` stays its "Coming soon" placeholder. Flag-off (or curves-off) ⇒ the
  * `resource-view`/`over-allocation` items are their placeholders AND `TsldCanvas` reserves no strip band
  * and paints byte-for-byte today's (`VITE_CANVAS_RESOURCE_VIEW=false` = emergency rollback / opt-out).
+ *
+ * @enabled 2026-07-20
  */
 export const CANVAS_RESOURCE_VIEW_ENABLED =
   flagDefaultOn(import.meta.env.VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED;
@@ -642,6 +645,8 @@ export const CANVAS_RESOURCE_VIEW_ENABLED =
  * this flag only governs whether the web UI exposes the entry + dialog. `VITE_SCHEDULE_INTERCHANGE=false`
  * (or the caller lacking `interchange:import`) ⇒ the plan-create surface is byte-for-byte today's — no
  * entry point, no dialog, and the review code is never reached (emergency rollback / opt-out).
+ *
+ * @enabled 2026-07-20
  */
 export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
   import.meta.env.VITE_SCHEDULE_INTERCHANGE,
@@ -675,6 +680,8 @@ export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
  * member chrome → revoke → unavailable). Set `VITE_GUEST_SHARE_LINKS=false` for a byte-for-byte rollback:
  * the toolbar `share` item reverts to its `placeholderItem()` "Coming soon" stub, no `/share` route is
  * registered, and none of the share code is reached (emergency opt-out).
+ *
+ * @enabled 2026-07-21
  */
 export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUEST_SHARE_LINKS);
 
@@ -697,6 +704,8 @@ export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUES
  * `VITE_ENTRY_ROUTES=true` to enable it in an environment. Flag-off ⇒ the plan notes stay inline, the
  * selection bar carries only its base three actions, and none of the new code is reached — byte-for-byte
  * the prior behaviour (emergency rollback / opt-out).
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const ENTRY_ROUTES_ENABLED = flagDefaultOn(import.meta.env.VITE_ENTRY_ROUTES);
 
@@ -713,6 +722,8 @@ export const ENTRY_ROUTES_ENABLED = flagDefaultOn(import.meta.env.VITE_ENTRY_ROU
  * the token-resolved **visual refresh** (M4/M5). No API or engine change — the recalc parity gate
  * is structurally untouched. Set `VITE_CANVAS_DIRECT_MANIPULATION=false` to fall back to the legacy
  * edge-drag zones and paint, byte-for-byte (emergency rollback / opt-out — the parity paint test).
+ *
+ * @enabled 2026-07-25
  */
 export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_DIRECT_MANIPULATION,
@@ -753,6 +764,8 @@ export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
  * grouping, tree, archive control or search field renders, every picker falls back to its native
  * `<select>`, and every list requests today's default (the shared organisation library) — the
  * flag-off parity suites.
+ *
+ * @enabled 2026-07-26
  */
 export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRARY_SCOPING);
 
@@ -789,6 +802,8 @@ export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRAR
  * `computeSchedule` — the ADR-0034 recalc parity gate is structurally untouched. Set
  * `VITE_CANVAS_LIVE_FEEDBACK=false` for a byte-for-byte rollback to the ADR-0052 surface (the
  * flag-off parity suites).
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_LIVE_FEEDBACK,
@@ -824,6 +839,8 @@ export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
  * byte-for-byte rollback: `ChromePortal` becomes an identity wrapper, the shell renders today's
  * `column[ header ][ row(rail | main) ]`, the header re-centres at `max-w-6xl`, and the root
  * attribute is absent so every token keeps today's value (the flag-off shell parity suite).
+ *
+ * @enabled 2026-07-26
  */
 export const DESIGNED_CHROME_ENABLED = flagDefaultOn(import.meta.env.VITE_DESIGNED_CHROME);
 
@@ -848,6 +865,8 @@ export const DESIGNED_CHROME_ENABLED = flagDefaultOn(import.meta.env.VITE_DESIGN
  * Frontend-only, and the painter is the only thing that changes: no API, DTO, schema or engine
  * change. Set `VITE_CANVAS_VISUAL_LANGUAGE=false` for a byte-for-byte paint — the
  * scene simply carries no `monthBands`, so the band layer is skipped entirely.
+ *
+ * @enabled 2026-07-26
  */
 export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CANVAS_VISUAL_LANGUAGE,
@@ -867,6 +886,8 @@ export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
  * wire — no API, DTO, schema or engine change, and no path back into `computeSchedule`. Flag-off
  * is byte-for-byte today's zoom/grid/today/non-working surface (`ZOOM_STOPS`, the single grid
  * pass, whole-day today, the flat non-working fill).
+ *
+ * @enabled 2026-07-27
  */
 export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TIME_AXIS);
 
@@ -887,6 +908,8 @@ export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  * `isCritical`, `parentId`, `percentComplete`) that are already on the wire — no API, DTO, schema
  * or permission change, and **no path back into `computeSchedule`**, so the ADR-0034 recalc
  * parity gate is untouched by construction.
+ *
+ * @enabled 2026-07-28
  */
 export const GANTT_VIEW_ENABLED = flagDefaultOn(import.meta.env.VITE_GANTT_VIEW);
 
@@ -914,6 +937,8 @@ export const GANTT_VIEW_ENABLED = flagDefaultOn(import.meta.env.VITE_GANTT_VIEW)
  * path into `computeSchedule`. (The steps edit-lock gate that shipped alongside this epic is
  * **not** behind this flag: a server check cannot be gated by a client build-time constant — see
  * ADR-0060 §5.)
+ *
+ * @enabled 2026-07-29
  */
 export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ACTIVITY_EDITOR_TABS,
@@ -954,6 +979,8 @@ export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
  *
  * Rollback: set `VITE_ACTIVITY_EDITOR_CONVERGENCE=false` and rebuild the web image. Nothing
  * persisted depends on it.
+ *
+ * @enabled 2026-07-29
  */
 export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
   ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_ACTIVITY_EDITOR_CONVERGENCE);
@@ -991,6 +1018,8 @@ export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
  * reachable but unreferenced, which is harmless, and nothing persisted depends on the flag. Every
  * flag-off parity suite is **kept and pinned** (`vi.mock` of `@/config/env`) rather than weakened —
  * that is the rollback contract, not scaffolding.
+ *
+ * @enabled 2026-07-30
  */
 export const WBS_IMPROVEMENTS_ENABLED =
   ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_WBS_IMPROVEMENTS);
@@ -1018,6 +1047,8 @@ export const WBS_IMPROVEMENTS_ENABLED =
  * depends on it — the recalculation hold is in-memory and released on every exit path, so a flag
  * flip mid-session cannot leave one open. The flag-off parity suites are kept and pinned rather
  * than weakened; they are the rollback contract.
+ *
+ * @enabled 2026-07-31
  */
 export const CANVAS_AUTHORING_FLOW_ENABLED =
   CANVAS_AUTHORING_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING_FLOW);
@@ -1050,6 +1081,8 @@ export const CANVAS_AUTHORING_FLOW_ENABLED =
  * depends on it — routing is a per-frame display decision and no route is stored. The flag-off
  * parity gates (`link-routing.test.ts`, `paint.routing-budget.test.ts`) are kept and pinned rather
  * than weakened; they are the rollback contract, and they are also what makes the rollback cheap.
+ *
+ * @enabled 2026-07-31
  */
 export const CANVAS_LINK_ROUTING_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_LINK_ROUTING);
@@ -1086,6 +1119,8 @@ export const CANVAS_LINK_ROUTING_ENABLED =
  * first run: it found that a menu opened from inside a modal `<dialog>` was unclickable, because a
  * modal dialog is in the browser's top layer and the menu portalled to `document.body`. No unit
  * test could have seen it — jsdom has no top layer.
+ *
+ * @enabled 2026-08-01
  */
 export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
   import.meta.env.VITE_CALENDAR_SHIFT_EDITOR,
@@ -1115,6 +1150,8 @@ export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
  * The flag exists at all — unlike ADR-0061's deliberately unflagged layout work — because this
  * changes **which field of the write DTO carries the value**. A wrong day↔minute factor is a wrong
  * date, silently, so the rollback has to be a switch rather than a revert.
+ *
+ * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_DAY_DURATIONS);
 
@@ -1148,6 +1185,8 @@ export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_
  * it — `lagMinutes` has been on the assignment DTOs since ADR-0071 M0, an existing lag keeps
  * scheduling, loading and earning exactly as it does now, and the flag-off surface simply stops
  * showing it. The flag-off parity suite is kept, not weakened: it is the rollback contract.
+ *
+ * @enabled 2026-08-02
  */
 export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNMENT_LAG);
 
@@ -1207,6 +1246,8 @@ export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNM
  * permission and no pen here — flag-off is byte-for-byte the prior product: no toolbar item, no
  * panel, no query, no scene contribution. The flag-off parity suite is the rollback contract and is
  * kept rather than weakened (the ADR-0053 M6 rule).
+ *
+ * @enabled 2026-08-02
  */
 export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATHS);
 
@@ -1244,6 +1285,8 @@ export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATH
  * nav entry, no queries. The API keeps recording either way, which is the point of shipping the
  * producers first: the log is being written long before anyone can read it, so the first screen
  * shows real history rather than an empty table.
+ *
+ * @enabled 2026-08-03
  */
 export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);
 
@@ -1263,6 +1306,8 @@ export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);
  * prior screens — no bar renders and the client sends no filter parameter at all, so the request is
  * the one it sent before. Pinned by `audit-filter.parity.test.tsx`, which is **kept** after the flip
  * rather than weakened: that suite is the rollback contract (ADR-0053 M6), not scaffolding.
+ *
+ * @enabled 2026-08-04
  */
 export const AUDIT_FILTERS_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_FILTERS);
 
@@ -1287,6 +1332,8 @@ export const AUDIT_FILTERS_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_FI
  * `audit-self-security.flag-on.test.tsx` pins the other half, and exists because this milestone
  * first shipped with only the rollback covered: nothing proved an attempt row reached the reader
  * with the column and the sentence that make it legible.
+ *
+ * @enabled 2026-08-04
  */
 export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_SELF_SECURITY);
 
@@ -1310,6 +1357,8 @@ export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AU
  * route is registered and the account menu has no entry for it, so the app is byte-for-byte what it
  * was. Pinned by `account-settings.parity.test.tsx`, kept rather than weakened — that suite is the
  * rollback contract (ADR-0053 M6).
+ *
+ * @enabled 2026-08-05
  */
 export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACCOUNT_SETTINGS);
 
@@ -1338,6 +1387,8 @@ export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACCOU
  * Rollback: set `VITE_PASSWORD_RESET=false` and rebuild the web image. Flag-off, neither route is
  * registered and sign-in carries no link, so the app is byte-for-byte what it was. Pinned by
  * `password-reset.parity.test.tsx`, kept rather than weakened (ADR-0053 M6).
+ *
+ * @enabled 2026-08-05
  */
 export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWORD_RESET);
 
@@ -1371,6 +1422,8 @@ export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWOR
  * weakened); no `View▾` toggle, legend entry, export-legend entry or listbox sentence renders.
  * Nothing persisted depends on it — the line is a per-frame display decision over a value
  * (`dataDate`) that has always been on the wire.
+ *
+ * @enabled 2026-08-07
  */
 export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_DATA_DATE);
 
@@ -1398,6 +1451,8 @@ export const CANVAS_DATA_DATE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  * canvas paint, the toolbar and the a11y tree are byte-for-byte today's (the flag-off parity suite
  * is the rollback contract). Frontend-only: no API, DTO, schema or migration, and the CPM engine is
  * not imported, so the ADR-0034 recalculation parity gate is untouched by construction.
+ *
+ * @enabled 2026-08-07
  */
 export const CANVAS_SEARCH_NAV_ENABLED =
   CANVAS_LENSES_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_SEARCH_NAV);
@@ -1420,6 +1475,8 @@ export const CANVAS_SEARCH_NAV_ENABLED =
  * a structural test pins exactly that. Nothing else changes: the canvas paint, the toolbar, the
  * a11y tree and the `Space` binding are byte-for-byte today's (the flag-off parity suite is the
  * rollback contract).
+ *
+ * @enabled 2026-08-07
  */
 export const CANVAS_MULTI_SELECT_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_MULTI_SELECT);
@@ -1459,5 +1516,7 @@ export const CANVAS_MULTI_SELECT_ENABLED =
  *
  * Frontend-only throughout: no API, DTO, schema or migration, and the CPM engine is not imported,
  * so the ADR-0034 recalculation parity gate is untouched by construction.
+ *
+ * @enabled 2026-08-08
  */
 export const ACTIVITY_COPY_PASTE_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_COPY_PASTE);

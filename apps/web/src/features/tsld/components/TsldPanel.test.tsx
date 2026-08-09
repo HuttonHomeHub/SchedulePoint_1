@@ -4,15 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
-// This file exercises the M1 read-only surface, so it pins the editing flag OFF
-// (it now defaults ON in the shipped bundle — config/env.ts). The flags-ON editing
-// surface is covered by TsldPanel.editing.test.tsx, which mocks this flag true.
-// Canvas-first authoring also defaults ON now (it mounts a drawable canvas in place of
-// the empty/recalc-prompt states), so pin it OFF too; its behaviour is covered by
-// TsldPanel.authoring.test.tsx.
+// Canvas-first authoring defaults ON (it mounts a drawable canvas in place of the empty /
+// recalc-prompt states), so pin it OFF here; its behaviour is covered by
+// TsldPanel.authoring.test.tsx. This file's remaining cases are about the read-only surface a
+// VIEWER gets — a real state, reached by role rather than by a flag — not about a rollback:
+// `VITE_TSLD_EDITING` retired in ADR-0084 batch 1 and the case that pinned it is gone with it.
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: false, CANVAS_AUTHORING_ENABLED: false };
+  return { ...actual, CANVAS_AUTHORING_ENABLED: false };
 });
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
@@ -138,20 +137,11 @@ describe('TsldPanel', () => {
     expect(legend).toHaveTextContent('Constraint');
   });
 
-  it('stays read-only (no editing toolbar) when the M2 flag is off, even for a writer', () => {
-    render(
-      <TsldPanel
-        activities={[activity()]}
-        dependencies={NO_DEPS}
-        dataDate="2026-01-01"
-        canEdit
-        onCreate={() => Promise.resolve({ recalcConflict: null })}
-      />,
-    );
-    // VITE_TSLD_EDITING is unset in tests → editing gated off → M1 surface (plain Fit only).
-    expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
-  });
+  // DELETED with `VITE_TSLD_EDITING` (ADR-0084 batch 1, D5): this was the flag-off parity case —
+  // "a writer still gets the read-only M1 surface" — and there is no longer a way to select that
+  // surface, so the assertion was about a configuration nobody can reach. The flag-ON contract it
+  // was the mirror of is covered by `TsldPanel.editing.test.tsx` and the `e2e-edit` journey, both
+  // of which are claims about the product rather than about the flag, and both of which stay.
 
   it('round-trips a zoom-preset click through the canvas back to the control (aria-pressed)', () => {
     // jsdom reports every element's `getBoundingClientRect` as all-zero, and range-anchored preset

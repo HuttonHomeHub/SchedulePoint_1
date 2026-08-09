@@ -75,8 +75,6 @@ export default defineConfig({
               VITE_ACTIVITY_EDITOR_CONVERGENCE: 'false',
               // The pen must be real: an assignment write is pen-gated (ADR-0028), and a lag that
               // saves without the lock is not the thing being tested.
-              VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_TSLD_EDITING: 'true',
               // `VITE_LIBRARY_SCOPING` is deliberately NOT pinned. It is default-on, so the
               // resource picker is the shared APG `Combobox` — leaving it at its default is what
               // makes this journey drive the control a planner actually meets, and the shared

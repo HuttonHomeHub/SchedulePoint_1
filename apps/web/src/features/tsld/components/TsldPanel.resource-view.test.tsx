@@ -9,7 +9,6 @@ vi.mock('../../../config/env', async (importOriginal) => {
   return {
     ...actual,
     CANVAS_RESOURCE_VIEW_ENABLED: true,
-    TSLD_EDITING_ENABLED: false,
     CANVAS_AUTHORING_ENABLED: false,
   };
 });

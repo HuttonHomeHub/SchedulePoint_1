@@ -1,0 +1,384 @@
+{
+  "$comment": "Generated once, maintained by hand. See docs/adr/0084-feature-flag-retirement.md.",
+  "horizonDays": 30,
+  "batches": {
+    "batch-1": {
+      "due": "2026-08-11"
+    },
+    "batch-2": {
+      "due": "2026-08-18"
+    },
+    "batch-3": {
+      "due": "2026-08-25"
+    },
+    "batch-4": {
+      "due": "2026-09-01"
+    },
+    "batch-5": {
+      "due": "2026-09-08"
+    }
+  },
+  "retired": [
+    {
+      "flag": "VITE_NAV_TREE_CRUD",
+      "constant": "NAV_TREE_CRUD_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "retired": "2026-08-09",
+      "batch": "batch-1"
+    },
+    {
+      "flag": "VITE_PLAN_EDIT_LOCK",
+      "constant": "PLAN_EDIT_LOCK_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "retired": "2026-08-09",
+      "batch": "batch-1"
+    },
+    {
+      "flag": "VITE_TSLD_EDITING",
+      "constant": "TSLD_EDITING_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "retired": "2026-08-09",
+      "batch": "batch-1"
+    }
+  ],
+  "flags": {
+    "VITE_ACCOUNT_SETTINGS": {
+      "constant": "ACCOUNT_SETTINGS_ENABLED",
+      "enabled": "2026-08-05",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_ACTIVITY_CALENDAR": {
+      "constant": "ACTIVITY_CALENDAR_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_ACTIVITY_COPY_PASTE": {
+      "constant": "ACTIVITY_COPY_PASTE_ENABLED",
+      "enabled": "2026-08-08",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_ACTIVITY_EDITOR_CONVERGENCE": {
+      "constant": "ACTIVITY_EDITOR_CONVERGENCE_ENABLED",
+      "enabled": "2026-07-29",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_ACTIVITY_EDITOR_TABS": {
+      "constant": "ACTIVITY_EDITOR_TABS_ENABLED",
+      "enabled": "2026-07-29",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_ACTIVITY_STEPS": {
+      "constant": "ACTIVITY_STEPS_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_ADVANCED_ACTIVITY_TYPES": {
+      "constant": "ADVANCED_ACTIVITY_TYPES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_ADVANCED_CONSTRAINTS": {
+      "constant": "ADVANCED_CONSTRAINTS_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_ASSIGNMENT_LAG": {
+      "constant": "ASSIGNMENT_LAG_ENABLED",
+      "enabled": "2026-08-02",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_AUDIT_FILTERS": {
+      "constant": "AUDIT_FILTERS_ENABLED",
+      "enabled": "2026-08-04",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_AUDIT_LOG": {
+      "constant": "AUDIT_LOG_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_AUDIT_SELF_SECURITY": {
+      "constant": "AUDIT_SELF_SECURITY_ENABLED",
+      "enabled": "2026-08-04",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_CALENDAR_SHIFT_EDITOR": {
+      "constant": "CALENDAR_SHIFT_EDITOR_ENABLED",
+      "enabled": "2026-08-01",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_CANVAS_ACTIVITY_TYPES": {
+      "constant": "CANVAS_ACTIVITY_TYPES_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_CANVAS_AUTHORING": {
+      "constant": "CANVAS_AUTHORING_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5",
+      "derivedFrom": "CANVAS_TOOLBAR_ENABLED"
+    },
+    "VITE_CANVAS_AUTHORING_FLOW": {
+      "constant": "CANVAS_AUTHORING_FLOW_ENABLED",
+      "enabled": "2026-07-31",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_CANVAS_DATA_DATE": {
+      "constant": "CANVAS_DATA_DATE_ENABLED",
+      "enabled": "2026-08-07",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_CANVAS_DIRECT_MANIPULATION": {
+      "constant": "CANVAS_DIRECT_MANIPULATION_ENABLED",
+      "enabled": "2026-07-25",
+      "enabledSource": "docblock",
+      "batch": "batch-3"
+    },
+    "VITE_CANVAS_LENSES": {
+      "constant": "CANVAS_LENSES_ENABLED",
+      "enabled": "2026-07-19",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_CANVAS_LINK_ROUTING": {
+      "constant": "CANVAS_LINK_ROUTING_ENABLED",
+      "enabled": "2026-07-31",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_CANVAS_LIVE_FEEDBACK": {
+      "constant": "CANVAS_LIVE_FEEDBACK_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_CANVAS_MULTI_SELECT": {
+      "constant": "CANVAS_MULTI_SELECT_ENABLED",
+      "enabled": "2026-08-07",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_CANVAS_NAV": {
+      "constant": "CANVAS_NAV_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_CANVAS_RESOURCE_VIEW": {
+      "constant": "CANVAS_RESOURCE_VIEW_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-2",
+      "derivedFrom": "RESOURCE_CURVES_ENABLED"
+    },
+    "VITE_CANVAS_SEARCH_NAV": {
+      "constant": "CANVAS_SEARCH_NAV_ENABLED",
+      "enabled": "2026-08-07",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_CANVAS_TIME_AXIS": {
+      "constant": "CANVAS_TIME_AXIS_ENABLED",
+      "enabled": "2026-07-27",
+      "enabledSource": "docblock",
+      "batch": "batch-3"
+    },
+    "VITE_CANVAS_TOOLBAR": {
+      "constant": "CANVAS_TOOLBAR_ENABLED",
+      "enabled": "2026-07-13",
+      "enabledSource": "docblock",
+      "batch": "batch-2",
+      "note": "Moved out of batch-1 on 2026-08-09, with the reason recorded rather than the date quietly slipped. This flag is not an `if`: flag-off selects `Adr0030PlanWorkspace`, a ~270-line alternative layout with two suites of its own, and retiring it is a deletion slice rather than a line change. ADR-0080 \u00a7\"the flag-on journey\" records that layout causing a SHIPPED defect \u2014 `bulk` was wired into it and not into the layout the flag actually selects \u2014 which is an argument for retiring it, not for keeping it."
+    },
+    "VITE_CANVAS_VISUAL_LANGUAGE": {
+      "constant": "CANVAS_VISUAL_LANGUAGE_ENABLED",
+      "enabled": "2026-07-26",
+      "enabledSource": "docblock",
+      "batch": "batch-3"
+    },
+    "VITE_CANVAS_WORKSPACE": {
+      "constant": "CANVAS_WORKSPACE_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_COST_ACCRUAL": {
+      "constant": "COST_ACCRUAL_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_DESIGNED_CHROME": {
+      "constant": "DESIGNED_CHROME_ENABLED",
+      "enabled": "2026-07-26",
+      "enabledSource": "docblock",
+      "batch": "batch-3"
+    },
+    "VITE_DURATION_TYPES": {
+      "constant": "DURATION_TYPES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_EARNED_VALUE": {
+      "constant": "EARNED_VALUE_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_ENTRY_ROUTES": {
+      "constant": "ENTRY_ROUTES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_EXPORT_PRINT": {
+      "constant": "EXPORT_PRINT_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_FLOAT_CRITICAL_SETTINGS": {
+      "constant": "FLOAT_CRITICAL_SETTINGS_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_FLOAT_PATHS": {
+      "constant": "FLOAT_PATHS_ENABLED",
+      "enabled": "2026-08-02",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_GANTT_VIEW": {
+      "constant": "GANTT_VIEW_ENABLED",
+      "enabled": "2026-07-28",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    },
+    "VITE_GUEST_SHARE_LINKS": {
+      "constant": "GUEST_SHARE_LINKS_ENABLED",
+      "enabled": "2026-07-21",
+      "enabledSource": "docblock",
+      "batch": "batch-3"
+    },
+    "VITE_INTER_PROJECT_DATES": {
+      "constant": "INTER_PROJECT_DATES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_LIBRARY_SCOPING": {
+      "constant": "LIBRARY_SCOPING_ENABLED",
+      "enabled": "2026-07-26",
+      "enabledSource": "docblock",
+      "batch": "batch-3"
+    },
+    "VITE_NAV_TREE": {
+      "constant": "NAV_TREE_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_NOTES": {
+      "constant": "NOTES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_PASSWORD_RESET": {
+      "constant": "PASSWORD_RESET_ENABLED",
+      "enabled": "2026-08-05",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_PROGRAMME_SCHEDULING": {
+      "constant": "PROGRAMME_SCHEDULING_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_PROGRESS_INGESTION": {
+      "constant": "PROGRESS_INGESTION_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_RESOURCES": {
+      "constant": "RESOURCES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_RESOURCE_CURVES": {
+      "constant": "RESOURCE_CURVES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_RESOURCE_LEVELLING": {
+      "constant": "RESOURCE_LEVELLING_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_SCHEDULE_INTERCHANGE": {
+      "constant": "SCHEDULE_INTERCHANGE_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_SCHEDULING_MODES": {
+      "constant": "SCHEDULING_MODES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5",
+      "derivedFrom": "CANVAS_AUTHORING_ENABLED"
+    },
+    "VITE_SUB_DAY_DURATIONS": {
+      "constant": "SUB_DAY_DURATIONS_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-5"
+    },
+    "VITE_TOOLBAR_QUICK_WINS": {
+      "constant": "TOOLBAR_QUICK_WINS_ENABLED",
+      "enabled": "2026-07-19",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_UNDO_REDO": {
+      "constant": "UNDO_REDO_ENABLED",
+      "enabled": "2026-07-19",
+      "enabledSource": "docblock",
+      "batch": "batch-2"
+    },
+    "VITE_WBS_IMPROVEMENTS": {
+      "constant": "WBS_IMPROVEMENTS_ENABLED",
+      "enabled": "2026-07-30",
+      "enabledSource": "docblock",
+      "batch": "batch-4"
+    }
+  },
+  "$schema-note": "enabledSource: \"docblock\" = the date the flag itself records; \"floor\" = the earliest date this repository can prove, used for the fourteen flags whose real flip is recorded NOWHERE (ADR-0084). A floor can only make a flag look YOUNGER than it is, so retiring on one is conservative \u2014 never premature. It is not corrected by guessing."
+}

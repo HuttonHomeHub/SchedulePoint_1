@@ -8,13 +8,10 @@ declare const __APP_VERSION__: string;
 
 interface ImportMetaEnv {
   /** On-canvas TSLD structural editing (M2). "true"/"1" enables it; off by default. */
-  readonly VITE_TSLD_EDITING?: string;
   /** The plan edit-lock "pen" front-end layer (ADR-0028). "true"/"1" enables it; off by default. */
-  readonly VITE_PLAN_EDIT_LOCK?: string;
   /** The persistent app-shell + hierarchy navigator (ADR-0029). "true"/"1" enables it; off by default. */
   readonly VITE_NAV_TREE?: string;
   /** In-tree CRUD for the Project Explorer (ADR-0029 Phase 2). On by default; "false"/"0" disables it. */
-  readonly VITE_NAV_TREE_CRUD?: string;
   /** Canvas-first plan workspace (ADR-0030). "true"/"1" enables it; off by default. */
   readonly VITE_CANVAS_WORKSPACE?: string;
   /** Canvas-maximal chrome reclaim + toolbar architecture (ADR-0031). "true"/"1" enables it; off by default. */

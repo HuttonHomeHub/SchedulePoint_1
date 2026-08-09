@@ -15,7 +15,6 @@ vi.mock('@/config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    TSLD_EDITING_ENABLED: true,
     get CANVAS_DIRECT_MANIPULATION_ENABLED() {
       return h.directManipulation;
     },

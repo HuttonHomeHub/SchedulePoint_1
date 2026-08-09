@@ -69,8 +69,6 @@ export default defineConfig({
               VITE_ACTIVITY_EDITOR_CONVERGENCE: 'true',
               VITE_RESOURCES: 'true',
               VITE_NOTES: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
               VITE_CANVAS_WORKSPACE: 'false',
               // Steps + earned value ON: the Progress tab's third panel and the physical-% measure
               // it overrides are the co-location this epic exists for.

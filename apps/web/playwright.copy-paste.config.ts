@@ -95,8 +95,6 @@ export default defineConfig({
               // The undo half: one Ctrl+Z removing a whole paste is one of the seven things this
               // suite must prove, and the accelerator lives behind its own flag.
               VITE_UNDO_REDO: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
               // Pinned OFF, mirroring the LOE / Gantt / WBS suites: Visual mode changes what a
               // bar's placement means, and the clone-placement assertions here are about lanes and
               // carried fields rather than about hand-placed positions.

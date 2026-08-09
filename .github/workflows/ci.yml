@@ -87,6 +87,14 @@ jobs:
       - name: Check the stage-banner counts
         run: pnpm check:counts
 
+      # Every VITE_ flag is default-ON — they are rollback contracts, not configuration — and each
+      # one's flag-off branch is a second product maintained forever. Pins that every flag records
+      # when it flipped and which dated batch retires it, and fails when a batch date passes with
+      # the batch not done (ADR-0084). Fourteen flags reached this gate with no enablement date
+      # recorded anywhere at all.
+      - name: Check the feature-flag retirement schedule
+        run: pnpm check:flags
+
       # Claims about a DEPENDENCY's internals — 34 file-and-line citations into `better-auth` and
       # `better-call`, several of which whole ADRs rest on. A minor bump moves every one of them
       # and nothing here was watching, so the prose would keep reading as authoritative while the
