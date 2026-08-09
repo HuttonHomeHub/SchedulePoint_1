@@ -395,6 +395,92 @@ export class HierarchyLifecycleService {
   }
 
   /**
+   * Soft-delete **many leaf activities as one set** — the batched form of
+   * {@link cascadeSoftDelete}'s activity branch (`docs/TECH_DEBT.md` #109).
+   *
+   * **Why this exists.** `bulkDelete` called `cascadeSoftDelete` once per id, and each call issues
+   * five statements: resolve the subtree, then sweep links, steps, notes and the row itself. At the
+   * DTO's `@ArrayMaxSize(2000)` ceiling that is ~10,000 round trips — every one of them inside the
+   * transaction that holds the **plan-wide advisory lock**, so every other structural write on that
+   * plan (a recalculation, another planner's edit, a WBS operation) waits for all of them. ADR-0053
+   * M6 measured the identical shape at ~830 ms → ~13 ms when batched.
+   *
+   * **Why it is safe to skip the subtree walk**, which is the part that makes this a set-wise sweep
+   * rather than a cleverer loop: `bulkDelete` **refuses a `WBS_SUMMARY`**
+   * (`activities.service.ts`, 422 `SUMMARY_NOT_BULK_ELIGIBLE`) precisely because deleting one takes
+   * its whole subtree with it. So every id it passes here is a leaf, and a leaf's subtree is
+   * itself — the walk was resolving a single-element set, 2,000 times.
+   *
+   * That refusal is therefore load-bearing for this method's correctness, not just its ergonomics.
+   * It is asserted here rather than assumed: a summary reaching this path would silently orphan its
+   * children instead of sweeping them.
+   */
+  async cascadeSoftDeleteActivityLeaves(
+    tx: Prisma.TransactionClient,
+    ids: readonly string[],
+    actorId: string,
+    batchId: string,
+  ): Promise<CascadeCounts> {
+    const counts: CascadeCounts = {
+      clients: 0,
+      projects: 0,
+      plans: 0,
+      activities: 0,
+      dependencies: 0,
+      baselines: 0,
+      steps: 0,
+      notes: 0,
+      planShares: 0,
+      calendars: 0,
+    };
+    if (ids.length === 0) return counts;
+
+    const summaries = await tx.activity.count({
+      where: { id: { in: [...ids] }, type: 'WBS_SUMMARY', deletedAt: null },
+    });
+    if (summaries > 0) {
+      // Not a user-facing error: the caller is supposed to have refused these already. Failing
+      // loudly beats sweeping a summary's row and leaving its children parented to a deleted node.
+      throw new Error(
+        `cascadeSoftDeleteActivityLeaves received ${String(summaries)} WBS_SUMMARY id(s); ` +
+          'the caller must refuse them (SUMMARY_NOT_BULK_ELIGIBLE) — a summary needs the subtree walk.',
+      );
+    }
+
+    const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
+    const list = [...ids];
+
+    // Four set-wise sweeps for the whole batch, in the same order the per-id path used: links
+    // before the rows they join, so nothing observes a dangling edge mid-transaction.
+    counts.dependencies = (
+      await tx.activityDependency.updateMany({
+        where: {
+          deletedAt: null,
+          OR: [{ predecessorId: { in: list } }, { successorId: { in: list } }],
+        },
+        data: stamp,
+      })
+    ).count;
+    counts.steps = (
+      await tx.activityStep.updateMany({
+        where: { activityId: { in: list }, deletedAt: null },
+        data: stamp,
+      })
+    ).count;
+    counts.notes = (
+      await tx.note.updateMany({
+        where: { activityId: { in: list }, deletedAt: null },
+        data: stamp,
+      })
+    ).count;
+    counts.activities = (
+      await tx.activity.updateMany({ where: { id: { in: list }, deletedAt: null }, data: stamp })
+    ).count;
+
+    return counts;
+  }
+
+  /**
    * Restore `entity` #id and everything soft-deleted with it (same batch).
    * Throws {@link NotFoundError} if the row is missing or not deleted,
    * `PARENT_DELETED` if its parent is still deleted, or `NAME_TAKEN` if

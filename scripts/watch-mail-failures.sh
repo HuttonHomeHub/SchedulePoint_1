@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# Alert an operator when SchedulePoint cannot send mail (`docs/TECH_DEBT.md` #100).
+#
+# ADR-0075 decided mail delivery is best-effort and that the failure belongs to the **operator**,
+# not the caller: a send that fails after Better Auth's handoff is invisible to the person who
+# triggered it, and deliberately so — surfacing it would make "that address was free" and "that
+# address is taken" distinguishable on an unauthenticated endpoint. The application therefore emits
+# one alertable line, `event: 'mail.send_failed'` (`apps/api/src/common/mail/smtp-mail.service.ts`),
+# and this is the thing that was missing: nothing watched it.
+#
+# What that costs while unwatched is not abstract. If the relay breaks — an expired credential, a
+# provider outage — then every sign-up, invitation and password reset fails silently, for every
+# organisation, and the first signal is a person who cannot get in telling somebody. With external
+# clients that person has no one to tell.
+#
+# **Deliberately not email.** The one transport this alert exists to report on is the one that is
+# broken, so the notification must not depend on it. `ntfy`, a Slack/Discord webhook or a phone
+# push are all fine; the script only needs a URL that accepts a POST.
+#
+# **Deliberately not part of `/health/ready`.** The host recreates containers unattended (ADR-0047),
+# so a readiness probe that failed on a 03:00 relay blip would take the API down and keep it down.
+# The same reasoning is why the boot-time SMTP handshake is warn-only.
+#
+# Usage (as a cron entry, every five minutes):
+#
+#   */5 * * * * SP_ALERT_URL=https://ntfy.sh/your-topic /path/to/watch-mail-failures.sh
+#
+# It is stateless between runs except for a cursor file, so it reports each failure once. A run with
+# no new failures prints nothing and exits 0 — silence means the transport is working.
+set -euo pipefail
+
+CONTAINER="${SP_API_CONTAINER:-schedulepoint-api}"
+ALERT_URL="${SP_ALERT_URL:-}"
+CURSOR="${SP_MAIL_CURSOR:-/var/tmp/schedulepoint-mail-watch.cursor}"
+WINDOW="${SP_MAIL_WINDOW:-10m}"
+
+if [ -z "$ALERT_URL" ]; then
+  echo "SP_ALERT_URL is not set — refusing to run a watcher that cannot alert anyone." >&2
+  echo "Set it to an ntfy topic, a Slack/Discord webhook, or anything that accepts a POST." >&2
+  exit 2
+fi
+
+# `--since` bounds the read so this stays O(recent) rather than re-reading a rotated log each run.
+# The window is deliberately wider than the cron interval: overlapping reads are harmless because
+# the cursor de-duplicates, whereas a gap loses a failure permanently.
+if ! logs="$(docker logs --since "$WINDOW" "$CONTAINER" 2>&1)"; then
+  # A container that is not running is itself worth knowing about, and it is not a mail failure —
+  # say which it is rather than emitting a misleading alert.
+  curl -fsS -m 10 -d "SchedulePoint: cannot read logs for container '${CONTAINER}' — is it running?" \
+    "$ALERT_URL" >/dev/null || true
+  exit 1
+fi
+
+failures="$(printf '%s\n' "$logs" | grep -F 'mail.send_failed' || true)"
+[ -z "$failures" ] && exit 0
+
+# One line per failure, hashed, so a failure already reported is not reported again on the next
+# overlapping window. Only the hashes are kept — the log lines carry addresses.
+touch "$CURSOR"
+new="$(printf '%s\n' "$failures" | sha256sum | cut -d' ' -f1)"
+grep -qxF "$new" "$CURSOR" 2>/dev/null && exit 0
+printf '%s\n' "$new" >> "$CURSOR"
+# Keep the cursor bounded; a few hundred entries is far more than the de-duplication window needs.
+tail -n 200 "$CURSOR" > "${CURSOR}.tmp" && mv "${CURSOR}.tmp" "$CURSOR"
+
+count="$(printf '%s\n' "$failures" | wc -l | tr -d ' ')"
+# The alert names the count and the window, not the addresses: this goes to a chat channel, and the
+# addresses are in the log for whoever investigates.
+curl -fsS -m 10 \
+  -d "SchedulePoint: ${count} mail send failure(s) in the last ${WINDOW}. Sign-ups, invitations and password resets are failing silently. Check the SMTP relay, then: docker logs --since ${WINDOW} ${CONTAINER} | grep mail.send_failed" \
+  "$ALERT_URL" >/dev/null

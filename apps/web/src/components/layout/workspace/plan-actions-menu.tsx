@@ -59,11 +59,20 @@ export function PlanActionsMenu({
         <MenuItem onSelect={() => setDialog('details')}>
           <Info aria-hidden="true" className="size-4" /> Plan details…
         </MenuItem>
-        {model.canWrite ? (
-          <MenuItem onSelect={() => model.setEditing(true)}>
-            <SquarePen aria-hidden="true" className="size-4" /> Edit plan…
-          </MenuItem>
-        ) : null}
+        {/* Shaded with a reason rather than omitted (ADR-0082/ADR-0083, `docs/TECH_DEBT.md` #114.2):
+            the option exists, the reader simply may not take it, and hiding it makes the menu look
+            different to different people with nothing saying why. The sentence can be stated
+            **precisely** here and nowhere else in this menu, because `model.canWrite` is
+            `canManageHierarchy(role)` — role only, never pen-gated (`use-plan-workspace-model.ts`
+            says so at its declaration). So there is no pen case to get wrong, which is exactly the
+            distinction #114 said was missing and the reason this one is no longer a guess. */}
+        <MenuItem
+          disabled={!model.canWrite}
+          disabledReason="Your role cannot edit this plan’s details."
+          onSelect={() => model.setEditing(true)}
+        >
+          <SquarePen aria-hidden="true" className="size-4" /> Edit plan…
+        </MenuItem>
         <MenuItem onSelect={() => setDialog('baselines')}>
           <Layers aria-hidden="true" className="size-4" /> Baselines…
         </MenuItem>

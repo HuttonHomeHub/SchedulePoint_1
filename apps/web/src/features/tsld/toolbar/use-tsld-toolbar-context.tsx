@@ -397,6 +397,10 @@ export function useTsldToolbarContext({
       // scale comes from the preset and its chart already spans the plan). `canvasActive` shades
       // them with a reason in the Gantt rather than leaving dead buttons.
       canvasActive: planView === 'tsld',
+      // One seam for every pen-gated refusal on this toolbar (`docs/TECH_DEBT.md` #114.1). The
+      // model owns it because only the model knows whether the missing thing is the role or the
+      // pen, and who is holding the pen if so.
+      scheduleRefusal: model.scheduleRefusal,
       stepZoom,
       fit: requestFit,
       // The plan's data date (`plannedStart`) is read-only here: it gates Go-to-date visibility and is
@@ -805,6 +809,7 @@ export function useTsldToolbarContext({
     // inputs the inline arrow closed over, so the memo re-identifies exactly as often as before —
     // listed rather than silenced, because an omitted dependency is unverifiable by inspection.
     setZoomPreset,
+    model.scheduleRefusal,
     stepZoom,
     goToDate,
     requestFit,

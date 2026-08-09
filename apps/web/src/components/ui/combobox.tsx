@@ -96,6 +96,17 @@ export interface ComboboxProps {
   onLoadMore?: (() => void) | undefined;
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * **Shut, but still readable** (ADR-0083 D1 row 4). The text input takes `readOnly`, the toggle
+   * takes `aria-disabled`, and the listbox refuses to open — so the reader can still focus the
+   * control, read the selected value and copy it, which is what "you may read this but not write
+   * it" means and what `disabled` takes away.
+   *
+   * Use this for a permission, a pen, an in-flight save or a domain rule. `disabled` stays for the
+   * two states that hold no value at all: the options have not loaded, or a field above this one
+   * has not been answered.
+   */
+  readOnly?: boolean;
   /** Shown when there are no options and nothing is loading. */
   emptyMessage?: string;
   /** Ids of help/error text describing the field, merged into the input's `aria-describedby`. */
@@ -142,6 +153,7 @@ export function Combobox({
   onLoadMore,
   placeholder,
   disabled = false,
+  readOnly = false,
   emptyMessage = 'No matches.',
   describedBy,
   invalid = false,
@@ -439,6 +451,10 @@ export function Combobox({
           {...(invalid ? { 'aria-invalid': true } : {})}
           aria-busy={loading}
           disabled={disabled}
+          // NOT `aria-disabled`: a read-only combobox IS operable — focusable, caret-placeable,
+          // selectable, copyable — and `readonly` already maps to `aria-readonly` through HTML-AAM.
+          // A second, contrary state would be a false announcement (ADR-0083 D1).
+          readOnly={readOnly}
           value={displayValue}
           placeholder={placeholder}
           onChange={(event) => {
@@ -446,7 +462,7 @@ export function Combobox({
             setOpen(true);
             setActiveIndex(-1);
           }}
-          onKeyDown={onKeyDown}
+          onKeyDown={readOnly ? undefined : onKeyDown}
           onBlur={() => setOpen(false)}
           className={cn(
             'border-input bg-field text-field-foreground ring-offset-background flex h-10 w-full rounded-md border py-2 pr-9 pl-3 text-sm transition-colors',
@@ -465,8 +481,12 @@ export function Combobox({
           aria-expanded={open}
           aria-controls={listboxId}
           disabled={disabled}
+          {...(readOnly ? { 'aria-disabled': true } : {})}
           onPointerDown={(event) => {
             event.preventDefault();
+            // The listbox refuses to open rather than the button leaving the page: a shut control
+            // that vanishes is the dead end this ADR exists to remove.
+            if (readOnly) return;
             if (open) setOpen(false);
             else openList(-1);
             inputRef.current?.focus();

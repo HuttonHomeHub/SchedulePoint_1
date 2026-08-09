@@ -1,0 +1,419 @@
+{
+  "$comment": "Generated once, maintained by hand. See docs/adr/0084-feature-flag-retirement.md.",
+  "horizonDays": 30,
+  "batches": {
+    "batch-1": {
+      "due": "2026-08-11"
+    },
+    "batch-2": {
+      "due": "2026-08-25"
+    },
+    "batch-3": {
+      "due": "2026-09-08"
+    },
+    "batch-4": {
+      "due": "2026-09-22"
+    },
+    "batch-5": {
+      "due": "2026-10-06"
+    },
+    "batch-6": {
+      "due": "2026-10-20"
+    },
+    "batch-7": {
+      "due": "2026-11-03"
+    },
+    "batch-8": {
+      "due": "2026-11-17"
+    },
+    "batch-9": {
+      "due": "2026-12-01"
+    },
+    "batch-10": {
+      "due": "2026-12-15"
+    },
+    "batch-11": {
+      "due": "2026-12-29"
+    },
+    "batch-12": {
+      "due": "2027-01-12"
+    },
+    "batch-13": {
+      "due": "2027-01-26"
+    },
+    "batch-14": {
+      "due": "2027-02-09"
+    },
+    "batch-15": {
+      "due": "2027-02-23"
+    },
+    "batch-16": {
+      "due": "2027-03-09"
+    },
+    "batch-17": {
+      "due": "2027-03-23"
+    }
+  },
+  "retired": [
+    {
+      "flag": "VITE_NAV_TREE_CRUD",
+      "constant": "NAV_TREE_CRUD_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "retired": "2026-08-09",
+      "batch": "batch-1"
+    }
+  ],
+  "flags": {
+    "VITE_ACCOUNT_SETTINGS": {
+      "constant": "ACCOUNT_SETTINGS_ENABLED",
+      "enabled": "2026-08-05",
+      "enabledSource": "docblock",
+      "batch": "batch-16"
+    },
+    "VITE_ACTIVITY_CALENDAR": {
+      "constant": "ACTIVITY_CALENDAR_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-16"
+    },
+    "VITE_ACTIVITY_COPY_PASTE": {
+      "constant": "ACTIVITY_COPY_PASTE_ENABLED",
+      "enabled": "2026-08-08",
+      "enabledSource": "docblock",
+      "batch": "batch-17"
+    },
+    "VITE_ACTIVITY_EDITOR_CONVERGENCE": {
+      "constant": "ACTIVITY_EDITOR_CONVERGENCE_ENABLED",
+      "enabled": "2026-07-29",
+      "enabledSource": "docblock",
+      "batch": "batch-10"
+    },
+    "VITE_ACTIVITY_EDITOR_TABS": {
+      "constant": "ACTIVITY_EDITOR_TABS_ENABLED",
+      "enabled": "2026-07-29",
+      "enabledSource": "docblock",
+      "batch": "batch-9"
+    },
+    "VITE_ACTIVITY_STEPS": {
+      "constant": "ACTIVITY_STEPS_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-6"
+    },
+    "VITE_ADVANCED_ACTIVITY_TYPES": {
+      "constant": "ADVANCED_ACTIVITY_TYPES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-15"
+    },
+    "VITE_ADVANCED_CONSTRAINTS": {
+      "constant": "ADVANCED_CONSTRAINTS_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-16"
+    },
+    "VITE_ASSIGNMENT_LAG": {
+      "constant": "ASSIGNMENT_LAG_ENABLED",
+      "enabled": "2026-08-02",
+      "enabledSource": "docblock",
+      "batch": "batch-11"
+    },
+    "VITE_AUDIT_FILTERS": {
+      "constant": "AUDIT_FILTERS_ENABLED",
+      "enabled": "2026-08-04",
+      "enabledSource": "docblock",
+      "batch": "batch-16"
+    },
+    "VITE_AUDIT_LOG": {
+      "constant": "AUDIT_LOG_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "docblock",
+      "batch": "batch-15"
+    },
+    "VITE_AUDIT_SELF_SECURITY": {
+      "constant": "AUDIT_SELF_SECURITY_ENABLED",
+      "enabled": "2026-08-04",
+      "enabledSource": "docblock",
+      "batch": "batch-16"
+    },
+    "VITE_CALENDAR_SHIFT_EDITOR": {
+      "constant": "CALENDAR_SHIFT_EDITOR_ENABLED",
+      "enabled": "2026-08-01",
+      "enabledSource": "docblock",
+      "batch": "batch-10"
+    },
+    "VITE_CANVAS_ACTIVITY_TYPES": {
+      "constant": "CANVAS_ACTIVITY_TYPES_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-7"
+    },
+    "VITE_CANVAS_AUTHORING": {
+      "constant": "CANVAS_AUTHORING_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-13",
+      "derivedFrom": "CANVAS_TOOLBAR_ENABLED"
+    },
+    "VITE_CANVAS_AUTHORING_FLOW": {
+      "constant": "CANVAS_AUTHORING_FLOW_ENABLED",
+      "enabled": "2026-07-31",
+      "enabledSource": "docblock",
+      "batch": "batch-10"
+    },
+    "VITE_CANVAS_DATA_DATE": {
+      "constant": "CANVAS_DATA_DATE_ENABLED",
+      "enabled": "2026-08-07",
+      "enabledSource": "docblock",
+      "batch": "batch-17"
+    },
+    "VITE_CANVAS_DIRECT_MANIPULATION": {
+      "constant": "CANVAS_DIRECT_MANIPULATION_ENABLED",
+      "enabled": "2026-07-25",
+      "enabledSource": "docblock",
+      "batch": "batch-8"
+    },
+    "VITE_CANVAS_LENSES": {
+      "constant": "CANVAS_LENSES_ENABLED",
+      "enabled": "2026-07-19",
+      "enabledSource": "docblock",
+      "batch": "batch-7"
+    },
+    "VITE_CANVAS_LINK_ROUTING": {
+      "constant": "CANVAS_LINK_ROUTING_ENABLED",
+      "enabled": "2026-07-31",
+      "enabledSource": "docblock",
+      "batch": "batch-10"
+    },
+    "VITE_CANVAS_LIVE_FEEDBACK": {
+      "constant": "CANVAS_LIVE_FEEDBACK_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-16"
+    },
+    "VITE_CANVAS_MULTI_SELECT": {
+      "constant": "CANVAS_MULTI_SELECT_ENABLED",
+      "enabled": "2026-08-07",
+      "enabledSource": "docblock",
+      "batch": "batch-17"
+    },
+    "VITE_CANVAS_NAV": {
+      "constant": "CANVAS_NAV_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-7"
+    },
+    "VITE_CANVAS_RESOURCE_VIEW": {
+      "constant": "CANVAS_RESOURCE_VIEW_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-7",
+      "derivedFrom": "RESOURCE_CURVES_ENABLED"
+    },
+    "VITE_CANVAS_SEARCH_NAV": {
+      "constant": "CANVAS_SEARCH_NAV_ENABLED",
+      "enabled": "2026-08-07",
+      "enabledSource": "docblock",
+      "batch": "batch-17"
+    },
+    "VITE_CANVAS_TIME_AXIS": {
+      "constant": "CANVAS_TIME_AXIS_ENABLED",
+      "enabled": "2026-07-27",
+      "enabledSource": "docblock",
+      "batch": "batch-9"
+    },
+    "VITE_CANVAS_TOOLBAR": {
+      "constant": "CANVAS_TOOLBAR_ENABLED",
+      "enabled": "2026-07-13",
+      "enabledSource": "docblock",
+      "batch": "batch-4",
+      "note": "Moved out of batch-1 on 2026-08-09, with the reason recorded rather than the date quietly slipped. This flag is not an `if`: flag-off selects `Adr0030PlanWorkspace`, a ~270-line alternative layout with two suites of its own, and retiring it is a deletion slice rather than a line change. ADR-0080 \u00a7\"the flag-on journey\" records that layout causing a SHIPPED defect \u2014 `bulk` was wired into it and not into the layout the flag actually selects \u2014 which is an argument for retiring it, not for keeping it."
+    },
+    "VITE_CANVAS_VISUAL_LANGUAGE": {
+      "constant": "CANVAS_VISUAL_LANGUAGE_ENABLED",
+      "enabled": "2026-07-26",
+      "enabledSource": "docblock",
+      "batch": "batch-8"
+    },
+    "VITE_CANVAS_WORKSPACE": {
+      "constant": "CANVAS_WORKSPACE_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-12"
+    },
+    "VITE_COST_ACCRUAL": {
+      "constant": "COST_ACCRUAL_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-6"
+    },
+    "VITE_DESIGNED_CHROME": {
+      "constant": "DESIGNED_CHROME_ENABLED",
+      "enabled": "2026-07-26",
+      "enabledSource": "docblock",
+      "batch": "batch-8"
+    },
+    "VITE_DURATION_TYPES": {
+      "constant": "DURATION_TYPES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-6"
+    },
+    "VITE_EARNED_VALUE": {
+      "constant": "EARNED_VALUE_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_ENTRY_ROUTES": {
+      "constant": "ENTRY_ROUTES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-16"
+    },
+    "VITE_EXPORT_PRINT": {
+      "constant": "EXPORT_PRINT_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-7"
+    },
+    "VITE_FLOAT_CRITICAL_SETTINGS": {
+      "constant": "FLOAT_CRITICAL_SETTINGS_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-16"
+    },
+    "VITE_FLOAT_PATHS": {
+      "constant": "FLOAT_PATHS_ENABLED",
+      "enabled": "2026-08-02",
+      "enabledSource": "docblock",
+      "batch": "batch-11"
+    },
+    "VITE_GANTT_VIEW": {
+      "constant": "GANTT_VIEW_ENABLED",
+      "enabled": "2026-07-28",
+      "enabledSource": "docblock",
+      "batch": "batch-9"
+    },
+    "VITE_GUEST_SHARE_LINKS": {
+      "constant": "GUEST_SHARE_LINKS_ENABLED",
+      "enabled": "2026-07-21",
+      "enabledSource": "docblock",
+      "batch": "batch-7"
+    },
+    "VITE_INTER_PROJECT_DATES": {
+      "constant": "INTER_PROJECT_DATES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_LIBRARY_SCOPING": {
+      "constant": "LIBRARY_SCOPING_ENABLED",
+      "enabled": "2026-07-26",
+      "enabledSource": "docblock",
+      "batch": "batch-8"
+    },
+    "VITE_NAV_TREE": {
+      "constant": "NAV_TREE_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-16"
+    },
+    "VITE_NOTES": {
+      "constant": "NOTES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-15"
+    },
+    "VITE_PASSWORD_RESET": {
+      "constant": "PASSWORD_RESET_ENABLED",
+      "enabled": "2026-08-05",
+      "enabledSource": "docblock",
+      "batch": "batch-17"
+    },
+    "VITE_PLAN_EDIT_LOCK": {
+      "constant": "PLAN_EDIT_LOCK_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "batch": "batch-2",
+      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world \u2014 they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
+    },
+    "VITE_PROGRAMME_SCHEDULING": {
+      "constant": "PROGRAMME_SCHEDULING_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-15"
+    },
+    "VITE_PROGRESS_INGESTION": {
+      "constant": "PROGRESS_INGESTION_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-16"
+    },
+    "VITE_RESOURCES": {
+      "constant": "RESOURCES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-5"
+    },
+    "VITE_RESOURCE_CURVES": {
+      "constant": "RESOURCE_CURVES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-6"
+    },
+    "VITE_RESOURCE_LEVELLING": {
+      "constant": "RESOURCE_LEVELLING_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "batch": "batch-6"
+    },
+    "VITE_SCHEDULE_INTERCHANGE": {
+      "constant": "SCHEDULE_INTERCHANGE_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "batch": "batch-7"
+    },
+    "VITE_SCHEDULING_MODES": {
+      "constant": "SCHEDULING_MODES_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-14",
+      "derivedFrom": "CANVAS_AUTHORING_ENABLED"
+    },
+    "VITE_SUB_DAY_DURATIONS": {
+      "constant": "SUB_DAY_DURATIONS_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "batch": "batch-15"
+    },
+    "VITE_TOOLBAR_QUICK_WINS": {
+      "constant": "TOOLBAR_QUICK_WINS_ENABLED",
+      "enabled": "2026-07-19",
+      "enabledSource": "docblock",
+      "batch": "batch-7"
+    },
+    "VITE_TSLD_EDITING": {
+      "constant": "TSLD_EDITING_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "batch": "batch-3",
+      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world \u2014 they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
+    },
+    "VITE_UNDO_REDO": {
+      "constant": "UNDO_REDO_ENABLED",
+      "enabled": "2026-07-19",
+      "enabledSource": "docblock",
+      "batch": "batch-6"
+    },
+    "VITE_WBS_IMPROVEMENTS": {
+      "constant": "WBS_IMPROVEMENTS_ENABLED",
+      "enabled": "2026-07-30",
+      "enabledSource": "docblock",
+      "batch": "batch-10"
+    }
+  },
+  "$schema-note": "enabledSource: \"docblock\" = the date the flag itself records; \"floor\" = the earliest date this repository can prove, used for the fourteen flags whose real flip is recorded NOWHERE (ADR-0084). A floor can only make a flag look YOUNGER than it is, so retiring on one is conservative \u2014 never premature. It is not corrected by guessing.",
+  "sizing": "A batch is sized by BLAST RADIUS. The enablement cohort only sets the EARLIEST date a flag may fall on (enabled + horizonDays); it does not set the batch. Re-spaced 2026-08-09 after the original cohort-only split put 17 flags and ~75 production files into a batch due in nine days \u2014 the largest batch on the second-earliest date.\nMEASURED per flag: production files referencing the constant, and the number of playwright*.config.ts files that PIN it. The pin count is the one nobody had: VITE_CANVAS_AUTHORING is pinned in 14 configs and VITE_SCHEDULING_MODES in 13, and CI proved a single pinned config costs six specs to convert, not a line.\nESTIMATED, and labelled as such: weight = files + 3x pins, a cap of 45 per batch, and a fortnightly cadence. Those three numbers come from ONE completed retirement, so they are a hypothesis rather than a plan. `check:flags` tests it for us \u2014 if batch 2 takes longer than a fortnight, the next batch date fails and forces a re-fit against a second data point. Re-fit it then; do not defend it."
+}

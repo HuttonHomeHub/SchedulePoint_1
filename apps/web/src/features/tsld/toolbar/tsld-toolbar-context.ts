@@ -67,6 +67,23 @@ export interface TsldToolbarContext {
    * changes how the diagram reads, so viewers still see which is active), operable only by writers. */
   setSchedulingMode: ((mode: SchedulingMode) => void) | null;
 
+  /**
+   * **Why a pen-gated command is shut, given a phrase naming what it does** — `null` when it is
+   * open (`docs/TECH_DEBT.md` #114.1/#115).
+   *
+   * Nine items on this toolbar carried the literal string "Start editing to …", each written where
+   * it was needed. That sentence is right in the common case and **wrong whenever a peer holds the
+   * pen**: the reader's screen then shows **Request control** and no Start-editing button at all,
+   * so the app names a control they do not have and stays silent about the one that would help. It
+   * is also wrong for a Viewer, whose role will never produce that button however long they look.
+   *
+   * A shared constant could not have fixed it, because the nine do not say the same thing — "…to
+   * add activities", "…to auto-arrange", "…to recalculate". The verb is the point. So each caller
+   * passes its own phrase and the model, which is the only place holding both the role/pen split
+   * and the pen's current holder, supplies the frame.
+   */
+  scheduleRefusal: (action: string) => string | null;
+
   // --- Tools / author (group 4, pen-gated) --------------------------------------------------
   /** True when the current edit mode is "add activity" (drives the tool's pressed state). */
   isAddingActivity: boolean;

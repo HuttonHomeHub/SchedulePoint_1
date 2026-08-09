@@ -70,8 +70,12 @@ decision is made; only the work is outstanding.
   backend, which is the actual decision.
 - `M` **Append-only audit log** (TECH_DEBT #14). Row attribution and structured
   logs are not an audit trail.
-- `M` **Privacy operations** — a hard-delete path and a data-export path, both
-  explicit and audited. Everything is a soft delete today.
+- `M` **Privacy operations** — **shaped by [ADR-0085](adr/0085-privacy-operations.md); do not start
+  from this line.** That ADR reads the schema and finds the work is not "a hard-delete path": it is
+  actor **anonymisation** (a hard delete would either cascade across 54 attribution columns or leave
+  dangling ids), and it may not touch the audit log's append-only triggers. **Trigger to build:** the
+  first organisation outside the product owner's own is onboarded, or a real subject request arrives.
+  Named because an unconditioned `M` stays exactly one priority below whatever is being done.
 
 ## WBS follow-ons (ADR-0063)
 

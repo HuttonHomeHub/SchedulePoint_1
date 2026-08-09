@@ -404,6 +404,7 @@ export function ToolbarPlanWorkspace({
       }
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
       canEdit={model.canEditSchedule && !lateOverlayActive}
+      scheduleRefusal={model.scheduleRefusal}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       // Bar-end resize (ADR-0052 M2/M3) + lag-anchor drag (M3). Always passed like onReposition;
@@ -421,6 +422,21 @@ export function ToolbarPlanWorkspace({
       // byte-for-byte today's canvas — the LOE tool-mode is then unreachable (the Add-menu item is also
       // flag-gated), so the prop is simply absent.
       {...(CANVAS_ACTIVITY_TYPES_ENABLED ? { onLoeSpan: model.createLoeSpan } : {})}
+      // Quiescence during an open two-click pick + the ADR-0048 inverse the link confirmation
+      // offers (ADR-0064 T5/T7) — the same three the legacy layout passes.
+      //
+      // **They were absent here, and this is the host that ships** (`plan-workspace.tsx:70` selects
+      // it whenever `CANVAS_TOOLBAR_ENABLED`, default-on): `docs/TECH_DEBT.md` #103. So ADR-0064's
+      // recalculation hold was `undefined` on the one surface planners use — the mechanism built
+      // because six link attempts produced zero dependencies — and `CanvasModeBand.tsx:98` renders
+      // the confirmation's Undo only when `onUndo` is passed, so that button had never appeared at
+      // all, including through the §7 gate pass that found a defect in it.
+      //
+      // The third was found by diffing the two hosts' whole prop lists rather than fixing the two
+      // the register named. Do that, not this, when a host divergence turns up.
+      recalcHold={model.autoRecalcHold}
+      dropLinkPickSignal={model.dropLinkPickSignal}
+      onUndoLastEdit={model.undoRedo.canUndo ? model.undoRedo.undo : undefined}
       onAutoArrange={model.onTsldAutoArrange}
       onOpenLogic={model.onOpenLogic}
       onEditActivity={model.onEditActivity}

@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 885 web
+> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 893 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 82 ADRs.
+> 85 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -376,7 +376,8 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   - explicit release) with a 423 `LockedError` write-gate (`assertHoldsPen`),
     graceful peer request→grace→take-over hand-off (Org-Admin immediate override),
     serialised by the existing plan advisory lock; the third concurrency layer above
-    optimistic 409 and the advisory lock. Unblocks `VITE_TSLD_EDITING`.
+    optimistic 409 and the advisory lock. Unblocked on-canvas editing, whose flag
+    (`VITE_TSLD_EDITING`) retired in ADR-0084 batch 1 — the pen is unconditional.
 - **ADR-0029** — Persistent app-shell & hierarchy navigator: evolve `_authed` into
   a mounted-once shell (top bar + Project Explorer rail + single workspace region),
   URL-derived selection, and a hand-rolled ARIA `tree` with lazy-load + virtualization.
@@ -1726,6 +1727,91 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   here: a primitive's accessibility posture plus a gating derivation, with no new capability).
   **The CPM engine is not imported and no migration runs.**
 
+- **ADR-0083** _(Proposed)_ — A gated form field is **read-only, not disabled**, and the mechanism
+  differs per control because the platform does not offer the same states — not because we prefer
+  variety. Text and textarea take `readOnly`; a checkbox takes `aria-disabled` plus a
+  `preventDefault` guard; a native `<select>` keeps native `disabled` as a **named exception with
+  its cost stated**; our own `Combobox` takes `readOnly` because we control it. The discriminator is
+  clean: a control whose only operation is changing its value gets `aria-disabled` and a guard; a
+  control with operations beyond that — caret, selection, copy — gets `readOnly`. Extends ADR-0082
+  from the menu tier, and for the **inverse** reason, which is the part worth keeping: a menu item's
+  content _is_ its function, so a menu of refusals renders no trigger; a field's content is its
+  **value**, so a form of shaded fields is exactly what the reader came for.
+  **The finding nobody had noticed is a trap in the other direction.** Making a gated field
+  _readable_ removes its WCAG 1.4.3/1.4.11 exemption — `disabled:opacity-50` is lawful today only
+  because the control is inactive. So the treatment dims the **chrome** and never the **value**
+  (`--field` → `--muted`, border stays `--input`, value keeps full contrast), and
+  `token-contrast.test.ts` must carry the new pair **before** the CSS is written, not after.
+  It **narrows rather than overturns** `DESIGN_SYSTEM.md`'s "native `disabled` is fine when nothing
+  flips underneath the user" clause: that clause's own example ("no permission") is not static,
+  because the ADR-0028 pen flips under a reader who did nothing — and static-vs-flipping is the
+  wrong axis for a field anyway, since a button's loss is operability and a field's is readability.
+  The button ruling is untouched. It also found that `disabled` on a field means **five different
+  things** today and one of them is legitimate: an unloaded picker has nothing to read, so native
+  `disabled` keeps that job — a blanket ban would have been wrong.
+  **Blast radius settled with its method recorded** (38 props on a `*Field` across 8 files, two
+  files carrying 30), because three passes had produced three numbers and the disagreement was
+  never about the code: the larger figures counted `disabled=` on any component. `AssignmentRow`'s
+  case is a **different** fix — it _unmounts_ its editors rather than disabling them, a guaranteed
+  focus drop to `<body>`, and needs a read-only render. Two claims are marked **reasoned from
+  specification, not observed** (real AT announcement of `readonly` + `aria-describedby`, and
+  whether Chrome/Safari suppress the picker on a `readonly` date input) and must be checked before
+  this is Accepted. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0084** _(Accepted)_ — A feature flag is a rollback contract with an expiry date. `env.ts`
+  declares 58 `VITE_` flags and `flagDefaultOff` is called **zero** times: every one is default-on,
+  i.e. a rollback contract left behind by the epic that shipped it. That is right on the day a
+  feature flips — the enablement milestones keep finding defects a human read missed — and wrong a
+  month later, when the flag-off branch has never been run by anybody and its parity suite asserts
+  that an unused configuration still works. **The cost is not the `if`; it is that every flag-off
+  branch is a second product, maintained on every change to the code around it forever.** So: a
+  machine-read `@enabled YYYY-MM-DD` tag on every declaration, a 30-day horizon (≈ a dozen releases
+  on a host that auto-pulls each one — ADR-0047 — which is the real unit of confidence), and
+  `pnpm check:flags` enforcing a **dated schedule rather than a cliff**, because a 30-day horizon
+  with no schedule fails on day one twenty-seven times and a gate that does that gets deleted
+  rather than fixed (ADR-0058). **Fourteen flags reached the gate with no enablement date recorded
+  anywhere** — not the docblock, not the ADR, not recoverable from git; they take the earliest date
+  the repository can prove, marked as a **floor**, which can only make a flag look younger than it
+  is and is therefore never premature. Batch 1 retired **one** flag,
+  `VITE_NAV_TREE_CRUD`. It first retired three, and **CI caught the other two**: a whole
+  `playwright*.config.ts` can BE a flag-off harness — the base config pins `VITE_TSLD_EDITING` and
+  `VITE_PLAN_EDIT_LOCK` off so that "the read-only TSLD surface and the role-only (no-pen) editing
+  journeys stay covered" — and D5 had named only the unit parity suites. Six editing specs sat
+  clicking controls the now-unconditional pen shades until they timed out. Both flags are back in
+  batch 2 with the reason recorded, and the gate gained a fifth assertion (verified red on 22
+  configs) so a retirement cannot strand a pinned harness again. `VITE_CANVAS_TOOLBAR` moved to batch 2 **with
+  the reason written down**: it is not an `if` but a ~270-line alternative layout, and ADR-0080
+  records that layout causing a shipped defect — an argument for retiring it, not for keeping it.
+  **The ADR's own D4 was drafted backwards and `check:flags` failed on its first run**, against the
+  register shipped in the same commit: a _child_ must not retire before its parent, because the
+  child's retirement declares the feature permanent while the surviving parent can still switch it
+  off. ADR-0076 Class 3, caught by the gate written beside it.
+
+- **ADR-0085** _(Accepted; decision only — nothing is built)_ — Erasure collides with the audit log,
+  and that collision is the decision. `docs/BACKLOG.md` carried "Privacy operations" as an `M`
+  sized as work — "a hard-delete path and a data-export path". It is not work yet; it is a genuine
+  conflict, and picking it up as a ticket means resolving that conflict by whichever half the
+  implementer opened first. **`audit_events` refuses `UPDATE` and `DELETE` in the database**, by
+  `BEFORE UPDATE OR DELETE` / `BEFORE TRUNCATE` triggers declared `ENABLE ALWAYS` so the application
+  role cannot bypass them — and it deliberately holds the address a failed sign-in named
+  (ADR-0073 C2 keeps the caller's own casing). A right-to-erasure request therefore meets a
+  guarantee this product made on purpose, three ADRs ago, at the strongest layer available. So
+  erasure is **anonymisation of the actor** — the `users` row is tombstoned, the unique index is
+  preserved by a non-routable address, and all **54** attribution columns keep pointing at the same
+  id — never deletion of the record. **Relaxing the triggers is rejected**: it converts a
+  _structural_ guarantee into a _procedural_ one, changing the answer to "could these rows have been
+  altered?" from "not by the application role" to "only by the erasure path, which we believe was
+  used correctly". Reading the schema first also found what a plan written from the backlog line
+  would have missed — `invitations` holds addresses for people who **never became users**, the
+  clearest-cut case in the system and the one case that IS a hard delete. The `auth.*`
+  `subject_label` is bounded by **retention** rather than per-subject deletion (a rule applied to all
+  rows alike cannot be aimed), with the period left unset because it is a legal question and
+  inventing a number would be ADR-0076 Class 3. Export is **organisation-scoped** first, not
+  subject-scoped: a subject export here is a name, an email and a list of ids, which tells its reader
+  almost nothing. **Build trigger named** — the first organisation outside the product owner's own,
+  or a real subject request — because an unconditioned `M` stays exactly one priority below whatever
+  is being done.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -1859,6 +1945,32 @@ When operating in this repo, Claude Code should:
    - This applies to the **decision-bearing** claims, not every sentence. A rule
      that applies everywhere is followed nowhere, and both failures were in the
      small set of statements that changed what got built.
+
+10. **Approved work runs to completion. A status report is not a stopping point.**
+    When the product owner has approved a plan or said "drive this to completion",
+    the only two reasons to stop are: **every milestone is done**, or **an answer is
+    needed that only they can give**. Nothing else qualifies — not a finished
+    milestone, not a good moment to summarise, not a long turn.
+
+    - **The failure mode is ending the turn, and it is silent.** On 2026-08-08 an
+      approved programme lost **seven and a half hours** between two milestones
+      (`ce4e6c5` at 23:33, `b710cbd` at 07:03). Nothing failed and nothing was
+      blocked: a milestone landed, a progress report was written, the turn ended,
+      and the session sat idle until the product owner typed. From the inside that
+      is indistinguishable from working — which is exactly why it needs a rule
+      rather than an intention.
+    - **So chain the work inside the turn.** Finish a slice, commit it, push it,
+      and start the next one **in the same turn**. Report at the end of the turn,
+      not instead of continuing.
+    - **And arm a wake-up before the turn can end** (`send_later`, ~25 minutes),
+      carrying the remaining milestone list and re-arming itself each turn while
+      work remains. A turn boundary is a real limit; being unable to cross it
+      alone is not a reason to stop, because the tool to cross it exists. This
+      session used that tool to babysit a pull request and not to continue the
+      work — which is the whole lesson.
+    - **If something genuinely needs an answer**, ask it, then **keep working on
+      everything that does not depend on it**. A blocking question blocks one
+      milestone, not the programme.
 
 ## 20. Specialised agents
 

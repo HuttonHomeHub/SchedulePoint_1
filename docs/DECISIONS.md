@@ -10,6 +10,52 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-09 — Reconciliation pass at the ADR-0083/0084 epic boundary
+
+**What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
+shade-don't-hide epic, and fold every finding. Documentation and tooling; the product behaviour
+changed only where a milestone had already changed it.
+
+**What it found — one finding, in three costumes.** The gate was right and aimed at a quarter of its
+subject.
+
+`pnpm check:counts` has re-derived `CLAUDE.md`'s six stage-banner figures since ADR-0076, and it has
+worked: the banner was correct. The same figures also sat in three ungated documents. The **front
+door** — `README.md`, the first thing any reader meets — said **73 ADRs against 85** and 23
+Playwright suites against 29, five days after a parenthesis reading "counted 2026-08-04".
+`apps/web/README.md` was wrong about three of four. `docs/FRONTEND_ARCHITECTURE.md` restated a module
+count it does not own.
+
+Widening the gate to the front door then found it **passing for the wrong reason**. `README.md` wraps
+as `23 flag-scoped\n> Playwright suites`, and exactly one of the six patterns carried the
+`\s*>?\s*` that survives a line break — so somebody had met this problem, fixed the pattern in front
+of them, and left the other five to be discovered by a wrong number surviving a green check. That is
+the ADR-0077 M0 shape one gate along, and it is now impossible by construction: the patterns are
+built from phrases by a helper that makes every space tolerant.
+
+The two internal copies were **deleted** rather than gated. A document restating a number it does not
+own has no reason to hold one, and correcting them would have had to pick silently between two
+counting methods that disagree (`find … | wc -l` says 897 where `check:counts` says 893).
+
+**What else.** `ROADMAP.md` was silent on **ADR-0074 through ADR-0085** — the identical failure the
+2026-07-31 and 2026-08-04 rows record, two epics later, which is why it is a numbered step rather
+than something to remember.
+
+**And step 7 earned its keep again**, this time by looking at the flags. `env.ts` declares 58 `VITE_`
+flags and calls `flagDefaultOff` **zero** times: every one is default-on, i.e. a rollback contract,
+and no decision anywhere said when a contract ends. Fourteen recorded no enablement date in any
+artefact — docblock, ADR or git. That became **ADR-0084** and `pnpm check:flags`, which caught its
+own ADR's D4 stated backwards on its first run. Separately, `docs/BACKLOG.md`'s "Privacy operations
+`M`" turned out not to be work but an unresolved collision with the audit log's `ENABLE ALWAYS`
+triggers — **ADR-0085**.
+
+**Consequences.** `check:counts` covers two documents and its patterns tolerate wrapping.
+`check:flags` joins the CI doc-gates. `RECONCILE.md` gains the rule the pass produced: _when you
+patch a gate, ask whether the same hole is in its siblings — and point a new gate at every copy of
+the claim, not the one in front of you._
+
+---
+
 ### 2026-08-04 — Reconciliation pass at the ADR-0073 epic boundary
 
 **What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the audit-log

@@ -3,6 +3,12 @@ import type { FieldErrors } from 'react-hook-form';
 
 import { Alert } from '@/components/ui/alert';
 import { alertBoxClassName } from '@/components/ui/alert-box';
+import {
+  FieldGateLock,
+  resolveFieldGate,
+  useFieldGate,
+  type FieldGate,
+} from '@/components/ui/field-gate';
 import { Input, type InputProps } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, type SelectProps } from '@/components/ui/select';
@@ -15,11 +21,48 @@ import { cn } from '@/lib/utils';
  * an extra description (e.g. a live character count) without silencing the validation error, and vice
  * versa. Order puts the field's own error/hint first so it's announced before caller-supplied context.
  */
-function mergeDescribedBy(own: string | undefined, caller: string | undefined): string | undefined {
-  return [own, caller].filter(Boolean).join(' ') || undefined;
+function mergeDescribedBy(...ids: Array<string | undefined>): string | undefined {
+  return ids.filter(Boolean).join(' ') || undefined;
 }
 
-export interface TextFieldProps extends InputProps {
+/**
+ * The `gate` prop, documented once and referenced from each field's props interface.
+ *
+ * @see FieldGate — this field's own gate. Overrides an inherited group gate: the **nearest reason
+ * wins**, because a specific one is always more useful than a general one. `null` opts out of an
+ * inherited gate entirely, for a control that stays live inside a read-only region.
+ */
+interface GatedFieldProps {
+  gate?: FieldGate | null | undefined;
+  /**
+   * Native `disabled` — kept for ADR-0083 D2's two states ONLY: the options have not loaded, or a
+   * field above this one has not been answered. **Never** a permission, a pen, an in-flight save or
+   * a domain rule; those are {@link GatedFieldProps.gate}. The compiler cannot tell the two apart —
+   * they are the same prop and the same type — which is why this docblock and
+   * `field-gate.structural.test.ts` both exist.
+   */
+  disabled?: boolean | undefined;
+}
+
+/** The label row: the label itself, plus the lock that says the field is shut (ADR-0083 D6). */
+function FieldLabel({
+  htmlFor,
+  label,
+  shut,
+}: {
+  htmlFor: string;
+  label: string;
+  shut: boolean;
+}): React.ReactElement {
+  return (
+    <Label htmlFor={htmlFor} className={shut ? 'flex items-center gap-1.5' : undefined}>
+      {label}
+      {shut ? <FieldGateLock /> : null}
+    </Label>
+  );
+}
+
+export interface TextFieldProps extends InputProps, GatedFieldProps {
   label: string;
   /** Validation message for this field, if any (from React Hook Form). */
   error?: string | undefined;
@@ -34,21 +77,26 @@ export interface TextFieldProps extends InputProps {
  * Hook Form's `register()` can be spread directly onto it.
  */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, error, hint, id, className, 'aria-describedby': ariaDescribedBy, ...props },
+  { label, error, hint, gate, id, className, 'aria-describedby': ariaDescribedBy, ...props },
   ref,
 ) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const errorId = `${fieldId}-error`;
   const hintId = `${fieldId}-hint`;
+  const gateId = `${fieldId}-gate`;
+  const { shut, ownReason, groupReasonId } = resolveFieldGate(gate, useFieldGate());
+  // Own error → own hint → gate reason → caller's: the field's own problem first, then what it is
+  // for, then why it is shut (ADR-0083 D4).
   const describedBy = mergeDescribedBy(
     error ? errorId : hint ? hintId : undefined,
+    ownReason ? gateId : groupReasonId,
     ariaDescribedBy,
   );
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={fieldId}>{label}</Label>
+      <FieldLabel htmlFor={fieldId} label={label} shut={shut} />
       <Input
         ref={ref}
         id={fieldId}
@@ -56,6 +104,13 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         aria-describedby={describedBy}
         className={className}
         {...props}
+        // AFTER the caller's props, deliberately: a legitimate `readOnly={false}` further up the
+        // spread would otherwise silently unlock a gated field. The gate is the last word.
+        //
+        // `readOnly`, never `aria-disabled`: the field IS operable — focusable, caret-placeable,
+        // selectable, copyable — and saying otherwise would be a false statement of the kind this
+        // repo has now twice shipped and twice had to remove (ADR-0083 D1).
+        {...(shut ? { readOnly: true } : {})}
       />
       {error ? (
         <p id={errorId} className="text-destructive-text text-sm">
@@ -66,11 +121,16 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           {hint}
         </p>
       ) : null}
+      {ownReason ? (
+        <p id={gateId} className="text-muted-foreground text-sm">
+          {ownReason}
+        </p>
+      ) : null}
     </div>
   );
 });
 
-export interface SelectFieldProps extends SelectProps {
+export interface SelectFieldProps extends SelectProps, GatedFieldProps {
   label: string;
   /** Validation message for this field, if any (from React Hook Form or a failed load). */
   error?: string | undefined;
@@ -119,6 +179,7 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
     error,
     hint,
     errorRole,
+    gate,
     id,
     className,
     children,
@@ -131,22 +192,37 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
   const fieldId = id ?? generatedId;
   const errorId = `${fieldId}-error`;
   const hintId = `${fieldId}-hint`;
+  const gateId = `${fieldId}-gate`;
+  const { shut, ownReason, groupReasonId } = resolveFieldGate(gate, useFieldGate());
   // Both when there is both: a hint stays useful while an error is showing (it says what the
   // control does; the error says why this value won't do), and losing it mid-correction is the
   // moment it is most wanted. Hint first — context before the complaint.
   const own = [hint ? hintId : undefined, error ? errorId : undefined].filter(Boolean).join(' ');
-  const describedBy = mergeDescribedBy(own || undefined, ariaDescribedBy);
+  const describedBy = mergeDescribedBy(
+    own || undefined,
+    ownReason ? gateId : groupReasonId,
+    ariaDescribedBy,
+  );
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={fieldId}>{label}</Label>
+      <FieldLabel htmlFor={fieldId} label={label} shut={shut} />
       <Select
         ref={ref}
         id={fieldId}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={className}
+        // Native `disabled` — a deliberate, NAMED exception (ADR-0083 D1): there is no read-only
+        // select and no complete guard for one. The accepted cost is that a gated select leaves
+        // the tab sequence; it stays in the accessibility tree, so a screen-reader user still
+        // reads its label and value in browse mode. The exception shrinks on its own as pickers
+        // migrate to `Combobox` (TECH_DEBT #42).
+        //
+        // After the caller's props: a `disabled={optionsLoading}` resolving to `false` would
+        // otherwise unlock a gated select. The gate is the last word.
         {...props}
+        {...(shut ? { disabled: true } : {})}
       >
         {children}
       </Select>
@@ -164,11 +240,16 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
           {error}
         </p>
       ) : null}
+      {ownReason ? (
+        <p id={gateId} className="text-muted-foreground text-sm">
+          {ownReason}
+        </p>
+      ) : null}
     </div>
   );
 });
 
-export interface CheckboxFieldProps extends Omit<InputProps, 'type'> {
+export interface CheckboxFieldProps extends Omit<InputProps, 'type'>, GatedFieldProps {
   label: string;
   /** Validation message for this field, if any (from React Hook Form). */
   error?: string | undefined;
@@ -195,9 +276,11 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
       label,
       error,
       hint,
+      gate,
       id,
       className,
       density = 'default',
+      onClick,
       'aria-describedby': ariaDescribedBy,
       ...props
     },
@@ -207,8 +290,11 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
     const fieldId = id ?? generatedId;
     const errorId = `${fieldId}-error`;
     const hintId = `${fieldId}-hint`;
+    const gateId = `${fieldId}-gate`;
+    const { shut, ownReason, groupReasonId } = resolveFieldGate(gate, useFieldGate());
     const describedBy = mergeDescribedBy(
       error ? errorId : hint ? hintId : undefined,
+      ownReason ? gateId : groupReasonId,
       ariaDescribedBy,
     );
 
@@ -228,9 +314,24 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
             aria-invalid={error ? true : undefined}
             aria-describedby={describedBy}
             className={cn('accent-primary size-4', className)}
+            // A checkbox's ONLY operation is to change its value, so there is nothing for
+            // `readOnly` to preserve — and `readonly` is inert on a checkbox in any case. It takes
+            // `aria-disabled` + a guard on the one event that changes it, which keeps it in the tab
+            // order so the reader can reach the label, the value and the linked reason (ADR-0083
+            // D1). `click` rather than `change`: the browser fires `click` first and cancelling it
+            // stops the check, whereas `change` fires after the box has already flipped.
             {...props}
+            {...(shut
+              ? {
+                  'aria-disabled': true,
+                  onClick: (event: React.MouseEvent<HTMLInputElement>) => {
+                    event.preventDefault();
+                  },
+                }
+              : { onClick })}
           />
           {label}
+          {shut ? <FieldGateLock /> : null}
         </label>
         {error ? (
           <p id={errorId} className="text-destructive-text text-sm">
@@ -241,12 +342,17 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
             {hint}
           </p>
         ) : null}
+        {ownReason ? (
+          <p id={gateId} className="text-muted-foreground text-sm">
+            {ownReason}
+          </p>
+        ) : null}
       </div>
     );
   },
 );
 
-export interface TextareaFieldProps extends TextareaProps {
+export interface TextareaFieldProps extends TextareaProps, GatedFieldProps {
   label: string;
   /** Validation message for this field, if any (from React Hook Form). */
   error?: string | undefined;
@@ -261,21 +367,24 @@ export interface TextareaFieldProps extends TextareaProps {
  */
 export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>(
   function TextareaField(
-    { label, error, hint, id, className, 'aria-describedby': ariaDescribedBy, ...props },
+    { label, error, hint, gate, id, className, 'aria-describedby': ariaDescribedBy, ...props },
     ref,
   ) {
     const generatedId = useId();
     const fieldId = id ?? generatedId;
     const errorId = `${fieldId}-error`;
     const hintId = `${fieldId}-hint`;
+    const gateId = `${fieldId}-gate`;
+    const { shut, ownReason, groupReasonId } = resolveFieldGate(gate, useFieldGate());
     const describedBy = mergeDescribedBy(
       error ? errorId : hint ? hintId : undefined,
+      ownReason ? gateId : groupReasonId,
       ariaDescribedBy,
     );
 
     return (
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor={fieldId}>{label}</Label>
+        <FieldLabel htmlFor={fieldId} label={label} shut={shut} />
         <Textarea
           ref={ref}
           id={fieldId}
@@ -283,6 +392,7 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
           aria-describedby={describedBy}
           className={className}
           {...props}
+          {...(shut ? { readOnly: true } : {})}
         />
         {error ? (
           <p id={errorId} className="text-destructive-text text-sm">
@@ -291,6 +401,11 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
         ) : hint ? (
           <p id={hintId} className="text-muted-foreground text-sm">
             {hint}
+          </p>
+        ) : null}
+        {ownReason ? (
+          <p id={gateId} className="text-muted-foreground text-sm">
+            {ownReason}
           </p>
         ) : null}
       </div>

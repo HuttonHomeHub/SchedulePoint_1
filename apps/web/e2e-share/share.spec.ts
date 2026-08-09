@@ -108,24 +108,36 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   // viewport height is exactly what can start clipping once the header wraps on a narrow screen —
   // so the fix's own mechanism is the thing to re-check at the small end, not assume.
   //
-  // This assertion is deliberately narrower than the one first written here, and the reason is a
-  // finding rather than a compromise. The accessibility review reasoned from the CSS that nothing
-  // on this chain sets `overflow-hidden`, so the page would simply scroll and pass WCAG 1.4.10.
-  // The first version asserted that. It **failed**: `documentElement.scrollWidth` is 436 at a 320 px
-  // viewport, because the TSLD zoom-preset row (`flex items-center gap-1`, no `flex-wrap`) is 420 px
-  // wide and cannot shrink. That is a real 1.4.10 failure on a public unauthenticated surface — and
-  // it is **pre-existing**, not caused by the height fix; it was simply unobservable while the
-  // canvas was 1 px and nobody had measured. It is `docs/TECH_DEBT.md` #98, because fixing a shared
-  // canvas control's responsive behaviour cuts across ADR-0031's overflow tiers and needs the member
-  // workspace re-checked at the same widths — work this pass is not doing.
+  // **The assertion this comment used to withhold** (`docs/TECH_DEBT.md` #98, now closed).
   //
-  // So: assert what the height fix is responsible for, record what it revealed, and do not pretend
-  // the horizontal overflow is fixed by leaving a passing test that never looked.
+  // The history is worth keeping, because it is a case of reasoning losing to measurement. The
+  // accessibility review reasoned from the CSS that nothing on this chain sets `overflow-hidden`,
+  // so the page would simply scroll and pass WCAG 1.4.10. The assertion written from that reasoning
+  // **failed**: `documentElement.scrollWidth` was 436 at a 320 px viewport, because the TSLD
+  // zoom-preset group (`flex items-center gap-1`, no `flex-wrap`) is 420 px wide and cannot shrink.
+  // Pre-existing rather than caused by the height fix — simply unobservable while the canvas was
+  // 1 px and nobody had measured.
+  //
+  // It was recorded rather than fixed at the time because a shared canvas control cuts across
+  // ADR-0031's overflow tiers and needed the member workspace re-checked at the same widths. That
+  // re-check is done; `TsldViewControls` wraps the group, on both surfaces, from one change.
   await guestPage.setViewportSize({ width: 320, height: 720 });
   const narrowCanvas = await guestPage.evaluate(
     () => document.querySelector('canvas')?.getBoundingClientRect().height ?? 0,
   );
   expect(narrowCanvas, 'the canvas must not collapse when the header wraps').toBeGreaterThan(100);
+
+  // WCAG 1.4.10 Reflow: no horizontal scroll at 320 px. Measured, not reasoned — a 4 px tolerance
+  // absorbs sub-pixel layout rounding without admitting a 116 px overflow, which is what this
+  // caught. Asserted at 320 and 360, because 320 is the criterion's own floor and 360 is the
+  // commonest real phone width, and a fix that only satisfies the narrower one is a coincidence.
+  for (const width of [320, 360]) {
+    await guestPage.setViewportSize({ width, height: 720 });
+    const scrollWidth = await guestPage.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth, `no horizontal overflow at ${String(width)} px`).toBeLessThanOrEqual(
+      width + 4,
+    );
+  }
   await guestPage.setViewportSize({ width: 1280, height: 800 });
 
   // A refresh of a LIVE link still shows the plan. This is not padding: step (4) below reloads this

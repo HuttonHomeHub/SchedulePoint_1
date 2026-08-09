@@ -86,8 +86,10 @@ describe('TSLD toolbar — Recalculate busy state', () => {
   });
 
   it('keeps the pen-gated reason when the pen is not held, busy or not', () => {
-    renderDoRow({ recalcPending: false, canRecalc: false });
-    expect(recalculateButton()).toHaveAttribute('title', 'Start editing to recalculate');
+    // Both halves of "the pen is not held": recalculation is pen-gated exactly as schedule editing
+    // is, so a fixture setting only one is describing a state the model cannot produce.
+    renderDoRow({ recalcPending: false, canRecalc: false, canEditSchedule: false });
+    expect(recalculateButton()).toHaveAttribute('title', 'Start editing to recalculate.');
   });
 
   /**

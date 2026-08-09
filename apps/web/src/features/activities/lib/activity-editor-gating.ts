@@ -1,4 +1,8 @@
+import type { PlanEditLockActor } from '@repo/types';
+
 import type { ActivityScope } from '../schemas/activity-scope-schemas';
+
+import { penReason } from '@/features/plan-lock';
 
 /**
  * The tabbed activity editor's per-scope write gate (ADR-0060 §6), in the shape of
@@ -23,6 +27,12 @@ export interface ActivityEditorGatingInput {
   penManaged: boolean;
   /** Does the caller currently hold the pen (`pen.holdsPen`). */
   holdsPen: boolean;
+  /**
+   * Who holds it, when somebody else does — `null` when the pen is free. Carried so the refusal can
+   * name **Request control** rather than a Start-editing button the reader does not have (#115).
+   * Optional so every existing caller compiles; absent behaves exactly as before.
+   */
+  holder?: PlanEditLockActor | null;
   /** Role: may edit an activity's definition (`activity:update` — Planner / Org Admin). */
   canWrite: boolean;
   /** Role: may report progress (Contributor and up) — never pen-gated. */
@@ -66,17 +76,25 @@ const NO_ROLE = 'Your role cannot edit activity details.';
  * nobody holds the pen when a plan has just been opened, so there is no one to take it from and
  * nothing to take over — the reader is told to fight a phantom instead of pressing Start editing.
  */
-const NO_PEN = 'Start editing to change this activity.';
+/**
+ * **Replaced by `penReason`** (`docs/TECH_DEBT.md` #115). The constant above is right whenever
+ * nobody holds the pen and wrong whenever a peer does — that reader sees **Request control** and no
+ * Start-editing button, so this named a control they do not have. It is now built from the holder,
+ * which the pen layer already knows (`lock-view.ts` reads `status.holder`), so the two surfaces
+ * cannot describe one state two ways.
+ */
+const noPen = (holder: PlanEditLockActor | null): string =>
+  penReason('change this activity', holder);
 const NO_PROGRESS_ROLE = 'Your role cannot report progress.';
 const NO_NOTES_ROLE = 'Your role cannot add notes.';
 
 export function deriveActivityEditorGating(input: ActivityEditorGatingInput): ActivityEditorGating {
-  const { penManaged, holdsPen, canWrite, canProgress, canReadCost } = input;
+  const { penManaged, holdsPen, canWrite, canProgress, canReadCost, holder = null } = input;
 
   // The definition rule, shared by all four definition scopes and (since M0) by steps.
   const penGated = (): ScopeGate => {
     if (!canWrite) return { writable: false, reason: NO_ROLE, readable: true };
-    if (penManaged && !holdsPen) return { writable: false, reason: NO_PEN, readable: true };
+    if (penManaged && !holdsPen) return { writable: false, reason: noPen(holder), readable: true };
     return { writable: true, reason: null, readable: true };
   };
 

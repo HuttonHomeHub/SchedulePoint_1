@@ -333,7 +333,7 @@ export function ResourceFormDialog({
                         parentOptions.find((row) => row.resource.id === parentId)?.resource.name
                       }
                       emptyOption={{ label: TOP_LEVEL_PARENT_LABEL }}
-                      disabled={readOnly}
+                      readOnly={readOnly}
                       describedBy={parentHelpId}
                       toggleLabel="Show groups"
                       emptyMessage="No groups match your search."
@@ -373,7 +373,7 @@ export function ResourceFormDialog({
                         emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
                         loading={calendarsLoading}
                         errored={calendarsError}
-                        disabled={readOnly}
+                        readOnly={readOnly}
                         describedBy={
                           calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
                         }

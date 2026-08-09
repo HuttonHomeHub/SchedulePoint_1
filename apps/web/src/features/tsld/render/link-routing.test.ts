@@ -13,9 +13,10 @@ import {
   MAX_CORRIDOR_CANDIDATES,
   routeOrthogonal,
   type LaneIntervalIndex,
-  type RenderActivity,
-  type Viewport,
-} from './render-model';
+} from './link-routing';
+// The two render types stay on the barrel: they are geometry, re-exported, and importing them
+// from `./geometry` here would say the test knows where they live rather than that it uses them.
+import type { RenderActivity, Viewport } from './render-model';
 
 /**
  * **Obstacle-aware link routing** (ADR-0064 M2). A link that runs straight through an unrelated

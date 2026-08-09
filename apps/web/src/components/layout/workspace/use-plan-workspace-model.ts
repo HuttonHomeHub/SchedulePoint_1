@@ -63,7 +63,7 @@ import {
 } from '@/features/dependencies';
 import { useFloatPathsPanel } from '@/features/float-paths';
 import { useActivityNoteCounts } from '@/features/notes';
-import { derivePlanGating, usePlanPen } from '@/features/plan-lock';
+import { derivePlanGating, scheduleRefusal, usePlanPen } from '@/features/plan-lock';
 import { usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
@@ -182,6 +182,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canProgress: canReportProgress(role),
     canCalculate: canCalculateSchedule(role),
   });
+  const penHolder = pen.status?.holder ?? null;
+  const refuseSchedule = useCallback(
+    (action: string) => scheduleRefusal({ canEditSchedule, penReadOnly }, penHolder, action),
+    [canEditSchedule, penReadOnly, penHolder],
+  );
   const [editing, setEditing] = useState(false);
   // The canvas-axis-aligned **resource-view** lens (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`):
   // an ephemeral, session-local open flag toggled from the `resource-view` toolbar item, exactly like the
@@ -421,8 +426,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // Client-derived from the role, because the DTO returns `null` for both "unset" and "not
         // permitted" (TECH_DEBT #62). Sound while `cost:read` and `activity:update` share a role set.
         canReadCost: canWrite,
+        // Who holds the pen, when it is not this reader (`docs/TECH_DEBT.md` #115). Without it the
+        // refusal says "Start editing to …" to somebody whose screen shows **Request control** and
+        // no Start-editing button — naming a control they do not have. The pen layer already knows
+        // (`lock-view.ts` reads the same `status.holder`), so this is threading, not new data.
+        holder: pen.status?.holder ?? null,
       }),
-    [pen.penManaged, pen.holdsPen, canWrite, canProgress],
+    [pen.penManaged, pen.holdsPen, canWrite, canProgress, pen.status?.holder],
   );
 
   // Per-activity note counts for the activities-table row badge (ADR-0046), route-composed like
@@ -1938,6 +1948,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canEditSchedule,
     canRecalc,
     canProgress,
+    /**
+     * Why a pen-gated schedule command is shut, given a phrase naming what it does — `null` when it
+     * is open (`docs/TECH_DEBT.md` #114.1). Bound here because this is the one place that holds
+     * both halves the sentence needs: the role/pen split (`penReadOnly`, which `canEditSchedule`
+     * has already fused away) and who currently holds the pen. A caller given only
+     * `canEditSchedule` cannot tell a Viewer from a Planner without the lock, and every caller that
+     * tried wrote a sentence that is false for one of them.
+     */
+    scheduleRefusal: refuseSchedule,
     // Schedule interchange export (ADR-0050 M4d) — every member may export (Viewer upward, a read-egress
     // of on-screen schedule data), so this is role-only (NOT pen-gated). Gates the Export menu's
     // "Interchange" group alongside `VITE_SCHEDULE_INTERCHANGE`. Named to match the `canExportSchedule`

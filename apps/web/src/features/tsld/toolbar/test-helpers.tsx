@@ -17,11 +17,14 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
 export function makeTsldToolbarContext(
   overrides: Partial<TsldToolbarContext> = {},
 ): TsldToolbarContext {
-  return {
+  const context: TsldToolbarContext = {
     // Frame / navigate
     zoomPreset: 'week',
     setZoomPreset: vi.fn(),
     canvasActive: true,
+    // Replaced below by a value DERIVED from `canEditSchedule` unless the caller overrode it — see
+    // the note at the bottom of this function. Present here only so the literal is complete.
+    scheduleRefusal: () => null,
     stepZoom: vi.fn(),
     fit: vi.fn(),
     plannedStart: '2026-01-01',
@@ -148,4 +151,13 @@ export function makeTsldToolbarContext(
     dismissExportNotice: vi.fn(),
     ...overrides,
   };
+  // `canEditSchedule` and `scheduleRefusal` are two halves of ONE fact, and in the real app both
+  // come from the model — so an un-writable context that also reports "nothing is refused" is a
+  // state the product cannot reach. Deriving the default here means a test cannot accidentally
+  // build one and then assert about it; a test that wants a specific sentence still overrides.
+  if (!('scheduleRefusal' in overrides)) {
+    context.scheduleRefusal = (action: string) =>
+      context.canEditSchedule ? null : `Start editing to ${action}.`;
+  }
+  return context;
 }

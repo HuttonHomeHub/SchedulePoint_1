@@ -597,8 +597,15 @@ export function AssignmentRow({
             <CheckboxField
               label="Driving resource"
               checked={assignment.isDriving}
-              disabled={isMaterial || update.isPending}
-              hint={isMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
+              // A domain rule and an in-flight save, both gates rather than the native attribute
+              // (ADR-0083 D1/D2). A checkbox's only operation is changing its value, so it takes
+              // `aria-disabled` plus a guard and stays in the tab order — which is the whole point
+              // here, since the material sentence is the reason a planner is looking at this row.
+              gate={{
+                writable: !isMaterial && !update.isPending,
+                reason: isMaterial ? MATERIAL_DRIVING_HINT : null,
+              }}
+              hint={isMaterial ? undefined : DRIVING_HINT}
               onChange={(event) => toggleDriving(event.target.checked)}
             />
             {/* Loading curve (M7 rung 5, ADR-0044 §3) — shapes the resource histogram, not the dates.

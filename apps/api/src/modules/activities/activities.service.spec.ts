@@ -165,6 +165,7 @@ describe('ActivitiesService', () => {
   };
   let lifecycle: {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
+    cascadeSoftDeleteActivityLeaves: ReturnType<typeof vi.fn>;
     restoreBatch: ReturnType<typeof vi.fn>;
   };
   let calendars: {
@@ -220,6 +221,9 @@ describe('ActivitiesService', () => {
     };
     lifecycle = {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
+      cascadeSoftDeleteActivityLeaves: vi
+        .fn()
+        .mockResolvedValue({ activities: 0, dependencies: 0 }),
       restoreBatch: vi.fn().mockResolvedValue({}),
     };
     // The tx carries `$executeRaw` for the calendar advisory lock (ADR-0037 validation path) and the
@@ -1472,31 +1476,42 @@ describe('ActivitiesService', () => {
     const call = (activitiesToDelete: ReturnType<typeof ref>[]) =>
       service.bulkDelete(principalWith(ALL), 'acme', PLAN_ID, { activities: activitiesToDelete });
 
-    it('sweeps every row under ONE injected batch id', async () => {
-      // The whole reason `cascadeSoftDelete` grew a batch-id parameter: N minted ids would mean the
-      // undo restores one activity, silently.
+    it('sweeps every row under ONE injected batch id, in ONE set-wise call', async () => {
+      // The invariant is unchanged and is now **structural**: one call takes one batch id, so N
+      // minted ids — which would make the undo restore a single activity, silently — is no longer
+      // a thing the code could do. What the assertion had to change to is the count, and that is
+      // the point of `docs/TECH_DEBT.md` #109: the loop issued five statements per id under the
+      // plan-wide advisory lock, ~10,000 at the 2,000 cap.
       txActivityFindMany.mockResolvedValue([
         { id: 'a', type: 'TASK', version: 1 },
         { id: 'b', type: 'TASK', version: 1 },
       ]);
-      lifecycle.cascadeSoftDelete.mockResolvedValue({
-        batchId: 'ignored',
-        counts: { activities: 1, dependencies: 0 },
+      lifecycle.cascadeSoftDeleteActivityLeaves.mockResolvedValue({
+        activities: 2,
+        dependencies: 0,
       });
       const result = await call([ref('a'), ref('b')]);
 
-      expect(lifecycle.cascadeSoftDelete).toHaveBeenCalledTimes(2);
-      const injected = lifecycle.cascadeSoftDelete.mock.calls.map((c) => c[4] as string);
-      expect(new Set(injected).size).toBe(1);
-      expect(injected[0]).toBe(result.deleteBatchId);
+      expect(lifecycle.cascadeSoftDeleteActivityLeaves).toHaveBeenCalledTimes(1);
+      // The per-id path must not be reached at all — a fallback that quietly kept looping would
+      // pass a count assertion and lose the whole benefit.
+      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+      const [, ids, , injected] = lifecycle.cascadeSoftDeleteActivityLeaves.mock.calls[0] as [
+        unknown,
+        readonly string[],
+        string,
+        string,
+      ];
+      expect([...ids]).toEqual(['a', 'b']);
+      expect(injected).toBe(result.deleteBatchId);
       expect(result).toMatchObject({ activityCount: 2, dependencyCount: 0 });
     });
 
     it('takes the plan write lock', async () => {
       txActivityFindMany.mockResolvedValue([{ id: 'a', type: 'TASK', version: 1 }]);
-      lifecycle.cascadeSoftDelete.mockResolvedValue({
-        batchId: 'b',
-        counts: { activities: 1, dependencies: 0 },
+      lifecycle.cascadeSoftDeleteActivityLeaves.mockResolvedValue({
+        activities: 1,
+        dependencies: 0,
       });
       await call([ref('a')]);
       expect(locksTaken()).toContain('dependency-plan');
@@ -1505,7 +1520,7 @@ describe('ActivitiesService', () => {
     it('409s a stale version without deleting anything', async () => {
       txActivityFindMany.mockResolvedValue([{ id: 'a', type: 'TASK', version: 7 }]);
       await expect(call([ref('a', 1)])).rejects.toBeInstanceOf(ConflictError);
-      expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+      expect(lifecycle.cascadeSoftDeleteActivityLeaves).not.toHaveBeenCalled();
     });
 
     it('422s a WBS summary without deleting anything', async () => {

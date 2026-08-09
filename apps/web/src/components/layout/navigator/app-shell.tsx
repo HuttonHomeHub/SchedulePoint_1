@@ -11,7 +11,6 @@ import { ChromeBand } from '@/components/layout/chrome/chrome-band';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
 import { Surface } from '@/components/ui/surface';
-import { NAV_TREE_CRUD_ENABLED } from '@/config/env';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -48,10 +47,10 @@ function ShellFrame(): React.ReactElement {
   // Shared, per-org expansion (ADR-0029 Phase 2): both rails and the CRUD coordinator
   // read one set, so revealing a freshly-created node works and pinned/drawer agree.
   const expansion = useExpansionState(orgSlug ?? '');
-  // In-tree CRUD is gated by the flag *and* write RBAC — Contributors/Viewers keep a
-  // read-only tree. The API re-checks; this is UX only.
+  // In-tree CRUD is write-RBAC only now that `VITE_NAV_TREE_CRUD` has retired (ADR-0084 batch 1):
+  // Contributors/Viewers keep a read-only tree. The API re-checks; this is UX only.
   const role = useOrgRole(orgSlug ?? '');
-  const canWrite = NAV_TREE_CRUD_ENABLED && canManageHierarchy(role);
+  const canWrite = canManageHierarchy(role);
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);

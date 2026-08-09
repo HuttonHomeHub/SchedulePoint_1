@@ -16,6 +16,13 @@ import { describe, expect, it } from 'vitest';
  *
  * The scan is deliberately narrow: it looks for the **arithmetic**, not for the word. Anyone can
  * call `rectsIntersect`; nobody should be writing `a.x < b.x + b.w` again.
+ *
+ * **Updated 2026-08-08 (ADR-0078 §3 / `docs/TECH_DEBT.md` #106): the home moved, the rule did not.**
+ * `rectsIntersect` now lives in `render/geometry.ts`, the acyclic core, and `render-model.ts`
+ * re-exports it — so it is still in exactly one place and every consumer's import is unchanged.
+ * That distinction matters, because "a structural test was edited during a refactor" is exactly how
+ * an invariant gets quietly weakened: what changed here is a path, and the assertion that there is
+ * only one implementation is the same assertion, still failing if a second one appears.
  */
 const TSLD = join(import.meta.dirname, '..');
 
@@ -40,14 +47,14 @@ describe('rectangle overlap is computed in exactly one place', () => {
     // one side adds a width or height to a coordinate.
     const overlapArithmetic = /\.x\s*<\s*\w+\.x\s*\+\s*\w+\.w|\.y\s*<\s*\w+\.y\s*\+\s*\w+\.h/;
     const offenders = sourceFiles(TSLD)
-      .filter((file) => !file.endsWith(join('render', 'render-model.ts')))
+      .filter((file) => !file.endsWith(join('render', 'geometry.ts')))
       .filter((file) => overlapArithmetic.test(readFileSync(file, 'utf8')))
       .map((file) => file.slice(TSLD.length + 1));
     expect(offenders).toEqual([]);
   });
 
-  it('render-model exports the predicate the gestures share', () => {
-    const model = readFileSync(join(TSLD, 'render', 'render-model.ts'), 'utf8');
+  it('the geometry core exports the predicate the gestures share', () => {
+    const model = readFileSync(join(TSLD, 'render', 'geometry.ts'), 'utf8');
     expect(model).toMatch(/export function idsIntersecting\(/);
     expect(model).toMatch(/export function rectsIntersect\(/);
     // `idsIntersecting` must go through `rectsIntersect` rather than re-deriving overlap — the
