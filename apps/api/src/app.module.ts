@@ -35,6 +35,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
+import { CspModule } from './modules/csp/csp.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { ShareModule } from './modules/share/share.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -130,6 +131,7 @@ function isPrettyLoggingAvailable(): boolean {
     InterchangeModule,
     ShareModule,
     StaffModule,
+    CspModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.

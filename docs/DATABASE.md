@@ -1297,6 +1297,36 @@ now() - interval '12 months'` on the leading index column. The spec's §4.10 def
   the timeout (`FAILED`) and the late transport error (`ABANDONED`) — which is the distinction
   ADR-0075's `send()` docblock exists to preserve.
 
+### CspReport: deduplicated policy telemetry (staff console M4)
+
+`csp_reports` holds one row per **distinct** Content-Security-Policy violation, with a `count`. It
+is the second table under this heading and follows `MailEvent`'s reasoning, with two differences
+worth stating because both are easy to get wrong.
+
+- **The dedup key is a HASH, not the three identifying columns.** A btree index row caps near 2704
+  bytes, and `blocked_uri`/`document_uri` arrive from an **unauthenticated** POST. Indexed directly,
+  an 8 KB URI would make the INSERT _fail_ rather than deduplicate — so a hostile report could deny
+  the reporting the table exists to collect. `dedupe_hash` is a SHA-256 of the three values, fixed
+  width whatever arrives. Verified against a real database: two 8 KB reports produce one row with
+  `count = 2`.
+- **Retention is 30 days**, not `mail_events`' twelve months, because the content is different —
+  URLs from our own origin rather than a customer's address — and a CSP finding is only interesting
+  while the policy it describes is current. As there, **nothing enforces it**: this application has
+  no scheduler, so the period is a ceiling and today's true retention is forever. `last_seen_at` is
+  the sweep predicate.
+
+Ordinary, updatable and deletable — the dedup upsert **is** an UPDATE, which the `audit_events`
+append-only triggers would make impossible. **Do not add a trigger to this table.** A repeat moves
+`count` and `last_seen_at` only: `first_seen_at` never moves, because it is what makes "this started
+when we deployed X" answerable.
+
+No `original_policy` column, deliberately: every report carries the whole policy string, it is
+identical on every row, and `docker-compose.yml` already says what our policy is.
+
+The query string and fragment are stripped from every URL **before** the write
+(`csp-report-body.ts`), because a document URL's query carries share tokens and search terms — this
+is telemetry about a policy, not an access log with better retention than the one anyone agreed to.
+
 ## Testing & performance
 
 - Integration tests run against a **real Postgres** (see [`TESTING.md`](TESTING.md)).

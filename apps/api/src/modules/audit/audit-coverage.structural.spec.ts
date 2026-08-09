@@ -166,12 +166,22 @@ const REASONS = {
   GUEST_READ: 'guest-read',
   /** Health, readiness and version. Not organisation data. */
   INFRASTRUCTURE: 'infrastructure',
+  /**
+   * An anonymous **machine** report about our own policy, not an act by a person (ADR-0086 M4).
+   *
+   * Both audit tests fail it. Durability: nothing durable changes for anybody — a counter moves on
+   * a row about a CSS file. Blast radius: it alters nobody's rights and nobody's work. And an
+   * audit row per report would be actively harmful, since the endpoint is unauthenticated and
+   * anyone could then fill the one table in the system that refuses DELETE.
+   */
+  BROWSER_TELEMETRY: 'browser-telemetry',
 } as const;
 
 type Reason = (typeof REASONS)[keyof typeof REASONS];
 
 /** Every route that records nothing, and why. */
 const UNAUDITED_ROUTES: Record<string, Reason> = {
+  'POST /api/v1/csp-report': REASONS.BROWSER_TELEMETRY,
   'DELETE /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
