@@ -10,6 +10,45 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-09 — Reconciliation pass at the ADR-0086 epic boundary
+
+**What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
+staff-console epic. Documentation and tooling only; no product behaviour changed here — the epic's
+own M6 fold, which did change behaviour, is a separate commit.
+
+**Two findings are worth carrying beyond their fix.**
+
+**A gate can be wrong about the same numbers in more than one way, and each way looks like the gate
+working.** `docs/ARCHITECTURE.md` said **20 feature modules** against 22 — found by reading it, which
+is the method ADR-0058 exists to replace. It was ungated for two independent reasons: the file was
+not in `check:counts`'s target list, and its wording ("feature modules") differed from the stage
+banner's ("API modules"), so adding the file alone would not have caught it. Widening for both then
+exposed a third hole in the same script — each pattern matched only the **first** occurrence in a
+document, and `CLAUDE.md` states the module count twice, so its repository-layout tree could rot
+behind a green check. Every one of these was a _fixed instance_ rather than a _fix_: the previous
+pass, hours earlier, had patched a line-wrap bug in one of six patterns and left the other five. The
+lesson recorded here is to ask **"is this class closed?"** rather than "is this instance fixed?"
+whenever a gate is corrected. Both new cases were verified red before the fix landed.
+
+**An instruction that cannot be followed is not a weaker instruction; it is a deferral wearing a
+test's clothes.** `DEPLOYMENT.md` told the operator to keep the superseded mail cron "until you have
+watched the new path alert on the real host at least once". A relay does not break to a schedule, so
+that condition retires the cron either never or on a day nobody is watching — leaving the
+replacement deployed and unproven indefinitely, which is a worse state than either alternative. The
+fix is not softer wording but a **procedure that induces the failure**: confirm the heartbeat first
+(it proves outbound POSTs leave the container at all, so a failure there is learnt without breaking
+mail), point `MAIL_SMTP_URL` at a dead port, trigger one send, watch, confirm the durable row
+landed, restore. `TECH_DEBT` #100's closing condition carried the same unfireable wording and was
+amended to match. Where a document asks an operator to _observe_ something, check that the
+observation can be **caused**.
+
+Also folded: the same section still opened by recommending the superseded cron with its replacement
+thirty lines below; `TECH_DEBT` #8's CSP flip advice rested on one person walking every route with a
+console open, when this epic shipped the sink that collects violations from every visitor; and two
+debt entries both numbered `102`, the newer renumbered to `117` across six files.
+
+---
+
 ### 2026-08-09 — Reconciliation pass at the ADR-0083/0084 epic boundary
 
 **What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
