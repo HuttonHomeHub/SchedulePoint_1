@@ -160,7 +160,11 @@ services:
     #   CSP_HEADER_NAME=Content-Security-Policy-Report-Only   # observe (default)
     environment:
       CSP_HEADER_NAME: ${CSP_HEADER_NAME:-Content-Security-Policy-Report-Only}
-      CSP_POLICY: ${CSP_POLICY:-default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests}
+      CSP_POLICY: ${CSP_POLICY:-default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests; report-uri /api/v1/csp-report; report-to csp}
+      # Names the group `report-to` refers to (staff-console M4). Same-origin, so the web
+      # container's own nginx proxies it to the API — no CORS, no preflight, and the reports
+      # never leave the deployment. The CSP_ prefix is required: NGINX_ENVSUBST_FILTER is ^CSP_.
+      CSP_REPORTING_ENDPOINTS: ${CSP_REPORTING_ENDPOINTS:-csp="/api/v1/csp-report"}
     ports:
       - '8080:8080'
 

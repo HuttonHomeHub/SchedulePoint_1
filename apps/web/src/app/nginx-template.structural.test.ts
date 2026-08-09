@@ -30,7 +30,13 @@ function render(env: Record<string, string>, filter = /^CSP_/): string {
 
 const ENV = {
   CSP_HEADER_NAME: 'Content-Security-Policy-Report-Only',
-  CSP_POLICY: "default-src 'self'; img-src 'self' blob:",
+  CSP_POLICY:
+    "default-src 'self'; img-src 'self' blob:; report-uri /api/v1/csp-report; report-to csp",
+  // Added with the M4 report sink. Its `CSP_` prefix is load-bearing — `NGINX_ENVSUBST_FILTER` is
+  // `^CSP_`, and a variable named anything else would survive substitution as a literal `${…}` and
+  // fail nginx's config parse at boot. This suite caught exactly that the moment the header landed
+  // without the variable being declared here, which is the coupling working rather than friction.
+  CSP_REPORTING_ENDPOINTS: 'csp="/api/v1/csp-report"',
 };
 
 /** The `add_header` lines only — comments explain the policy and would confuse a naive match. */
@@ -49,6 +55,18 @@ describe('nginx.conf as an envsubst template', () => {
     expect(rendered).toContain("img-src 'self' blob:");
     // A surviving `${…}` would reach nginx as a literal and fail the config parse at boot.
     expect(rendered).not.toContain('${');
+  });
+
+  it('reports violations to the same-origin sink, by both mechanisms', () => {
+    // Both directives, because support differs by engine and neither is universal: `report-uri` is
+    // deprecated and still the only thing several engines implement, `report-to` is current and
+    // needs the `Reporting-Endpoints` header to name its group. A browser that understands
+    // `report-to` ignores `report-uri`, so emitting both costs nothing.
+    const rendered = render(ENV);
+
+    expect(rendered).toContain('report-uri /api/v1/csp-report');
+    expect(rendered).toContain('report-to csp');
+    expect(rendered).toContain('add_header Reporting-Endpoints "csp="/api/v1/csp-report""');
   });
 
   it.each([
