@@ -1793,6 +1793,46 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   child's retirement declares the feature permanent while the surviving parent can still switch it
   off. ADR-0076 Class 3, caught by the gate written beside it.
 
+- **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
+  customer. The product owner asked for "a super god user"; the motivating example — email-down
+  alerts — turned out to need no principal at all (an alert is an outbound POST), but the question
+  underneath was real, and reading the code produced an argument nobody had made: **every staff
+  operation on this installation happens over `psql` and is completely unaudited.** `audit_events`
+  is append-only in the database, and a shell is outside that boundary entirely — so the most
+  privileged acts in the product were the only ones with no record of who performed them. A staff
+  identity built this way is therefore a security **improvement**, not a new hole.
+  The load-bearing decision is that `StaffPrincipal` copies `GuestPrincipal` **exactly** — no
+  memberships, no `can()`, no `organizationId`, no role — so it is not assignable to `Principal` and
+  staff reaching customer data is a **compile error**, not a check somebody remembers. The rejected
+  alternative was a `STAFF` role or an `isStaff` flag, which puts a new branch into twenty modules'
+  org-scope assertions, where each branch is a potential IDOR. `AuthContextService` is not modified;
+  the cross-org 404 invariant is **untouched**, not merely respected. Declining the product owner's
+  offer of the canvas is the largest simplification in the epic: reaching the canvas means holding a
+  `Principal`, which destroys the property everything else rests on.
+  **Reads are audited, inverting the ordinary rule deliberately** — on this surface the read _is_
+  the privileged act, so ADR-0073's durability test would have left the most privileged surface
+  recording nothing. A seventh census assertion derives from the **path**, so a staff route added
+  later is covered the day it is written. The audit row records that a panel was reached and never
+  what was on it: the console reads customer addresses (CQ-1, which overruled the domain-only
+  proposal), and putting those in the one table that refuses `DELETE` is what ADR-0085 D3 spent a
+  decision avoiding.
+  **The epic's own gates found what human reads did not, four times.** M2 shipped **unable to serve
+  a single request** — `ck_audit_events_actor_shape` is a fail-closed `CASE … ELSE false` and the new
+  `STAFF` label had no branch — with 1,589 unit tests green, because every one of them mocks Prisma.
+  M3's journey caught `apiFetch('/api/v1/staff/me')` against an `API_BASE_URL` that is already
+  `/api/v1`, invisible to component tests that mock `apiFetch` and assert back whatever path they are
+  handed. M4's CSP sink **could not receive a report from any browser** — the body parser was
+  registered for `application/json` alone — and lost a violation's first burst to two clocks in one
+  statement. Each was found by something that ran the real thing, and each is recorded where it
+  happened rather than in a postmortem.
+  A `csp_reports` table was hand-written after a launched design agent returned nothing; the review
+  that followed found four defects, two of them fatal. **That is why "every schema change goes
+  through the database-architect agent" is now unconditional in §19 and §20** — including the clause
+  that matters most, that deciding a change is too small to need it is the judgement the agent
+  exists to make.
+  **The CPM engine is not imported and the ADR-0034 parity gate is untouched** — in its honest form:
+  there is nothing here to hold parity for.
+
 - **ADR-0085** _(Accepted; decision only — nothing is built)_ — Erasure collides with the audit log,
   and that collision is the decision. `docs/BACKLOG.md` carried "Privacy operations" as an `M`
   sized as work — "a hard-delete path and a data-export path". It is not work yet; it is a genuine
@@ -1834,6 +1874,17 @@ A lighter-weight running log of smaller decisions is in
 
 ## 17. Known limitations & assumptions
 
+- **The staff console is live but unwired** (ADR-0086, 2026-08-09). Five panels exist and every
+  route is audited; what does **not** exist yet is anybody receiving the two signals it added.
+  `MAIL_ALERT_URL` and `HEARTBEAT_URL` are compose edits on the host, both empty by default, and
+  until they are set a broken relay still reaches nobody — which is the exact failure
+  `docs/TECH_DEBT.md` #100 records, so that row stays **open on the operator half**. Likewise
+  `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
+  is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
+  opposite of the mistake the bullet below this one records.
+- **Two new tables document a retention period and nothing enforces either** — 30 days for
+  `csp_reports`, 12 months for `mail_events`. There is no scheduler in this application, so both
+  are **ceilings, not promises**, and today's true retention is forever.
 - **Four accepted ADRs have no implementation** — background jobs + Redis
   (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
   tracing (0013, of which only Pino is wired). Nothing in the running system

@@ -1,3 +1,17 @@
+> # ⚠ SUPERSEDED by the staff console (ADR-0086), 2026-08-09
+>
+> **Not deleted, because one third of it survives and deleting the document would take that with
+> it.** This spec's central constraint was "there is no system administrator", and the staff console
+> overturned exactly that — so two of its three milestones are subsumed and the third is not:
+>
+> | This spec                              | Fate                                                                                                                                                                                                                                                                                                                            |
+> | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **M-A** CSP report sink                | **Subsumed** by staff-console M4. Built, plus a Security panel that reads it — which this spec ruled out on the grounds that there was no principal for a system-wide read.                                                                                                                                                     |
+> | **M-B** Mail failure alerting          | **Subsumed** by staff-console M1. Built as `MAIL_ALERT_URL`, plus the heartbeat this spec did not propose.                                                                                                                                                                                                                      |
+> | **M-C** Unverified members, org-scoped | **SURVIVES, and is not in that epic.** It is genuinely organisation-scoped — an Org Admin asking about their own organisation's members — so it needs no staff principal and belongs on the members screen. The staff console's Accounts panel is a different thing: installation-wide, staff-only, and no use to an Org Admin. |
+>
+> Read the rest for the reasoning; act on `docs/specs/staff-console/` for anything but M-C.
+
 # Implementation Plan: Operational self-service
 
 > **Status:** Draft — awaiting approval alongside `feature-spec.md`.

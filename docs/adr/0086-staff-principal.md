@@ -1,6 +1,6 @@
 # ADR-0086 — A staff identity that cannot reach a customer
 
-**Status:** Accepted
+**Status:** Accepted — M1–M6 landed 2026-08-09
 **Date:** 2026-08-09
 **Builds on:** ADR-0051 (the `GuestPrincipal` shape, which this copies), ADR-0012/0016 (RBAC and
 tenancy), ADR-0072/0073 (the append-only audit log and what earns a row), ADR-0075 (mail is
