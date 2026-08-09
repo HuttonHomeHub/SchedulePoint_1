@@ -3,9 +3,14 @@
 The SchedulePoint web client: **React 19 + TypeScript + Vite**, styled with **Tailwind CSS v4**
 and **hand-rolled WAI-ARIA APG primitives**, using **Lucide** icons.
 
-> **Status:** built and shipping. 27 feature modules under `src/features/`, ~750 source files, a
-> Canvas-2D TSLD workspace, a virtualized Gantt view, and 23 flag-scoped Playwright suites beside
-> the base journey (counted 2026-08-04). The **architecture** is defined in
+> **Status:** built and shipping — a Canvas-2D TSLD workspace, a virtualized Gantt view, and a
+> flag-scoped Playwright suite per feature beside the base journey. **The counts live in one place,
+> and it is not here:** `CLAUDE.md`'s stage banner, re-derived and gated by `pnpm check:counts`
+> (ADR-0076). This paragraph used to restate them and was wrong about three of four five days after
+> saying "counted 2026-08-04" — 27 modules against 28, ~750 source files against 893, 23 suites
+> against 29. A second, ungated copy of a number is a claim with nothing watching it, which is the
+> whole reason that gate exists; and the two counting methods do not even agree with each other,
+> so a corrected copy would have had to pick one silently. The **architecture** is defined in
 > [`docs/FRONTEND_ARCHITECTURE.md`](../../docs/FRONTEND_ARCHITECTURE.md), the
 > **design system** in [`docs/DESIGN_SYSTEM.md`](../../docs/DESIGN_SYSTEM.md)
 > (tokens implemented in [`src/styles/globals.css`](src/styles/globals.css)),
@@ -23,7 +28,7 @@ src/
   main.tsx          # App entry: providers + router mount
   app/              # App-wide composition (providers, router)
   routes/           # File-based routes (TanStack Router)
-  features/         # 27 feature modules (components, api, hooks, model, schemas)
+  features/         # Feature modules (components, api, hooks, model, schemas)
   components/ui/     # Design-system primitives — hand-rolled on the WAI-ARIA APG
   components/layout/ # App shell: top bar, Project Explorer rail, workspace region
   hooks/            # Shared React hooks

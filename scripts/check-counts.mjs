@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Re-derives the six figures in `CLAUDE.md`'s stage banner and fails if the prose disagrees
- * (ADR-0076).
+ * Re-derives the counts stated in `CLAUDE.md`'s stage banner **and in the front-door `README.md`**,
+ * and fails if either disagrees with the tree (ADR-0076).
  *
  * **Why this is a script and not a habit.** The banner has drifted at every reconciliation pass,
  * and the last time it was corrected the replacement text told the reader to re-run `ls | wc -l`
@@ -12,6 +12,19 @@
  *
  * Deliberately narrow: it checks **counts**, not prose. "Substantially built" is a judgement and
  * stays a judgement. What this forbids is a number that nobody re-derived.
+ *
+ * **`README.md` was added on 2026-08-09**, at a reconciliation pass that found the same figures
+ * duplicated in FOUR documents with only this one gated — and the front door, which is the first
+ * thing any reader meets, five days stale and **twelve ADRs out** (73 against 85). Gating the
+ * banner and leaving three ungated copies is not drift control; it is drift control aimed at one
+ * of four targets. Two of the copies (`apps/web/README.md`, `docs/FRONTEND_ARCHITECTURE.md`) were
+ * DELETED rather than gated, because an internal document restating a number it does not own has
+ * no reason to hold it at all. The front door keeps its numbers and gets the gate, because the
+ * status paragraph is what it is for.
+ *
+ * A document may state a subset — `README.md` does not mention web source files — so a figure a
+ * document does not claim is skipped rather than demanded. What is forbidden is stating one and
+ * being wrong.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,34 +55,61 @@ const actual = {
   ADRs: readdirSync(join(root, 'docs/adr')).filter((n) => /^\d{4}-.*\.md$/.test(n)).length,
 };
 
-const banner = read('CLAUDE.md');
-// The banner sentence, read as claims rather than as a paragraph. Each entry is the number the
-// prose states and the label it states it under.
+/**
+ * A phrase, made tolerant of markdown line-wrapping: every space becomes "whitespace, optionally a
+ * blockquote marker, whitespace".
+ *
+ * **This is why the front door's stale suite count slipped through on the first run of the widened
+ * gate.** `README.md` wraps as `23 flag-scoped\n> Playwright suites`, and a pattern with a literal
+ * space cannot see it. The `web source files` pattern already carried a hand-written `\s*>?\s*` —
+ * so somebody hit this exact problem once, patched the one pattern in front of them, and left the
+ * other five to be discovered by a wrong number surviving a green check. Doing it for all six by
+ * construction is the difference between a fix and a fixed instance.
+ */
+const phrase = (text) => new RegExp(text.replace(/ /g, '\\s*>?\\s*'));
+
+// Each entry is the number the prose states and the label it states it under.
 const claimed = {
-  'API modules': /(\d+) API modules/,
-  'Prisma models': /(\d+) Prisma models/,
-  migrations: /across (\d+) migrations/,
-  'web source files': /(\d+) web\s*>?\s*source files/,
-  'flag-scoped Playwright suites': /(\d+) flag-scoped Playwright suites/,
-  ADRs: /(\d+) ADRs/,
+  'API modules': phrase('(\\d+) API modules'),
+  'Prisma models': phrase('(\\d+) Prisma models'),
+  migrations: phrase('across (\\d+) migrations'),
+  'web source files': phrase('(\\d+) web source files'),
+  'flag-scoped Playwright suites': phrase('(\\d+) flag-scoped Playwright suites'),
+  ADRs: phrase('(\\d+) ADRs'),
 };
 
+/**
+ * Which figures each document must state. `required` is the load-bearing part: CLAUDE.md's banner
+ * is the canonical six and a MISSING one there means the sentence was reworded and this script
+ * needs updating — never that the claim may quietly go. The front door states a subset by design,
+ * so an absent figure there is simply not claimed.
+ */
+const documents = [
+  { path: 'CLAUDE.md', label: "CLAUDE.md's stage banner", required: true },
+  { path: 'README.md', label: "README.md's status paragraph", required: false },
+];
+
 const problems = [];
-for (const [label, pattern] of Object.entries(claimed)) {
-  const match = banner.match(pattern);
-  if (!match) {
-    problems.push(`${label}: the banner no longer states this figure (pattern ${pattern} found nothing).
+for (const { path, label: where, required } of documents) {
+  const text = read(path);
+  for (const [label, pattern] of Object.entries(claimed)) {
+    const match = text.match(pattern);
+    if (!match) {
+      if (required) {
+        problems.push(`${where} — ${label}: no longer states this figure (pattern ${pattern} found nothing).
     If the sentence was reworded, update this script — do not delete the claim.`);
-    continue;
-  }
-  const stated = Number(match[1]);
-  if (stated !== actual[label]) {
-    problems.push(`${label}: CLAUDE.md says ${stated}, the repository has ${actual[label]}`);
+      }
+      continue;
+    }
+    const stated = Number(match[1]);
+    if (stated !== actual[label]) {
+      problems.push(`${where} — ${label}: says ${stated}, the repository has ${actual[label]}`);
+    }
   }
 }
 
 if (problems.length > 0) {
-  console.error('CLAUDE.md stage banner is out of date:\n');
+  console.error('A stated count disagrees with the tree:\n');
   for (const p of problems) console.error(`  - ${p}`);
   console.error(
     '\nFix the banner, not this script — the numbers above were re-derived from the tree just now.',
@@ -78,7 +118,7 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `CLAUDE.md stage banner OK (${Object.entries(actual)
+  `Stated counts OK in CLAUDE.md and README.md (${Object.entries(actual)
     .map(([k, v]) => `${v} ${k}`)
     .join(', ')}).`,
 );

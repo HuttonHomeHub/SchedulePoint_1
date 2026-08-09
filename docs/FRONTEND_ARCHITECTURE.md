@@ -1,8 +1,11 @@
 # Frontend Architecture
 
 > **Status:** built and in use. This document defines the architecture the web
-> client (`apps/web`) follows — 27 feature modules inside a persistent app shell
-> — and every frontend change must respect it. Decisions here are backed by ADRs
+> client (`apps/web`) follows — feature modules inside a persistent app shell —
+> and every frontend change must respect it. (The module count used to be stated
+> here and was deleted on 2026-08-09: it is not a fact this document owns, and an
+> ungated copy of a number is a claim with nothing watching it. The gated counts
+> are in `CLAUDE.md`'s stage banner — ADR-0076.) Decisions here are backed by ADRs
 > [0004](adr/0004-frontend-state-management.md)–[0007](adr/0007-forms-and-validation.md),
 > with the shell and workspace shaped by
 > [0029](adr/0029-persistent-hierarchy-navigator.md)–[0031](adr/0031-tsld-toolbar-registry-and-taxonomy.md)

@@ -4,7 +4,7 @@
 > Backed by [ADR-0058](adr/0058-drift-control-and-the-reconciliation-pass.md),
 > which records why it exists and why several of the steps are automated.
 >
-> **Last full pass: 2026-08-04.** Record each pass in
+> **Last full pass: 2026-08-09.** Record each pass in
 > [`DECISIONS.md`](DECISIONS.md), add a row to [Passes run](#passes-run), and
 > update that date. **All three, in the same commit** — this line said
 > `2026-07-28` while the table below recorded a pass on `2026-07-31`, so the
@@ -41,17 +41,18 @@ day of the change.
 These run in CI on every push. If one is red, fix it there — the manual pass
 below assumes they are green.
 
-| Gate                                       | Catches                                                       |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| `pnpm format:check` / `lint` / `typecheck` | The ordinary things.                                          |
-| `pnpm check:doc-links`                     | A relative link to a file that no longer exists.              |
-| `prisma:check-drift`                       | `schema.prisma` disagreeing with the migrations.              |
-| `pnpm test` (coverage thresholds)          | Coverage sliding below the recorded floor.                    |
-| `surface-seams.structural.test.ts`         | Application code reaching past a design-system seam.          |
-| `styles/token-contrast.test.ts`            | A colour pair below its WCAG ratio, across themes × surfaces. |
-| Flag-off parity suites                     | A flagged change altering the rollback path.                  |
-| `pnpm check:counts`                        | `CLAUDE.md`'s six stage-banner figures going stale.           |
-| `pnpm check:claims`                        | A citation into `better-auth`/`better-call` that has moved.   |
+| Gate                                       | Catches                                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------------------- |
+| `pnpm format:check` / `lint` / `typecheck` | The ordinary things.                                                         |
+| `pnpm check:doc-links`                     | A relative link to a file that no longer exists.                             |
+| `prisma:check-drift`                       | `schema.prisma` disagreeing with the migrations.                             |
+| `pnpm test` (coverage thresholds)          | Coverage sliding below the recorded floor.                                   |
+| `surface-seams.structural.test.ts`         | Application code reaching past a design-system seam.                         |
+| `styles/token-contrast.test.ts`            | A colour pair below its WCAG ratio, across themes × surfaces.                |
+| Flag-off parity suites                     | A flagged change altering the rollback path.                                 |
+| `pnpm check:counts`                        | The stage-banner figures going stale — in `CLAUDE.md` **and** `README.md`.   |
+| `pnpm check:claims`                        | A citation into a dependency's internals that has moved.                     |
+| `pnpm check:flags`                         | A feature flag with no enablement date, or a retirement batch past its date. |
 
 **Prefer adding a gate to adding a checklist item.** A gate that computes runs
 every push; a checklist item runs when someone remembers. Every row above
@@ -87,9 +88,19 @@ were added to this list on 2026-08-04, because the pass before it swept only the
 first four and left the rest stale — including a web README claiming the client
 was "foundation only".
 
-**`CLAUDE.md`'s six banner figures are no longer your job — `pnpm check:counts`
-owns them** (ADR-0076). Run it; if it is red, fix the banner. This step now
-covers only the numbers quoted in the _other_ files above, which are not gated.
+**`CLAUDE.md`'s and `README.md`'s banner figures are no longer your job —
+`pnpm check:counts` owns them** (ADR-0076). Run it; if it is red, fix the prose.
+This step now covers only the numbers quoted in the _other_ files above.
+
+`README.md` was added to the gate on **2026-08-09**, and the pass that did it is
+the argument for the standing instruction below. The figures were duplicated in
+four documents with **one** of them gated, and the front door — the first thing
+any reader meets — was five days stale and twelve ADRs out. Widening the gate
+then found it passing for the wrong reason: only one of its six patterns
+tolerated a markdown line break, so `23 flag-scoped\n> Playwright suites` was
+invisible to it. Someone had met that exact problem, fixed the pattern in front
+of them, and left five. **When you patch a gate, ask whether the same hole is in
+its siblings.**
 
 The reason that changed is worth carrying: this section used to end "write the
 date you counted next to the numbers, and treat the date rather than the word
@@ -100,9 +111,11 @@ a reader who checks the date has already been misled once. Telling people to
 re-run `ls | wc -l` is the vigilance ADR-0058 exists to replace.
 
 **So the standing instruction for anything on this list is: if you find yourself
-writing "remember to re-check X", write a gate for X instead.** Six of the seven
-remaining figures above could be gated the same way; they are not yet, and that
-is a backlog item rather than a decision.
+writing "remember to re-check X", write a gate for X instead.** And when you do,
+**point it at every copy of the claim, not the one in front of you** — the
+2026-08-09 pass found the gate correct and aimed at a quarter of its subject.
+Two of the ungated copies were then **deleted** rather than gated, which is the
+cheaper answer whenever a document is restating a number it does not own.
 
 ### 2. Check the dependency claims
 
@@ -195,6 +208,7 @@ pass is worth running. Update the date at the top of this file.
 
 | Date       | Trigger                       | What it found                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ---------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-09 | ADR-0083/0084 epic boundary   | **The count gate was aimed at one of four copies.** `check:counts` has gated `CLAUDE.md`'s banner since ADR-0076, and the same figures sat ungated in `README.md` (the front door — **73 ADRs against 85**, and 23 Playwright suites against 29, five days after "counted 2026-08-04"), `apps/web/README.md` (three of four wrong) and `docs/FRONTEND_ARCHITECTURE.md`. Widening the gate then found it **passing for the wrong reason**: `README.md` wraps as `23 flag-scoped\n> Playwright suites`, and only ONE of the six patterns carried the `\\s*>?\\s*` that survives a line break — so somebody had hit this exact problem, patched the pattern in front of them, and left five to be found by a wrong number surviving a green check (the ADR-0077 M0 shape, one gate along). All six are now tolerant by construction; the front door is gated; the two internal copies are **deleted**, because a document restating a number it does not own has no reason to hold it. `ROADMAP.md` was silent on **ADR-0074 through ADR-0085** — the same failure as the two rows below, two epics later, which is why that check is a numbered step and not a habit. **Step 7 pointed at the flags:** 58 `VITE_` flags, `flagDefaultOff` called **zero** times, and no decision anywhere saying when a rollback contract ends — fourteen of them with no enablement date recorded in any artefact. That became ADR-0084 and `pnpm check:flags`, whose own D4 it caught backwards on the first run. And `docs/BACKLOG.md`'s "Privacy operations `M`" turned out not to be work at all but an unresolved collision with the audit log's `ENABLE ALWAYS` triggers — ADR-0085.                                                                                                                                                                                             |
 | 2026-08-04 | ADR-0073 epic boundary (C4)   | **Every one of the six headline counts was wrong**, three days after a banner claiming they were recounted. `apps/web/README.md` said "**foundation only. No application features are implemented yet**" beside 748 source files, and claimed both shadcn/ui and a `lib/telemetry` that has never existed — the two failures ADR-0058 was written about, sitting in the one file no previous pass had opened. **ADR-0006's shadcn/Radix clause was never adopted** and nothing said so, so the register instructed a reader to copy in primitives the codebase deliberately hand-rolls. Three `CLAUDE.md` §17 claims were false: no audit log (shipped), no data-export path (three of them), and a "logging stub" mail port (a real SMTP adapter). **Hosting was settled on 2026-08-01 and four documents still called it the open question.** `ROADMAP.md` was silent on ADR-0067–0073 — the same failure as the row below, one epic later. `ARCHITECTURE.md` never mentioned the audit log. Two agents asserted absent libraries as invariants and two pointed at files ADR-0057 deleted. Debt rows #1/#7/#8/#12/#37 described expired premises — #8's "CSP not finalised" meant **no CSP header at all**, and #37 listed a canvas feature that had shipped five days earlier in a different shape. And this file's own banner disagreed with its own table. **Step 7 earned its keep:** pointed at PR #225 — the app's first outbound transport, merged with no review pass — security and devops independently found that the mail stub logged a **live email-verification token** on the default no-SMTP path, which is the running deployment; and that the "a verification failure fails the sign-up" guarantee asserted in three places **does not hold**, because Better Auth swallows the rejection. Both folded; the second's operator-signal gap is #94. |
 | 2026-07-31 | ADR-0066 epic boundary (M5.5) | `CLAUDE.md` had **no ADR-0066 entry at all** — five milestones with nothing in the operating manual; the repo-layout tree omitted all three new workspace packages; `docs/ARCHITECTURE.md` and `docs/ROADMAP.md` were silent on the epic. Found by grepping for the ADR number, not by reading.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 

@@ -258,6 +258,47 @@ discriminators. Each becomes a spec/plan before build:
   **durability** and **blast radius** — not from a list of opinions; content edits are
   **permanently** excluded. A failed sign-in is readable by the account it named and nobody else.
   The CPM engine is not imported, and auditing a recalculation is forbidden by decision.
+- **Account recovery, verification enforcement and the web origin's CSP** — **shipped**
+  (ADR-0074, `VITE_ACCOUNT_SETTINGS` + `VITE_PASSWORD_RESET` default-on 2026-08-05, with ADR-0075).
+  The product had **no password reset at all** — not a missing screen but a server refusal — so the
+  only route back into a locked account ran through an operator with database access. Two findings
+  outranked every screen in the epic and both were one configuration key: reset tokens would have
+  been stored **cleartext**, and a completed reset would have left every session alive. The
+  precedent it set is the one later epics keep citing: **a client surface whose gate is a
+  server-side condition is branched on runtime evidence, never on a `VITE_` constant.** Its CSP is
+  derived from what the code loads, and the report-only window caught a violation from a
+  _dependency_ — which no amount of reading `apps/web/src` could have found, so `e2e-csp` now
+  serves the real policy over the production build. ADR-0075 answers the mail half as a decision
+  **not** to build: sending from application code before Better Auth would create an enumeration
+  oracle, and the wrapper would bypass the rate limiter.
+- **The public screens' brand surface** — **shipped** (ADR-0077, unflagged, 2026-08-06). The six
+  pre-authentication routes are the only part of SchedulePoint a stranger meets, and were the one
+  significant surface that had never had a design pass: a 384px card on a page where
+  `--background` and `--card` are the same white. Adds a fourth and then a fifth ADR-0055 surface
+  scope (`brand`, `auth`), both **theme-invariant by decision** — the login is one identity rather
+  than a fixed navy panel joined to a themed card. The computed contrast matrix caught what
+  copying a design cannot: two real WCAG 1.4.11 failures in the **old app's own values**. Its M8
+  rule is worth carrying forward — _a field's problem belongs to the field; the alert belongs to
+  the form._
+- **Canvas module boundaries, search that navigates, and the plural selection** — **shipped**
+  (ADR-0078 refactor-only; ADR-0079 `VITE_CANVAS_SEARCH_NAV` and ADR-0080
+  `VITE_CANVAS_MULTI_SELECT` default-on 2026-08-07/08). Search **filtered and did not find**; Enter
+  now walks the matches on the same comparator Next-conflict uses. Every plan-shaping gesture acted
+  on exactly one bar, so re-sequencing a twelve-activity phase was twelve gestures; a selection is
+  now a set with a primary, and a bulk delete's undo is **one id-stable restore-batch**, because
+  re-creating would restore the bars and silently lose the links between them.
+- **Shaded rather than hidden, at every tier** — **shipped** (ADR-0082 menus, ADR-0083 form
+  fields, unflagged, 2026-08-09). A gated field is **read-only, not disabled**: a field's loss on
+  being disabled is not operability but _readability_, so "you may not edit this" was being
+  implemented as "you may not read it either". There is no gated fill and that is measured — on
+  every light theme the control's outline has 0.36 of headroom over 1.4.11 and the `auth` family
+  has none, so the state is carried by a lock glyph and a linked sentence instead.
+- **Feature-flag retirement and the privacy position** — **shipped as decisions** (ADR-0084 with
+  `pnpm check:flags`, 2026-08-09; ADR-0085 decision-only). 58 flags, every one default-on, each a
+  rollback contract nobody had ever ended; they now carry dated tags and a retirement schedule.
+  ADR-0085 records why "Privacy operations" is not the ticket the backlog described: erasure meets
+  the audit log's `ENABLE ALWAYS` triggers head-on, so it is **anonymisation of the actor**, and
+  the build trigger is named rather than left implicit.
 - **Export** (PDF/CSV) and **resources** (library + assignments) —
   Must/Should-have per the brief. (Resources have since shipped — M7. Export shipped as the TSLD
   CSV/PNG/PDF menu, the printed programme, and XER/MSPDI via `GET …/export/:format`.)
