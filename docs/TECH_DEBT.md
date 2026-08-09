@@ -1826,3 +1826,43 @@ dead weight. Tightening the type is a small cleanup with no behavioural change.
 
 **Risk:** (1) and (2) together are a real capability gap for keyboard-driven planners and should be
 taken as one slice. (3)–(5) are consistency and tidiness.
+
+### 102. CSP report delivery is unverified end to end
+
+**Found:** 2026-08-09, while writing the gate that was supposed to verify it (staff console M4).
+
+`apps/web/e2e-csp` serves the **real** deployed policy over the **production build** and now proves
+a violation of it fires with the report directives present. It does **not** prove the report is
+delivered, and the reason is structural rather than a gap in effort.
+
+**The Reporting API uploads out-of-band from the browser process, not through the renderer's network
+stack, and it batches with a delay.** Playwright's `page.route` intercepts renderer requests, so it
+cannot see the upload at all. Observed across two attempts: the violation fires every time and no
+request is ever interceptable. That is a limitation of the harness, **not evidence that delivery
+fails** — and the difference is why the suite does not assert it. A gate that is permanently red
+gets deleted rather than fixed (ADR-0058).
+
+**What is verified**, and by what:
+
+| Claim                                                           | Established by                                     |
+| --------------------------------------------------------------- | -------------------------------------------------- |
+| The directives do not break the policy; a violation still fires | `e2e-csp`, real policy, production build           |
+| The API accepts both wire formats                               | `csp-report-body.spec.ts`, 20 unit tests           |
+| The API parses the two real content types                       | `csp-report.e2e-spec.ts`, real HTTP, real database |
+| A first burst is not lost to a concurrency race                 | the same suite, verified red first                 |
+
+**What is not**: that Chromium resolves a **relative** reporting URL against the document origin,
+and which of the two formats it chooses. Both remain reasoned defaults. The API accepts either, and
+`app-setup.ts` now registers a parser for both content types — so the residual risk is that reports
+are never sent, not that they arrive and are dropped.
+
+**A real hazard surfaced while trying, and it is worth more than the test would have been.** A
+policy carrying `report-to` with **no** `Reporting-Endpoints` header reports **nothing at all**: a
+modern engine honours `report-to` and ignores `report-uri` once both are present, so the deprecated
+fallback does not save you. `nginx.conf` emits both, but if `CSP_REPORTING_ENDPOINTS` were ever
+blank while the policy kept `report-to`, reporting would die with no error anywhere.
+
+**How to close it:** deploy, visit a page, and read `GET /api/v1/staff/csp-reports`. It needs one
+origin serving both the app and the API, which is the deployed stack and not a preview server —
+the same shape as `docs/TECH_DEBT.md` #100's operator half, and closable the same way: by
+observation on the host, not by a test.

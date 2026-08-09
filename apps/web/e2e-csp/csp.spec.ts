@@ -64,7 +64,20 @@ async function armCspRecording(page: Page): Promise<void> {
     }
     await route.fulfill({
       response,
-      headers: { ...headers, 'content-security-policy-report-only': policy },
+      headers: {
+        ...headers,
+        'content-security-policy-report-only': policy,
+        // **Both headers, because the policy is inert without the second one.** `report-to csp`
+        // names a group that `Reporting-Endpoints` defines, and a modern engine that understands
+        // `report-to` IGNORES `report-uri` — so a policy carrying both directives with no
+        // `Reporting-Endpoints` header reports NOTHING AT ALL, silently. Observed here: the
+        // violation fired and no request left the browser.
+        //
+        // That is a real deployment hazard rather than a test detail: `nginx.conf` emits both, but
+        // if `CSP_REPORTING_ENDPOINTS` were ever blank while the policy kept `report-to`, reporting
+        // would die without a single error anywhere. This is the only place that fact is pinned.
+        'reporting-endpoints': 'csp="/api/v1/csp-report"',
+      },
     });
   });
 
@@ -124,4 +137,62 @@ test('the authenticated shell raises no CSP violation', async ({ page }) => {
   await page.getByRole('button', { name: /create organisation/i }).click();
   await expect(page).toHaveURL(/\/orgs\//);
   expectClean(await violations(page), 'the organisation home');
+});
+
+/**
+ * **What could and could not be established about the report directives.**
+ *
+ * Two claims went into the policy as reasoned defaults when `report-uri` / `report-to` /
+ * `Reporting-Endpoints` were added: that Chromium accepts a **relative** reporting URL, and which
+ * **wire format** it sends. Both are claims about software we do not own — the ADR-0076 Class 2
+ * shape — and this test was written to settle them by breaking the policy on purpose and catching
+ * the POST.
+ *
+ * **It settles one of them and cannot settle the other, and saying which is the point.**
+ *
+ * What it proves: a real violation of the deployed policy fires, with the report directives present
+ * and parsed — so the directives do not break the policy, which is the failure that would take the
+ * whole header down.
+ *
+ * What it **cannot** prove: that the report is delivered. The Reporting API uploads out-of-band
+ * from the browser process rather than through the renderer's network stack, and it batches with a
+ * delay — so Playwright's `page.route`, which intercepts renderer requests, structurally cannot see
+ * it. Observed here across two attempts: the violation fires every time and no request is ever
+ * interceptable. That is a limitation of the harness, **not evidence that delivery fails**, and the
+ * difference matters — asserting delivery here would produce a permanently red gate that gets
+ * deleted rather than fixed (ADR-0058).
+ *
+ * **A real finding came out of the attempt, and it is a deployment hazard.** A policy carrying
+ * `report-to` with **no** `Reporting-Endpoints` header reports **nothing at all** — a modern engine
+ * honours `report-to` and ignores `report-uri` once both are present, so the deprecated fallback
+ * does not save you. `nginx.conf` emits both, but if `CSP_REPORTING_ENDPOINTS` were ever blank while
+ * the policy kept `report-to`, reporting would die silently with no error anywhere. Hence both
+ * headers below, and hence the structural test that pins them together.
+ *
+ * The residual — end-to-end delivery from a real browser to the real sink — is `docs/TECH_DEBT.md`
+ * #102. It needs a real origin serving both the app and the API, which is the deployed stack.
+ */
+test('the report directives do not break the policy, and a violation still fires', async ({
+  page,
+}) => {
+  await armCspRecording(page);
+
+  await page.goto('/sign-in');
+  await page.waitForLoadState('networkidle');
+
+  // A 1×1 transparent GIF as a `data:` URI — refused by `img-src 'self' blob:`. Chosen because
+  // `data:` is deliberately absent from that directive (ADR-0074), so this is a violation the
+  // product's own rules define rather than one invented for a test.
+  await page.evaluate(async () => {
+    const img = document.createElement('img');
+    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    document.body.appendChild(img);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  });
+
+  const seen = await violations(page);
+  expect(
+    seen.some((v) => v.directive.startsWith('img-src')),
+    `expected an img-src violation under the deployed policy, saw:\n${JSON.stringify(seen, null, 2)}`,
+  ).toBe(true);
 });
