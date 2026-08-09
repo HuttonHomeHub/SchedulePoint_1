@@ -78,7 +78,7 @@ attribution and no history. There is nothing to preserve, so it is a hard delete
 tombstone. Stating it separately because a plan reasoning only about `users` would leave the most
 clear-cut case in the system unhandled — an address held for someone who never agreed to anything.
 
-### D3 — `subject_label` is redacted **in place is impossible**, so it is bounded by retention
+### D3 — `subject_label` cannot be redacted in place, so it is bounded by retention instead
 
 The one row the tombstone cannot reach: a failed sign-in for `someone@example.com` names the address
 in a column, in a table that refuses `UPDATE`. There are exactly three honest answers and this ADR
