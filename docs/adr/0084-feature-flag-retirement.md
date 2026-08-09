@@ -101,6 +101,27 @@ proof leaving together rather than one outliving the other.
 What is **not** deleted is the flag-**on** journey: `apps/web/e2e-*` proves the feature works, which
 is a claim about the product and not about the flag.
 
+> **This clause was incomplete, and CI found it the same day — the second of two corrections this
+> ADR earned from its own gate.** D5 says "its flag-off parity suite" and means the unit suites. It
+> does not say that **a whole Playwright config can BE a flag-off harness**, which
+> `apps/web/playwright.config.ts` is: it pins `VITE_TSLD_EDITING`, `VITE_PLAN_EDIT_LOCK` and
+> `VITE_CANVAS_WORKSPACE` off for the entire base journey so that — in its own words — "the
+> read-only TSLD surface and the role-only (no-pen) editing journeys stay covered". Batch 1 retired
+> the first two. The pins became dead, the base suite was served an app with the pen live, and six
+> editing specs (`activities`, `baselines`, `dependencies` ×2, `schedule` ×2) sat clicking controls
+> the pen now shades until they timed out.
+>
+> Both flags are **put back**, into batch 2, with the reason recorded rather than the date quietly
+> slipped — the same call `VITE_CANVAS_TOOLBAR` got, for the same reason: retiring them is a slice
+> that converts six specs to take the pen, not a line deletion. And `pnpm check:flags` gained a
+> fifth assertion reading the `env:` blocks of every `playwright*.config.ts`, so a retirement that
+> would strand a pinned harness fails **before** it is pushed. Verified red first: it reports 22
+> configs.
+>
+> The lesson generalises past this ADR. A flag-off contract is wherever a flag is _pinned_, and
+> pinning happens in at least three places — a `vi.mock` of `@/config/env`, a Playwright config's
+> `env:`, and `.env.example`. Only the first was in anybody's head.
+
 ### D6 — A flag may be kept past its horizon, with a written reason, in the register
 
 `flag-retirement.json` entries may carry `"keep": "<reason>"` instead of a batch. A flag genuinely
@@ -111,7 +132,8 @@ that quietly never got done.
 ## Consequences
 
 - 58 flags gain a dated tag; 14 gain the date they never had, sourced from their ADR.
-- The first batch retires the **2026-07-12 cohort**, oldest first.
+- The first batch retires **one** flag, `VITE_NAV_TREE_CRUD` — the only one of the 2026-07-12 cohort
+  with no harness pinning it. The other two were retired, caught by CI, and put back (D5's note).
 - `pnpm check:flags` joins `check:counts` / `check:claims` / `check:doc-links` / `check:playbook` as
   a computed gate on documentation-shaped truth.
 - A future epic's enablement milestone gains one line of work: add the `@enabled` tag. If it does

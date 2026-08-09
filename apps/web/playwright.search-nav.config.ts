@@ -79,6 +79,8 @@ export default defineConfig({
               // The Link tool, and the pen it is gated on — the Escape-precedence assertion is
               // about an ARMED tool surviving a keystroke in the field, so both are required.
               VITE_CANVAS_AUTHORING_FLOW: 'true',
+              VITE_TSLD_EDITING: 'true',
+              VITE_PLAN_EDIT_LOCK: 'true',
               // The Gantt, for M4's half of the match set. Default-on since ADR-0059 M6; pinned
               // here so this suite does not silently lose an assertion to a future flag change.
               VITE_GANTT_VIEW: 'true',

@@ -1772,10 +1772,14 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   rather than fixed (ADR-0058). **Fourteen flags reached the gate with no enablement date recorded
   anywhere** — not the docblock, not the ADR, not recoverable from git; they take the earliest date
   the repository can prove, marked as a **floor**, which can only make a flag look younger than it
-  is and is therefore never premature. Batch 1 retired `VITE_TSLD_EDITING`, `VITE_PLAN_EDIT_LOCK`
-  and `VITE_NAV_TREE_CRUD` (one production line each — the pen is now unconditional; the
-  **server-side** `PLAN_EDIT_LOCK_ENFORCED` is a separate operator switch and is untouched), with
-  the flag-off parity case deleted alongside (D5). `VITE_CANVAS_TOOLBAR` moved to batch 2 **with
+  is and is therefore never premature. Batch 1 retired **one** flag,
+  `VITE_NAV_TREE_CRUD`. It first retired three, and **CI caught the other two**: a whole
+  `playwright*.config.ts` can BE a flag-off harness — the base config pins `VITE_TSLD_EDITING` and
+  `VITE_PLAN_EDIT_LOCK` off so that "the read-only TSLD surface and the role-only (no-pen) editing
+  journeys stay covered" — and D5 had named only the unit parity suites. Six editing specs sat
+  clicking controls the now-unconditional pen shades until they timed out. Both flags are back in
+  batch 2 with the reason recorded, and the gate gained a fifth assertion (verified red on 22
+  configs) so a retirement cannot strand a pinned harness again. `VITE_CANVAS_TOOLBAR` moved to batch 2 **with
   the reason written down**: it is not an `if` but a ~270-line alternative layout, and ADR-0080
   records that layout causing a shipped defect — an argument for retiring it, not for keeping it.
   **The ADR's own D4 was drafted backwards and `check:flags` failed on its first run**, against the

@@ -55,6 +55,65 @@ export function flagDefaultOff(value: string | undefined): boolean {
 }
 
 /**
+ * The plan edit-lock "pen" front-end layer (ADR-0028, edit-lock M2). **ON by
+ * default** (2026-07-12). Set `VITE_PLAN_EDIT_LOCK=false` to ship the pen inert:
+ * `usePlanPen` then reports `penManaged: false` — the lock-status query never polls,
+ * no heartbeat runs, the `EditLockBanner` renders nothing, and schedule-editing
+ * affordances fall back to role-only gating (rollback / opt-out).
+ *
+ * ROLLOUT ORDERING (ADR-0028 §9): the web pen is on by default; the API's
+ * `PLAN_EDIT_LOCK_ENFORCED` is NOT (it stays a deliberate config switch). Keep that
+ * order — enable enforcement only once a bundle with the pen on is live, so users
+ * are already acquiring the pen on every editing entry point (harmless while the
+ * backend still accepts non-holder writes). Flipping enforcement first would 423 the
+ * activities-table / dependency / recalculate flows.
+ *
+ * @enabled 2026-07-12
+ *
+ * **Not retired in ADR-0084 batch 1, and the reason is a finding rather than a deferral.**
+ * It WAS retired, and CI caught it: `playwright.config.ts` pins this flag OFF for the whole
+ * BASE journey — "the read-only TSLD surface and the role-only (no-pen) editing journeys stay
+ * covered", in its own words — so retiring it left six editing specs clicking controls the pen
+ * now shades. D5 said a retirement deletes the flag-off PARITY SUITE; it did not say that a
+ * whole Playwright config can BE one. `pnpm check:flags` now refuses to retire a flag any
+ * config still pins, so this cannot recur silently.
+ */
+export const PLAN_EDIT_LOCK_ENABLED = flagDefaultOn(import.meta.env.VITE_PLAN_EDIT_LOCK);
+
+/**
+ * On-canvas TSLD structural editing (M2). **ON by default** (2026-07-12) now that
+ * every pre-enablement gate is green — see below. Set `VITE_TSLD_EDITING=false` to
+ * fall back to the M1 read-only surface, byte-for-byte (rollback / opt-out).
+ *
+ * CONCURRENCY PRECONDITION — MET. The plan edit-lock (ADR-0028) has landed: the
+ * `features/plan-lock` "pen" (behind {@link PLAN_EDIT_LOCK_ENABLED}, also on by
+ * default) makes a Planner take an exclusive lock before the canvas editing
+ * affordances go live. NB the server-side write-gate `PLAN_EDIT_LOCK_ENFORCED`
+ * remains **default-off** and is enabled by config as a separate, deliberate step
+ * AFTER the web pen is confirmed deployed (ADR-0028 §9 rollout ordering) — never
+ * flip enforcement ahead of the web bundle or non-holder writes would 423.
+ *
+ * PRE-ENABLEMENT GATES — ALL GREEN. The `Alt+←/→` time-nudge must NOT trigger
+ * native Back/Forward history navigation (preventDefault is the mitigation, but
+ * browser-chrome accelerators aren't guaranteed suppressible everywhere): asserted
+ * automatically on **Chromium** by the flag-on Playwright suite (`keyboard-edit.spec.ts`
+ * via `pnpm --filter @repo/web test:e2e:edit`) and MANUALLY CONFIRMED PASSING on
+ * **Firefox / Safari / Edge** (2026-07-12, docs/TECH_DEBT.md #25a). Procedure:
+ * docs/runbooks/tsld-editing-enablement.md.
+ *
+ * @enabled 2026-07-12
+ *
+ * **Not retired in ADR-0084 batch 1, and the reason is a finding rather than a deferral.**
+ * It WAS retired, and CI caught it: `playwright.config.ts` pins this flag OFF for the whole
+ * BASE journey — "the read-only TSLD surface and the role-only (no-pen) editing journeys stay
+ * covered", in its own words — so retiring it left six editing specs clicking controls the pen
+ * now shades. D5 said a retirement deletes the flag-off PARITY SUITE; it did not say that a
+ * whole Playwright config can BE one. `pnpm check:flags` now refuses to retire a flag any
+ * config still pins, so this cannot recur silently.
+ */
+export const TSLD_EDITING_ENABLED = flagDefaultOn(import.meta.env.VITE_TSLD_EDITING);
+
+/**
  * The persistent app-shell + hierarchy navigator (ADR-0029). **ON by default** now
  * that M1 (shell) and M2 (the accessible Client → Project → Plan tree) have landed
  * with their journeys and a11y gates green — the mounted-once shell (top bar +

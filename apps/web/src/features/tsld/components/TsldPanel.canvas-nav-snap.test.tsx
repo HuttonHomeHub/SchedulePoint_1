@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Snap is a canvas-nav Visual-mode authoring aid, so drive it with CANVAS_NAV + TSLD_EDITING on.
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_NAV_ENABLED: true };
+  return { ...actual, CANVAS_NAV_ENABLED: true, TSLD_EDITING_ENABLED: true };
 });
 
 const announceSpy = vi.fn();

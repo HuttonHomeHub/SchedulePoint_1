@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  TSLD_EDITING_ENABLED: true,
   CANVAS_DIRECT_MANIPULATION_ENABLED: true,
 }));
 

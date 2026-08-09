@@ -26,22 +26,6 @@
       "enabledSource": "docblock",
       "retired": "2026-08-09",
       "batch": "batch-1"
-    },
-    {
-      "flag": "VITE_PLAN_EDIT_LOCK",
-      "constant": "PLAN_EDIT_LOCK_ENABLED",
-      "enabled": "2026-07-12",
-      "enabledSource": "docblock",
-      "retired": "2026-08-09",
-      "batch": "batch-1"
-    },
-    {
-      "flag": "VITE_TSLD_EDITING",
-      "constant": "TSLD_EDITING_ENABLED",
-      "enabled": "2026-07-12",
-      "enabledSource": "docblock",
-      "retired": "2026-08-09",
-      "batch": "batch-1"
     }
   ],
   "flags": {
@@ -312,6 +296,13 @@
       "enabledSource": "docblock",
       "batch": "batch-5"
     },
+    "VITE_PLAN_EDIT_LOCK": {
+      "constant": "PLAN_EDIT_LOCK_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "batch": "batch-2",
+      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world \u2014 they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
+    },
     "VITE_PROGRAMME_SCHEDULING": {
       "constant": "PROGRAMME_SCHEDULING_ENABLED",
       "enabled": "2026-08-03",
@@ -366,6 +357,13 @@
       "enabled": "2026-07-19",
       "enabledSource": "docblock",
       "batch": "batch-2"
+    },
+    "VITE_TSLD_EDITING": {
+      "constant": "TSLD_EDITING_ENABLED",
+      "enabled": "2026-07-12",
+      "enabledSource": "docblock",
+      "batch": "batch-2",
+      "note": "Retired in batch 1 on 2026-08-09 and PUT BACK the same day, because CI caught what the plan did not: `apps/web/playwright.config.ts` pins this flag OFF for the entire BASE journey, and six editing specs (activities, baselines, dependencies x2, schedule x2) are written against that world \u2014 they click controls the unconditional pen now shades, and time out. Retiring it means converting those specs to take the pen, which is a slice of its own rather than a line deletion. ADR-0084 D5 named the unit parity suites and did not say a whole Playwright config can BE one; `check:flags` now refuses to retire a flag any config still pins."
     },
     "VITE_UNDO_REDO": {
       "constant": "UNDO_REDO_ENABLED",

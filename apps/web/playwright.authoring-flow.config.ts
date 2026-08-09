@@ -69,6 +69,8 @@ export default defineConfig({
               VITE_CANVAS_AUTHORING: 'true',
               VITE_CANVAS_TOOLBAR: 'true',
               VITE_CANVAS_WORKSPACE: 'true',
+              VITE_TSLD_EDITING: 'true',
+              VITE_PLAN_EDIT_LOCK: 'true',
               // Pinned OFF, mirroring the LOE / Gantt / WBS suites: this journey is about the
               // authoring gesture, and the Visual-mode surface would change what a bar's position
               // means mid-pick — which is precisely the variable the diagnostic is measuring.

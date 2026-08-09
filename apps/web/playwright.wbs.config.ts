@@ -72,6 +72,8 @@ export default defineConfig({
               VITE_CANVAS_AUTHORING: 'true',
               VITE_CANVAS_TOOLBAR: 'true',
               VITE_CANVAS_WORKSPACE: 'true',
+              VITE_TSLD_EDITING: 'true',
+              VITE_PLAN_EDIT_LOCK: 'true',
               VITE_ACTIVITY_EDITOR_TABS: 'true',
               // Pinned OFF, mirroring the LOE / Gantt / library suites: this journey is about
               // grouping, and the Visual-mode surface would change what the bars mean.

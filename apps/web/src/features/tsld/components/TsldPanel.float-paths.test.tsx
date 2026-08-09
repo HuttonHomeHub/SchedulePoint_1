@@ -11,6 +11,7 @@ vi.mock('../../../config/env', async (importOriginal) => {
     ...actual,
     CANVAS_NAV_ENABLED: true,
     CANVAS_LENSES_ENABLED: true,
+    TSLD_EDITING_ENABLED: false,
     CANVAS_AUTHORING_ENABLED: false,
   };
 });

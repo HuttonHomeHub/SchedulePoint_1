@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // behaviour has its own suites (TsldPanel.resize.test.tsx, TsldCanvas.hover.test.tsx, paint.test.ts).
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_DIRECT_MANIPULATION_ENABLED: false };
+  return { ...actual, TSLD_EDITING_ENABLED: true, CANVAS_DIRECT_MANIPULATION_ENABLED: false };
 });
 
 // Capture live-region announcements so we can assert on (or the absence of) status messages.

@@ -21,13 +21,20 @@
  *   3. No batch is overdue. A flag past `horizonDays` is fine while its batch date is in the
  *      future; the failure a developer meets is a **batch date passing with the batch not done**,
  *      which is a schedule rather than a cliff (ADR-0084 D3).
- *   4. A derived flag never retires BEFORE its parent (D4, as corrected — this script caught the
+ *   4. A flag that a Playwright config PINS is not retired. This one was written after CI caught
+ *      the omission it exists to prevent: `VITE_TSLD_EDITING` and `VITE_PLAN_EDIT_LOCK` were retired
+ *      in batch 1, and `playwright.config.ts` pins both OFF for the whole base journey — "the
+ *      read-only TSLD surface and the role-only (no-pen) editing journeys stay covered", in its own
+ *      words. Six editing specs then clicked controls the now-unconditional pen shades, and timed
+ *      out. ADR-0084 D5 said a retirement deletes the flag-off PARITY SUITE; it did not say that a
+ *      whole Playwright config can BE one, which is a distinction only a red run made visible.
+ *   5. A derived flag never retires BEFORE its parent (D4, as corrected — this script caught the
  *      rule stated the other way round on its first run). Retiring a child while its parent
  *      survives is the contradiction: the child's retirement says the feature is now permanent,
  *      and the surviving parent can still switch it off. The other order is harmless — a retired
  *      parent simply drops its conjunct, and nobody can turn off what no longer exists.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -101,7 +108,23 @@ for (const [batch, { due }] of Object.entries(register.batches)) {
   }
 }
 
-// 4 — a child may not retire before its parent.
+// 4 — a Playwright config pinning a flag is a flag-off harness, so the flag is not retirable.
+// Read from the config's `env:` block rather than from a list, so a NEW pin is covered the day it
+// is written and nobody has to remember this rule exists.
+const WEB = join(ROOT, 'apps/web');
+const retired = new Set(register.retired.map((r) => r.flag));
+for (const file of readdirSync(WEB).filter((n) => /^playwright.*\.config\.ts$/.test(n))) {
+  const config = readFileSync(join(WEB, file), 'utf8');
+  for (const [, flag] of config.matchAll(/(VITE_[A-Z0-9_]+)\s*:\s*'(?:true|false)'/g)) {
+    if (retired.has(flag)) {
+      problems.push(
+        `${flag} is retired, but apps/web/${file} still pins it — that config IS a flag-off harness, and its specs are written against the pinned world. Convert them first, or put the flag back.`,
+      );
+    }
+  }
+}
+
+// 5 — a child may not retire before its parent.
 const byConstant = new Map(
   Object.entries(register.flags).map(([flag, e]) => [e.constant, { flag, ...e }]),
 );

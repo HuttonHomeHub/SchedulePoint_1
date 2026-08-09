@@ -25,7 +25,7 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
 // hook reads the flag — the mutation/heartbeat hooks take `enabled`/`holding` args).
 vi.mock('@/config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual };
+  return { ...actual, PLAN_EDIT_LOCK_ENABLED: true };
 });
 
 const FREE: PlanEditLockStatus = {

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLockError } from '../lib/lock-error';
 
-import { API_BASE_URL } from '@/config/env';
+import { API_BASE_URL, PLAN_EDIT_LOCK_ENABLED } from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 import { planLockKeys } from '@/lib/query/hierarchy-keys';
 
@@ -224,12 +224,7 @@ export interface PlanPen {
  * is inert (no polling, no heartbeat, no banner).
  */
 export function usePlanPen(orgSlug: string, planId: string): PlanPen {
-  // Unconditional since `VITE_PLAN_EDIT_LOCK` retired (ADR-0084 batch 1). Kept as a named local
-  // rather than inlined `true`, because it is threaded through the returned object and read by the
-  // gating layer, and a boolean field that is always true still says what it means at the call
-  // sites. The SERVER-side `PLAN_EDIT_LOCK_ENFORCED` is a separate, operator-owned switch and is
-  // unaffected — ADR-0028 §9's rollout ordering still applies to it.
-  const penManaged = true;
+  const penManaged = PLAN_EDIT_LOCK_ENABLED;
   const queryClient = useQueryClient();
 
   const lockQuery = usePlanEditLock(orgSlug, planId, penManaged);
