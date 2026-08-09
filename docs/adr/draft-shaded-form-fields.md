@@ -8,6 +8,32 @@ same commit; ADR-0071 and ADR-0079 both record what happens when that is skipped
 partly overturned for fields (§D1). ADR-0061's form-layout vocabulary gains one member (§D4).
 **Supersedes:** nothing.
 
+## Blast radius — settled, with the method recorded
+
+**38 `disabled=` props passed to a `*Field` component, across 8 files.** Two files carry 30 of them.
+
+Recorded with its method because three passes produced three numbers — 38/8, 83/26 and 145/63 —
+and the disagreement was never about the code. 145/63 and 83/26 counted `disabled=` on **any**
+component, buttons included; only 38/8 answered the question this ruling is about. A number without
+its method is how that happens.
+
+The method: for each `<TextField|SelectField|CheckboxField|TextareaField|NumberField|DateField`,
+scan forward brace-aware to the matching `>` at depth 0 and count `disabled=` inside that element.
+Brace-aware matters — the original grep bounded on `[^>]*`, which stops at the first `>` and
+silently drops every call site whose props contain an arrow function.
+
+| File                                                                     | Count |
+| ------------------------------------------------------------------------ | ----- |
+| `features/activities/components/ActivityEditorDialog.tsx`                | 19    |
+| `features/activities/components/ActivityProgressPanels.tsx`              | 11    |
+| `features/cross-plan-dependencies/components/AddCrossPlanLinkDialog.tsx` | 3     |
+| five others, one each                                                    | 5     |
+
+Two consequences for the migration. It is **M, not L** — the concentration means most of the work
+is two files, not a sweep. And `AddCrossPlanLinkDialog`'s three are the **prerequisite-cascade**
+kind ("choose a plan before an activity"), not a permission gate, so under §"`disabled` means five
+things" they keep native `disabled` and are not part of the migration at all.
+
 ## Context
 
 `docs/TECH_DEBT.md` #64 and #66 are the same question from two sides: a definition field is
