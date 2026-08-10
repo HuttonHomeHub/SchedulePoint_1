@@ -52,7 +52,24 @@ export function configureHttpApp(app: NestExpressApplication): void {
     .getInstance()
     .all(/^\/api\/auth(?:\/|$)/, toNodeHandler(auth));
 
-  app.use(json());
+  // **The extra two types are not decoration: without them the CSP sink records nothing.** A
+  // browser posts a violation report as `application/csp-report` (the legacy `report-uri`
+  // mechanism) or `application/reports+json` (the Reporting API) — never `application/json`. With
+  // the default registration the body arrived unparsed, the normaliser saw `undefined`, and the
+  // endpoint answered its usual 204, so the failure was invisible from outside.
+  //
+  // It was invisible from inside too, which is the part worth remembering: `csp-report.e2e-spec.ts`
+  // passed throughout because supertest's `.send(obj)` sets `application/json`, a type no browser
+  // sends here. A test whose client differs from the real one in the one respect that matters is
+  // green and worthless. Found by the schema review, not by the suite.
+  //
+  // A body cap belongs here too — these arrive on an unauthenticated route.
+  app.use(
+    json({
+      type: ['application/json', 'application/csp-report', 'application/reports+json'],
+      limit: '64kb',
+    }),
+  );
   app.use(urlencoded({ extended: true }));
 
   // All Nest routes under /api, URI-versioned (/api/v1/...).

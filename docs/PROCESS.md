@@ -249,7 +249,7 @@ with nothing failing and nothing blocked: a slice landed, a progress summary was
 written, and the work simply did not resume until the product owner asked why. The
 summary was the problem — it read like a natural end. It is not one. Report at the end
 of a turn, not instead of continuing; and where a turn boundary would otherwise end the
-work, schedule the resumption before it can (CLAUDE.md §19.10).
+work, schedule the resumption before it can (CLAUDE.md §19.11).
 
 A blocking question blocks **one milestone**, not the programme. Ask it, then carry on
 with everything that does not depend on the answer.

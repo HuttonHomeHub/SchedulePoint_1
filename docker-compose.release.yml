@@ -106,6 +106,24 @@ services:
       # is refused at boot: the verify link would exist only in the API's log.
       MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Operational alerting (staff console M1). Unset = today's behaviour exactly: a mail
+      # failure is logged and nothing else. Set MAIL_ALERT_URL to any endpoint accepting a
+      # JSON POST and a broken relay produces a message instead of a silence. The body names
+      # counts, the window and the message kinds — never a recipient, because it leaves for a
+      # third party. See docs/DEPLOYMENT.md "Alerting on mail failures".
+      MAIL_ALERT_URL: ${MAIL_ALERT_URL:-}
+      MAIL_ALERT_WINDOW_MINUTES: ${MAIL_ALERT_WINDOW_MINUTES:-10}
+      # Dead-man's-switch: the API pings out on an interval so an external check can alert on
+      # the ABSENCE of pings — the only signal that survives the API being what is broken.
+      # Unset = no timer at all. Treat the URL as a credential; it is never logged.
+      HEARTBEAT_URL: ${HEARTBEAT_URL:-}
+      HEARTBEAT_INTERVAL_MINUTES: ${HEARTBEAT_INTERVAL_MINUTES:-5}
+      # SchedulePoint staff console (ADR-0086). Comma-separated addresses that may reach
+      # /api/v1/staff/*. Empty = nobody, which is the default and the safe direction.
+      # Changing it needs host access and a container recreate — deliberately the same bar
+      # as reading the database, so it creates no new privilege path. An allowlisted address
+      # must ALSO have a verified email, unconditionally, or it would be squattable.
+      STAFF_EMAILS: ${STAFF_EMAILS:-}
       PLAN_EDIT_LOCK_ENFORCED: ${PLAN_EDIT_LOCK_ENFORCED:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Declared in the env schema and .env.example, so they must be listed here too —
@@ -142,7 +160,11 @@ services:
     #   CSP_HEADER_NAME=Content-Security-Policy-Report-Only   # observe (default)
     environment:
       CSP_HEADER_NAME: ${CSP_HEADER_NAME:-Content-Security-Policy-Report-Only}
-      CSP_POLICY: ${CSP_POLICY:-default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests}
+      CSP_POLICY: ${CSP_POLICY:-default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests; report-uri /api/v1/csp-report; report-to csp}
+      # Names the group `report-to` refers to (staff-console M4). Same-origin, so the web
+      # container's own nginx proxies it to the API — no CORS, no preflight, and the reports
+      # never leave the deployment. The CSP_ prefix is required: NGINX_ENVSUBST_FILTER is ^CSP_.
+      CSP_REPORTING_ENDPOINTS: ${CSP_REPORTING_ENDPOINTS:-csp="/api/v1/csp-report"}
     ports:
       - '8080:8080'
 

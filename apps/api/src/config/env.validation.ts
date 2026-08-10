@@ -14,6 +14,26 @@ const optionalString = z.preprocess(
 );
 
 /**
+ * {@link optionalString} for an **outbound webhook URL**, validated as a URL at boot rather than
+ * discovered at POST time.
+ *
+ * The distinction matters more here than for an ordinary string. Both variables that use this are
+ * fire-and-forget alerting paths whose failures are, by design, swallowed to a log line — so a
+ * typo'd value does not fail anything visibly: it produces an operator who believes they are
+ * covered and a channel that never receives a message. That is the precise failure this milestone
+ * exists to remove (`docs/TECH_DEBT.md` #100), so it is refused at the one moment somebody is
+ * watching.
+ *
+ * The scheme is not constrained to `https:` — a receiver on the same Docker network is a legitimate
+ * and common configuration, and it has no certificate. What is on the other end is the operator's
+ * decision; that it is a URL at all is not.
+ */
+const optionalUrl = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().url().optional(),
+);
+
+/**
  * Environment schema — the single source of truth for configuration shape.
  * The app validates the environment at startup and refuses to boot on invalid
  * config (fail fast). See docs/BACKEND_ARCHITECTURE.md (Configuration).
@@ -68,6 +88,58 @@ export const envSchema = z
     /** The `From:` address. Required once SMTP is configured — a transport with no sender cannot send. */
     MAIL_FROM: optionalString,
     /**
+     * Where to POST when mail stops working (staff console M1). **Absent = today's behaviour
+     * exactly**: the `mail.send_failed` log line and nothing else — which is the rollback contract,
+     * and is asserted by a test rather than assumed.
+     *
+     * ADR-0075 decided that a failed send is the **operator's** signal and not the caller's, because
+     * surfacing it to the caller would make "that address was free" distinguishable from "that
+     * address is taken" on an unauthenticated endpoint. It then left the operator with a log line
+     * nobody reads (`docs/TECH_DEBT.md` #100). This closes that half: the same event, pushed to a
+     * channel somebody actually watches.
+     *
+     * **The message never names a recipient.** It goes to a third-party chat service, which is data
+     * egress — the same ground on which the staff-console spec rejects a third-party CSP collector.
+     * Counts, window and message kinds only; the address lives in `mail_events`, behind the staff
+     * guard, where reading it is an audited act.
+     */
+    MAIL_ALERT_URL: optionalUrl,
+    /**
+     * How long one alert speaks for. A broken relay fails *every* send, so the interesting message
+     * is "mail has been failing for ten minutes, 43 times" and not forty-three copies of "a send
+     * failed" — an alert channel that cries wolf is muted, and a muted channel is worth less than
+     * no channel because it is believed to be working.
+     *
+     * Ten minutes is chosen against how the failure is discovered rather than how fast it can be
+     * fixed: nothing about a relay outage is actionable inside ten minutes, and the first alert
+     * fires **immediately** regardless — the window bounds the repeats, not the notification.
+     */
+    MAIL_ALERT_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(10),
+    /**
+     * Dead-man's-switch: POST here on an interval so an external service can alert on the **absence**
+     * of the ping. Absent ⇒ **no timer is created at all** (asserted, not assumed).
+     *
+     * This is the one honest thing an application can do about its own liveness. Everything else in
+     * this milestone is a signal the API sends when something is wrong; the API cannot send anything
+     * when the API is what is wrong, and `scripts/watch-mail-failures.sh`'s "cannot read logs" branch
+     * has the same defect one layer out — it runs on the same host it is meant to be watching.
+     *
+     * **Nothing watches this yet** (product owner, CQ-4, 2026-08-09: build it, wire the receiver
+     * later). Until a receiver exists it is genuinely inert, which is why the absent case creating
+     * no timer is a requirement rather than an optimisation — and why `docs/TECH_DEBT.md` #100's
+     * operator half stays **open** rather than closing when this merges.
+     */
+    HEARTBEAT_URL: optionalUrl,
+    /**
+     * How often to ping. Capped at 60 so a value that silently disables the switch — an interval
+     * longer than any check's tolerance — cannot be set by a typo.
+     *
+     * With more than one replica this is N pings per interval rather than one. That is harmless for
+     * a dead-man's-switch, which asks "did *anything* ping?", and is stated here because the
+     * arithmetic looks wrong to a reader who assumes one.
+     */
+    HEARTBEAT_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
+    /**
      * When `true`, structural plan writes (activity/dependency create/update/
      * delete/restore, positions batch, schedule recalculate) require the caller
      * to hold the plan edit-lock (ADR-0028) and return **423** otherwise. Off by
@@ -81,6 +153,46 @@ export const envSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
+    /**
+     * Comma-separated addresses that may reach the staff console (ADR-0086 D3). Empty = **nobody**,
+     * which is the default and the safe direction: an unset variable cannot accidentally grant.
+     *
+     * Provisioning is deliberately out-of-band. Changing this needs host access and a container
+     * recreate — the **same bar as reading the database**, which is the point: it creates no new
+     * privilege path, because anyone who could edit it could already do everything the console
+     * offers, unaudited, over `psql`.
+     *
+     * Its weaknesses are real and recorded rather than discovered later: no revocation without a
+     * recreate, no per-staff capability split, and a list keyed on an address — which is why the
+     * guard also requires `emailVerified` unconditionally. Without that, an allowlisted address
+     * that has not yet signed up is squattable, and whoever registers it first becomes staff.
+     */
+    /**
+     * …and an entry that is not a plausible address **fails the boot**.
+     *
+     * This was an approved acceptance criterion that silently did not ship — the security review
+     * found it — and the reason to build rather than delete it is the shape of the failure it
+     * catches. A typo fails **closed**: nobody becomes staff, the console 404s for the person it
+     * was configured for, and every diagnostic points at the guard. Loud at boot is the honest
+     * version of the same fact, and this is a value an operator hand-edits on a host.
+     *
+     * The check is deliberately shallow — a non-empty local part, an `@`, a dot-bearing domain, no
+     * whitespace. Address syntax is not decidable by regex and pretending otherwise would refuse
+     * real addresses; this rejects the mistakes people actually make (a stray comma, a name, a
+     * missing `@`).
+     */
+    STAFF_EMAILS: z
+      .string()
+      .default('')
+      .refine(
+        (value) =>
+          value
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter((entry) => entry !== '')
+            .every((entry) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry)),
+        { message: 'STAFF_EMAILS must be a comma-separated list of email addresses' },
+      ),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),

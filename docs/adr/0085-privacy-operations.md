@@ -92,9 +92,25 @@ picks the third:
    must permit for that narrow, dated predicate and nothing else.
 
 (3) is chosen because a retention policy is a rule applied to all rows alike, which is a far weaker
-hole than a per-subject delete: it cannot be aimed. The period is **not set here** — it is a legal
-question, not an engineering one, and inventing a number would be exactly the ADR-0076 Class 3
-failure this repository keeps recording.
+hole than a per-subject delete: it cannot be aimed.
+
+**The period is 12 months** (product owner, 2026-08-09). It was left unset in the first draft on the
+grounds that it is a legal question and inventing a number would be the ADR-0076 Class 3 failure this
+repository keeps recording — which was right about the authority and wrong about the deadline, since
+leaving it open costs nothing only until somebody claims erasure works.
+
+The argument that settled it is an **asymmetry, and it cuts against the privacy-forward instinct**:
+shortening the period later is free, because the next sweep simply takes more rows. **Lengthening it
+later recovers nothing** — the rows are already deleted. So a short period does not defer the legal
+question, it answers it downward and forecloses the alternative, while a longer one leaves the
+decision genuinely open. Twelve months is the longest period defensible without a specific driver,
+and it is the one that can still be changed in either direction on the day a real answer arrives.
+
+Two consequences worth stating plainly. The period is a **ceiling, not a promise** — nothing is built
+yet, the sweep job does not exist, and until it does the true retention is _forever_, which is what
+makes this a decision worth taking now rather than at build time. And it binds only `auth.*` rows
+carrying a `subject_label`: every other row in the table remains permanent, which is the point of
+D1.
 
 ### D4 — Export is **organisation-scoped and role-gated**, not subject-scoped
 

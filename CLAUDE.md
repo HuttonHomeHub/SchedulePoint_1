@@ -19,10 +19,10 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 20 API modules
-> (`apps/api/src/modules/`), 27 Prisma models across 47 migrations, 893 web
-> source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 85 ADRs.
+> **Current stage: the application is substantially built.** 22 API modules
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 899 web
+> source files with 30 flag-scoped Playwright suites beside the base journey, and
+> 86 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -105,10 +105,10 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   20 feature modules
+│   │   ├── src/modules/      #   22 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (27 models) + 47 migrations
+│   │   ├── prisma/           #   Schema (29 models) + 54 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -377,7 +377,13 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
     graceful peer request→grace→take-over hand-off (Org-Admin immediate override),
     serialised by the existing plan advisory lock; the third concurrency layer above
     optimistic 409 and the advisory lock. Unblocked on-canvas editing, whose flag
-    (`VITE_TSLD_EDITING`) retired in ADR-0084 batch 1 — the pen is unconditional.
+    (`VITE_TSLD_EDITING`) is **still live** (`apps/web/src/config/env.ts:114`,
+    consumed at `TsldPanel.tsx:1311`) and sits in ADR-0084 batch 3. This line said it
+    "retired in batch 1 — the pen is unconditional" until 2026-08-09: it was retired
+    in batch 1 and **put back the same day**, because CI found the base Playwright
+    config pins it off for six editing specs. The banner was written from the plan
+    rather than from the outcome, which is ADR-0076 Class 1 inside the register's own
+    first batch.
 - **ADR-0029** — Persistent app-shell & hierarchy navigator: evolve `_authed` into
   a mounted-once shell (top bar + Project Explorer rail + single workspace region),
   URL-derived selection, and a hand-rolled ARIA `tree` with lazy-load + virtualization.
@@ -1435,7 +1441,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   `scripts/dependency-claims.json`, so **a Dependabot bump of either package fails CI**, which is
   the intended cost: the bump is exactly when the citations need re-reading. All 34 were verified
   accurate while seeding. Class 3 is **not computable** and gets a process rule instead, labelled as
-  the weak one (§19.9): a decision-bearing claim names the command, file or test that established
+  the weak one (§19.10): a decision-bearing claim names the command, file or test that established
   it, and **a claim inherited from the brief is checked like any other** — both Class 3 failures
   entered through a brief. The CPM engine is not imported and no product behaviour changes.
 
@@ -1787,6 +1793,66 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   child's retirement declares the feature permanent while the surviving parent can still switch it
   off. ADR-0076 Class 3, caught by the gate written beside it.
 
+- **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
+  customer. The product owner asked for "a super god user"; the motivating example — email-down
+  alerts — turned out to need no principal at all (an alert is an outbound POST), but the question
+  underneath was real, and reading the code produced an argument nobody had made: **every staff
+  operation on this installation happens over `psql` and is completely unaudited.** `audit_events`
+  is append-only in the database, and a shell is outside that boundary entirely — so the most
+  privileged acts in the product were the only ones with no record of who performed them. A staff
+  identity built this way is therefore a security **improvement**, not a new hole.
+  The load-bearing decision is that `StaffPrincipal` copies `GuestPrincipal` **exactly** — no
+  memberships, no `can()`, no `organizationId`, no role — so it is not assignable to `Principal` and
+  staff reaching customer data is a **compile error**, not a check somebody remembers. The rejected
+  alternative was a `STAFF` role or an `isStaff` flag, which puts a new branch into twenty modules'
+  org-scope assertions, where each branch is a potential IDOR. `AuthContextService` is not modified;
+  the cross-org 404 invariant is **untouched**, not merely respected. Declining the product owner's
+  offer of the canvas is the largest simplification in the epic: reaching the canvas means holding a
+  `Principal`, which destroys the property everything else rests on.
+  **Reads are audited, inverting the ordinary rule deliberately** — on this surface the read _is_
+  the privileged act, so ADR-0073's durability test would have left the most privileged surface
+  recording nothing. A seventh census assertion derives from the **path**, so a staff route added
+  later is covered the day it is written. The audit row records that a panel was reached and never
+  what was on it: the console reads customer addresses (CQ-1, which overruled the domain-only
+  proposal), and putting those in the one table that refuses `DELETE` is what ADR-0085 D3 spent a
+  decision avoiding.
+  **The epic's own gates found what human reads did not, four times.** M2 shipped **unable to serve
+  a single request** — `ck_audit_events_actor_shape` is a fail-closed `CASE … ELSE false` and the new
+  `STAFF` label had no branch — with 1,589 unit tests green, because every one of them mocks Prisma.
+  M3's journey caught `apiFetch('/api/v1/staff/me')` against an `API_BASE_URL` that is already
+  `/api/v1`, invisible to component tests that mock `apiFetch` and assert back whatever path they are
+  handed. M4's CSP sink **could not receive a report from any browser** — the body parser was
+  registered for `application/json` alone — and lost a violation's first burst to two clocks in one
+  statement. Each was found by something that ran the real thing, and each is recorded where it
+  happened rather than in a postmortem.
+  **M6 is the fifth time, and the largest — the epic's own thesis landing on it (ADR-0086 D8).** The
+  approved spec called an audited **denial** non-negotiable in five separate places; the code shipped
+  silence, with a test asserting the silence and a comment justifying it — "recording one would make
+  the log an inventory of who tried". The security review found it. The argument is answerable and
+  was answering the wrong question: an inventory of who tried to reach the most privileged surface in
+  the product is precisely the evidence this epic exists to create, and the part that would be an
+  oracle — **which** of the three conditions failed — was already withheld by the redactor's empty
+  allow-list. The reversal had also never been written back into the ADR, which is the ADR-0071
+  failure one document along. Two consequences worth carrying: the row is `recordBestEffort` behind a
+  `.catch()`, because `record()` would answer an unwritable `audit_events` with a **500** and make the
+  staff surface distinguishable from an unmapped route by status code — an oracle bought with the
+  mechanism meant to close one; and its actor is `USER`, never `STAFF`, which forced the activity
+  panel to filter on the **`staff.` action namespace** rather than actor type, or it would hide the
+  one row a reader most needs to see. Seven more blocking findings folded with it, including a
+  declared-but-uncompletable cursor pagination found **independently by two reviewers**, a dual-hat
+  banner D4 decided and nobody built, and an activity read that sequentially scanned a table which
+  grows forever — measured 23–40 ms at 500,334 rows against 0.02–0.13 ms indexed. That index taught
+  something worth keeping: Postgres matches a partial index by **expression equality, not pattern
+  containment**, so a strictly _narrower_ predicate also seq-scans, and the filter literal is now
+  pinned by a structural test because changing it reverts the read with nothing failing anywhere.
+  A `csp_reports` table was hand-written after a launched design agent returned nothing; the review
+  that followed found four defects, two of them fatal. **That is why "every schema change goes
+  through the database-architect agent" is now unconditional in §19 and §20** — including the clause
+  that matters most, that deciding a change is too small to need it is the judgement the agent
+  exists to make.
+  **The CPM engine is not imported and the ADR-0034 parity gate is untouched** — in its honest form:
+  there is nothing here to hold parity for.
+
 - **ADR-0085** _(Accepted; decision only — nothing is built)_ — Erasure collides with the audit log,
   and that collision is the decision. `docs/BACKLOG.md` carried "Privacy operations" as an `M`
   sized as work — "a hard-delete path and a data-export path". It is not work yet; it is a genuine
@@ -1828,6 +1894,21 @@ A lighter-weight running log of smaller decisions is in
 
 ## 17. Known limitations & assumptions
 
+- **The staff console is live but unwired** (ADR-0086, 2026-08-09). Five panels exist and every
+  route is audited; what does **not** exist yet is anybody receiving the two signals it added.
+  `MAIL_ALERT_URL` and `HEARTBEAT_URL` are compose edits on the host, both empty by default, and
+  until they are set a broken relay still reaches nobody — which is the exact failure
+  `docs/TECH_DEBT.md` #100 records, so that row stays **open on the operator half**. Likewise
+  `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
+  is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
+  opposite of the mistake the bullet below this one records.
+- **Two new tables document a retention period and nothing enforces either** — 30 days for
+  `csp_reports`, 12 months for `mail_events`. There is no scheduler in this application, so both
+  are **ceilings, not promises**, and today's true retention is forever. The M6 security review
+  sharpened why that matters sooner than its place in the roadmap suggests: `csp_reports` is written
+  by an **unauthenticated** endpoint that strips only the query string, so unique rows are trivially
+  mintable, and `mail_events.recipient` holds a real customer address — the thing ADR-0085 spent a
+  decision keeping erasable (`docs/TECH_DEBT.md` #118).
 - **Four accepted ADRs have no implementation** — background jobs + Redis
   (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
   tracing (0013, of which only Pino is wired). Nothing in the running system
@@ -1904,15 +1985,22 @@ When operating in this repo, Claude Code should:
    **Do not diverge from those cross-cutting patterns without a documented
    architectural reason — an ADR** (ADR-0057, superseding ADR-0015). There is no
    template to keep in step: the exemplars are real modules under real tests.
-3. **Prefer the smallest change that fully solves the task.** Do not scaffold
+3. **Every schema change goes through the database-architect agent — always.**
+   A model, a column, an index, a constraint, a data migration: no exceptions, and
+   no self-assessment of whether this one is big enough to need it. If the agent
+   returns nothing, fails, or is slow, **re-run it**; an unavailable agent is a
+   reason to wait, never a reason to proceed. A migration is checksummed the moment
+   it lands and applies to a real database, so a mistake costs a second migration in
+   every environment rather than an edit. Product-owner instruction, 2026-08-09.
+4. **Prefer the smallest change that fully solves the task.** Do not scaffold
    application features unless explicitly asked.
-4. **Match existing conventions** (this file + `docs/`). If a convention is
+5. **Match existing conventions** (this file + `docs/`). If a convention is
    missing, propose one here rather than inventing an undocumented one.
-5. **Keep docs in lock-step** with code. Update the ADRs/CLAUDE.md/`docs/` when
+6. **Keep docs in lock-step** with code. Update the ADRs/CLAUDE.md/`docs/` when
    you change architecture, standards, or process.
-6. **Never commit secrets**, disable TLS verification, or weaken security/a11y
+7. **Never commit secrets**, disable TLS verification, or weaken security/a11y
    gates to make CI pass.
-7. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
+8. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
    push" — `pnpm lint && pnpm typecheck && pnpm test` (plus `pnpm check:playbook`
    when you add or rename a seed plan, and `pnpm check:build-contract` when you
    add a shared `packages/*` workspace package — a local checkout has its
@@ -1927,26 +2015,27 @@ When operating in this repo, Claude Code should:
    rather than the product, every one visible in the first local run. **A local
    database is available and always has been** — that gap was a process gap, not
    a tooling one.
-8. **Use Conventional Commits** and add a changeset for user-visible change.
+9. **Use Conventional Commits** and add a changeset for user-visible change.
    Meet the Feature Completion Criteria (§21) before calling work done.
-9. **A claim that decides something must carry its evidence** (ADR-0076). When a
-   spec, ADR, plan, risk table or docblock asserts a fact about behaviour — a
-   cost, a guarantee, a failure mode, "there is no oracle here", "this is not on
-   the request path" — say what was **run or read** to establish it: the command,
-   the file and line, or the test. Not a pointer to another document.
-   - **The brief is not evidence.** A claim inherited from the task that started
-     the work gets checked like any other. Both recorded instances of this
-     failure entered through a brief and were repeated into three or four
-     artefacts before anyone opened the file that disproved them.
-   - **Claims about a dependency's internals are registered**, not just cited:
-     add the package, path, line range and an anchor to
-     `scripts/dependency-claims.json`. `pnpm check:claims` fails on a citation
-     that is not there, so this is a gate rather than a habit.
-   - This applies to the **decision-bearing** claims, not every sentence. A rule
-     that applies everywhere is followed nowhere, and both failures were in the
-     small set of statements that changed what got built.
+10. **A claim that decides something must carry its evidence** (ADR-0076). When a
+    spec, ADR, plan, risk table or docblock asserts a fact about behaviour — a
+    cost, a guarantee, a failure mode, "there is no oracle here", "this is not on
+    the request path" — say what was **run or read** to establish it: the command,
+    the file and line, or the test. Not a pointer to another document.
 
-10. **Approved work runs to completion. A status report is not a stopping point.**
+- **The brief is not evidence.** A claim inherited from the task that started
+  the work gets checked like any other. Both recorded instances of this
+  failure entered through a brief and were repeated into three or four
+  artefacts before anyone opened the file that disproved them.
+- **Claims about a dependency's internals are registered**, not just cited:
+  add the package, path, line range and an anchor to
+  `scripts/dependency-claims.json`. `pnpm check:claims` fails on a citation
+  that is not there, so this is a gate rather than a habit.
+- This applies to the **decision-bearing** claims, not every sentence. A rule
+  that applies everywhere is followed nowhere, and both failures were in the
+  small set of statements that changed what got built.
+
+11. **Approved work runs to completion. A status report is not a stopping point.**
     When the product owner has approved a plan or said "drive this to completion",
     the only two reasons to stop are: **every milestone is done**, or **an answer is
     needed that only they can give**. Nothing else qualifies — not a finished
@@ -1996,8 +2085,17 @@ Subagents live in [`.claude/agents/`](.claude/agents/) (see its
 
 **Backend:**
 
-- **database-architect** — design schema/migrations/indexes; run **before**
-  writing a migration.
+- **database-architect** — design schema/migrations/indexes. **Every schema change goes through
+  this agent, without exception** — a new model, a new column, a new index, a new constraint, a data
+  migration. This is not "run it when the change looks significant": the judgement about whether a
+  change is significant is the judgement the agent exists to make, so making it yourself is skipping
+  the step. **Product-owner instruction, 2026-08-09**, after `csp_reports` was hand-written when a
+  launched agent returned nothing — the honest failure there was deciding that an unavailable agent
+  meant proceeding rather than re-running it, which is exactly the shortcut that only ever gets
+  taken under time pressure. **If the agent fails, is empty, or is slow, re-run it. Waiting is the
+  cheap option; a migration is the expensive one**, because it applies to a real database, it is
+  checksummed the moment it lands, and correcting it costs a second migration in every environment
+  rather than an edit.
 - **api-reviewer** — REST/OpenAPI conventions, status codes, envelopes,
   pagination.
 - **security-reviewer** — auth, RBAC + resource scoping (IDOR), validation,

@@ -2,6 +2,36 @@
 #
 # Alert an operator when SchedulePoint cannot send mail (`docs/TECH_DEBT.md` #100).
 #
+# ---------------------------------------------------------------------------------------------
+# SUPERSEDED (staff console M1, 2026-08-09) — kept in-tree for one release as the fallback.
+#
+# Both halves of this script now have a replacement inside the application, and both replacements
+# are strictly better for the same underlying reason: this script runs on the host it is watching.
+#
+#   * The mail-failure grep below is replaced by `MAIL_ALERT_URL`. The API posts the same signal
+#     from inside the container — no Docker socket, no `SP_API_CONTAINER` to get wrong, no log
+#     window to tune, and no dependence on the log driver keeping the line. It also coalesces, so a
+#     broken relay produces one alert and one summary rather than one per send.
+#   * The "cannot read logs" branch is replaced by `HEARTBEAT_URL`. That branch is this script's
+#     attempt at a liveness check and it cannot work in the case that matters: if the HOST goes
+#     down, the cron does not run, so nothing is emitted at all — the watcher and the thing watched
+#     fail together and the silence looks exactly like health. An outward heartbeat inverts the
+#     signal so that silence IS the alarm, which is the only construction that survives the failure
+#     it reports.
+#
+# **Do not remove the cron entry until you have watched the new path alert on the real host.** The
+# replacement is code that has passed unit tests and a real migration; it has not yet been observed
+# failing over a genuinely broken relay on the deployed machine, and that observation is the
+# evidence — not the test suite. Retiring first would leave a window with no alerting at all.
+#
+# And note what is NOT yet true: nothing is watching `HEARTBEAT_URL`. It ships built and dormant by
+# choice (CQ-4, 2026-08-09), so until a dead-man's-switch check exists, this script's liveness
+# branch — flawed as it is — is still the only one there is. `docs/TECH_DEBT.md` #100's operator
+# half stays open until that check exists.
+#
+# See `docs/DEPLOYMENT.md` §"Alerting on mail failures" for the compose settings.
+# ---------------------------------------------------------------------------------------------
+#
 # ADR-0075 decided mail delivery is best-effort and that the failure belongs to the **operator**,
 # not the caller: a send that fails after Better Auth's handoff is invisible to the person who
 # triggered it, and deliberately so — surfacing it would make "that address was free" and "that

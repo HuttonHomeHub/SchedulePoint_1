@@ -103,6 +103,16 @@ jobs:
       - name: Check dependency-internal claims
         run: pnpm check:claims
 
+      # The web container's nginx template, substituted exactly as the container substitutes it.
+      # A value that breaks the config parse is a container that never serves a request, and until
+      # this existed the ONLY thing in the repository that would notice was the smoke-boot job — a
+      # container build away, reporting minutes later, after the push. `e2e-csp` cannot see it: it
+      # reads the policy from `docker-compose.yml` and serves it from a preview server, so it tests
+      # the policy and never nginx's parse of the file. Verified red against the failure that
+      # prompted it (`[emerg] unexpected "/"`, PR #269).
+      - name: Check the nginx template survives substitution
+        run: pnpm check:nginx
+
       - name: Unit tests
         run: pnpm test
 
@@ -452,6 +462,17 @@ jobs:
       # a server switch, so this is the only step that can see either.
       - name: Web end-to-end tests (email verification enforced)
         run: pnpm --filter @repo/web test:e2e:account-verify
+
+      # ADR-0086, staff-console M3. **Not a flag-on suite** — every sibling pins a `VITE_` constant
+      # and this one pins a SERVER variable, `STAFF_EMAILS`, because staff-ness is a server fact the
+      # bundle cannot see. It lands with M3 because M3 is the first milestone with a user-facing
+      # entry point (ADR-0081 §2), and this epic had already paid for that rule: M2 passed 1,589
+      # unit tests and could not serve one request. This suite earned its keep on its first green
+      # run too — it caught `apiFetch('/api/v1/staff/me')` against an `API_BASE_URL` that is already
+      # `/api/v1`, which the component tests could not see because they mock `apiFetch` and assert
+      # back whatever path the code passed them.
+      - name: Web end-to-end tests (staff console)
+        run: pnpm --filter @repo/web test:e2e:staff
 
       # The public screens, **measured** rather than reasoned about (ADR-0077 M6-T1): ten
       # URL-reachable states × six viewports × three themes, plus a real invitation carrying a

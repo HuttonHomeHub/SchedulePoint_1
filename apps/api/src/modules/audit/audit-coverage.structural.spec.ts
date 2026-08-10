@@ -49,6 +49,17 @@ import { AppModule } from '../../app.module';
 
 /** Every route that records at least one event, and which events it records. */
 const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
+  // The staff console (ADR-0086 D5). A READ, and audited — which inverts the ordinary rule
+  // deliberately: on this surface the read IS the privileged act, so applying the usual
+  // "reads earn nothing" test would audit the entire console at nothing at all. Pinned by the
+  // seventh assertion below, which derives from the path rather than from this list, so a staff
+  // route added later is covered the day it is written.
+  'GET /api/v1/staff/me': ['staff.session_started'],
+  'GET /api/v1/staff/health': ['staff.panel_read'],
+  'GET /api/v1/staff/csp-reports': ['staff.panel_read'],
+  'GET /api/v1/staff/installation': ['staff.panel_read'],
+  'GET /api/v1/staff/accounts': ['staff.panel_read'],
+  'GET /api/v1/staff/activity': ['staff.panel_read'],
   'DELETE /api/v1/organizations/:orgSlug/clients/:clientId': ['client.deleted'],
   'DELETE /api/v1/organizations/:orgSlug/invitations/:invitationId': ['invitation.revoked'],
   'DELETE /api/v1/organizations/:orgSlug/members/:memberId': ['member.removed'],
@@ -159,12 +170,22 @@ const REASONS = {
   GUEST_READ: 'guest-read',
   /** Health, readiness and version. Not organisation data. */
   INFRASTRUCTURE: 'infrastructure',
+  /**
+   * An anonymous **machine** report about our own policy, not an act by a person (ADR-0086 M4).
+   *
+   * Both audit tests fail it. Durability: nothing durable changes for anybody — a counter moves on
+   * a row about a CSS file. Blast radius: it alters nobody's rights and nobody's work. And an
+   * audit row per report would be actively harmful, since the endpoint is unauthenticated and
+   * anyone could then fill the one table in the system that refuses DELETE.
+   */
+  BROWSER_TELEMETRY: 'browser-telemetry',
 } as const;
 
 type Reason = (typeof REASONS)[keyof typeof REASONS];
 
 /** Every route that records nothing, and why. */
 const UNAUDITED_ROUTES: Record<string, Reason> = {
+  'POST /api/v1/csp-report': REASONS.BROWSER_TELEMETRY,
   'DELETE /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
@@ -442,6 +463,23 @@ describe('audit coverage census (ADR-0072)', () => {
     expect(
       AUDITED_ROUTES['POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit'],
     ).toEqual(['interchange.imported']);
+  });
+
+  it('audits EVERY staff route, including reads', () => {
+    // The seventh positive assertion (ADR-0086 D5), and the only one that inverts the durability
+    // test rather than applying it. Normally a read earns no row; here the read is the privileged
+    // act, so the ordinary rule would leave the most privileged surface in the product recording
+    // nothing — which is the argument the whole epic rests on.
+    //
+    // Derived from the PATH, not from a list, so it covers a staff route somebody adds in M3/M4/M5
+    // on the day they write it rather than when they remember this file exists. The brief assumed
+    // the census FORBIDS auditing a read; it does not — all six assertions above force a route TO
+    // BE audited and none forbids it, which is what makes this buildable as a gate at all.
+    const staffRoutes = [...declared].filter((route) => route.includes(' /api/v1/staff/'));
+    expect(staffRoutes.length, 'the staff console must have at least one route').toBeGreaterThan(0);
+    for (const route of staffRoutes) {
+      expect(AUDITED_ROUTES[route], `${route} must audit — every staff route does`).toBeDefined();
+    }
   });
 
   it('leaves no route parked as "coverage decided later"', () => {

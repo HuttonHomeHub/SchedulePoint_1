@@ -12,6 +12,7 @@ import { AuthenticationGuard } from './common/guards/authentication.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { MailModule } from './common/mail/mail.module';
+import { OperationalModule } from './common/operational/operational.module';
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
@@ -21,6 +22,7 @@ import { BaselinesModule } from './modules/baselines/baselines.module';
 import { CalendarsModule } from './modules/calendars/calendars.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { CrossPlanDependenciesModule } from './modules/cross-plan-dependencies/cross-plan-dependencies.module';
+import { CspModule } from './modules/csp/csp.module';
 import { DependenciesModule } from './modules/dependencies/dependencies.module';
 import { InterchangeModule } from './modules/interchange/interchange.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
@@ -35,6 +37,7 @@ import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { ShareModule } from './modules/share/share.module';
+import { StaffModule } from './modules/staff/staff.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { VersionModule } from './version/version.module';
 
@@ -100,6 +103,8 @@ function isPrettyLoggingAvailable(): boolean {
     }),
     PrismaModule,
     AuthModule,
+    // Before MailModule: its transport factory injects OperationalAlertService.
+    OperationalModule,
     MailModule,
     // Global, like MailModule: the producers live in nine feature modules and an audit call must
     // never be skipped for want of an import (ADR-0072).
@@ -125,6 +130,8 @@ function isPrettyLoggingAvailable(): boolean {
     RecycleBinModule,
     InterchangeModule,
     ShareModule,
+    StaffModule,
+    CspModule,
   ],
   providers: [
     // Global validation: reject unknown fields, coerce types, 422 on failure.

@@ -171,6 +171,52 @@ keep `main` releasable.
   resources, M3 adds MS Project MSPDI, M4 (optional) export (spec `docs/specs/schedule-interchange/`,
   ADR-0050). Stage C2 M1 of the toolbar-placeholder burn-down; the External-Guest share link is Stage F.
 
+## Delivered — operations & supportability
+
+**A theme this roadmap did not have.** Everything below was built between 2026-08-05 and
+2026-08-09, and none of it fitted anywhere on this page — which is itself the finding: the roadmap
+tracked what the product does for a planner and had no place for what it takes to _run_ it, so
+work that keeps the installation alive was invisible to the one document that decides what gets
+built next.
+
+- **Mail failures reach somebody** (staff console M1). ADR-0075 decided a failed send is the
+  operator's signal rather than the caller's, and then left the operator a log line nobody reads
+  (`docs/TECH_DEBT.md` #100). `MAIL_ALERT_URL` posts the same signal, coalesced, from inside the
+  container. Absent, behaviour is byte-identical to before.
+- **A dead-man's-switch** (`HEARTBEAT_URL`). The one honest thing an application can do about its
+  own liveness, because it cannot report that it is down. Ships built and **dormant** — nothing
+  watches it yet, and #100's operator half stays open until something does.
+- **A staff identity that cannot reach a customer** (ADR-0086). `StaffPrincipal` copies
+  `GuestPrincipal`: no memberships, no `can()`, so staff reaching plan data is a **compile error**
+  rather than a check somebody remembers. The cross-organisation 404 invariant is untouched — not
+  respected, untouched: no code on that path changed.
+- **The staff console** — mail health, CSP violations, installation state, unverified accounts, and
+  a record of what staff themselves have done. Every route is audited **including reads**, because
+  on this surface the read _is_ the privileged act.
+- **CSP violations are collected instead of discarded** (staff console M4). The policy now reports;
+  a public, throttled, deduplicated sink stores what arrives, so the decision to enforce can be made
+  from evidence rather than from whatever somebody saw in a console during a six-surface walk.
+
+**The argument the theme rests on**, and the reason it counts as security work rather than
+convenience: before it, every staff operation on this installation happened over `psql` and left
+**no record at all**. The append-only audit log is a database guarantee, and a shell is outside it.
+This narrows the unaudited surface; it does not close it, and saying otherwise would be false.
+
+### Next in this theme
+
+- **Wire the two receivers.** `MAIL_ALERT_URL` and a dead-man's-switch check are compose edits on
+  the host. Until they exist the signals reach nobody, which is the failure `#100` records.
+- **Verify CSP delivery end to end** (`docs/TECH_DEBT.md` #117) — closable only by deploying,
+  visiting a page and reading the Security panel.
+- **A retention sweep — and it belongs first in this list, not last.** Both new tables document a
+  period (30 days for CSP reports, 12 months for mail events) and **nothing enforces either**; there
+  is no scheduler in this application, so the periods are ceilings and today's true retention is
+  forever. The M6 security review moved it up on two facts rather than on tidiness: `csp_reports` is
+  written by an **unauthenticated** endpoint that strips only the query string from the two URI
+  columns, so a caller who wants unique rows gets them at 20 per request; and `mail_events.recipient`
+  retains a real customer address indefinitely, which is exactly what ADR-0085 D3 spent a decision
+  keeping erasable. The other two items in this list are compose edits on a host; this one is code.
+
 ## Next
 
 ### Committed engine milestones (conformance framework)

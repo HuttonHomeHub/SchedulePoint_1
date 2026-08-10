@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 27
-> models across 47 committed migrations (counted 2026-08-04, `grep -c '^model '` /
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 28
+> models across 48 committed migrations (counted 2026-08-09, `grep -c '^model '` /
 > `ls migrations`, not memory) — is the single source of truth for the data model.
 > See ADR-0008.
 
@@ -1145,6 +1145,403 @@ IS NULL OR expires_at > now()`) **AND** the referenced plan is itself active. An
   equality, unit-tested like every sibling); asserting `plan:share` (Planner/Org-Admin)
   on create/list/revoke; returning the raw token **once** on create and **never** in the
   list; and the guest guard's uniform-404 resolution + live-plan re-check.
+
+### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
+
+`mail_events` records one row per failed or abandoned send, making
+`event: 'mail.send_failed'` durable instead of a log line nobody reads
+(`docs/TECH_DEBT.md` #100). It is the **first table in this schema that deliberately follows
+almost none of the conventions above**, and every departure is a decision rather than an
+oversight — which is why it is documented here at length rather than listed.
+
+- **It is NOT the audit shape, and that is load-bearing.** The reflex after ADR-0072 is to
+  model a new "things that happened" table on `audit_events`. Here that would be a defect:
+  `audit_events` refuses `UPDATE` and `DELETE` **in the database** (`ENABLE ALWAYS`
+  triggers), and this row holds a **customer's full email address** (staff-console CQ-1,
+  which overruled the domain-only proposal). The audit shape would therefore write customer
+  addresses into a permanently unerasable table — the exact collision ADR-0085 D3 spent an
+  entire decision avoiding for **one** column, repeated for every failed send. `mail_events`
+  is **ordinary**: updatable (so ADR-0085 D1's tombstone can scrub `recipient` in place),
+  deletable and expirable. **Do not add a trigger to this table.**
+- **No `created_at`/`updated_at`**, against the rule in "Auditing" above. The producer writes
+  inside the `catch` block that observes the failure, so `created_at` would equal
+  `occurred_at` to the millisecond; and the only `UPDATE` this table will ever see is an
+  erasure scrub, which is an audited act whose record belongs in `audit_events` — a stamp
+  here would invite the row to be read as edited data rather than as a captured instant.
+- **No `version`** (nothing edits a mail event concurrently — the `AuditEvent` reasoning) and
+  **no `deleted_at`**: a soft delete that leaves the address in place defeats the single
+  property that makes this table ordinary.
+- **No `organization_id`**, against "Denormalised `organization_id`" above. Verification and
+  password-reset mail is sent **before and outside** any membership — a sign-up verification
+  precedes every organisation — so the column would be null for exactly the rows most often
+  read and present only for invitations. The staff read is installation-wide by design;
+  `correlation_id` reaches the Pino line where the request's org context lives. It would also
+  drag a telemetry row into the organisation FK graph, where a `RESTRICT` can block an
+  organisation delete.
+- **`kind` / `outcome` are TEXT + value-list CHECKs, not Postgres enums** — the
+  `audit_events.action` precedent, for its stated reason (Postgres needs **two** migrations to
+  add an enum label and use it). This vocabulary is _observed_ to grow rather than suspected
+  to: `test` is already specified for the CQ-3 staff send and is not a member of
+  `MailFailureKind` today, so it is permitted from the start and M3 needs no migration.
+  Values are `lower_snake` to equal `MailFailureKind` **value for value**, so the producer
+  needs no mapping table — a mapping table is where two vocabularies drift.
+- **`error_class`, never `error.message`.** A transport error's message routinely embeds the
+  address it failed to reach in whatever shape the relay chose. There is deliberately no
+  `message`/`detail` column, and `ck_mail_events_error_class_shape` makes the remaining hole
+  structural rather than procedural: a constructor name or errno matches, anything long or
+  punctuated enough to carry an address does not. `ck_mail_events_recipient_length` bounds the
+  address at RFC 5321's 320 octets — a **length** check and not a format one, because a send
+  can fail precisely _because_ the address was malformed, and rejecting that row would lose
+  the record that explains the failure.
+- **Retention is 12 months, and nothing enforces it.** The number is deliberately the same as
+  ADR-0085 D3's `auth.*` `subject_label` period rather than a second one. It is a **ceiling,
+  not a promise**: this application has no scheduler (no `@nestjs/schedule`, no BullMQ, no
+  Redis), so no sweep runs and the true retention today is forever. When one is built it is a
+  single ranged `DELETE … WHERE occurred_at < now() - interval '12 months'`, served by the
+  leading column of the one index.
+- **One index, `(occurred_at, id)`** — full, not partial, and therefore declared in
+  `schema.prisma` rather than as raw SQL: every row is in the read set (no soft delete, no org
+  scope, no nullable leading column), so none of the `audit_events` partial-index reasoning
+  applies. ASC read backwards, because both keys descend together. **No index on
+  `recipient`** — an index on a plaintext address is a second copy of the address.
+- **Service-layer obligations the DB can't enforce (M1-T2):** `kind` must be threaded into
+  `SmtpMailService`'s private `send()` so the `ABANDONED` row can carry one (it is generic
+  today and knows only the recipient, so a null there would blank the read's primary axis for
+  precisely the hardest failures); the producer normalises `error_class` to a constructor name
+  or errno **before** the insert (the CHECK is a backstop, and reaching it is a bug); and the
+  write runs inside a `catch` block, so it **swallows its own failure** — a rejected insert
+  must never become the second error of a failed send.
+
+## Operational telemetry (installation-wide, not organisation-scoped)
+
+Two tables. Neither is part of the `Organization → Client → … → Activity` hierarchy above,
+neither carries an `organization_id`, and both are read by a staff member about the
+installation rather than by a member about their own data. Both are **ordinary** tables —
+updatable, deletable, expirable — and both migrations say so at length, because the reflex in
+this repository after ADR-0072 is to model a new "things that happened" table on
+`audit_events` and in both cases that would be a defect rather than a style choice.
+
+### MailEvent: failed and abandoned sends (staff console M1)
+
+The `mail_events` table (staff-console M1-T1, `docs/TECH_DEBT.md` #100) is the durable half of
+a signal that today reaches nobody: `SmtpMailService` emits `event: 'mail.send_failed'` at four
+sites and nothing acts on it. One row per failed or abandoned send, so a staff member can read a
+history and the alerter has something to count. **Non-scheduling** — the CPM engine never reads
+it — so the migration is byte-parity (a single additive table create).
+
+**It is an ordinary table, and that is a requirement rather than a default.** The reflex after
+ADR-0072 is to model a new "things that happened" table on `audit_events`; here that would be a
+defect. `audit_events` refuses `UPDATE` and `DELETE` in the database (`BEFORE UPDATE OR DELETE` +
+`BEFORE TRUNCATE`, `ENABLE ALWAYS`), and this row holds a **customer's full email address**
+(staff-console CQ-1, which overruled the domain-only proposal). The audit shape would therefore
+write customer addresses into a permanently unerasable table — exactly the collision ADR-0085 D3
+spent a whole decision avoiding for a single column, repeated for every failed send. So the table
+is **updatable** (ADR-0085 D1's tombstone can scrub `recipient` in place), **deletable** and
+**expirable**. Do not add a trigger to it.
+
+- **Retention: 12 months**, deliberately ADR-0085 D3's number and not a second one — two periods
+  for one class of data is a question nobody can answer later. **Nothing enforces it yet.** There
+  is no scheduler in this application (no `@nestjs/schedule`, no BullMQ, no Redis), so the period
+  is a **ceiling, not a promise**, and the true retention today is _forever_ — D3's own caveat,
+  inherited with the number. When a sweep lands it is one ranged `DELETE … WHERE occurred_at <
+now() - interval '12 months'` on the leading index column. The spec's §4.10 defaults table still
+  says 90 days; that row predates CQ-1 and is stale.
+- **`kind` and `outcome` are TEXT + a value-list CHECK, not Postgres enums** — the
+  `audit_events.action` precedent, for its stated reason: an enum label costs **two** migrations
+  (Postgres forbids adding and using one in a single transaction), a CHECK costs one. This
+  vocabulary is _observed_ to grow rather than suspected — `test` is specified for the CQ-3 staff
+  send and is not a member of `MailFailureKind` today — so it is permitted from the start and M3
+  needs no migration at all. Deliberately **not** the `AuditOutcome` precedent: that enum is
+  closed by construction (every act succeeds, is denied or fails), while `FAILED`/`ABANDONED`
+  enumerate today's failure modes on a table named for _events_. `kind`'s values are lower_snake
+  (not the SCREAMING enum convention) so they equal `MailFailureKind` value for value and the
+  producer needs no mapping table — a mapping table is where two vocabularies drift.
+- **`error_class`, never `error.message`.** A transport error's message routinely embeds the
+  address it failed to reach in whatever shape the relay chose; storing the address in a column is
+  a decision, storing it again inside a free-text blob is a leak wearing the decision's clothes.
+  There is no `message`/`detail` column, and `ck_mail_events_error_class_shape` makes that
+  structural rather than procedural: a constructor name or errno (`Error`, `ECONNREFUSED`)
+  matches, a sentence with a space or an `@` does not. `ck_mail_events_recipient_length` bounds
+  the one PII column at RFC 5321's 320 octets — a **length** check, not a format one, because a
+  send can fail precisely _because_ the address was malformed and rejecting that row would lose
+  the record that explains the failure.
+- **Nullability.** `kind` and `outcome` are `NOT NULL` (every row is one of the two branches, and
+  a null `kind` would blank the read's primary axis). `recipient` is nullable **as the erasure
+  affordance**, not because a producer omits it: with no unique index to preserve, NULL is the
+  honest scrub where `users.email` needs a non-routable tombstone. `error_class` is nullable
+  because a rejection is `unknown` and a thrown null has no class to name — writing `'Unknown'`
+  would dress an absence as a fact. `correlation_id` is nullable because
+  `RequestContext.correlationId` is itself `string | null` and the ABANDONED site fires from a
+  detached `.catch()` after the response has gone.
+- **No `organization_id`, and that is a decision.** Verification and password-reset mail is sent
+  before and outside any membership — a sign-up verification precedes every organisation — so the
+  column would be null for exactly the rows most often read and present only for invitations,
+  reading as a fact about the failure when it is only a fact about which message it was. The staff
+  read is installation-wide by design and never filters on it, `correlation_id` reaches the log
+  line where the request's org context lives, and an FK would drag a telemetry row into the
+  organisation graph where a `RESTRICT` can block an organisation delete.
+- **No `created_at`/`updated_at`/`version`/`deleted_at`.** The producer writes inside the catch
+  block that observes the failure, so `created_at` would equal `occurred_at` on every row; the
+  only `UPDATE` this table will see is an ADR-0085 scrub, which is an audited act whose record
+  belongs in `audit_events`; nothing edits a row concurrently; and a soft delete that leaves the
+  address in place defeats the single property that makes this table ordinary.
+- **One index, `(occurred_at, id)`, declared in Prisma** — full, not partial, because every row
+  is in the read set (no soft delete, no org scope, no nullable leading column), so none of the
+  `audit_events` partial-index reasoning applies. Declared **ASC and read backwards**: the spec
+  proposed `(occurred_at DESC, id DESC)`, but both keys descend together, so the newest-first
+  cursor read is a plain backward scan of this one (the `activities`/`notes` `(…, created_at, id)`
+  argument). `audit_events` spells `DESC` only because its indexes are raw SQL anyway. `recipient`,
+  `kind` and `outcome` are **unindexed**; the numbers behind that are in the migration.
+- **Service-layer obligations the DB can't enforce (M1-T2):** `kind` must be threaded into the
+  private `send()` so an ABANDONED row can carry one; `error_class` must be normalised to a
+  constructor name or errno before the insert (the CHECK is a backstop — reaching it is a bug);
+  and the write runs inside a catch block, so it must swallow its own failure rather than turn a
+  failed send into a second error. Note that an abandoned send legitimately writes **two** rows —
+  the timeout (`FAILED`) and the late transport error (`ABANDONED`) — which is the distinction
+  ADR-0075's `send()` docblock exists to preserve.
+
+### CspReport: deduplicated CSP violation reports (staff console M4)
+
+The `csp_reports` table (staff-console M4, `docs/TECH_DEBT.md` #8) is where browser evidence
+lands instead of being discarded. The web origin ships its Content-Security-Policy in
+**report-only** mode. Until 2026-08-09 `CSP_POLICY` carried no `report-uri`, no `report-to` and no
+`Reporting-Endpoints`, so a violation existed only in whichever browser console happened to be open
+and the documented way to enforce was to flip the header and walk six surfaces watching DevTools.
+**All three now ship** (`acd035a`) — this paragraph described the state the table was designed
+against and was already out of date when it was written, which is the drift ADR-0058 exists for. ADR-0074 records that
+the one violation found that way was found **in production, after release**, by a person
+watching a console — and that it came from a **dependency** (Zod 4's `allowsEval()` probe),
+which appears nowhere in `apps/web/src`. **Non-scheduling** — the CPM engine never reads it —
+so the migration is byte-parity (a single additive table create).
+
+**One row per DISTINCT violation, not per report.** The key is
+`(effective_directive, blocked_uri, document_uri, disposition)`; a repeat increments `count` and moves
+`last_seen_at`. Ten thousand identical violations are one row with `count = 10000`. **`disposition` is in the key** (2026-08-09, on the schema review's recommendation). Left out, a
+violation seen 500× during a report-only window and once after enforcement collapsed into one row
+reading `count = 501, disposition = 'enforce'` — claiming 501 people were blocked when one was, on
+exactly the transition this table exists to inform, with no way for a reader to recover the truth.
+**Conflation and fragmentation are not symmetric failures**: one is invisible and overstates harm,
+the other is visible and adds up, so the key errs toward the recoverable one. The accepted cost is
+that a `null` disposition — the legacy body carries none in every engine — is its own bucket, so one
+violation seen in one phase by two browsers can be two rows; that is the same fragmentation in its
+mildest form and still the safe direction. It cost **no migration**: the hash is producer-computed,
+so the column and index are unchanged and existing rows simply stopped matching, which is harmless
+on retention-bounded telemetry and is said here so nobody reads the discontinuity as data loss.
+
+Dedup is
+the design rather than a later optimisation: it makes volume a property of the **policy**
+(distinct violations) instead of a property of **traffic**, which on an unauthenticated
+endpoint is a property of whoever is pointing at us.
+
+- **The dedup key is a hash column, and that is the decision the table turns on.** A unique
+  index over the three columns directly is not merely inelegant — it is a write path an
+  unauthenticated caller can make **fail**. Measured before it was written (PostgreSQL 16.13,
+  incompressible input, plain btree over the three text columns): 2,600 chars accepted;
+  **2,700 chars → `ERROR: index row size 2776 exceeds btree version 4 maximum 2704`**; 8,192
+  chars → `ERROR: index row requires 8264 bytes`. So a hostile URI does not merely fail to
+  deduplicate, it errors, and the report is lost — on exactly the input the table exists to
+  survive. `dedupe_hash` puts a fixed 64 hex characters in the index and length stops being
+  reachable. Proved end to end on a freshly-migrated database: three inserts of the same 8 KB
+  incompressible `blocked_uri` produce **one row with `count = 3`**, and the same value in a
+  plain three-column unique index raises `index row requires 8264 bytes`.
+- **A hostile-length test built from a repeated character proves nothing**, and that is worth
+  knowing before writing one. The same experiment with `repeat('a', 8192)` was **accepted** by
+  the plain three-column index: a btree compresses an index tuple that would not otherwise fit,
+  and 8 KB of one character compresses to nothing. Use incompressible input.
+- **The hash is computed by the producer, not the database**, and the alternatives were tried
+  rather than reasoned about. A `GENERATED ALWAYS AS (…) STORED` column and an index expression
+  both require `IMMUTABLE` functions, and `convert_to(text,'UTF8')` is **STABLE**
+  (`pg_proc.provolatile = 's'`), so `sha256(convert_to(…))` is refused outright
+  (`generation expression is not immutable` / `functions in index expression must be marked
+IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not superuser
+  (`pg_user.usesuper = f`), and pgcrypto is not trusted, so a migration cannot install it.
+  **This database cannot compute a strong hash.** It can compute `md5` — and md5 over
+  attacker-controlled input, on a table whose purpose is to be evidence, hands a prober a way
+  to merge a real violation into another row by collision. A generated column also **drifts**:
+  declared as an ordinary column, `prisma migrate diff` reports `Altered column dedupe_hash
+(changed from Nullable to Required, default changed from Some(DbGenerated(…)) to None)` and
+  exits 2 — the CI failure TECH_DEBT #54 was. Silencing it needs
+  `String? @default(dbgenerated("md5(…)"))`, i.e. a client type of `string | null` for a column
+  that is never null, plus the SQL restated in the model where a later migration can quietly
+  disagree with it. So the hash is `sha256Hex` in Node — the `Invitation.tokenHash` /
+  `PlanShare.tokenHash` precedent (`common/tokens/token.ts:21`), already used twice in this
+  schema for exactly this shape.
+- **The hash joins on `\x1f` (UNIT SEPARATOR), not `|`.** The first version used a pipe and
+  argued the collision was harmless. It is not: joined on a pipe,
+  `('https://cdn/a|b.js', 'https://app/x')` and `('https://cdn/a', 'b.js|https://app/x')` produce
+  the **same** digest — verified, both `40223a8b…` — so two genuinely different violations share
+  one row and one count on a table an operator reads to decide what to fix. A control character
+  cannot occur in a directive name or a URI. (The original argument, that forging a row on an
+  unauthenticated endpoint is free anyway, holds for the **hostile** case and says nothing about
+  the accidental one.) Note the migration comment below quoted a `\x1f` join while the producer
+  used `|`, so the recompute it describes as "verified" could not have accepted a producer hash;
+  the separator now matches what that comment always claimed.
+- **A CHECK that recomputes the hash was tried and is deliberately not shipped.**
+  Postgres does not enforce immutability inside a `CHECK`. It would make the separator and field
+  order a database constant, so changing either in the producer refuses **every** row — and
+  because this endpoint swallows its own write failures by design, the symptom is total, silent
+  loss of reports rather than a failing test. A benign duplicate row from a producer bug is the
+  better residual. `ck_csp_reports_dedupe_hash_shape` asserts only that the value **is** a
+  sha256 hex digest, which is a fact about the column rather than about the producer.
+- **The two URI columns are deliberately unbounded by any CHECK**, and this is the sharpest
+  departure from the `mail_events` precedent. That table's `ck_mail_events_recipient_length`
+  bounds a value **our own code** produces; here the producer transforms untrusted input, the
+  endpoint answers **204 whatever happens**, and the write is swallowed — so a refused row is a
+  **silently dropped report**. On the two columns that are themselves the evidence, losing the
+  row is worse than losing the tail of a URL, and a length constraint would be reachable by
+  exactly the hostile input the table exists to survive the moment the producer's cap and the
+  constraint disagreed. The bound belongs at the boundary (`MAX_FIELD_LENGTH` = 1,024 and the
+  body cap in `csp-report-body.ts`); the database's job is to make a hostile length **harmless**
+  rather than to refuse it, which is what `dedupe_hash` buys.
+- **The query string and fragment are stripped from every URL before the write**
+  (`csp-report-body.ts`), and that is worth keeping for its own reason rather than as tidying: a
+  URL's query is where identifiers live — a search term, an email in a redirect — and this is
+  telemetry about a policy, not an access log with better retention than the one anyone agreed
+  to. It also narrows the dedup key to the thing that identifies the violation, so one broken
+  asset does not become one row per query string. `first_seen_at` likewise never moves on a
+  repeat: it is what makes "this started when we deployed X" answerable.
+- **No CHECK on this table may be able to REFUSE a row, and two of the originals could.** This is
+  the rule the first migration applied to the URI columns and then contradicted twice, and it is
+  the correction in `20260809170000_csp_reports_refusable_constraints`. Because the endpoint
+  answers 204 and the producer swallows the write, a rejected `INSERT` is not an error anyone
+  sees — it is a report that never existed, and browsers do not retry.
+  - `ck_csp_reports_directive_shape` (`^[a-z][a-z0-9-]{0,63}$`) — **dropped.** Its stated
+    reasoning (a shape, never a value list, because the directive vocabulary looks closed and is
+    not) was right and stopped one step short: a shape is still a refusal. The shipped producer
+    fell back to the legacy `violated-directive` **verbatim**, so `script-src 'self'` — the value
+    several engines are the only ones to send — was answered 204 and recorded **nothing**.
+    Measured through the real route: 204, zero rows. Normalising the directive to a bare token is
+    the fix and belongs in the producer; the residual is a duplicate row, which the same migration
+    already called "the better residual" when it rejected the hash-recomputing CHECK.
+  - `ck_csp_reports_disposition` (`IN ('enforce','report')`) — **dropped.** Reachable from an
+    unauthenticated POST (`disposition: 'enforcing'` → row refused → report gone) and from any
+    future browser that adds a third value. A value list refuses what we did not anticipate, which
+    is the argument used against a value list on `effective_directive` one bullet earlier.
+  - Nothing replaces them, not even a length backstop: the URI columns beside them are unbounded
+    on the same reasoning, and a length CHECK near `MAX_FIELD_LENGTH` becomes reachable the moment
+    the cap and the constraint disagree. **The four CHECKs that remain are ones the producer
+    structurally cannot violate** — a sha256 hex digest, a count that only increments, clamped
+    int4 positions — with one exception, next.
+- **`ck_csp_reports_seen_order` is kept, and it is currently reachable with no hostile input.**
+  Measured: **16 concurrent reports of the same NEW violation record one, losing 15**; a burst of
+  two loses one. It is **not** a race on the unique index — Prisma emits a correct
+  `INSERT … ON CONFLICT (dedupe_hash) DO UPDATE`, and the same statement written by hand with
+  `now()` on both branches records all 16 with zero errors. It is two clocks in one statement:
+  `first_seen_at` is stamped by the Prisma query engine as it builds the INSERT, `last_seen_at` on
+  the DO UPDATE branch is the `new Date()` the service took ~1 ms earlier, so the loser of the
+  insert race updates with an instant older than the winner's `first_seen_at`. Repeats against an
+  existing row are correct, so the loss falls entirely on a violation's **first burst** — which is
+  when a newly-shipped policy breaks something for several people at once. The constraint is kept
+  because it is true and because it is what surfaced the defect; **the fix is in the producer**
+  (let the database stamp both instants).
+- **`disposition` is nullable, and the null is the interesting case.** `enforce` vs `report` is
+  the difference between "this **did** break" and "this **would have**", which is the whole
+  transition the table informs. It is **absent by format, not by accident**: the Reporting API
+  body always carries it, the legacy `application/csp-report` body carries it in some engines
+  and not others. Defaulting a missing value to `report` invents the answer, and invents it in
+  the direction that reads a real block as hypothetical. `NULL` says "the report did not say",
+  which is true and is a third fact. **This paragraph shipped describing a producer that did the
+  opposite** — `clean(disposition ?? 'report')`, with the e2e suite asserting `disposition:
+'report'` for a body that carried none — so the column could not be null and the third fact did
+  not exist. The producer is corrected to pass null through.
+  It is **not** part of the dedup key, so it is last-writer-wins and reads as "as of
+  `last_seen_at`, this was the disposition". Read that literally: a violation seen 500 times in
+  report-only and once after enforcement shows `disposition = 'enforce'`, `count = 501`, and
+  nothing separates it from 501 real blocks. **If the report-only → enforce transition is the
+  decision this table serves, the disposition belongs in the dedup key**, where the two phases are
+  two rows and the comparison is the answer. It costs no migration (the key is a producer-computed
+  hash) and the transition is benign — old rows stop matching and dedup restarts.
+- **No `original_policy`.** Both wire formats carry it; it is several hundred bytes,
+  byte-identical on every row, and describes something `docker-compose.yml` already states and
+  `apps/web/e2e-csp` already parses. It is also not in the dedup key, so the stored copy would
+  be whichever report arrived most recently — the cost of storing it and none of the certainty.
+  Absent for reasons of their own: `referrer` (a URL carrying identifiers, telling us nothing
+  `document_uri` does not), `status_code` (has never decided anything here), `script_sample`
+  (empty unless the policy carries `'report-sample'`, which it does not, and it echoes our own
+  script text into a table read over the network), and `user_agent` (varies by version, so as a
+  non-key column it preserves one arbitrary sample — and "enforcing breaks Safari" is not a
+  different decision from "enforcing breaks").
+- **`source_file` / `line_number` / `column_number` are kept**, on ADR-0074's own experience:
+  `blocked_uri = 'eval'` names what broke and says nothing about what to change, and the code
+  that caused that violation was in a dependency. Not in the key, so last-writer-wins — one
+  worked example, which is all they need to be.
+- **Nullability, per column.** The three key columns are `NOT NULL`, and that is a **dedup
+  requirement rather than a preference**: in a Postgres unique index a NULL is distinct from
+  every other NULL, so one nullable key column would silently turn the table back into one row
+  per report — which is why the producer substitutes `'unknown'` rather than omitting a field.
+  `dedupe_hash`, `count`, `first_seen_at`, `last_seen_at` are `NOT NULL` because the producer
+  always knows them. `disposition` and the three source-location columns are nullable because
+  they are **absent by format**: the two wire formats carry different field sets, so a missing
+  value means "this reporter does not send it", not "something went wrong".
+- **`count` is `INT`, not `BIGINT`**, and the arithmetic is recorded because an `integer`
+  overflow **throws** on the one write this table performs. At the per-IP throttle this endpoint
+  carries, saturating `int4` on a single row needs on the order of fifty thousand address-days
+  aimed at one identical triple, against a 30-day retention that keeps resetting it. `BIGINT`
+  would also put a `bigint` on the read, which does not survive `JSON.stringify`.
+- **Retention: 30 days**, on `last_seen_at` and **not** `first_seen_at` — a violation that is
+  still happening must not expire out from under the decision it informs. Deliberately a
+  different number from `mail_events`' twelve months: that table holds a customer's address and
+  inherits ADR-0085 D3's period, this one holds URLs, and a CSP finding is only interesting
+  while the policy it describes is current. **Nothing enforces it.** There is no scheduler in
+  this application (verified against `apps/api/package.json`: no `@nestjs/schedule`, no BullMQ,
+  no Redis), so the period is a **ceiling, not a promise** and the true retention today is
+  _forever_ — the `mail_events` phrasing, inherited with the caveat. When a sweep lands it is one
+  ranged `DELETE … WHERE last_seen_at < now() - interval '30 days'` on the leading index column.
+  **Read "30 days" as a claim about ROWS, not about data age.** Because `last_seen_at` moves on
+  every repeat, a violation that keeps happening never expires, and its `document_uri` — which may
+  carry a plan or organisation id in its path — is retained for as long as it lasts, with a
+  `first_seen_at` arbitrarily older than the period. That is the intended behaviour and not an
+  oversight in the predicate (a live finding must not expire out from under the decision it
+  informs), but it means the period bounds **staleness**, not retention, and the sentence "URLs are
+  kept for 30 days" is not one this table supports.
+- **One index beyond the unique key, `(last_seen_at, id)`** — full, not partial, and therefore
+  declared in `schema.prisma`: every row is in the read set, so none of the `audit_events`
+  partial-index reasoning applies. ASC read backwards (measured `Index Scan Backward`, 0.44 ms
+  for the first page at 500,000 rows), which keeps this schema free of its first `sort:`. It is
+  **not discretionary** — it also serves the retention sweep on its leftmost prefix.
+- **No index on `count`, and that is measured rather than omitted.** The panel also wants
+  most-frequent-first. At **500,000 rows** (174 MB — past any honest expectation, inside the
+  hostile band) `ORDER BY count DESC, id DESC LIMIT 50` costs **49.8–55.1 ms** as a parallel seq
+  scan plus a top-N heapsort over 22,404 buffers; a `(count, id)` index takes it to
+  **0.30–0.39 ms** for **19 MB**. A 130–180× speed-up, and still not worth shipping: at
+  **5,000 rows** the same unindexed sort costs **1.32–1.36 ms**, and 5,000 distinct violations
+  is already generous when a correct policy yields tens. The 50 ms case needs a sustained
+  hostile flood **and** is a staff-only read behind a throttle. The numbers are in the migration
+  so adding it later is one step rather than a rediscovery (the ADR-0073 C1 rule).
+- **The write side of that index, which the read measurement does not cover.** `last_seen_at` is
+  indexed **and** rewritten on every repeat, so **no repeat can ever be a HOT update**: measured,
+  2,000 repeats at a distinct millisecond each gave `n_tup_hot_upd = 0` and grew
+  `csp_reports_last_seen_at_id_idx` 16 kB → 96 kB and `csp_reports_dedupe_hash_key` 16 kB → 32 kB
+  for **one row**, each repeat writing a new heap tuple plus an entry in every index (reclaimed by
+  autovacuum). Beware the obvious test: repeats inside the **same millisecond are HOT**, because
+  `timestamptz(3)` rounds them to an equal value and Postgres then sees the column as unmodified —
+  a tight loop measures 93% HOT and tells you nothing about production. The cost buys the
+  newest-first read and the sweep, so it is worth paying; it also settles the `count` question
+  from the other side, since a `(count, id)` index would add a fourth index entry per repeat but
+  would **not** newly break HOT — indexing `last_seen_at` already did.
+- **Service-layer obligations the DB can't enforce (M4).** Each is a real gap in the producer as
+  it stands, not a hypothetical. (1) `effective_directive` must be normalised to a **bare
+  token**: the legacy `violated-directive` field carries the serialised directive, value and all
+  (`script-src 'self'`), and `csp-report-body.ts` falls back to it verbatim — stored that way the
+  same violation keys differently per engine and the count that decides whether to enforce is
+  split across two rows that read as two problems — and, until the CHECK was dropped, no row at
+  all. (2) `disposition` must be `null` when the report did not say, and must never be defaulted.
+  (3) The three source-location fields must be read from both wire formats — the shipped
+  `NormalisedCspReport` carried no such fields, so `source_file`, `line_number` and
+  `column_number` had **no writer at all** and were permanently null. (4)
+  `line_number`/`column_number` must be clamped to safe integers or dropped to null — a JSON
+  number outside `int4` fails at **cast** time, before any CHECK can see it. (5) The write
+  swallows its own failure, because the endpoint answers 204 whatever happens and a rejected
+  insert must never become a response — which is what converts every constraint on this table
+  from a guard into a silent delete. (6) **Both timestamps must be stamped by the database**, or
+  the first simultaneous burst of a new violation records one report and loses the rest; see
+  `ck_csp_reports_seen_order` above.
+- **The one thing to check before any of the above matters.** `app.use(json())` parses only
+  `application/json`, and browsers post CSP reports as `application/csp-report` (report-uri) and
+  `application/reports+json` (Reporting API). Measured against the real route: both real content
+  types return **204 with zero rows recorded**; only `application/json` — which no browser sends,
+  and which is what the e2e suite sends — records anything. The table cannot currently receive a
+  report from a browser at all.
 
 ## Testing & performance
 

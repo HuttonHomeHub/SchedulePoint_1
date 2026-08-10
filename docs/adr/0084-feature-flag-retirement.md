@@ -108,18 +108,34 @@ config costs six specs to convert rather than a line.
 
 **Two of the three inputs are measured and one is not, and the difference is stated rather than
 blurred.** The file and pin counts are real. The weighting (`files + 3 × pins`), the per-batch cap
-(45) and the fortnightly cadence are extrapolated from **one** completed retirement, which is not
-enough to justify a seventeen-batch schedule reaching into 2027 — asserting otherwise would be the
+(45) and the cadence are extrapolated from **one** completed retirement, which is not enough to
+justify a seventeen-batch schedule reaching most of a year out — asserting otherwise would be the
 ADR-0076 Class 3 failure this repository keeps recording, committed inside the ADR that cites it.
 
-They are therefore a **hypothesis the gate tests for us**: if batch 2 takes longer than its
-fortnight, the next batch's date fails and forces a re-fit against a second data point. Re-fit it
-then. Do not defend it.
+They are therefore a **hypothesis the gate tests for us**: if a batch takes longer than its slot, the
+next batch's date fails and forces a re-fit against a second data point. Re-fit it then. Do not
+defend it.
 
 **And the horizon and the batch date are now visibly different things**, which the original draft
 conflated: the horizon says when a flag stops earning its keep, the batch date says when we can
 afford to remove it. The gap between them **is** the debt, and it is large. That is worth knowing
 rather than hiding behind a schedule that pretends otherwise.
+
+### D4b — The cadence is weekly, and it is the knob that was actually reached for
+
+Added 2026-08-09. The register as first fitted was fortnightly and ran to **2027-03-23** — seven and
+a half months for 57 flags. Put to the product owner as a choice between three levers, the one
+declined is the informative one: **raising the horizon from 30 days to 90** would have stopped
+`check:flags` reporting most of the estate as past its horizon, and it was rejected precisely
+because D4a says the gap between horizon and batch date **is** the debt. Making the report calmer
+without making the debt smaller is hiding it.
+
+So the horizon stays at 30 days and the cadence halves. Nothing is re-sized: batch composition is
+unchanged and every batch still sits at or after its flags' earliest date, so the schedule now
+finishes **2026-12-01**. What that does to the estimate is stated rather than absorbed — the cap of
+45 was fitted against a fortnight and now has a week, so the cap is the part under test, and D4a's
+own instruction applies to it: when a batch slips, re-fit against the second data point rather than
+defending the first.
 
 ### D5 — Retiring a flag deletes its flag-off parity suite, and that is the point
 
@@ -141,9 +157,18 @@ is a claim about the product and not about the flag.
 > editing specs (`activities`, `baselines`, `dependencies` ×2, `schedule` ×2) sat clicking controls
 > the pen now shades until they timed out.
 >
-> Both flags are **put back**, into batch 2, with the reason recorded rather than the date quietly
-> slipped — the same call `VITE_CANVAS_TOOLBAR` got, for the same reason: retiring them is a slice
-> that converts six specs to take the pen, not a line deletion. And `pnpm check:flags` gained a
+> Both flags are **put back**, with the reason recorded rather than the date quietly slipped — the
+> same call `VITE_CANVAS_TOOLBAR` got, for the same reason: retiring them is a slice that converts
+> six specs to take the pen, not a line deletion. They go into **different** batches —
+> `VITE_PLAN_EDIT_LOCK` into batch 2, `VITE_TSLD_EDITING` into batch 3 — which this note recorded as
+> "both into batch 2" until 2026-08-09, from before D4a re-spaced the register by blast radius. D4a
+> is why they are split, and the split is right: they gate different things, so they are two
+> conversions rather than one. Removing the `VITE_PLAN_EDIT_LOCK` pin makes the **pen** live in the
+> base journey and the six specs must acquire it; removing the `VITE_TSLD_EDITING` pin then makes
+> **on-canvas editing** appear in a suite that has never seen it. Doing both in one batch would mean
+> rewriting those specs twice against two different worlds in a single slice.
+>
+> And `pnpm check:flags` gained a
 > fifth assertion reading the `env:` blocks of every `playwright*.config.ts`, so a retirement that
 > would strand a pinned harness fails **before** it is pushed. Verified red first: it reports 22
 > configs.

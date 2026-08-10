@@ -2050,12 +2050,24 @@ export const AUDIT_ACTIONS = [
   //   libraries. "Where did this programme come from, and which file was it?" is a question the
   //   product otherwise cannot answer at all once the upload is gone.
   'interchange.imported',
+  // — Staff (ADR-0086). SchedulePoint staff operating the INSTALLATION, never a customer's data.
+  //   These are READS, and they are recorded anyway — the one place the durability test is
+  //   deliberately inverted, because on the staff console the read IS the privileged act. Today
+  //   every one of these operations happens over `psql` on the host and leaves no record at all,
+  //   so this narrows the unaudited surface rather than widening the audited one.
+  'staff.session_started',
+  'staff.panel_read',
+  //   And the refusals. This one is not a read at all: it is an authenticated caller who is NOT
+  //   staff reaching a staff route, and it is the only row in the vocabulary whose actor is
+  //   deliberately `USER` rather than `STAFF` — recording a prober as staff would be a lie, and it
+  //   would put them in the console's own "what staff have done" panel.
+  'staff.access_denied',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /** Who performed an audited action. Mirrors the app's real principal kinds. */
-export const AUDIT_ACTOR_TYPES = ['USER', 'GUEST', 'SYSTEM', 'ANONYMOUS'] as const;
+export const AUDIT_ACTOR_TYPES = ['USER', 'GUEST', 'SYSTEM', 'ANONYMOUS', 'STAFF'] as const;
 export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
 
 /**
@@ -2157,6 +2169,9 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   // Archiving is deliberately NOT a deletion (ADR-0053 §4) — the row stays valid and every
   // existing reference keeps working — so filing it under "what disappeared" would answer the
   // wrong question. A tier move is the same class of fact: who may use this, from now on.
+  'staff.session_started': 'access',
+  'staff.panel_read': 'access',
+  'staff.access_denied': 'access',
   'calendar.archived': 'settings',
   'calendar.unarchived': 'settings',
   'calendar.scope_changed': 'settings',

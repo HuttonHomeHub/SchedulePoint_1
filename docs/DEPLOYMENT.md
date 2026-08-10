@@ -629,6 +629,13 @@ is taken" on an unauthenticated endpoint. The application emits one alertable li
 silently unrecoverable accounts: every sign-up, invitation and password reset failing, for every
 organisation, with the first signal being someone who cannot get in telling somebody.
 
+> **Read the two subsections below before setting any of this up.** `scripts/watch-mail-failures.sh`
+> is **superseded** (2026-08-09) by `MAIL_ALERT_URL` and `HEARTBEAT_URL`, which do the same two jobs
+> from inside the container. It is kept in-tree for one release as the fallback, and this section is
+> kept because an operator running it today needs it to keep making sense. **If you are setting this
+> up for the first time, skip to "The API can now do this itself" and do not install the cron at
+> all.** What follows describes the path being retired.
+
 `scripts/watch-mail-failures.sh` closes that. Run it from cron on the host:
 
 ```cron
@@ -653,6 +660,138 @@ and keep it down. Same reasoning as the boot-time SMTP handshake being warn-only
 Both compose files now set `logging: json-file, max-size 10m, max-file 3` on every service. Docker's
 default has **no rotation**, so a steadily-logging container fills the host disk until something
 else fails first — and the API's structured Pino output is exactly that.
+
+### The API can now do this itself — `MAIL_ALERT_URL`
+
+Staff console M1. The cron above greps `docker logs` from outside the container; the API can send
+the same signal from inside it, which needs no Docker socket, no container name and no host script:
+
+```yaml
+api:
+  environment:
+    MAIL_ALERT_URL: https://ntfy.sh/your-topic
+    MAIL_ALERT_WINDOW_MINUTES: 10
+```
+
+Recreate the API container and it takes effect. **Unset, behaviour is exactly what it was** — the
+failure is logged and nothing else — which is the rollback: clear the variable and recreate.
+
+The message names the failure count, the window and which kinds of message failed. It **never names
+a recipient**, deliberately: the alert leaves for a third-party chat service, and the address lives
+in `mail_events` where reading it is an audited act behind the staff guard. The first failure alerts
+immediately; the window bounds the **repeats**, so a broken relay produces one alert and one summary
+rather than one per send.
+
+The URL is validated at boot — a typo refuses the boot rather than producing a channel that silently
+never delivers. Any endpoint accepting a JSON POST works; the body carries `text`, which Slack and
+Mattermost render directly.
+
+**This replaces the cron's mail-failure half, not the cron.** Keep the script running until you have
+watched the new path alert on the real host at least once — see "the liveness half" below for what
+the script still covers that this cannot, and "retiring the cron" below for how to get that
+observation without waiting for a genuine outage.
+
+### The liveness half — `HEARTBEAT_URL`
+
+**An application cannot alert that it is down.** Everything above is a signal the API sends when
+something is wrong, and the API sends nothing when the API is what is wrong. The cron does not escape
+this either: it runs on the host it is watching, so a host outage silences the watcher and the thing
+watched together.
+
+The only construction that survives the failure it reports is an inverted one — the API pings
+outward on a schedule and an external service alerts on the **absence** of pings:
+
+```yaml
+api:
+  environment:
+    HEARTBEAT_URL: https://hc-ping.com/<your-check-uuid>
+    HEARTBEAT_INTERVAL_MINUTES: 5
+```
+
+Create the check first (healthchecks.io has a free tier; any dead-man's-switch works), set its
+**period a little longer than the interval** so an ordinary slow ping is not an alarm, and paste its
+URL in. The API pings once at boot and then on the interval; unset, **no timer is created at all**.
+
+Treat that URL as a credential: anyone holding it can suppress the alarm. It is never logged.
+
+> **Nothing is watching this yet.** It ships built and dormant by choice (2026-08-09) so wiring a
+> receiver is a compose edit rather than a release. Until you create the check,
+> `docs/TECH_DEBT.md` #100's operator half stays **open** — the code existing does not close it,
+> because a signal nobody receives is the failure that entry records in the first place.
+
+### Retiring the cron
+
+**Remove the cron line only after you have watched the new path alert on this host.** Not after the
+release notes say it shipped, and not after the tests pass — the code has passed unit tests, an API
+end-to-end suite and a real migration, and none of that is evidence that _this_ host's outbound
+network lets _this_ container reach _your_ receiver. That is the one thing the cron was covering and
+the one thing no test in the repository can establish.
+
+The trap is the word "watched". A relay does not break to a schedule, so waiting for a genuine
+failure means the cron is retired either never or on a day nobody is paying attention. **Cause one
+instead**, which takes about two minutes and is fully reversible:
+
+1. Set `MAIL_ALERT_URL` and `HEARTBEAT_URL` as above and recreate the API container. Confirm the
+   heartbeat first — the dead-man's-switch check should go green within one interval. That proves
+   outbound POSTs leave this container at all, which is the shared prerequisite; if it fails, the
+   mail alert was never going to work either and you have learned it without breaking mail.
+2. Point `MAIL_SMTP_URL` at a port with nothing on it — `smtp://127.0.0.1:1` is enough — and
+   recreate. Sends now fail at connect, immediately, with no message going anywhere by accident.
+3. Trigger one send: request a password reset for a throwaway address on your own installation.
+4. Watch your receiver. You should get one alert naming the count, the window and the kind of
+   message. Then open `/staff` and confirm the failure is in the Mail panel with an error class —
+   that is the durable half, and it proves the row was written as well as the alert sent.
+5. Restore the real `MAIL_SMTP_URL`, recreate, and send one more reset to confirm mail works again.
+   **Do this before step 6** — a half-finished retirement that leaves mail pointed at nothing is
+   strictly worse than the cron you were removing.
+6. Now remove the cron line, and delete `scripts/watch-mail-failures.sh` from the host.
+
+If step 4 produces nothing, the cron stays. The script is not elegant, but it is the alerting you
+actually have until something replaces it, and removing it on the strength of a merged pull request
+is how an installation ends up with no alerting at all and no one aware of it.
+
+## The staff console
+
+SchedulePoint staff operate the **installation** — mail health, Content-Security-Policy reports,
+what this installation is running, which accounts cannot verify, and what staff themselves have
+done. They reach **no customer data at all**: `StaffPrincipal` carries no memberships and no
+permissions, so a staff request reaching a member service is a compile error rather than a check
+somebody has to remember (ADR-0086). The console is at `/staff`; nothing links to it.
+
+```yaml
+api:
+  environment:
+    STAFF_EMAILS: ops@schedulepoint.example,second@schedulepoint.example
+```
+
+Empty — the default — means **nobody**. An allowlisted address must also have a **verified email**,
+unconditionally and regardless of `AUTH_REQUIRE_EMAIL_VERIFICATION`: without that, an allowlisted
+address that has never signed up is squattable, and whoever registers it first becomes staff.
+
+**A malformed entry fails the boot**, loudly, rather than being ignored. That is deliberate: a typo
+here fails _closed_ — nobody becomes staff, the console 404s for the person it was configured for,
+and every diagnostic points at the guard rather than at this line. Spacing is tolerated
+(`' a@b.test , c@d.test '` is fine); a missing `@`, a semicolon separator or a display name is not.
+
+Provisioning is deliberately out-of-band. Changing this needs host access and a container recreate —
+the same bar as reading the database, which is the point: it creates no new privilege path, because
+anyone who could edit it could already do everything the console offers, unaudited, over `psql`.
+
+**A dedicated staff account is recommended, not required.** Dual-hatting — one address that is both
+allowlisted and an organisation member — is permitted, because refusing it would lock the only staff
+member out on day one, and because staff-ness confers nothing inside any organisation by
+construction. At boot the API logs `event: 'staff.allowlist_resolved'` with counts (never
+addresses): how many entries have no account, how many are unverified, and how many are dual-hatted.
+Watch that line after changing the list — an entry with no account is usually a typo.
+
+Every staff request is **audited, including reads**, because on this surface the read is the
+privileged act. The row records that a panel was reached, never what was on it.
+
+**So is every refusal.** An authenticated caller who is not staff — a member, an Org Admin, an
+allowlisted address that has not verified — gets the same 404 an unmapped route gives, and leaves a
+`staff.access_denied` row naming them. The row never says _which_ condition failed, because that
+difference is what the uniform 404 exists to withhold. Those rows appear in the console's own Staff
+activity panel, which is where you would notice somebody probing.
 
 ## Pre-release checklist
 
