@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
- * the real `PlanDetailScreen` with both `CANVAS_WORKSPACE_ENABLED` and `CANVAS_TOOLBAR_ENABLED`
- * forced on. Proves the flag routes to the toolbar layout: the two command rows (Look / Do), a
+ * the real `PlanDetailScreen` with `CANVAS_WORKSPACE_ENABLED` forced on. (It forced
+ * `CANVAS_TOOLBAR_ENABLED` too until ADR-0088 D3 retired that flag — the toolbar layout is now the
+ * only one, so there is nothing to route between.) Proves the layout renders: the two command rows (Look / Do), a
  * full-height chromeless canvas, the activities panel collapsed by default, and the plan actions
  * reachable inline on Row 2. The canvas + heavy children are stubbed (jsdom has no Canvas 2D).
  */
@@ -28,7 +29,6 @@ const h = vi.hoisted<{
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_WORKSPACE_ENABLED: true,
-  CANVAS_TOOLBAR_ENABLED: true,
   // This suite asserts the ADR-0031 toolbar *layout*, not authoring; pin the (now default-on)
   // authoring flag off so the plain Add toggle + inert empty canvas are the subject. Authoring is
   // covered by the tsld-toolbar-authoring / TsldPanel.authoring suites + the flag-on e2e journey.
@@ -338,9 +338,10 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
   });
 
   /**
-   * **This host is the one that ships** (`plan-workspace.tsx:70` selects it whenever
-   * `CANVAS_TOOLBAR_ENABLED`, which is default-on), and it was passing three fewer props to
-   * `TsldPanel` than the legacy layout beside it — `docs/TECH_DEBT.md` #103.
+   * **This host is the one that ships** — at the time, `plan-workspace.tsx` selected it whenever
+   * `CANVAS_TOOLBAR_ENABLED` (default-on); since ADR-0088 D3 retired that flag it is the only host
+   * there is. It was passing three fewer props to `TsldPanel` than the legacy layout beside it —
+   * `docs/TECH_DEBT.md` #103.
    *
    * Each absence disabled a mechanism silently, on the surface every planner uses:
    *

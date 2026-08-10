@@ -4,9 +4,13 @@ import { expect, test } from '@playwright/test';
 import { addActivity, onboard, openNewPlan, startEditing } from './support';
 
 /**
- * Flag-ON **canvas-maximal, toolbar-hosted workspace** journey (`VITE_CANVAS_TOOLBAR`, ADR-0031
- * two-row amendment) — the layer above ADR-0030's canvas-first workspace. Proves the toolbar layout
- * runs end-to-end in a real browser: opening a plan mounts a one-line header + **two** command
+ * The **canvas-maximal, toolbar-hosted workspace** journey (ADR-0031 two-row amendment).
+ *
+ * **No longer flag-on: it is the only plan workspace there is.** `VITE_CANVAS_TOOLBAR` selected this
+ * layout or ADR-0030's, and ADR-0088 D3 retired the flag and deleted the alternative — so this
+ * suite now drives the surface every planner gets, unconditionally.
+ *
+ * Proves the toolbar layout runs end-to-end in a real browser: opening a plan mounts a one-line header + **two** command
  * `role="toolbar"` rows (Look / Do) over a **chromeless, full-height canvas**, with the activities
  * panel **collapsed by default**. Every former chrome band is inline on the two rows (plan actions as
  * icon buttons on Row 2, display toggles in the `View▾` popover) and each row is a roving-tabindex APG

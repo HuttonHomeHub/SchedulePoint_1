@@ -128,8 +128,11 @@ export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
 /**
  * Canvas-first plan workspace (ADR-0030, spec `docs/specs/canvas-first-plan-workspace.md`).
  * **ON by default** now that the M5 quality gates are green — the a11y/ux/perf review findings
- * are folded in, the flag-on Playwright journey (`e2e-workspace/workspace.spec.ts` via
- * `pnpm --filter @repo/web test:e2e:workspace`) is wired into CI, and the 538 unit tests pass.
+ * are folded in, a flag-on Playwright journey is wired into CI, and the 538 unit tests pass.
+ * That journey was `e2e-workspace/workspace.spec.ts` (`test:e2e:workspace`) until ADR-0088 D3
+ * deleted it with `VITE_CANVAS_TOOLBAR`; the workspace-ON surface is now driven by every other
+ * flag-on harness — 14 configs pin `VITE_CANVAS_WORKSPACE: 'true'`, `playwright.toolbar.config.ts`
+ * foremost, and the splitter assertion unique to the old suite was ported into `e2e-toolbar`.
  * When on, opening a plan renders the TSLD canvas as the primary workspace surface (filling the
  * shell's workspace region) with the activity table as a draggable, collapsible bottom panel.
  * Set `VITE_CANVAS_WORKSPACE=false` to fall back to the legacy long stacked plan-detail page,

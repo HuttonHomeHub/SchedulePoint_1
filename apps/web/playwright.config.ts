@@ -59,8 +59,11 @@ export default defineConfig({
             // surface has its own harness, playwright.edit.config.ts (test:e2e:edit).
             // VITE_CANVAS_WORKSPACE is likewise pinned OFF here so these plan-surface
             // journeys keep exercising the legacy stacked plan-detail page (the flag-off
-            // fallback); the canvas-first workspace (now default ON, ADR-0030) has its
-            // own harness, playwright.workspace.config.ts (test:e2e:workspace).
+            // fallback). The workspace-ON surface is covered by every other flag-on
+            // harness — 14 of them pin VITE_CANVAS_WORKSPACE: 'true', playwright.toolbar
+            // .config.ts foremost. This comment named playwright.workspace.config.ts
+            // until ADR-0088 D3 deleted it with VITE_CANVAS_TOOLBAR; the coverage moved,
+            // so the pointer had to as well.
             env: {
               VITE_TSLD_EDITING: 'false',
               VITE_PLAN_EDIT_LOCK: 'false',

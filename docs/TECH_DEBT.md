@@ -1384,6 +1384,11 @@ passes. It is passed into `TsldPanel` from **one** host:
 - `components/layout/workspace/plan-workspace-toolbar.tsx` — passes **neither**. This is the default
   surface (`VITE_CANVAS_TOOLBAR` has been default-on since ADR-0031's enablement).
 
+> _Both citations above are historical as of 2026-08-10._ ADR-0088 D3 retired `VITE_CANVAS_TOOLBAR`
+> and **deleted** the ADR-0030 host, so `plan-workspace.tsx` is now a 24-line re-export and the
+> toolbar host is the only one. The row is kept as written because it records how the defect was
+> found; what it describes as "the surface every planner actually uses" is now the only surface.
+
 So on the surface every planner actually uses, `recalcHold` is `undefined`, `TsldPanel`'s
 `recalcHoldRef.current?.hold(...)` is a no-op, and a two-click link pick takes no hold at all. The
 feature is not broken in the sense of throwing — it is inert, which is the shape ADR-0064 §7 itself

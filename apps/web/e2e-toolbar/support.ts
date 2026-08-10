@@ -1,8 +1,9 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **canvas-maximal toolbar** suite (`VITE_CANVAS_TOOLBAR`,
- * ADR-0031, two-row amendment). Same hierarchy-driving approach as the other flag-on suites; they
+ * Journey helpers for the **canvas-maximal toolbar** suite (ADR-0031, two-row amendment) — no
+ * longer flag-on, since ADR-0088 D3 retired `VITE_CANVAS_TOOLBAR` and deleted the layout it
+ * selected. Same hierarchy-driving approach as the other flag-on suites; they
  * differ only where the toolbar layout re-homes chrome: the plan actions are inline icon buttons on
  * Row 2 · Do (not a header menu or `⋯` overflow), and the activities panel is collapsed by default
  * (expand it to reach its table).
