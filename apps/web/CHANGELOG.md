@@ -1,5 +1,16 @@
 # @repo/web
 
+## 0.82.2
+
+### Patch Changes
+
+- [#286](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/286) [`9e37a3f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9e37a3f4404a509bf1deef08d8957949f1c24e97) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Retire `VITE_CALENDAR_SHIFT_EDITOR` and `VITE_LIBRARY_SCOPING`, deleting the weekday-checkbox
+  calendar form and the raw-`<select>` library pickers they selected (ADR-0088 D3). Class A
+  alternative surfaces go 4 → 2.
+
+  No user-visible change: both flags were compiled on in every published image and unreachable by any
+  build path, so nothing could select the deleted branches.
+
 ## 0.82.1
 
 ### Patch Changes
