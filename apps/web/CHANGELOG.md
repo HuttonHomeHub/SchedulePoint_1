@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.82.1
+
+### Patch Changes
+
+- [#284](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/284) [`823b4a9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/823b4a9e9c0dcce2acf8d4b77369980dd395c1a0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Retire `VITE_CANVAS_TOOLBAR` and delete the alternative plan-workspace layout it selected
+  (ADR-0088 D3). No user-visible change: the flag was compiled on and unreachable by any build path,
+  so the deleted branch could not be selected by anybody.
+
 ## 0.82.0
 
 ### Minor Changes
