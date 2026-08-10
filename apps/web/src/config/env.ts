@@ -140,23 +140,6 @@ export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
 export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_WORKSPACE);
 
 /**
- * Canvas-maximal chrome reclaim + the future-proof Toolbar architecture (ADR-0031, spec
- * `docs/specs/canvas-toolbar-architecture.md`). **ON by default** (2026-07-13) now that the M5
- * quality gates are green — the a11y (3 WCAG 2.2 AA blockers), ux, perf and component review
- * findings are folded in, the flag-on Playwright journey (`e2e-toolbar/toolbar.spec.ts` via
- * `pnpm --filter @repo/web test:e2e:toolbar`) is wired into CI, and the 597 unit tests pass. When
- * on, the plan workspace collapses the ADR-0030 stacked chrome bands into a slim header + a single
- * registry-driven `Toolbar` row over a full-height canvas (activities panel collapsed by default,
- * Diagram/Activities pane switch below `md`), moving secondary info into `View`/`Summary`/`Legend`
- * popovers and the `⋯` overflow. Layers on {@link CANVAS_WORKSPACE_ENABLED} (ADR-0030) — meaningful
- * only when the canvas-first workspace is on. Set `VITE_CANVAS_TOOLBAR=false` to fall back to the
- * ADR-0030 workspace, byte-for-byte (emergency rollback / opt-out). Remaining fast-follows: TECH_DEBT #31.
- *
- * @enabled 2026-07-13
- */
-export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TOOLBAR);
-
-/**
  * Canvas-first plan authoring (ADR-0032, spec `docs/specs/canvas-first-authoring.md`). **ON by
  * default** now that M1–M5 shipped and their quality gates are green — the a11y/ux/component/perf
  * review findings are folded in, the flag-on Playwright journey (`e2e-authoring/authoring.spec.ts`
@@ -172,15 +155,15 @@ export const CANVAS_TOOLBAR_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_
  * toolbar-hosted, canvas-first workspace — the Add/Link/start-date controls live in that `Toolbar`,
  * and authoring **suppresses the edge-drag link gesture**. If authoring were on while the toolbar or
  * workspace were off, edge-drag would be gone with no Link tool to replace it — a dead end for
- * on-canvas dependency creation (a11y review). So this flag is gated on both host flags: turning
- * either host off turns authoring off too (and edge-drag returns, byte-for-byte).
+ * on-canvas dependency creation (a11y review). So this flag is gated on its surviving host:
+ * turning the workspace off turns authoring off too (and edge-drag returns, byte-for-byte). It was
+ * gated on the toolbar flag as well until ADR-0088 D3 retired that one — a retired parent simply
+ * drops its conjunct, because nobody can turn off what no longer exists (ADR-0084 D4).
  *
  * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
 export const CANVAS_AUTHORING_ENABLED =
-  flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING) &&
-  CANVAS_TOOLBAR_ENABLED &&
-  CANVAS_WORKSPACE_ENABLED;
+  flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING) && CANVAS_WORKSPACE_ENABLED;
 
 /**
  * Scheduling modes & a de-overloaded plan start (ADR-0033, spec

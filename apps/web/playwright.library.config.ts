@@ -65,7 +65,6 @@ export default defineConfig({
               VITE_LIBRARY_SCOPING: 'true',
               VITE_RESOURCES: 'true',
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_CANVAS_TOOLBAR: 'true',
               VITE_CANVAS_WORKSPACE: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',

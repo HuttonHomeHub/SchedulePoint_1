@@ -90,6 +90,21 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(collapse).toBeFocused();
   await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
 
+  // The panel is a real WAI-ARIA window splitter: keyboard-resizable, and resizing keeps the canvas
+  // mounted (no jump / remount — the split just re-proportions).
+  //
+  // **Ported from `e2e-workspace/workspace.spec.ts`, which was deleted with `VITE_CANVAS_TOOLBAR`**
+  // (ADR-0088 D3). That suite drove the ADR-0030 layout the flag's off-branch selected, and almost
+  // everything it proved is proved here for the layout that ships — except this. The test review
+  // caught the gap and asked for the assertion to be ported rather than lost silently, which is the
+  // difference between deleting a redundant suite and deleting coverage.
+  const resizer = page.getByRole('separator', { name: 'Resize activities panel' });
+  await resizer.focus();
+  const before = await resizer.getAttribute('aria-valuenow');
+  await page.keyboard.press('ArrowDown'); // shrink one step — reliably below the default, above min
+  await expect(resizer).not.toHaveAttribute('aria-valuenow', before ?? '');
+  await expect(diagram.getByRole('option')).toHaveCount(2);
+
   // Row 1 is one roving-tabindex APG widget: arrows move focus between controls. Drive it from the
   // pinned View trigger (a stable, never-demoted target) — ArrowRight moves focus off it.
   const viewTrigger = lookRow.getByRole('button', { name: 'View', exact: true });

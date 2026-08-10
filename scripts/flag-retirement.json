@@ -62,6 +62,11 @@
       "enabledSource": "docblock",
       "retired": "2026-08-09",
       "batch": "batch-1"
+    },
+    {
+      "flag": "VITE_CANVAS_TOOLBAR",
+      "retiredOn": "2026-08-10",
+      "note": "ADR-0088 D3, the first retirement on MERIT rather than on a date. Its flag-off branch was `Adr0030PlanWorkspace`, a ~257-line second implementation of the plan surface that no shipped bundle could select and that ADR-0080 had already attributed a user-facing defect to. `plan-workspace.tsx` goes 334 lines to 24. The flag-off parity suite (plan-workspace.test.tsx) and the flag-off harness (playwright.workspace.config.ts + e2e-workspace/) are deleted with their subject (ADR-0084 D5); the splitter assertion only that harness carried was PORTED to e2e-toolbar/toolbar.spec.ts, and plan-detail.gating.test.tsx was RE-HOSTED onto the surviving layout rather than deleted \u2014 it was pen-gating coverage that merely happened to live there."
     }
   ],
   "flags": {
@@ -180,9 +185,10 @@
       "enabled": "2026-08-03",
       "enabledSource": "floor",
       "batch": "batch-13",
-      "derivedFrom": "CANVAS_TOOLBAR_ENABLED",
+      "derivedFrom": "CANVAS_WORKSPACE_ENABLED",
       "class": "B",
-      "keep": "Guard-only: one line of production code, so there is no second product to maintain. ADR-0088 D4."
+      "keep": "Guard-only: one line of production code, so there is no second product to maintain. ADR-0088 D4.",
+      "note": "Was derived from CANVAS_TOOLBAR_ENABLED as well until ADR-0088 D3 retired that flag. A retired parent drops its conjunct (ADR-0084 D4): nobody can turn off what no longer exists."
     },
     "VITE_CANVAS_AUTHORING_FLOW": {
       "constant": "CANVAS_AUTHORING_FLOW_ENABLED",
@@ -272,14 +278,6 @@
       "batch": "batch-9",
       "class": "B",
       "keep": "Guard-only: one line of production code, so there is no second product to maintain. ADR-0088 D4."
-    },
-    "VITE_CANVAS_TOOLBAR": {
-      "constant": "CANVAS_TOOLBAR_ENABLED",
-      "enabled": "2026-07-13",
-      "enabledSource": "docblock",
-      "batch": "batch-2",
-      "note": "Moved out of batch-1 on 2026-08-09, with the reason recorded rather than the date quietly slipped. This flag is not an `if`: flag-off selects `Adr0030PlanWorkspace`, a ~270-line alternative layout with two suites of its own, and retiring it is a deletion slice rather than a line change. ADR-0080 \u00a7\"the flag-on journey\" records that layout causing a SHIPPED defect \u2014 `bulk` was wired into it and not into the layout the flag actually selects. PULLED FORWARD from batch-4 to batch-2 by the product owner on 2026-08-09, on exactly that evidence: it is the only flag in the register whose flag-off branch has a user-facing defect attributed to it, which makes it the estate's highest-risk second product rather than merely its largest.",
-      "class": "A"
     },
     "VITE_CANVAS_VISUAL_LANGUAGE": {
       "constant": "CANVAS_VISUAL_LANGUAGE_ENABLED",
@@ -528,10 +526,9 @@
   "classA": {
     "VITE_ACTIVITY_EDITOR_TABS": "Selects <ActivityEditorDialog> or the legacy ActivityFormDialog/Progress/Steps trio. Arguably the worst case in the estate: at least nine unrelated features have had to add a case to BOTH to keep them byte-identical. Missed by the ADR author AND the architecture review; found by the test review reading the code.",
     "VITE_CALENDAR_SHIFT_EDITOR": "Selects <WeeklyShiftEditor> + the hours-per-day section, or the legacy weekday checkboxes \u2014 two implementations of \"author a working week\" (ADR-0067).",
-    "VITE_CANVAS_TOOLBAR": "Selects <ToolbarPlanWorkspace> or <Adr0030PlanWorkspace> \u2014 a ~257-line alternative plan surface. The only flag whose off-branch has a SHIPPED user-facing defect attributed to it (ADR-0080 wired `bulk` into one host and not the layout this flag selects). Retires first under ADR-0088 D3.",
     "VITE_CANVAS_WORKSPACE": "Selects <PlanWorkspace> or <LegacyPlanLayout>, the pre-ADR-0030 stacked plan-detail page. Harnessed by seven configs \u2014 the largest conversion cost in the estate, and the register carried NO note for it until ADR-0088 D5.",
     "VITE_LIBRARY_SCOPING": "Selects <Combobox> or <Select> in FOUR pickers (activity calendar, plan calendar, activity resources, resource form). One drift risk repeated four times (ADR-0053 M6)."
   },
-  "classACap": 5,
+  "classACap": 4,
   "$classA-note": "ADR-0088 D2/D3. Authoritative \u2014 `scripts/detect-alternative-surfaces.mjs` is a TRIPWIRE that asserts `detected subset-of classA`, never the converse, because it can only under-detect (a flag branching by early return, by `const B = FLAG ? X : Y`, or through an indirection is invisible to it and is legitimately curated by hand). `classACap` is the MEASURED count and ratchets DOWN after each retirement; raising it needs an ADR."
 }
