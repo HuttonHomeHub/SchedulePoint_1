@@ -26,7 +26,9 @@ function contextFor(request: Partial<StaffRequest & AuthenticatedRequest>): Exec
   // request object without them is a shape Express never produces.
   // Assigned onto the caller's own object rather than a copy — the guard's success path attaches
   // `staff` to the request, and a spread would leave those assertions inspecting a different object.
-  Object.assign(request, { headers: {}, socket: {} });
+  // `url` defaults to a PANEL route: the identity probe is deliberately excluded from the denial
+  // audit, so a test that silently ran against `/staff/me` would assert the opposite of its name.
+  Object.assign(request, { headers: {}, socket: {}, url: '/api/v1/staff/health', ...request });
   return {
     switchToHttp: () => ({ getRequest: () => request }),
   } as unknown as ExecutionContext;
@@ -207,5 +209,20 @@ describe('StaffGuard', () => {
     await expect(guard.canActivate(contextFor({ principal: principal() }))).rejects.toThrow(
       NotFoundError,
     );
+  });
+
+  it('does not audit a refusal of the identity probe', async () => {
+    // `/staff/me` is asked by the APP, for every reader, to decide whether to offer a menu item —
+    // so a 404 there is the expected answer and not evidence. Auditing it would write a row every
+    // time an ordinary member opened their account menu, into a table that refuses DELETE, burying
+    // the refusals that do mean something. Found by the flag-on journey, which recorded two
+    // denials for a member who had done nothing but sign in and open a menu.
+    const { guard, recordBestEffort } = build({ user: null });
+    const request: Partial<StaffRequest & AuthenticatedRequest> = { principal: principal() };
+    Object.assign(request, { url: '/api/v1/staff/me' });
+
+    await guard.canActivate(contextFor(request)).catch(() => undefined);
+
+    expect(recordBestEffort).not.toHaveBeenCalled();
   });
 });

@@ -31,9 +31,23 @@ export const staffIdentityKey = ['staff', 'me'] as const;
  * throwing. Any other failure still throws, because "the API is unreachable" and "you are not
  * staff" are different facts and collapsing them would hide an outage behind a shrug.
  */
-export function useStaffIdentity(): UseQueryResult<StaffIdentity | null> {
+export function useStaffIdentity(
+  options: { enabled?: boolean } = {},
+): UseQueryResult<StaffIdentity | null> {
   return useQuery({
     queryKey: staffIdentityKey,
+    // **Deferrable, because one caller pays for everybody.** The console itself always asks; the
+    // account menu asks only when it is OPENED. Two reasons, and the second is the load-bearing
+    // one. A probe on every page load would be a request for every signed-in user in the product
+    // to answer a question about one of them — and, because `GET /staff/me` is audited by design
+    // (ADR-0086 D5, no staff route may be unaudited), it would also write a `staff.session_started`
+    // row every time a staff member opened a tab. That row would still be TRUE, but it would
+    // change what the Staff activity panel means: a reader looking for "who went to the console"
+    // would find a list dominated by "somebody loaded the app". Deferring keeps the row's sense.
+    //
+    // `staleTime: Infinity` means the deferral costs one moment on the first open of a session and
+    // nothing on any open after it.
+    enabled: options.enabled ?? true,
     queryFn: async (): Promise<StaffIdentity | null> => {
       try {
         return await apiFetch<StaffIdentity>('/staff/me');

@@ -17,11 +17,20 @@ const h = vi.hoisted(() => ({
   navigate: vi.fn(),
   signOutMutate: vi.fn(),
   isPending: false,
+  /** `null` is the answer for almost everybody — the guard 404s every non-staff caller. */
+  staff: null as { userId: string; email: string; dualHatted: boolean } | null,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useNavigate: () => h.navigate,
+}));
+
+// Mocked rather than wrapped in a QueryClientProvider: this file is about the chip, and a real
+// query would make every assertion here wait on a fetch that has nothing to do with it. The two
+// branches that matter get their own tests below.
+vi.mock('@/features/staff/api/staff-identity', () => ({
+  useStaffIdentity: () => ({ data: h.staff }),
 }));
 
 vi.mock('@/features/auth', () => ({
@@ -41,6 +50,7 @@ beforeEach(() => {
   h.navigate.mockReset();
   h.signOutMutate.mockReset();
   h.isPending = false;
+  h.staff = null;
   window.localStorage.clear();
   document.documentElement.className = '';
   Object.defineProperty(window, 'matchMedia', {
@@ -120,5 +130,30 @@ describe('AccountChip', () => {
     fireEvent.click(item);
     // A second press mid-request would fire a duplicate sign-out.
     expect(h.signOutMutate).not.toHaveBeenCalled();
+  });
+
+  it('offers the staff console only to staff, from runtime evidence', async () => {
+    // The gate is a `GET /staff/me` that answered 200 — never a `VITE_` constant, because
+    // staff-ness is a server fact the bundle cannot see (ADR-0074's rule, ADR-0086's case).
+    h.staff = { userId: 'u1', email: 'ops@schedulepoint.test', dualHatted: true };
+    renderChip();
+    fireEvent.click(screen.getByRole('button', { name: /account/i }));
+
+    const item = await screen.findByRole('menuitem', { name: /staff console/i });
+    fireEvent.click(item);
+
+    expect(h.navigate).toHaveBeenCalledWith({ to: '/staff' });
+  });
+
+  it('shows nothing at all to everybody else — not a shaded item', async () => {
+    // A disabled "Staff console" would tell a reader the surface exists and that they are not
+    // allowed near it, which is precisely the oracle the API's uniform 404 refuses to be. This is
+    // the ADR-0082 "omit, do not shade" case: the action does not apply to this reader at all.
+    h.staff = null;
+    renderChip();
+    fireEvent.click(screen.getByRole('button', { name: /account/i }));
+
+    await screen.findByRole('menu');
+    expect(screen.queryByText(/staff/i)).not.toBeInTheDocument();
   });
 });

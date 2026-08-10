@@ -8,12 +8,14 @@ import {
   ScrollText,
   Sun,
   UserCog,
+  Wrench,
 } from 'lucide-react';
 import { useId } from 'react';
 
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import { ACCOUNT_SETTINGS_ENABLED, AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
+import { useStaffIdentity } from '@/features/staff/api/staff-identity';
 import { useTheme, type Theme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +57,8 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  // Asked only while the menu is open — see the hook for why the deferral is not an optimisation.
+  const staff = useStaffIdentity({ enabled: open });
   const themeLabelId = useId();
 
   const email = session?.user?.email;
@@ -128,6 +132,32 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
           >
             <ScrollText aria-hidden="true" className="size-4" />
             My activity
+          </MenuItem>
+        ) : null}
+        {/* **The staff console, for the one person in the installation who has one.**
+            Shown from RUNTIME EVIDENCE — a `GET /staff/me` that answered 200 — and never from a
+            `VITE_` constant, which is ADR-0074's rule applied to its natural case: staff-ness is a
+            server fact read from `STAFF_EMAILS`, invisible to the bundle and changed by an
+            operator without a release. A build-time flag would be worse than none, granting the
+            link to everybody on one mistake and hiding it from the only staff member on the other.
+
+            It is also not an oracle. A non-staff caller's `/staff/me` is the same 404 an unmapped
+            route gives, so `data` is `null` and this renders nothing — indistinguishable from a
+            product that has no staff console at all, which is the point.
+
+            Added because the console shipped reachable only by typing `/staff`, and the product
+            owner met exactly that: deployed, working, and invisible. ADR-0086 declined a link in
+            the ORGANISATION nav — that shell is org-scoped and the console deliberately is not —
+            but this menu is the account's own, which is the right home for a surface that follows
+            the person rather than the organisation. */}
+        {staff.data ? (
+          <MenuItem
+            onSelect={() => {
+              void navigate({ to: '/staff' });
+            }}
+          >
+            <Wrench aria-hidden="true" className="size-4" />
+            Staff console
           </MenuItem>
         ) : null}
         <p className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium" id={themeLabelId}>

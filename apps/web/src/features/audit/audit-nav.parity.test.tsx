@@ -15,6 +15,13 @@ import { ThemeProvider } from '@/hooks/use-theme';
  * The nav entry is a courtesy, never the control — the API answers 403 whether or not it renders,
  * which is why this file pins visibility and the API e2e pins authorisation.
  */
+// The account chip now asks whether the reader is staff (ADR-0086). Stubbed to "no" — the answer
+// for almost everybody — so these tests stay about what they are about, and so no real fetch
+// escapes into jsdom. `account-chip.test.tsx` owns both branches of that gate.
+vi.mock('@/features/staff/api/staff-identity', () => ({
+  useStaffIdentity: () => ({ data: null }),
+}));
+
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme' }),

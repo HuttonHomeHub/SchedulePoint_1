@@ -756,7 +756,11 @@ SchedulePoint staff operate the **installation** — mail health, Content-Securi
 what this installation is running, which accounts cannot verify, and what staff themselves have
 done. They reach **no customer data at all**: `StaffPrincipal` carries no memberships and no
 permissions, so a staff request reaching a member service is a compile error rather than a check
-somebody has to remember (ADR-0086). The console is at `/staff`; nothing links to it.
+somebody has to remember (ADR-0086). The console is at `/staff`, and a **Staff console** item
+appears in the account menu for allowlisted, verified accounts only — everybody else sees no such
+item, which is indistinguishable from a product that has no console. If you have just added
+yourself to `STAFF_EMAILS`, the menu item appears after the next sign-in; the direct URL works
+immediately.
 
 ```yaml
 api:

@@ -13,6 +13,25 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
 /**
+ * The identity probe — `GET /api/v1/staff/me` — whose **refusal is not evidence**.
+ *
+ * Every other staff route is asked by somebody who already knows the console exists. This one is
+ * asked by the app itself, on the reader's behalf, to decide whether to offer a menu item; a 404 is
+ * the expected answer for essentially every caller in the installation. Recording it would write a
+ * `staff.access_denied` row every time an ordinary member opened their account menu — into a table
+ * that refuses `DELETE` and has no retention sweep — and would bury the rows that DO mean something
+ * (somebody who knows the panel URLs, trying them) under a pile that means nothing.
+ *
+ * Found by the flag-on journey, which recorded two denials for a member who had done nothing but
+ * sign in and open a menu. The narrower rule is the honest one: a refusal on a **panel** route is a
+ * probe worth keeping; a refusal on the question "am I staff?" is the answer to a question the
+ * product asked itself.
+ */
+function isIdentityProbe(url: string | undefined): boolean {
+  return (url ?? '').split('?')[0]?.endsWith('/staff/me') ?? false;
+}
+
+/**
  * Resolves an authenticated session to a {@link StaffPrincipal}, for routes under
  * `/api/v1/staff/` (ADR-0086 D3).
  *
@@ -44,7 +63,7 @@ import { AuditService } from '../audit/audit.service';
  * is what makes that safe rather than a convention — a staff service takes `StaffPrincipal` and a
  * member service takes `Principal`, and neither is assignable to the other.
  *
- * **Every refusal by an authenticated caller writes `staff.access_denied`.** This shipped as
+ * **A refusal on a PANEL route writes `staff.access_denied`.** This shipped as
  * silence, contradicting the approved spec in five places; the security review found it. The
  * argument then offered against it — that a denial log becomes an inventory of who tried — is
  * answerable and was answering the wrong question: an inventory of who tried to reach the most
@@ -65,7 +84,9 @@ import { AuditService } from '../audit/audit.service';
  *
  * The volume is bounded by the controller's 30/60 s throttle and by nothing else — `audit_events`
  * refuses DELETE, so an authenticated member can add rows that cannot be removed until the
- * retention sweep exists (`docs/TECH_DEBT.md`). That is stated rather than discovered.
+ * retention sweep exists (`docs/TECH_DEBT.md`). That is stated rather than discovered, and it is
+ * why {@link isIdentityProbe} exists: the one route the app itself calls for every reader is
+ * excluded, so ordinary use cannot fill the table.
  */
 @Injectable()
 export class StaffGuard implements CanActivate {
@@ -80,6 +101,8 @@ export class StaffGuard implements CanActivate {
       .switchToHttp()
       .getRequest<StaffRequest & AuthenticatedRequest & RequestContextSource>();
     const principal = request.principal;
+    // See {@link isIdentityProbe} — a refusal there is the expected answer, not evidence.
+    const audit = !isIdentityProbe(request.url);
 
     // No session at all. **Unreachable in the wired app**, and the earlier comment here overstated
     // what it buys: the global `AuthenticationGuard` runs first and answers an anonymous caller
@@ -91,7 +114,8 @@ export class StaffGuard implements CanActivate {
     if (!principal) throw this.notFound();
 
     const allowlist = this.config.staffEmails;
-    if (allowlist.length === 0) throw await this.deny(request, principal.userId, principal.email);
+    if (allowlist.length === 0)
+      throw await this.deny(request, principal.userId, principal.email, audit);
 
     // Read the address from the DATABASE, not from the session's cached profile: `principal.email`
     // is carried as best-effort display data and its own docblock says never to use it as an
@@ -100,13 +124,13 @@ export class StaffGuard implements CanActivate {
       where: { id: principal.userId },
       select: { id: true, email: true, emailVerified: true },
     });
-    if (!user) throw await this.deny(request, principal.userId, principal.email);
+    if (!user) throw await this.deny(request, principal.userId, principal.email, audit);
 
     const email = normalizeEmail(user.email);
-    if (!allowlist.includes(email)) throw await this.deny(request, user.id, user.email);
+    if (!allowlist.includes(email)) throw await this.deny(request, user.id, user.email, audit);
 
     // The control that makes an address-keyed allowlist safe — see the class docblock.
-    if (!user.emailVerified) throw await this.deny(request, user.id, user.email);
+    if (!user.emailVerified) throw await this.deny(request, user.id, user.email, audit);
 
     request.staff = new StaffPrincipal(user.id, email);
     return true;
@@ -123,7 +147,9 @@ export class StaffGuard implements CanActivate {
     request: RequestContextSource,
     userId: string,
     label: string | undefined,
+    record: boolean,
   ): Promise<NotFoundError> {
+    if (!record) return this.notFound();
     await this.audit
       .recordBestEffort({
         action: 'staff.access_denied',
