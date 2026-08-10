@@ -54,7 +54,11 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     // target, so ANY dependency row left in the shared local database — by a sibling spec, or by a
     // Playwright journey run against the same `app_test` — makes this `deleteMany` a foreign-key
     // violation, and every one of this file's tests then fails in `beforeEach` with an error that
-    // names a table the spec never touches. The sibling specs already sweep in this order.
+    // names a table the spec never touches.
+    //
+    // "The sibling specs already sweep in this order" is what this comment used to say, and it was
+    // wrong: NINE of them did not, and each passed or failed on the order the files happened to run
+    // in until one new e2e file changed it (`docs/TECH_DEBT.md` #119). They all sweep this way now.
     await prisma.crossPlanDependency.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.activity.deleteMany();

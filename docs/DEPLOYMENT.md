@@ -750,6 +750,45 @@ If step 4 produces nothing, the cron stays. The script is not elegant, but it is
 actually have until something replaces it, and removing it on the strength of a merged pull request
 is how an installation ends up with no alerting at all and no one aware of it.
 
+## Retention — what gets deleted, and when
+
+ADR-0087. Two tables document a period, and until this shipped **nothing enforced either**:
+`csp_reports` (30 days) and `mail_events` (12 months). The API now sweeps them on a timer inside its
+own process — no Redis, no queue, nothing to install.
+
+```yaml
+api:
+  environment:
+    RETENTION_SWEEP_ENABLED: 'true' # the default
+    RETENTION_CSP_REPORTS_DAYS: 30
+    RETENTION_MAIL_EVENTS_DAYS: 365
+    RETENTION_SWEEP_INTERVAL_MINUTES: 60
+```
+
+**It is on by default, unlike the two alerting URLs above**, and the difference is deliberate: those
+need a receiver you have to create, so shipping them armed would point at nothing. A sweep needs
+nothing, and both periods were already decided by an accepted ADR. Rollback is
+`RETENTION_SWEEP_ENABLED=false` and a recreate — which creates **no timer at all**, rather than one
+that deletes nothing.
+
+> **Shortening a period is free. Lengthening it recovers nothing.** Rows deleted under the old value
+> are gone, and no later edit brings them back. This is the one setting in the product where a typo
+> is unrecoverable, which is why the minimum is one day — there is no value here that empties a table
+> on the next tick — and why the effective numbers are logged at boot rather than left to be inferred
+> from what disappears. Watch for `event: 'retention.configured'` after a recreate.
+
+**What it will delete on your host: nothing, for a while.** Both tables were created on 2026-08-09,
+so the first CSP rows become eligible thirty days later and the first mail events in a year. The
+sweep runs and reports `deleted: 0` until then, which is the correct behaviour and worth knowing so
+an empty result does not read as a broken sweep.
+
+**Two things it deliberately does not do.** It never touches `audit_events` — that table refuses
+`DELETE` in the database and ADR-0085 D1 declined to relax it, so **its** documented period stays
+unenforced (`docs/TECH_DEBT.md` #118). And the CSP period bounds **staleness, not data age**:
+`last_seen_at` moves on every repeat, so a violation still being reported never ages out. That is
+intentional — expiring a live finding would remove it from the Security panel, the one screen built
+to show what the policy is blocking now.
+
 ## The staff console
 
 SchedulePoint staff operate the **installation** — mail health, Content-Security-Policy reports,

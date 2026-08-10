@@ -1929,7 +1929,36 @@ rather than a date — build it when unverified accounts on the deployed install
 figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` so the question is
 not reopened from scratch.
 
-## 119. The API e2e suite fails intermittently, and the failure has never been captured
+## 119. The API e2e suite fails intermittently **(DIAGNOSED AND CLOSED 2026-08-10)**
+
+> **It was never intermittent. It was order-dependent, and the order changed whenever a new e2e file
+> was added.**
+>
+> Nine specs — `calendars`, `clients`, `invitations`, `me`, `members`, `organizations`, `plans`,
+> `projects`, `recycle-bin` — began their `beforeEach` with `prisma.plan.deleteMany()` **without
+> first deleting the activities and link rows that reference a plan**. Each therefore passed only
+> when whichever spec ran before it happened to have left the tables empty. `vitest.e2e.config.ts`
+> sets `fileParallelism: false` and every spec shares one database, so "whichever ran before" is
+> decided by the file list — and adding `retention-sweep.e2e-spec.ts` was enough to reshuffle it.
+>
+> The failure then names a table the failing spec never touches
+> (`Foreign key constraint violated on the constraint: activities_plan_id_fkey`), which is why it
+> read as noise: the spec that breaks is not the spec that is wrong. Whole files fail at once —
+> the shape this entry recorded as "a `beforeAll` failure" — because a broken `beforeEach` takes
+> every test in the file with it.
+>
+> **What closed it was capturing the log instead of retrying**, which is the one instruction this
+> entry asked for. The three earlier occurrences were each met with a re-run that passed and
+> destroyed the evidence; the fourth was written to a file first and diagnosed in one read.
+>
+> The correct sweep order was already documented — in `activities.e2e-spec.ts`, whose comment
+> claimed "the sibling specs already sweep in this order". Nine of them did not. That sentence is
+> corrected in the same commit, because a comment asserting an invariant nine files violate is worse
+> than no comment: it is the reason nobody checked.
+
+### Original entry (2026-08-10, before the diagnosis)
+
+## 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
 **Observed 2026-08-10, three times in one session, against `scripts/e2e-local.sh api`.** Each time
 the whole `test/staff.e2e-spec.ts` file failed — all 13 tests including ones the change had not

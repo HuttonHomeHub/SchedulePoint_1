@@ -2,7 +2,9 @@ import { Global, Module } from '@nestjs/common';
 
 import { HeartbeatService } from './heartbeat.service';
 import { OperationalAlertService } from './operational-alert.service';
+import { RetentionStatusStore } from './retention-status.store';
 import { RetentionSweepRunner } from './retention-sweep.runner';
+import { RetentionSweepService } from './retention-sweep.service';
 
 /**
  * Operational signalling: the durable record of a mail failure, and the alert that carries it to
@@ -20,13 +22,20 @@ import { RetentionSweepRunner } from './retention-sweep.runner';
  */
 @Global()
 @Module({
-  // `RetentionSweepRunner` is provided but **nothing calls it** (ADR-0087, M1 ships dark). It is
-  // wired now so the API e2e suite can resolve it from the real container and prove the delete
-  // against a real Postgres before M2 arms a timer that runs it unattended.
-  providers: [OperationalAlertService, HeartbeatService, RetentionSweepRunner],
+  providers: [
+    OperationalAlertService,
+    HeartbeatService,
+    RetentionSweepRunner,
+    RetentionStatusStore,
+    RetentionSweepService,
+  ],
   // `HeartbeatService` is deliberately NOT exported: nothing injects it, it exists for its
   // lifecycle hooks, and exporting it would invite a caller that then has to reason about whether
   // the timer is running — the `MailBootstrapService` precedent.
-  exports: [OperationalAlertService, RetentionSweepRunner],
+  // `RetentionSweepService` is NOT exported, for the reason `HeartbeatService` is not: it owns a
+  // timer, and handing that to another module would let a controller start, stop or re-run the
+  // sweep from a request. The STORE is exported — the staff panel needs what happened, not the
+  // schedule. The runner is exported only so the API e2e suite can drive the delete directly.
+  exports: [OperationalAlertService, RetentionSweepRunner, RetentionStatusStore],
 })
 export class OperationalModule {}

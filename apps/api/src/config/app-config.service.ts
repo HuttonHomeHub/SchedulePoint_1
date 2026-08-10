@@ -73,6 +73,26 @@ export class AppConfigService {
    * `assertHoldsPen` check until this is enabled (once the front end acquires the
    * pen across all editing entry points). See env.validation.ts.
    */
+  /** Whether the retention sweep runs at all (ADR-0087 D5). False creates no timer. */
+  get retentionSweepEnabled(): boolean {
+    return this.config.get('RETENTION_SWEEP_ENABLED', { infer: true });
+  }
+
+  /** Days a CSP report is kept after it was last seen. */
+  get retentionCspReportsDays(): number {
+    return this.config.get('RETENTION_CSP_REPORTS_DAYS', { infer: true });
+  }
+
+  /** Days a mail event — and the customer address on it — is kept. */
+  get retentionMailEventsDays(): number {
+    return this.config.get('RETENTION_MAIL_EVENTS_DAYS', { infer: true });
+  }
+
+  /** How often the sweep runs. */
+  get retentionSweepIntervalMinutes(): number {
+    return this.config.get('RETENTION_SWEEP_INTERVAL_MINUTES', { infer: true });
+  }
+
   get planEditLockEnforced(): boolean {
     return this.config.get('PLAN_EDIT_LOCK_ENFORCED', { infer: true });
   }

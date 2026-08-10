@@ -149,6 +149,55 @@ export const envSchema = z
      * across every editing entry point (edit-lock M2/M3). The progress path and
      * reads are never gated regardless of this flag.
      */
+    /**
+     * **Retention (ADR-0087).** Deletes rows past their documented period, on a timer inside this
+     * process. Two tables documented a period for months and nothing enforced either.
+     *
+     * Default **on**, unlike `MAIL_ALERT_URL` and `HEARTBEAT_URL`, and the difference is the point:
+     * those need an external receiver, so shipping them armed would point at nothing, while a sweep
+     * needs nothing and its periods are already decided by an accepted ADR. Default-off would
+     * reproduce `docs/TECH_DEBT.md` #100 — a mechanism that exists and reaches nobody.
+     *
+     * Rollback is `RETENTION_SWEEP_ENABLED=false` and a recreate. Disabled creates **no timer at
+     * all**, so the rollback is genuinely inert rather than a loop that deletes nothing.
+     */
+    RETENTION_SWEEP_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    /**
+     * How long a CSP violation report is kept after it was **last seen** — 30 days
+     * (`20260809160000_csp_reports/migration.sql`).
+     *
+     * **Shortening this is free; lengthening it recovers nothing.** Rows deleted under the old value
+     * are gone, and no later edit brings them back — ADR-0085 D3's asymmetry, restated here because
+     * this is the line somebody edits. The bound is 1 day precisely so a typo cannot mean "delete
+     * everything": there is no value here that empties the table on the next tick.
+     *
+     * Note what the period bounds. `last_seen_at` moves on every repeat, so a violation still being
+     * reported never ages out — this bounds **staleness, not data age** (ADR-0087, `docs/DATABASE.md`).
+     */
+    RETENTION_CSP_REPORTS_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+    /**
+     * How long a mail-delivery event is kept — 12 months, decided by ADR-0085 D3.
+     *
+     * These rows carry a **customer address** (`mail_events.recipient`), which is exactly what that
+     * ADR spent a decision keeping erasable. The same asymmetry applies: shortening is free,
+     * lengthening recovers nothing.
+     *
+     * 365 days rather than twelve calendar months — see `retention-policy.ts` for why the difference
+     * is deliberate and unobservable.
+     */
+    RETENTION_MAIL_EVENTS_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+    /**
+     * How often the sweep runs. Hourly by default.
+     *
+     * Frequency is close to free: the idle batch — the one that runs forever and finds nothing —
+     * measured **0.03 ms** (ADR-0087 D6). The constraint is the opposite one, that a rare sweep lets
+     * a flood's residue sit; the floor of 5 minutes exists only to stop a misconfiguration turning
+     * this into a busy loop against the database.
+     */
+    RETENTION_SWEEP_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
     PLAN_EDIT_LOCK_ENFORCED: z
       .enum(['true', 'false'])
       .default('false')

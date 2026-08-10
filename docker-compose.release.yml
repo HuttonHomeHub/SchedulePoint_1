@@ -118,6 +118,16 @@ services:
       # Unset = no timer at all. Treat the URL as a credential; it is never logged.
       HEARTBEAT_URL: ${HEARTBEAT_URL:-}
       HEARTBEAT_INTERVAL_MINUTES: ${HEARTBEAT_INTERVAL_MINUTES:-5}
+      # Retention (ADR-0087). Deletes rows past their documented period on a timer inside the API.
+      # ON by default — a sweep needs no external receiver, unlike the two alerting URLs above, and
+      # both periods were already decided by an accepted ADR. Set RETENTION_SWEEP_ENABLED=false and
+      # recreate to roll back; disabled creates no timer at all.
+      #
+      # Shortening a period is free; LENGTHENING IT RECOVERS NOTHING (ADR-0085 D3's asymmetry).
+      RETENTION_SWEEP_ENABLED: ${RETENTION_SWEEP_ENABLED:-true}
+      RETENTION_CSP_REPORTS_DAYS: ${RETENTION_CSP_REPORTS_DAYS:-30}
+      RETENTION_MAIL_EVENTS_DAYS: ${RETENTION_MAIL_EVENTS_DAYS:-365}
+      RETENTION_SWEEP_INTERVAL_MINUTES: ${RETENTION_SWEEP_INTERVAL_MINUTES:-60}
       # SchedulePoint staff console (ADR-0086). Comma-separated addresses that may reach
       # /api/v1/staff/*. Empty = nobody, which is the default and the safe direction.
       # Changing it needs host access and a container recreate — deliberately the same bar
