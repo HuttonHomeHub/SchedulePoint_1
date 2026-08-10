@@ -4,15 +4,15 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
+import { postAlert } from './alert-dispatch';
+
 /**
- * How long one alert POST may take before it is abandoned.
+ * Re-exported, not redefined.
  *
- * Shorter than {@link SEND_TIMEOUT_MS} deliberately: this fires from inside a `catch` block that has
- * already decided the request is finished, so nothing waits on it — but an unbounded `fetch` still
- * holds a socket, and the failure it is reporting is very often a network one, where a hung
- * connection is the *likely* case rather than the unlucky one.
+ * The constant moved to `alert-dispatch.ts` with the POST it bounds (ADR-0087 M4); this keeps every
+ * existing importer working. A second declaration here is how two timeouts drift apart.
  */
-export const ALERT_TIMEOUT_MS = 5_000;
+export { ALERT_TIMEOUT_MS } from './alert-dispatch';
 
 /**
  * Which message failed.
@@ -234,43 +234,27 @@ export class OperationalAlertService implements OnApplicationShutdown {
   }
 
   /**
-   * One bounded, unawaited POST.
+   * The mail half of one bounded, unawaited POST.
    *
-   * **The body never names a recipient.** This leaves the system for a third-party chat service,
-   * which is data egress — the same ground on which the staff-console spec rejects a third-party
-   * CSP collector. The address lives in `mail_events`, behind the staff guard, where reading it is
-   * an audited act. Counts, window and kinds are enough to act on and carry nothing about a person.
+   * The transport itself moved to {@link postAlert} in M4, so the retention sweep could reach the
+   * operator's webhook without a `recordRetentionFailure` method inside a service whose whole
+   * vocabulary is mail — which would make the name a lie. It went as a **function** rather than as
+   * an injected service specifically so this class's constructor did not change: that is what let
+   * `operational-alert.service.spec.ts` stay the before/after oracle with every assertion intact.
    *
-   * The log context is **allow-listed to `{ status, kind, count }`** and never includes the URL: a
-   * webhook URL is frequently the credential (`https://hooks.slack.com/services/T…/B…/<secret>`),
-   * and logs are retained and shipped. That is the `smtpEndpoint` rule, which returns "a new object
-   * with two scalars … so a future field cannot arrive by accident".
+   * What is left here is the only mail-specific part: which URL, which event name, and the
+   * allow-listed `{ kind, count }` context. The body never names a recipient — this leaves the
+   * system for a third-party chat service, which is data egress, and the address lives in
+   * `mail_events` behind the staff guard where reading it is an audited act.
    */
   private async post(text: string, context: { kind: string; count: number }): Promise<void> {
-    const url = this.config.mailAlertUrl;
-    if (url === undefined) return;
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        // `text` is the near-universal webhook field — Slack and Mattermost render it directly.
-        // The scalars beside it are for anything that parses rather than displays.
-        body: JSON.stringify({ text, event: 'mail.send_failed', ...context }),
-        signal: AbortSignal.timeout(ALERT_TIMEOUT_MS),
-      });
-
-      if (!response.ok) {
-        this.logger.warn(
-          { event: 'mail_alert.rejected', status: response.status, ...context },
-          'the mail alert endpoint rejected the notification',
-        );
-      }
-    } catch (error) {
-      this.logger.warn(
-        { event: 'mail_alert.failed', err: error, ...context },
-        'could not deliver a mail alert; the mail failure is recorded in mail_events',
-      );
-    }
+    await postAlert({
+      url: this.config.mailAlertUrl,
+      text,
+      event: 'mail.send_failed',
+      alertName: 'mail_alert',
+      context,
+      logger: this.logger,
+    });
   }
 }

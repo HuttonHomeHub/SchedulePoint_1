@@ -782,6 +782,29 @@ so the first CSP rows become eligible thirty days later and the first mail event
 sweep runs and reports `deleted: 0` until then, which is the correct behaviour and worth knowing so
 an empty result does not read as a broken sweep.
 
+### When it keeps failing
+
+If the sweep fails **three runs in a row**, one message is POSTed to `MAIL_ALERT_URL` — the same
+webhook the mail alerter uses, and the only operator control this needs. Three rather than one is
+deliberate: a single failed sweep is usually a connection the process will have again on the next
+tick, and the next tick **is** the retry, so alerting on it would train you to mute the channel. A
+muted channel is worth less than no channel, because it is believed to be working.
+
+One message per incident, not per tick. A clean run closes the incident, so a sweep that recovers and
+breaks again hours later alerts again — that is a new incident to whoever is reading it.
+
+The body carries the failure count and the table names and **nothing from a row**: this POST leaves
+your system for a third-party chat service, `csp_reports` holds attacker-controlled strings, and
+`mail_events` holds customer addresses.
+
+> **What this cannot tell you: that the sweep never started.** No runs means no failures means no
+> alert, forever. That is why the console's **overdue** marker is derived from the age of the oldest
+> surviving row rather than from this counter — it is the primary detector, and the alert is the
+> secondary one, for a sweep that is running and losing.
+
+With `MAIL_ALERT_URL` unset — which it is on the deployed host today — nothing is POSTed and the
+staff console is the only signal. See `docs/TECH_DEBT.md` #100.
+
 ### Checking it without a shell
 
 The staff console (`/staff`) carries a **Retention** section, and its leading answer is deliberately

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearDomainData } from './audit-reset';
 
 /**
  * **This suite exists because M2 shipped unable to complete a single request, and 1,589 unit tests
@@ -66,20 +66,25 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
 
   beforeEach(async () => {
     await prisma.mailEvent.deleteMany();
-    await prisma.orgMember.deleteMany();
-    // **Before the organisations, and this suite failed for three runs without it.**
-    // `audit_events.organization_id` is `ON DELETE RESTRICT`, so any row another suite left behind
-    // blocks the organisation delete — and the append-only trigger refuses to let the spec remove
-    // those rows itself. `clearAuditEvents` is the sanctioned escape hatch ADR-0072 documents
-    // rather than hides: it disables the trigger as the table's owner and restores `ENABLE ALWAYS`
-    // afterwards.
+    // **The shared sweep, not a hand-rolled one — which is what this was, and it broke.**
     //
-    // The failure was intermittent because it depended on what earlier suites had written, which is
-    // why it read as flake for three runs before it was diagnosed. It was not flake.
-    await clearAuditEvents(prisma);
-    await prisma.organization.deleteMany();
-    await prisma.verification.deleteMany();
-    await prisma.user.deleteMany();
+    // This block used to delete org members, audit events, organisations, verifications and users,
+    // in that order, having grown that list one failure at a time. It was correct only for the file
+    // order the runner happened to pick: `vitest.e2e.config.ts` sets `fileParallelism: false`, so
+    // all 40 suites share one database, and adding `retention-alerting.e2e-spec.ts` reshuffled them
+    // until a suite leaving `clients` behind ran first. The organisation delete then tripped
+    // `clients_organization_id_fkey` — a message naming a foreign key and saying nothing about the
+    // spec that actually left the rows.
+    //
+    // That is `docs/TECH_DEBT.md` #119's class exactly, and `clearDomainData`'s own docblock
+    // predicted it: "a second copy would drift again, and the drift would be invisible until an
+    // unrelated change reordered the files." It is order-dependence, not flake — the same rows,
+    // every run, revealed or hidden by ordering.
+    //
+    // The helper also handles the part a spec cannot do for itself: `audit_events` is append-only in
+    // the database and holds an `ON DELETE RESTRICT` FK to its organisation, so its rows must go
+    // first and only `clearAuditEvents` may remove them.
+    await clearDomainData(prisma);
   });
 
   const server = () => app.getHttpServer();

@@ -20,7 +20,11 @@ function result(table: string, over: Partial<RetentionSweepResult> = {}): Retent
 }
 
 function build(
-  options: { enabled?: boolean; sweepAll?: () => Promise<RetentionSweepResult[]> } = {},
+  options: {
+    enabled?: boolean;
+    sweepAll?: () => Promise<RetentionSweepResult[]>;
+    alertUrl?: string | undefined;
+  } = {},
 ) {
   const sweepAll = vi.fn(options.sweepAll ?? (() => Promise.resolve([result('csp_reports')])));
   const config = {
@@ -28,6 +32,7 @@ function build(
     retentionCspReportsDays: 30,
     retentionMailEventsDays: 365,
     retentionSweepIntervalMinutes: 60,
+    mailAlertUrl: 'alertUrl' in options ? options.alertUrl : 'https://alerts.example/hook',
   } as AppConfigService;
   const store = new RetentionStatusStore();
   const service = new RetentionSweepService(
@@ -44,11 +49,22 @@ beforeEach(() => {
   logger.info.mockReset();
   logger.warn.mockReset();
   logger.error.mockReset();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve({ ok: true, status: 200 } as Response)),
+  );
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
+
+/** The JSON body of the nth alert POST. `body` is a `BodyInit`, so it is narrowed rather than cast. */
+const alertBody = (index: number): string => {
+  const init = vi.mocked(fetch).mock.calls[index]?.[1];
+  return typeof init?.body === 'string' ? init.body : '';
+};
 
 describe('RetentionSweepService', () => {
   it('creates NO timer when disabled — not a timer that deletes nothing', async () => {
@@ -132,7 +148,9 @@ describe('RetentionSweepService', () => {
     // Two things are asserted: the schedule survives (the next tick is the retry, which is why this
     // design needs no retry of its own), and the guard is released — without the `finally`, one
     // throw would disable every later tick with nothing in the log to explain it.
-    const { service, sweepAll } = build({ sweepAll: () => Promise.reject(new Error('boom')) });
+    const { service, sweepAll, store } = build({
+      sweepAll: () => Promise.reject(new Error('boom')),
+    });
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
 
@@ -147,6 +165,105 @@ describe('RetentionSweepService', () => {
       'a void-ed rejection would take the whole process down',
     ).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalled();
+    // A throw is a FAILED run. Recording it as `record([], at)` found no failed table and reset the
+    // counter, so a sweep crashing on every tick read as healthy — asserted here so a return to
+    // that shape fails rather than merely going quiet.
+    expect(store.snapshot().consecutiveFailures).toBe(2);
+  });
+
+  it('stays silent for the first two failures, alerts once on the third', async () => {
+    // The cried-wolf rule (ADR-0075). One failed sweep is usually a connection this process will
+    // have again by the next tick — and the next tick IS the retry — so it is not yet news. An
+    // alert channel that fires on every blip gets muted, and a muted channel is worth less than no
+    // channel because it is believed to be working.
+    const { service } = build({
+      sweepAll: () => Promise.resolve([result('csp_reports', { error: 'PrismaClientKnownError' })]),
+    });
+
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch, 'the first failure is not news').not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(fetch, 'nor is the second').not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(alertBody(0)).toContain('retention.sweep_failing');
+  });
+
+  it('sends ONE message however long the outage lasts', async () => {
+    // Without the latch a relay outage sends one message per tick, forever — the exact failure the
+    // threshold exists to prevent, reintroduced by the mechanism meant to report it.
+    const { service } = build({
+      sweepAll: () => Promise.resolve([result('csp_reports', { error: 'PrismaClientKnownError' })]),
+    });
+
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(10 * 60 * 60 * 1000);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-arms after a clean run, so a later outage is a NEW incident', async () => {
+    let broken = true;
+    const { service } = build({
+      sweepAll: () =>
+        Promise.resolve([
+          broken
+            ? result('csp_reports', { error: 'PrismaClientKnownError' })
+            : result('csp_reports'),
+        ]),
+    });
+
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    broken = false;
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    broken = true;
+    await vi.advanceTimersByTimeAsync(3 * 60 * 60 * 1000);
+
+    expect(fetch, 'a recovered-then-broken sweep is a second incident').toHaveBeenCalledTimes(2);
+  });
+
+  it('alerts on a sweep that THROWS, not only on one that reports a failure', async () => {
+    // The failure mode nobody anticipated must not also be the one that never reaches anybody.
+    const { service } = build({ sweepAll: () => Promise.reject(new Error('boom')) });
+
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('names tables and counts, and NOTHING from a row', async () => {
+    // This POST leaves the system for a third-party chat service, which is data egress. One of
+    // these tables holds attacker-controlled strings and the other a customer's address.
+    const { service } = build({
+      sweepAll: () => Promise.resolve([result('mail_events', { error: 'PrismaClientKnownError' })]),
+    });
+
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
+
+    const body = alertBody(0);
+    expect(body).toContain('mail_events');
+    expect(body).toContain('3 runs in a row');
+    expect(body).not.toMatch(/@|https?:\/\/(?!.*alerts\.example)/);
+  });
+
+  it('attempts NO alert when the operator has configured no webhook', async () => {
+    const { service } = build({
+      alertUrl: undefined,
+      sweepAll: () => Promise.resolve([result('csp_reports', { error: 'PrismaClientKnownError' })]),
+    });
+
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(5 * 60 * 60 * 1000);
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('logs the effective periods at boot, because a mistyped one is irreversible', () => {

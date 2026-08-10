@@ -50,6 +50,25 @@ export class RetentionStatusStore {
       : 0;
   }
 
+  /**
+   * A run that threw before it could report anything.
+   *
+   * **A separate method because inferring it from an empty result list was wrong**, and wrong in
+   * the worst direction: `record([])` finds no failed table, so it reset `consecutiveFailures` to
+   * zero — a sweep that crashed on every tick was filed as a clean run, silencing the M4 alert
+   * threshold and painting the staff console healthy during the one failure mode nobody
+   * anticipated. Found by the alert test, which expected a message and got silence.
+   *
+   * The table list is cleared rather than kept, because nothing is known about any table: the run
+   * did not get far enough to have an opinion, and holding the previous run's numbers would show
+   * last hour's deletions beside this hour's failure.
+   */
+  recordFailedRun(at: Date): void {
+    this.lastRunAt = at;
+    this.lastTables = [];
+    this.consecutiveFailures += 1;
+  }
+
   snapshot(): {
     processStartedAt: Date;
     lastRunAt: Date | null;
