@@ -103,6 +103,16 @@ jobs:
       - name: Check dependency-internal claims
         run: pnpm check:claims
 
+      # The web container's nginx template, substituted exactly as the container substitutes it.
+      # A value that breaks the config parse is a container that never serves a request, and until
+      # this existed the ONLY thing in the repository that would notice was the smoke-boot job — a
+      # container build away, reporting minutes later, after the push. `e2e-csp` cannot see it: it
+      # reads the policy from `docker-compose.yml` and serves it from a preview server, so it tests
+      # the policy and never nginx's parse of the file. Verified red against the failure that
+      # prompted it (`[emerg] unexpected "/"`, PR #269).
+      - name: Check the nginx template survives substitution
+        run: pnpm check:nginx
+
       - name: Unit tests
         run: pnpm test
 

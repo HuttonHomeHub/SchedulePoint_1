@@ -277,6 +277,18 @@ failure should surface at the earliest step that can see it.
 | 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile              |
 | 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file         |
 | 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call` |
+| 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                |
+
+Step 9 exists because the web container's config is the one artefact no other
+gate reads. It substitutes `apps/web/nginx.conf` exactly as the container does
+(`NGINX_ENVSUBST_FILTER=^CSP_`, defaults parsed out of `docker-compose.yml`
+rather than restated) and checks the property that has actually broken: a quoted
+directive value containing its own delimiter, which is not a bad header but a
+**boot failure** — nginx refuses the config and the container never serves a
+request. `apps/web/e2e-csp` cannot catch it, because it reads the policy from
+the compose file and serves it from a preview server: it tests the policy, never
+nginx's parse of the file. Before this, CI's smoke-boot was the only thing that
+would notice, a container build away and minutes after the push.
 
 Steps 7 and 8 are ADR-0076's gates and both run in milliseconds off the
 filesystem, so "always" is a fine answer for when to run them — the `When`
