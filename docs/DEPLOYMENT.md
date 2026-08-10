@@ -750,6 +750,95 @@ If step 4 produces nothing, the cron stays. The script is not elegant, but it is
 actually have until something replaces it, and removing it on the strength of a merged pull request
 is how an installation ends up with no alerting at all and no one aware of it.
 
+## Retention — what gets deleted, and when
+
+ADR-0087. Two tables document a period, and until this shipped **nothing enforced either**:
+`csp_reports` (30 days) and `mail_events` (12 months). The API now sweeps them on a timer inside its
+own process — no Redis, no queue, nothing to install.
+
+```yaml
+api:
+  environment:
+    RETENTION_SWEEP_ENABLED: 'true' # the default
+    RETENTION_CSP_REPORTS_DAYS: 30
+    RETENTION_MAIL_EVENTS_DAYS: 365
+    RETENTION_SWEEP_INTERVAL_MINUTES: 60
+```
+
+**It is on by default, unlike the two alerting URLs above**, and the difference is deliberate: those
+need a receiver you have to create, so shipping them armed would point at nothing. A sweep needs
+nothing, and both periods were already decided by an accepted ADR. Rollback is
+`RETENTION_SWEEP_ENABLED=false` and a recreate — which creates **no timer at all**, rather than one
+that deletes nothing.
+
+> **Shortening a period is free. Lengthening it recovers nothing.** Rows deleted under the old value
+> are gone, and no later edit brings them back. This is the one setting in the product where a typo
+> is unrecoverable, which is why the minimum is one day — there is no value here that empties a table
+> on the next tick — and why the effective numbers are logged at boot rather than left to be inferred
+> from what disappears. Watch for `event: 'retention.configured'` after a recreate.
+
+**What it will delete on your host: nothing, for a while.** Both tables were created on 2026-08-09,
+so the first CSP rows become eligible thirty days later and the first mail events in a year. The
+sweep runs and reports `deleted: 0` until then, which is the correct behaviour and worth knowing so
+an empty result does not read as a broken sweep.
+
+### When it keeps failing
+
+If the sweep fails **three runs in a row**, one message is POSTed to `MAIL_ALERT_URL` — the same
+webhook the mail alerter uses, and the only operator control this needs. Three rather than one is
+deliberate: a single failed sweep is usually a connection the process will have again on the next
+tick, and the next tick **is** the retry, so alerting on it would train you to mute the channel. A
+muted channel is worth less than no channel, because it is believed to be working.
+
+One message per incident, not per tick. A clean run closes the incident, so a sweep that recovers and
+breaks again hours later alerts again — that is a new incident to whoever is reading it.
+
+The body carries the failure count and the table names and **nothing from a row**: this POST leaves
+your system for a third-party chat service, `csp_reports` holds attacker-controlled strings, and
+`mail_events` holds customer addresses.
+
+> **What this cannot tell you: that the sweep never started.** No runs means no failures means no
+> alert, forever. That is why the console's **overdue** marker is derived from the age of the oldest
+> surviving row rather than from this counter — it is the primary detector, and the alert is the
+> secondary one, for a sweep that is running and losing.
+
+With `MAIL_ALERT_URL` unset — which it is on the deployed host today — nothing is POSTed and the
+staff console is the only signal. See `docs/TECH_DEBT.md` #100.
+
+### Checking it without a shell
+
+The staff console (`/staff`) carries a **Retention** section, and its leading answer is deliberately
+**derived from the data rather than reported by the sweep**: the age of each table's oldest surviving
+row against the configured period. That matters because the sweep's own bookkeeping is held in
+memory and resets on every recreate — so a last-run timestamp cannot tell "the sweep is working"
+from "the sweep never armed", which is the same inverted-signal problem the heartbeat exists to solve
+one layer out. A table whose oldest row is older than its period **plus one interval** is marked
+**overdue**, in words, with the number the claim rests on.
+
+Four states are worth recognising, because they look similar and mean different things:
+
+| The section says                                  | What it means                                                                                                                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Retention sweeping is disabled"                  | `RETENTION_SWEEP_ENABLED=false` took effect. No timer exists.                                                                                                            |
+| "This process has not swept yet", in plain text   | The API restarted moments ago and has not produced a result yet. Routine.                                                                                                |
+| "This process has not swept yet", **as an error** | More than one interval has passed with no result. The boot sweep is unawaited and finishes in milliseconds on an idle table, so this almost certainly means it is stuck. |
+| "Not swept yet" against **every** table           | The last run threw before it reached any table. The consecutive-failure count says for how long.                                                                         |
+
+The third row used to read _"'Not swept yet' against a **single** table — this process has swept, but
+that table was not reached"_. **That state does not exist.** `sweepAll` returns one result per policy,
+so a per-table failure renders "Last run failed", and the only path that clears the per-table results
+clears all of them together. The UX review caught it: a claim written from the shape of the model
+rather than from the code, which is the ADR-0076 Class 3 failure this repository keeps a rule for.
+An empty table reads **"no rows"** and never "0 days": a measurement of zero and having nothing to
+measure are different facts, and only one of them is something the response can honestly state.
+
+**Two things it deliberately does not do.** It never touches `audit_events` — that table refuses
+`DELETE` in the database and ADR-0085 D1 declined to relax it, so **its** documented period stays
+unenforced (`docs/TECH_DEBT.md` #118). And the CSP period bounds **staleness, not data age**:
+`last_seen_at` moves on every repeat, so a violation still being reported never ages out. That is
+intentional — expiring a live finding would remove it from the Security panel, the one screen built
+to show what the policy is blocking now.
+
 ## The staff console
 
 SchedulePoint staff operate the **installation** — mail health, Content-Security-Policy reports,

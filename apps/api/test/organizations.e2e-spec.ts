@@ -45,6 +45,18 @@ describe.skipIf(!hasDatabase)('Organizations API (e2e)', () => {
   beforeEach(async () => {
     // Order respects the RESTRICT foreign keys (invitations + members reference org/user).
     await prisma.invitation.deleteMany();
+    // Both link tables and `activities` first, even though this spec creates none of them.
+    // `activities` is the link tables' FK target and `plans` is its own, so ANY row left in the
+    // shared local database — by a sibling spec, or by a Playwright journey run against the same
+    // `app_test` — makes the `plan.deleteMany()` below a foreign-key violation, and every test in
+    // this file then fails in `beforeEach` naming a table the spec never touches.
+    //
+    // This order was missing from NINE specs and present in the rest, so each of them passed or
+    // failed on the order the files happened to run in. Adding one new e2e file was enough to
+    // change that order and break them (`docs/TECH_DEBT.md` #119).
+    await prisma.crossPlanDependency.deleteMany();
+    await prisma.activityDependency.deleteMany();
+    await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();

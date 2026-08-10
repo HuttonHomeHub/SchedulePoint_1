@@ -222,6 +222,33 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // them. A test that passes or fails on what an unrelated suite left behind is measuring the
   // harness. Both states are covered — this proves the panel is wired, that proves what it says.
 
+  // ---------------------------------------------------------------- Retention (ADR-0087 M3)
+  // The milestone's entry point (ADR-0081 §2), asserted against the real API rather than a fixture.
+  // Two things only this can see: that the periods rendered are the ones the SERVER is configured
+  // with — a component test asserts whatever number its own payload carries — and that the panel
+  // is reading the same in-memory `RetentionStatusStore` the sweep writes. `OperationalModule` is
+  // global and exports the store; providing a second copy inside `StaffModule` would compile,
+  // inject, and report a working sweep as one that had never run, forever, with nothing failing.
+  await expect(staff.getByRole('heading', { name: 'Retention' })).toBeVisible();
+  // Scoped to the section, never the document — the ADR-0073 C2.5 finding, where a document-scoped
+  // assertion passed on the page's prose alone and proved nothing about the table.
+  const retention = staff.getByRole('region', { name: /retention by table/i });
+  await expect(retention.getByText('Policy violation reports')).toBeVisible();
+  await expect(retention.getByText('Mail events')).toBeVisible();
+  // Both configured periods, as the API reports them. Not `/\d+ days/` — a regex would pass on
+  // whatever number arrived, including a default the server is not actually using.
+  await expect(retention.getByText('30 days')).toBeVisible();
+  await expect(retention.getByText('365 days')).toBeVisible();
+  // The sweep runs at boot (`onApplicationBootstrap`), so by the time a browser has signed up,
+  // verified an address and signed in twice, this process HAS swept — which makes the "not swept
+  // yet" wording the wrong assertion here and the presence of a real last-run line the right one.
+  //
+  // `.*` and not `.* ago`: the first version of this assertion demanded "ago" and failed against a
+  // perfectly correct panel reading **"Last swept just now"**, because the API boots seconds before
+  // the browser arrives and `agoLabel` says "just now" under a minute. The journey was written from
+  // the shape of the copy rather than from a run — which is the failure this step exists to catch.
+  await expect(staff.getByText(/Last swept .*, every \d+ minutes\./)).toBeVisible();
+
   // 4. NOT bounced to onboarding. This account has no organisation — which is the recommended
   // configuration — and `/staff` sits outside `_authed` precisely so the shell's home resolver
   // never sees it.

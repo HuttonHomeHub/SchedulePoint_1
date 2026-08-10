@@ -22,7 +22,10 @@ import { StaffGuard } from './staff.guard';
  * That is the module-level statement of the epic's central property: a
  * staff surface that imported `ClientsModule` or `PlansModule` would be reaching customer data, and
  * a structural seam test asserts no file here imports an org-scoped module's service or repository,
- * or the CPM engine. `AppConfigService` and `PrismaService` reach it through global modules.
+ * or the CPM engine. `AppConfigService`, `PrismaService` and `RetentionStatusStore` reach it through
+ * global modules — the last of those matters: providing `RetentionStatusStore` here instead would
+ * compile, inject and read a **second, empty instance** that nothing ever writes, so the console
+ * would report a healthy sweep as one that had never run, forever, with nothing failing anywhere.
  */
 @Module({
   controllers: [StaffController],

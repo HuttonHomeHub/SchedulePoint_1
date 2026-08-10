@@ -1886,15 +1886,21 @@ panels, the never-built dual-hat banner, the unindexed activity read). These fou
 rather than being rushed:
 
 **1. `csp_reports` and `mail_events` have no retention sweep, and one of them is written by an
-unauthenticated endpoint.** ADR-0085 D3 settled the period at 12 months and nothing enforces it —
-`apps/api/prisma/migrations/20260809160000_csp_reports/migration.sql` says so in its own comment
-("the true retention today is forever"). The security review's point sharpens the priority rather
-than adding a new fact: the CSP write path needs **no credential**, and stripping only the query
-string from `blocked_uri`/`document_uri` leaves the path, so unique rows are trivially mintable at
-20 per request × 60 requests/minute per IP. Separately, `mail_events.recipient` retains a real
-customer address indefinitely, which is the thing ADR-0085 spent a decision keeping erasable.
-**Close it by building the sweep**, and treat it as ahead of its current place in `ROADMAP.md`'s
-"next in this theme" ordering, because the write side is internet-facing.
+unauthenticated endpoint. (CLOSED 2026-08-10 — ADR-0087.)** ADR-0085 D3 settled the period at 12
+months and nothing enforced it —
+`apps/api/prisma/migrations/20260809160000_csp_reports/migration.sql` still says so in its own
+comment ("the true retention today is forever"), and **that comment cannot be corrected**, because a
+landed migration is checksummed; `docs/DATABASE.md` carries the current statement instead. The
+security review's point sharpened the priority rather than adding a new fact: the CSP write path
+needs **no credential**, and stripping only the query string from `blocked_uri`/`document_uri`
+leaves the path, so unique rows are trivially mintable at 20 per request × 60 requests/minute per IP.
+Separately, `mail_events.recipient` retained a real customer address indefinitely, which is the thing
+ADR-0085 spent a decision keeping erasable.
+**Closed by building the sweep**: an in-process hourly `setInterval`, batched at 1,000 rows on
+`ctid`, capped at 50,000 a run, with `RETENTION_SWEEP_ENABLED=false` as the rollback. Two residuals
+are **not** closed with it and are carried below as #118a and #118b — one because the sweep may never
+touch `audit_events`, and one because the CSP period was always a claim about staleness rather than
+about data age.
 
 **2. A CSP row's `source_file`/`line_number`/`column_number` are last-writer-wins with no auth.**
 Anyone who can reproduce a row's four key fields — all observable from the page that produced the
@@ -1929,7 +1935,111 @@ rather than a date — build it when unverified accounts on the deployed install
 figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` so the question is
 not reopened from scratch.
 
-## 119. The API e2e suite fails intermittently, and the failure has never been captured
+## 118a. `audit_events`' 12-month `auth.*` period is still unenforced, and the sweep may never enforce it
+
+The half of #118 item 1 that the retention sweep **cannot** close, split out rather than quietly
+carried along with the half it did close — because "retention is enforced" is now true of two tables
+and false of a third, and four documents were about to say the first thing without the second.
+
+ADR-0085 D3 bounds the `auth.*` `subject_label` — the address a failed sign-in named, kept in the
+caller's own casing — by **retention** rather than by per-subject deletion, on the ground that a rule
+applied to all rows alike cannot be aimed at one person. Nothing enforces that period, and ADR-0087
+D3 refuses to make the sweep do it: `audit_events` refuses `UPDATE` and `DELETE` in the database, by
+`BEFORE UPDATE OR DELETE` and `BEFORE TRUNCATE` triggers declared `ENABLE ALWAYS` so the application
+role cannot bypass them, and ADR-0085 D1 already refused to relax them once. Relaxing them converts a
+**structural** guarantee into a **procedural** one: the answer to "could these rows have been
+altered?" changes from "not by the application role" to "only by the retention path, which we believe
+was used correctly."
+
+So this is a genuine conflict between two accepted decisions and not an unbuilt feature.
+`retention-boundary.structural.spec.ts` asserts the table set by **equality**, so adding
+`audit_events` to the sweep fails a test rather than passing review — which is the intended cost.
+
+**Not closable by writing code.** It needs the ADR-0085 D6 build trigger to fire (the first
+organisation outside the product owner's own, or a real subject request), and then a decision about
+which guarantee gives way. The candidate that keeps both is a **column-level scrub** — nulling
+`subject_label` on rows past the period — but `audit_events` refuses `UPDATE` too, so it lands in the
+same place. Recorded here so the next reader meets the conflict rather than the ticket.
+
+## 118b. The CSP period bounds staleness, not data age — and the sweep does not change that
+
+Carried forward from #118 item 1 unchanged, because building the sweep neither fixed it nor made it
+worse, and closing item 1 without saying so would have read as a fix.
+
+`csp_reports` expires on `last_seen_at`, deliberately: `last_seen_at` moves on every repeat, so a
+violation **still being reported** never ages out — which is the point, since the Security panel
+exists to show what the policy is blocking now and expiring a live finding would remove it from the
+one screen built to surface it. The consequence is that a `document_uri` — which may carry a plan or
+organisation id in its path — is retained for as long as the violation keeps recurring, with a
+`first_seen_at` arbitrarily older than 30 days. "URLs are kept for 30 days" is not a sentence this
+table supports.
+
+Switching the predicate to `first_seen_at` would look like a tightening and would silently delete
+live findings; `retention-sweep.e2e-spec.ts` has a test named for exactly that
+("KEEPS a violation that is old but still being reported"), so the change fails rather than passes.
+The real remedy, if one is wanted, is to stop recording the path at all — which costs the
+investigative value the column exists for. Open, unowned, and cheap to leave open: the throttle
+bounds a sustained flood and the sweep bounds the residue after one stops.
+
+## 120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
+
+Measured, not suspected. The backend-performance review seeded `csp_reports` to 500,000 rows
+(~207 MB), vacuumed, then drove a full `RUN_CAP`-bounded drain — 50 sequential 1,000-row batches,
+exactly the runner's loop — and watched `pg_stat_user_tables`:
+
+- `n_dead_tup` reached exactly **50,000 (10% of the table) and stayed there.** `autovacuum_count` did
+  not increment, even past `autovacuum_naptime`. With Postgres defaults
+  (`autovacuum_vacuum_scale_factor = 0.2`) the trigger for a table this size is ~100,050 dead tuples,
+  and this schema sets no per-table `reloptions` override — so **one capped run does not cross the
+  threshold**, and a 500k-row backlog takes about ten hourly ticks to clear with dead tuples sitting
+  at 10–20% for much of that window (autovacuum firing roughly every second tick).
+- Within one drain and before autovacuum runs, a batch that re-scans the head of an index it has just
+  emptied costs **37.8 ms / 53,642 buffer hits** against a clean **7–13 ms / ~2,000**. Postgres's
+  opportunistic `kill_prior_tuple` marking largely repairs this inside the same session — later
+  batches fell back to 8–11 ms — so it does not run away.
+
+**This is ordinary Postgres behaviour and not a defect in the design.** It is recorded because the
+ADR and the docblocks assert the sweep is bounded and say nothing about the table staying clean, and
+those are different claims. The place it will actually be met is the **first enablement against a
+real backlog**, which on the deployed host is a month away for `csp_reports` and a year for
+`mail_events` — so there is time, and nothing to do today.
+
+If it ever matters, the remedies in order of cost are: watch `n_dead_tup` rather than assume it
+self-heals; set a per-table `autovacuum_vacuum_scale_factor` on the two swept tables; or raise
+`RUN_CAP` so a drain crosses the default threshold in one run. Do none of them without measuring
+first — the last one trades a bounded connection hold for a faster vacuum, which is the opposite of
+what `RUN_CAP` exists for.
+
+## 119. The API e2e suite fails intermittently **(DIAGNOSED AND CLOSED 2026-08-10)**
+
+> **It was never intermittent. It was order-dependent, and the order changed whenever a new e2e file
+> was added.**
+>
+> Nine specs — `calendars`, `clients`, `invitations`, `me`, `members`, `organizations`, `plans`,
+> `projects`, `recycle-bin` — began their `beforeEach` with `prisma.plan.deleteMany()` **without
+> first deleting the activities and link rows that reference a plan**. Each therefore passed only
+> when whichever spec ran before it happened to have left the tables empty. `vitest.e2e.config.ts`
+> sets `fileParallelism: false` and every spec shares one database, so "whichever ran before" is
+> decided by the file list — and adding `retention-sweep.e2e-spec.ts` was enough to reshuffle it.
+>
+> The failure then names a table the failing spec never touches
+> (`Foreign key constraint violated on the constraint: activities_plan_id_fkey`), which is why it
+> read as noise: the spec that breaks is not the spec that is wrong. Whole files fail at once —
+> the shape this entry recorded as "a `beforeAll` failure" — because a broken `beforeEach` takes
+> every test in the file with it.
+>
+> **What closed it was capturing the log instead of retrying**, which is the one instruction this
+> entry asked for. The three earlier occurrences were each met with a re-run that passed and
+> destroyed the evidence; the fourth was written to a file first and diagnosed in one read.
+>
+> The correct sweep order was already documented — in `activities.e2e-spec.ts`, whose comment
+> claimed "the sibling specs already sweep in this order". Nine of them did not. That sentence is
+> corrected in the same commit, because a comment asserting an invariant nine files violate is worse
+> than no comment: it is the reason nobody checked.
+
+### Original entry (2026-08-10, before the diagnosis)
+
+## 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
 **Observed 2026-08-10, three times in one session, against `scripts/e2e-local.sh api`.** Each time
 the whole `test/staff.e2e-spec.ts` file failed — all 13 tests including ones the change had not

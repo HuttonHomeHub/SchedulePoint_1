@@ -53,6 +53,18 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
     // Plans reference calendars (plans.calendar_id FK, RESTRICT, since Task C1), so
     // delete plans BEFORE calendars — the delete-in-use test leaves a plan pointing at
     // a calendar.
+    // Both link tables and `activities` first, even though this spec creates none of them.
+    // `activities` is the link tables' FK target and `plans` is its own, so ANY row left in the
+    // shared local database — by a sibling spec, or by a Playwright journey run against the same
+    // `app_test` — makes the `plan.deleteMany()` below a foreign-key violation, and every test in
+    // this file then fails in `beforeEach` naming a table the spec never touches.
+    //
+    // This order was missing from NINE specs and present in the rest, so each of them passed or
+    // failed on the order the files happened to run in. Adding one new e2e file was enough to
+    // change that order and break them (`docs/TECH_DEBT.md` #119).
+    await prisma.crossPlanDependency.deleteMany();
+    await prisma.activityDependency.deleteMany();
+    await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();

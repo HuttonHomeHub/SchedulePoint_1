@@ -298,10 +298,20 @@ moment 34 file-and-line citations need re-reading, and it is the only moment
 anybody would.
 
 `scripts/e2e-local.sh` brings up Postgres, creates the `app` role and `app_test`
-database **with the same credentials CI uses**, applies migrations, finds the
-sandbox Chromium, and runs the targets you name. It is idempotent, so re-running
-costs a few seconds. `--db-only` stops after the database if you want to drive
-the suites yourself.
+database **with the same credentials — and the same privileges — CI uses**,
+applies migrations, finds the sandbox Chromium, and runs the targets you name.
+It is idempotent, so re-running costs a few seconds. `--db-only` stops after the
+database if you want to drive the suites yourself.
+
+> **The role is a SUPERUSER because CI's is.** The `postgres:17-alpine` service
+> container makes `POSTGRES_USER` a superuser; this script used to create a plain
+> `CREATEDB` role, and the difference is invisible until a test depends on a
+> privilege check — at which point it passes locally and fails in CI for a reason
+> nothing in the output names. That happened: an ADR-0087 suite induced a failure
+> with `REVOKE DELETE`, which a superuser bypasses entirely, so the sweep it
+> expected to fail quietly succeeded. If you need a test to make the database
+> refuse something, **use a trigger, not a privilege** — a trigger fires for
+> superusers too. `retention-sweep.e2e-spec.ts` shows the shape.
 
 ```bash
 scripts/e2e-local.sh                 # database + API e2e (the default gate)

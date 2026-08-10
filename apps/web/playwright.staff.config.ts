@@ -73,6 +73,14 @@ export default defineConfig({
               // refused" assertion stable across re-runs — the e2e database persists, so the first
               // account is verified from the previous run onwards and cannot prove that branch twice.
               STAFF_EMAILS: ' Ops@SchedulePoint.test , unverified@schedulepoint.test ',
+              // Pinned rather than left to the defaults, because the journey asserts these exact
+              // numbers on screen. Left ambient, a developer with either variable exported would
+              // see the suite fail on a perfectly correct panel — and, worse, a run on a machine
+              // that happened to match would prove only that two unstated values agreed.
+              RETENTION_SWEEP_ENABLED: 'true',
+              RETENTION_CSP_REPORTS_DAYS: '30',
+              RETENTION_MAIL_EVENTS_DAYS: '365',
+              RETENTION_SWEEP_INTERVAL_MINUTES: '60',
             },
           },
           {
