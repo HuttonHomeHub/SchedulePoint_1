@@ -8,8 +8,6 @@ import {
 } from '@repo/types';
 import { z } from 'zod';
 
-import { CALENDAR_SHIFT_EDITOR_ENABLED } from '@/config/env';
-
 /**
  * The tier filter the organisation calendar list accepts (`?scope=`, ADR-0053 §1) — mirrors the
  * API's `CalendarListQueryDto`. `org` is the default and returns exactly the pre-ADR-0053 result
@@ -64,8 +62,8 @@ export const CALENDAR_SCOPE_LABELS: Record<CalendarScope, string> = {
 
 /**
  * Short weekday labels, indexed 0 = Monday … 6 = Sunday to match the
- * {@link WorkingWeekdays} bitmask order. Used by the table summary and the
- * form's weekday toggle group.
+ * {@link WorkingWeekdays} bitmask order. Used by the table summary and the weekly shift editor.
+ * (It also named the form's weekday toggle group until ADR-0088 D3 deleted that control.)
  */
 export const WEEKDAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
@@ -93,31 +91,20 @@ export function formatWorkingWeekdays(mask: number): string {
 }
 
 /**
- * Calendar create/edit form schema — mirrors the API DTO. `workingWeekdays` is
- * the 7-bit pattern (bit 0 = Monday … bit 6 = Sunday) bound to the toggle group;
- * it must be a valid mask, and — only while the shift editor is off — at least one working day.
- * Name ≤ 120, description ≤ 2000.
+ * Calendar create/edit form schema — mirrors the API DTO. Name ≤ 120, description ≤ 2000.
+ *
+ * **`workingWeekdays` is deliberately absent.** It was the 7-bit weekday mask bound to the toggle
+ * group, and ADR-0088 D3 deleted that control with `VITE_CALENDAR_SHIFT_EDITOR`: the shift editor
+ * owns the week, and the form writes explicit `shifts`. Keeping a validated field with no control
+ * to satisfy it is the ADR-0067 M4 dead end verbatim — a hidden rule refusing Save with nothing on
+ * screen to fix. The empty week (mask 0) remains valid at the domain and the API (TECH_DEBT #79,
+ * ADR-0036 §2); the API still ACCEPTS a mask, and `api/use-calendars.ts` keeps the record of why
+ * sending one is destructive.
  */
 export const calendarFormSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required.').max(120, 'Name is too long.'),
     description: z.string().trim().max(2000, 'Description is too long.').optional(),
-    workingWeekdays: z
-      .number()
-      // The empty week (mask 0) is a WINDOW-ONLY calendar — valid at the domain and at the API since
-      // TECH_DEBT #79 (ADR-0036 §2), and the shape a shutdown or a turnaround needs.
-      //
-      // The bound is therefore the FORM's capability, not the domain's, and it moves with the flag.
-      // Flag-off, the weekday toggles are the only week control and there is no way to author the
-      // dated windows an empty week needs, so an empty mask would produce a calendar on which
-      // nothing can ever be scheduled and report it only at the next recalculation. Flag-on, this
-      // field is not rendered at all — the shift editor owns the week — and keeping the bound made
-      // a **dead end**: applying the Window-only preset, saving, and reopening left Save refused
-      // by a hidden field with no control anywhere on screen to satisfy it.
-      .refine(
-        (mask) => WorkingWeekdays.isValid(mask) && (CALENDAR_SHIFT_EDITOR_ENABLED || mask >= 1),
-        'Select at least one working day.',
-      ),
     /**
      * The calendar's standard working day, in hours (P6 `day_hr_cnt`; ADR-0068) — the day↔minute
      * factor for every duration and lag measured on it. Optional so the field is simply ABSENT from

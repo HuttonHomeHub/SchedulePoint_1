@@ -1,8 +1,9 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **library scoping & manageability** suite
- * (`VITE_LIBRARY_SCOPING`, ADR-0053, `docs/specs/library-scoping-and-manageability/`). The
+ * Journey helpers for the **library scoping & manageability** suite
+ * (ADR-0053, `docs/specs/library-scoping-and-manageability/`) — no longer flag-on since ADR-0088
+ * D3 retired `VITE_LIBRARY_SCOPING`. The
  * onboarding + client/project/plan + canvas-authoring helpers mirror `e2e-share/support.ts`
  * verbatim (the same canvas-authoring flags bake into this suite's `webServer`, so a plan opens on
  * a draw-ready blank canvas). The onboarding actor becomes the org's Org Admin, which already

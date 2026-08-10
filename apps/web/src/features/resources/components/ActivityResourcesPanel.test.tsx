@@ -13,7 +13,6 @@ import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 // (a flat native `<select>`), not the flag's searched `Combobox`.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: false,
   EARNED_VALUE_ENABLED: true,
 }));
 
@@ -63,7 +62,16 @@ function renderPanel({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   if (seed) {
-    queryClient.setQueryData(resourceKeys.list('acme'), [CREW, CONCRETE]);
+    queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [
+      CREW,
+      CONCRETE,
+    ]);
+    // The picker reads the cursor-paginated SEARCH query, a different read from the library
+    // list above — seed it too, or the listbox opens empty.
+    queryClient.setQueryData(resourceKeys.search('acme', { q: '' }), {
+      pages: [{ resources: [CREW, CONCRETE], nextCursor: null, hasMore: false }],
+      pageParams: [null],
+    });
     queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [ASSIGNMENT]);
   }
   return render(
@@ -73,6 +81,7 @@ function renderPanel({
   );
 }
 
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
 describe('ActivityResourcesPanel', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue([]);
@@ -115,7 +124,16 @@ describe('ActivityResourcesPanel', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     });
-    queryClient.setQueryData(resourceKeys.list('acme'), [CREW, CONCRETE]);
+    queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [
+      CREW,
+      CONCRETE,
+    ]);
+    // The picker reads the cursor-paginated SEARCH query, a different read from the library
+    // list above — seed it too, or the listbox opens empty.
+    queryClient.setQueryData(resourceKeys.search('acme', { q: '' }), {
+      pages: [{ resources: [CREW, CONCRETE], nextCursor: null, hasMore: false }],
+      pageParams: [null],
+    });
     queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), []);
     render(
       <QueryClientProvider client={queryClient}>

@@ -775,46 +775,6 @@ export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
 );
 
 /**
- * Library scoping & manageability — the web surface for the ORG / PROJECT calendar tier, the
- * resource hierarchy, the archive lifecycle and server-side library search (ADR-0053, spec
- * `docs/specs/library-scoping-and-manageability/`). **ON by default** (2026-07-26) now that every
- * milestone (M1 calendar-scope API → M2 calendar-scope web → M3 resource hierarchy → M4 archive +
- * search + the shared combobox → M5 interchange tiering) has landed and the M6 enablement gates are
- * green — the ux / accessibility / api / backend-performance reviews are folded in and the flag-on
- * Playwright journey (`e2e-library/library.spec.ts` via `pnpm --filter @repo/web test:e2e:library`)
- * is wired into CI. When on:
- *
- * - the **calendar library** screen gains a `Scope` badge column (Organisation / a named project)
- *   and a scope filter (Organisation · Project · All), reading the M1 `?scope=org|project|all` list;
- * - the **project detail** screen gains a *Calendars* section listing the calendars usable in that
- *   project — its own plus every organisation one — off the M1
- *   `GET …/projects/:projectId/calendars` endpoint;
- * - **creating** a calendar gains a scope choice: the shared organisation library (additionally
- *   gated on `calendar:manage_org`) or the project it was opened from, and a calendar can be moved
- *   between tiers (narrowing is refused with a 409 while anything outside the project uses it);
- * - the **plan** and **activity** calendar pickers read that project-usable list and group their
- *   options by tier, while the **resource** picker stays organisation-only (the API hard-rejects a
- *   project calendar on a resource — the pool is org-global, ADR-0039);
- * - the **resource library** nests under a `parent` tree with a non-assignable `GROUP` kind;
- * - both libraries gain **archive / restore** (an archived row keeps scheduling every assignment it
- *   already has, but leaves every picker) and a server-side **search** field, and every picker is
- *   the shared APG `Combobox` reading a searched, paginated list — closing the 20-row truncation
- *   defect;
- * - **importing** a schedule tiers its calendars to the target project by default, with an opt-in
- *   "add global calendars to the organisation library" choice (gated on `calendar:manage_org`).
- *
- * Frontend-only: every endpoint, error code and permission behind it shipped with M1/M3/M4/M5, and
- * the CPM engine is untouched (the ADR-0034 recalc parity gate is structurally trivial). Set
- * `VITE_LIBRARY_SCOPING=false` for a byte-for-byte rollback: no scope column, filter, section,
- * grouping, tree, archive control or search field renders, every picker falls back to its native
- * `<select>`, and every list requests today's default (the shared organisation library) — the
- * flag-off parity suites.
- *
- * @enabled 2026-07-26
- */
-export const LIBRARY_SCOPING_ENABLED = flagDefaultOn(import.meta.env.VITE_LIBRARY_SCOPING);
-
-/**
  * Canvas **live feedback & GPM float/drift visualisation** (ADR-0054, spec
  * `docs/specs/canvas-live-feedback/`). Default **off** until its M6 enablement gate — the
  * specialist reviews and, critically, the ADR-0026 draw-budget measurement at 2,000 activities
@@ -1131,45 +1091,6 @@ export const CANVAS_AUTHORING_FLOW_ENABLED =
  */
 export const CANVAS_LINK_ROUTING_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_LINK_ROUTING);
-
-/**
- * **The calendar shift-pattern editor** (`VITE_CALENDAR_SHIFT_EDITOR`, default **ON** since
- * 2026-08-01) — the authoring half of ADR-0036, behind ADR-0067.
- *
- * ADR-0036 moved storage and the CPM engine to working-**minutes** with intraday shift patterns:
- * split shifts, night shifts crossing midnight, asymmetric weeks with a half-day Friday. The engine
- * has scheduled all of it for a year. `api-v0.34.0` and the commits after it made every shape
- * authorable through the REST API. **Nothing in the product could still author one** — the calendar
- * form offered seven weekday checkboxes, which can say only *whether* a day works.
- *
- * Flag ON replaces those checkboxes with a per-day list of `HH:MM` periods, built on the shared
- * `WindowListEditor` — the same primitive the dated-exception editor uses, because a window is
- * authored in two places and two editors would drift about ordering, overlap and midnight
- * (ADR-0067 §2).
- *
- * Times are **text, not `<input type="time">`**: storage ends a full day at 24:00 and the native
- * control stops at 23:59 (spec Q2). Reading `00:00` back as 24:00 was rejected outright — it is
- * read-time inference, and 00:00 is a legitimate start.
- *
- * Rollback: set `VITE_CALENDAR_SHIFT_EDITOR=false` and rebuild the web image. Nothing persisted
- * depends on it: the API accepts both the mask and explicit shifts, and a calendar authored with
- * the editor keeps scheduling identically with the flag off — it simply becomes uneditable at
- * minute granularity again, which the form says out loud rather than implying the mask is the whole
- * truth. The flag-off parity suite is kept, not weakened; it is the rollback contract.
- *
- * Flipped default-on once the M4 gate pass finished: five specialist reviews over the combined
- * diff, ten blocking defects folded with regression tests, the `capability-shift-calendars` seed
- * plan reaching six capability keys no plan had ever reached, and the flag-on journey
- * (`apps/web/e2e-calendar-shifts/`) green against a real API. That journey earned its place on its
- * first run: it found that a menu opened from inside a modal `<dialog>` was unclickable, because a
- * modal dialog is in the browser's top layer and the menu portalled to `document.body`. No unit
- * test could have seen it — jsdom has no top layer.
- *
- * @enabled 2026-08-01
- */
-export const CALENDAR_SHIFT_EDITOR_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_CALENDAR_SHIFT_EDITOR,
-);
 
 /**
  * **Sub-day durations and lags** (`VITE_SUB_DAY_DURATIONS`, default **OFF**) — ADR-0070, the

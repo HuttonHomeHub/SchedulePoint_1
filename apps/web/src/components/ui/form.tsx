@@ -148,8 +148,8 @@ export interface SelectFieldProps extends SelectProps, GatedFieldProps {
 /*
  * NO `renderControl` ESCAPE HATCH — deliberately.
  *
- * One was added here for the flag-forked pickers (a `Combobox` when
- * `VITE_LIBRARY_SCOPING` is on, a native select when it is off) and removed
+ * One was added here for what were then the flag-forked pickers (a `Combobox` or a native select,
+ * chosen by `VITE_LIBRARY_SCOPING` — retired in ADR-0088 D3, `Combobox` now unconditional) and removed
  * again the same day: it passed only `{ id, describedBy, invalid }` to the
  * render function, never the `ref` or the rest props. Since the whole point was
  * to host a `register()`-bound control, and `register()` supplies exactly a ref

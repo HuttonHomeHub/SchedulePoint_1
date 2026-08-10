@@ -1,7 +1,7 @@
 import { WorkingWeekdays } from '@repo/types';
 import type { ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resourceKeys } from '../api/use-resources';
@@ -17,7 +17,6 @@ import { ApiFetchError, apiFetch } from '@/lib/api/client';
 // `ResourcesTable.archive` suites (ADR-0053 §3/§4).
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', async (importOriginal) => ({
@@ -95,6 +94,7 @@ function renderTable(
   );
 }
 
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
 describe('ResourcesTable', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
@@ -109,12 +109,17 @@ describe('ResourcesTable', () => {
   it('renders each resource with its kind, code and calendar name plus write actions', () => {
     renderTable(true);
 
-    expect(screen.getByText('Crew A')).toBeInTheDocument();
-    expect(screen.getByText('Labour')).toBeInTheDocument();
-    expect(screen.getByText('CRW-A')).toBeInTheDocument();
-    expect(screen.getByText('Standard')).toBeInTheDocument();
-    expect(screen.getByText('Concrete')).toBeInTheDocument();
-    expect(screen.getByText('Material')).toBeInTheDocument();
+    // Kind assertions are scoped to their ROW: the Kind filter above the table offers "Labour" and
+    // "Material" as options too, which it did not while `VITE_LIBRARY_SCOPING` gated the filter bar
+    // (ADR-0088 D3). The claim is unchanged — this row shows this kind — only the scope is.
+    const crewRow = within(screen.getByRole('row', { name: /Crew A/ }));
+    expect(crewRow.getByText('Crew A')).toBeInTheDocument();
+    expect(crewRow.getByText('Labour')).toBeInTheDocument();
+    expect(crewRow.getByText('CRW-A')).toBeInTheDocument();
+    expect(crewRow.getByText('Standard')).toBeInTheDocument();
+    const concreteRow = within(screen.getByRole('row', { name: /Concrete/ }));
+    expect(concreteRow.getByText('Concrete')).toBeInTheDocument();
+    expect(concreteRow.getByText('Material')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Crew A' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete Concrete' })).toBeInTheDocument();
   });

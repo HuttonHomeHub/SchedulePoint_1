@@ -29,7 +29,7 @@ import {
 
 /**
  * The calendars **usable in one project** (ADR-0053 §1) — the project's own, plus every shared
- * organisation calendar — shown on the project's detail screen behind `LIBRARY_SCOPING_ENABLED`.
+ * organisation calendar — shown on the project's detail screen.
  *
  * It reads the API's `…/projects/:projectId/calendars` endpoint, which returns exactly the set the
  * server's write guard accepts for a plan or activity in this project. That makes the section both

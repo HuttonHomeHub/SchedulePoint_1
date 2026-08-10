@@ -6,8 +6,6 @@ import { INHERIT_CALENDAR_LABEL } from '../schemas/activity-schemas';
 import { Combobox } from '@/components/ui/combobox';
 import { FieldGateLock, useFieldGate } from '@/components/ui/field-gate';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import {
   CALENDAR_TIER_GROUP_LABELS,
   groupCalendarsByTier,
@@ -72,15 +70,13 @@ export function ActivityCalendarField({
   const shaded = penShut || resourceDependent;
   // A bound value that matches no option (the list is still loading, or failed): inject a synthetic
   // option so the Select shows it as selected — never blank, which would read as "inherit".
-  const missing = Boolean(value) && !calendars.some((c) => c.id === value);
 
   const calendarTiers = groupCalendarsByTier(calendars);
-  const grouped = LIBRARY_SCOPING_ENABLED && calendarTiers.project.length > 0;
+  const grouped = calendarTiers.project.length > 0;
   // Not debounced: `calendars` is already the COMPLETE project-usable library, so this is a
   // client-side array pass.
   const [query, setQuery] = useState('');
   const options = useMemo(() => {
-    if (!LIBRARY_SCOPING_ENABLED) return [];
     const offerable = offerableCalendars(calendars, value).filter((calendar) =>
       matchesLibraryQuery(query, calendar.name),
     );
@@ -95,46 +91,26 @@ export function ActivityCalendarField({
         Calendar
         {shaded ? <FieldGateLock /> : null}
       </Label>
-      {LIBRARY_SCOPING_ENABLED ? (
-        <Combobox
-          id={fieldId}
-          value={value}
-          onChange={onChange}
-          query={query}
-          onQueryChange={setQuery}
-          options={options}
-          selectedLabel={calendars.find((c) => c.id === value)?.name}
-          groupLabels={CALENDAR_TIER_GROUP_LABELS}
-          emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
-          // `readOnly`, not `disabled`: the picker still shows which calendar this activity is on,
-          // and that value stays focusable and copyable (ADR-0083 D1 row 4).
-          readOnly={shaded}
-          loading={loading}
-          errored={errored}
-          describedBy={describedBy}
-          invalid={errored}
-          toggleLabel="Show calendars"
-          emptyMessage="No calendars match your search."
-        />
-      ) : (
-        <Select
-          id={fieldId}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          disabled={loading || shaded}
-          aria-busy={loading}
-          aria-invalid={errored ? true : undefined}
-          aria-describedby={describedBy}
-        >
-          <option value="">{INHERIT_CALENDAR_LABEL}</option>
-          {missing ? <option value={value}>{loading ? 'Loading…' : 'Unavailable'}</option> : null}
-          {calendars.map((calendar) => (
-            <option key={calendar.id} value={calendar.id}>
-              {calendar.name}
-            </option>
-          ))}
-        </Select>
-      )}
+      <Combobox
+        id={fieldId}
+        value={value}
+        onChange={onChange}
+        query={query}
+        onQueryChange={setQuery}
+        options={options}
+        selectedLabel={calendars.find((c) => c.id === value)?.name}
+        groupLabels={CALENDAR_TIER_GROUP_LABELS}
+        emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
+        // `readOnly`, not `disabled`: the picker still shows which calendar this activity is on,
+        // and that value stays focusable and copyable (ADR-0083 D1 row 4).
+        readOnly={shaded}
+        loading={loading}
+        errored={errored}
+        describedBy={describedBy}
+        invalid={errored}
+        toggleLabel="Show calendars"
+        emptyMessage="No calendars match your search."
+      />
       <p id={helpId} className="text-muted-foreground text-sm">
         {resourceDependent
           ? // Says WHY it is unavailable, not merely that it is. A disabled control with no reason

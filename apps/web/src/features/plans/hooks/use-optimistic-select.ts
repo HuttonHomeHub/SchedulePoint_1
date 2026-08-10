@@ -24,7 +24,7 @@ export function useOptimisticSelect<T, E extends HTMLElement = HTMLSelectElement
   /**
    * Attach to the control so focus can be restored after the busy state clears. `E` defaults to
    * `HTMLSelectElement` (every pre-existing caller); the calendar picker passes `HTMLInputElement`
-   * for the {@link Combobox} it renders behind `VITE_LIBRARY_SCOPING`.
+   * for the {@link Combobox}, which since ADR-0088 D3 is the only control it renders.
    */
   selectRef: React.RefObject<E | null>;
   /** Record an in-flight pick (call before firing the mutation). */

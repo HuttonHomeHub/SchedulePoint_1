@@ -22,7 +22,6 @@ import type {
   ExceptionFormValues,
 } from '../schemas/calendar-schemas';
 
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { calendarKeys } from '@/lib/query/hierarchy-keys';
 
@@ -36,9 +35,9 @@ function optional(value?: string): string | undefined {
 
 /**
  * The tier half of a create/update body (ADR-0053 §1–§2). Both fields are **omitted entirely**
- * unless a scope was chosen, so a caller that never touches scope — every caller while
- * `VITE_LIBRARY_SCOPING` is off — sends byte-identical JSON to before, and the server applies its
- * `ORG` default. `projectId` rides only with `scope: 'PROJECT'`, matching the API's paired validator.
+ * unless a scope was chosen, so a caller that never touches scope sends the pre-ADR-0053 JSON and
+ * the server applies its `ORG` default. `projectId` rides only with `scope: 'PROJECT'`, matching
+ * the API's paired validator.
  */
 function scopeBody(input: { scope?: CalendarScope | undefined; projectId?: string | undefined }) {
   if (input.scope === undefined) return {};
@@ -63,8 +62,15 @@ function createBody(input: CreateCalendarInput) {
   };
 }
 
-/** A create: the form's values, with the week expressed EITHER as a mask or as explicit shifts. */
-export type CreateCalendarInput = Omit<CalendarFormValues, 'workingWeekdays'> & {
+/**
+ * A create: the form's values, with the week expressed EITHER as a mask or as explicit shifts.
+ *
+ * `CalendarFormValues` no longer carries `workingWeekdays` (ADR-0088 D3 deleted the toggle group),
+ * so this was `Omit<…, 'workingWeekdays'>` and became a **silent no-op** — `Omit` of an absent key
+ * compiles and asserts nothing. The mask stays declared below because the **API still accepts one**;
+ * only the form stopped producing it.
+ */
+export type CreateCalendarInput = CalendarFormValues & {
   workingWeekdays?: number;
   shifts?: CalendarShift[];
 };
@@ -89,7 +95,7 @@ function updateBody(input: UpdateCalendarInput) {
 }
 
 /** An edit: the form's values with the week optional, plus the row's optimistic-locking version. */
-export type UpdateCalendarInput = Omit<CalendarFormValues, 'workingWeekdays'> & {
+export type UpdateCalendarInput = CalendarFormValues & {
   workingWeekdays?: number;
   shifts?: CalendarShift[];
   version: number;
@@ -194,11 +200,10 @@ export function useProjectCalendars(
 }
 
 /**
- * What a calendar PICKER asks the server for behind `VITE_LIBRARY_SCOPING`: archived rows included,
- * so a picker can label an archived current value honestly (it filters them out of the OFFERED
- * options itself). Exported so the resource screen — whose org-only picker is composed at the
- * route — applies the same rule as the plan/activity ones. Flag off it is never applied, and the
- * request keeps its bare path.
+ * What a calendar PICKER asks the server for: archived rows included, so a picker can label an
+ * archived current value honestly (it filters them out of the OFFERED options itself). Exported so
+ * the resource screen — whose org-only picker is composed at the route — applies the same rule as
+ * the plan/activity ones.
  */
 export const PICKER_CALENDAR_FILTERS: CalendarListFilters = { archived: 'include' };
 
@@ -206,13 +211,13 @@ export const PICKER_CALENDAR_FILTERS: CalendarListFilters = { archived: 'include
  * The calendars a **plan's** pickers (plan default + per-activity) may offer, resolved for the
  * plan's project.
  *
- * Flag off ⇒ the shared organisation library, byte-for-byte the pre-ADR-0053 read: the same hook,
- * key, URL and rows. Flag on ⇒ {@link useProjectCalendars} for that project (its own + every org
- * one). Both queries are declared unconditionally (rules of hooks) but only ONE is ever enabled, so
- * exactly one request fires either way — the switch lives here, in the feature that owns the tier
- * rules, rather than being re-derived by every composing screen.
+ * {@link useProjectCalendars} for that project — its own calendars plus every organisation one.
+ * Until ADR-0088 D3 this hook declared TWO queries and enabled exactly one, because
+ * `VITE_LIBRARY_SCOPING` off meant reading the shared organisation library instead; the switch
+ * lived here, in the feature that owns the tier rules, rather than being re-derived by every
+ * composing screen. One query now.
  *
- * Flag on it also asks for `?archived=include`. That looks backwards for a picker — until you note
+ * It asks for `?archived=include`. That looks backwards for a picker — until you note
  * the alternative: with archived rows absent, a plan whose calendar was archived AFTER it was
  * chosen would show "Unavailable" instead of its name. The pickers filter archived rows out of the
  * offered options themselves, keeping only the CURRENT value and badging it `Archived` (ADR-0053 §4
@@ -223,12 +228,12 @@ export function usePlanScopedCalendars(
   orgSlug: string,
   projectId: string,
 ): UseQueryResult<CalendarSummary[]> {
-  const org = useQuery({ ...calendarsQueryOptions(orgSlug), enabled: !LIBRARY_SCOPING_ENABLED });
-  const project = useQuery({
+  // `enabled` keeps its `Boolean(projectId)` guard — only the flag conjunct went. Without it the
+  // query fires with an empty projectId and asks the server for `/projects//calendars`.
+  return useQuery({
     ...projectCalendarsQueryOptions(orgSlug, projectId, PICKER_CALENDAR_FILTERS),
-    enabled: LIBRARY_SCOPING_ENABLED && Boolean(projectId),
+    enabled: Boolean(projectId),
   });
-  return LIBRARY_SCOPING_ENABLED ? project : org;
 }
 
 export function calendarQueryOptions(orgSlug: string, calendarId: string) {

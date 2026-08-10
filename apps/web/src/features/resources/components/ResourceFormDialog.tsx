@@ -1,10 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  ASSIGNABLE_RESOURCE_KINDS,
-  RESOURCE_KINDS,
-  type CalendarSummary,
-  type ResourceSummary,
-} from '@repo/types';
+import { RESOURCE_KINDS, type CalendarSummary, type ResourceSummary } from '@repo/types';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -29,11 +24,7 @@ import {
 } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import {
-  EARNED_VALUE_ENABLED,
-  LIBRARY_SCOPING_ENABLED,
-  RESOURCE_LEVELLING_ENABLED,
-} from '@/config/env';
+import { EARNED_VALUE_ENABLED, RESOURCE_LEVELLING_ENABLED } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { minorToMajorInput } from '@/lib/format-money';
 import { ARCHIVED_BADGE, isArchivedRow, matchesLibraryQuery } from '@/lib/library-filters';
@@ -71,7 +62,7 @@ export function ResourceFormDialog({
   readOnly?: boolean;
   /**
    * The org's resources, for the parent-group picker's options (ADR-0053 §3, route/table-composed
-   * like `calendars`). Only `GROUP` rows are offered, and only behind `VITE_LIBRARY_SCOPING`.
+   * like `calendars`). Only `GROUP` rows are offered.
    */
   resources?: ResourceSummary[];
   /** The org's calendars, for the calendar picker's options (route-composed). */
@@ -142,18 +133,16 @@ export function ResourceFormDialog({
   const calendarId = useWatch({ control, name: 'calendarId' });
   // The seeded calendar isn't in the loaded list (still loading, or it failed): keep it
   // selected under an honest label so the Select never reads blank ("inherit").
-  const missingCalendar = Boolean(calendarId) && !calendars.some((c) => c.id === calendarId);
 
   // Resource tree (ADR-0053 §3). A GROUP has no calendar, capacity or cost — those fields are
   // hidden for one rather than shown-and-rejected, and `use-resources` strips any stale value.
   const kind = useWatch({ control, name: 'kind' });
-  const isGroup = LIBRARY_SCOPING_ENABLED && kind === 'GROUP';
+  const isGroup = kind === 'GROUP';
   const parentId = useWatch({ control, name: 'parentId' });
   // The parent options are the org's GROUPs in tree order (indented), minus this resource's own
   // subtree — nesting a group inside itself is a 409 the picker should never offer. Groups are a
   // small minority of the library, so this stays a cheap client-side derivation.
   const parentOptions = useMemo(() => {
-    if (!LIBRARY_SCOPING_ENABLED) return [];
     const excluded = new Set<string>();
     if (resource) {
       excluded.add(resource.id);
@@ -182,7 +171,6 @@ export function ResourceFormDialog({
   // project calendar here (422 `RESOURCE_REQUIRES_ORG_CALENDAR`). That is why this picker has no
   // tier grouping: there is only ever one tier in it.
   const calendarOptions = useMemo<ComboboxOption[]>(() => {
-    if (!LIBRARY_SCOPING_ENABLED) return [];
     return calendars
       .filter(
         (calendar) =>
@@ -300,13 +288,11 @@ export function ResourceFormDialog({
                   <Select id={kindSelectId} disabled={readOnly} {...register('kind')}>
                     {/* GROUP is only offered behind the flag (ADR-0053 §3) — with it off the option
                     list is byte-for-byte the three assignable kinds it has always been. */}
-                    {(LIBRARY_SCOPING_ENABLED ? RESOURCE_KINDS : ASSIGNABLE_RESOURCE_KINDS).map(
-                      (kindOption) => (
-                        <option key={kindOption} value={kindOption}>
-                          {RESOURCE_KIND_LABELS[kindOption]}
-                        </option>
-                      ),
-                    )}
+                    {RESOURCE_KINDS.map((kindOption) => (
+                      <option key={kindOption} value={kindOption}>
+                        {RESOURCE_KIND_LABELS[kindOption]}
+                      </option>
+                    ))}
                   </Select>
                   {isGroup ? (
                     <p className="text-muted-foreground text-sm">
@@ -315,36 +301,33 @@ export function ResourceFormDialog({
                     </p>
                   ) : null}
                 </div>
-                {LIBRARY_SCOPING_ENABLED ? (
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={parentSelectId}>Group</Label>
-                    <Combobox
-                      id={parentSelectId}
-                      value={parentId ?? ''}
-                      onChange={(value) =>
-                        setValue('parentId', value, { shouldDirty: true, shouldValidate: true })
-                      }
-                      query={parentQuery}
-                      onQueryChange={setParentQuery}
-                      options={parentComboboxOptions}
-                      // A seeded group no longer on offer stays selected under the combobox's own
-                      // "Unavailable" fallback, so the field never silently reads "top level".
-                      selectedLabel={
-                        parentOptions.find((row) => row.resource.id === parentId)?.resource.name
-                      }
-                      emptyOption={{ label: TOP_LEVEL_PARENT_LABEL }}
-                      readOnly={readOnly}
-                      describedBy={parentHelpId}
-                      toggleLabel="Show groups"
-                      emptyMessage="No groups match your search."
-                    />
-                    <p id={parentHelpId} className="text-muted-foreground text-sm">
-                      Nest this resource under a group to keep a large library navigable. Grouping
-                      is organisational only — it never changes how anything is scheduled or
-                      levelled.
-                    </p>
-                  </div>
-                ) : null}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={parentSelectId}>Group</Label>
+                  <Combobox
+                    id={parentSelectId}
+                    value={parentId ?? ''}
+                    onChange={(value) =>
+                      setValue('parentId', value, { shouldDirty: true, shouldValidate: true })
+                    }
+                    query={parentQuery}
+                    onQueryChange={setParentQuery}
+                    options={parentComboboxOptions}
+                    // A seeded group no longer on offer stays selected under the combobox's own
+                    // "Unavailable" fallback, so the field never silently reads "top level".
+                    selectedLabel={
+                      parentOptions.find((row) => row.resource.id === parentId)?.resource.name
+                    }
+                    emptyOption={{ label: TOP_LEVEL_PARENT_LABEL }}
+                    readOnly={readOnly}
+                    describedBy={parentHelpId}
+                    toggleLabel="Show groups"
+                    emptyMessage="No groups match your search."
+                  />
+                  <p id={parentHelpId} className="text-muted-foreground text-sm">
+                    Nest this resource under a group to keep a large library navigable. Grouping is
+                    organisational only — it never changes how anything is scheduled or levelled.
+                  </p>
+                </div>
               </FieldGrid>
             </FormSection>
 
@@ -359,58 +342,33 @@ export function ResourceFormDialog({
                 <FieldGrid>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor={calendarSelectId}>Calendar</Label>
-                    {LIBRARY_SCOPING_ENABLED ? (
-                      <Combobox
-                        id={calendarSelectId}
-                        value={calendarId ?? ''}
-                        onChange={(value) =>
-                          setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
-                        }
-                        query={calendarQuery}
-                        onQueryChange={setCalendarQuery}
-                        options={calendarOptions}
-                        selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
-                        emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
-                        loading={calendarsLoading}
-                        errored={calendarsError}
-                        readOnly={readOnly}
-                        describedBy={
-                          calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
-                        }
-                        invalid={calendarsError}
-                        toggleLabel="Show calendars"
-                        emptyMessage="No calendars match your search."
-                      />
-                    ) : (
-                      <Select
-                        id={calendarSelectId}
-                        disabled={readOnly || calendarsLoading}
-                        aria-busy={calendarsLoading}
-                        aria-invalid={calendarsError ? true : undefined}
-                        aria-describedby={
-                          calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
-                        }
-                        {...register('calendarId')}
-                      >
-                        <option value="">{INHERIT_CALENDAR_LABEL}</option>
-                        {missingCalendar ? (
-                          <option value={calendarId}>
-                            {calendarsLoading ? 'Loading…' : 'Unavailable'}
-                          </option>
-                        ) : null}
-                        {calendars.map((calendar) => (
-                          <option key={calendar.id} value={calendar.id}>
-                            {calendar.name}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
+                    <Combobox
+                      id={calendarSelectId}
+                      value={calendarId ?? ''}
+                      onChange={(value) =>
+                        setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
+                      }
+                      query={calendarQuery}
+                      onQueryChange={setCalendarQuery}
+                      options={calendarOptions}
+                      selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
+                      emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
+                      loading={calendarsLoading}
+                      errored={calendarsError}
+                      readOnly={readOnly}
+                      describedBy={
+                        calendarsError ? `${calendarHelpId} ${calendarErrorId}` : calendarHelpId
+                      }
+                      invalid={calendarsError}
+                      toggleLabel="Show calendars"
+                      emptyMessage="No calendars match your search."
+                    />
                     <p id={calendarHelpId} className="text-muted-foreground text-sm">
                       The working-time calendar this resource is scheduled on when it drives an
                       activity. Inherits the plan’s calendar unless you pick one.
-                      {LIBRARY_SCOPING_ENABLED
-                        ? ' Organisation calendars only — the resource pool is shared across every project, so a project’s own calendar can’t be used here.'
-                        : null}
+                      {
+                        ' Organisation calendars only — the resource pool is shared across every project, so a project’s own calendar can’t be used here.'
+                      }
                     </p>
                     {calendarsError ? (
                       <p

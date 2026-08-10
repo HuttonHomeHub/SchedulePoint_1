@@ -120,13 +120,39 @@ Version 4 finds **five**, and the two extra beyond the reviewer's are real by th
 | `VITE_CANVAS_WORKSPACE`      | `<PlanWorkspace>` vs `<LegacyPlanLayout>` (`plan-detail.tsx:112`)                     |
 | `VITE_ACTIVITY_EDITOR_TABS`  | `<ActivityEditorDialog>` vs the legacy dialog trio (`activity-crud-dialogs.tsx:143`)  |
 | `VITE_CALENDAR_SHIFT_EDITOR` | `<WeeklyShiftEditor>` vs the legacy weekday checkboxes (`CalendarFormDialog.tsx:467`) |
-| `VITE_LIBRARY_SCOPING`       | `<Combobox>` vs `<Select>`, in **four** pickers                                       |
+| `VITE_LIBRARY_SCOPING`       | `<Combobox>` vs `<Select>`, in **five** pickers (+ one guard — see below)             |
+
+> _Corrected 2026-08-10._ This row said **four** pickers. The true shape is **five two-arm selection
+> sites** — `ActivityFormDialog.tsx:551`, `ActivityCalendarField.tsx:98`, `PlanCalendarPicker.tsx:146`,
+> `ResourceFormDialog.tsx:362`, `ActivityResourcesPanel.tsx:367` — **plus one guard-only site**,
+> `ResourceFormDialog.tsx:318`, whose flag-off branch is `: null`. That last one renders **no control
+> at all** flag-off, which is this decision's own **Class B guard** shape rather than a selection, so
+> counting it as a sixth picker would be wrong in the other direction.
+>
+> The figure was not a clerical slip: it was **the detector's output**. `detect-alternative-surfaces.mjs`
+> structurally cannot see `:318` (its ternary wraps a `<div>`, so neither arm opens with a JSX element
+> by its test) or `:551` (an intervening comment). The consequence outranks the count — **assertion 3b
+> does not backstop those two sites**, so the safety net when this flag retires is deleting the
+> constant from `env.ts`, which converts every missed reference into a typecheck error. The detector
+> remains a tripwire, never the classifier, exactly as D2 says.
 
 **`VITE_ACTIVITY_EDITOR_TABS` is arguably the worst case in the estate**, and neither the ADR's
 author nor the architecture review found it. Its flag-off branch is the pre-ADR-0060 dialog trio, and
 **at least nine unrelated features have had to add a case to both** the legacy monolith and the
 tabbed editor to keep them byte-identical — `ActivityFormDialog.{calendar,advanced-constraints,cost-accrual,duration-types,earned-value,inter-project-dates,levelling,scope,sub-day,activity-types}.test.tsx`.
 That is the "second product maintained forever" with nine receipts.
+
+> _Corrected 2026-08-10._ **The paragraph above is true about the codebase and false about the flag**,
+> which is a more useful mistake than a wrong number. `ActivityEditorDialog.tsx:154` states in its own
+> docblock that "this editor is **edit-only**; creation stays with `ActivityFormDialog`", and
+> `CreateActivityButton.tsx` renders `ActivityFormDialog` with **no flag reference anywhere in the
+> file**. So retiring this flag deletes three mount sites and leaves the legacy monolith alive as the
+> **create** surface, carrying every field those nine features added — and the nine suites are
+> **flag-unaware** (0 of 11 `ActivityFormDialog.*.test.tsx` files reference the constant), so they
+> would not move either. The nine receipts are real; they are receipts for **create and edit being two
+> different components** (an ADR-0060 decision), not for this flag. Retiring it collects none of the
+> payoff this paragraph promises, which is why the batch-2 retirement chose other subjects. Unifying
+> the two dialogs is the work that would actually collect it.
 
 **The ADR said "two", and the honest number is five.** It is recorded rather than quietly amended,
 because a document that asserts a computed count and gets it wrong is the exact failure this decision
@@ -179,6 +205,39 @@ The cap is **re-set to the measured count after each Class A retirement** and ne
 ADR. `VITE_CANVAS_TOOLBAR` retiring takes it to four. Failing this gate is not a prohibition — it is
 a required register edit with a written reason, which is what the cap is for.
 
+### D3a — A Class A flag may be deferred, but only to an event somebody named
+
+_Added 2026-08-10, with the batch-2 retirement._
+
+D3 says Class A retires **on epic-touch**. Two of the four survivors have no epic touching them, and
+both still sit on batch dates the gate enforces — so `check:flags` would go red on a date nobody
+chose, for work deliberately not being done. A red build for a decision that was made correctly is
+how a gate gets argued away.
+
+**The obvious remedy is wrong.** `keep` already suspends the date, and reaching for it here would be
+a **written false statement**: `keep` means "Class B, guard-only, never retires", and applying it to
+an alternative surface corrupts the one classification this ADR exists to defend. It would also
+launder the estate's two most expensive flags into the population declared permanently exempt.
+
+So a `deferredUntil` field, **bounded by construction**, because an undated gate-honoured opt-out for
+a Class A flag _is_ the escape hatch this decision set out to remove:
+
+- a **trigger from a closed vocabulary** (`deferralTriggers` in the register) — so adding a reason is
+  a decision made in a diff, not a sentence invented on the day a date passes;
+- a **named `docs/TECH_DEBT.md` row**, because a deferral nobody can find is a deletion with extra
+  steps;
+- a **written reason**, and the gate rejects a bare date, a free-text trigger or a missing debt row.
+
+**What a deferred parent's date means for a child.** Assertion 5 compares batch dues literally, so
+once a parent is deferred its `due` stops being a retirement date while still bounding its children.
+`CANVAS_WORKSPACE → CANVAS_AUTHORING → SCHEDULING_MODES` is a live chain of exactly this shape. The
+rule is unchanged and the reason is worth stating: **a child may still not retire before its parent**,
+and a deferred parent simply cannot retire yet — so the bound is stricter, never looser, and no child
+is silently released by its parent's deferral.
+
+`"retirement in flight"` is in the vocabulary from the start, so a retirement that slips past its own
+batch date has a fitting value already written down rather than one improvised under time pressure.
+
 **`VITE_CANVAS_TOOLBAR` retires first, and on evidence rather than on its date.** It is the only flag
 in the register whose flag-off branch has a **shipped, user-facing defect** attributed to it:
 ADR-0080 wired `bulk` into one host and not into the layout this flag selects, unit-green throughout.
@@ -201,6 +260,13 @@ maintain"_ — which is what that field was built for and, until now, had **zero
 
 This is the half of the product owner's instinct that was right, and it applies to most of the
 estate.
+
+> **`keep` is a Class B claim and nothing else** (added with D3a, 2026-08-10). It asserts "guard-only;
+> no second product to maintain", which is false of every Class A flag. A Class A flag that needs to
+> outlive its batch date takes **`deferredUntil`** instead — a different field because it is a
+> different claim, and `check:flags` rejects a flag carrying both. The register's vocabulary is
+> therefore `class` (what shape it is), `keep` (Class B, permanent) and `deferredUntil` (Class A, an
+> event that will happen).
 
 ### D5 — Class C: replace the coverage, not the flag, and not on a deadline
 
@@ -296,7 +362,17 @@ parity suite" describes deleting nothing.
   classified by the same rule rather than by whoever is reviewing.
 - **Two gates replace one.** Every flag carries a class; a Class B flag that _grows_ a
   component-selecting ternary fails CI, because promotion to Class A is a decision somebody makes and
-  not a drift. Class A is capped at three.
+  not a drift. Class A is capped **at the measured count, which ratchets down after each
+  retirement** — the rule D3 states, not a literal.
+
+  > _Corrected 2026-08-10._ This line read "capped at three" — one of the two draft figures D3
+  > explicitly records **rejecting** as the aspirational-80% mistake, chosen before the detector
+  > existed and below the real count. The ADR therefore contradicted itself, and `CLAUDE.md`
+  > propagated the wrong half. The shipped gate was right throughout, which is the argument for
+  > gates: `check-flags.mjs` read `classACap` from the register and never read this sentence. The
+  > literal is gone rather than updated, because a number restated in prose is a number that goes
+  > stale again at the next retirement (ADR-0073 C4).
+
 - **`keep` gets its first occupants.** ADR-0084 built the field and never used it; ~28 flags take it
   with one shared reason.
 - **The blast-radius accounting is corrected** for three flags the register under-stated, the largest

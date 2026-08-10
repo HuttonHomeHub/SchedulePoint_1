@@ -2,7 +2,6 @@ import { ARCHIVED_FILTERS, RESOURCE_KINDS } from '@repo/types';
 import { useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { PICKER_CALENDAR_FILTERS, useCalendars } from '@/features/calendars';
 import {
   ANY_RESOURCE_KIND,
@@ -57,12 +56,8 @@ export function ResourcesScreen(): React.ReactElement {
   // `?scope=org` list IS the usable set, so the picker can never offer one that would be refused.
   // Archived rows ride along behind the flag (ADR-0053 §4): the picker filters them out of what it
   // OFFERS, but a resource already bound to a since-archived calendar must still show its name
-  // rather than "Unnamed". Flag off, the request is byte-for-byte today's.
-  const calendars = useCalendars(
-    orgSlug,
-    'org',
-    LIBRARY_SCOPING_ENABLED ? PICKER_CALENDAR_FILTERS : {},
-  );
+  // rather than "Unnamed".
+  const calendars = useCalendars(orgSlug, 'org', PICKER_CALENDAR_FILTERS);
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 p-6">

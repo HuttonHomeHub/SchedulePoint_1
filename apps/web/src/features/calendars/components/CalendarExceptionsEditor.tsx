@@ -34,7 +34,6 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { WindowListEditor } from '@/components/ui/window-list-editor';
-import { CALENDAR_SHIFT_EDITOR_ENABLED } from '@/config/env';
 import { ApiFetchError } from '@/lib/api/client';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -61,12 +60,10 @@ function formatExceptionSpan(date: string, endDate: string | undefined): string 
   return `${first} – ${formatCalendarDate(endDate)}`;
 }
 
-/** The options offered, flag off (two) and flag on (three) — see {@link ExceptionKind}. */
-const OFFERED_KINDS: ExceptionKind[] = CALENDAR_SHIFT_EDITOR_ENABLED
-  ? ['holiday', 'allDay', 'hours']
-  : ['holiday', 'allDay'];
+/** The three options offered — see {@link ExceptionKind}. */
+const OFFERED_KINDS: ExceptionKind[] = ['holiday', 'allDay', 'hours'];
 
-/** What an exception does to its day. Flag off, the same two options it has always offered. */
+/** What an exception does to its day. */
 function ExceptionKindSelect({
   kind,
   onKindChange,
@@ -118,7 +115,7 @@ function ExceptionWindowFields({
   message?: string | undefined;
   legend: string;
 }): React.ReactElement | null {
-  if (!CALENDAR_SHIFT_EDITOR_ENABLED || kind !== 'hours') return null;
+  if (kind !== 'hours') return null;
   return (
     <div className="flex flex-col gap-1.5">
       <WindowListEditor
@@ -400,12 +397,12 @@ export function CalendarExceptionsEditor({
               <li
                 key={exception.id}
                 className={
-                  CALENDAR_SHIFT_EDITOR_ENABLED && editingId === exception.id
+                  editingId === exception.id
                     ? 'border-border rounded-md border p-2'
                     : 'border-border flex items-center justify-between gap-3 rounded-md border p-2'
                 }
               >
-                {CALENDAR_SHIFT_EDITOR_ENABLED && editingId === exception.id ? (
+                {editingId === exception.id ? (
                   <ExceptionEditForm
                     exception={exception}
                     orgSlug={orgSlug}
@@ -423,7 +420,7 @@ export function CalendarExceptionsEditor({
                       </Badge>
                       {/* The hours a "Working day" badge alone cannot express — a half-day reads
                           as an ordinary worked day without them (ADR-0067 §3). */}
-                      {CALENDAR_SHIFT_EDITOR_ENABLED && exceptionKindOf(exception) === 'hours' ? (
+                      {exceptionKindOf(exception) === 'hours' ? (
                         <span className="text-muted-foreground shrink-0">
                           {formatWindowList(exception.windows)}
                         </span>
@@ -434,19 +431,17 @@ export function CalendarExceptionsEditor({
                     </div>
                     {readOnly ? null : (
                       <div className="flex shrink-0 items-center">
-                        {CALENDAR_SHIFT_EDITOR_ENABLED ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingId(exception.id)}
-                            // Queried by `closeEditor` to hand focus back to the control that
-                            // opened the form — a per-row ref map for one lookup would be worse.
-                            data-edit-exception={exception.id}
-                            aria-label={`Edit exception on ${formatExceptionSpan(exception.date, exception.endDate)}`}
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditingId(exception.id)}
+                          // Queried by `closeEditor` to hand focus back to the control that
+                          // opened the form — a per-row ref map for one lookup would be worse.
+                          data-edit-exception={exception.id}
+                          aria-label={`Edit exception on ${formatExceptionSpan(exception.date, exception.endDate)}`}
+                        >
+                          Edit
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

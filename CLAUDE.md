@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 900 web
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 897 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
 > 88 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -1812,8 +1812,12 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   ~28 one-line guards, including both flags that blew up batch 1 (`TsldPanel.tsx:1311` and
   `use-plan-edit-lock.ts:227` are one line each) — formally **keeps**, giving ADR-0084 D6's field its
   first occupants. **Class C** — pinned by a Playwright harness — replaces the coverage first, never
-  on a deadline. Class A retires on epic-touch with a **cap of three**, so a fourth alternative
-  surface fails CI while the conversation is still cheap.
+  on a deadline. Class A retires on epic-touch under a cap set at **the measured count, ratcheting
+  down after each retirement**, so an alternative surface **beyond** that count fails CI while the
+  conversation is still cheap. (This said "a cap of three, so a fourth… fails CI" until 2026-08-10 —
+  wrong twice over, and copied from ADR-0088's Consequences section, which contradicted that ADR's
+  own D3. The cap is a number in `flag-retirement.json`; prose restating it goes stale at every
+  retirement, so it no longer does.)
   Three things are recorded because they are uncomfortable. `check-flags.mjs` matches `'true'` and
   `'false'` identically — **135 no-op pins against 10 real harnesses** — so batch 2 would have failed
   on the cheapest possible cause before reaching the work. The base journey's six editing specs prove

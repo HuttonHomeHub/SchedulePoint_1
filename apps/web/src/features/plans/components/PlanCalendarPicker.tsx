@@ -7,8 +7,6 @@ import { useOptimisticSelect } from '../hooks/use-optimistic-select';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import {
   CALENDAR_TIER_GROUP_LABELS,
@@ -25,7 +23,7 @@ const NONE_LABEL = 'None (all days work)';
  * `<input>`. Exactly one exists at a time (the flag is a build-time constant), so one ref typed as
  * the intersection satisfies both consumers without a cast or a second hook instance.
  */
-type CalendarControl = HTMLSelectElement & HTMLInputElement;
+type CalendarControl = HTMLInputElement;
 
 /**
  * The plan's default working-day calendar (M5, ADR-0024). Writers (`canEdit`, the
@@ -41,7 +39,7 @@ type CalendarControl = HTMLSelectElement & HTMLInputElement;
  * optimistic-lock race a rapid re-edit would otherwise hit. Focus is restored after
  * the busy state clears (disabling the focused control drops focus otherwise).
  *
- * Behind `LIBRARY_SCOPING_ENABLED` the control is the shared APG {@link Combobox}
+ * The control is the shared APG {@link Combobox}
  * (ADR-0053 §4 / US-8) rather than a native `<select>`: a planner can TYPE to find a
  * calendar in a large library, tiers become labelled option groups, and an archived
  * current value stays selected under an `Archived` badge. Flag off it is the same
@@ -86,20 +84,18 @@ export function PlanCalendarPicker({
   // loaded, so an unmatched non-empty value only happens while `calendars` is still
   // loading. Inject a synthetic option for it so the Select shows the calendar as
   // selected (not silently blank, which would read as "None").
-  const missingCurrent = displayed !== '' && !calendars.some((c) => c.id === displayed);
 
-  // Behind `LIBRARY_SCOPING_ENABLED` the list spans two tiers (ADR-0053 §1), so the options are
+  // The list spans two tiers (ADR-0053 §1), so the options are
   // grouped under named `<optgroup>`s — a native grouping screen readers announce as the option's
   // group, so "Site shutdown, This project's calendars" is unambiguous next to an identically-named
   // organisation calendar (the tiers deliberately allow the same name). A group with no members is
   // not rendered, so a project with no calendars of its own shows one flat, unheaded list.
   const tiers = groupCalendarsByTier(calendars);
-  const grouped = LIBRARY_SCOPING_ENABLED && tiers.project.length > 0;
+  const grouped = tiers.project.length > 0;
 
   // Archived calendars are offered only when one IS the current value (US-8), and the search runs
   // over what is left — so typing can never surface a calendar the write seam would refuse.
   const options = useMemo(() => {
-    if (!LIBRARY_SCOPING_ENABLED) return [];
     const offerable = offerableCalendars(calendars, displayed).filter((calendar) =>
       matchesLibraryQuery(query, calendar.name),
     );
@@ -143,45 +139,24 @@ export function PlanCalendarPicker({
   return (
     <div className="flex max-w-xs flex-col gap-1.5">
       <Label htmlFor={selectId}>Calendar</Label>
-      {LIBRARY_SCOPING_ENABLED ? (
-        <Combobox
-          id={selectId}
-          inputRef={selectRef}
-          value={displayed}
-          onChange={commit}
-          query={query}
-          onQueryChange={setQuery}
-          options={options}
-          selectedLabel={calendars.find((calendar) => calendar.id === displayed)?.name}
-          groupLabels={CALENDAR_TIER_GROUP_LABELS}
-          emptyOption={{ label: NONE_LABEL }}
-          loading={calendarsLoading}
-          disabled={busy}
-          describedBy={describedBy}
-          invalid={setCalendar.isError}
-          toggleLabel="Show calendars"
-          emptyMessage="No calendars match your search."
-        />
-      ) : (
-        <Select
-          ref={selectRef}
-          id={selectId}
-          value={displayed}
-          disabled={busy}
-          aria-busy={busy}
-          aria-invalid={setCalendar.isError}
-          aria-describedby={describedBy}
-          onChange={(event) => commit(event.target.value)}
-        >
-          <option value="">{NONE_LABEL}</option>
-          {missingCurrent ? <option value={displayed}>Loading…</option> : null}
-          {calendars.map((calendar) => (
-            <option key={calendar.id} value={calendar.id}>
-              {calendar.name}
-            </option>
-          ))}
-        </Select>
-      )}
+      <Combobox
+        id={selectId}
+        inputRef={selectRef}
+        value={displayed}
+        onChange={commit}
+        query={query}
+        onQueryChange={setQuery}
+        options={options}
+        selectedLabel={calendars.find((calendar) => calendar.id === displayed)?.name}
+        groupLabels={CALENDAR_TIER_GROUP_LABELS}
+        emptyOption={{ label: NONE_LABEL }}
+        loading={calendarsLoading}
+        disabled={busy}
+        describedBy={describedBy}
+        invalid={setCalendar.isError}
+        toggleLabel="Show calendars"
+        emptyMessage="No calendars match your search."
+      />
       <p id={hintId} className="text-muted-foreground text-sm">
         {busy ? 'Saving…' : 'Recalculate to apply the calendar to the schedule’s dates.'}
       </p>

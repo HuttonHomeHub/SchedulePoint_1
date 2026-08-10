@@ -1986,6 +1986,42 @@ The real remedy, if one is wanted, is to stop recording the path at all — whic
 investigative value the column exists for. Open, unowned, and cheap to leave open: the throttle
 bounds a sustained flood and the sweep bounds the residue after one stops.
 
+## 122. Two Class A flags are deferred, and the payoff is not where the register said it was
+
+`VITE_ACTIVITY_EDITOR_TABS` and `VITE_CANVAS_WORKSPACE` are the two alternative surfaces the batch-2
+retirement did **not** take. Both carry `deferredUntil` in `scripts/flag-retirement.json` (ADR-0088
+D3a), which suspends their batch dates against a **named event** rather than a date — so this row is
+the thing the gate points at, and deleting it fails `pnpm check:flags`.
+
+**`VITE_ACTIVITY_EDITOR_TABS` — trigger: the next epic touching the activity editor.**
+The register described this as the estate's worst case, on the strength of nine unrelated features
+having had to patch both branches. That is **true about the codebase and false about the flag**, and
+the distinction is the whole point of this row:
+
+- `ActivityEditorDialog.tsx:154` — _"This editor is edit-only; creation stays with
+  `ActivityFormDialog`."_
+- `CreateActivityButton.tsx` renders `ActivityFormDialog` with **no flag reference in the file**.
+- 0 of 11 `ActivityFormDialog.*.test.tsx` suites reference the constant — they are flag-unaware.
+
+So retiring the flag deletes three mount sites and leaves the legacy monolith alive as the **create**
+surface, carrying every field those nine features added, and moves none of the nine suites. **The
+receipts belong to create and edit being two components** — an ADR-0060 decision — not to the flag.
+The work that would actually collect the payoff is unifying the two dialogs; retiring the flag first
+buys nothing and costs 2 flag-off harnesses (`sub-day`, `assignment-lag`) plus 2 derived children.
+
+**`VITE_CANVAS_WORKSPACE` — trigger: the next epic touching the plan workspace.**
+Seven flag-off Playwright configs pin it and their specs are written against the legacy stacked
+plan-detail page: `activity-editor`, `assignment-lag`, base, `edit`, `notes`, `programme`, `sub-day`.
+That is the largest conversion cost in the estate, and ADR-0084 D5 forbids retiring before the
+coverage is replaced. Note `sub-day` and `assignment-lag` harness **both** deferred survivors, so
+converting either flag pays down part of the other.
+
+**Why this is debt and not a decision to close.** Neither flag is hurting anybody today — both are
+compiled on and unreachable (ADR-0088 D1), so no user can select the deleted branch. The cost is that
+every change near either surface has to be made twice, and the failures that causes are the quiet
+kind: ADR-0080 wired `bulk` into one host and not the layout `VITE_CANVAS_TOOLBAR` selected, unit-green
+throughout.
+
 ## 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
 `apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the

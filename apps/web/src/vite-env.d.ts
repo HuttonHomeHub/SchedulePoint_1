@@ -13,8 +13,6 @@ interface ImportMetaEnv {
   readonly VITE_PLAN_EDIT_LOCK?: string;
   /** The persistent app-shell + hierarchy navigator (ADR-0029). "true"/"1" enables it; off by default. */
   readonly VITE_NAV_TREE?: string;
-  /** In-tree CRUD for the Project Explorer (ADR-0029 Phase 2). On by default; "false"/"0" disables it. */
-  readonly VITE_NAV_TREE_CRUD?: string;
   /** Canvas-first plan workspace (ADR-0030). "true"/"1" enables it; off by default. */
   readonly VITE_CANVAS_WORKSPACE?: string;
   /** Canvas-first plan authoring (ADR-0032). "true"/"1" enables it; off by default. */
@@ -73,8 +71,6 @@ interface ImportMetaEnv {
   readonly VITE_ENTRY_ROUTES?: string;
   /** TSLD canvas direct manipulation + visual refresh — time-true link anchoring (lag walked on the relationship's lag calendar from the constrained edge; lead = left) + directional arrowheads, duration resize on both bar edges, a draggable lag anchor, and the token-resolved bar/link visual refresh (ADR-0052, docs/specs/canvas-direct-manipulation/). On by default (2026-07-25, M1–M5 landed); "false"/"0" rolls back to the legacy edge-drag zones and canvas paint, byte-for-byte. */
   readonly VITE_CANVAS_DIRECT_MANIPULATION?: string;
-  /** Library scoping & manageability web surface — the calendar ORG/PROJECT tier (scope badge/filter, the project Calendars section, the scope choice on create, tier-grouped pickers), the resource parent tree + non-assignable GROUP kind, archive/restore, URL-backed server-side library search, the shared searched combobox pickers, and the interchange calendar-tier import option (ADR-0053). On by default (2026-07-26, M1-M6 landed); "false"/"0" rolls the whole surface back, byte-for-byte. */
-  readonly VITE_LIBRARY_SCOPING?: string;
   /** TSLD canvas live feedback + GPM float/drift visualisation — the in-flight ghost carrying the dragged bar's own label/progress/glyph while its source recedes, a cursor date chip + ruler guideline, start/finish dates flanking each bar behind a Dates toggle, hollow float/drift tails, and relationship slack on the selected activity's links (ADR-0054, docs/specs/canvas-live-feedback/). "true"/"1" enables it; off by default until the M6 draw-budget measurement + specialist reviews. */
   readonly VITE_CANVAS_LIVE_FEEDBACK?: string;
   /** Designed chrome band — the header row and (on a plan) the two toolbar rows rendered as ONE full-bleed band across the top, with the Project Explorer and the workspace below it; the toolbar reaches the band through a portal, so no plan state moves into the shell (ADR-0055, docs/specs/designed-ui/). Also stamps `data-designed-chrome` on <html>, activating the flagged token values. "true"/"1" enables it; off by default until the S5 enablement gate. */
@@ -94,8 +90,6 @@ interface ImportMetaEnv {
   /** ADR-0064 M1 — the additive canvas authoring-flow surface (band, confirmation, quiescence). */
   readonly VITE_CANVAS_AUTHORING_FLOW?: string;
   readonly VITE_CANVAS_LINK_ROUTING?: string;
-  /** ADR-0067 — author a calendar's working HOURS, not just its working days. Default off. */
-  readonly VITE_CALENDAR_SHIFT_EDITOR?: string;
   /** ADR-0070 — type a duration or lag in days, hours and minutes. Default off. */
   readonly VITE_SUB_DAY_DURATIONS?: string;
   /** ADR-0071 M4 — set how far into an activity a resource joins it. Default off. */
