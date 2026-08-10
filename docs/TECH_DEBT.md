@@ -1928,3 +1928,37 @@ the **real** table (five rows, one heap page) at 0.036 ms and recommended deferr
 rather than a date — build it when unverified accounts on the deployed installation reach five
 figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` so the question is
 not reopened from scratch.
+
+## 119. The API e2e suite fails intermittently, and the failure has never been captured
+
+**Observed 2026-08-10, three times in one session, against `scripts/e2e-local.sh api`.** Each time
+the whole `test/staff.e2e-spec.ts` file failed — all 13 tests including ones the change had not
+touched, which is the shape of a `beforeAll` failure rather than 13 independent ones. Each time the
+next run passed: **517 passed** on five subsequent runs, including one immediately after `touch`ing
+an API source file to force a cold transform.
+
+**Two hypotheses were tested and neither held.**
+
+1. _Two suites sharing one database._ The second failure did coincide with a backgrounded full-gate
+   invocation running its own `e2e-local.sh api`, and that is a real hazard — `vitest.e2e.config.ts`
+   sets `fileParallelism: false` and every suite shares one process and one `process.env`, so two
+   concurrent runs share a database with no isolation at all. But the third failure had no overlap.
+2. _A cold transform blowing a hook timeout on the first run after an edit._ Explicitly reproduced
+   with `touch` + a full run: passed.
+
+**What is actually wrong is the diagnosis, not the suite.** The failure text was never captured:
+each occurrence was met with a re-run, which passed, which destroyed the evidence. That is the
+mistake to fix first — this entry exists so the next occurrence is treated as the only chance to see
+it. Capture the full output to a file **before** re-running, and keep it.
+
+**Do not file this as flake.** A whole-file failure with a persistent database and a shared process
+has several credible mechanisms — leftover rows from a sibling suite that `beforeEach` does not
+clear, a `STAFF_EMAILS` value leaking across files (the suite's own docblock warns about exactly
+that), an `audit_events` row blocking an organisation delete under `ON DELETE RESTRICT` (which this
+suite has already been bitten by once, and which read as flake for three runs then too). Any of
+those would be a real defect in the suite's isolation, and calling it flake is how it stays.
+
+**Not blocking the merge it was found during**: the suite passes cleanly and CI runs it
+independently. But a gate that fails one run in three and is green on the retry is a gate people
+learn to re-run rather than read, which is the failure mode `docs/RECONCILE.md` describes for
+documentation and applies just as well here.

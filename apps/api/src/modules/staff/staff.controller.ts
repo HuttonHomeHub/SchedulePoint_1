@@ -24,6 +24,7 @@ import {
   StaffActivityRowDto,
   StaffInstallationDto,
 } from './dto/staff-installation.dto';
+import { IdentityProbe } from './identity-probe.decorator';
 import { StaffHealthService } from './staff-health.service';
 import { StaffGuard } from './staff.guard';
 
@@ -71,6 +72,7 @@ export class StaffController {
   ) {}
 
   @Get('me')
+  @IdentityProbe()
   @ApiOperation({
     summary: 'Who am I, as staff',
     description:

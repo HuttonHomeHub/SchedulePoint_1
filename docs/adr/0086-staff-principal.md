@@ -222,6 +222,15 @@ is narrower than D8 stated: **a refusal on a panel route is a probe worth keepin
 question "am I staff?" is the answer to a question the product asked itself.** The flag-on journey
 asserts both halves, and had to be rewritten to provoke a denial the way a real one arrives.
 
+The exemption is carried by **metadata on the handler** (`@IdentityProbe()`), not by matching
+`request.url`. The string version worked, and the follow-up security review proved it worked — by
+driving real Express with dot-segments, encoded separators, matrix params and null bytes, none of
+which reach a panel handler. But it worked _because_ Express happens not to normalise dot-segments
+and matches route literals exactly: undocumented behaviour of a dependency, load-bearing for an
+audit exemption, and liable to change silently under a move to Fastify or a routing option nobody
+connected to this file. The metadata says what the exemption means — _this is the identity handler_
+— and leaves no routing behaviour to depend on.
+
 That rewrite exposed a second thing. The journey's docblock claimed it proved "a non-staff **member**
 sees Not found" — but that is also what a signed-out visitor sees, so the assertion had never
 distinguished the two and would have passed on a sign-up that silently failed. It now asserts the

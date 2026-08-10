@@ -1,4 +1,5 @@
 import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 
 import type { AuthenticatedRequest, StaffRequest } from '../../common/auth/authenticated-request';
 import { normalizeEmail } from '../../common/auth/normalize-email';
@@ -12,24 +13,7 @@ import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
-/**
- * The identity probe — `GET /api/v1/staff/me` — whose **refusal is not evidence**.
- *
- * Every other staff route is asked by somebody who already knows the console exists. This one is
- * asked by the app itself, on the reader's behalf, to decide whether to offer a menu item; a 404 is
- * the expected answer for essentially every caller in the installation. Recording it would write a
- * `staff.access_denied` row every time an ordinary member opened their account menu — into a table
- * that refuses `DELETE` and has no retention sweep — and would bury the rows that DO mean something
- * (somebody who knows the panel URLs, trying them) under a pile that means nothing.
- *
- * Found by the flag-on journey, which recorded two denials for a member who had done nothing but
- * sign in and open a menu. The narrower rule is the honest one: a refusal on a **panel** route is a
- * probe worth keeping; a refusal on the question "am I staff?" is the answer to a question the
- * product asked itself.
- */
-function isIdentityProbe(url: string | undefined): boolean {
-  return (url ?? '').split('?')[0]?.endsWith('/staff/me') ?? false;
-}
+import { IDENTITY_PROBE } from './identity-probe.decorator';
 
 /**
  * Resolves an authenticated session to a {@link StaffPrincipal}, for routes under
@@ -85,7 +69,7 @@ function isIdentityProbe(url: string | undefined): boolean {
  * The volume is bounded by the controller's 30/60 s throttle and by nothing else — `audit_events`
  * refuses DELETE, so an authenticated member can add rows that cannot be removed until the
  * retention sweep exists (`docs/TECH_DEBT.md`). That is stated rather than discovered, and it is
- * why {@link isIdentityProbe} exists: the one route the app itself calls for every reader is
+ * why `@IdentityProbe()` exists: the one route the app itself calls for every reader is
  * excluded, so ordinary use cannot fill the table.
  */
 @Injectable()
@@ -94,6 +78,7 @@ export class StaffGuard implements CanActivate {
     private readonly config: AppConfigService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -101,8 +86,8 @@ export class StaffGuard implements CanActivate {
       .switchToHttp()
       .getRequest<StaffRequest & AuthenticatedRequest & RequestContextSource>();
     const principal = request.principal;
-    // See {@link isIdentityProbe} — a refusal there is the expected answer, not evidence.
-    const audit = !isIdentityProbe(request.url);
+    // See `@IdentityProbe()` — a refusal on the identity route is the expected answer, not evidence.
+    const audit = !this.reflector.get<boolean>(IDENTITY_PROBE, context.getHandler());
 
     // No session at all. **Unreachable in the wired app**, and the earlier comment here overstated
     // what it buys: the global `AuthenticationGuard` runs first and answers an anonymous caller
