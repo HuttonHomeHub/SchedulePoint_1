@@ -108,19 +108,32 @@ for (const [batch, { due }] of Object.entries(register.batches)) {
   }
 }
 
-// 4 — a Playwright config pinning a flag is a flag-off harness, so the flag is not retirable.
+// 4 — a Playwright config pinning a flag OFF is a flag-off harness, so the flag is not retirable.
 // Read from the config's `env:` block rather than from a list, so a NEW pin is covered the day it
 // is written and nobody has to remember this rule exists.
+//
+// **`'false'` and `'true'` are different facts, and this matched them identically until ADR-0088.**
+// Every flag is default-on, so a `'true'` pin asserts nothing — it re-states the default. There are
+// 135 of them across 39 flags, against 10 flags with a real `'false'` harness, and 31 flags whose
+// ONLY pins are no-op `'true'`s. Conflated, the gate blocked a retirement on the cheapest possible
+// cause: verified red before this fix, marking a `'true'`-only flag retired produced three
+// "that config IS a flag-off harness" failures, which is the opposite of what a `'true'` pin is.
+// ADR-0084 D4a's `weight = files + 3 × pins` inherited the same error and inverted the cost.
+//
+// Both still stop a retirement — a config referencing a flag that no longer exists is dead config —
+// but the remedy differs by an order of magnitude, so the message has to say which one you are
+// looking at: a `'false'` pin is a spec conversion, a `'true'` pin is a line deletion.
 const WEB = join(ROOT, 'apps/web');
 const retired = new Set(register.retired.map((r) => r.flag));
 for (const file of readdirSync(WEB).filter((n) => /^playwright.*\.config\.ts$/.test(n))) {
   const config = readFileSync(join(WEB, file), 'utf8');
-  for (const [, flag] of config.matchAll(/(VITE_[A-Z0-9_]+)\s*:\s*'(?:true|false)'/g)) {
-    if (retired.has(flag)) {
-      problems.push(
-        `${flag} is retired, but apps/web/${file} still pins it — that config IS a flag-off harness, and its specs are written against the pinned world. Convert them first, or put the flag back.`,
-      );
-    }
+  for (const [, flag, value] of config.matchAll(/(VITE_[A-Z0-9_]+)\s*:\s*'(true|false)'/g)) {
+    if (!retired.has(flag)) continue;
+    problems.push(
+      value === 'false'
+        ? `${flag} is retired, but apps/web/${file} pins it OFF — that config IS a flag-off harness, and its specs are written against the pinned world. Convert them first, or put the flag back.`
+        : `${flag} is retired, but apps/web/${file} still pins it 'true' — a no-op re-stating the default, so this is dead config rather than a harness. Delete the line in the retirement commit (ADR-0084 D5).`,
+    );
   }
 }
 
