@@ -66,7 +66,25 @@ describe('nginx.conf as an envsubst template', () => {
 
     expect(rendered).toContain('report-uri /api/v1/csp-report');
     expect(rendered).toContain('report-to csp');
-    expect(rendered).toContain('add_header Reporting-Endpoints "csp="/api/v1/csp-report""');
+    // **SINGLE quotes around the value, and this assertion pinned the opposite until CI caught it.**
+    // The header's own grammar puts the URL in double quotes, so the substituted value CONTAINS
+    // them; wrapped in double quotes the nginx string ends at the value's first `"` and the URL is
+    // read as a bare token — `[emerg] unexpected "/"`, and the container never serves a request.
+    // This test asserted that exact unparseable string, so it was pinning the defect in place: it
+    // passed on a config no nginx would load. Only the smoke-boot job disagreed.
+    expect(rendered).toContain(`add_header Reporting-Endpoints 'csp="/api/v1/csp-report"' always;`);
+  });
+
+  it('never wraps a header value in a quote the value itself contains', () => {
+    // The general form of the defect above, so the next header carrying quotes is caught here
+    // rather than in a container build. `pnpm check:nginx` runs the same rule over the real compose
+    // defaults; this runs it over the rendered template beside its siblings, because a unit suite
+    // is where somebody editing this file is already looking.
+    for (const [, quote, value] of render(ENV).matchAll(
+      /add_header\s+\S+\s+(["'])(.*?)\1\s*(?:always)?\s*;/g,
+    ) as unknown as Iterable<[string, string, string]>) {
+      expect(value, `a value wrapped in ${quote} must not contain ${quote}`).not.toContain(quote);
+    }
   });
 
   it.each([
