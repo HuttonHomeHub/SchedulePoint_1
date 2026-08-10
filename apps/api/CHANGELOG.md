@@ -1,5 +1,38 @@
 # @repo/api
 
+## 0.49.0
+
+### Minor Changes
+
+- [#282](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/282) [`4c77257`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4c7725737814d1e8566aa210718f87d24e4559fe) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the Retention section to the staff console (ADR-0087 M3).
+
+  `GET /api/v1/staff/health` gains a `retention` object — no new route, so no route-census entry and
+  no second `staff.panel_read` row per page load — and `/staff` renders it below Mail health.
+
+  The leading answer is **derived from the data, not reported by the sweep**: the age of each table's
+  oldest surviving row against its configured period, which is true whether or not any sweep has ever
+  run. The sweep's own bookkeeping resets on restart, so a last-run timestamp alone cannot separate
+  "working" from "never armed". The section keeps three pairs of states distinct that a careless
+  sentence collapses: an empty table ("no rows") from one whose oldest row is new; a process that has
+  not swept from one that swept and deleted nothing; and a disabled sweep — which shows no last-run
+  time at all, because a timestamp beside "disabled" reads as health.
+
+- [#282](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/282) [`4c77257`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4c7725737814d1e8566aa210718f87d24e4559fe) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Alert the operator when the retention sweep keeps failing (ADR-0087 M4).
+
+  After three consecutive failed runs, one message is POSTed to `MAIL_ALERT_URL` — the existing
+  webhook, reached through a `postAlert` function extracted verbatim from `OperationalAlertService`.
+  Three rather than one, because a single failed sweep is usually a connection the next tick will have
+  and the next tick is the retry; a channel that cries wolf gets muted. One message per incident, not
+  per tick, and a clean run closes the incident so a later outage alerts again.
+
+  The body carries counts and table names only — this POST leaves the system for a third-party chat
+  service, and one of these tables holds attacker-controlled strings while the other holds customer
+  addresses.
+
+  Also fixes a sweep that **throws** being recorded as a clean run: `record([])` found no failed table
+  and reset the counter, so a sweep crashing on every tick silenced this threshold and painted the
+  staff console healthy. `recordFailedRun` now says so explicitly.
+
 ## 0.48.1
 
 ### Patch Changes
