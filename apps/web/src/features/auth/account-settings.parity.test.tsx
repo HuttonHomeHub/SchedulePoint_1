@@ -17,6 +17,13 @@ import { ThemeProvider } from '@/hooks/use-theme';
  * not a hidden screen but no screen. What a test can add is the reachable half: no menu entry, and
  * the rest of the menu untouched.
  */
+// The account chip now asks whether the reader is staff (ADR-0086). Stubbed to "no" — the answer
+// for almost everybody — so these tests stay about what they are about, and so no real fetch
+// escapes into jsdom. `account-chip.test.tsx` owns both branches of that gate.
+vi.mock('@/features/staff/api/staff-identity', () => ({
+  useStaffIdentity: () => ({ data: null }),
+}));
+
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme' }),

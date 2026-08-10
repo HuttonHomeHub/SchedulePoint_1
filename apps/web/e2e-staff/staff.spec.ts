@@ -90,12 +90,34 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   const memberContext = await browser.newContext();
   const member = await memberContext.newPage();
   await signUpOrIn(member, memberEmail, 'Ordinary Member');
+  // **Assert the session exists before relying on it.** This journey's docblock claims §1 proves
+  // "a non-staff MEMBER sees Not found" — but "Not found" is also exactly what an unauthenticated
+  // visitor sees, so that assertion has never distinguished the two and would have passed on a
+  // sign-up that silently failed. Stated positively here, once, so the rest of this block means
+  // what it says.
+  await expect(member).not.toHaveURL(/\/sign-(in|up)/);
 
   await member.goto('/staff');
   // The whole surface argument, driven against the real guard: "Not found", never "access denied",
   // never a sign-in bounce that implies signing in as somebody else would help.
   await expect(member.getByRole('heading', { name: 'Not found' })).toBeVisible();
   await expect(member.getByText(/denied|permission|not authorised|staff/i)).toHaveCount(0);
+
+  // ...and the account menu offers them nothing either. Absent, never shaded: a disabled "Staff
+  // console" would tell this reader the surface exists and that they are not allowed near it,
+  // which is exactly the oracle the uniform 404 above refuses to be.
+  await member.goto('/');
+  await member.getByRole('button', { name: /account/i }).click();
+  await expect(member.getByRole('menu')).toBeVisible();
+  await expect(member.getByRole('menuitem', { name: /staff console/i })).toHaveCount(0);
+
+  // **And now the thing the denial row exists to record: somebody who knows a PANEL url.**
+  // Nothing the app does on this reader's behalf produces one — their `/staff` visit and their
+  // account menu both ask only the identity probe, which is deliberately unaudited — so a denial
+  // has to be provoked the way a real one arrives, by asking for a panel directly. This request
+  // carries the member's own session cookies, which is what makes it attributable.
+  const probe = await member.request.get('/api/v1/staff/health');
+  expect(probe.status(), 'a panel route refuses a member with the same 404').toBe(404);
   await memberContext.close();
 
   // -------------------------------------------------- Allowlisted, but unverified: still refused
@@ -168,6 +190,19 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await staff.getByRole('button', { name: /sign in/i }).click();
   await staff.waitForLoadState('networkidle');
 
+  // ------------------------------------------------- Reached from the account menu, not a URL
+  // **This account has NO organisation**, which is the recommended configuration, so signing in
+  // lands it on `/onboarding`. That screen is a child of the authenticated layout and therefore
+  // carries the header — asserted here rather than assumed, because if onboarding ever moved
+  // outside that layout the link would vanish for exactly the configuration the documentation
+  // recommends, and nothing else would fail. The console shipped reachable only by typing
+  // `/staff`, and the product owner met that: deployed, working, invisible.
+  await staff.goto('/');
+  await staff.getByRole('button', { name: /account/i }).click();
+  await staff.getByRole('menuitem', { name: /staff console/i }).click();
+  await expect(staff).toHaveURL(/\/staff$/);
+  await expect(staff.getByRole('heading', { name: 'Staff console' })).toBeVisible();
+
   // ---------------------------------------------------------------- The console itself
   await staff.goto('/staff');
   await expect(staff.getByRole('heading', { name: 'Staff console' })).toBeVisible();
@@ -201,7 +236,10 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // Nothing short of the real product exercises all three.
   await expect(staff.getByRole('heading', { name: 'Staff activity' })).toBeVisible();
   const activity = staff.getByRole('region', { name: /staff actions/i });
-  await expect(activity.getByText(memberEmail)).toBeVisible();
+  // The row comes from the member's direct panel request above — NOT from their `/staff` visit or
+  // their account menu, both of which ask only the unaudited identity probe. That distinction is
+  // the point: this panel shows people who went looking, not everyone who opened a menu.
+  await expect(activity.getByText(memberEmail).first()).toBeVisible();
   // And the row says only THAT it was refused, never WHICH of the three conditions failed — the
   // difference the uniform 404 withholds, and a screen that spelt it out would be the oracle the
   // guard is built to deny. An exact-text match is the assertion: a first draft searched the whole

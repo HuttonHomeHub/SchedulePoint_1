@@ -1,4 +1,5 @@
 import type { ExecutionContext } from '@nestjs/common';
+import type { Reflector } from '@nestjs/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AuthenticatedRequest, StaffRequest } from '../../common/auth/authenticated-request';
@@ -26,9 +27,11 @@ function contextFor(request: Partial<StaffRequest & AuthenticatedRequest>): Exec
   // request object without them is a shape Express never produces.
   // Assigned onto the caller's own object rather than a copy — the guard's success path attaches
   // `staff` to the request, and a spread would leave those assertions inspecting a different object.
-  Object.assign(request, { headers: {}, socket: {} });
+  Object.assign(request, { headers: {}, socket: {}, ...request });
   return {
     switchToHttp: () => ({ getRequest: () => request }),
+    // Read by the guard's `Reflector`; the stub above ignores it, so any value is fine.
+    getHandler: () => () => undefined,
   } as unknown as ExecutionContext;
 }
 
@@ -39,6 +42,8 @@ function principal(userId = STAFF_ID): Principal {
 function build(options: {
   allowlist?: readonly string[];
   user?: { id: string; email: string; emailVerified: boolean } | null;
+  /** Whether the route under test is the `@IdentityProbe()`-marked one. */
+  identityProbe?: boolean;
 }): {
   guard: StaffGuard;
   findFirst: ReturnType<typeof vi.fn>;
@@ -52,8 +57,15 @@ function build(options: {
   const prisma = { user: { findFirst } } as unknown as PrismaService;
   const recordBestEffort = vi.fn().mockResolvedValue(undefined);
   const audit = { recordBestEffort } as unknown as AuditService;
+  // The identity route carries `@IdentityProbe()`; everything else does not. Defaults to "not the
+  // probe", so a test that forgets to say asserts the auditing branch — the stricter one.
+  const reflector = { get: () => options.identityProbe ?? false } as unknown as Reflector;
 
-  return { guard: new StaffGuard(config, prisma, audit), findFirst, recordBestEffort };
+  return {
+    guard: new StaffGuard(config, prisma, audit, reflector),
+    findFirst,
+    recordBestEffort,
+  };
 }
 
 const VERIFIED_STAFF = { id: STAFF_ID, email: 'staff@schedulepoint.test', emailVerified: true };
@@ -207,5 +219,18 @@ describe('StaffGuard', () => {
     await expect(guard.canActivate(contextFor({ principal: principal() }))).rejects.toThrow(
       NotFoundError,
     );
+  });
+
+  it('does not audit a refusal of the identity probe', async () => {
+    // `/staff/me` is asked by the APP, for every reader, to decide whether to offer a menu item —
+    // so a 404 there is the expected answer and not evidence. Auditing it would write a row every
+    // time an ordinary member opened their account menu, into a table that refuses DELETE, burying
+    // the refusals that do mean something. Found by the flag-on journey, which recorded two
+    // denials for a member who had done nothing but sign in and open a menu.
+    const { guard, recordBestEffort } = build({ user: null, identityProbe: true });
+
+    await guard.canActivate(contextFor({ principal: principal() })).catch(() => undefined);
+
+    expect(recordBestEffort).not.toHaveBeenCalled();
   });
 });

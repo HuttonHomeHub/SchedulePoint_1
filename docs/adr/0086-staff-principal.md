@@ -194,6 +194,48 @@ The cost is stated rather than discovered: `audit_events` refuses `DELETE`, so a
 member can add rows nobody can remove until the retention sweep exists. The bound is the controller's
 30/60 s throttle and nothing else.
 
+### D9 — The console is reachable from the account menu, and the identity probe's refusal is not evidence
+
+The console shipped reachable only by typing `/staff`. The product owner deployed it, it worked, and
+they could not find it — ADR-0081's "a milestone names its entry point" one step along: the entry
+point was named in `DEPLOYMENT.md` and nowhere a person would look.
+
+The link goes in the **account menu**, not the organisation nav. That shell is org-scoped and the
+console deliberately is not; the account menu already holds the surfaces that follow the person
+rather than the organisation (`Your account`, `My activity`). It is gated on **runtime evidence** — a
+`GET /staff/me` that answered 200 — never a `VITE_` constant, which is ADR-0074's rule meeting its
+natural case: staff-ness is read from `STAFF_EMAILS` on the server, invisible to the bundle and
+changed by an operator without a release. It is **omitted, never shaded** (ADR-0082's rule for an
+action that does not apply): a disabled "Staff console" would tell every member the surface exists,
+which is the oracle the uniform 404 spends its whole design denying.
+
+**The probe is deferred to menu-open, and that is not an optimisation.** Asked on every page load it
+would be a request for every signed-in user in the product to answer a question about one of them.
+
+**And its refusal is deliberately unaudited — a narrowing of D8, found by the journey.** With the
+menu wired up, a member who did nothing but sign in and open their account menu produced
+`staff.access_denied` rows. Every one was true and every one was noise: `/staff/me` is asked by the
+**app**, for every reader, and a 404 is the expected answer. Recording it would grow an append-only
+table with no retention sweep on ordinary use, and bury the refusals that mean something —
+somebody who knows the panel URLs and is trying them — under a pile that means nothing. So the rule
+is narrower than D8 stated: **a refusal on a panel route is a probe worth keeping; a refusal on the
+question "am I staff?" is the answer to a question the product asked itself.** The flag-on journey
+asserts both halves, and had to be rewritten to provoke a denial the way a real one arrives.
+
+The exemption is carried by **metadata on the handler** (`@IdentityProbe()`), not by matching
+`request.url`. The string version worked, and the follow-up security review proved it worked — by
+driving real Express with dot-segments, encoded separators, matrix params and null bytes, none of
+which reach a panel handler. But it worked _because_ Express happens not to normalise dot-segments
+and matches route literals exactly: undocumented behaviour of a dependency, load-bearing for an
+audit exemption, and liable to change silently under a move to Fastify or a routing option nobody
+connected to this file. The metadata says what the exemption means — _this is the identity handler_
+— and leaves no routing behaviour to depend on.
+
+That rewrite exposed a second thing. The journey's docblock claimed it proved "a non-staff **member**
+sees Not found" — but that is also what a signed-out visitor sees, so the assertion had never
+distinguished the two and would have passed on a sign-up that silently failed. It now asserts the
+session positively first.
+
 ## Consequences
 
 - The API gains a second guard and a second principal type. Both are small and both are pinned by a

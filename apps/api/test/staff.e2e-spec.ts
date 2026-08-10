@@ -163,7 +163,10 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     await signUp(agent, MEMBER_EMAIL).expect(200);
     await prisma.user.updateMany({ where: { email: MEMBER_EMAIL }, data: { emailVerified: true } });
 
-    await agent.get('/api/v1/staff/me').set('Origin', ORIGIN).expect(404);
+    // A PANEL route, not `/staff/me`: the identity probe's refusal is deliberately unaudited,
+    // because the app asks it for every reader and a row per account-menu open would bury the
+    // refusals that mean something.
+    await agent.get('/api/v1/staff/health').set('Origin', ORIGIN).expect(404);
 
     const row = await prisma.auditEvent.findFirst({
       where: { action: 'staff.access_denied' },
@@ -289,5 +292,22 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     await prisma.user.updateMany({ where: { email: MEMBER_EMAIL }, data: { emailVerified: true } });
 
     await agent.get('/api/v1/staff/health').set('Origin', ORIGIN).expect(404);
+  });
+
+  it('writes NO denial row for the identity probe', async () => {
+    // `GET /staff/me` is what the account menu calls to decide whether to offer a link, for every
+    // signed-in reader in the installation. A 404 there is the expected answer and carries no
+    // security signal; recording it would grow an append-only table on ordinary use. Driven end to
+    // end because the exclusion is a property of the wired route, not of a helper.
+    const agent = request.agent(server());
+    await signUp(agent, MEMBER_EMAIL).expect(200);
+    await prisma.user.updateMany({ where: { email: MEMBER_EMAIL }, data: { emailVerified: true } });
+    const before = await prisma.auditEvent.count({ where: { action: 'staff.access_denied' } });
+
+    await agent.get('/api/v1/staff/me').set('Origin', ORIGIN).expect(404);
+
+    expect(await prisma.auditEvent.count({ where: { action: 'staff.access_denied' } })).toBe(
+      before,
+    );
   });
 });

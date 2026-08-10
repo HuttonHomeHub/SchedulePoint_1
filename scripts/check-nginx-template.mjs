@@ -39,6 +39,19 @@ const TEMPLATE = 'apps/web/nginx.conf';
 const COMPOSE_FILES = ['docker-compose.yml', 'docker-compose.release.yml'];
 
 /**
+ * The image's own `ENV` defaults — a **third** statement of the same policy, and the one that
+ * applies when an operator's compose file omits the web `environment:` block entirely.
+ *
+ * That is not a hypothetical: a real deployment did exactly that, which is a perfectly reasonable
+ * thing to do when the image carries defaults. The reporting directives had been added to both
+ * compose files with the CSP sink and **not** here, so that deployment ran a policy with no
+ * reporting at all — every page loading normally, the staff console's Security panel permanently
+ * empty, and an operator reading that emptiness as "the policy is clean". A silent wrong answer on
+ * the one screen built to give the right one.
+ */
+const DOCKERFILE = 'apps/web/Dockerfile';
+
+/**
  * The `CSP_*` defaults the deployment actually uses.
  *
  * Parsed out of `docker-compose.yml` rather than duplicated, for the reason `e2e-csp` gives for
@@ -71,12 +84,57 @@ function substitute(template, values, compose) {
   });
 }
 
+/** The same defaults as `ENV NAME="value"` lines in the image. */
+function dockerfileDefaults() {
+  const defaults = new Map();
+  for (const line of read(DOCKERFILE).split('\n')) {
+    const match = /^ENV\s+(CSP_[A-Z_]+)="(.*)"\s*$/.exec(line);
+    // `\"` in a Dockerfile ENV is a literal quote in the value.
+    if (match) defaults.set(match[1], (match[2] ?? '').replace(/\\"/g, '"'));
+  }
+  return defaults;
+}
+
 const problems = [];
 const template = read(TEMPLATE);
 
-for (const compose of COMPOSE_FILES) {
-  const rendered = substitute(template, composeDefaults(compose), compose);
-  check(rendered, compose);
+const sources = [
+  ...COMPOSE_FILES.map((file) => ({ file, values: composeDefaults(file) })),
+  { file: DOCKERFILE, values: dockerfileDefaults() },
+];
+
+for (const { file, values } of sources) {
+  check(substitute(template, values, file), file);
+}
+
+/**
+ * **All three sources must state the same policy.**
+ *
+ * Which one applies depends on how an operator wrote their compose file, and they cannot be
+ * expected to know that — so a difference between them is not a preference, it is one deployment
+ * silently getting a policy nobody chose. The failure is invisible: the container starts and every
+ * page loads.
+ */
+for (const name of new Set(sources.flatMap(({ values }) => [...values.keys()]))) {
+  const seen = new Map();
+  for (const { file, values } of sources) {
+    const value = values.get(name);
+    if (value === undefined) {
+      problems.push(`${file} states no default for ${name}, and its siblings do.`);
+      continue;
+    }
+    if (!seen.has(value)) seen.set(value, []);
+    seen.get(value).push(file);
+  }
+  if (seen.size > 1) {
+    problems.push(
+      `${name} differs between the files that define it — an operator gets whichever one their\n` +
+        `    compose file happens to select, with no error either way:\n` +
+        [...seen]
+          .map(([value, files]) => `      ${files.join(', ')}:\n        ${value}`)
+          .join('\n'),
+    );
+  }
 }
 
 /**
@@ -110,11 +168,15 @@ if (problems.length > 0) {
   console.error('The nginx template does not survive substitution:\n');
   for (const p of problems) console.error(`  - ${p}\n`);
   console.error(
-    'This is a container-will-not-start failure. CI’s smoke-boot job catches it too, minutes later.',
+    'A quoting problem is a container-will-not-start failure, which CI’s smoke-boot job also\n' +
+      'catches, minutes later. A DISAGREEMENT between sources is worse: nothing fails anywhere,\n' +
+      'and one deployment quietly runs a policy nobody chose.',
   );
   process.exit(1);
 }
 
 console.log(
-  `nginx template OK (${TEMPLATE} substitutes cleanly with ${COMPOSE_FILES.join(' and ')}).`,
+  `nginx template OK (${TEMPLATE} substitutes cleanly, and ${sources.length} sources agree: ${sources
+    .map((s) => s.file)
+    .join(', ')}).`,
 );
