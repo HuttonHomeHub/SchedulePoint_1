@@ -49,7 +49,7 @@
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.5.7",
+    "@hookform/resolvers": "^5.7.1",
     "@repo/interchange": "workspace:*",
     "@repo/layout": "workspace:*",
     "@repo/types": "workspace:*",
