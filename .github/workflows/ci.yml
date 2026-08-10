@@ -501,7 +501,6 @@ jobs:
             apps/web/playwright-report-csp/
             apps/web/playwright-report-account-verify/
             apps/web/playwright-report-edit/
-            apps/web/playwright-report-workspace/
             apps/web/playwright-report-toolbar/
             apps/web/playwright-report-authoring/
             apps/web/playwright-report-authoring-flow/
