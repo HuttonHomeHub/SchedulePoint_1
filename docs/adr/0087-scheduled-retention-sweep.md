@@ -1,6 +1,6 @@
 # ADR-0087 — This application runs scheduled work, and its first job is a retention sweep
 
-- **Status:** Accepted
+- **Status:** Accepted; M0–M5 landed 2026-08-10
 - **Date:** 2026-08-10
 - **Deciders:** product owner (approved 2026-08-10, four clickable questions), engineering
 - **Supersedes:** nothing. **Narrows:** ADR-0009 (background processing). **Builds on:** ADR-0085
@@ -240,6 +240,42 @@ anticipated. `recordFailedRun` now says it explicitly, and both the store and th
   moves on every repeat, so a violation still being reported never ages out, and its `document_uri`
   may carry a plan or organisation id in its path. The sweep bounds the residue **after** a flood
   stops; the per-IP throttle bounds a sustained one. Accepted and recorded rather than over-claimed.
+
+- **A capped drain leaves dead tuples behind for several ticks.** Measured at the enablement gate:
+  50 batches on a freshly vacuumed 500,000-row table leaves `n_dead_tup` at exactly 50,000 (10%) and
+  **does not cross the default autovacuum threshold** (~100,050 for a table that size), so a real
+  backlog sits at 10–20% dead for much of the ten ticks it takes to clear. Ordinary Postgres
+  behaviour rather than a defect, but "the sweep is bounded" and "the table stays clean" are
+  different claims and only the first was being made. `docs/TECH_DEBT.md` **#120**.
+
+## The gate pass, and what it found (M5)
+
+Six specialists over the combined diff. Security and backend-performance passed with nothing
+blocking — both re-derived this ADR's own measurements from the final code rather than trusting them,
+which is how D6's `ctid` claim was confirmed at production scale and how two _other_ claims here were
+found to be wrong. The other four blocked, on defects that had already passed a human read.
+
+**Two are this ADR's own thesis landing on it.** The staff console's polite live region — the one
+channel that exists to state the settled result — announced _"every table is inside its period"_ while
+the sweep had failed three runs in a row, because the sentence never consulted `consecutiveFailures`
+(WCAG 4.1.3). And a run that _threw_ was reported per table as "not swept yet", byte-identical to a
+process that had never run, which is exactly the state-collapse D8 exists to prevent, occurring inside
+the section built to prevent it. Both now have regression tests; the second was verified red against
+the old code first.
+
+**Two more were the console failing to say what it knows.** The failure alert never disclosed whether
+anybody outside the screen had been told — and `MAIL_ALERT_URL` is unset on the deployed host, so the
+commonest truth is "you are the only one who knows" while the commonest reading was the opposite. And
+nothing said `audit_events` is deliberately **not** swept, so "every table is inside its period"
+invited precisely the conclusion D3 spends a decision refusing.
+
+**And two claims in this document were wrong.** `ctid IN (…)` is not "always a Tid Scan" — a
+5,000-row table seq-scans either formulation, because a small enough outer relation is cheaper to
+scan than to probe. And `RUN_CAP`'s "50 batches ≈ 0.3 s" was one batch multiplied by fifty, presented
+as a measurement; a real sustained drain measures **1.23 s**, because the loop pays for revisiting
+index entries whose heap tuples it has just deleted. Both are ADR-0076 Class 3 — asserted, not
+checked — and both were found by re-running the measurement rather than re-reading the claim. They
+are corrected in place and recorded here rather than quietly dropped.
 
 ## What this ADR does not do
 
