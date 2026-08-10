@@ -1,7 +1,8 @@
 # Implementation Plan: The next Class A feature-flag retirement (ADR-0088 D3)
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft (rev 3) — two review rounds, all five AGREE WITH CONDITIONS, no blocks
+- **Status:** Draft (rev 4) — three review rounds; round 3 was component **AGREE (unconditional)** and
+  four **AGREE WITH CONDITIONS**, all textual. No blocks in any round. **Ready for approval.**
 - **Owner:** _(unassigned)_
 
 > **Subject.** Retires **`VITE_CALENDAR_SHIFT_EDITOR`** then **`VITE_LIBRARY_SCOPING`** — spec §1,
@@ -16,9 +17,10 @@
 ```mermaid
 flowchart LR
   E["Epic: Class A retirement, batch 2"] --> M0["M0 — Register truth + 3 gate repairs"]
-  M0 --> M3["M3 — Constrained deferral<br/>(before 2026-09-29)"]
-  M3 --> M1["M1 — Retire CALENDAR_SHIFT_EDITOR<br/>cap 4 → 3"]
+  M0 --> M3["M3 — Constrained deferral<br/>(independent; scheduled first, before 2026-09-29)"]
+  M0 --> M1["M1 — Retire CALENDAR_SHIFT_EDITOR<br/>cap 4 → 3"]
   M1 --> M2["M2 — Retire LIBRARY_SCOPING<br/>cap 3 → 2 · hard date 2026-09-29"]
+  M3 -.->|"scheduling only,<br/>not a dependency"| M1
 ```
 
 ### Epic
@@ -103,7 +105,9 @@ substitute and it is stronger here than a journey.
      `CANVAS_LINK_ROUTING`←`CANVAS_DIRECT_MANIPULATION_ENABLED`; `CANVAS_SEARCH_NAV`←`CANVAS_LENSES_ENABLED`;
      `CANVAS_MULTI_SELECT`←`CANVAS_DIRECT_MANIPULATION_ENABLED`.
   6. Resolve the one inversion (M0-T2a).
-  7. Update the script docblock's assertion list.
+  7. Update the script docblock's assertion list — **and correct `check-flags.mjs:4`, which says
+     "declares 58 `VITE_` flags" where the register holds 56.** A count in the docblock of the gate
+     that enforces counts is the ADR-0076 Class 1 shape, and this is the register-truth milestone.
 
 ##### Task M0-T2a — Resolve the single inversion the backfill exposes
 
@@ -136,13 +140,22 @@ substitute and it is stronger here than a journey.
     `VITE_NAV_TREE`/`VITE_NAV_TREE_CRUD` and `VITE_CANVAS_AUTHORING`/`VITE_CANVAS_AUTHORING_FLOW`. A
     substring check reports a **live** flag as residue the day its prefix-sibling retires. **Named
     fixture.**
+  - **Residue lives in a third file class, and it is live now.** `.github/workflows/ci.yml:504` still
+    uploads `apps/web/playwright-report-workspace/`, although `e2e-workspace/` and
+    `playwright.workspace.config.ts` were deleted in the **previous** retirement (`VITE_CANVAS_TOOLBAR`,
+    2026-08-10). Verified directly. Rev 3's checklist named `env.ts`, `vite-env.d.ts`, `.env.example`,
+    configs, register and banner/README — **not `ci.yml`**. It is a second live fixture, exactly as
+    `vite-env.d.ts:17` is.
 - **Testing:** arm → **fails on `VITE_NAV_TREE_CRUD`**; confirm it does **not** fire on `env.ts:133`
   or either prefix pair; remove `vite-env.d.ts:17` → green.
 - **Development steps:**
   1. Add the assertion; run; confirm it fails on the live residue and is silent on both fixtures.
   2. Delete `vite-env.d.ts:17`; check `.env.example` for a `VITE_NAV_TREE_CRUD` stanza.
-  3. Extend the retirement checklist in the script docblock: `env.ts`, `vite-env.d.ts`,
-     `.env.example`, configs, register, **`CLAUDE.md` banner + `README.md` counts**.
+  3. **Delete `ci.yml:504`** (`apps/web/playwright-report-workspace/`) — live residue from the
+     previous retirement.
+  4. Extend the retirement checklist in the script docblock: `env.ts`, `vite-env.d.ts`,
+     `.env.example`, configs, register, **`CLAUDE.md` banner + `README.md` counts**, **and
+     `.github/workflows/ci.yml` — both the comment block and the report-upload paths**.
 
 ---
 
@@ -197,9 +210,14 @@ earliest of which (**2026-09-29**) belongs to M2's own subject.
     or empty string fails the gate.
   - **A field the governing ADR does not know about is the ADR-0071 shape** this plan cites twice →
     ADR-0088 D4/D6 amended in the same commit.
-- **Testing:** **back-date `register.batches['batch-8'].due`, `['batch-9'].due`, `['batch-12'].due`,
-  run `pnpm check:flags`, restore.** Preferred over a `FLAG_CHECK_TODAY` override — a date override
-  in a gate is a bypass. Remove the field → red.
+- **Testing:** **back-date `register.batches['batch-9'].due` and `['batch-12'].due` only, run
+  `pnpm check:flags`, restore.** Preferred over a `FLAG_CHECK_TODAY` override — a date override in a
+  gate is a bypass. Remove the field → red.
+  **`batch-8` is deliberately excluded, and this is a correction rev 3 got wrong.** Batch-8's only
+  non-`keep` flag is `VITE_LIBRARY_SCOPING`, which M3 does **not** defer, so back-dating it makes
+  assertion 3 fire **correctly** — that redness is M2's hard date working as intended. Rev 3 listed
+  all three, which meant the proof could not pass and the two ways out were both wrong: add the field
+  to `LIBRARY_SCOPING`, silently cancelling the hard date rev 3 introduced, or stop verifying.
 - **Development steps:**
   1. Add the field with an enumerated trigger to both survivors:
      - `VITE_ACTIVITY_EDITOR_TABS` — "the next epic touching the activity editor, or any epic
@@ -208,9 +226,20 @@ earliest of which (**2026-09-29**) belongs to M2's own subject.
      - `VITE_CANVAS_WORKSPACE` — "the next epic touching the plan workspace". Name the seven
        flag-off configs, and note that `sub-day` and `assignment-lag` harness **both** survivors, so
        converting them is shared work.
+       1a. **Add the self-limiting enumeration value now:**
+       `"retirement in flight — docs/specs/flag-retirement-library-and-calendar/, M2"`. Without it, an
+       M2 slip past 2026-09-29 meets a rule with no fitting value and the author invents one under time
+       pressure — the escape hatch this task's first risk exists to close.
   2. Teach assertion 3 to honour the field **and to reject an empty/undated trigger**.
-  3. Amend **ADR-0088 D4/D6** to define the field and its constraint.
-  4. Verify green past 2026-09-29 / 10-06 / 10-27 by back-dating; red without the field.
+  3. Amend **ADR-0088 D3 as well as D4/D6**. D4/D6 define the register's vocabulary, but **D3 is the
+     decision that says Class A retires on merit under a standing cap** — the thing this field
+     suspends. A reader of D3 alone would learn nothing about it, which is the confusion this task's
+     own risk warns about.
+     3a. **Add the assertion-5 clause:** after M3 a deferred parent's `due` is no longer a retirement
+     date, yet it still bounds its children. `CANVAS_WORKSPACE → CANVAS_AUTHORING → SCHEDULING_MODES`
+     is a live chain, so state what a deferred parent's date means for a child.
+  4. Verify green past **2026-10-06 and 2026-10-27** by back-dating **`batch-9` and `batch-12` only**;
+     red without the field.
   5. `docs/TECH_DEBT.md` rows — next free number is **#122** (#119–#121 all exist) — cross-referenced
      from the register.
 
@@ -235,8 +264,9 @@ verbatim. `playwright.calendar-shifts.config.ts` pins **`'true'`**, so it drives
 - **Risks:** the only real risk is **mis-transcription**. `:361` becomes unconditionally `'lg'`, which
   is **already** what every shipped bundle evaluates (E24) — say so in the PR so a reviewer does not
   read it as an unrelated visual change.
-- **Testing:** `CalendarFormDialog.shifts.test.tsx` and `.scope.test.tsx` pass **unedited** — with one
-  exception, below.
+- **Testing:** `CalendarFormDialog.shifts.test.tsx` and `.scope.test.tsx` pass **unedited** — with
+  **two** exceptions: the `:235` assertion ruled on in step 5 below, and the dead `'true'` pin at
+  `:18` that M1-T3 step 4 deletes.
 - **Development steps:**
   1. Re-grep `WeekdayToggleGroup`, `weekIsSimplified`; confirm E15.
   2. Delete `:51`, `:219-220`, `:524-549`.
@@ -246,6 +276,12 @@ verbatim. `playwright.calendar-shifts.config.ts` pins **`'true'`**, so it drives
      advisory, which becomes a tautology asserting the absence of a string no longer in the repo.
      Delete it or rewrite its comment. It currently survives only because "passes unedited" is the
      oracle.
+  6. **Correct `features/calendars/model/shift-summary.ts:5-16`.** Its docblock says
+     `hasIntradayDetail` is "the predicate behind two behaviours that must agree: the advisory telling
+     a planner their week is shown simplified, and … the library table's '· 2 shifts' suffix". M1
+     deletes that advisory, so the docblock becomes false — and it names **neither the flag nor the
+     constant**, so no grep in this plan reaches it. It is the worked proof that the prose sweep needs
+     a term list rather than a constant name (M1-T5).
 
 ##### Task M1-T2 — The field decision first, then schema, exceptions, table
 
@@ -269,8 +305,10 @@ verbatim. `playwright.calendar-shifts.config.ts` pins **`'true'`**, so it drives
      to `CalendarFormValues & {…}`. **Keep** the body builders and flatten docblocks (`:51-64`,
      `:73-82`) — they are the surviving record of the destructive server-side flatten, not residue.
      (Rev 2 said "simplify" and "keep" of the same ranges in adjacent steps; this is the resolution.)
-  4. `calendar-schemas.ts:118` → `WorkingWeekdays.isValid(mask)`; rewrite the comment, keeping
-     TECH_DEBT #79 / ADR-0036 §2 and the ADR-0067 M4 story. Update **`:98`** too.
+  4. **Only if step 1 kept the field:** `calendar-schemas.ts:118` → `WorkingWeekdays.isValid(mask)`;
+     rewrite the comment, keeping TECH_DEBT #79 / ADR-0036 §2 and the ADR-0067 M4 story. **If step 1
+     removed it there is no `:118` refine to simplify** — the field and its refine go together.
+     Update **`:98`**'s comment either way.
   5. `CalendarExceptionsEditor.tsx:65,121,403,408,426,437` → keep the flag-on arm.
   6. `CalendarsTable.tsx:208` → unconditional badge.
 
@@ -284,14 +322,23 @@ verbatim. `playwright.calendar-shifts.config.ts` pins **`'true'`**, so it drives
     M1-T4 runs that journey. Rev 2's "re-express as a unit test" was also **impossible as written**:
     under step 1 above the field leaves the schema, so no mutation short of re-adding it reproduces
     the original cause. → Verdict: **deleted — covered by `e2e-calendar-shifts`.**
-  - **Five non-parity `it()`s, not four** — `:64`, `:83`, `:124`, `:135`, `:159`. **`:135` has no
+  - **Five non-parity `it()`s, not four** — `:64`, `:83`, `:124`, `:135`, `:159`. **"Non-parity" means
+    "does not assert the deleted branch"; it does not mean "must survive as a unit test"** — `:83` is
+    in this list _and_ takes the `deleted — covered by …` verdict above, which is consistent and reads
+    as a contradiction to a hurried implementer. **`:135` has no
     counterpart in either flag-on sibling**, so it is a real gap if dropped without a destination.
 - **Testing:** **both "re-hosted" and "re-expressed" require red-first**, and each ledger row names
   the **mutation** (file:line changed to make it red).
 - **Development steps:**
-  1. Enumerate every `it()`; assign one of **five** verdicts: _deleted (asserts the removed branch)_ /
-     _deleted — covered by `<journey>`_ / _converted_ / _re-hosted_ / _re-expressed_. The last two
-     each carry a named mutation.
+  1. Enumerate every `it()`; assign one of **five** verdicts:
+     - _deleted (asserts the removed branch)_
+     - _`deleted — covered by <spec file>:<line>`_ — **the ledger row must quote the covering
+       assertion. A journey _name_ alone does not satisfy it**, or this verdict becomes a laundering
+       route requiring no `file:line`, no quote and no red-first. M1's single use is
+       `e2e-calendar-shifts/calendar-shifts.spec.ts:60-68`, quoted.
+     - _converted_
+     - _re-hosted_ — **red-first, naming the mutation**
+     - _re-expressed_ — **red-first, naming the mutation**
   2. **State `CalendarFormDialog.test.tsx`'s own fate explicitly** — rev 2 never did. Default: the
      file goes once every `it()` has a verdict.
   3. Re-grep `CALENDAR_SHIFT_EDITOR_ENABLED: false` for any other suite.
@@ -325,9 +372,15 @@ web:calendar-shifts` run locally** (CLAUDE.md §19.8 — omitting it cost five C
      M1). Add `playwright-report-calendar-shifts` to the artefact upload list; **nine** journeys lack
      one (`assignment-lag`, `calendar-shifts`, `copy-paste`, `float-paths`, `multi-select`, `public`,
      `search-nav`, `staff`, `sub-day`) — fix this one, file the rest.
-  8. **Docs sweep: read every `rg -n "CALENDAR_SHIFT_EDITOR" docs/` hit** — 29 hits, 4 outside this
-     spec directory. (Rev 2's AND-grep recipe would have missed them.) `docs/adr/0067-…:149-152` is
-     the sentence at stake; update the CLAUDE.md §16 ADR-0067 entry too.
+  8. **Docs sweep: read every `rg -n "CALENDAR_SHIFT_EDITOR" docs/` hit.** Checksum, **with the unit
+     named** because rev 3's was wrong and a wrong checksum on a "read every hit" instruction licenses
+     stopping early: **7 files**, of which **2 are this spec directory, 2 are the sibling
+     `docs/specs/calendar-shift-editor/`, and 3 are outside any spec directory** —
+     `docs/adr/0067-…`, `docs/adr/0088-…`, `docs/ROADMAP.md` (≈4 _hits_ outside any spec directory;
+     file and hit counts are different units, so re-derive rather than matching one against the
+     other). **Do not stop at the sibling spec directory** — that is exactly where rev 3's figure
+     ran out. `docs/adr/0067-…:149-152` is the sentence at stake; update the CLAUDE.md §16 ADR-0067
+     entry too.
   9. Changeset (`patch`, `web`): **no user-visible change**.
 
 ##### Task M1-T5 — Residue sweep
@@ -335,8 +388,14 @@ web:calendar-shifts` run locally** (CLAUDE.md §19.8 — omitting it cost five C
 - **Complexity:** S · **Dependencies:** M1-T1..T4
 - **Risks:** rev 2 sent this task after `missing*` derivations that live only in **M2's** files —
   corrected: those belong to M2-T7.
-- **Development steps:** sweep for prose **naming the flag _or the feature_** (not only the constant),
-  orphaned docblock sentences, and leftover pins; `pnpm lint`, `pnpm typecheck`.
+- **Development steps:** the prose sweep is **runnable, not an intention.** Rev 3's "naming the flag
+  _or the feature_" gave no term list, no scope and no done-condition, and
+  `features/calendars/model/shift-summary.ts:5-16` is the proof it would have missed something — that
+  docblock goes false when M1 deletes the advisory, and names **neither** the flag nor the constant.
+  1. **Terms:** `shift editor|shown simplified|works specific hours|weekday (mask|checkbox)|WeekdayToggleGroup`.
+  2. **Scope:** `apps/web/src` **and** `docs/`.
+  3. **Done-condition:** every hit read, then corrected or explicitly left, with the count in the PR.
+  4. Then orphaned docblock sentences and leftover pins; `pnpm lint`, `pnpm typecheck`.
 
 ---
 
@@ -410,7 +469,9 @@ the **create-activity** dialog's calendar picker (`ActivityFormDialog.tsx:551`).
   - `ActivityCalendarField`'s docblock (`:20-21`) claims an importer it does not have → correct it;
     **file the duplicate-picker collapse separately**.
   - `PlanCalendarPicker.tsx:159` loses busy state on the **save** half only (`setCalendar.isPending`);
-    list-load busy survives via `loading`. **Pre-existing; deliberately not fixed here.**
+    list-load busy survives via `loading`. **Pre-existing; deliberately not fixed here — and it is
+    US-8's one named exception**, declared in the DoD so the per-site table cites it instead of
+    failing on it. Filed as debt in M2-T7.
   - **`ActivityCalendarField` has no axe assertion anywhere** — the one surviving arm nothing checks.
     Record as debt; US-8's per-site table is where it surfaces.
   - `ActivityFormDialog.tsx:569` (native `disabled` for a domain rule, reason `aria-describedby`-only
@@ -454,7 +515,10 @@ the **create-activity** dialog's calendar picker (`ActivityFormDialog.tsx:551`).
   verified red first**, each naming its mutation.
 - **Development steps:**
   1. For each of the 13: open the **docblock**, record _whose_ contract it is.
-  2. Classify **per `it()`** (five verdicts, as M1-T3). At least three files are mixed.
+  2. Classify **per `it()`** (the five verdicts defined in M1-T3 step 1, **including its evidence
+     rule**: `deleted — covered by <spec file>:<line>` with the covering assertion quoted. "Covered by
+     `e2e-library`" is **not** a verdict — this task spans 13 suites and is where an unevidenced
+     verdict would do the most damage). At least three files are mixed.
   3. Convert the incidental and foreign-owned suites; delete only true `LIBRARY_SCOPING` parity `it()`s.
   4. Confirm `combobox.test.tsx` still covers the three M6 fixes.
   5. Ledger in the PR description.
@@ -489,7 +553,12 @@ the **create-activity** dialog's calendar picker (`ActivityFormDialog.tsx:551`).
   derivations (**they live here, not in M1**); the two hook `enabled` parameters —
   `use-calendar-project-names.ts` and `use-result-count-announcement.ts` (**verify the latter's
   consumer count before removing; it is reported to reach zero**); `ASSIGNABLE_RESOURCE_KINDS`; dead
-  `'true'` pins; and prose **naming the flag _or the feature_**. `pnpm lint`, `pnpm typecheck`.
+  `'true'` pins; and the prose sweep in M1-T5's runnable form, with terms
+  `library scoping|scope (badge|filter)|organisation calendar|native select|optgroup` over
+  `apps/web/src` + `docs/`, every hit read. **Also file the debt** this milestone deliberately did not
+  fix: `PlanCalendarPicker.tsx:159`'s save-half `aria-busy` (US-8's named exception),
+  `ActivityCalendarField`'s absent axe assertion, `ActivityFormDialog.tsx:569`, and the
+  duplicate-picker collapse. `pnpm lint`, `pnpm typecheck`.
 
 ---
 
@@ -504,7 +573,12 @@ the **create-activity** dialog's calendar picker (`ActivityFormDialog.tsx:551`).
 
 **Dates:** `VITE_LIBRARY_SCOPING` is batch-8, **due 2026-09-29** — Class A with no `keep`, so CI
 reddens that day if M2 has not landed. That is **earlier than both deferral dates**. A slip takes M3's
-deferral field, not a red build — which is the second reason M3 comes first.
+deferral field under the **already-enumerated** value
+`"retirement in flight — docs/specs/flag-retirement-library-and-calendar/, M2"` (M3-T1 step 1a), not a
+red build and not an invented trigger — which is the second reason M3 is scheduled first.
+
+**M3 is scheduled ahead of M1/M2 but does not depend on them**, and they do not depend on it; the
+flowchart's dotted edge says so. Its ordering is a date, not a dependency.
 
 **No feature flag.** Gating a flag retirement behind a flag keeps the branch this work deletes.
 Rollback is `git revert`; each milestone is one revertible commit (the `VITE_CANVAS_TOOLBAR` precedent).
@@ -521,13 +595,22 @@ Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md), sharpened:
   must also be verified **silent** on their named negative fixtures (`env.ts:133`, `env.ts:1535`, both
   prefix pairs).
 - Every removed assertion carries a ledger verdict **with a named destination or a written reason** —
-  a bare "deleted" does not satisfy this. **"Re-hosted" and "re-expressed" both require red-first, and
-  each names the mutation** (file:line changed to make it red).
+  a bare "deleted" does not satisfy this. **"Re-hosted" and "re-expressed" both require red-first,
+  each naming the mutation** (file:line changed to make it red); **`deleted — covered by …` requires
+  a `<spec file>:<line>` and the covering assertion quoted** — a journey name alone does not satisfy
+  it.
 - **Accessibility (US-8):** a review runs over the combined **M1+M2** diff **before** the retirement
   commit. Acceptance: for every site where an arm is deleted, the surviving arm's accessible name,
   `aria-describedby`, `aria-invalid` and busy state are **equal to or better than** the deleted arm's,
   recorded as a **per-site table** in the PR — **and any site entering scope after that review
   re-opens it.**
+  **One named exception, declared here rather than waived at the table:**
+  `PlanCalendarPicker.tsx:159` is strictly **worse** on busy state — the deleted `<select>` carried
+  `aria-busy` for both halves, the `Combobox` survivor carries the list-load half only (`loading`);
+  `setCalendar.isPending` is unreflected. **Pre-existing, out of scope by this plan's own no-behaviour-
+  change-in-a-refactor rule**, and the round-two review that raised it said "do not fix it inside M2".
+  Filed as debt in M2-T7. Without naming it, the first table filled in contains a failing row and the
+  gate gets waived wholesale — which is what it existed to prevent.
 - Changeset (`patch`, `web`) stating **no user-visible behaviour changes**.
 - **No schema change.** If any task implies one, it stops and **database-architect** runs first,
   unconditionally (CLAUDE.md §19.3).
@@ -546,19 +629,23 @@ Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md), sharpened:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                 | Likelihood                   | Impact   | Mitigation                                                                        |
-| ----------------------------------------------------------------- | ---------------------------- | -------- | --------------------------------------------------------------------------------- |
-| **Parser reports the register's three correct edges as stale**    | was **certain** in rev 1     | **high** | Commutative operand rule; exactly-9 before arming (M0-T2)                         |
-| **Residue scan fires on a history note or a live prefix sibling** | **high** without guards      | **high** | Declaration-anchored + word-boundary; two named fixtures (M0-T3)                  |
-| **M2-T5 deletes another flag's rollback contract**                | was **high** in rev 1        | **high** | Docblock ownership; the 13-file table restored                                    |
-| **A "re-hosted" assertion launders a lost check**                 | was **reopened** in rev 2    | **high** | Red-first on **both** verdicts; each row names its mutation                       |
-| **`Omit` of an absent key silently no-ops**                       | med                          | med      | E27; retype `use-calendars.ts:67,92` (M1-T2)                                      |
-| **`assignable` deleted as dead code**                             | med                          | med      | E25; keep it, drop the conjunct (M2-T3)                                           |
-| **`env` block deleted instead of one pin in M2**                  | med                          | **high** | E28; turns `VITE_SCHEDULING_MODES` on silently (M2-T6)                            |
-| **`check:counts` fails both milestones**                          | **certain** without the fold | med      | Banner + README in M1-T4 / M2-T6                                                  |
-| **CI red on 2026-09-29 (M2's own flag)**                          | med                          | med      | M3 lands first; a slip takes the deferral field                                   |
-| **The deferral becomes an escape hatch**                          | med                          | med      | Enumerated trigger or named TECH_DEBT row required; ADR-0088 amended (M3-T1)      |
-| A retirement deletes the surviving world's journey                | low                          | high     | "Delete the pin, never the config" — M1-T4, M2-T6                                 |
-| **E8/E9 are wrong and the brief was right**                       | low                          | med      | M0-T4 step 1 re-verifies first. This plan is a brief, and a brief is not evidence |
-| **Any user-visible change**                                       | **none**                     | —        | E24: both rev-1 counter-examples already evaluate to the surviving value          |
-| CPM engine / recalc parity gate affected                          | **none**                     | —        | Engine not imported in the blast radius; structurally untouched                   |
+| Risk / assumption                                                      | Likelihood                    | Impact   | Mitigation                                                                                                     |
+| ---------------------------------------------------------------------- | ----------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| **Parser reports the register's three correct edges as stale**         | was **certain** in rev 1      | **high** | Commutative operand rule; exactly-9 before arming (M0-T2)                                                      |
+| **Residue scan fires on a history note or a live prefix sibling**      | **high** without guards       | **high** | Declaration-anchored + word-boundary; two named fixtures (M0-T3)                                               |
+| **M2-T5 deletes another flag's rollback contract**                     | was **high** in rev 1         | **high** | Docblock ownership; the 13-file table restored                                                                 |
+| **A "re-hosted" assertion launders a lost check**                      | was **reopened** in rev 2     | **high** | Red-first on **both** verdicts; each row names its mutation                                                    |
+| **`Omit` of an absent key silently no-ops**                            | med                           | med      | E27; retype `use-calendars.ts:67,92` (M1-T2)                                                                   |
+| **`assignable` deleted as dead code**                                  | med                           | med      | E25; keep it, drop the conjunct (M2-T3)                                                                        |
+| **`env` block deleted instead of one pin in M2**                       | med                           | **high** | E28; turns `VITE_SCHEDULING_MODES` on silently (M2-T6)                                                         |
+| **`check:counts` fails both milestones**                               | **certain** without the fold  | med      | Banner + README in M1-T4 / M2-T6                                                                               |
+| **CI red on 2026-09-29 (M2's own flag)**                               | med                           | med      | M3 scheduled first; a slip takes the **already-enumerated** `"retirement in flight …"` trigger (M3-T1 step 1a) |
+| **M3's own proof cannot pass — and going green cancels the hard date** | was **certain** in rev 3      | **high** | Back-date **`batch-9` + `batch-12` only**; `batch-8` redness is M2's hard date working as intended             |
+| **`deleted — covered by …` spent without evidence across 13 suites**   | med                           | **high** | Verdict requires `<spec file>:<line>` **and** the quoted assertion (M1-T3, M2-T5, DoD)                         |
+| **US-8's table holds a known-failing row, so the gate is waived**      | was **certain** in rev 3      | med      | `PlanCalendarPicker.tsx:159` named as an exception **in the rule**, filed as debt in M2-T7                     |
+| **Residue in a third file class (`ci.yml`)**                           | **already happened** (`:504`) | low      | `ci.yml` added to the retirement checklist; `:504` deleted in M0 as the second live fixture                    |
+| **The deferral becomes an escape hatch**                               | med                           | med      | Enumerated trigger or named TECH_DEBT row required; ADR-0088 amended (M3-T1)                                   |
+| A retirement deletes the surviving world's journey                     | low                           | high     | "Delete the pin, never the config" — M1-T4, M2-T6                                                              |
+| **E8/E9 are wrong and the brief was right**                            | low                           | med      | M0-T4 step 1 re-verifies first. This plan is a brief, and a brief is not evidence                              |
+| **Any user-visible change**                                            | **none**                      | —        | E24: both rev-1 counter-examples already evaluate to the surviving value                                       |
+| CPM engine / recalc parity gate affected                               | **none**                      | —        | Engine not imported in the blast radius; structurally untouched                                                |

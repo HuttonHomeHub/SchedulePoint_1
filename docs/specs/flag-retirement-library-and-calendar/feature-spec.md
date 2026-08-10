@@ -1,6 +1,7 @@
 # Feature Spec: The next Class A feature-flag retirement (ADR-0088 D3)
 
-- **Status:** Draft (rev 3) — two review rounds, all five reviewers AGREE WITH CONDITIONS, no blocks
+- **Status:** Draft (rev 4) — three review rounds; round 3 was component **AGREE (unconditional)** and
+  four **AGREE WITH CONDITIONS**, all textual. No blocks in any round. **Ready for approval.**
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-10 (rev 3)
 - **Tracking issue / epic:** _(none yet)_
@@ -69,8 +70,12 @@ work** (E26).
   in plan M2-T5.
 - **R3 — substance folded, number not.** A review put E7 at 15 code consumers; I measure 12 files
   (11 code, 1 comment-only) and cannot reproduce 15. Likely a grep on `LIBRARY_SCOPING` rather than
-  `_ENABLED`, which also matches `vite-env.d.ts`, `.env.example` and two config comments. Re-derived at
-  implementation time (plan M2-T0) with the method recorded. Not load-bearing.
+  `_ENABLED`, which additionally matches `vite-env.d.ts:77`, the `.env.example` stanza, **pins** in
+  `playwright.library.config.ts:65` and `playwright.assignment-lag.config.ts`, **and at least three
+  prose sites** — `use-plan-workspace-model.ts:368`, `components/ui/form.tsx:152` and
+  `use-optimistic-select.ts:27`. **That list is open-ended, not a set**: it is the expected floor for
+  plan M2-T0 step 3, and a hit outside it is a finding, not a contradiction. Re-derived at
+  implementation time with the method recorded. Not load-bearing.
 - **R4 — folded, and it is the best finding of the round because it deletes a task.** Rev 2 required
   re-expressing the flattening assertion as a new unit test. E26 shows `e2e-calendar-shifts` already
   proves it end-to-end, and M1 runs that journey anyway. Rev 2's instruction was also **impossible as
@@ -81,6 +86,21 @@ work** (E26).
   "the web server's sole env key" sentence. E28 shows that is false for M2. Worse: deleting the `env`
   block would **silently turn `VITE_SCHEDULING_MODES` on** for that journey, which pins it off
   deliberately. **M2 deletes one line.**
+- **R6 — rev 3 regression, introduced by moving M3 ahead of M1/M2.** Rev 2 verified M3 by back-dating
+  "both" deferral batches and was right; rev 3 widened that to three, adding `batch-8`. **Batch-8's
+  only non-`keep` flag is `VITE_LIBRARY_SCOPING`**, which M3 deliberately does not defer — so the
+  proof cannot pass, and the two ways out are both wrong: add the field to `LIBRARY_SCOPING`, which
+  **silently cancels the hard date rev 3 introduced**, or stop verifying. **Corrected to `batch-9`
+  and `batch-12` only**, everywhere it appears.
+- **R7 — units mismatch on the docs checksum, flagged rather than folded blind.** A review corrected
+  rev 3's "29 hits, 4 outside this spec directory" to "27 hits, 11 outside this spec dir, 4 outside
+  any spec dir". I can verify the **file** counts and not the hit counts: `CALENDAR_SHIFT_EDITOR`
+  appears in **7 files** — 2 in this spec directory, 2 in `docs/specs/calendar-shift-editor/`, and
+  **3 outside any spec directory** (`docs/adr/0067-…`, `docs/adr/0088-…`, `docs/ROADMAP.md`). "4
+  hits across 3 files" is consistent with that, so the two counts do not conflict — they are in
+  different units. Both are recorded in the instruction (plan M1-T4 step 8) **with the unit named**,
+  because the reviewer's own point is that a checksum on a "read every hit" instruction licenses
+  stopping early if it is wrong.
 
 ---
 
@@ -148,9 +168,12 @@ unreachable by any operator. Stated unqualified because rev 1's two counter-exam
 - `pnpm check:flags` green at `classACap: 2` with 2 Class A flags.
 - The derivation parser returns **exactly 9** edges before its assertion is armed, and rejects the
   E11c fixture.
-- The residue assertion is **verified red on the live `VITE_NAV_TREE_CRUD`**, and rejects both E22a
-  fixtures (`env.ts:133`; the two prefix pairs).
-- `check:flags` green with the clock advanced past 2026-09-29, 2026-10-06 and 2026-10-27.
+- The residue assertion is **verified red on the live `VITE_NAV_TREE_CRUD`** and on the live
+  `ci.yml:504` upload path, and rejects both E22a fixtures (`env.ts:133`; the two prefix pairs).
+- `check:flags` green with **`batch-9` and `batch-12` only** back-dated (2026-10-06 / 2026-10-27).
+  **`batch-8` is deliberately excluded**: its only non-`keep` flag is `VITE_LIBRARY_SCOPING`, which M3
+  does **not** defer, so back-dating it makes assertion 3 fire **correctly** — that redness is M2's
+  hard date working, not a failure to fix (§0.1 R6).
 - `pnpm check:counts` green (E29 — banner **and** README updated).
 - Every removed assertion carries a ledger verdict **with a named destination or a written reason**,
   and every red-first claim names its mutation.
@@ -212,9 +235,20 @@ unreachable by any operator. Stated unqualified because rev 1's two counter-exam
 
 > **US-6** — The deferred flags survive their dates via a **constrained** deferral field: it must
 > carry an **enumerated trigger or a named TECH_DEBT row** — an undated, gate-honoured opt-out for a
-> Class A flag is the escape hatch this epic exists to remove. **ADR-0088 is amended** to define the
-> field (D4/D6 define the register's vocabulary; a field the governing ADR does not know about is the
-> ADR-0071 shape this spec cites twice).
+> Class A flag is the escape hatch this epic exists to remove.
+>
+> - The enumeration includes a **self-limiting** value for a retirement that is under way but has not
+>   landed: `"retirement in flight — docs/specs/flag-retirement-library-and-calendar/, M2"`. It is
+>   named **now**, because otherwise an M2 slip past 2026-09-29 meets a rule with no value that fits
+>   and the author invents one under time pressure — which is precisely the escape hatch M3-T1's
+>   first risk exists to close.
+> - **ADR-0088 is amended at D3 as well as D4/D6.** D4/D6 define the register's vocabulary, but **D3
+>   is the decision that says Class A retires on merit under a standing cap** — a reader of D3 alone
+>   would learn nothing about a field that suspends exactly that, and defining it only beside `keep`
+>   invites the confusion M3-T1's own risk warns about.
+> - **Assertion 5 gains a clause:** after M3 a deferred parent's `due` is no longer a retirement date,
+>   yet it still bounds its children. `CANVAS_WORKSPACE → CANVAS_AUTHORING → SCHEDULING_MODES` is a
+>   live chain, so the rule must say what a deferred parent's date means for a child.
 
 > **US-7** — A retired flag leaves no residue: absent from `env.ts` **and** `vite-env.d.ts`, matched
 > on **declaration forms** (`readonly VITE_X?:`, `import.meta.env.VITE_X`) with **word boundaries**.
@@ -225,19 +259,29 @@ unreachable by any operator. Stated unqualified because rev 1's two counter-exam
 > `aria-describedby`, `aria-invalid` and busy state are **equal to or better than** the deleted arm's,
 > recorded as a per-site table in the PR — **and any site entering scope after that review re-opens
 > it.** That last clause is the point: two sites entered scope after the rev-2 reviews.
+>
+> **One named exception, declared in the rule rather than waived at the table.** At
+> `PlanCalendarPicker.tsx:159` the surviving arm is strictly **worse** on one property: the deleted
+> native `<select>` carried `aria-busy` for both the list-load and the **save** half, and the
+> `Combobox` survivor carries only the list-load half (`loading`); `setCalendar.isPending` is not
+> reflected. It is **out of scope by the plan's own rule** — no behaviour change is smuggled into a
+> refactor, and the round-two review that raised it also said "do not fix it inside M2". It is
+> **pre-existing**, not caused here. Recorded as debt (plan M2-T7), and the per-site table cites this
+> exception rather than failing on it. Without naming it, the first table filled in contains a
+> failing row and the gate gets waived wholesale — which is what the gate existed to prevent.
 
 ### Edge cases
 
-| Case                                                  | Expected behaviour                                                                     |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Config pins the retiring flag `'true'`                | Delete **the line**, never the config or the `env` block (E28)                         |
-| Config pins it `'false'`                              | Blocked; convert specs first. Not applicable (E4/E5)                                   |
-| A `*.flag-off.test.tsx` owned by a **different** flag | **Converted, never deleted.** Ownership from the **docblock**, never the filename      |
-| A mixed suite                                         | Classified **per `it()`**                                                              |
-| An assertion already proven by a journey              | Verdict **deleted — covered by `<journey>`** (E26); stronger than a unit re-expression |
-| A "re-hosted" or "re-expressed" assertion             | **Both** require red-first, and the ledger row names the mutation (§0.1 R1)            |
-| Removing a field typed via `Omit<…>`                  | `Omit` of an absent key is a silent no-op — retype, do not trust the compiler (E27)    |
-| M2 slips past 2026-09-29                              | Takes the same deferral field, not a red build                                         |
+| Case                                                  | Expected behaviour                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Config pins the retiring flag `'true'`                | Delete **the line**, never the config or the `env` block (E28)                                                                                                                                                                                                                                                                                                                   |
+| Config pins it `'false'`                              | Blocked; convert specs first. Not applicable (E4/E5)                                                                                                                                                                                                                                                                                                                             |
+| A `*.flag-off.test.tsx` owned by a **different** flag | **Converted, never deleted.** Ownership from the **docblock**, never the filename                                                                                                                                                                                                                                                                                                |
+| A mixed suite                                         | Classified **per `it()`**                                                                                                                                                                                                                                                                                                                                                        |
+| An assertion already proven by a journey              | Verdict **`deleted — covered by <spec file>:<line>`**, and the ledger row **quotes the covering assertion**. A journey _name_ alone does not satisfy it — without a file and line this is a laundering route requiring no evidence, and M2 would inherit it across 13 suites against `e2e-library`. M1's single use is `e2e-calendar-shifts/calendar-shifts.spec.ts:60-68` (E26) |
+| A "re-hosted" or "re-expressed" assertion             | **Both** require red-first, and the ledger row names the mutation (§0.1 R1)                                                                                                                                                                                                                                                                                                      |
+| Removing a field typed via `Omit<…>`                  | `Omit` of an absent key is a silent no-op — retype, do not trust the compiler (E27)                                                                                                                                                                                                                                                                                              |
+| M2 slips past 2026-09-29                              | Takes the same deferral field, not a red build                                                                                                                                                                                                                                                                                                                                   |
 
 ### Permissions
 
@@ -440,8 +484,9 @@ hand-kept list _is_ the drift. A new ADR for the cap — disproportionate; ADR-0
 this is an internal contradiction, corrected in place.
 
 **Is an ADR required?** **No new ADR — but ADR-0088 is amended** (US-6): the deferral field enters the
-register's vocabulary, which D4/D6 define. Amending the governing ADR in the same commit is the
-ADR-0071 lesson this spec cites twice.
+register's vocabulary, which D4/D6 define, **and D3**, which is the decision saying Class A retires on
+merit under a standing cap — the thing the field suspends. Amending the governing ADR in the same
+commit is the ADR-0071 lesson this spec cites twice.
 
 ## 5. Open questions
 
@@ -466,7 +511,10 @@ ADR-0071 lesson this spec cites twice.
 ## 6. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
-- Docs updated: `docs/adr/0088-flag-classification.md` (**corrected and amended**), `CLAUDE.md`
-  (§16 entry **and the stage banner counts**), `README.md` (counts), `scripts/flag-retirement.json`,
-  `scripts/check-flags.mjs`, `docs/TECH_DEBT.md`, `.env.example`, `apps/web/src/vite-env.d.ts`,
-  `.github/workflows/ci.yml`, `docs/adr/0067-…`, `docs/adr/0053-…`
+- Docs updated: `docs/adr/0088-flag-classification.md` (**D2 corrected; D3 + D4/D6 amended**),
+  `CLAUDE.md` (§16 entry **and the stage banner counts**), `README.md` (counts),
+  `scripts/flag-retirement.json`, `scripts/check-flags.mjs` (**including its `:4` docblock, which says
+  "58 `VITE_` flags" where it is 56**), `docs/TECH_DEBT.md`, `.env.example`,
+  `apps/web/src/vite-env.d.ts`, `.github/workflows/ci.yml` (**comment block _and_ the report-upload
+  paths — `:504` still uploads the deleted `playwright-report-workspace/`**), `docs/adr/0067-…`,
+  `docs/adr/0053-…`
