@@ -1981,6 +1981,36 @@ The real remedy, if one is wanted, is to stop recording the path at all — whic
 investigative value the column exists for. Open, unowned, and cheap to leave open: the throttle
 bounds a sustained flood and the sweep bounds the residue after one stops.
 
+## 121. The base Playwright journey proves editing in a world no shipped bundle can produce
+
+`apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the
+whole base journey, so its six editing specs — `activities.spec.ts`, `baselines.spec.ts`,
+`dependencies.spec.ts` (×2), `schedule.spec.ts` (×2) — run with `penManaged: false`: the client pen
+inert, gating by role alone.
+
+**No shipped bundle can be in that configuration.** Both flags are compiled on and unreachable by any
+build path (ADR-0088 D1). So the product's main end-to-end editing coverage exercises a world that
+does not exist, and the real editing flow — with the pen — is covered only by the narrower
+`playwright.edit.config.ts`.
+
+This is worse than covering a rollback path, and it is **not** fixed by retiring the flags. ADR-0088
+D4 keeps both permanently (they are one line of production code each), which means "convert the specs
+before the flag is deleted" would never fire. Hence this row: the conversion is owned here, with a
+trigger of its own.
+
+**What to do:** convert the six specs to acquire the pen, and drop the two pins from
+`playwright.config.ts`. The gating _logic_ is already safe either way —
+`plan-gating.test.ts` unit-tests `derivePlanGating({ penManaged: false, … })` as a pure function
+taking a boolean as data rather than through the env module, so it survives whatever happens to the
+flags. What needs re-hosting is the end-to-end proof against a real API, which no unit test replaces
+(the ADR-0067 modal-in-top-layer and ADR-0079 native-listener-race defects are both of that class).
+
+**Trigger:** the next epic that touches plan editing end to end, or the next time a base-journey
+editing spec needs changing for any reason — whichever comes first. Not a date: ADR-0088 supersedes
+dated flag work precisely because the date was the wrong instrument.
+
+**Do not** substitute unit-level flag-off suites for it (ADR-0088 D5, D7).
+
 ## 120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
 
 Measured, not suspected. The backend-performance review seeded `csp_reports` to 500,000 rows

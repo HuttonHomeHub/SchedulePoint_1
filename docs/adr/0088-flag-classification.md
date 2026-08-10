@@ -64,36 +64,97 @@ ADR-0084 treated 57 flags as one population and sorted them by **age**. Age is n
 **branch shape** is. A flag that selects between two screens and a flag that guards one line are the
 same age and nothing else.
 
+**Two axes, not one enum — and the first draft got this wrong in a way that mattered.** It offered
+Class A / B / C as a partition. They are not disjoint: **both** Class A flags are also pinned off by
+a Playwright config, so the two classes that matter most overlapped completely and the enum could
+express neither. The architecture review caught it. The axes are independent because the questions
+are:
+
+**Axis 1 — branch shape. Mandatory, computed, and it partitions the register.**
+
 - **Class A — alternative surface.** The flag's value decides which of two **different components**
-  is rendered. This is the "second product maintained forever" ADR-0084 describes, and for these
-  flags the description is exactly right.
-- **Class B — guard.** The flag appears only in `&&`, a conditional spread, a prop or a string
-  ternary. Its production cost is one line. **These do not retire.**
-- **Class C — the flag is really a test or rollout control.** Its production footprint is trivial but
-  a Playwright harness pins it off to preserve coverage of a path users still reach. The work is
-  replacing that coverage; the flag's deletion is a consequence, not the task.
+  is returned. This is the "second product maintained forever" ADR-0084 describes, and for these
+  flags the description is exactly right. **Five flags** — and the first draft of this ADR said
+  two, which is the correction recorded below.
+- **Class B — guard.** Everything else: `&&`, a conditional spread, a prop, a string ternary. Its
+  production cost is one line. **These do not retire.** **Fifty-two flags.**
+
+5 + 52 = 57, and `check:flags` asserts that sum. **There is no third bucket and no default**, because
+the first draft's "roughly 28 / roughly 10 / roughly 17" left seventeen flags unclassified — and an
+unclassified residue is precisely what ADR-0073 C3.4 deleted `PENDING_COVERAGE` for: _"the one census
+reason that was a queue rather than a decision"_, replaced by an assertion that every reason is a
+decision somebody made. Same rule here.
+
+**Why "two different components" and not "lines of code behind the flag".** The cost is not volume;
+it is **two implementations of one surface that can drift**. `{FLAG && <BigThing/>}` guarding four
+hundred lines is cheap, because absence cannot drift — there is nothing to keep in step. ADR-0080's
+shipped defect was drift between two implementations of one workspace. Stated so a later reader does
+not "improve" this into a line-count threshold.
+
+**Axis 2 — harness. Derived by script from the configs, never hand-maintained.** Which
+`playwright*.config.ts` files pin this flag `'false'`. **Ten flags** carry one. This is orthogonal to
+branch shape: a Class A flag may be harnessed (both are), and so may a Class B flag
+(`VITE_PLAN_EDIT_LOCK`, `VITE_TSLD_EDITING`). A harnessed flag's retirement is governed by D5
+whatever its branch shape — **replace or retire the coverage first, in the same commit**, never on a
+deadline.
 
 **Class A is derived by a script, not by a reviewer's reading**, or it becomes the prose ADR-0058
-exists to distrust. The discriminator that works, verified against this codebase: _a flag whose
-value selects which of two different JSX roots a component returns._
+exists to distrust — and this clause went through **four** versions, three of them wrong, which is
+the part worth keeping:
 
-```
-return FLAG_ENABLED ? ( <A …/> ) : ( <B …/> )        // A ≠ B  ⇒  Class A
-```
+1. **"the flag appears in a ternary"** — matches **48 of 57**. Useless.
+2. **"two different capitalised arms in a `.tsx`"** — matches two flags, and the **wrong** two.
+3. **"a `return` whose arms are JSX roots"** — finds the two an architect had identified by reading,
+   so the ADR was written claiming the rule was "verified against this codebase". A reviewer then
+   found `VITE_ACTIVITY_EDITOR_TABS` **by reading**, minutes later: it branches _inside_ JSX
+   (`{FLAG ? (<A/>) : (<B/>)}`), and anchoring on `return` missed it.
+4. **`scripts/detect-alternative-surfaces.mjs`** — finds `FLAG ?`, then scans forward **balancing
+   brackets** to the `:` belonging to that ternary and asks whether both arms open with a JSX
+   element. It anchors on nothing around the ternary, because anchoring is what produced 1–3.
 
-**That measurement is the reason this clause is stated the way it is.** The obvious rule — "the flag
-appears in a ternary" — matches **48 of 57 flags** and is useless. The rule above matches **two**,
-and they are the two an architect independently identified by reading the code:
+Version 4 finds **five**, and the two extra beyond the reviewer's are real by the drift test above:
 
-| Flag                    | Selects                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `VITE_CANVAS_TOOLBAR`   | `<ToolbarPlanWorkspace>` vs `<Adr0030PlanWorkspace>` (`plan-workspace.tsx:70`) |
-| `VITE_CANVAS_WORKSPACE` | `<PlanWorkspace>` vs `<LegacyPlanLayout>` (`plan-detail.tsx:66,112`)           |
+| Flag                         | Selects                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------- |
+| `VITE_CANVAS_TOOLBAR`        | `<ToolbarPlanWorkspace>` vs `<Adr0030PlanWorkspace>` (`plan-workspace.tsx:70`)        |
+| `VITE_CANVAS_WORKSPACE`      | `<PlanWorkspace>` vs `<LegacyPlanLayout>` (`plan-detail.tsx:112`)                     |
+| `VITE_ACTIVITY_EDITOR_TABS`  | `<ActivityEditorDialog>` vs the legacy dialog trio (`activity-crud-dialogs.tsx:143`)  |
+| `VITE_CALENDAR_SHIFT_EDITOR` | `<WeeklyShiftEditor>` vs the legacy weekday checkboxes (`CalendarFormDialog.tsx:467`) |
+| `VITE_LIBRARY_SCOPING`       | `<Combobox>` vs `<Select>`, in **four** pickers                                       |
 
-A narrower first attempt — "two different capitalised arms anywhere in a `.tsx`" — found two
-_different_ flags and missed both of these, because the real cases return multi-line JSX rather than
-a bare identifier. The rule shipped is the one checked against the answer, and a Class A list that
-is not reproducible by the script is a bug in the script, not a judgement call.
+**`VITE_ACTIVITY_EDITOR_TABS` is arguably the worst case in the estate**, and neither the ADR's
+author nor the architecture review found it. Its flag-off branch is the pre-ADR-0060 dialog trio, and
+**at least nine unrelated features have had to add a case to both** the legacy monolith and the
+tabbed editor to keep them byte-identical — `ActivityFormDialog.{calendar,advanced-constraints,cost-accrual,duration-types,earned-value,inter-project-dates,levelling,scope,sub-day,activity-types}.test.tsx`.
+That is the "second product maintained forever" with nine receipts.
+
+**The ADR said "two", and the honest number is five.** It is recorded rather than quietly amended,
+because a document that asserts a computed count and gets it wrong is the exact failure this decision
+is built on — and because the correction only exists thanks to a reviewer reading the code after the
+ADR claimed the reading was done.
+
+**But the detector is not the classifier, and that distinction is load-bearing.** The regex would
+miss a Class A flag written as `const Body = FLAG ? A : B; return <Body/>`, as early returns in two
+functions, or as `...(FLAG ? [routeA] : [routeB])` in the router. A gate that under-detects **fails
+silently and conceals its own failure**: the cap never fires, nobody gets a red build, and D3's
+central protection becomes decoration whose symptom is silence.
+
+So the design is `check:claims`'s (ADR-0076), which has the same shape — a curated register, and a
+script that fails loud on anything unregistered:
+
+- The **curated Class A list in `flag-retirement.json` is authoritative**, and the cap is evaluated
+  against it.
+- The assertion is **`detected ⊆ curated`**. A flag outside the list that grows a returned-JSX-root
+  ternary fails CI — the Class-B-becomes-Class-A tripwire.
+- **The converse is never asserted.** A human-declared Class A flag written in an undetectable shape
+  is legitimate, and `curated ⊆ detected` would fail it. Under-detection makes superset the only
+  sound direction.
+
+**This is the weak clause, and it is labelled as one** (the ADR-0076 §19.10 pattern). It catches
+drift and omission. It **cannot** catch someone classifying a genuine Class A flag as Class B —
+that requires a written false statement in a reviewed file rather than an oversight, and no gate
+closes it. Said plainly rather than implied, because ADR-0072 described `ENGINE_DERIVED` as a gate
+when it was a rule and ADR-0087 had to correct it.
 
 ### D3 — Class A retires on merit and on epic-touch, with a standing cap
 
@@ -101,9 +162,22 @@ No dates. A Class A flag retires when an epic next touches that surface — ADR-
 extract-when-touched rule, which has the property a calendar lacks: **the person deleting the branch
 is the person who just paid for it.**
 
-And a **cap of three**. Adding a fourth alternative surface fails CI, which forces the conversation
-at the moment it is cheap rather than eighteen months later. That is ADR-0058's ratchet shape aimed
-at the thing that actually hurts: silent on the one-line guard, loud on the second product.
+And a **cap at the measured count, which ratchets down.** Today that is **five**. Adding a _sixth_
+alternative surface fails CI, which forces the conversation at the moment it is cheap rather than
+eighteen months later.
+That is ADR-0058's ratchet shape aimed at the thing that actually hurts: silent on the one-line
+guard, loud on the second product.
+
+**The measured count, and the reason is ADR-0058's own.** That decision set the coverage floors at
+the **measured** value (API 74% / web 87%) rather than the aspirational 80%, because a gate that
+fails on day one gets deleted rather than fixed. The first draft proposed three, then two — both
+chosen before the detector was written, and both **below** the real count, so either would have
+failed immediately on five perfectly ordinary flags. That is the aspirational-80% mistake twice in
+one clause, and it is the second thing the detector corrected.
+
+The cap is **re-set to the measured count after each Class A retirement** and never raised without an
+ADR. `VITE_CANVAS_TOOLBAR` retiring takes it to four. Failing this gate is not a prohibition — it is
+a required register edit with a written reason, which is what the cap is for.
 
 **`VITE_CANVAS_TOOLBAR` retires first, and on evidence rather than on its date.** It is the only flag
 in the register whose flag-off branch has a **shipped, user-facing defect** attributed to it:
@@ -148,9 +222,17 @@ retires:
   as a pure function taking a boolean as **data**, not through the env module. It survives the flag's
   death for free. This is the pattern to copy.
 - The **end-to-end proof** needs re-hosting, not deleting: convert the six specs to acquire the pen.
-  That is a slice of its own, landed and green in the default world for a release **before** the flag
-  is deleted — never coupled to a retirement date, because that coupling is exactly what made batch 1
-  fail.
+  That is a slice of its own, **decoupled from the flag's fate entirely** — not merely from its
+  retirement date.
+
+  The test review caught why that stronger wording is needed. D4 keeps `VITE_PLAN_EDIT_LOCK` and
+  `VITE_TSLD_EDITING` **permanently**, so "convert the specs before the flag is deleted" is a null
+  commitment: if the flag never retires, the condition never fires, and the base journey goes on
+  proving role-only editing in an impossible configuration forever. That is ADR-0084 D1's own
+  complaint — _an undated intention rots_ — reproduced inside this ADR's remediation. So it takes a
+  **`docs/TECH_DEBT.md` row with its own trigger**, owned independently of whether either flag is
+  ever retired.
+
 - **Do not manufacture unit-level flag-off suites as substitutes.** That would be producing the
   folklore D6 exists to end.
 
@@ -225,6 +307,18 @@ parity suite" describes deleting nothing.
 ## What this ADR does not do
 
 It does not retire any flag by itself, does not touch the CPM engine, and adds no migration.
+
 `VITE_CANVAS_TOOLBAR`'s retirement is the first slice under D3 and lands as its own revertible
-commit, gated on `scripts/e2e-local.sh web:workspace` — batch 1's failure was invisible to every unit
-suite.
+commit, gated on **`scripts/e2e-local.sh web:toolbar`** — batch 1's failure was invisible to every
+unit suite.
+
+**That gate said `web:workspace` in the first draft, and it would have reproduced batch 1 exactly.**
+`playwright.workspace.config.ts` pins `VITE_CANVAS_TOOLBAR: 'false'` and drives
+`e2e-workspace/workspace.spec.ts`, which exists to exercise `Adr0030PlanWorkspace` — **the component
+the retirement deletes**. Running it after the retirement means its specs click controls that no
+longer exist, which is batch 1 verbatim, proposed as the safety gate of the ADR written to prevent
+batch 1. `playwright.toolbar.config.ts` pins the flag `'true'`, so it is the harness for the world
+that survives, and it is the correct gate. `playwright.workspace.config.ts` and `e2e-workspace/` are
+**deleted in the same commit as their subject** (ADR-0084 D5) — after confirming
+`e2e-toolbar/toolbar.spec.ts` covers the drag-resizer gesture, and porting that one assertion if it
+does not.
