@@ -32,7 +32,7 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Label } from '@/components/ui/label';
 import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
-import { CALENDAR_SHIFT_EDITOR_ENABLED, LIBRARY_SCOPING_ENABLED } from '@/config/env';
+import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { ApiFetchError } from '@/lib/api/client';
@@ -205,7 +205,7 @@ export function CalendarsTable({
       cell: (calendar) => (
         <span>
           {formatWorkingWeekdays(calendar.workingWeekdays)}
-          {CALENDAR_SHIFT_EDITOR_ENABLED && hasIntradayDetail(calendar.shifts) ? (
+          {hasIntradayDetail(calendar.shifts) ? (
             <span className="text-muted-foreground"> · {shiftCountLabel(calendar.shifts)}</span>
           ) : null}
         </span>

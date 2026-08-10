@@ -20,7 +20,6 @@ vi.mock('@/lib/api/client', async (importOriginal) => ({
 // rather than weakened — it is the rollback contract (ADR-0053 M6 precedent).
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<typeof Env>()),
-  CALENDAR_SHIFT_EDITOR_ENABLED: true,
 }));
 
 /** A half-day before a shutdown: worked, but not for the whole day. */
@@ -73,7 +72,7 @@ async function sentBody(method: string): Promise<Record<string, unknown>> {
   return JSON.parse(call[1]?.body as string) as Record<string, unknown>;
 }
 
-describe('CalendarExceptionsEditor — hours (VITE_CALENDAR_SHIFT_EDITOR)', () => {
+describe('CalendarExceptionsEditor — hours', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(DETAIL);
   });

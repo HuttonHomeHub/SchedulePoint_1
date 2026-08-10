@@ -10,12 +10,13 @@ import type * as Env from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
-// Flag ON: this file is the shift editor's contract. The flag-off surface is pinned separately by
-// `library-scoping-flag-off.test.tsx` and by `CalendarFormDialog.test.tsx`, which are kept rather
-// than weakened — they are the rollback contract (ADR-0053 M6).
+// This file is the calendar form's contract. It carried a `CALENDAR_SHIFT_EDITOR_ENABLED: true`
+// pin until ADR-0088 D3 retired that flag — a no-op re-stating the default once the alternative
+// was deleted. Four assertions from `CalendarFormDialog.test.tsx` were RE-HOSTED here when that
+// file went with the weekday-checkbox surface it existed to pin: they were never about the deleted
+// branch, they merely lived on it.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<typeof Env>()),
-  CALENDAR_SHIFT_EDITOR_ENABLED: true,
 }));
 
 const SPLIT_SHIFT: CalendarSummary = {
@@ -52,11 +53,60 @@ async function sentBody(method: string): Promise<Record<string, unknown>> {
   return JSON.parse(call![1]?.body as string) as Record<string, unknown>;
 }
 
-describe('CalendarFormDialog — shift editor (VITE_CALENDAR_SHIFT_EDITOR)', () => {
+describe('CalendarFormDialog — the working week', () => {
   beforeEach(() => {
     vi.mocked(apiFetch)
       .mockReset()
       .mockResolvedValue({ ...SPLIT_SHIFT, exceptions: [] });
+  });
+
+  /**
+   * **Re-hosted from `CalendarFormDialog.test.tsx`** when ADR-0088 D3 deleted that file with the
+   * weekday-checkbox surface it pinned. None of these four asserts the deleted branch — they are
+   * ordinary form behaviour that merely happened to be hosted there, which is the distinction
+   * ADR-0084 D5 turns on: delete the parity suite, never the coverage sitting inside it.
+   */
+  it('seeds the form in edit mode and PATCHes with the row version', async () => {
+    renderDialog({ calendar: SPLIT_SHIFT });
+
+    const name = screen.getByLabelText('Name');
+    expect(name).toHaveValue('Two shift');
+
+    fireEvent.change(name, { target: { value: 'Two shift UK' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await sentBody('PATCH')).toMatchObject({ name: 'Two shift UK', version: 3 });
+  });
+
+  it('POSTs a new calendar in create mode', async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Nights' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create calendar' }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
+    expect(path).toBe('/organizations/acme/calendars');
+    expect(init?.method).toBe('POST');
+  });
+
+  it('embeds the exceptions editor in edit mode (and not in create mode)', () => {
+    const { unmount } = renderDialog({ calendar: SPLIT_SHIFT });
+    expect(screen.getByRole('heading', { name: 'Exceptions' })).toBeInTheDocument();
+    unmount();
+
+    renderDialog();
+    expect(screen.queryByRole('heading', { name: 'Exceptions' })).not.toBeInTheDocument();
+  });
+
+  it('renders read-only for a reader: fields shown, no save/edit affordances', () => {
+    renderDialog({ calendar: SPLIT_SHIFT, readOnly: true });
+    expect(screen.getByLabelText('Name')).toHaveValue('Two shift');
+    expect(screen.getByLabelText('Name')).toHaveAttribute('readonly');
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    // Readers still see the exceptions section, but no add form / remove buttons.
+    expect(screen.getByRole('heading', { name: 'Exceptions' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add exception' })).not.toBeInTheDocument();
   });
 
   it('gives every weekday its own hours group', () => {
@@ -232,13 +282,6 @@ describe('CalendarFormDialog — shift editor (VITE_CALENDAR_SHIFT_EDITOR)', () 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('drops the flag-off advisory, which would now be false', () => {
-    // Flag off, the form says the week is "shown simplified" because seven checkboxes cannot carry
-    // a split shift. Flag on it can, so the advisory would be a lie.
-    renderDialog({ calendar: SPLIT_SHIFT });
-    expect(screen.queryByText(/works specific hours/i)).not.toBeInTheDocument();
-  });
-
   it('shows hours as plain text with no controls when read-only', () => {
     renderDialog({ calendar: SPLIT_SHIFT, readOnly: true });
     const monday = screen.getByRole('group', { name: 'Monday hours' });
@@ -247,7 +290,7 @@ describe('CalendarFormDialog — shift editor (VITE_CALENDAR_SHIFT_EDITOR)', () 
   });
 });
 
-describe('CalendarFormDialog — the window-only calendar is savable (VITE_CALENDAR_SHIFT_EDITOR)', () => {
+describe('CalendarFormDialog — the window-only calendar is savable', () => {
   beforeEach(() => {
     vi.mocked(apiFetch)
       .mockReset()

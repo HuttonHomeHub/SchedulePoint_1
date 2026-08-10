@@ -301,8 +301,9 @@ jobs:
       - name: Web end-to-end tests (library scoping flag on)
         run: pnpm --filter @repo/web test:e2e:library
 
-      # Flag-ON calendar shift-editor journey (playwright.calendar-shifts.config.ts) serving the app
-      # with VITE_CALENDAR_SHIFT_EDITOR on. It proves the four claims a mocked fetch structurally
+      # The calendar shift-editor journey (playwright.calendar-shifts.config.ts). No longer flag-on:
+      # ADR-0088 D3 retired VITE_CALENDAR_SHIFT_EDITOR and deleted the weekday-checkbox form it
+      # selected, so this drives the only calendar form there is. It proves the four claims a mocked fetch structurally
       # cannot (ADR-0067/ADR-0068): the hours a planner types round-trip to the minute, a rename does
       # not flatten them (the defect the epic was opened on), a calendar with no working week stays
       # savable on the SECOND save, and a dated exception's hours can be edited in place through the

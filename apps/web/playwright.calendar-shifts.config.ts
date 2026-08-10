@@ -1,10 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **calendar shift editor**
- * (`VITE_CALENDAR_SHIFT_EDITOR`, ADR-0067/ADR-0068,
+ * End-to-end configuration for the **calendar shift editor** (ADR-0067/ADR-0068,
  * `docs/specs/calendar-shift-editor/`) — the per-day window list, the week presets, copy-day, the
  * assisted night shift, the standard working day, and dated exceptions with real hours.
+ *
+ * **No longer flag-on: it is the only calendar form there is.** `VITE_CALENDAR_SHIFT_EDITOR`
+ * selected this editor or the seven weekday checkboxes, and ADR-0088 D3 retired the flag and
+ * deleted the checkboxes — so this config's `env` pin went with it, and the suite now drives the
+ * surface every planner gets, unconditionally.
  *
  * Everything this suite proves needs a **real API and a real database**: that the windows a planner
  * types survive a round trip byte for byte, that a rename does not flatten them, that a calendar
@@ -61,7 +65,6 @@ export default defineConfig({
             // The shift editor ON. The calendar library is reachable without any canvas layer, so
             // this suite deliberately turns none of them on — the fewer flags a journey needs, the
             // fewer reasons it has to fail for something it is not about.
-            env: { VITE_CALENDAR_SHIFT_EDITOR: 'true' },
           },
         ],
       }),

@@ -71,6 +71,15 @@
       "retiredOn": "2026-08-10",
       "batch": "batch-2",
       "note": "ADR-0088 D3, the first retirement on MERIT rather than on a date. Its flag-off branch was `Adr0030PlanWorkspace`, a ~257-line second implementation of the plan surface that no shipped bundle could select and that ADR-0080 had already attributed a user-facing defect to. `plan-workspace.tsx` goes 334 lines to 24. The flag-off parity suite (plan-workspace.test.tsx) and the flag-off harness (playwright.workspace.config.ts + e2e-workspace/) are deleted with their subject (ADR-0084 D5); the splitter assertion only that harness carried was PORTED to e2e-toolbar/toolbar.spec.ts, and plan-detail.gating.test.tsx was RE-HOSTED onto the surviving layout rather than deleted \u2014 it was pen-gating coverage that merely happened to live there."
+    },
+    {
+      "flag": "VITE_CALENDAR_SHIFT_EDITOR",
+      "constant": "CALENDAR_SHIFT_EDITOR_ENABLED",
+      "enabled": "2026-08-01",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-08-10",
+      "batch": "batch-10",
+      "note": "ADR-0088 D3, batch-2 retirement M1. Flag-off selected seven weekday checkboxes \u2014 a control that can say only WHETHER a day works, so it could not express the split shifts and part days ADR-0036 stores and ADR-0067 built the editor to author. Deleted with the flag: `WeekdayToggleGroup`, the `weekIsSimplified` advisory, the flag-off submit branch, and `workingWeekdays` from `calendarFormSchema` \u2014 the last because keeping a validated field with no control left to satisfy it is the ADR-0067 M4 dead end verbatim. `use-calendars.ts` keeps its `workingWeekdays` members and the flatten docblock deliberately: the API still ACCEPTS a mask, and that comment is the surviving record of why sending one is destructive. Its two `Omit<CalendarFormValues,'workingWeekdays'>` aliases were retyped \u2014 `Omit` of an absent key compiles and asserts nothing, the one site typecheck could not catch. `playwright.calendar-shifts.config.ts` is KEPT (it pinned 'true', i.e. drove the surviving world); only its one-line `env` pin went. No user-visible change: the flag was compiled on in every published image (ADR-0088 D1)."
     }
   ],
   "flags": {
@@ -174,13 +183,6 @@
       "batch": "batch-16",
       "class": "B",
       "keep": "Guard-only: one line of production code, so there is no second product to maintain. ADR-0088 D4."
-    },
-    "VITE_CALENDAR_SHIFT_EDITOR": {
-      "constant": "CALENDAR_SHIFT_EDITOR_ENABLED",
-      "enabled": "2026-08-01",
-      "enabledSource": "docblock",
-      "batch": "batch-10",
-      "class": "A"
     },
     "VITE_CANVAS_ACTIVITY_TYPES": {
       "constant": "CANVAS_ACTIVITY_TYPES_ENABLED",
@@ -546,11 +548,10 @@
   "sizing": "A batch is sized by BLAST RADIUS. The enablement cohort only sets the EARLIEST date a flag may fall on (enabled + horizonDays); it does not set the batch. Re-spaced 2026-08-09 after the original cohort-only split put 17 flags and ~75 production files into a batch due in nine days \u2014 the largest batch on the second-earliest date.\nMEASURED per flag: production files referencing the constant, and the number of playwright*.config.ts files that PIN it. The pin count is the one nobody had: VITE_CANVAS_AUTHORING is pinned in 14 configs and VITE_SCHEDULING_MODES in 13, and CI proved a single pinned config costs six specs to convert, not a line.\nESTIMATED, and labelled as such: weight = files + 3x pins and a cap of 45 per batch. The cadence was fortnightly and is WEEKLY from batch-2 (product owner, 2026-08-09), which finishes the queue 2026-12-01 rather than 2027-03-23. Note what that does to the estimate: the batch COMPOSITION was fitted against a fortnight and now has a week, so the cap is the part now under test \u2014 halving the cadence doubles the rate of work without re-sizing a single batch. The weighting, the cap and the cadence all come from ONE completed retirement, so they are a hypothesis rather than a plan. `check:flags` tests it for us \u2014 if batch 2 takes longer than its week, the next batch date fails and forces a re-fit against a second data point. Re-fit it then; do not defend it.",
   "classA": {
     "VITE_ACTIVITY_EDITOR_TABS": "Selects <ActivityEditorDialog> or the legacy ActivityFormDialog/Progress/Steps trio \u2014 for EDITING only. CORRECTED 2026-08-10: this note previously called it 'arguably the worst case in the estate: at least nine unrelated features have had to add a case to BOTH'. That sentence is true about the codebase and FALSE about the flag. ActivityEditorDialog.tsx:154 says in its own docblock 'This editor is edit-only; creation stays with ActivityFormDialog', and CreateActivityButton.tsx renders ActivityFormDialog with no flag reference anywhere in the file \u2014 so retiring the flag deletes three mount sites and leaves the legacy monolith alive as the create surface, with every field those nine features added. The nine ActivityFormDialog.*.test.tsx suites are flag-UNAWARE (0 of 11 reference the constant). The drift tax is caused by create and edit being two different components (an ADR-0060 decision), not by this flag, and retiring it collects none of the payoff. Real cost: 2 flag-off harnesses plus 2 derived children. Deferred \u2014 see deferredUntil.",
-    "VITE_CALENDAR_SHIFT_EDITOR": "Selects <WeeklyShiftEditor> + the hours-per-day section, or the legacy weekday checkboxes \u2014 two implementations of \"author a working week\" (ADR-0067).",
     "VITE_CANVAS_WORKSPACE": "Selects <PlanWorkspace> or <LegacyPlanLayout>, the pre-ADR-0030 stacked plan-detail page. Harnessed by seven configs \u2014 the largest conversion cost in the estate, and the register carried NO note for it until ADR-0088 D5.",
     "VITE_LIBRARY_SCOPING": "Selects <Combobox> or <Select> across FIVE two-arm selection sites \u2014 ActivityFormDialog.tsx:551, ActivityCalendarField.tsx:98, PlanCalendarPicker.tsx:146, ResourceFormDialog.tsx:362, ActivityResourcesPanel.tsx:367 \u2014 PLUS one guard-only site, ResourceFormDialog.tsx:318, whose flag-off branch is `: null` (no control at all), which is ADR-0088 D2's Class B guard shape and not a selection. CORRECTED 2026-08-10: this said 'FOUR pickers'. That figure was detect-alternative-surfaces.mjs's OUTPUT, not a clerical slip \u2014 the detector structurally cannot see :318 (the ternary wraps a <div>) or :551 (an intervening comment). The consequence matters more than the count: assertion 3b does NOT backstop those two sites, so the real backstop when retiring is deleting the constant from env.ts, which turns every missed reference into a typecheck error."
   },
-  "classACap": 4,
+  "classACap": 3,
   "$classA-note": "ADR-0088 D2/D3. Authoritative \u2014 `scripts/detect-alternative-surfaces.mjs` is a TRIPWIRE that asserts `detected subset-of classA`, never the converse, because it can only under-detect (a flag branching by early return, by `const B = FLAG ? X : Y`, or through an indirection is invisible to it and is legitimately curated by hand). `classACap` is the MEASURED count and ratchets DOWN after each retirement; raising it needs an ADR.",
   "deferralTriggers": [
     "epic-touch: activity editor",

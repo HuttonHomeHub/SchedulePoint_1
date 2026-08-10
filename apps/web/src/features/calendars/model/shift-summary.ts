@@ -6,13 +6,16 @@ import { formatTimeOfDay } from './time-of-day';
  * Does this calendar's week carry detail the 7-bit weekday mask cannot express?
  *
  * True when any day works partial hours, or works more than one window (a split shift). The mask
- * can only say *whether* a weekday works, so for these calendars it is a lossy summary — and the
- * form's seven checkboxes are a lossy editor.
+ * can only say *whether* a weekday works, so for these calendars it is a lossy summary.
  *
- * This is the predicate behind two behaviours that must agree: the advisory telling a planner their
- * week is shown simplified, and (Q5) the library table's "· 2 shifts" suffix. One derivation rather
- * than two, because a table that says "Mon–Fri" beside a form that says "simplified" is worse than
- * either alone.
+ * It drives (Q5) the library table's "· 2 shifts" suffix — the cue that a calendar's week is more
+ * than its Mon–Fri summary says.
+ *
+ * It used to drive a second behaviour that had to agree with that one: an advisory in the calendar
+ * form warning that the week was "shown simplified", because the form's seven checkboxes could not
+ * express these calendars. ADR-0088 D3 deleted those checkboxes with `VITE_CALENDAR_SHIFT_EDITOR`,
+ * so the form now authors the hours directly and has nothing to apologise for. One consumer left,
+ * and the "must agree" constraint is gone with the second.
  */
 export function hasIntradayDetail(shifts: readonly CalendarShift[]): boolean {
   const perWeekday = new Map<number, number>();

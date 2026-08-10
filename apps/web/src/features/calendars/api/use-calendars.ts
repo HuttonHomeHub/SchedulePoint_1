@@ -63,8 +63,15 @@ function createBody(input: CreateCalendarInput) {
   };
 }
 
-/** A create: the form's values, with the week expressed EITHER as a mask or as explicit shifts. */
-export type CreateCalendarInput = Omit<CalendarFormValues, 'workingWeekdays'> & {
+/**
+ * A create: the form's values, with the week expressed EITHER as a mask or as explicit shifts.
+ *
+ * `CalendarFormValues` no longer carries `workingWeekdays` (ADR-0088 D3 deleted the toggle group),
+ * so this was `Omit<…, 'workingWeekdays'>` and became a **silent no-op** — `Omit` of an absent key
+ * compiles and asserts nothing. The mask stays declared below because the **API still accepts one**;
+ * only the form stopped producing it.
+ */
+export type CreateCalendarInput = CalendarFormValues & {
   workingWeekdays?: number;
   shifts?: CalendarShift[];
 };
@@ -89,7 +96,7 @@ function updateBody(input: UpdateCalendarInput) {
 }
 
 /** An edit: the form's values with the week optional, plus the row's optimistic-locking version. */
-export type UpdateCalendarInput = Omit<CalendarFormValues, 'workingWeekdays'> & {
+export type UpdateCalendarInput = CalendarFormValues & {
   workingWeekdays?: number;
   shifts?: CalendarShift[];
   version: number;

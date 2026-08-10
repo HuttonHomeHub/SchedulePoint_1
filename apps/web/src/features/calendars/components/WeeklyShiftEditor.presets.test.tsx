@@ -14,7 +14,6 @@ vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 // than weakened — it is the rollback contract (ADR-0053 M6 precedent).
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<typeof Env>()),
-  CALENDAR_SHIFT_EDITOR_ENABLED: true,
 }));
 
 const CALENDAR: CalendarSummary = {
