@@ -150,6 +150,47 @@ describe.skipIf(!hasDatabase)('Retention sweep (e2e)', () => {
     expect(await prisma.cspReport.count()).toBe(0);
   });
 
+  it('REPORTS a database failure rather than throwing it', async () => {
+    // The property the whole design rests on: both production call sites are `void this.sweepNow()`,
+    // so a runner that threw would be an unhandled rejection, which Node treats as fatal. The
+    // runner catches per policy and returns an `error` — asserted here against a real database
+    // error rather than a mocked one, because whether Prisma's rejection is caught at all is a
+    // question only a real Postgres answers.
+    //
+    // **A trigger, not a privilege.** The obvious lever is `REVOKE DELETE`, and it is a trap: the
+    // `postgres:17` image creates `POSTGRES_USER` as a SUPERUSER, and a superuser bypasses
+    // privilege checks entirely — so a revoke induces nothing in CI while working perfectly on a
+    // developer's plain role. That exact mismatch failed `retention-alerting.e2e-spec.ts` in CI
+    // after passing locally. A trigger fires for superusers too.
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION csp_reports_refuse_delete() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'csp_reports delete refused by test'; END;
+      $$ LANGUAGE plpgsql`);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER tr_csp_reports_refuse_delete BEFORE DELETE ON csp_reports
+      FOR EACH ROW EXECUTE FUNCTION csp_reports_refuse_delete()`);
+
+    try {
+      await cspRow('e5', LONG_AGO, LONG_AGO);
+
+      const results = await runner.sweepAll(new Date());
+
+      const csp = results.find((r) => r.table === 'csp_reports');
+      expect(csp?.error, 'the failure is reported, not thrown').toBeDefined();
+      expect(csp?.deleted).toBe(0);
+      // And the OTHER table is still swept: each table is its own unit of work, so one broken
+      // table must not stop the sweep reaching the next.
+      expect(results.find((r) => r.table === 'mail_events')?.error).toBeUndefined();
+    } finally {
+      // In `finally` so a failed assertion cannot leak the trigger into every later suite in this
+      // shared process — the failure would surface far from its cause (TECH_DEBT #119's shape).
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS tr_csp_reports_refuse_delete ON csp_reports',
+      );
+      await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS csp_reports_refuse_delete()');
+    }
+  });
+
   it('leaves audit_events untouched, and that table still refuses DELETE', async () => {
     // Two assertions, and the second is the one that matters. The first proves the sweep does not
     // touch the audit log; the second proves nothing in this epic RELAXED the guarantee that it

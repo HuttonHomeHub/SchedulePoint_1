@@ -48,9 +48,23 @@ pg_isready -h localhost -p "$PG_PORT" >/dev/null 2>&1 || {
 
 # Idempotent: role and database are created only if absent, so re-running is
 # free and an existing developer database is never clobbered.
+#
+# **SUPERUSER, and that is not a convenience — it is what CI has.** The `postgres:17-alpine`
+# service container creates `POSTGRES_USER` as a superuser, so CI's `app` is one; this script
+# created a plain `CREATEDB` role and the difference is invisible until a test depends on a
+# privilege check. It did: `retention-alerting.e2e-spec.ts` induced a failure with
+# `REVOKE DELETE ON csp_reports`, which passed here and did NOTHING in CI, because a superuser
+# bypasses privilege checks entirely. Measured on one database: as a plain role the delete is
+# refused (`permission denied for table csp_reports`); after `ALTER ROLE app SUPERUSER` the
+# identical statement reports `DELETE 1`.
+#
+# That is precisely the failure this script's own header calls worse than having no script at
+# all — "passes locally, fails in CI" turned into a mystery rather than a signal. The `ALTER`
+# below also repairs an existing role created by an earlier version of this script.
 as_super() { if [ "$(id -u)" -eq 0 ]; then su postgres -c "$1"; else sudo -u postgres bash -c "$1"; fi; }
 as_super "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='app'\"" | grep -q 1 \
-  || as_super "psql -qc \"CREATE ROLE app LOGIN PASSWORD 'app' CREATEDB;\""
+  || as_super "psql -qc \"CREATE ROLE app LOGIN PASSWORD 'app' SUPERUSER CREATEDB;\""
+as_super "psql -qc \"ALTER ROLE app SUPERUSER;\"" >/dev/null
 as_super "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='app_test'\"" | grep -q 1 \
   || as_super "psql -qc \"CREATE DATABASE app_test OWNER app;\""
 echo "ready: ${DATABASE_URL}"
