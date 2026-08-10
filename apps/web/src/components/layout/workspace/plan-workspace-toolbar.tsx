@@ -87,8 +87,10 @@ const ROW_LABEL_CLASSNAME = 'text-muted-foreground text-xs font-semibold trackin
 const ROW_LABEL_GUTTER_CLASSNAME = 'border-border flex w-16 shrink-0 items-center border-r pr-2';
 
 /**
- * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — the `VITE_CANVAS_TOOLBAR`
- * evolution of {@link PlanWorkspace}. It collapses the ADR-0030 chrome bands into a **one-line header**
+ * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — and, since ADR-0088 D3 retired
+ * `VITE_CANVAS_TOOLBAR` and deleted the ADR-0030 layout that flag selected, the **only** plan
+ * workspace there is (`PlanWorkspace` is now a thin re-export of this component).
+ * It collapses the ADR-0030 chrome bands into a **one-line header**
  * (breadcrumb ending at the plan name + status pill + compact pen status) plus a **two-row
  * registry-driven `<Toolbar>`** (Row 1 · Look — view/navigate, always live; Row 2 · Do — build/manage,
  * with a pen-gated authoring cluster that shades as a set), over a **full-height chromeless canvas**
@@ -425,8 +427,9 @@ export function ToolbarPlanWorkspace({
       // Quiescence during an open two-click pick + the ADR-0048 inverse the link confirmation
       // offers (ADR-0064 T5/T7) — the same three the legacy layout passes.
       //
-      // **They were absent here, and this is the host that ships** (`plan-workspace.tsx:70` selects
-      // it whenever `CANVAS_TOOLBAR_ENABLED`, default-on): `docs/TECH_DEBT.md` #103. So ADR-0064's
+      // **They were absent here, and this is the host that ships** — `plan-workspace.tsx` selected
+      // it whenever `CANVAS_TOOLBAR_ENABLED` (default-on) until ADR-0088 D3 retired that flag and
+      // left this the only host: `docs/TECH_DEBT.md` #103. So ADR-0064's
       // recalculation hold was `undefined` on the one surface planners use — the mechanism built
       // because six link attempts produced zero dependencies — and `CanvasModeBand.tsx:98` renders
       // the confirmation's Undo only when `onUndo` is passed, so that button had never appeared at

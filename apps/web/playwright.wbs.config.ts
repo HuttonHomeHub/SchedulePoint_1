@@ -70,7 +70,6 @@ export default defineConfig({
               VITE_ADVANCED_ACTIVITY_TYPES: 'true',
               VITE_GANTT_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_CANVAS_TOOLBAR: 'true',
               VITE_CANVAS_WORKSPACE: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',

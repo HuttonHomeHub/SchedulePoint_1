@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 901 web
-> source files with 30 flag-scoped Playwright suites beside the base journey, and
-> 87 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 900 web
+> source files with 29 flag-scoped Playwright suites beside the base journey, and
+> 88 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1792,6 +1792,37 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   register shipped in the same commit: a _child_ must not retire before its parent, because the
   child's retirement declares the feature permanent while the surviving parent can still switch it
   off. ADR-0076 Class 3, caught by the gate written beside it.
+
+- **ADR-0088** _(Proposed)_ — Feature flags are classified, not scheduled. Supersedes ADR-0084's
+  calendar (D2/D3/D4a/D4b), keeps its tag, its delete-the-harness rule and its unused `keep` field.
+  Opened by the product owner asking whether retiring them was right at all, and the answer is that
+  **the estate is not one population**. The load-bearing finding is that a `VITE_` flag **cannot be
+  switched off on a deployed container and never could**: Vite inlines `import.meta.env.VITE_*` at
+  build time, `apps/web/Dockerfile` declares one `VITE_` build arg, `docker-publish.yml` passes
+  **none**, and `.dockerignore` strips `**/.env` from the build context — so every published image
+  carries every flag at its default, on. ADR-0084 argued throughout about "a rollback contract";
+  for the operator there has never been one, and `.env.example` said otherwise beside three flags on
+  the one file they edit. The argument was already in the repo thirty lines above the flag block,
+  about the CSP, and nobody had read it that way.
+  So classification replaces age. **Class A** — the flag selects which of two different JSX roots a
+  component returns — is the "second product maintained forever", and there are **two**
+  (`VITE_CANVAS_TOOLBAR`, `VITE_CANVAS_WORKSPACE`). The discriminator is **computed, and the
+  measurement is why the clause reads as it does**: "appears in a ternary" matches 48 of 57 flags and
+  is useless; the shipped rule matches exactly the two an architect found by reading. **Class B** —
+  ~28 one-line guards, including both flags that blew up batch 1 (`TsldPanel.tsx:1311` and
+  `use-plan-edit-lock.ts:227` are one line each) — formally **keeps**, giving ADR-0084 D6's field its
+  first occupants. **Class C** — pinned by a Playwright harness — replaces the coverage first, never
+  on a deadline. Class A retires on epic-touch with a **cap of three**, so a fourth alternative
+  surface fails CI while the conversation is still cheap.
+  Three things are recorded because they are uncomfortable. `check-flags.mjs` matches `'true'` and
+  `'false'` identically — **135 no-op pins against 10 real harnesses** — so batch 2 would have failed
+  on the cheapest possible cause before reaching the work. The base journey's six editing specs prove
+  role-only editing in **a world no shipped bundle can produce**, which is worse than covering a
+  rollback path. And a search of every ADR and ~19 enablement retrospectives — documents that list
+  every defect they found — credits a **unit-level** flag-off parity suite with exactly **one** catch
+  in the project's history (ADR-0070's `+1d` rounding); every other catch belongs to a flag-on journey
+  or a specialist review. Seventeen flags have no off-branch test at all.
+  **Nothing about the running application changes** — every flag is already on and unreachable.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down

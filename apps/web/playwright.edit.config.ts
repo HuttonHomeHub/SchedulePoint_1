@@ -63,7 +63,9 @@ export default defineConfig({
             // Turn the editing surface + pen layer on in the browser bundle. Pin the
             // canvas-first workspace OFF: these editing journeys drive the legacy plan
             // page (Edit plan button, stacked activities section); the workspace-on
-            // editing path is covered by playwright.workspace.config.ts.
+            // editing path is covered by playwright.toolbar.config.ts, which pins the
+            // workspace, the editing surface and the pen all ON. (It named
+            // playwright.workspace.config.ts until ADR-0088 D3 deleted that harness.)
             env: {
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',

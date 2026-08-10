@@ -17,7 +17,6 @@
     "test:e2e": "playwright test --pass-with-no-tests",
     "test:e2e:staff": "playwright test --config playwright.staff.config.ts --pass-with-no-tests",
     "test:e2e:edit": "playwright test --config playwright.edit.config.ts --pass-with-no-tests",
-    "test:e2e:workspace": "playwright test --config playwright.workspace.config.ts --pass-with-no-tests",
     "test:e2e:toolbar": "playwright test --config playwright.toolbar.config.ts --pass-with-no-tests",
     "test:e2e:authoring": "playwright test --config playwright.authoring.config.ts --pass-with-no-tests",
     "test:e2e:authoring-flow": "playwright test --config playwright.authoring-flow.config.ts --pass-with-no-tests",

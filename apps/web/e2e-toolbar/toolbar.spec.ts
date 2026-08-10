@@ -4,9 +4,13 @@ import { expect, test } from '@playwright/test';
 import { addActivity, onboard, openNewPlan, startEditing } from './support';
 
 /**
- * Flag-ON **canvas-maximal, toolbar-hosted workspace** journey (`VITE_CANVAS_TOOLBAR`, ADR-0031
- * two-row amendment) — the layer above ADR-0030's canvas-first workspace. Proves the toolbar layout
- * runs end-to-end in a real browser: opening a plan mounts a one-line header + **two** command
+ * The **canvas-maximal, toolbar-hosted workspace** journey (ADR-0031 two-row amendment).
+ *
+ * **No longer flag-on: it is the only plan workspace there is.** `VITE_CANVAS_TOOLBAR` selected this
+ * layout or ADR-0030's, and ADR-0088 D3 retired the flag and deleted the alternative — so this
+ * suite now drives the surface every planner gets, unconditionally.
+ *
+ * Proves the toolbar layout runs end-to-end in a real browser: opening a plan mounts a one-line header + **two** command
  * `role="toolbar"` rows (Look / Do) over a **chromeless, full-height canvas**, with the activities
  * panel **collapsed by default**. Every former chrome band is inline on the two rows (plan actions as
  * icon buttons on Row 2, display toggles in the `View▾` popover) and each row is a roving-tabindex APG
@@ -89,6 +93,21 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expand.click();
   await expect(collapse).toBeFocused();
   await expect(page.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
+
+  // The panel is a real WAI-ARIA window splitter: keyboard-resizable, and resizing keeps the canvas
+  // mounted (no jump / remount — the split just re-proportions).
+  //
+  // **Ported from `e2e-workspace/workspace.spec.ts`, which was deleted with `VITE_CANVAS_TOOLBAR`**
+  // (ADR-0088 D3). That suite drove the ADR-0030 layout the flag's off-branch selected, and almost
+  // everything it proved is proved here for the layout that ships — except this. The test review
+  // caught the gap and asked for the assertion to be ported rather than lost silently, which is the
+  // difference between deleting a redundant suite and deleting coverage.
+  const resizer = page.getByRole('separator', { name: 'Resize activities panel' });
+  await resizer.focus();
+  const before = await resizer.getAttribute('aria-valuenow');
+  await page.keyboard.press('ArrowDown'); // shrink one step — reliably below the default, above min
+  await expect(resizer).not.toHaveAttribute('aria-valuenow', before ?? '');
+  await expect(diagram.getByRole('option')).toHaveCount(2);
 
   // Row 1 is one roving-tabindex APG widget: arrows move focus between controls. Drive it from the
   // pinned View trigger (a stable, never-demoted target) — ArrowRight moves focus off it.

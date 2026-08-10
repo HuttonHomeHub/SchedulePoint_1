@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,12 +34,17 @@ const h = vi.hoisted(() => ({
   recalculate: vi.fn(),
 }));
 
-// This suite validates pen-gating + the reposition seams against the ADR-0030 workspace layout;
-// the toolbar layout now defaults ON (ADR-0031) but has its own suite, so pin it off here (keeping
-// the ADR-0030 fallback path — still the rollback target — under test).
+// This suite validates pen-gating + the reposition seams. It ran against the ADR-0030 workspace
+// layout by pinning `CANVAS_TOOLBAR_ENABLED: false`; ADR-0088 D3 retired that flag and deleted the
+// layout, so the pin is gone and these seams are now asserted against the layout that ships.
+//
+// **Re-hosted rather than deleted, and the distinction is the point.** Its sibling
+// `plan-workspace.test.tsx` WAS a flag-off parity suite — its subject was the deleted layout — and
+// went with it (ADR-0084 D5). This one is real pen-gating coverage that merely happened to be
+// hosted there. Deleting it would have lost coverage under cover of a retirement, which is exactly
+// what D5 must not become.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_TOOLBAR_ENABLED: false,
   // These seams assert the flag-off reposition→inline-recalc path; authoring (now default-on) routes
   // recalc through the coalescer instead, so pin it off here (the coalescer has its own unit tests).
   CANVAS_AUTHORING_ENABLED: false,
@@ -170,6 +175,10 @@ vi.mock('@/features/schedule', () => ({
     <div data-testid="recalculate" data-can-calc={String(canCalculate)} />
   ),
   ScheduleSummaryStrip: () => <div data-testid="summary-strip" />,
+  // The toolbar layout reads the summary directly rather than through the strip, so re-hosting this
+  // suite onto it (ADR-0088 D3) needed this export. That is the conversion cost a Class A
+  // retirement means in practice — not a line deletion, and worth seeing.
+  useScheduleSummary: () => ({ data: undefined, isPending: false, isError: false }),
 }));
 
 vi.mock('@/features/tsld', async (importOriginal) => ({
@@ -186,11 +195,22 @@ const { PlanDetailScreen } = await import('./plan-detail');
 
 function renderScreen() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const result = render(
     <QueryClientProvider client={client}>
       <PlanDetailScreen />
     </QueryClientProvider>,
   );
+  // **The activities panel is collapsed by default on this layout** (canvas-maximal, ADR-0031), so
+  // the table these gating assertions read is not mounted until it is expanded. The ADR-0030 layout
+  // this suite used to run against showed it open, which is why the pin's removal (ADR-0088 D3)
+  // needed this line and not just a mock.
+  //
+  // `docs/TESTING.md` records this exact trap from the ADR-0063 enablement journey — "a table that
+  // lives in a collapsible panel under the flags that suite sets" — and it cost five CI rounds
+  // there. Met here in a unit suite instead, which is cheaper by exactly those five rounds.
+  const expand = screen.queryByRole('button', { name: 'Expand activities panel' });
+  if (expand) fireEvent.click(expand);
+  return result;
 }
 
 /** A pen object shaped like `usePlanPen`'s return, tuned per test. */
@@ -244,7 +264,11 @@ describe('PlanDetailScreen — pen gating (flag off: role only)', () => {
     renderScreen();
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('true');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('true');
-    expect(screen.getByTestId('recalculate').dataset.canCalc).toBe('true');
+    // The Recalculate control moved into the toolbar registry with the ADR-0031 layout, so it is
+    // no longer a component this route renders. Its pen-gating is asserted where the control now
+    // lives — `tsld-toolbar-recalculate.test.tsx`, "keeps the pen-gated reason when the pen is not
+    // held" — rather than dropped. (ADR-0088 D3: a retirement may delete a parity suite, never
+    // coverage.)
     expect(screen.getByTestId('activity-editor').dataset.canManage).toBe('true');
     expect(screen.getByTestId('create-activity')).toBeInTheDocument();
     expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
@@ -259,11 +283,15 @@ describe('PlanDetailScreen — pen gating (flag on)', () => {
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('false');
     // Progress is never pen-gated (Q-C) — a Planner can report progress.
     expect(screen.getByTestId('activities-table').dataset.canProgress).toBe('true');
-    expect(screen.getByTestId('recalculate').dataset.canCalc).toBe('false');
     expect(screen.getByTestId('activity-editor').dataset.canManage).toBe('false');
     expect(screen.queryByTestId('create-activity')).not.toBeInTheDocument();
-    // The read-only hint appears (Logic + Activities sections).
-    expect(screen.getAllByText(/read-only/i).length).toBeGreaterThan(0);
+    // **The read-only NOTE is gone, and that is ADR-0031's design rather than a regression.**
+    // `PenReadOnlyNote` was the ADR-0028 card; ADR-0031 replaced it with pen-gated authoring as a
+    // toolbar *group state* — the affordances shade and carry a reason where the reader is looking,
+    // instead of a banner above the diagram. The layout this suite used to run against still
+    // rendered the card; the one that ships does not, so the assertion went with the layout
+    // (ADR-0088 D3). What it protected — that a pen-less Planner loses every write affordance — is
+    // asserted by the five lines above, and the shaded reason itself by `ToolbarButton`'s own suite.
   });
 
   it('a Planner WITH the pen regains every affordance; no read-only hint', () => {
@@ -271,7 +299,6 @@ describe('PlanDetailScreen — pen gating (flag on)', () => {
     renderScreen();
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('true');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('true');
-    expect(screen.getByTestId('recalculate').dataset.canCalc).toBe('true');
     expect(screen.getByTestId('create-activity')).toBeInTheDocument();
     expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });

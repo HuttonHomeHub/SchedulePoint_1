@@ -1,14 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **canvas-maximal, toolbar-hosted** plan workspace
- * (`VITE_CANVAS_TOOLBAR`, ADR-0031) — the layer above ADR-0030's canvas-first workspace.
+ * End-to-end configuration for the **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031).
  *
- * Serves the web bundle with `VITE_CANVAS_TOOLBAR=true` (and `VITE_CANVAS_WORKSPACE=true`, which it
- * layers on) plus the editing surface + pen so a Planner can drive the real toolbar commands. Like
- * `playwright.workspace.config.ts` / `playwright.edit.config.ts`, the flags bake at `webServer`
- * start, so this is a separate config on the same ports; it runs as its own CI step after the prior
- * suites tear down. Chromium only (the flag-off suite carries firefox/webkit; TECH_DEBT #25a).
+ * **No longer flag-on: it is the only plan workspace there is.** `VITE_CANVAS_TOOLBAR` selected this
+ * layout or `Adr0030PlanWorkspace`, and ADR-0088 D3 retired the flag and deleted the alternative —
+ * so this config's pin went with it, and `playwright.workspace.config.ts`, which drove that
+ * alternative, was deleted outright. The one thing that harness proved and this did not — the
+ * activities panel's WAI-ARIA window splitter — was **ported** into `e2e-toolbar/toolbar.spec.ts`
+ * rather than lost, which is the difference between deleting a redundant suite and deleting
+ * coverage.
+ *
+ * Serves the web bundle with `VITE_CANVAS_WORKSPACE=true` plus the editing surface + pen so a
+ * Planner can drive the real toolbar commands. Like `playwright.edit.config.ts`, the flags bake at
+ * `webServer` start, so this is a separate config on the same ports; it runs as its own CI step
+ * after the prior suites tear down. Chromium only (the base suite carries firefox/webkit;
+ * TECH_DEBT #25a).
  */
 export default defineConfig({
   testDir: './e2e-toolbar',
@@ -57,7 +64,6 @@ export default defineConfig({
             // flag-on suite (playwright.authoring.config.ts).
             env: {
               VITE_CANVAS_WORKSPACE: 'true',
-              VITE_CANVAS_TOOLBAR: 'true',
               VITE_CANVAS_AUTHORING: 'false',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',

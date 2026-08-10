@@ -13,7 +13,7 @@
  * in the ADR, not recoverable from git — which is exactly why the date is a machine-read tag now
  * and not prose.
  *
- * Four assertions, and the third is the one that does the work:
+ * Assertions, and 3a/3b are the ones that now do the work (ADR-0088 superseded the schedule):
  *   1. Every flag in `env.ts` is in the register, and vice versa. A flag added without a register
  *      entry fails here rather than aging invisibly.
  *   2. Every flag carries an `@enabled YYYY-MM-DD` docblock tag matching its register entry — so
@@ -96,7 +96,10 @@ for (const [flag, entry] of Object.entries(register.flags)) {
   }
 }
 
-// 3 — overdue batches. Reported per batch, with its flags, because the batch is the unit of work.
+// 3 — overdue batches. SUPERSEDED by ADR-0088 D2: age is not the risk, branch shape is, and every
+// Class B flag now carries `keep`, so this loop finds nothing by construction. It is left in place
+// rather than deleted because a flag can still be batched deliberately (a Class A retirement in
+// flight), and on that day the date should still be honoured.
 for (const [batch, { due }] of Object.entries(register.batches)) {
   const flags = Object.entries(register.flags)
     .filter(([, entry]) => entry.batch === batch && entry.keep === undefined)
@@ -108,19 +111,83 @@ for (const [batch, { due }] of Object.entries(register.batches)) {
   }
 }
 
-// 4 — a Playwright config pinning a flag is a flag-off harness, so the flag is not retirable.
+// 3a — the classification is TOTAL, and Class A is capped at the measured count (ADR-0088 D2/D3).
+//
+// Total because an unclassified residue is a queue rather than a decision — the reason ADR-0073 C3.4
+// deleted `PENDING_COVERAGE`. Every flag carries `class: 'A' | 'B'`, the two partition the register,
+// and every Class B carries the `keep` reason ADR-0084 D6 built and never used.
+//
+// The cap is the MEASURED Class A count and ratchets DOWN after each retirement. It is not an
+// aspirational number: ADR-0088's own drafts proposed three and then two, both chosen before the
+// detector existed and both BELOW the real five, so either would have failed on day one — which is
+// how a gate gets deleted rather than fixed (ADR-0058).
+for (const [flag, entry] of Object.entries(register.flags)) {
+  if (entry.class !== 'A' && entry.class !== 'B') {
+    problems.push(`${flag} has no class — every flag is A (alternative surface) or B (guard).`);
+  }
+  if (entry.class === 'A' && register.classA?.[flag] === undefined) {
+    problems.push(`${flag} is class A but carries no reason in the register's classA map.`);
+  }
+  if (entry.class === 'B' && entry.keep === undefined) {
+    problems.push(`${flag} is class B but has no \`keep\` reason (ADR-0084 D6, ADR-0088 D4).`);
+  }
+}
+const classAcount = Object.values(register.flags).filter((e) => e.class === 'A').length;
+if (classAcount > register.classACap) {
+  problems.push(
+    `${classAcount} alternative surfaces against a cap of ${register.classACap}. Retire one, or ` +
+      `raise the cap in an ADR with the reason — an alternative surface is a second implementation ` +
+      `of one screen, and drift between two of them is what ADR-0080 shipped.`,
+  );
+}
+
+// 3b — the tripwire: anything the detector finds must already be classified A (ADR-0088 D2).
+//
+// `detected ⊆ classA`, and NEVER the converse. The detector can only under-detect — a flag branching
+// by early return, by `const Body = FLAG ? X : Y`, or through an indirection is invisible to it — so
+// a curated Class A flag it cannot see is legitimate, and asserting the converse would fail it.
+// This is `check:claims`'s shape (ADR-0076): a curated register, and a script that fails loud on
+// anything unregistered.
+//
+// **The weak clause, labelled as one** (ADR-0076 §19.10): this catches a Class B flag that GROWS an
+// alternative surface. It cannot catch someone classifying a genuine Class A flag as B — that needs
+// a written false statement in a reviewed file rather than an oversight, and no gate closes it.
+const { detectAlternativeSurfaces } = await import('./detect-alternative-surfaces.mjs');
+for (const [flag, sites] of detectAlternativeSurfaces()) {
+  if (register.flags[flag]?.class === 'A') continue;
+  const where = sites.map((s) => `${s.file}:${s.line} <${s.left}> vs <${s.right}>`).join('; ');
+  problems.push(
+    `${flag} selects between two components but is not class A: ${where}. Classify it — it is a ` +
+      `second implementation of one surface, which is what the cap exists to bound.`,
+  );
+}
+
+// 4 — a Playwright config pinning a flag OFF is a flag-off harness, so the flag is not retirable.
 // Read from the config's `env:` block rather than from a list, so a NEW pin is covered the day it
 // is written and nobody has to remember this rule exists.
+//
+// **`'false'` and `'true'` are different facts, and this matched them identically until ADR-0088.**
+// Every flag is default-on, so a `'true'` pin asserts nothing — it re-states the default. There are
+// 135 of them across 39 flags, against 10 flags with a real `'false'` harness, and 31 flags whose
+// ONLY pins are no-op `'true'`s. Conflated, the gate blocked a retirement on the cheapest possible
+// cause: verified red before this fix, marking a `'true'`-only flag retired produced three
+// "that config IS a flag-off harness" failures, which is the opposite of what a `'true'` pin is.
+// ADR-0084 D4a's `weight = files + 3 × pins` inherited the same error and inverted the cost.
+//
+// Both still stop a retirement — a config referencing a flag that no longer exists is dead config —
+// but the remedy differs by an order of magnitude, so the message has to say which one you are
+// looking at: a `'false'` pin is a spec conversion, a `'true'` pin is a line deletion.
 const WEB = join(ROOT, 'apps/web');
 const retired = new Set(register.retired.map((r) => r.flag));
 for (const file of readdirSync(WEB).filter((n) => /^playwright.*\.config\.ts$/.test(n))) {
   const config = readFileSync(join(WEB, file), 'utf8');
-  for (const [, flag] of config.matchAll(/(VITE_[A-Z0-9_]+)\s*:\s*'(?:true|false)'/g)) {
-    if (retired.has(flag)) {
-      problems.push(
-        `${flag} is retired, but apps/web/${file} still pins it — that config IS a flag-off harness, and its specs are written against the pinned world. Convert them first, or put the flag back.`,
-      );
-    }
+  for (const [, flag, value] of config.matchAll(/(VITE_[A-Z0-9_]+)\s*:\s*'(true|false)'/g)) {
+    if (!retired.has(flag)) continue;
+    problems.push(
+      value === 'false'
+        ? `${flag} is retired, but apps/web/${file} pins it OFF — that config IS a flag-off harness, and its specs are written against the pinned world. Convert them first, or put the flag back.`
+        : `${flag} is retired, but apps/web/${file} still pins it 'true' — a no-op re-stating the default, so this is dead config rather than a harness. Delete the line in the retirement commit (ADR-0084 D5).`,
+    );
   }
 }
 
@@ -148,7 +215,7 @@ if (problems.length > 0) {
   console.error('Feature-flag retirement register is out of date:');
   for (const problem of problems) console.error(`  - ${problem}`);
   console.error(
-    '\nSee docs/adr/0084-feature-flag-retirement.md. Fix the register or the flag, not this script.',
+    '\nSee docs/adr/0088-flag-classification.md, which supersedes the ADR-0084 schedule. Fix the register or the flag, not this script.',
   );
   process.exit(1);
 }

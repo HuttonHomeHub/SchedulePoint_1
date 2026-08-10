@@ -80,7 +80,6 @@ export default defineConfig({
               VITE_CANVAS_DIRECT_MANIPULATION: 'true',
               VITE_CANVAS_LENSES: 'true',
               VITE_CANVAS_WORKSPACE: 'true',
-              VITE_CANVAS_TOOLBAR: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               // The Link tool, and the pen it is gated on — the Escape-precedence assertion is
               // about an ARMED tool surviving a keystroke in the field, so both are required.

@@ -1673,9 +1673,17 @@ maxPaths)` is a pure, read-only analysis returning ranked **contiguous driving c
   clamp the panel's _maximum_, never as an actual floor on the canvas region. It is now a real
   `min-height`, so the column grows past the viewport and scrolls instead of overlapping.
 
-  Held by `e2e-gantt/gantt-scale.spec.ts` (the row count) and `e2e-workspace/workspace.spec.ts` (the
-  collision). **No unit test can hold either**, because jsdom has no layout: it cannot tell a bounded
-  scroller from an unbounded one, nor a panel from the element painted over it.
+  Held by `e2e-gantt/gantt-scale.spec.ts` (the row count). **No unit test can hold it**, because
+  jsdom has no layout: it cannot tell a bounded scroller from an unbounded one, nor a panel from the
+  element painted over it.
+
+  _Corrected 2026-08-10 (ADR-0088 D3)._ This sentence also named `e2e-workspace/workspace.spec.ts`
+  as holding the collision. Deleting that suite with `VITE_CANVAS_TOOLBAR` prompted a read of it,
+  and **it never asserted the collision** — its unique assertion was the panel's WAI-ARIA splitter,
+  which was ported into `e2e-toolbar/toolbar.spec.ts`, and everything else it did that suite already
+  covered. So the citation was wrong when written, not broken by the deletion: the collision half
+  has never been held by a journey. Which is ADR-0058's rule exactly — the claim read as coverage
+  for months, and only checking it showed there was none.
 
 - **Resource-dependent activities reach the product (ADR-0035 §23 web surface, 2026-07-28).** §23 was
   Accepted and built in M7.2 — the engine schedules a `RESOURCE_DEPENDENT` activity on its driving

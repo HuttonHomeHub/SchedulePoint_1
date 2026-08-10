@@ -159,9 +159,9 @@ export function PlanDialogs({
           (the id reused by both entry points, so there's exactly ONE progress dialog per workspace).
           Superseded behind `VITE_ACTIVITY_EDITOR_TABS`, where both entry points open the tabbed
           editor's Progress tab instead and `ActivityCrudDialogs` is the workspace's only editor.
-          Role-gated (Contributor+), NOT pen-gated (the progress precedent, ADR-0046). Rendered by both
-          canvas layouts (this component is shared), so progress works on the selection bar regardless
-          of `VITE_CANVAS_TOOLBAR`. */}
+          Role-gated (Contributor+), NOT pen-gated (the progress precedent, ADR-0046). This component
+          was shared by both canvas layouts so progress worked regardless of `VITE_CANVAS_TOOLBAR`;
+          ADR-0088 D3 retired that flag and deleted the other layout, so there is now one host. */}
       {model.canProgress && !ACTIVITY_EDITOR_TABS_ENABLED ? (
         <ActivityProgressDialog
           orgSlug={model.orgSlug}

@@ -111,3 +111,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0085](0085-privacy-operations.md)                                        | Erasure collides with the audit log                | Accepted           |
 | [0086](0086-staff-principal.md)                                           | A staff identity that cannot reach a customer      | Accepted           |
 | [0087](0087-scheduled-retention-sweep.md)                                 | Scheduled work, and a retention sweep              | Accepted           |
+| [0088](0088-flag-classification.md)                                       | Feature flags are classified, not scheduled        | Proposed           |
