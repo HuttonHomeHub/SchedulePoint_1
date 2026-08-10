@@ -63,8 +63,20 @@ ENV NGINX_ENVSUBST_FILTER="^CSP_"
 
 # Report-only by default: a deployment observes before it enforces. Enforcing is a deliberate,
 # separately-approved step (ADR-0074 M5) — set CSP_HEADER_NAME=Content-Security-Policy.
+#
+# **These defaults must state the SAME policy the compose files state, and for a while they did
+# not.** The reporting directives and `CSP_REPORTING_ENDPOINTS` were added to
+# `docker-compose{,.release}.yml` with the staff-console CSP sink and not here, so an operator whose
+# own compose file omits the web `environment:` block — a perfectly ordinary thing to do, since the
+# image carries defaults — got a policy with **no reporting at all**. The container starts, every
+# page loads, and the staff console's Security panel stays permanently empty, which reads as "the
+# policy is clean" and is the exact wrong conclusion. Found by reading a real operator's compose
+# file; `pnpm check:nginx` now asserts the three sources agree, so this cannot drift again.
 ENV CSP_HEADER_NAME="Content-Security-Policy-Report-Only"
-ENV CSP_POLICY="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+ENV CSP_POLICY="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests; report-uri /api/v1/csp-report; report-to csp"
+# Names the group `report-to` refers to. SINGLE-quoted in nginx.conf because this value carries
+# double quotes of its own — see that file, and `check:nginx`, for what happens otherwise.
+ENV CSP_REPORTING_ENDPOINTS="csp=\"/api/v1/csp-report\""
 
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
