@@ -118,12 +118,50 @@ for (const [flag, entry] of Object.entries(register.flags)) {
 // flight), and on that day the date should still be honoured.
 for (const [batch, { due }] of Object.entries(register.batches)) {
   const flags = Object.entries(register.flags)
-    .filter(([, entry]) => entry.batch === batch && entry.keep === undefined)
+    .filter(
+      ([, entry]) =>
+        entry.batch === batch && entry.keep === undefined && entry.deferredUntil === undefined,
+    )
     .map(([flag]) => flag);
   if (flags.length > 0 && due < today) {
     problems.push(
       `${batch} was due ${due} and still holds ${flags.length} flags: ${flags.join(', ')}`,
     );
+  }
+}
+
+// 3c — a deferral is an EVENT, never an indefinite opt-out (ADR-0088 D3a).
+//
+// A Class A flag may outlive its batch date, but not by a bare date and not by `keep` — `keep` means
+// "Class B, guard-only, never retires", which is a written false statement about a Class A flag and
+// corrupts the classification. So `deferredUntil` carries a trigger from a CLOSED vocabulary plus a
+// named debt row. Adding a vocabulary entry is then a decision somebody makes in a diff, rather than
+// a sentence invented under time pressure on the day a date passes — which is exactly when the
+// escape hatch this epic set out to remove would otherwise be re-opened.
+const TRIGGERS = new Set(register.deferralTriggers ?? []);
+for (const [flag, entry] of Object.entries(register.flags)) {
+  const deferral = entry.deferredUntil;
+  if (deferral === undefined) continue;
+  if (entry.keep !== undefined) {
+    problems.push(
+      `${flag} carries both \`keep\` and \`deferredUntil\` — they are different claims.`,
+    );
+  }
+  if (!TRIGGERS.has(deferral.trigger)) {
+    problems.push(
+      `${flag}'s deferral trigger ${JSON.stringify(deferral.trigger)} is not in ` +
+        `\`deferralTriggers\`. A deferral names an EVENT from the closed vocabulary; a date or a ` +
+        `free-text sentence is the indefinite opt-out this field exists to prevent.`,
+    );
+  }
+  if (!/^#\d+$/.test(deferral.debt ?? '')) {
+    problems.push(
+      `${flag}'s deferral names no TECH_DEBT row (expected e.g. "#122") — a deferral nobody can ` +
+        `find is a deletion with extra steps.`,
+    );
+  }
+  if ((deferral.reason ?? '').length < 40) {
+    problems.push(`${flag}'s deferral has no written reason.`);
   }
 }
 

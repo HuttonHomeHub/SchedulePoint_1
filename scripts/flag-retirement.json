@@ -112,6 +112,11 @@
       "enabled": "2026-07-29",
       "enabledSource": "docblock",
       "batch": "batch-9",
+      "deferredUntil": {
+        "trigger": "epic-touch: activity editor",
+        "debt": "#122",
+        "reason": "Retiring this flag deletes three mount sites and leaves ActivityFormDialog alive as the create surface (ActivityEditorDialog.tsx:154 is edit-only by its own docblock; CreateActivityButton.tsx renders the legacy dialog with no flag reference). The nine features that had to patch both branches are receipts for create and edit being two components \u2014 an ADR-0060 decision \u2014 not for this flag, and the nine suites are flag-unaware. Retiring it alone collects NONE of the payoff. Real cost: 2 flag-off harnesses (sub-day, assignment-lag) + 2 derived children (ACTIVITY_EDITOR_CONVERGENCE_ENABLED, WBS_IMPROVEMENTS_ENABLED)."
+      },
       "class": "A"
     },
     "VITE_ACTIVITY_STEPS": {
@@ -302,6 +307,11 @@
       "enabled": "2026-08-03",
       "enabledSource": "floor",
       "batch": "batch-12",
+      "deferredUntil": {
+        "trigger": "epic-touch: plan workspace",
+        "debt": "#122",
+        "reason": "Seven flag-off Playwright configs pin this OFF and their specs are written against the legacy stacked plan-detail page \u2014 activity-editor, assignment-lag, base, edit, notes, programme, sub-day. That is the largest conversion cost in the estate and D5 forbids retiring before the coverage is replaced. Note sub-day and assignment-lag harness BOTH deferred survivors, so converting them is shared work whenever either is taken up."
+      },
       "class": "A"
     },
     "VITE_COST_ACCRUAL": {
@@ -541,5 +551,11 @@
     "VITE_LIBRARY_SCOPING": "Selects <Combobox> or <Select> across FIVE two-arm selection sites \u2014 ActivityFormDialog.tsx:551, ActivityCalendarField.tsx:98, PlanCalendarPicker.tsx:146, ResourceFormDialog.tsx:362, ActivityResourcesPanel.tsx:367 \u2014 PLUS one guard-only site, ResourceFormDialog.tsx:318, whose flag-off branch is `: null` (no control at all), which is ADR-0088 D2's Class B guard shape and not a selection. CORRECTED 2026-08-10: this said 'FOUR pickers'. That figure was detect-alternative-surfaces.mjs's OUTPUT, not a clerical slip \u2014 the detector structurally cannot see :318 (the ternary wraps a <div>) or :551 (an intervening comment). The consequence matters more than the count: assertion 3b does NOT backstop those two sites, so the real backstop when retiring is deleting the constant from env.ts, which turns every missed reference into a typecheck error."
   },
   "classACap": 4,
-  "$classA-note": "ADR-0088 D2/D3. Authoritative \u2014 `scripts/detect-alternative-surfaces.mjs` is a TRIPWIRE that asserts `detected subset-of classA`, never the converse, because it can only under-detect (a flag branching by early return, by `const B = FLAG ? X : Y`, or through an indirection is invisible to it and is legitimately curated by hand). `classACap` is the MEASURED count and ratchets DOWN after each retirement; raising it needs an ADR."
+  "$classA-note": "ADR-0088 D2/D3. Authoritative \u2014 `scripts/detect-alternative-surfaces.mjs` is a TRIPWIRE that asserts `detected subset-of classA`, never the converse, because it can only under-detect (a flag branching by early return, by `const B = FLAG ? X : Y`, or through an indirection is invisible to it and is legitimately curated by hand). `classACap` is the MEASURED count and ratchets DOWN after each retirement; raising it needs an ADR.",
+  "deferralTriggers": [
+    "epic-touch: activity editor",
+    "epic-touch: plan workspace",
+    "retirement in flight"
+  ],
+  "$deferral-note": "ADR-0088 D3a. A Class A flag may be deferred past its batch date, but NOT by a bare date and NOT by `keep` \u2014 `keep` means 'Class B, guard-only, never retires', which is a written false statement about a Class A flag and corrupts the classification this register exists to defend. A deferral carries a trigger from `deferralTriggers` (a CLOSED vocabulary: adding a value is a decision somebody makes, in a diff) and a named TECH_DEBT row, so it is an event that will happen rather than an indefinite opt-out. This is the escape hatch the epic exists to remove, so it is bounded by construction."
 }
