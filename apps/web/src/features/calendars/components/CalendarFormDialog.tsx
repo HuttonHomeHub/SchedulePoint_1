@@ -30,7 +30,6 @@ import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form
 import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { calendarErrorMessage } from '@/lib/api/calendar-scope-errors';
 
 /**
@@ -48,7 +47,7 @@ const ORG_TIER_DENIED_MESSAGE =
  * calendar), the fields and exceptions are shown but not editable — every member may read a
  * calendar's pattern and holidays (spec US-4), only Planners/Org Admins may change them.
  *
- * Behind `LIBRARY_SCOPING_ENABLED` (ADR-0053 §1) **creating** gains a scope choice: the shared
+ * **Creating** offers a scope choice (ADR-0053 §1): the shared
  * organisation library, or the project the dialog was opened from (`projectId`). The organisation
  * option additionally needs `calendar:manage_org` — without it the option is disabled with a plain
  * explanation rather than silently missing, so a planner learns why the choice is unavailable and
@@ -107,8 +106,8 @@ export function CalendarFormDialog({
 
   // The tier controls are meaningful only while creating: an existing calendar's tier moves through
   // the dedicated, confirmed Move actions.
-  const creatingWithTiers = LIBRARY_SCOPING_ENABLED && !isEdit && !readOnly;
-  const hasProjectContext = LIBRARY_SCOPING_ENABLED && Boolean(projectId);
+  const creatingWithTiers = !isEdit && !readOnly;
+  const hasProjectContext = Boolean(projectId);
   // The shared library needs `calendar:manage_org`; a project tier needs a project to be in.
   const orgTierUnavailable = creatingWithTiers && !canManageOrg;
   // Neither tier is reachable — so there is nothing to choose between, and nothing to create. Render
@@ -342,7 +341,7 @@ export function CalendarFormDialog({
               ) : null}
               {/* Editing: the tier is shown, not edited — a `<dl>` so the value is programmatically
             associated with its term (the read-only convention used by the plan calendar picker). */}
-              {LIBRARY_SCOPING_ENABLED && isEdit ? (
+              {isEdit ? (
                 <dl className="flex flex-col gap-1.5">
                   <dt className="text-sm font-medium">Scope</dt>
                   <dd>

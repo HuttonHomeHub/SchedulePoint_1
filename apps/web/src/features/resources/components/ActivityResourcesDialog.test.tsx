@@ -1,6 +1,6 @@
 import type { ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assignmentKeys, resourceKeys } from '../api/use-resources';
@@ -15,7 +15,6 @@ import { apiFetch } from '@/lib/api/client';
 // `ActivityResourcesDialog.picker.test.tsx` (ADR-0053 §4).
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -73,7 +72,13 @@ function renderDialog(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(resourceKeys.list('acme'), resources);
+  queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), resources);
+  // The picker reads the cursor-paginated SEARCH query, a different read from the library
+  // list above — seed it too, or the listbox opens empty.
+  queryClient.setQueryData(resourceKeys.search('acme', { q: '' }), {
+    pages: [{ resources: resources, nextCursor: null, hasMore: false }],
+    pageParams: [null],
+  });
   queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), assignments);
   return render(
     <QueryClientProvider client={queryClient}>
@@ -89,6 +94,21 @@ function renderDialog(
   );
 }
 
+const comboField = (name: string): HTMLElement => screen.getByRole('combobox', { name });
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
+const openCombo = (name: string): void => {
+  fireEvent.keyDown(comboField(name), { key: 'ArrowDown' });
+};
+/**
+ * Pick by visible option name. Options exist in the DOM only while the listbox is open, and the
+ * Combobox commits on `pointerDown` rather than `click` — deliberately, so the pick beats the
+ * input's own `blur`, which would otherwise close the listbox first on touch.
+ */
+const chooseCombo = (name: string, option: string | RegExp): void => {
+  openCombo(name);
+  fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
+};
+
 describe('ActivityResourcesDialog', () => {
   beforeEach(() => {
     // A mutation invalidates the assignments list, which refetches through this same mock — so the
@@ -98,7 +118,7 @@ describe('ActivityResourcesDialog', () => {
 
   it('assigns a resource — POSTs the chosen resource and budgeted units', async () => {
     renderDialog([]);
-    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    chooseCombo('Resource', /^Crew A\b/);
     fireEvent.change(screen.getByLabelText('Budgeted units'), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
 
@@ -141,7 +161,7 @@ describe('ActivityResourcesDialog', () => {
     const driving = screen.getByLabelText('Driving resource');
     expect(driving).not.toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-2' } });
+    chooseCombo('Resource', /^Concrete\b/);
     expect(screen.getByLabelText('Driving resource')).toBeDisabled();
     expect(screen.getByText(/material resource can’t drive/i)).toBeInTheDocument();
   });
@@ -170,7 +190,13 @@ describe('ActivityResourcesDialog', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     });
-    queryClient.setQueryData(resourceKeys.list('acme'), [CREW]);
+    queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [CREW]);
+    // The picker reads the cursor-paginated SEARCH query, a different read from the library
+    // list above — seed it too, or the listbox opens empty.
+    queryClient.setQueryData(resourceKeys.search('acme', { q: '' }), {
+      pages: [{ resources: [CREW], nextCursor: null, hasMore: false }],
+      pageParams: [null],
+    });
     queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [assignment()]);
     render(
       <QueryClientProvider client={queryClient}>

@@ -292,9 +292,11 @@ jobs:
       - name: Web end-to-end tests (guest share links flag on)
         run: pnpm --filter @repo/web test:e2e:share
 
-      # Flag-ON library scoping & manageability journey (playwright.library.config.ts) serving the app
-      # with VITE_LIBRARY_SCOPING on (layered on the canvas authoring/toolbar/workspace/editing/pen
-      # flags), so the epic's two load-bearing claims are proven end to end (ADR-0053): a PROJECT
+      # The library scoping & manageability journey (playwright.library.config.ts). No longer
+      # flag-on: ADR-0088 D3 retired VITE_LIBRARY_SCOPING and deleted the raw-<select> pickers it
+      # selected, so this drives the only library surface there is. The config still pins six OTHER
+      # flags this journey's plan steps need — only the one line went. Its two load-bearing claims
+      # are proven end to end (ADR-0053): a PROJECT
       # calendar is offered to its own project's plan picker and absent from a sibling project's, and
       # archiving a resource retires it from the picker while its existing assignment survives
       # untouched. Runs last, after the prior runs tear down their servers, reusing the ports.

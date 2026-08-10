@@ -1,21 +1,19 @@
 import { WorkingWeekdays } from '@repo/types';
 import type { CalendarSummary, PlanSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PlanCalendarPicker } from './PlanCalendarPicker';
 
 import { apiFetch } from '@/lib/api/client';
 
-// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE plan-calendar
-// picker — a flat, ungrouped native `<select>` over the org library (ADR-0024). The tier-grouped
-// `Combobox` the flag turns it into is asserted by the sibling `PlanCalendarPicker.scope.test.tsx`
-// (ADR-0053 §1/§4).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: false,
-}));
+// This suite documents the plan-calendar picker's BASE behaviour over the org library (ADR-0024):
+// the current value, the PATCH body, clearing to null, the loading placeholder and the read-only
+// render. It pinned `LIBRARY_SCOPING_ENABLED` OFF until ADR-0088 D3 retired that flag and deleted
+// the native `<select>` arm, so the assertions were CONVERTED to drive the `Combobox` — the claims
+// are unchanged, only the control they reach through. Tier grouping stays with the sibling
+// `PlanCalendarPicker.scope.test.tsx` (ADR-0053 §1/§4).
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
@@ -88,6 +86,21 @@ function renderPicker(props: Partial<React.ComponentProps<typeof PlanCalendarPic
   );
 }
 
+const field = (): HTMLElement => screen.getByRole('combobox', { name: 'Calendar' });
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
+const open = (): void => {
+  fireEvent.keyDown(field(), { key: 'ArrowDown' });
+};
+/**
+ * Pick by visible name. Options exist in the DOM only while the listbox is open, and the Combobox
+ * commits on `pointerDown` rather than `click` — deliberately, so the pick beats the input's own
+ * `blur`, which would otherwise close the listbox first on touch.
+ */
+const choose = (name: string): void => {
+  open();
+  fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name }));
+};
+
 describe('PlanCalendarPicker', () => {
   beforeEach(() => {
     vi.mocked(apiFetch)
@@ -97,15 +110,16 @@ describe('PlanCalendarPicker', () => {
 
   it('shows the current calendar selected and lists the org calendars + None', () => {
     renderPicker();
-    const select = screen.getByLabelText('Calendar');
-    expect(select).toHaveValue('cal-standard');
-    expect(screen.getByRole('option', { name: 'None (all days work)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Seven-day' })).toBeInTheDocument();
+    expect(field()).toHaveValue('Standard');
+    open();
+    const listbox = within(screen.getByRole('listbox'));
+    expect(listbox.getByRole('option', { name: 'None (all days work)' })).toBeInTheDocument();
+    expect(listbox.getByRole('option', { name: 'Seven-day' })).toBeInTheDocument();
   });
 
   it('PATCHes the plan with the chosen calendar id and version', async () => {
     renderPicker();
-    fireEvent.change(screen.getByLabelText('Calendar'), { target: { value: 'cal-7' } });
+    choose('Seven-day');
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
@@ -116,7 +130,7 @@ describe('PlanCalendarPicker', () => {
 
   it('clears the calendar (null) when None is chosen', async () => {
     renderPicker();
-    fireEvent.change(screen.getByLabelText('Calendar'), { target: { value: '' } });
+    choose('None (all days work)');
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
@@ -124,19 +138,18 @@ describe('PlanCalendarPicker', () => {
   });
 
   it('keeps the current calendar selected (not blank) while the calendars list loads', () => {
-    // Plan has a calendar, but the list hasn't arrived yet — the Select must not
-    // silently show "None" (which would misrepresent the plan's actual calendar).
+    // Plan has a calendar, but the list hasn't arrived yet — the control must not silently show
+    // "None", which would misrepresent the plan's actual calendar. The Combobox carries this as its
+    // own value (there is no option list to hold a placeholder), and reports the wait via
+    // `aria-busy` rather than by going inert.
     renderPicker({ calendars: [], calendarsLoading: true });
-    const select = screen.getByLabelText('Calendar');
-    expect(select).toBeDisabled();
-    expect(select).toHaveValue('cal-standard');
-    // A placeholder option represents the not-yet-loaded current calendar.
-    expect(screen.getByRole('option', { name: 'Loading…' })).toBeInTheDocument();
+    expect(field()).toHaveValue('Loading…');
+    expect(field()).toHaveAttribute('aria-busy', 'true');
   });
 
-  it('renders read-only (no select) for a non-editor, showing the calendar name', () => {
+  it('renders read-only (no control) for a non-editor, showing the calendar name', () => {
     renderPicker({ canEdit: false });
-    expect(screen.queryByLabelText('Calendar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Calendar' })).not.toBeInTheDocument();
     expect(screen.getByText('Standard')).toBeInTheDocument();
   });
 

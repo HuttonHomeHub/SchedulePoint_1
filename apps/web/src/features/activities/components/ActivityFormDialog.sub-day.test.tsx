@@ -1,7 +1,7 @@
 import { WorkingWeekdays } from '@repo/types';
 import type { ActivitySummary, CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityFormDialog } from './ActivityFormDialog';
@@ -23,7 +23,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ACTIVITY_CALENDAR_ENABLED: true,
   // The base native picker, not the tier-grouped combobox — this suite is about the duration field,
   // and the flat `<select>` is the simpler thing to drive.
-  LIBRARY_SCOPING_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -144,6 +143,21 @@ beforeEach(() => {
   vi.mocked(apiFetch).mockResolvedValue(ACTIVITY);
 });
 
+const comboField = (name: string): HTMLElement => screen.getByRole('combobox', { name });
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
+const openCombo = (name: string): void => {
+  fireEvent.keyDown(comboField(name), { key: 'ArrowDown' });
+};
+/**
+ * Pick by visible option name. Options exist in the DOM only while the listbox is open, and the
+ * Combobox commits on `pointerDown` rather than `click` — deliberately, so the pick beats the
+ * input's own `blur`, which would otherwise close the listbox first on touch.
+ */
+const chooseCombo = (name: string, option: string | RegExp): void => {
+  openCombo(name);
+  fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
+};
+
 describe('ActivityFormDialog — sub-day durations', () => {
   it('seeds a sub-day duration as text instead of showing it as 0 days', () => {
     renderDialog({ activity: ACTIVITY });
@@ -169,7 +183,7 @@ describe('ActivityFormDialog — sub-day durations', () => {
   it('follows the calendar the FORM selects, not the one the row was saved on', async () => {
     renderDialog({ activity: ACTIVITY });
     // Move the activity onto the 24-hour calendar in the same edit. "1d" must now mean 1440.
-    fireEvent.change(screen.getByLabelText('Calendar'), { target: { value: 'cal-24' } });
+    chooseCombo('Calendar', 'Round the clock');
     fireEvent.change(screen.getByLabelText('Duration'), { target: { value: '1d' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 

@@ -18,7 +18,6 @@ import { useAnnounce } from '@/components/ui/announcer';
  *   reason must not re-announce.
  */
 export function useResultCountAnnouncement({
-  enabled = true,
   pending,
   count,
   /** Changes whenever the query/filters change — the trigger for a new announcement. */
@@ -28,7 +27,6 @@ export function useResultCountAnnouncement({
   /** Message when nothing matched; defaults to a generic one. */
   emptyMessage,
 }: {
-  enabled?: boolean;
   pending: boolean;
   count: number;
   filterKey: string;
@@ -40,7 +38,7 @@ export function useResultCountAnnouncement({
   const lastMessage = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!enabled || pending) return;
+    if (pending) return;
     const key = `${filterKey}|${count}`;
     // First settled render establishes the baseline without speaking.
     if (lastKey.current === null) {
@@ -56,5 +54,5 @@ export function useResultCountAnnouncement({
     if (message === lastMessage.current) return;
     lastMessage.current = message;
     announce(message);
-  }, [enabled, pending, count, filterKey, noun, emptyMessage, announce]);
+  }, [pending, count, filterKey, noun, emptyMessage, announce]);
 }

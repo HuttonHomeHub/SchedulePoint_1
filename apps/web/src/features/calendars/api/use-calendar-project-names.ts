@@ -26,16 +26,15 @@ const MAX_PROJECT_LOOKUPS = 30;
 export function useCalendarProjectNames(
   orgSlug: string,
   calendars: CalendarSummary[] | undefined,
-  enabled: boolean,
 ): Map<string, string> {
   const projectIds = useMemo(() => {
-    if (!enabled || !calendars) return [];
+    if (!calendars) return [];
     const ids = new Set<string>();
     for (const calendar of calendars) {
       if (calendar.scope === 'PROJECT' && calendar.projectId) ids.add(calendar.projectId);
     }
     return [...ids].slice(0, MAX_PROJECT_LOOKUPS);
-  }, [calendars, enabled]);
+  }, [calendars]);
 
   const results = useQueries({
     queries: projectIds.map((projectId) => projectQueryOptions(orgSlug, projectId)),

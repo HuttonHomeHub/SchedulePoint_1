@@ -1,6 +1,6 @@
 import type { ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assignmentKeys, resourceKeys } from '../api/use-resources';
@@ -23,7 +23,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   EARNED_VALUE_ENABLED: true,
   RESOURCES_ENABLED: true,
-  LIBRARY_SCOPING_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -69,7 +68,13 @@ function renderDialog(assignments: ResourceAssignmentSummary[]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(resourceKeys.list('acme'), [CREW]);
+  queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [CREW]);
+  // The picker reads the cursor-paginated SEARCH query, a different read from the library
+  // list above — seed it too, or the listbox opens empty.
+  queryClient.setQueryData(resourceKeys.search('acme', { q: '' }), {
+    pages: [{ resources: [CREW], nextCursor: null, hasMore: false }],
+    pageParams: [null],
+  });
   queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), assignments);
   return render(
     <QueryClientProvider client={queryClient}>
@@ -84,6 +89,21 @@ function renderDialog(assignments: ResourceAssignmentSummary[]) {
     </QueryClientProvider>,
   );
 }
+
+const comboField = (name: string): HTMLElement => screen.getByRole('combobox', { name });
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
+const openCombo = (name: string): void => {
+  fireEvent.keyDown(comboField(name), { key: 'ArrowDown' });
+};
+/**
+ * Pick by visible option name. Options exist in the DOM only while the listbox is open, and the
+ * Combobox commits on `pointerDown` rather than `click` — deliberately, so the pick beats the
+ * input's own `blur`, which would otherwise close the listbox first on touch.
+ */
+const chooseCombo = (name: string, option: string | RegExp): void => {
+  openCombo(name);
+  fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
+};
 
 describe('ActivityResourcesDialog — cost & actuals (flag on)', () => {
   beforeEach(() => {
@@ -133,7 +153,7 @@ describe('ActivityResourcesDialog — cost & actuals (flag on)', () => {
 
   it('assign form: carries the cost inputs on POST (major → minor)', async () => {
     renderDialog([]);
-    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    chooseCombo('Resource', /^Crew A\b/);
     fireEvent.change(screen.getByLabelText('Budgeted units'), { target: { value: '100' } });
     fireEvent.change(screen.getByLabelText('Budgeted cost'), {
       target: { value: '750' },

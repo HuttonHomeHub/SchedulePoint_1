@@ -24,7 +24,6 @@ import { apiFetch } from '@/lib/api/client';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_CALENDAR_ENABLED: true,
-  LIBRARY_SCOPING_ENABLED: false,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -146,6 +145,21 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDia
   );
 }
 
+const comboField = (name: string): HTMLElement => screen.getByRole('combobox', { name });
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
+const openCombo = (name: string): void => {
+  fireEvent.keyDown(comboField(name), { key: 'ArrowDown' });
+};
+/**
+ * Pick by visible option name. Options exist in the DOM only while the listbox is open, and the
+ * Combobox commits on `pointerDown` rather than `click` — deliberately, so the pick beats the
+ * input's own `blur`, which would otherwise close the listbox first on touch.
+ */
+const chooseCombo = (name: string, option: string | RegExp): void => {
+  openCombo(name);
+  fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
+};
+
 describe('ActivityFormDialog — calendar picker (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
@@ -153,20 +167,21 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
 
   it('offers "Plan default (inherit)" plus each org calendar, defaulting to inherit on a new activity', () => {
     renderDialog();
-    const select = screen.getByLabelText('Calendar');
-    const labels = within(select)
+    // Inherit is the value, shown by its label rather than as a blank field — the Combobox renders
+    // `emptyOption`'s label as the selection (ADR-0053 M6), because "None"/"Inherit" is the most
+    // common state of all and a blank box reads as unset-and-broken.
+    expect(comboField('Calendar')).toHaveValue('Plan default (inherit)');
+    openCombo('Calendar');
+    const labels = within(screen.getByRole('listbox'))
       .getAllByRole('option')
       .map((o) => o.textContent);
     expect(labels).toEqual(['Plan default (inherit)', '5-day week', '24/7']);
-    expect(select).toHaveValue('');
   });
 
   it('creates an activity on a chosen calendar', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText('Calendar'), {
-      target: { value: 'cal-5day' },
-    });
+    chooseCombo('Calendar', '5-day week');
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -180,9 +195,8 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
 
   it('seeds the activity’s calendar and clears it to inherit (null) on save', async () => {
     renderDialog({ activity: ACTIVITY });
-    const select = screen.getByLabelText('Calendar');
-    expect(select).toHaveValue('cal-247');
-    fireEvent.change(select, { target: { value: '' } });
+    expect(comboField('Calendar')).toHaveValue('24/7');
+    chooseCombo('Calendar', 'Plan default (inherit)');
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -197,9 +211,8 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
 
     // The failure is announced, not silent.
     expect(screen.getByRole('alert')).toHaveTextContent(/Couldn’t load the calendar list/);
-    // The seeded calendar still shows as selected under an honest label — never blank (= inherit).
-    const select = screen.getByLabelText('Calendar');
-    expect(select).toHaveValue('cal-247');
-    expect(within(select).getByRole('option', { name: 'Unavailable' })).toBeInTheDocument();
+    // The seeded calendar still shows as selected under an honest label — never blank (= inherit),
+    // which is the whole point: blank would claim the activity inherits the plan's calendar.
+    expect(comboField('Calendar')).toHaveValue('Unavailable');
   });
 });

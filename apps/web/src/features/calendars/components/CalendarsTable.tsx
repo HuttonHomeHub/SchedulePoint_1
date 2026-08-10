@@ -32,7 +32,6 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Label } from '@/components/ui/label';
 import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { ApiFetchError } from '@/lib/api/client';
@@ -64,7 +63,7 @@ function deleteErrorMessage(error: unknown): string {
  * reference the calendar surfaces a friendly inline message. The open target is looked up by id from
  * the live query so a 409 retry carries the current version. States come from the shared DataTable.
  *
- * Behind `LIBRARY_SCOPING_ENABLED` (ADR-0053 §1) it also shows which **tier** each calendar belongs
+ * It also shows which **tier** each calendar belongs
  * to — a `Scope` badge column naming the owning project for project-scoped rows — with a filter over
  * the API's `?scope=org|project|all`, and a **Move to organisation** action promoting a project
  * calendar into the shared library (gated on `calendar:manage_org`).
@@ -115,11 +114,10 @@ export function CalendarsTable({
   // itself renders `search` and stays instant.
   const debouncedSearch = useDebouncedValue(search);
   // Flag-off neither filter can leave its default, so this is the same query, key and URL as before.
-  const calendars = useCalendars(
-    orgSlug,
-    LIBRARY_SCOPING_ENABLED ? scopeFilter : 'org',
-    LIBRARY_SCOPING_ENABLED ? { q: debouncedSearch, archived: archivedFilter } : {},
-  );
+  const calendars = useCalendars(orgSlug, scopeFilter, {
+    q: debouncedSearch,
+    archived: archivedFilter,
+  });
   const deleteCalendar = useDeleteCalendar(orgSlug);
   const archiveCalendar = useArchiveCalendar(orgSlug);
   const unarchiveCalendar = useUnarchiveCalendar(orgSlug);
@@ -134,7 +132,7 @@ export function CalendarsTable({
   const [deleting, setDeleting] = useState<CalendarSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-  const projectNames = useCalendarProjectNames(orgSlug, calendars.data, LIBRARY_SCOPING_ENABLED);
+  const projectNames = useCalendarProjectNames(orgSlug, calendars.data);
   // Only the promote direction is offered here: narrowing needs a target project, which this
   // org-wide screen cannot name (that move lives on the project's own Calendars section).
   const scopeMove = useCalendarScopeMove(orgSlug, { restoreFocusRef: regionRef });
@@ -144,13 +142,11 @@ export function CalendarsTable({
     : undefined;
 
   const filtersActive =
-    LIBRARY_SCOPING_ENABLED &&
-    (search.trim() !== '' || archivedFilter !== 'exclude' || scopeFilter !== 'org');
+    search.trim() !== '' || archivedFilter !== 'exclude' || scopeFilter !== 'org';
 
   // A debounced search that silently reshapes the table is invisible to a screen-reader user
   // (WCAG 4.1.3) — announce the settled count, exactly as the Combobox does for its listbox.
   useResultCountAnnouncement({
-    enabled: LIBRARY_SCOPING_ENABLED,
     pending: calendars.isPending || calendars.isFetching,
     count: calendars.data?.length ?? 0,
     filterKey: `${debouncedSearch}|${scopeFilter}|${archivedFilter}`,
@@ -190,9 +186,7 @@ export function CalendarsTable({
         <span className="flex items-center gap-2">
           <span className="font-medium">{calendar.name}</span>
           {/* The state is carried by a word, never by dimming alone (WCAG 1.4.1). */}
-          {LIBRARY_SCOPING_ENABLED && isArchivedRow(calendar) ? (
-            <Badge size="sm">{ARCHIVED_BADGE}</Badge>
-          ) : null}
+          {isArchivedRow(calendar) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
         </span>
       ),
     },
@@ -218,17 +212,15 @@ export function CalendarsTable({
       ),
     },
   ];
-  if (LIBRARY_SCOPING_ENABLED) {
-    columns.push({
-      header: 'Scope',
-      cell: (calendar) => (
-        <CalendarScopeBadge
-          calendar={calendar}
-          {...(calendar.projectId ? { projectName: projectNames.get(calendar.projectId) } : {})}
-        />
-      ),
-    });
-  }
+  columns.push({
+    header: 'Scope',
+    cell: (calendar) => (
+      <CalendarScopeBadge
+        calendar={calendar}
+        {...(calendar.projectId ? { projectName: projectNames.get(calendar.projectId) } : {})}
+      />
+    ),
+  });
   columns.push({
     header: 'Actions',
     srHeader: true,
@@ -237,7 +229,7 @@ export function CalendarsTable({
     cell: (calendar) =>
       canWrite ? (
         <div className="flex justify-end gap-2">
-          {LIBRARY_SCOPING_ENABLED && calendar.scope === 'PROJECT' && canManageOrg ? (
+          {calendar.scope === 'PROJECT' && canManageOrg ? (
             <Button
               variant="ghost"
               size="sm"
@@ -257,16 +249,14 @@ export function CalendarsTable({
           </Button>
           {/* Always-visible row actions (never hover-only, docs/UX_STANDARDS.md "Row / node
               actions"), matching the Edit/Delete idiom this table already uses. */}
-          {LIBRARY_SCOPING_ENABLED ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleArchived(calendar)}
-              aria-label={`${isArchivedRow(calendar) ? 'Unarchive' : 'Archive'} ${calendar.name}`}
-            >
-              {isArchivedRow(calendar) ? 'Unarchive' : 'Archive'}
-            </Button>
-          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleArchived(calendar)}
+            aria-label={`${isArchivedRow(calendar) ? 'Unarchive' : 'Archive'} ${calendar.name}`}
+          >
+            {isArchivedRow(calendar) ? 'Unarchive' : 'Archive'}
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -312,69 +302,65 @@ export function CalendarsTable({
 
   return (
     <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-      {LIBRARY_SCOPING_ENABLED ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-end gap-3">
-            <SearchField
-              id={searchId}
-              className="min-w-56 flex-1"
-              label="Search calendars"
-              placeholder="Search by name"
-              clearLabel="Clear calendar search"
-              value={search}
-              onChange={(next) => setFilters({ q: next })}
-            />
-            <div className="flex max-w-xs flex-col gap-1.5">
-              <Label htmlFor={filterId}>Scope</Label>
-              <Select
-                id={filterId}
-                value={scopeFilter}
-                aria-describedby={scopeHintId}
-                onChange={(event) =>
-                  setFilters({ scope: event.target.value as CalendarScopeFilter })
-                }
-              >
-                {CALENDAR_SCOPE_FILTERS.map((value) => (
-                  <option key={value} value={value}>
-                    {CALENDAR_SCOPE_FILTER_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex max-w-xs flex-col gap-1.5">
-              <Label htmlFor={archivedFilterId}>Show archived</Label>
-              <Select
-                id={archivedFilterId}
-                value={archivedFilter}
-                aria-describedby={explainerId}
-                onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
-              >
-                {ARCHIVED_FILTERS.map((value) => (
-                  <option key={value} value={value}>
-                    {ARCHIVED_FILTER_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
-            </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <SearchField
+            id={searchId}
+            className="min-w-56 flex-1"
+            label="Search calendars"
+            placeholder="Search by name"
+            clearLabel="Clear calendar search"
+            value={search}
+            onChange={(next) => setFilters({ q: next })}
+          />
+          <div className="flex max-w-xs flex-col gap-1.5">
+            <Label htmlFor={filterId}>Scope</Label>
+            <Select
+              id={filterId}
+              value={scopeFilter}
+              aria-describedby={scopeHintId}
+              onChange={(event) => setFilters({ scope: event.target.value as CalendarScopeFilter })}
+            >
+              {CALENDAR_SCOPE_FILTERS.map((value) => (
+                <option key={value} value={value}>
+                  {CALENDAR_SCOPE_FILTER_LABELS[value]}
+                </option>
+              ))}
+            </Select>
           </div>
-          {/* The screen is titled plainly "Calendars" but shows only the SHARED library by
+          <div className="flex max-w-xs flex-col gap-1.5">
+            <Label htmlFor={archivedFilterId}>Show archived</Label>
+            <Select
+              id={archivedFilterId}
+              value={archivedFilter}
+              aria-describedby={explainerId}
+              onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
+            >
+              {ARCHIVED_FILTERS.map((value) => (
+                <option key={value} value={value}>
+                  {ARCHIVED_FILTER_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        {/* The screen is titled plainly "Calendars" but shows only the SHARED library by
               default, so say so — a planner who never learns the tier exists would otherwise
               conclude a project calendar had been lost. */}
-          <p id={scopeHintId} className="text-muted-foreground text-sm">
-            {scopeFilter === 'org'
-              ? 'Showing the shared organisation library. Switch Scope to see calendars that belong to a single project.'
-              : 'A project calendar can only be used by that project’s plans and activities.'}
+        <p id={scopeHintId} className="text-muted-foreground text-sm">
+          {scopeFilter === 'org'
+            ? 'Showing the shared organisation library. Switch Scope to see calendars that belong to a single project.'
+            : 'A project calendar can only be used by that project’s plans and activities.'}
+        </p>
+        <p id={explainerId} className="text-muted-foreground text-sm">
+          {ARCHIVE_EXPLAINER}
+        </p>
+        {archiveError ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {archiveError}
           </p>
-          <p id={explainerId} className="text-muted-foreground text-sm">
-            {ARCHIVE_EXPLAINER}
-          </p>
-          {archiveError ? (
-            <p role="alert" className="text-destructive-text text-sm">
-              {archiveError}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <DataTable
         caption="Calendars"
@@ -424,9 +410,7 @@ export function CalendarsTable({
           error={deleteError}
         />
       ) : null}
-      {LIBRARY_SCOPING_ENABLED && canWrite && canManageOrg ? (
-        <ConfirmDialog {...scopeMove.dialogProps} />
-      ) : null}
+      {canWrite && canManageOrg ? <ConfirmDialog {...scopeMove.dialogProps} /> : null}
     </div>
   );
 }

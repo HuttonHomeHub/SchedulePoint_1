@@ -37,7 +37,6 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Label } from '@/components/ui/label';
 import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
-import { LIBRARY_SCOPING_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { ApiFetchError } from '@/lib/api/client';
@@ -82,7 +81,7 @@ function deleteErrorMessage(error: unknown): string {
  * route-composed (like {@link ActivitiesTable}) so this feature stays dependency-free
  * of the calendars feature.
  *
- * Behind `LIBRARY_SCOPING_ENABLED` it grows the ADR-0053 management layer: the §3 tree
+ * It carries the ADR-0053 management layer: the §3 tree
  * rendering, and the §4 search (`?q=` over name OR code, debounced, server-side), kind and
  * archived filters, an `Archived` badge and per-row Archive / Unarchive. Archiving is **not**
  * deleting — every existing assignment survives and keeps scheduling, levelling and earning value
@@ -121,16 +120,11 @@ export function ResourcesTable({
   // The request follows the SETTLED term, so a typing burst costs one round trip.
   const debouncedSearch = useDebouncedValue(search);
   // Flag-off no filter can leave its default, so this is the same query, key and URL as before.
-  const resources = useResources(
-    orgSlug,
-    LIBRARY_SCOPING_ENABLED
-      ? {
-          q: debouncedSearch,
-          archived: archivedFilter,
-          ...(kindFilter === ANY_RESOURCE_KIND ? {} : { kind: kindFilter }),
-        }
-      : {},
-  );
+  const resources = useResources(orgSlug, {
+    q: debouncedSearch,
+    archived: archivedFilter,
+    ...(kindFilter === ANY_RESOURCE_KIND ? {} : { kind: kindFilter }),
+  });
   const deleteResource = useDeleteResource(orgSlug);
   const archiveResource = useArchiveResource(orgSlug);
   const unarchiveResource = useUnarchiveResource(orgSlug);
@@ -152,15 +146,13 @@ export function ResourcesTable({
   const editing = editingId ? resources.data?.find((r) => r.id === editingId) : undefined;
 
   const filtersActive =
-    LIBRARY_SCOPING_ENABLED &&
-    (search.trim() !== '' || kindFilter !== ANY_RESOURCE_KIND || archivedFilter !== 'exclude');
+    search.trim() !== '' || kindFilter !== ANY_RESOURCE_KIND || archivedFilter !== 'exclude';
 
   const clearFilters = (): void => setFilters(DEFAULT_RESOURCE_LIBRARY_FILTERS);
 
   // A debounced search that silently reshapes the table is invisible to a screen-reader user
   // (WCAG 4.1.3) — announce the settled count, exactly as the Combobox does for its listbox.
   useResultCountAnnouncement({
-    enabled: LIBRARY_SCOPING_ENABLED,
     pending: resources.isPending || resources.isFetching,
     count: resources.data?.length ?? 0,
     filterKey: `${debouncedSearch}|${kindFilter}|${archivedFilter}`,
@@ -180,7 +172,7 @@ export function ResourcesTable({
   // is never lost, only un-drawn.
   const rows = useMemo<ResourceTreeRow[]>(() => {
     const data = resources.data ?? [];
-    if (!LIBRARY_SCOPING_ENABLED || filtersActive) {
+    if (filtersActive) {
       return data.map((resource) => ({ resource, depth: 0 }));
     }
     return toResourceTreeRows(data);
@@ -246,12 +238,8 @@ export function ResourcesTable({
           <span className="font-medium">{resource.name}</span>
           {/* The Kind column already says "Group"; this badge carries the CONSEQUENCE, which is
               what a planner scanning the library actually needs to know (ADR-0053 §3). */}
-          {LIBRARY_SCOPING_ENABLED && isResourceGroup(resource) ? (
-            <Badge size="sm">Not assignable</Badge>
-          ) : null}
-          {LIBRARY_SCOPING_ENABLED && isArchivedRow(resource) ? (
-            <Badge size="sm">{ARCHIVED_BADGE}</Badge>
-          ) : null}
+          {isResourceGroup(resource) ? <Badge size="sm">Not assignable</Badge> : null}
+          {isArchivedRow(resource) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
         </span>
       ),
     },
@@ -265,25 +253,19 @@ export function ResourcesTable({
           <span className="text-muted-foreground">—</span>
         ),
     },
-    ...(LIBRARY_SCOPING_ENABLED
-      ? [
-          {
-            header: 'Group',
-            headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-            cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
-            cell: ({ resource }: ResourceTreeRow) => {
-              const parentName = resource.parentId
-                ? groupNameById.get(resource.parentId)
-                : undefined;
-              return parentName ? (
-                <span className="text-muted-foreground">{parentName}</span>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              );
-            },
-          } satisfies Column<ResourceTreeRow>,
-        ]
-      : []),
+    {
+      header: 'Group',
+      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+      cell: ({ resource }: ResourceTreeRow) => {
+        const parentName = resource.parentId ? groupNameById.get(resource.parentId) : undefined;
+        return parentName ? (
+          <span className="text-muted-foreground">{parentName}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
+    } satisfies Column<ResourceTreeRow>,
     {
       header: 'Calendar',
       headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
@@ -291,7 +273,7 @@ export function ResourcesTable({
       cell: ({ resource }) => {
         // A group has no calendar by construction (ADR-0053 §3) — say so rather than showing the
         // same "—" that means "inherits the plan calendar" for a real resource.
-        if (LIBRARY_SCOPING_ENABLED && isResourceGroup(resource)) {
+        if (isResourceGroup(resource)) {
           return <span className="text-muted-foreground">Not scheduled</span>;
         }
         if (!resource.calendarId) return <span className="text-muted-foreground">—</span>;
@@ -323,16 +305,14 @@ export function ResourcesTable({
           </Button>
           {/* Always-visible row actions (never hover-only, docs/UX_STANDARDS.md "Row / node
               actions"), matching the Edit/Delete idiom this table already uses. */}
-          {LIBRARY_SCOPING_ENABLED ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleArchived(resource)}
-              aria-label={`${isArchivedRow(resource) ? 'Unarchive' : 'Archive'} ${resource.name}`}
-            >
-              {isArchivedRow(resource) ? 'Unarchive' : 'Archive'}
-            </Button>
-          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleArchived(resource)}
+            aria-label={`${isArchivedRow(resource) ? 'Unarchive' : 'Archive'} ${resource.name}`}
+          >
+            {isArchivedRow(resource) ? 'Unarchive' : 'Archive'}
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -378,62 +358,60 @@ export function ResourcesTable({
 
   return (
     <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-      {LIBRARY_SCOPING_ENABLED ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-end gap-3">
-            <SearchField
-              id={searchId}
-              className="min-w-56 flex-1"
-              label="Search resources"
-              placeholder="Search by name or code"
-              clearLabel="Clear resource search"
-              value={search}
-              onChange={(next) => setFilters({ q: next })}
-            />
-            <div className="flex max-w-xs flex-col gap-1.5">
-              <Label htmlFor={kindFilterId}>Kind</Label>
-              <Select
-                id={kindFilterId}
-                value={kindFilter}
-                onChange={(event) => setFilters({ kind: event.target.value as ResourceKindFilter })}
-              >
-                <option value={ANY_RESOURCE_KIND}>All kinds</option>
-                {RESOURCE_KINDS.map((value) => (
-                  <option key={value} value={value}>
-                    {RESOURCE_KIND_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex max-w-xs flex-col gap-1.5">
-              <Label htmlFor={archivedFilterId}>Show archived</Label>
-              <Select
-                id={archivedFilterId}
-                value={archivedFilter}
-                aria-describedby={explainerId}
-                onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
-              >
-                {ARCHIVED_FILTERS.map((value) => (
-                  <option key={value} value={value}>
-                    {ARCHIVED_FILTER_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
-            </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <SearchField
+            id={searchId}
+            className="min-w-56 flex-1"
+            label="Search resources"
+            placeholder="Search by name or code"
+            clearLabel="Clear resource search"
+            value={search}
+            onChange={(next) => setFilters({ q: next })}
+          />
+          <div className="flex max-w-xs flex-col gap-1.5">
+            <Label htmlFor={kindFilterId}>Kind</Label>
+            <Select
+              id={kindFilterId}
+              value={kindFilter}
+              onChange={(event) => setFilters({ kind: event.target.value as ResourceKindFilter })}
+            >
+              <option value={ANY_RESOURCE_KIND}>All kinds</option>
+              {RESOURCE_KINDS.map((value) => (
+                <option key={value} value={value}>
+                  {RESOURCE_KIND_LABELS[value]}
+                </option>
+              ))}
+            </Select>
           </div>
-          <p id={explainerId} className="text-muted-foreground text-sm">
-            {ARCHIVE_EXPLAINER}
-            {filtersActive
-              ? ' While a filter is active the list is flat — the Group column still names each match’s group.'
-              : ''}
-          </p>
-          {archiveError ? (
-            <p role="alert" className="text-destructive-text text-sm">
-              {archiveError}
-            </p>
-          ) : null}
+          <div className="flex max-w-xs flex-col gap-1.5">
+            <Label htmlFor={archivedFilterId}>Show archived</Label>
+            <Select
+              id={archivedFilterId}
+              value={archivedFilter}
+              aria-describedby={explainerId}
+              onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
+            >
+              {ARCHIVED_FILTERS.map((value) => (
+                <option key={value} value={value}>
+                  {ARCHIVED_FILTER_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
-      ) : null}
+        <p id={explainerId} className="text-muted-foreground text-sm">
+          {ARCHIVE_EXPLAINER}
+          {filtersActive
+            ? ' While a filter is active the list is flat — the Group column still names each match’s group.'
+            : ''}
+        </p>
+        {archiveError ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {archiveError}
+          </p>
+        ) : null}
+      </div>
 
       <DataTable
         caption="Resources"

@@ -1,12 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **library scoping & manageability**
- * (`VITE_LIBRARY_SCOPING`, ADR-0053, `docs/specs/library-scoping-and-manageability/`) — the calendar
+ * End-to-end configuration for **library scoping & manageability**
+ * (ADR-0053, `docs/specs/library-scoping-and-manageability/`) — the calendar
  * ORG/PROJECT tier (badge column, scope filter, the project's own Calendars section, the
  * tier-grouped plan picker) and the M4 management layer (server-side search, archive/restore, the
- * shared `Combobox` pickers). Serves the web bundle with `VITE_LIBRARY_SCOPING=true` plus the
- * canvas-first plan-workspace layers this journey's plan steps build on (canvas authoring →
+ * shared `Combobox` pickers).
+ *
+ * **No longer flag-on: it is the only library surface there is.** `VITE_LIBRARY_SCOPING` selected
+ * these controls or a raw `<select>`, and ADR-0088 D3 retired the flag and deleted that arm — so
+ * its pin went, and ONLY its pin. The six remaining `env` keys below are other flags this journey
+ * genuinely needs, including `VITE_SCHEDULING_MODES: 'false'`, which is pinned OFF deliberately:
+ * deleting the block wholesale would have silently armed scheduling modes here.
+ *
+ * Serves the web bundle with the canvas-first plan-workspace layers this journey's plan steps build on (canvas authoring →
  * toolbar → workspace → editing surface + pen; mirrors the interchange/share suites' layering).
  * Like the other flag-on configs the flags bake at `webServer` start, so this is a separate config
  * on the same ports; it runs as its own CI step after the prior suites tear down. Chromium only
@@ -62,7 +69,6 @@ export default defineConfig({
             // resource-view / interchange / share suites) to keep this journey asserting the plain
             // authoring surface it was written for.
             env: {
-              VITE_LIBRARY_SCOPING: 'true',
               VITE_RESOURCES: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               VITE_CANVAS_WORKSPACE: 'true',

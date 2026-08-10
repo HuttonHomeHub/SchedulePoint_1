@@ -1,6 +1,6 @@
 import type { ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assignmentKeys, resourceKeys } from '../api/use-resources';
@@ -19,7 +19,6 @@ import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: false,
   ASSIGNMENT_LAG_ENABLED: false,
 }));
 
@@ -64,7 +63,13 @@ function renderPanel(props: Partial<React.ComponentProps<typeof ActivityResource
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(resourceKeys.list('acme'), [CREW, CRANE]);
+  queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [CREW, CRANE]);
+  // The picker reads the cursor-paginated SEARCH query, a different read from the library
+  // list above — seed it too, or the listbox opens empty.
+  queryClient.setQueryData(resourceKeys.search('acme', { q: '' }), {
+    pages: [{ resources: [CREW, CRANE], nextCursor: null, hasMore: false }],
+    pageParams: [null],
+  });
   queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [LAGGED]);
   return render(
     <QueryClientProvider client={queryClient}>
@@ -78,6 +83,21 @@ function renderPanel(props: Partial<React.ComponentProps<typeof ActivityResource
     </QueryClientProvider>,
   );
 }
+
+const comboField = (name: string): HTMLElement => screen.getByRole('combobox', { name });
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
+const openCombo = (name: string): void => {
+  fireEvent.keyDown(comboField(name), { key: 'ArrowDown' });
+};
+/**
+ * Pick by visible option name. Options exist in the DOM only while the listbox is open, and the
+ * Combobox commits on `pointerDown` rather than `click` — deliberately, so the pick beats the
+ * input's own `blur`, which would otherwise close the listbox first on touch.
+ */
+const chooseCombo = (name: string, option: string | RegExp): void => {
+  openCombo(name);
+  fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
+};
 
 describe('ActivityResourcesPanel — the join lag, flag OFF (the rollback contract)', () => {
   beforeEach(() => {
@@ -104,7 +124,7 @@ describe('ActivityResourcesPanel — the join lag, flag OFF (the rollback contra
     // Not `lagMinutes: 0` — absent. An explicit zero would be this build asserting a value it has no
     // control for, and would overwrite a lag set by an import or by a flag-on colleague.
     renderPanel();
-    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-2' } });
+    chooseCombo('Resource', /^Crane\b/);
     fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
 
     await waitFor(() => {

@@ -15,7 +15,6 @@ import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: false,
   ASSIGNMENT_LAG_ENABLED: true,
 }));
 
@@ -65,6 +64,17 @@ const EIGHT_HOUR = 8;
  * fail for the wrong reason.
  */
 const assignForm = () => within(screen.getByRole('group', { name: 'Assign a resource' }));
+/**
+ * Pick the assign form's resource. Scoped to the form, because the panel also lists the ALREADY
+ * assigned rows. Options exist only while the listbox is open, and the Combobox commits on
+ * `pointerDown` rather than `click` — deliberately, so the pick beats the input's own `blur`.
+ * (This drove a native `<select>` by id until ADR-0088 D3 deleted that arm.)
+ */
+const chooseResource = (option: RegExp): void => {
+  const field = assignForm().getByRole('combobox', { name: 'Resource' });
+  fireEvent.keyDown(field, { key: 'ArrowDown' });
+  fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
+};
 const assignedRow = () => within(screen.getByRole('listitem'));
 
 /**
@@ -84,7 +94,13 @@ function renderPanel(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(resourceKeys.list('acme'), [CREW, CRANE]);
+  queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [CREW, CRANE]);
+  // The picker reads the cursor-paginated SEARCH query, a different read from the library
+  // list above — seed it too, or the listbox opens empty.
+  queryClient.setQueryData(resourceKeys.search('acme', { q: '' }), {
+    pages: [{ resources: [CREW, CRANE], nextCursor: null, hasMore: false }],
+    pageParams: [null],
+  });
   queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), assignments);
   return render(
     <QueryClientProvider client={queryClient}>
@@ -99,6 +115,7 @@ function renderPanel(
   );
 }
 
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
 describe('ActivityResourcesPanel — the join lag, flag on', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue([]);
@@ -109,7 +126,7 @@ describe('ActivityResourcesPanel — the join lag, flag on', () => {
     // The whole reason the factor is threaded (ADR-0068): `1d` on an eight-hour calendar is 480
     // minutes. A 1,440 here would be the epic's own defect — a wrong day, silently, changing dates.
     renderPanel();
-    fireEvent.change(assignForm().getByLabelText('Resource'), { target: { value: 'res-2' } });
+    chooseResource(/^Crane\b/);
     fireEvent.change(assignForm().getByLabelText('Joins after'), { target: { value: '1d' } });
     fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
 
@@ -135,7 +152,7 @@ describe('ActivityResourcesPanel — the join lag, flag on', () => {
     // guessing 24 (three days' work on an eight-hour calendar) or 8 (the inverse on a 24-hour one).
     renderPanel({ noFactor: true });
     expect(assignForm().getByLabelText('Joins after (hours or minutes)')).toBeInTheDocument();
-    fireEvent.change(assignForm().getByLabelText('Resource'), { target: { value: 'res-2' } });
+    chooseResource(/^Crane\b/);
     fireEvent.change(assignForm().getByLabelText('Joins after (hours or minutes)'), {
       target: { value: '2d' },
     });
@@ -152,7 +169,7 @@ describe('ActivityResourcesPanel — the join lag, flag on', () => {
     // comment claims parity with — has always called `setError(..., { shouldFocus: true })`.
     renderPanel({ noFactor: true });
     const field = assignForm().getByLabelText('Joins after (hours or minutes)');
-    fireEvent.change(assignForm().getByLabelText('Resource'), { target: { value: 'res-2' } });
+    chooseResource(/^Crane\b/);
     fireEvent.change(field, { target: { value: '2d' } });
     fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
 
@@ -164,7 +181,7 @@ describe('ActivityResourcesPanel — the join lag, flag on', () => {
 
   it('accepts hours with no factor, because an hour needs none', async () => {
     renderPanel({ noFactor: true });
-    fireEvent.change(assignForm().getByLabelText('Resource'), { target: { value: 'res-2' } });
+    chooseResource(/^Crane\b/);
     fireEvent.change(assignForm().getByLabelText('Joins after (hours or minutes)'), {
       target: { value: '4h' },
     });

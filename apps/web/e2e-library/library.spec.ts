@@ -12,7 +12,8 @@ import {
 } from './support';
 
 /**
- * Flag-ON **library scoping & manageability** journey (`VITE_LIBRARY_SCOPING`, ADR-0053). It proves
+ * The **library scoping & manageability** journey (ADR-0053) — no longer flag-on, since ADR-0088
+ * D3 retired `VITE_LIBRARY_SCOPING` and deleted the pickers it selected. It proves
  * the two claims the whole epic rests on, end to end against a real API and database — the claims a
  * unit test can only assert against a mock:
  *
