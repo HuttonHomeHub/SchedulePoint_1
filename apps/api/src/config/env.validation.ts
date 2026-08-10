@@ -140,16 +140,6 @@ export const envSchema = z
      */
     HEARTBEAT_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
     /**
-     * When `true`, structural plan writes (activity/dependency create/update/
-     * delete/restore, positions batch, schedule recalculate) require the caller
-     * to hold the plan edit-lock (ADR-0028) and return **423** otherwise. Off by
-     * default: the lock *mechanism* ships inert so it never breaks the existing
-     * (flag-on) activities-table / dependency-editor / recalculate flows, which do
-     * not yet acquire a lock. Flip it on only once the front end acquires the pen
-     * across every editing entry point (edit-lock M2/M3). The progress path and
-     * reads are never gated regardless of this flag.
-     */
-    /**
      * **Retention (ADR-0087).** Deletes rows past their documented period, on a timer inside this
      * process. Two tables documented a period for months and nothing enforced either.
      *
@@ -198,6 +188,16 @@ export const envSchema = z
      * this into a busy loop against the database.
      */
     RETENTION_SWEEP_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
+    /**
+     * When `true`, structural plan writes (activity/dependency create/update/
+     * delete/restore, positions batch, schedule recalculate) require the caller
+     * to hold the plan edit-lock (ADR-0028) and return **423** otherwise. Off by
+     * default: the lock *mechanism* ships inert so it never breaks the existing
+     * (flag-on) activities-table / dependency-editor / recalculate flows, which do
+     * not yet acquire a lock. Flip it on only once the front end acquires the pen
+     * across every editing entry point (edit-lock M2/M3). The progress path and
+     * reads are never gated regardless of this flag.
+     */
     PLAN_EDIT_LOCK_ENFORCED: z
       .enum(['true', 'false'])
       .default('false')

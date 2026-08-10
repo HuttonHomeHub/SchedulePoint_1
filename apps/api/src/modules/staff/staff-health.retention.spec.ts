@@ -167,6 +167,21 @@ describe('StaffHealthService retention', () => {
     expect(retention.consecutiveFailures).toBe(1);
   });
 
+  it('marks every table failed when the run CRASHED before reaching any of them', async () => {
+    // A run that throws reports nothing per table, so every row fell back to `failed: false` /
+    // `lastDeleted: null` — byte-identical to "this process has not swept yet" — while `lastRunAt`
+    // and `consecutiveFailures` said the opposite two fields away. That is the state-collapse this
+    // whole section exists to prevent, wearing the panel's own clothes. Raised by the API review.
+    const { service, store } = build();
+
+    store.recordFailedRun(new Date());
+    const { retention } = await service.read();
+
+    expect(retention.tables.every((t) => t.failed)).toBe(true);
+    expect(retention.lastRunAt).not.toBeNull();
+    expect(retention.consecutiveFailures).toBe(1);
+  });
+
   it('says the sweep is disabled, and still answers the derived question', async () => {
     // Disabled is a statement about the schedule, not about the data: an operator who has just
     // turned the sweep off still needs to know what is sitting in the tables.

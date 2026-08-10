@@ -19,6 +19,7 @@ import {
   oldestSentence,
   overdueSentence,
   scheduleSentence,
+  statusSentence,
   tableLabel,
 } from '@/features/staff/model/retention-copy';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -281,9 +282,17 @@ function MailHealthPanel(): React.ReactElement {
  * staff panel is an audited act, so a second route would have written a second `staff.panel_read`
  * row on every page load (spec §4.6). TanStack Query dedupes the call with the Mail panel above.
  */
+const RETENTION_DISABLED_ID = 'retention-disabled-note';
+const RETENTION_FAILING_ID = 'retention-failing-note';
+
 function RetentionPanel(): React.ReactElement {
   const health = useStaffHealth();
   const retention = health.data?.retention;
+  // Read from the SAME response, because "the sweep is failing" and "anybody outside this screen
+  // knows" are two different facts and the second one is unset on the deployed host today. The Mail
+  // panel above already discloses this for its own failures; the UX review found that this one did
+  // not, on the panel where the reader is most likely to assume somebody has been paged.
+  const alertingConfigured = health.data?.alertingConfigured ?? false;
 
   const columns: Column<RetentionTable>[] = [
     { header: 'Table', cell: (row) => tableLabel(row.table) },
@@ -294,9 +303,9 @@ function RetentionPanel(): React.ReactElement {
         <>
           <span className="tabular-nums">{oldestSentence(row)}</span>
           {row.overdue && (
-            // The word, not the colour (WCAG 1.4.1). The badge repeats what the sentence below
-            // already says in full, including the number the claim rests on — an operator who
-            // cannot see that has to open a shell, which is what this console exists to avoid.
+            // The word, not the colour (WCAG 1.4.1). The badge says "Overdue"; the sentence below
+            // carries only the number the claim rests on, so a screen reader does not hear the word
+            // twice in a row — which is what the first version did.
             <>
               {' '}
               <Badge variant="warning">Overdue</Badge>
@@ -309,7 +318,16 @@ function RetentionPanel(): React.ReactElement {
     { header: 'Last run', cell: (row) => lastRunSentence(row) },
   ];
 
-  const overdueCount = retention?.tables.filter((table) => table.overdue).length ?? 0;
+  // Bound once. Called twice it did the same work twice and, more to the point, could have
+  // straddled a boundary between the two calls — `now` defaults to `Date.now()`.
+  const schedule = retention === undefined ? null : scheduleSentence(retention);
+  // Both caveats change how the ages and the Overdue flags below should be read, and `DataTable`
+  // is a focusable `role="region"` — so a reader navigating by landmark lands INSIDE it, having
+  // skipped whatever sits above. `describedById` is the established fix (`my-activity.tsx`).
+  const notes = [
+    retention?.enabled === false ? RETENTION_DISABLED_ID : undefined,
+    retention !== undefined && retention.consecutiveFailures > 0 ? RETENTION_FAILING_ID : undefined,
+  ].filter((id): id is string => id !== undefined);
 
   return (
     <Panel
@@ -321,11 +339,7 @@ function RetentionPanel(): React.ReactElement {
             ? 'Retention state could not be read.'
             : retention === undefined
               ? ''
-              : !retention.enabled
-                ? 'Retention: sweeping is disabled.'
-                : overdueCount === 0
-                  ? 'Retention: every table is inside its period.'
-                  : `Retention: ${String(overdueCount)} table${overdueCount === 1 ? ' is' : 's are'} overdue.`
+              : statusSentence(retention)
       }
     >
       {health.isPending && <Spinner label="Loading retention…" />}
@@ -342,27 +356,38 @@ function RetentionPanel(): React.ReactElement {
       {retention !== undefined && (
         <>
           {!retention.enabled && (
-            <Alert tone="info">
+            <Alert tone="info" id={RETENTION_DISABLED_ID}>
               <strong className="font-medium">Retention sweeping is disabled.</strong> Nothing is
               being deleted. Set <code>RETENTION_SWEEP_ENABLED=true</code> to resume — the ages
               below are still real, and will keep growing until you do.
             </Alert>
           )}
           {retention.consecutiveFailures > 0 && (
-            <Alert tone="error">
+            <Alert tone="error" id={RETENTION_FAILING_ID}>
               <strong className="font-medium">
                 The last {String(retention.consecutiveFailures)} sweep
                 {retention.consecutiveFailures === 1 ? '' : 's'} failed.
               </strong>{' '}
-              The next run retries automatically; if the count keeps climbing, the API log carries
-              the reason under <code>retention.sweep_failed</code>.
+              The next run retries automatically. The commonest causes are the database refusing the
+              delete and the database being unreachable; both appear in the API log as{' '}
+              <code>retention.sweep_failed</code> with the error class.{' '}
+              {alertingConfigured
+                ? 'An alert was sent to your webhook after the third failure.'
+                : 'Nobody has been notified — no MAIL_ALERT_URL is configured, so this screen is the only signal. Set it to be told next time.'}
             </Alert>
           )}
           {/* Null while disabled — the alert above carries that state, with the action attached.
               Saying it in both places is the duplication ADR-0077 M8 removed. */}
-          {scheduleSentence(retention) !== null && (
-            <p className="text-muted-foreground text-sm">{scheduleSentence(retention)}</p>
-          )}
+          {schedule !== null &&
+            (schedule.overdue ? (
+              // A whole interval past boot with no sweep is not the routine "just started" case:
+              // the boot run is unawaited and finishes in milliseconds on an idle table, so this
+              // almost certainly means it is stuck. Drawing it as muted body text alongside the
+              // healthy sentence is the lit-but-inert shape ADR-0059 M6 records.
+              <Alert tone="error">{schedule.text}</Alert>
+            ) : (
+              <p className="text-muted-foreground text-sm">{schedule.text}</p>
+            ))}
           <DataTable
             caption="Retention by table"
             columns={columns}
@@ -374,8 +399,18 @@ function RetentionPanel(): React.ReactElement {
             }}
             getRowKey={(row) => row.table}
             loadingLabel="Loading retention…"
+            describedById={notes.length > 0 ? notes.join(' ') : undefined}
             empty={<p className="text-muted-foreground text-sm">Nothing is swept on a schedule.</p>}
           />
+          {/* The scope, stated in the product rather than only in DEPLOYMENT.md. "Every table is
+              inside its period" is otherwise an invitation to conclude that everything is bounded,
+              and the most sensitive table in the system is deliberately not. */}
+          <p className="text-muted-foreground text-sm">
+            These are the only tables swept on a schedule. <code>audit_events</code> is{' '}
+            <strong className="font-medium">not</strong> — it refuses <code>DELETE</code> in the
+            database by design (ADR-0085), so it is retained indefinitely and that is a decision
+            rather than an oversight.
+          </p>
         </>
       )}
     </Panel>

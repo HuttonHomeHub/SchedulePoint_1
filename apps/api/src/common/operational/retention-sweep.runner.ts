@@ -27,9 +27,16 @@ const BATCH_SIZE = 1000;
  * The most rows one run will delete from one table before stopping and leaving the rest for the next
  * tick.
  *
- * 50 batches ≈ 0.3 s at the measured rate — enough to drain a day of ordinary growth in one run,
- * bounded so a pathological backlog cannot hold a connection for minutes. Hitting it is not an
- * error: the work is idempotent and time-predicated, so the next tick resumes it.
+ * **A full 50-batch drain measured 1.23 s** against a freshly vacuumed 500,000-row table — enough to
+ * take a day of ordinary growth in one run, bounded so a pathological backlog cannot hold a
+ * connection for minutes. Hitting it is not an error: the work is idempotent and time-predicated, so
+ * the next tick resumes it.
+ *
+ * This line said "≈ 0.3 s", which was one batch's 5.6 ms multiplied by fifty — an extrapolation
+ * presented as a measurement, and wrong by 4× because a sustained loop pays for revisiting index
+ * entries whose heap tuples it has just deleted and not yet vacuumed. The backend-performance review
+ * ran the real loop. Recorded rather than quietly corrected: ADR-0076's rule is that a claim which
+ * decides something names what established it, and "50 × one batch" was not that.
  */
 const RUN_CAP = 50_000;
 
@@ -58,7 +65,12 @@ export interface RetentionSweepResult {
  *    the planner's OUTER lookup degrades to a sequential scan as the batch grows or the table
  *    shrinks — 160 ms over 499,000 rows at batch 10,000, and **10.8× slower on the smaller table** —
  *    so the delete costs O(table) rather than O(batch), which is the one property a batched delete
- *    exists to guarantee. `ctid IN (…)` is always a Tid Scan. It is used **inside one statement and
+ *    exists to guarantee. `ctid IN (…)` **cannot degrade that way** — which is the property that
+ *    matters, and is narrower than what this line first claimed. "Always a Tid Scan" is measurably
+ *    false: on a 5,000-row table the planner seq-scans either formulation, because a small enough
+ *    outer relation is cheaper to scan than to probe. Harmless (a 5,000-row scan is nothing) and
+ *    corrected anyway, because an overstated guarantee is the thing a later reader relies on. It is
+ *    used **inside one statement and
  *    never persisted or carried between statements**: a `ctid` is a physical row location and moves
  *    under `VACUUM`. Each batch re-selects, which is what makes that safe.
  * 2. **No `$transaction`.** A long transaction is precisely the thing being avoided on a table an

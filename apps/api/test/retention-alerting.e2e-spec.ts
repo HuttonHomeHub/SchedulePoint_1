@@ -82,6 +82,16 @@ describe.skipIf(!hasDatabase)('Retention alerting (e2e)', () => {
     // this service — a controller must not be able to start, stop or re-run the sweep from a
     // request — and that refusal is exactly what makes this the only way to reach the real instance.
     sweep = app.get(RetentionSweepService, { strict: false });
+
+    // **Repair before use, not only after.** The test below revokes a role-level privilege, which
+    // is not session state: it takes effect immediately and outlives this process. A hard kill
+    // (OOM, a cancelled CI job) between the revoke and `afterAll` would leave `DELETE` revoked for
+    // every later step in the same job — the pairwise differential and the Playwright suites run
+    // afterwards against the same database and the same role — producing failures with no visible
+    // connection to this file. That is `docs/TECH_DEBT.md` #119's shape exactly, and the security
+    // review raised it. A `GRANT` here means the next run self-heals; the residual is a crash
+    // within one job, which is accepted and stated rather than left to be discovered.
+    await prisma.$executeRawUnsafe('GRANT DELETE ON csp_reports TO CURRENT_USER');
   });
 
   afterAll(async () => {

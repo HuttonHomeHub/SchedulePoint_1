@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StaffConsoleScreen } from './staff';
 
+import type { Retention } from '@/features/staff/api/staff-health';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
 /**
@@ -60,8 +61,16 @@ function otherPanels(path: string): Promise<unknown> {
   });
 }
 
-/** A retention block with nothing wrong with it, for the tests that are about another panel. */
-function healthyRetention(over: Record<string, unknown> = {}): Record<string, unknown> {
+/**
+ * A retention block with nothing wrong with it, for the tests that are about another panel.
+ *
+ * Typed as `Partial<Retention>` rather than `Record<string, unknown>`: untyped, a typo in an
+ * override compiled, did nothing, and left the test either passing for the wrong reason or failing
+ * at an assertion nowhere near the mistake. The sibling copy-model suite already got this right
+ * (`retention-copy.test.ts`'s `row(over: Partial<RetentionTable>)`); the component review caught
+ * that this one had not.
+ */
+function healthyRetention(over: Partial<Retention> = {}): Retention {
   return {
     enabled: true,
     intervalMinutes: 60,
@@ -424,7 +433,10 @@ describe('StaffConsoleScreen', () => {
  * ADR-0064 §7 all record that this is precisely where the defects live — a control that renders,
  * looks right, and states something the response does not say.
  */
-async function renderRetention(over: Record<string, unknown>): Promise<void> {
+async function renderRetention(
+  over: Partial<Retention>,
+  options: { alertingConfigured?: boolean } = {},
+): Promise<void> {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path === '/staff/me') {
       return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test', dualHatted: false });
@@ -435,7 +447,7 @@ async function renderRetention(over: Record<string, unknown>): Promise<void> {
       failuresLastHour: 0,
       lastFailureAt: null,
       transportConfigured: true,
-      alertingConfigured: true,
+      alertingConfigured: options.alertingConfigured ?? true,
       heartbeatConfigured: true,
       recentFailures: [],
       retention: healthyRetention(over),
@@ -524,6 +536,71 @@ describe('the Retention section', () => {
     await renderRetention({ consecutiveFailures: 3 });
 
     expect(screen.getByText(/The last 3 sweeps failed/)).toBeInTheDocument();
+    expect(screen.getByText(/retention\.sweep_failed/)).toBeInTheDocument();
+  });
+
+  it('says whether anyone OUTSIDE this screen was told', async () => {
+    // The deployed host has no MAIL_ALERT_URL, so the commonest real reading of this alert is
+    // "somebody has been paged" and the commonest truth is "you are the only one who knows". The
+    // Mail panel above already discloses this for its own failures; the UX review found that the
+    // panel most likely to be misread did not.
+    await renderRetention({ consecutiveFailures: 3 }, { alertingConfigured: false });
+
+    expect(screen.getByText(/Nobody has been notified/)).toBeInTheDocument();
+  });
+
+  it('says an alert WAS sent when a webhook is configured', async () => {
+    await renderRetention({ consecutiveFailures: 3 }, { alertingConfigured: true });
+
+    expect(screen.getByText(/An alert was sent to your webhook/)).toBeInTheDocument();
+  });
+
+  it('never announces "every table is inside its period" while the sweep is failing', async () => {
+    // The accessibility review's finding, asserted through the DOM as well as in the copy unit
+    // test: the polite region is the one channel that states the settled result, and it said the
+    // opposite of the visible alert two elements away.
+    await renderRetention({ consecutiveFailures: 3 });
+
+    // Asserted on the POLITE REGION specifically, not on the document: the visible alert says the
+    // same words, and matching either would let the sr-only line go back to claiming health while
+    // the test stayed green — which is exactly the shape of the defect.
+    await waitFor(() => {
+      expect(screen.getByText('Retention: the last 3 sweeps failed.')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Retention: every table is inside its period.')).toBeNull();
+  });
+
+  it('ties the disabled and failing caveats to the table they qualify', async () => {
+    // `DataTable` is a focusable `role="region"`, so a reader navigating by landmark lands INSIDE
+    // it and skips whatever sits above — which here is the sentence saying the ages below will keep
+    // growing. `describedById` is the established fix; this pins that it is actually passed.
+    await renderRetention({ enabled: false, consecutiveFailures: 3 });
+
+    const region = screen.getByRole('region', { name: 'Retention by table' });
+    const described = region.getAttribute('aria-describedby') ?? '';
+    expect(described).toContain('retention-disabled-note');
+    expect(described).toContain('retention-failing-note');
+  });
+
+  it('escalates a process that has gone a whole interval without sweeping', async () => {
+    await renderRetention({
+      lastRunAt: null,
+      processStartedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    // `role="alert"` is `Alert tone="error"`; the routine just-booted case renders a plain
+    // paragraph, so this asserts the escalation rather than merely the words.
+    const alerts = screen.getAllByRole('alert').map((node) => node.textContent ?? '');
+    expect(alerts.some((text) => text.includes('has not swept yet'))).toBe(true);
+  });
+
+  it('states that audit_events is deliberately NOT swept', async () => {
+    // "Every table is inside its period" otherwise invites the reader to conclude everything is
+    // bounded, and the most sensitive table in the system is deliberately not.
+    await renderRetention({});
+
+    expect(screen.getByText(/refuses/)).toBeInTheDocument();
+    expect(screen.getByText('audit_events')).toBeInTheDocument();
   });
 
   it('announces its settled state politely', async () => {

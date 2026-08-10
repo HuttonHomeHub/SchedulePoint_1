@@ -117,10 +117,15 @@ export class StaffController {
 
   @Get('health')
   @ApiOperation({
-    summary: 'Is mail working?',
+    summary: 'Is mail working, and is retention being honoured?',
     description:
       'Mail-failure counts and the most recent failures, plus whether a transport, alerting and a ' +
-      'heartbeat are configured at all. Zero failures with no transport configured is NOT health.',
+      'heartbeat are configured at all. Zero failures with no transport configured is NOT health. ' +
+      'ALSO carries `retention` (ADR-0087): per table, its configured period, the age of its oldest ' +
+      'surviving row and whether that row is overdue — derived from the data rather than from the ' +
+      "sweep's own bookkeeping, so it is true whether or not any sweep has run. Retention is on " +
+      'this route rather than one of its own because a second staff route earns a route-census ' +
+      'entry and writes a second `staff.panel_read` audit row on every page load.',
   })
   @ApiOkResponse({ type: StaffHealthDto })
   async healthPanel(

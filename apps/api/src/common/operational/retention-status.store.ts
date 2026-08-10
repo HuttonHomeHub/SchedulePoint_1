@@ -33,6 +33,16 @@ export class RetentionStatusStore {
   private lastRunAt: Date | null = null;
   private lastTables: RetentionTableStatus[] = [];
   private consecutiveFailures = 0;
+  /**
+   * Set when the last run threw before it could report anything per table.
+   *
+   * **Reported rather than inferred**, because inferring it is exactly the state-collapse this
+   * feature exists to prevent: after a crash `lastTables` is empty, so every table falls back to
+   * `failed: false` / `lastDeleted: null` — byte-identical to "this process has not swept yet",
+   * while `lastRunAt` and `consecutiveFailures` say the opposite. A reader would have to
+   * cross-reference three fields to work out which. Raised by the API review.
+   */
+  private lastRunCrashed = false;
 
   record(results: readonly RetentionSweepResult[], at: Date): void {
     this.lastRunAt = at;
@@ -48,6 +58,7 @@ export class RetentionStatusStore {
     this.consecutiveFailures = this.lastTables.some((table) => table.failed)
       ? this.consecutiveFailures + 1
       : 0;
+    this.lastRunCrashed = false;
   }
 
   /**
@@ -67,6 +78,7 @@ export class RetentionStatusStore {
     this.lastRunAt = at;
     this.lastTables = [];
     this.consecutiveFailures += 1;
+    this.lastRunCrashed = true;
   }
 
   snapshot(): {
@@ -74,12 +86,14 @@ export class RetentionStatusStore {
     lastRunAt: Date | null;
     tables: RetentionTableStatus[];
     consecutiveFailures: number;
+    lastRunCrashed: boolean;
   } {
     return {
       processStartedAt: this.processStartedAt,
       lastRunAt: this.lastRunAt,
       tables: this.lastTables,
       consecutiveFailures: this.consecutiveFailures,
+      lastRunCrashed: this.lastRunCrashed,
     };
   }
 }

@@ -815,14 +815,20 @@ from "the sweep never armed", which is the same inverted-signal problem the hear
 one layer out. A table whose oldest row is older than its period **plus one interval** is marked
 **overdue**, in words, with the number the claim rests on.
 
-Three states are worth recognising, because they look similar and mean different things:
+Four states are worth recognising, because they look similar and mean different things:
 
-| The section says                       | What it means                                                           |
-| -------------------------------------- | ----------------------------------------------------------------------- |
-| "Retention sweeping is disabled"       | `RETENTION_SWEEP_ENABLED=false` took effect. No timer exists.           |
-| "This process has not swept yet"       | The API restarted and has not reached its first tick — or it is failing |
-| "Not swept yet" against a single table | This process has swept, but that table was not reached                  |
+| The section says                                  | What it means                                                                                                                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Retention sweeping is disabled"                  | `RETENTION_SWEEP_ENABLED=false` took effect. No timer exists.                                                                                                            |
+| "This process has not swept yet", in plain text   | The API restarted moments ago and has not produced a result yet. Routine.                                                                                                |
+| "This process has not swept yet", **as an error** | More than one interval has passed with no result. The boot sweep is unawaited and finishes in milliseconds on an idle table, so this almost certainly means it is stuck. |
+| "Not swept yet" against **every** table           | The last run threw before it reached any table. The consecutive-failure count says for how long.                                                                         |
 
+The third row used to read _"'Not swept yet' against a **single** table — this process has swept, but
+that table was not reached"_. **That state does not exist.** `sweepAll` returns one result per policy,
+so a per-table failure renders "Last run failed", and the only path that clears the per-table results
+clears all of them together. The UX review caught it: a claim written from the shape of the model
+rather than from the code, which is the ADR-0076 Class 3 failure this repository keeps a rule for.
 An empty table reads **"no rows"** and never "0 days": a measurement of zero and having nothing to
 measure are different facts, and only one of them is something the response can honestly state.
 

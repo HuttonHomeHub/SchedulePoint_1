@@ -1981,6 +1981,35 @@ The real remedy, if one is wanted, is to stop recording the path at all — whic
 investigative value the column exists for. Open, unowned, and cheap to leave open: the throttle
 bounds a sustained flood and the sweep bounds the residue after one stops.
 
+## 120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
+
+Measured, not suspected. The backend-performance review seeded `csp_reports` to 500,000 rows
+(~207 MB), vacuumed, then drove a full `RUN_CAP`-bounded drain — 50 sequential 1,000-row batches,
+exactly the runner's loop — and watched `pg_stat_user_tables`:
+
+- `n_dead_tup` reached exactly **50,000 (10% of the table) and stayed there.** `autovacuum_count` did
+  not increment, even past `autovacuum_naptime`. With Postgres defaults
+  (`autovacuum_vacuum_scale_factor = 0.2`) the trigger for a table this size is ~100,050 dead tuples,
+  and this schema sets no per-table `reloptions` override — so **one capped run does not cross the
+  threshold**, and a 500k-row backlog takes about ten hourly ticks to clear with dead tuples sitting
+  at 10–20% for much of that window (autovacuum firing roughly every second tick).
+- Within one drain and before autovacuum runs, a batch that re-scans the head of an index it has just
+  emptied costs **37.8 ms / 53,642 buffer hits** against a clean **7–13 ms / ~2,000**. Postgres's
+  opportunistic `kill_prior_tuple` marking largely repairs this inside the same session — later
+  batches fell back to 8–11 ms — so it does not run away.
+
+**This is ordinary Postgres behaviour and not a defect in the design.** It is recorded because the
+ADR and the docblocks assert the sweep is bounded and say nothing about the table staying clean, and
+those are different claims. The place it will actually be met is the **first enablement against a
+real backlog**, which on the deployed host is a month away for `csp_reports` and a year for
+`mail_events` — so there is time, and nothing to do today.
+
+If it ever matters, the remedies in order of cost are: watch `n_dead_tup` rather than assume it
+self-heals; set a per-table `autovacuum_vacuum_scale_factor` on the two swept tables; or raise
+`RUN_CAP` so a drain crosses the default threshold in one run. Do none of them without measuring
+first — the last one trades a bounded connection hold for a faster vacuum, which is the opposite of
+what `RUN_CAP` exists for.
+
 ## 119. The API e2e suite fails intermittently **(DIAGNOSED AND CLOSED 2026-08-10)**
 
 > **It was never intermittent. It was order-dependent, and the order changed whenever a new e2e file

@@ -171,7 +171,13 @@ export class StaffHealthService {
           // are different facts, and the panel has to be able to say which.
           lastDeleted: last?.deleted ?? null,
           cappedOut: last?.cappedOut ?? false,
-          failed: last?.failed ?? false,
+          // `lastRunCrashed` rather than `false` as the fallback. A run that threw reports nothing
+          // per table, so every row would otherwise read `failed: false` / `lastDeleted: null` —
+          // byte-identical to "this process has not swept yet" — while `lastRunAt` and
+          // `consecutiveFailures` said the opposite two fields away. That is exactly the
+          // state-collapse this section exists to prevent, wearing the panel's own clothes. Raised
+          // by the API review.
+          failed: last?.failed ?? status.lastRunCrashed,
         };
       }),
     };

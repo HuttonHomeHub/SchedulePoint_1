@@ -1,5 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+import {
+  RETENTION_TABLES,
+  type RetentionTable,
+} from '../../../common/operational/retention-policy';
+
 /** One failed or abandoned send, as the console shows it. */
 export class MailFailureDto {
   @ApiProperty() id!: string;
@@ -19,8 +24,15 @@ export class MailFailureDto {
 
 /** One table's retention state, as the console shows it (ADR-0087). */
 export class RetentionTableDto {
-  @ApiProperty({ description: 'The table name, exactly as it exists in the database.' })
-  table!: string;
+  @ApiProperty({
+    // The vocabulary is closed and already enumerable at runtime — `RETENTION_TABLES` is a `const`
+    // array for exactly this reason (the `MAIL_EVENT_KINDS` / `AUDIT_ACTIONS` pattern), and the
+    // sibling `MailFailureDto` above already declares its bounded fields this way. A bare `string`
+    // would describe an open set the sweep structurally cannot produce.
+    enum: RETENTION_TABLES,
+    description: 'The table name, exactly as it exists in the database.',
+  })
+  table!: RetentionTable;
 
   @ApiProperty({ description: 'The configured period in days.' })
   retentionDays!: number;
@@ -36,14 +48,15 @@ export class RetentionTableDto {
 
   @ApiProperty({
     nullable: true,
-    description: 'The oldest surviving row s age in whole days, or null when the table is empty.',
+    description:
+      'The age in whole days of the oldest surviving row, or null when the table is empty.',
   })
   oldestAgeDays!: number | null;
 
   @ApiProperty({
     description:
       'Whether the oldest surviving row is older than the period plus one sweep interval. ' +
-      'DERIVED from the data rather than from the sweep s own bookkeeping, so it is true whether ' +
+      'DERIVED from the data rather than from the sweep\u2019s own bookkeeping, so it is true whether ' +
       'or not any sweep has ever run.',
   })
   overdue!: boolean;
@@ -61,7 +74,12 @@ export class RetentionTableDto {
   })
   cappedOut!: boolean;
 
-  @ApiProperty({ description: 'Whether the last run failed for this table.' })
+  @ApiProperty({
+    description:
+      'Whether the last run failed for this table — including a run that threw before it reached ' +
+      'any table, which reports no per-table result at all and would otherwise be indistinguishable ' +
+      'from never having swept.',
+  })
   failed!: boolean;
 }
 

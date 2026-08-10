@@ -67,12 +67,6 @@ export class AppConfigService {
     return this.config.get('AUTH_REQUIRE_EMAIL_VERIFICATION', { infer: true });
   }
 
-  /**
-   * Whether the plan edit-lock write-gate is enforced (ADR-0028). Off by default
-   * so the lock mechanism ships inert; the structural write services no-op their
-   * `assertHoldsPen` check until this is enabled (once the front end acquires the
-   * pen across all editing entry points). See env.validation.ts.
-   */
   /** Whether the retention sweep runs at all (ADR-0087 D5). False creates no timer. */
   get retentionSweepEnabled(): boolean {
     return this.config.get('RETENTION_SWEEP_ENABLED', { infer: true });
@@ -93,6 +87,12 @@ export class AppConfigService {
     return this.config.get('RETENTION_SWEEP_INTERVAL_MINUTES', { infer: true });
   }
 
+  /**
+   * Whether the plan edit-lock write-gate is enforced (ADR-0028). Off by default
+   * so the lock mechanism ships inert; the structural write services no-op their
+   * `assertHoldsPen` check until this is enabled (once the front end acquires the
+   * pen across all editing entry points). See env.validation.ts.
+   */
   get planEditLockEnforced(): boolean {
     return this.config.get('PLAN_EDIT_LOCK_ENFORCED', { infer: true });
   }

@@ -6,6 +6,7 @@ import {
   oldestSentence,
   overdueSentence,
   scheduleSentence,
+  statusSentence,
   tableLabel,
 } from './retention-copy';
 
@@ -80,7 +81,7 @@ describe('scheduleSentence', () => {
     // "Has not swept" means something different two minutes after a deploy than three days after
     // one, and the store is in memory — so the two facts have to travel together or neither is
     // interpretable.
-    const sentence = scheduleSentence(
+    const schedule = scheduleSentence(
       {
         enabled: true,
         intervalMinutes: 60,
@@ -90,12 +91,45 @@ describe('scheduleSentence', () => {
       NOW,
     );
 
-    expect(sentence).toContain('has not swept yet');
-    expect(sentence).toContain('3 days ago');
+    expect(schedule?.text).toContain('has not swept yet');
+    expect(schedule?.text).toContain('3 days ago');
+  });
+
+  it('does NOT escalate a process that has only just started', () => {
+    // The boot sweep is unawaited, so a moment between boot and the first result is routine.
+    expect(
+      scheduleSentence(
+        {
+          enabled: true,
+          intervalMinutes: 60,
+          lastRunAt: null,
+          processStartedAt: ago(2 * 60 * 1000),
+        },
+        NOW,
+      )?.overdue,
+    ).toBe(false);
+  });
+
+  it('escalates "has not swept yet" once a whole interval has passed', () => {
+    // The panel's single most alarming state, and the first version drew it in the same muted body
+    // text as the healthy one — a real problem rendered identically to no problem, which is the
+    // lit-but-inert shape ADR-0059 M6 and ADR-0062 M6 both record. The accessibility and UX reviews
+    // found it independently.
+    expect(
+      scheduleSentence(
+        {
+          enabled: true,
+          intervalMinutes: 60,
+          lastRunAt: null,
+          processStartedAt: ago(3 * 24 * 60 * 60 * 1000),
+        },
+        NOW,
+      )?.overdue,
+    ).toBe(true);
   });
 
   it('states when it last swept, and how often', () => {
-    const sentence = scheduleSentence(
+    const schedule = scheduleSentence(
       {
         enabled: true,
         intervalMinutes: 60,
@@ -105,8 +139,69 @@ describe('scheduleSentence', () => {
       NOW,
     );
 
-    expect(sentence).toContain('10 minutes ago');
-    expect(sentence).toContain('60 minutes');
+    expect(schedule?.text).toContain('10 minutes ago');
+    expect(schedule?.text).toContain('60 minutes');
+    expect(schedule?.overdue).toBe(false);
+  });
+});
+
+describe('statusSentence', () => {
+  const table = (over: Partial<RetentionTable> = {}) => row(over);
+
+  it('NEVER says every table is inside its period while the sweep is failing', () => {
+    // **The defect this function exists to fix.** The first version branched
+    // disabled → overdue-count → healthy and never consulted `consecutiveFailures`, so a sweep that
+    // had failed three runs in a row — but whose tables had not yet crossed their thresholds —
+    // announced "every table is inside its period" on the one polite channel that exists to state
+    // the settled result, while the visible alert said the opposite two elements away. Found by the
+    // accessibility review, which also named the cause: nothing tested a failing sweep together
+    // with a zero overdue count.
+    const sentence = statusSentence({
+      enabled: true,
+      consecutiveFailures: 3,
+      tables: [table({ overdue: false })],
+    });
+
+    expect(sentence).not.toContain('inside its period');
+    expect(sentence).toContain('3 sweeps failed');
+  });
+
+  it('says a failing sweep ALSO has tables past their period, when it does', () => {
+    // The compound fact is more urgent than either half, and reading the table rows to discover it
+    // is the work this line exists to save.
+    expect(
+      statusSentence({
+        enabled: true,
+        consecutiveFailures: 2,
+        tables: [table({ overdue: true }), table({ overdue: false })],
+      }),
+    ).toContain('1 already past its period');
+  });
+
+  it('composes disabled with overdue rather than dropping one', () => {
+    expect(
+      statusSentence({
+        enabled: false,
+        consecutiveFailures: 0,
+        tables: [table({ overdue: true }), table({ overdue: true })],
+      }),
+    ).toBe('Retention: sweeping is disabled. 2 already past its period.');
+  });
+
+  it('says the healthy thing only when it is true', () => {
+    expect(statusSentence({ enabled: true, consecutiveFailures: 0, tables: [table()] })).toBe(
+      'Retention: every table is inside its period.',
+    );
+  });
+
+  it('counts overdue tables when nothing has failed', () => {
+    expect(
+      statusSentence({
+        enabled: true,
+        consecutiveFailures: 0,
+        tables: [table({ overdue: true }), table({ overdue: false })],
+      }),
+    ).toBe('Retention: 1 table is overdue.');
   });
 });
 
@@ -132,6 +227,9 @@ describe('overdueSentence', () => {
     // thing this console exists to avoid.
     expect(overdueSentence(row({ overdue: true, oldestAgeDays: 400 }))).toContain('400 days old');
     expect(overdueSentence(row({ overdue: true, oldestAgeDays: 400 }))).toContain('30-day period');
+    // And NOT the word itself: the badge beside it already says "Overdue", and repeating it makes
+    // a screen reader say it twice in a row. Both the accessibility and component reviews raised it.
+    expect(overdueSentence(row({ overdue: true, oldestAgeDays: 400 }))).not.toContain('Overdue');
   });
 
   it('says nothing when the table is inside its period', () => {

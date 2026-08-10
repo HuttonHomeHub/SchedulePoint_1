@@ -35,7 +35,15 @@ import { RetentionSweepService } from './retention-sweep.service';
   // `RetentionSweepService` is NOT exported, for the reason `HeartbeatService` is not: it owns a
   // timer, and handing that to another module would let a controller start, stop or re-run the
   // sweep from a request. The STORE is exported — the staff panel needs what happened, not the
-  // schedule. The runner is exported only so the API e2e suite can drive the delete directly.
-  exports: [OperationalAlertService, RetentionSweepRunner, RetentionStatusStore],
+  // schedule.
+  //
+  // **`RetentionSweepRunner` is not exported either, and briefly was.** It executes the `DELETE`,
+  // so exporting it from a `@Global()` module made the one piece the boundary above exists to
+  // protect injectable from any controller in the application with no wiring at all — the opposite
+  // of the paragraph directly above it. It was exported only to let the API e2e suite drive the
+  // delete, and that suite has since demonstrated the right way to reach a non-exported provider:
+  // `app.get(Token, { strict: false })`, which searches the container and which a controller cannot
+  // do by accident. Raised by the security review.
+  exports: [OperationalAlertService, RetentionStatusStore],
 })
 export class OperationalModule {}

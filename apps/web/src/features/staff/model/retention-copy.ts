@@ -1,4 +1,4 @@
-import type { RetentionTable } from '@/features/staff/api/staff-health';
+import type { Retention, RetentionTable } from '@/features/staff/api/staff-health';
 
 /**
  * The words the Retention section uses (ADR-0087 M3).
@@ -64,20 +64,37 @@ export function agoLabel(iso: string, now: number = Date.now()): string {
  * on the response: the store is in memory and resets on restart, so "has not swept" is a statement
  * about this process and is only interpretable beside when this process began.
  */
+export type ScheduleFacts = Pick<
+  Retention,
+  'enabled' | 'intervalMinutes' | 'lastRunAt' | 'processStartedAt'
+>;
+
+/**
+ * How the schedule sentence should be presented.
+ *
+ * **`overdue` is not a styling hint; it is a distinct fact.** The sweep runs once at boot and
+ * completes in milliseconds on an idle table, so "has not swept yet" two minutes after a deploy is
+ * routine and the same sentence a whole interval later almost certainly means the run is stuck.
+ * Rendering both in the same muted paragraph is the "lit but inert" shape ADR-0059 M6 and ADR-0062
+ * M6 both record: a real problem, drawn identically to the healthy case. The UX review found it here.
+ */
 export function scheduleSentence(
-  retention: {
-    enabled: boolean;
-    intervalMinutes: number;
-    lastRunAt: string | null;
-    processStartedAt: string;
-  },
+  retention: ScheduleFacts,
   now: number = Date.now(),
-): string | null {
+): { text: string; overdue: boolean } | null {
   if (!retention.enabled) return null;
+  const every = `every ${String(retention.intervalMinutes)} minutes`;
+
   if (retention.lastRunAt === null) {
-    return `This process has not swept yet. It started ${agoLabel(retention.processStartedAt, now)} and sweeps every ${String(retention.intervalMinutes)} minutes.`;
+    const startedMs = now - new Date(retention.processStartedAt).getTime();
+    return {
+      text: `This process has not swept yet. It started ${agoLabel(retention.processStartedAt, now)} and sweeps ${every}.`,
+      // A whole interval's grace before this counts as wrong — the boot sweep is unawaited, so a
+      // slow first run on a real backlog is expected and is not a fault.
+      overdue: startedMs > retention.intervalMinutes * 60 * 1000,
+    };
   }
-  return `Last swept ${agoLabel(retention.lastRunAt, now)}, every ${String(retention.intervalMinutes)} minutes.`;
+  return { text: `Last swept ${agoLabel(retention.lastRunAt, now)}, ${every}.`, overdue: false };
 }
 
 /** What a table's age column says. */
@@ -92,21 +109,55 @@ export function oldestSentence(row: Pick<RetentionTable, 'oldestAgeDays'>): stri
 /**
  * Why a table is overdue, in words.
  *
- * **The word "overdue" carries the meaning; the badge only repeats it** (WCAG 1.4.1). And the
- * number that makes it true travels with it — an operator who cannot see what the claim is based on
- * has to go to a shell to check, which is the thing this console exists to avoid.
+ * **The word "overdue" carries the meaning; the badge beside it repeats it** (WCAG 1.4.1) — so this
+ * sentence deliberately does NOT open with it a second time. It carries only the number the claim
+ * rests on, because an operator who cannot see what "overdue" is based on has to go to a shell to
+ * check, which is the thing this console exists to avoid. Saying the word twice in a row was the
+ * first version and both the accessibility and component reviews flagged it: a screen reader speaks
+ * "Overdue. Overdue — the oldest row is…".
  */
-export function overdueSentence(row: RetentionTable): string | null {
+export function overdueSentence(
+  row: Pick<RetentionTable, 'overdue' | 'oldestAgeDays' | 'retentionDays'>,
+): string | null {
   if (!row.overdue || row.oldestAgeDays === null) return null;
-  return `Overdue — the oldest row is ${String(row.oldestAgeDays)} days old against a ${String(row.retentionDays)}-day period.`;
+  return `The oldest row is ${String(row.oldestAgeDays)} days old against a ${String(row.retentionDays)}-day period.`;
 }
 
 /** What this process last did to a table, or the honest absence of it. */
-export function lastRunSentence(row: RetentionTable): string {
+export function lastRunSentence(
+  row: Pick<RetentionTable, 'failed' | 'lastDeleted' | 'cappedOut'>,
+): string {
   if (row.failed) return 'Last run failed';
   // Null is "has not swept"; zero is "swept and found nothing". Collapsing them would make a dead
   // sweep indistinguishable from an idle one, which is the single failure this milestone prevents.
   if (row.lastDeleted === null) return 'Not swept yet';
   if (row.cappedOut) return `${String(row.lastDeleted)} deleted (hit the per-run cap)`;
   return `${String(row.lastDeleted)} deleted`;
+}
+
+/**
+ * The one sentence a screen reader hears when the panel settles (WCAG 4.1.3).
+ *
+ * **Pure and unit-tested, because the first version got the most important case wrong.** It branched
+ * disabled → overdue-count → healthy and never consulted `consecutiveFailures`, so a sweep that had
+ * failed three runs in a row — but whose tables had not yet crossed their thresholds — announced
+ * "every table is inside its period" on the one channel that exists to state the settled result.
+ * The visible `Alert` said the opposite two elements away. The accessibility review found it, and
+ * noted the cause: nothing tested a failing sweep together with a zero overdue count.
+ *
+ * The order is by urgency, not by field order. A failing sweep outranks an overdue table because it
+ * is the reason the table will stay overdue; disabled outranks both because it explains them.
+ */
+export function statusSentence(
+  retention: Pick<Retention, 'enabled' | 'consecutiveFailures' | 'tables'>,
+): string {
+  const overdue = retention.tables.filter((table) => table.overdue).length;
+  const alsoOverdue = overdue === 0 ? '' : ` ${String(overdue)} already past its period.`;
+
+  if (!retention.enabled) return `Retention: sweeping is disabled.${alsoOverdue}`;
+  if (retention.consecutiveFailures > 0) {
+    return `Retention: the last ${String(retention.consecutiveFailures)} sweep${retention.consecutiveFailures === 1 ? '' : 's'} failed.${alsoOverdue}`;
+  }
+  if (overdue === 0) return 'Retention: every table is inside its period.';
+  return `Retention: ${String(overdue)} table${overdue === 1 ? ' is' : 's are'} overdue.`;
 }

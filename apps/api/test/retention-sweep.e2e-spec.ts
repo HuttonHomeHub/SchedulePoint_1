@@ -46,7 +46,11 @@ describe.skipIf(!hasDatabase)('Retention sweep (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(PrismaServiceToken);
-    runner = app.get(RetentionSweepRunner);
+    // `strict: false` searches the whole container. `OperationalModule` deliberately does not export
+    // the runner — it is the piece that executes the `DELETE`, and exporting it from a `@Global()`
+    // module made it injectable from any controller in the application, which is the opposite of
+    // the boundary that module's docblock spends a paragraph describing.
+    runner = app.get(RetentionSweepRunner, { strict: false });
   });
 
   afterAll(async () => {
