@@ -1193,12 +1193,18 @@ oversight — which is why it is documented here at length rather than listed.
   address at RFC 5321's 320 octets — a **length** check and not a format one, because a send
   can fail precisely _because_ the address was malformed, and rejecting that row would lose
   the record that explains the failure.
-- **Retention is 12 months, and nothing enforces it.** The number is deliberately the same as
-  ADR-0085 D3's `auth.*` `subject_label` period rather than a second one. It is a **ceiling,
-  not a promise**: this application has no scheduler (no `@nestjs/schedule`, no BullMQ, no
-  Redis), so no sweep runs and the true retention today is forever. When one is built it is a
-  single ranged `DELETE … WHERE occurred_at < now() - interval '12 months'`, served by the
-  leading column of the one index.
+- **Retention is 12 months, and it is enforced** (ADR-0087). The number is deliberately the
+  same as ADR-0085 D3's `auth.*` `subject_label` period rather than a second one. Until
+  2026-08-10 it was a **ceiling, not a promise** — this application had no scheduler at all —
+  and the sweep closes that: `RetentionSweepRunner` deletes in batches of 1,000 on
+  `occurred_at`, hourly, capped at 50,000 rows a run. **The migration's own comment still says
+  nothing enforces it, and cannot be corrected** — a landed migration is checksummed — so this
+  paragraph is the current statement and that one is history.
+  The delete is `ctid IN (SELECT ctid … ORDER BY occurred_at, id LIMIT 1000)`, **not** the
+  single ranged `DELETE` this paragraph used to predict and **not** `id IN (…)`: ADR-0087 D6
+  measured the `id` form's outer lookup degrading to a sequential scan as the batch grows or
+  the table shrinks — 160 ms over 499k rows at batch 10,000, and 10.8× slower on the smaller
+  table — which loses the one property a batched delete exists to guarantee.
 - **One index, `(occurred_at, id)`** — full, not partial, and therefore declared in
   `schema.prisma` rather than as raw SQL: every row is in the read set (no soft delete, no org
   scope, no nullable leading column), so none of the `audit_events` partial-index reasoning
@@ -1240,12 +1246,13 @@ is **updatable** (ADR-0085 D1's tombstone can scrub `recipient` in place), **del
 **expirable**. Do not add a trigger to it.
 
 - **Retention: 12 months**, deliberately ADR-0085 D3's number and not a second one — two periods
-  for one class of data is a question nobody can answer later. **Nothing enforces it yet.** There
-  is no scheduler in this application (no `@nestjs/schedule`, no BullMQ, no Redis), so the period
-  is a **ceiling, not a promise**, and the true retention today is _forever_ — D3's own caveat,
-  inherited with the number. When a sweep lands it is one ranged `DELETE … WHERE occurred_at <
-now() - interval '12 months'` on the leading index column. The spec's §4.10 defaults table still
-  says 90 days; that row predates CQ-1 and is stale.
+  for one class of data is a question nobody can answer later. **Enforced since 2026-08-10**
+  (ADR-0087): an in-process hourly sweep, batched on the leading index column, configurable by
+  `RETENTION_MAIL_EVENTS_DAYS` and disableable with `RETENTION_SWEEP_ENABLED=false`. The period
+  was a ceiling and is now a promise — the row, and with it the `recipient` address ADR-0085 D1
+  kept erasable, is deleted. What is **still** unenforced is D3's own `auth.*` `subject_label`
+  period on `audit_events`, which the sweep may never touch (`docs/TECH_DEBT.md` #118). The
+  spec's §4.10 defaults table still says 90 days; that row predates CQ-1 and is stale.
 - **`kind` and `outcome` are TEXT + a value-list CHECK, not Postgres enums** — the
   `audit_events.action` precedent, for its stated reason: an enum label costs **two** migrations
   (Postgres forbids adding and using one in a single transaction), a CHECK costs one. This
@@ -1482,12 +1489,14 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   still happening must not expire out from under the decision it informs. Deliberately a
   different number from `mail_events`' twelve months: that table holds a customer's address and
   inherits ADR-0085 D3's period, this one holds URLs, and a CSP finding is only interesting
-  while the policy it describes is current. **Nothing enforces it.** There is no scheduler in
-  this application (verified against `apps/api/package.json`: no `@nestjs/schedule`, no BullMQ,
-  no Redis), so the period is a **ceiling, not a promise** and the true retention today is
-  _forever_ — the `mail_events` phrasing, inherited with the caveat. When a sweep lands it is one
-  ranged `DELETE … WHERE last_seen_at < now() - interval '30 days'` on the leading index column.
-  **Read "30 days" as a claim about ROWS, not about data age.** Because `last_seen_at` moves on
+  while the policy it describes is current. **Enforced since 2026-08-10** (ADR-0087): an
+  in-process hourly sweep, batched on the leading index column, configurable by
+  `RETENTION_CSP_REPORTS_DAYS`. That matters more here than for its sibling, because this table
+  is written by an **unauthenticated** endpoint that strips the query string but not the path,
+  so unique rows are mintable at roughly 1.73M/day per IP. The sweep bounds the residue after a
+  flood stops; the per-IP throttle bounds a sustained one.
+  **The caveat below survives the sweep unchanged, and is the reason the predicate is
+  `last_seen_at`. Read "30 days" as a claim about ROWS, not about data age.** Because `last_seen_at` moves on
   every repeat, a violation that keeps happening never expires, and its `document_uri` — which may
   carry a plan or organisation id in its path — is retained for as long as it lasts, with a
   `first_seen_at` arbitrarily older than the period. That is the intended behaviour and not an

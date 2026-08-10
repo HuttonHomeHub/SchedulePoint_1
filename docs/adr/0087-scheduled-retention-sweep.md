@@ -152,6 +152,62 @@ runs `Index Only Scan using csp_reports_last_seen_at_id_idx` and
 `Index Scan using mail_events_occurred_at_id_idx`. The conditional database-architect task the plan
 opened (M0-T3) therefore **does not open**. Had it, it would have run unconditionally (§19.3).
 
+### D8 — The console's leading answer is derived from the data, not reported by the sweep
+
+`RetentionStatusStore` is in memory and resets on restart, so a last-run timestamp **cannot**
+separate "the sweep is working" from "the sweep never armed" — the inverted-signal problem
+`HeartbeatService` was built to solve one layer out, met again inside this feature. A panel that led
+with `lastRunAt` would read healthiest exactly when the sweep had failed to start.
+
+So `overdue` is computed from the age of each table's **oldest surviving row** against its period
+plus one sweep interval. That is a fact about the database, true on a replica that has this instant
+booted and true if this code has never run at all. The store's numbers are carried too, but as
+detail behind that answer.
+
+Two consequences worth stating. The grace is measured in **exact milliseconds**, not against the
+floored day count the panel displays: at the default hourly interval the allowance is 1/24th of a
+day, so comparing whole days would round it entirely away and report every table as overdue for an
+hour out of every day, until the word stopped meaning anything. And there are **no counts** —
+"how many rows are expired" is a full scan of a table this feature exists because it grows without
+bound, run on every page load, answering a question no operator has. One index-forward `LIMIT 1` per
+table answers the one they do.
+
+It ships on the existing `GET /staff/health` response rather than a route of its own. A second route
+earns a route-census entry and writes a second `staff.panel_read` audit row every time the page
+loads; the cost is a mail-named DTO carrying retention, which the DTO's own docblock states rather
+than leaving to be discovered.
+
+### D9 — Three consecutive failures earn one alert, and what that cannot see is stated
+
+A sweep that keeps failing POSTs once to the existing `MAIL_ALERT_URL`, after three consecutive
+failed runs, latched until a clean run. One failure is not news: the next tick **is** the retry, and
+a channel that fires on every blip gets muted — a muted channel being worth less than no channel,
+because it is believed to be working (ADR-0075). A clean run closes the incident, so a sweep that
+recovers and breaks again hours later alerts again; that is a new incident to whoever reads it.
+
+The body carries the failure count and the table names and **nothing from a row**. This POST leaves
+the system for a third-party chat service, which is data egress; `csp_reports` holds
+attacker-controlled strings and `mail_events` holds a customer's address.
+
+**What it cannot detect is a sweep that never armed** — no runs means no failures means no alert,
+forever. That is D8's job, and the two are documented as primary and secondary detectors rather than
+as one mechanism that happens to have a gap.
+
+`OperationalAlertService.post()` was extracted verbatim to `postAlert` in `alert-dispatch.ts`. The
+implementation plan named an injected `OperationalAlertDispatcher`; it shipped as a **function**, and
+the departure is the point rather than a shortcut: a service adds a fourth constructor parameter to
+`OperationalAlertService` and forces both construction sites in
+`operational-alert.service.spec.ts` to change — and that spec is the before/after oracle for this
+move (the ADR-0078 barrel-preserving-move argument). As a function it passes with **zero** edits.
+Adding a `recordRetentionFailure` to a service whose whole vocabulary is mail was rejected outright:
+the name would become a lie, which is how the next producer ends up somewhere worse.
+
+**The threshold test found a real defect rather than confirming one.** A sweep that _threw_ recorded
+itself with `record([], at)`, which finds no failed table in an empty list and therefore **reset**
+`consecutiveFailures` to zero — so a sweep crashing on every tick was filed as a clean run, silencing
+this threshold and painting the staff console healthy during the one failure mode nobody had
+anticipated. `recordFailedRun` now says it explicitly, and both the store and the service pin it.
+
 ## Options rejected
 
 - **BullMQ + Redis (ADR-0009 as written).** A queue, a broker, a new runtime dependency and an

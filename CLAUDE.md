@@ -1879,6 +1879,30 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   delete exists to guarantee. `ctid` is always a Tid Scan; batch 1,000 (5.6 / 3.8 ms), interval
   1 hour (the idle batch measures **0.03 ms**), cap 50,000. No schema change, confirmed rather than
   assumed, so the conditional database-architect task did not open.
+  **M3 is the first user-facing milestone and names its entry point** (ADR-0081): a **Retention**
+  section on `/staff`, on the existing `GET /staff/health` response rather than a route of its own —
+  a second route earns a census entry and writes a second `staff.panel_read` row on every page load,
+  buying a tidier DTO name with a noisier audit log. Its leading answer is **derived from the data,
+  not reported by the sweep**: `RetentionStatusStore` is in memory and resets on restart, so a
+  last-run timestamp cannot separate "the sweep is working" from "the sweep never armed" — the same
+  inverted signal `HeartbeatService` exists to solve one layer out — while the age of the oldest
+  surviving row is true of the database on a replica that has this instant booted. The section keeps
+  three pairs apart that a careless sentence collapses (empty table vs. oldest-row-is-new,
+  has-not-swept vs. swept-and-deleted-nothing, disabled vs. idle), and **disabled shows no last-run
+  time at all**, because a timestamp beside "disabled" reads as health. There is **no `VITE_` flag**:
+  the staff console has none, and the real rollback is server-side, which a build-time constant
+  structurally cannot gate (the ADR-0060 M0 / ADR-0074 rule). **M4** alerts after **three**
+  consecutive failed runs — one is not news, because the next tick is the retry, and a channel that
+  cries wolf gets muted (ADR-0075) — through a `postAlert` extracted **verbatim** from
+  `OperationalAlertService` as a **function**, not the injected service the plan named, so that
+  service's constructor never changed and `operational-alert.service.spec.ts` stayed the
+  before/after oracle with every assertion intact (the ADR-0078 barrel-preserving argument). Its
+  docblock states what it **cannot** detect — a sweep that never armed — and points at the panel's
+  derived `overdue` as the primary detector. The threshold test found a real defect rather than
+  confirming one: a sweep that **threw** called `record([], at)`, which finds no failed table and
+  therefore **reset** the counter, so a sweep crashing on every tick was filed as a clean run —
+  silencing the alert and painting the console healthy during the one failure mode nobody
+  anticipated.
 
 - **ADR-0085** _(Accepted; decision only — nothing is built)_ — Erasure collides with the audit log,
   and that collision is the decision. `docs/BACKLOG.md` carried "Privacy operations" as an `M`
@@ -1929,13 +1953,16 @@ A lighter-weight running log of smaller decisions is in
   `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
   is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
   opposite of the mistake the bullet below this one records.
-- **Two new tables document a retention period and nothing enforces either** — 30 days for
-  `csp_reports`, 12 months for `mail_events`. There is no scheduler in this application, so both
-  are **ceilings, not promises**, and today's true retention is forever. The M6 security review
-  sharpened why that matters sooner than its place in the roadmap suggests: `csp_reports` is written
-  by an **unauthenticated** endpoint that strips only the query string, so unique rows are trivially
-  mintable, and `mail_events.recipient` holds a real customer address — the thing ADR-0085 spent a
-  decision keeping erasable (`docs/TECH_DEBT.md` #118).
+- **Retention is enforced on two tables and not on the third, and the difference is a decision.**
+  `csp_reports` (30 days) and `mail_events` (12 months) are swept hourly since 2026-08-10
+  (ADR-0087) — this application's **first** scheduled work of any kind. `audit_events` is **not**,
+  and may never be: it refuses `UPDATE` and `DELETE` in the database by `ENABLE ALWAYS` triggers, so
+  ADR-0085 D3's own 12-month `auth.*` period stays unenforced rather than being bought with the
+  structural guarantee ADR-0085 D1 refused to trade (`docs/TECH_DEBT.md` **#118a**). Two more things
+  do not follow from "retention is enforced": the CSP period bounds **staleness, not data age**,
+  because a violation still being reported never ages out (**#118b**), and nothing is deleted on the
+  deployed host for a while yet — both tables were created on 2026-08-09, so the sweep correctly
+  reports `deleted: 0` until the periods elapse.
 - **Four accepted ADRs have no implementation** — background jobs + Redis
   (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
   tracing (0013, of which only Pino is wired). Nothing in the running system
