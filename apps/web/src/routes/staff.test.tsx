@@ -60,6 +60,40 @@ function otherPanels(path: string): Promise<unknown> {
   });
 }
 
+/** A retention block with nothing wrong with it, for the tests that are about another panel. */
+function healthyRetention(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    enabled: true,
+    intervalMinutes: 60,
+    processStartedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    lastRunAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    consecutiveFailures: 0,
+    tables: [
+      {
+        table: 'csp_reports',
+        retentionDays: 30,
+        oldestAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        oldestAgeDays: 2,
+        overdue: false,
+        lastDeleted: 0,
+        cappedOut: false,
+        failed: false,
+      },
+      {
+        table: 'mail_events',
+        retentionDays: 365,
+        oldestAt: null,
+        oldestAgeDays: null,
+        overdue: false,
+        lastDeleted: 0,
+        cappedOut: false,
+        failed: false,
+      },
+    ],
+    ...over,
+  };
+}
+
 /** Render the console with staff identity resolved and the given panel payloads. */
 function renderStaffWith(payloads: Record<string, unknown>): void {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
@@ -76,6 +110,7 @@ function renderStaffWith(payloads: Record<string, unknown>): void {
       alertingConfigured: true,
       heartbeatConfigured: true,
       recentFailures: [],
+      retention: healthyRetention(),
     });
   });
   renderScreen();
@@ -161,6 +196,7 @@ describe('StaffConsoleScreen', () => {
             errorClass: 'ECONNREFUSED',
           },
         ],
+        retention: healthyRetention(),
       });
     });
 
@@ -281,6 +317,7 @@ describe('StaffConsoleScreen', () => {
         alertingConfigured: false,
         heartbeatConfigured: false,
         recentFailures: [],
+        retention: healthyRetention(),
       });
     });
 
@@ -316,6 +353,7 @@ describe('StaffConsoleScreen', () => {
           alertingConfigured: true,
           heartbeatConfigured: true,
           recentFailures: [],
+          retention: healthyRetention(),
         });
       }
       return otherPanels(path);
@@ -365,6 +403,7 @@ describe('StaffConsoleScreen', () => {
           alertingConfigured: true,
           heartbeatConfigured: true,
           recentFailures: [],
+          retention: healthyRetention(),
         });
       }
       return otherPanels(path);
@@ -375,5 +414,145 @@ describe('StaffConsoleScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: /show older/i }));
 
     expect(await screen.findByText('later@example.test')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The Retention section (ADR-0087 M3).
+ *
+ * Every state in spec §4.9 is rendered and asserted, because ADR-0059 M6, ADR-0062 M6 and
+ * ADR-0064 §7 all record that this is precisely where the defects live — a control that renders,
+ * looks right, and states something the response does not say.
+ */
+async function renderRetention(over: Record<string, unknown>): Promise<void> {
+  vi.mocked(apiFetch).mockImplementation((path: string) => {
+    if (path === '/staff/me') {
+      return Promise.resolve({ userId: 'u1', email: 'ops@schedulepoint.test', dualHatted: false });
+    }
+    if (path !== '/staff/health') return otherPanels(path);
+    return Promise.resolve({
+      failuresLast24h: 0,
+      failuresLastHour: 0,
+      lastFailureAt: null,
+      transportConfigured: true,
+      alertingConfigured: true,
+      heartbeatConfigured: true,
+      recentFailures: [],
+      retention: healthyRetention(over),
+    });
+  });
+  renderScreen();
+  // Waits for the panel's CONTENT, not its heading. The heading renders while the query is still
+  // pending, so awaiting it and then reading synchronously asserts against the spinner — which is
+  // how the first version of these six tests failed with the panel working perfectly.
+  await screen.findByText('Retention by table');
+}
+
+describe('the Retention section', () => {
+  it('names each table and its configured period', async () => {
+    await renderRetention({});
+
+    expect(screen.getByText('Policy violation reports')).toBeInTheDocument();
+    expect(screen.getByText('Mail events')).toBeInTheDocument();
+    expect(screen.getByText('30 days')).toBeInTheDocument();
+    expect(screen.getByText('365 days')).toBeInTheDocument();
+  });
+
+  it('says "no rows" for an empty table, never "0 days"', async () => {
+    // The fixture's `mail_events` is empty. Printing a measurement for a table with nothing to
+    // measure states a fact the response does not carry.
+    await renderRetention({});
+
+    expect(screen.getByText('no rows')).toBeInTheDocument();
+  });
+
+  it('marks an overdue table in WORDS, with the number the claim rests on', async () => {
+    // WCAG 1.4.1: the badge repeats the meaning, it never carries it alone.
+    await renderRetention({
+      tables: [
+        {
+          table: 'csp_reports',
+          retentionDays: 30,
+          oldestAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(),
+          oldestAgeDays: 400,
+          overdue: true,
+          lastDeleted: null,
+          cappedOut: false,
+          failed: false,
+        },
+      ],
+    });
+
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByText(/400 days old against a 30-day period/)).toBeInTheDocument();
+  });
+
+  it('shows NO last-run time when the sweep is disabled', async () => {
+    // A timestamp beside "disabled" reads as health. The two facts are mutually exclusive in the
+    // copy, not merely ordered — asserted through the DOM as well as in the copy unit test,
+    // because the panel could reintroduce it beside the sentence rather than inside it.
+    await renderRetention({ enabled: false, lastRunAt: new Date().toISOString() });
+
+    expect(screen.getByText(/Retention sweeping is disabled/)).toBeInTheDocument();
+    expect(screen.queryByText(/Last swept/)).not.toBeInTheDocument();
+  });
+
+  it('tells a process that has not swept from one that swept and deleted nothing', async () => {
+    await renderRetention({
+      lastRunAt: null,
+      processStartedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      tables: [
+        {
+          table: 'csp_reports',
+          retentionDays: 30,
+          oldestAt: null,
+          oldestAgeDays: null,
+          overdue: false,
+          lastDeleted: null,
+          cappedOut: false,
+          failed: false,
+        },
+      ],
+    });
+
+    expect(screen.getByText(/has not swept yet/)).toBeInTheDocument();
+    expect(screen.getByText(/started 3 days ago/)).toBeInTheDocument();
+    expect(screen.getByText('Not swept yet')).toBeInTheDocument();
+  });
+
+  it('surfaces a run of failures, and says where the reason is', async () => {
+    await renderRetention({ consecutiveFailures: 3 });
+
+    expect(screen.getByText(/The last 3 sweeps failed/)).toBeInTheDocument();
+  });
+
+  it('announces its settled state politely', async () => {
+    // The ADR-0086 M6 accessibility fix, applied to the new panel rather than left to the next
+    // review to find: each panel's `Spinner` unmounts silently, so without this a screen-reader
+    // user has to re-explore the page to learn that a panel has finished.
+    await renderRetention({});
+
+    await waitFor(() => {
+      expect(screen.getByText('Retention: every table is inside its period.')).toBeInTheDocument();
+    });
+  });
+
+  it('offers a retry rather than a dead end when the read fails', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === '/staff/me') {
+        return Promise.resolve({
+          userId: 'u1',
+          email: 'ops@schedulepoint.test',
+          dualHatted: false,
+        });
+      }
+      if (path === '/staff/health') return Promise.reject(new Error('boom'));
+      return otherPanels(path);
+    });
+
+    renderScreen();
+
+    await screen.findByRole('heading', { name: 'Retention' });
+    expect(await screen.findByText('Could not read retention state.')).toBeInTheDocument();
   });
 });

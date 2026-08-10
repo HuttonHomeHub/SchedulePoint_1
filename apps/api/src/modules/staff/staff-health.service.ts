@@ -1,12 +1,19 @@
 import { Injectable } from '@nestjs/common';
 
 import { smtpEndpoint } from '../../common/mail/mail-bootstrap.service';
+import {
+  ageInWholeDays,
+  isRetentionOverdue,
+  RETENTION_POLICIES,
+  type RetentionTable,
+} from '../../common/operational/retention-policy';
+import { RetentionStatusStore } from '../../common/operational/retention-status.store';
 import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VersionService } from '../../version/version.service';
 
 import type { CspReportRowDto } from './dto/staff-csp-reports.dto';
-import type { StaffHealthDto } from './dto/staff-health.dto';
+import type { RetentionDto, StaffHealthDto } from './dto/staff-health.dto';
 import type {
   StaffAccountsDto,
   StaffActivityRowDto,
@@ -50,6 +57,7 @@ export class StaffHealthService {
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
     private readonly version: VersionService,
+    private readonly retentionStatus: RetentionStatusStore,
   ) {}
 
   async read(): Promise<StaffHealthDto> {
@@ -57,7 +65,7 @@ export class StaffHealthService {
     const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
     const hourAgo = new Date(now - 60 * 60 * 1000);
 
-    const [failuresLast24h, failuresLastHour, latest, recent] = await Promise.all([
+    const [failuresLast24h, failuresLastHour, latest, recent, retention] = await Promise.all([
       this.prisma.mailEvent.count({ where: { occurredAt: { gte: dayAgo } } }),
       this.prisma.mailEvent.count({ where: { occurredAt: { gte: hourAgo } } }),
       this.prisma.mailEvent.findFirst({
@@ -68,6 +76,7 @@ export class StaffHealthService {
         orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
         take: RECENT_LIMIT,
       }),
+      this.retention(new Date(now)),
     ]);
 
     return {
@@ -85,6 +94,86 @@ export class StaffHealthService {
         recipient: row.recipient,
         errorClass: row.errorClass,
       })),
+      retention,
+    };
+  }
+
+  /**
+   * Is retention being honoured? (ADR-0087, M3)
+   *
+   * **No `COUNT(*)`.** The obvious panel — "how many rows are expired" — is a full scan of a table
+   * this feature exists because it grows without bound, run on every page load. The question it
+   * answers is also the wrong one: an operator does not need a backlog size, they need to know
+   * whether anything is surviving longer than it should. That is one index-forward `LIMIT 1` per
+   * table on the column the sweep already orders by.
+   *
+   * **The leading signal is derived rather than reported**, which is the decision worth keeping.
+   * `RetentionStatusStore` is in memory and resets on restart, so its `lastRunAt` cannot separate
+   * "the sweep is working" from "the sweep never armed" — the inverted-signal problem
+   * `HeartbeatService` exists to solve one layer out. `overdue` is computed from the age of the
+   * oldest surviving row and is therefore true of the database, not of this process's bookkeeping.
+   * The store's numbers are carried too, but as detail behind that answer.
+   *
+   * Read on a **separate connection concurrently with the mail counts** by the caller's
+   * `Promise.all`; both are bounded single-row or single-page reads on this staff-only route.
+   */
+  private async retention(now: Date): Promise<RetentionDto> {
+    const status = this.retentionStatus.snapshot();
+    const days: Record<RetentionTable, number> = {
+      csp_reports: this.config.retentionCspReportsDays,
+      mail_events: this.config.retentionMailEventsDays,
+    };
+    const intervalMinutes = this.config.retentionSweepIntervalMinutes;
+
+    const oldest = await Promise.all(
+      RETENTION_POLICIES.map(async (policy) => {
+        // One `findFirst` per policy, dispatched by table because Prisma's delegates are distinct
+        // types — the same reason `RetentionSweepRunner` uses a `switch` rather than interpolating a
+        // table name into SQL. Two tables is not a scaling problem; a dynamic accessor would be.
+        const row =
+          policy.table === 'csp_reports'
+            ? await this.prisma.cspReport.findFirst({
+                orderBy: [{ lastSeenAt: 'asc' }, { id: 'asc' }],
+                select: { lastSeenAt: true },
+              })
+            : await this.prisma.mailEvent.findFirst({
+                orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+                select: { occurredAt: true },
+              });
+
+        const at = row === null ? null : 'lastSeenAt' in row ? row.lastSeenAt : row.occurredAt;
+        return { table: policy.table, at };
+      }),
+    );
+
+    return {
+      enabled: this.config.retentionSweepEnabled,
+      intervalMinutes,
+      processStartedAt: status.processStartedAt.toISOString(),
+      lastRunAt: status.lastRunAt?.toISOString() ?? null,
+      consecutiveFailures: status.consecutiveFailures,
+      tables: oldest.map(({ table, at }) => {
+        const last = status.tables.find((entry) => entry.table === table);
+        return {
+          table,
+          retentionDays: days[table],
+          // Null for an EMPTY table, and the surface must keep that distinct from an age of zero.
+          // "0 days" reads as a measurement of something; there is nothing here to measure.
+          oldestAt: at?.toISOString() ?? null,
+          oldestAgeDays: at === null ? null : ageInWholeDays(at, now),
+          overdue: isRetentionOverdue({
+            oldestAt: at,
+            now,
+            retentionDays: days[table],
+            intervalMinutes,
+          }),
+          // Null rather than 0 when this process has not swept: "deleted nothing" and "has not run"
+          // are different facts, and the panel has to be able to say which.
+          lastDeleted: last?.deleted ?? null,
+          cappedOut: last?.cappedOut ?? false,
+          failed: last?.failed ?? false,
+        };
+      }),
     };
   }
 

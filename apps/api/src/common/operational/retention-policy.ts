@@ -89,3 +89,43 @@ export const RETENTION_POLICIES: readonly RetentionPolicy[] = [
 export function cutoffFor(days: number, now: Date): Date {
   return new Date(now.getTime() - days * MS_PER_DAY);
 }
+
+/**
+ * How old the oldest surviving row is, in **whole** days.
+ *
+ * Floored, because this number is read by a person: "3 days" is a fact, "3.27 days" is a
+ * measurement nobody asked for. It is deliberately NOT what {@link isRetentionOverdue} compares —
+ * see there.
+ */
+export function ageInWholeDays(at: Date, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - at.getTime()) / MS_PER_DAY));
+}
+
+/**
+ * Is a table's oldest surviving row older than it should be?
+ *
+ * **Derived from the data, never from the sweep's own bookkeeping** — which is the whole reason this
+ * exists. `RetentionStatusStore` resets on restart, so a last-run timestamp cannot distinguish "the
+ * sweep is working" from "the sweep never armed": the inverted-signal problem `HeartbeatService` was
+ * built to solve one layer out. This answer is a fact about the database and is true whether or not
+ * any sweep code has ever run — including on a replica that has this instant booted.
+ *
+ * The grace is **one sweep interval**, because a row reaching its period between two ticks is
+ * expected and is not a fault. It is measured in **exact milliseconds** rather than against the
+ * floored day count above: at a one-hour interval the grace is 1/24th of a day, so comparing whole
+ * days would round the whole allowance away and report every table as overdue for an hour a day.
+ */
+export function isRetentionOverdue(params: {
+  oldestAt: Date | null;
+  now: Date;
+  retentionDays: number;
+  intervalMinutes: number;
+}): boolean {
+  const { oldestAt, now, retentionDays, intervalMinutes } = params;
+  // An empty table is never overdue. There is nothing surviving to be too old, and saying otherwise
+  // would light the console's one alarm on the healthiest state a table can be in.
+  if (oldestAt === null) return false;
+
+  const allowanceMs = retentionDays * MS_PER_DAY + intervalMinutes * 60 * 1000;
+  return now.getTime() - oldestAt.getTime() > allowanceMs;
+}

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { cutoffFor, RETENTION_POLICIES } from './retention-policy';
+import {
+  ageInWholeDays,
+  cutoffFor,
+  isRetentionOverdue,
+  RETENTION_POLICIES,
+} from './retention-policy';
 
 describe('retention policy', () => {
   it('keeps a row exactly at the cutoff, because the predicate is `<`', () => {
@@ -37,5 +42,64 @@ describe('retention policy', () => {
     for (const policy of RETENTION_POLICIES) {
       expect(policy.days, `${policy.table} must retain something`).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('the console s derived answer (ADR-0087 M3)', () => {
+  const now = new Date('2026-08-10T12:00:00.000Z');
+  const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+  it('reports an age in whole days, because a person reads it', () => {
+    expect(ageInWholeDays(daysAgo(3.9), now)).toBe(3);
+  });
+
+  it('never reports a negative age for a row written in the future', () => {
+    // Clock skew between the API and Postgres is real, and "-1 days old" on an operations panel
+    // reads as a broken screen rather than as a clock difference of no consequence.
+    expect(ageInWholeDays(new Date(now.getTime() + 60_000), now)).toBe(0);
+  });
+
+  it('is NOT overdue for an empty table', () => {
+    // The healthiest state a table can be in must not light the panel s one alarm.
+    expect(
+      isRetentionOverdue({ oldestAt: null, now, retentionDays: 30, intervalMinutes: 60 }),
+    ).toBe(false);
+  });
+
+  it('is not overdue inside the period', () => {
+    expect(
+      isRetentionOverdue({ oldestAt: daysAgo(29), now, retentionDays: 30, intervalMinutes: 60 }),
+    ).toBe(false);
+  });
+
+  it('grants exactly one sweep interval of grace past the period', () => {
+    // A row reaching its period between two ticks is expected and is not a fault.
+    const justInside = new Date(now.getTime() - (30 * 24 * 60 + 59) * 60 * 1000);
+    const justOutside = new Date(now.getTime() - (30 * 24 * 60 + 61) * 60 * 1000);
+
+    expect(
+      isRetentionOverdue({ oldestAt: justInside, now, retentionDays: 30, intervalMinutes: 60 }),
+    ).toBe(false);
+    expect(
+      isRetentionOverdue({ oldestAt: justOutside, now, retentionDays: 30, intervalMinutes: 60 }),
+    ).toBe(true);
+  });
+
+  it('measures the grace in real time, not in whole days', () => {
+    // The defect this shape exists to avoid: comparing a FLOORED day count against
+    // `retentionDays + intervalDays` rounds a one-hour grace away entirely, so every table would
+    // read as overdue for an hour out of every day and the word would stop meaning anything.
+    const oneHourPast = new Date(now.getTime() - (30 * 24 + 1) * 60 * 60 * 1000);
+
+    expect(Math.floor(ageInWholeDays(oneHourPast, now))).toBe(30);
+    expect(
+      isRetentionOverdue({ oldestAt: oneHourPast, now, retentionDays: 30, intervalMinutes: 120 }),
+    ).toBe(false);
+  });
+
+  it('is overdue well past the period, whatever the interval', () => {
+    expect(
+      isRetentionOverdue({ oldestAt: daysAgo(400), now, retentionDays: 30, intervalMinutes: 1440 }),
+    ).toBe(true);
   });
 });

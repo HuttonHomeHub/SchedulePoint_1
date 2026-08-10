@@ -210,6 +210,35 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     );
   });
 
+  it('carries the retention state on the health response, through the real envelope', async () => {
+    // ADR-0087 M3. Asserted **here** rather than in a controller unit test because the shape the
+    // web client consumes is the one the `TransformInterceptor` produces, and a unit test on the
+    // service cannot see the envelope at all (`staff.controller.ts` records why).
+    //
+    // It also proves the read is wired to the SAME store the sweep writes: `RetentionStatusStore`
+    // is global, and providing a second copy in `StaffModule` would compile, inject and report a
+    // healthy sweep as one that had never run — forever, with nothing failing anywhere.
+    const agent = await signedInStaff();
+    await prisma.mailEvent.create({
+      data: { kind: 'test', outcome: 'FAILED', recipient: 'retention@example.test' },
+    });
+
+    const response = await agent.get('/api/v1/staff/health').set('Origin', ORIGIN).expect(200);
+    const retention = response.body.data.retention;
+
+    expect(retention.tables.map((t: { table: string }) => t.table)).toEqual([
+      'csp_reports',
+      'mail_events',
+    ]);
+    expect(typeof retention.intervalMinutes).toBe('number');
+    expect(typeof retention.processStartedAt).toBe('string');
+    const mail = retention.tables.find((t: { table: string }) => t.table === 'mail_events');
+    // A row written moments ago: an age of zero days, and NOT the null that means "no rows".
+    expect(mail.oldestAgeDays).toBe(0);
+    expect(mail.retentionDays).toBeGreaterThan(0);
+    expect(mail.overdue).toBe(false);
+  });
+
   it('NEVER puts a configured secret in the installation response', async () => {
     // The assertion this panel's design exists for. `MAIL_SMTP_URL` is
     // `smtps://user:PASSWORD@host:port`, and a response assembled by spreading the config object

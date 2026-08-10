@@ -782,6 +782,27 @@ so the first CSP rows become eligible thirty days later and the first mail event
 sweep runs and reports `deleted: 0` until then, which is the correct behaviour and worth knowing so
 an empty result does not read as a broken sweep.
 
+### Checking it without a shell
+
+The staff console (`/staff`) carries a **Retention** section, and its leading answer is deliberately
+**derived from the data rather than reported by the sweep**: the age of each table's oldest surviving
+row against the configured period. That matters because the sweep's own bookkeeping is held in
+memory and resets on every recreate — so a last-run timestamp cannot tell "the sweep is working"
+from "the sweep never armed", which is the same inverted-signal problem the heartbeat exists to solve
+one layer out. A table whose oldest row is older than its period **plus one interval** is marked
+**overdue**, in words, with the number the claim rests on.
+
+Three states are worth recognising, because they look similar and mean different things:
+
+| The section says                       | What it means                                                           |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| "Retention sweeping is disabled"       | `RETENTION_SWEEP_ENABLED=false` took effect. No timer exists.           |
+| "This process has not swept yet"       | The API restarted and has not reached its first tick — or it is failing |
+| "Not swept yet" against a single table | This process has swept, but that table was not reached                  |
+
+An empty table reads **"no rows"** and never "0 days": a measurement of zero and having nothing to
+measure are different facts, and only one of them is something the response can honestly state.
+
 **Two things it deliberately does not do.** It never touches `audit_events` — that table refuses
 `DELETE` in the database and ADR-0085 D1 declined to relax it, so **its** documented period stays
 unenforced (`docs/TECH_DEBT.md` #118). And the CSP period bounds **staleness, not data age**:
