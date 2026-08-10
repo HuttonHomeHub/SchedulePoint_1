@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 22 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 899 web
 > source files with 30 flag-scoped Playwright suites beside the base journey, and
-> 86 ADRs.
+> 87 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1852,6 +1852,33 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   exists to make.
   **The CPM engine is not imported and the ADR-0034 parity gate is untouched** — in its honest form:
   there is nothing here to hold parity for.
+
+- **ADR-0087** _(Accepted; M0 landed 2026-08-10)_ — This application runs scheduled work, and its
+  first job is a retention sweep. Two tables documented a period and **nothing enforced either** —
+  `csp_reports` 30 days, `mail_events` 12 months, both effectively forever — while
+  `csp_reports` is written by an **unauthenticated** endpoint that strips the query string but not
+  the path, so unique rows are mintable at 1.73 M/day per IP (≈600 MB), and `mail_events.recipient`
+  holds the customer address ADR-0085 spent a decision keeping erasable. There was **no scheduler in
+  the application at all** (verified across every `package.json`), so the first question was not
+  "what period" but "what runs anything". The answer is `HeartbeatService`'s shape — one
+  `setInterval`, `.unref()`'d, no timer when disabled, no Redis, no queue, no dependency — with its
+  costs **stated** (per replica, non-durable, no retry) and each accepted _because of what this job
+  is_: idempotent and time-predicated, so a second run finds nothing and a restart is repaired by the
+  next tick. ADR-0009 is **narrowed, not superseded**, and D2 names the trigger to reopen it
+  (durability, retries, exactly-once, fan-out, enqueue-from-a-request, visible progress) so "we have
+  a scheduler" does not become the answer to every future background need. **The sweep may never
+  touch `audit_events`** — ADR-0085 D1's refusal to relax the `ENABLE ALWAYS` triggers stands, so
+  D3's own period **remains unenforced** and TECH_DEBT #118 splits rather than closes. No audit
+  event, with ADR-0073's two tests applied in writing **and** the admission that the route census
+  reflects over controller metadata and a lifecycle hook has none — so it can see this decision in
+  neither direction, making it a recorded rule rather than a gate (the ADR-0072 `ENGINE_DERIVED`
+  mistake, not repeated). **D6 is the measured correction**: the spec proposed
+  `id IN (SELECT id …)`, and measurement showed the planner's OUTER lookup degrades to a sequential
+  scan as the batch grows or the table shrinks — 160 ms over 499 k rows at batch 10,000, and
+  **10.8× slower on the smaller table** — so the delete became O(table), the one property a batched
+  delete exists to guarantee. `ctid` is always a Tid Scan; batch 1,000 (5.6 / 3.8 ms), interval
+  1 hour (the idle batch measures **0.03 ms**), cap 50,000. No schema change, confirmed rather than
+  assumed, so the conditional database-architect task did not open.
 
 - **ADR-0085** _(Accepted; decision only — nothing is built)_ — Erasure collides with the audit log,
   and that collision is the decision. `docs/BACKLOG.md` carried "Privacy operations" as an `M`
