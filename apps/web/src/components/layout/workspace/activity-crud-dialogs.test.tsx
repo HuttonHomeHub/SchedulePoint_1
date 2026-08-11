@@ -4,19 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * **Flag-OFF parity** for the workspace's activity dialogs — the rollback contract for ADR-0060.
  *
- * `VITE_ACTIVITY_EDITOR_TABS` went default-ON at the M6 gate, so this suite pins it OFF explicitly
- * rather than being rewritten to the new surface. That is deliberate and matches the ADR-0053 M6
- * precedent: a parity suite that is updated to describe the new behaviour stops being a parity
- * suite, and the day the flag is rolled back there is nothing left saying what "back" meant.
+ * **This was `VITE_ACTIVITY_EDITOR_TABS`'s flag-off parity suite, and it is rewritten rather than
+ * deleted** (ADR-0084 D5: coverage moves with a named destination). It pinned the flag OFF and
+ * asserted the legacy dialog, on the reasoning that a parity suite updated to describe the new
+ * behaviour stops being a parity suite. That reasoning holds only while there is something to roll
+ * back to. The flag retired with ADR-0089 and the legacy dialog is gone, so pinning it off now
+ * describes a configuration no build can produce — which is strictly worse than no test, because
+ * it reads as coverage.
  *
- * The flag-ON path for this host is covered by `e2e-activity-editor/` (a real browser, a real API,
- * the pen enforced) and by `activity-editor-entry-points.test.tsx` for the table host.
+ * Four of its six cases were never about the flag at all: the delete confirm's wiring, its error
+ * path, and the WBS cascade warning are the same whichever dialog sits beside them. Those are kept
+ * verbatim. The two that named the edit surface now name the editor.
+ *
+ * The wider flag-ON path for this host is covered by `e2e-activity-editor/` (a real browser, a real
+ * API, the pen enforced) and by `activity-editor-entry-points.test.tsx` for the table host.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_EDITOR_TABS_ENABLED: false,
-}));
-
 // Announcer + the activities feature are mocked so we can assert the dialog wiring in isolation.
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
@@ -34,9 +36,9 @@ vi.mock('@/features/activities', async () => ({
   ...(await vi.importActual<Record<string, unknown>>(
     '@/features/activities/lib/delete-activity-copy',
   )),
-  // A probe standing in for the real edit dialog — surfaces the open state + which activity, and
+  // A probe standing in for the real editor — surfaces the open state + which activity, and
   // captures the `onSaved` prop so we can assert the workspace's undo-recording seam is wired through.
-  ActivityFormDialog: ({
+  ActivityEditorDialog: ({
     open,
     activity,
     onSaved,
@@ -67,9 +69,9 @@ function makeModel(over: Partial<Record<string, unknown>> = {}): PlanWorkspaceMo
     // The plan row: the dialogs read its `calendarId` to resolve the duration field's
     // working-hours factor (ADR-0070). Absent leaves that field in whole working days.
     plan: { data: { calendarId: null } },
-    editActivityId: null,
+    editorIntent: null,
     deleteActivityId: null,
-    setEditActivityId: vi.fn(),
+    setEditorIntent: vi.fn(),
     setDeleteActivityId: vi.fn(),
     recordActivityUpdate: vi.fn(),
     recordActivityDelete: vi.fn(),
@@ -80,12 +82,16 @@ function makeModel(over: Partial<Record<string, unknown>> = {}): PlanWorkspaceMo
 describe('ActivityCrudDialogs', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('opens the edit dialog for the targeted activity', () => {
-    render(<ActivityCrudDialogs model={makeModel({ editActivityId: 'a2' })} />);
+  it('opens the editor for the targeted activity', () => {
+    render(
+      <ActivityCrudDialogs
+        model={makeModel({ editorIntent: { activityId: 'a2', tab: 'general' } })}
+      />,
+    );
     expect(screen.getByTestId('edit-dialog')).toHaveTextContent('Editing Excavate');
   });
 
-  it('wires the model’s undo-recording seam into the edit dialog (ADR-0048)', () => {
+  it('wires the model’s undo-recording seam into the editor (ADR-0048)', () => {
     const recordActivityUpdate = vi.fn();
     render(<ActivityCrudDialogs model={makeModel({ recordActivityUpdate })} />);
     // The dialog receives the model's `recordActivityUpdate` as its `onSaved` callback, so a saved

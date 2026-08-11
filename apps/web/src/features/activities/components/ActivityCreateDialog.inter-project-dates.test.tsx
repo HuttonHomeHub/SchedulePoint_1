@@ -3,16 +3,23 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
 /**
  * The activity External dates section (`externalEarlyStart` / `externalLateFinish`, ADR-0043 / ADR-0035
  * §30) with `VITE_INTER_PROJECT_DATES` forced ON — the surface ships dark by default, so this suite pins
- * the flag to prove the two date inputs render + submit, the client-side N26 rule rejects an inverted
- * window, and a stored value seeds + round-trips. The flag-off (section hidden) behaviour is covered by
- * `ActivityFormDialog.test.tsx`.
+ * the flag to prove the two date inputs render + submit and the client-side N26 rule rejects an inverted
+ * window. The flag-off (section hidden) behaviour is covered by `ActivityCreateDialog.test.tsx`.
+ *
+ * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
+ * (activity-dialog-unification epic): "seeds both dates from the row and round-trips them on save"
+ * ported to `ActivityEditorDialog.round-trips.test.tsx` — "seeds both dates from the row and
+ * round-trips them on a Scheduling save"; "clears an external date to null when the field is emptied
+ * on edit" is covered by
+ * `apps/web/src/features/activities/api/activity-body-builders.structural.test.ts` (both
+ * `externalEarlyStart`/`externalLateFinish` are in its `CLEARABLE_KEYS`).
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -83,16 +90,16 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityCreateDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
     </QueryClientProvider>,
   );
 }
 
-describe('ActivityFormDialog — External dates (flag on)', () => {
+describe('ActivityCreateDialog — External dates (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
@@ -146,36 +153,5 @@ describe('ActivityFormDialog — External dates (flag on)', () => {
     );
     expect(errors.length).toBeGreaterThan(0);
     expect(apiFetch).not.toHaveBeenCalled();
-  });
-
-  it('seeds both dates from the row and round-trips them on save', async () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('External early start')).toHaveValue('2026-02-01');
-    expect(screen.getByLabelText('External late finish')).toHaveValue('2026-03-01');
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      externalEarlyStart: '2026-02-01',
-      externalLateFinish: '2026-03-01',
-      version: 4,
-    });
-  });
-
-  it('clears an external date to null when the field is emptied on edit', async () => {
-    renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('External late finish'), {
-      target: { value: '' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      externalEarlyStart: '2026-02-01',
-      externalLateFinish: null,
-      version: 4,
-    });
   });
 });

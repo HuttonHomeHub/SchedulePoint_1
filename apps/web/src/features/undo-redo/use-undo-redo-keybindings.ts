@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef } from 'react';
  * The handler no-ops when disabled (flag off or the user can't edit), while focus is in a text
  * field / textarea / select / contenteditable (so typing an undo in a form is never hijacked), and
  * while a modal dialog is open (`modalOpen`) — otherwise `Ctrl+Z` would mutate plan state
- * underneath an open `ConfirmDialog`/`ActivityFormDialog` (e.g. focus on a confirm's Cancel
+ * underneath an open `ConfirmDialog`/`ActivityCreateDialog` (e.g. focus on a confirm's Cancel
  * button, which isn't a text field).
  */
 export function useUndoRedoKeybindings(params: {

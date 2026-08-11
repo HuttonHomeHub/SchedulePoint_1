@@ -22,7 +22,6 @@ import { ActivitiesTable } from './ActivitiesTable';
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_EDITOR_TABS_ENABLED: true,
 }));
 
 const ROW: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {

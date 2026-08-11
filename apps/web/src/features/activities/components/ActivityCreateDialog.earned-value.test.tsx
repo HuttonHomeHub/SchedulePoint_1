@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
@@ -12,8 +12,19 @@ import { apiFetch } from '@/lib/api/client';
  * `budgetedExpense` / `actualExpense`, EV4b / ADR-0042) with `VITE_EARNED_VALUE` forced ON — the surface
  * ships dark by default, so this suite pins the flag to prove the fields render, convert MAJOR-unit money
  * entry to minor units (omitted when blank), reveal the physical %-field only for the PHYSICAL measure,
- * seed + round-trip stored values, and hide for a type with no cost meaning (a milestone). Flag-off
- * behaviour is covered by `ActivityFormDialog.test.tsx`.
+ * and hide for a type with no cost meaning (a milestone). Flag-off behaviour is covered by
+ * `ActivityCreateDialog.test.tsx`.
+ *
+ * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
+ * (activity-dialog-unification epic): "seeds the fields (minor → major) from the row and round-trips
+ * them on save" ported to `ActivityEditorDialog.round-trips.test.tsx` — split across its two write
+ * scopes as "seeds the expenses (minor → major) from the row and round-trips them on a Cost save"
+ * and "seeds the value measure from the row and round-trips it on a Progress (Measure) save"
+ * (`budgetedExpense`/`actualExpense` are Cost, `percentCompleteType`/`physicalPercentComplete` are
+ * Measure — one merged save on create, two independent scopes on the editor). "Clears a blank
+ * expense to null on edit" is covered by
+ * `apps/web/src/features/activities/api/activity-body-builders.structural.test.ts`
+ * (`budgetedExpense` is in its `CLEARABLE_KEYS`).
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -85,16 +96,16 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityCreateDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
     </QueryClientProvider>,
   );
 }
 
-describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
+describe('ActivityCreateDialog — Cost & Earned Value (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
@@ -102,7 +113,7 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
   it('creates an activity carrying the %-complete type and expense (major → minor)', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText('% complete type'), { target: { value: 'UNITS' } });
+    fireEvent.change(screen.getByLabelText('Earn value from'), { target: { value: 'UNITS' } });
     fireEvent.change(screen.getByLabelText('Budgeted expense'), {
       target: { value: '1000' },
     });
@@ -134,49 +145,26 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
     expect(body).not.toHaveProperty('actualExpense');
   });
 
-  it('shows the physical %-field only for the PHYSICAL measure', () => {
+  it('shows the physical %-field whatever the measure (D10)', () => {
+    // It was rendered only for PHYSICAL until M4. `physicalPercentComplete` is a STORED value, and
+    // ADR-0060 §6 is the rule: shading implies a value is there, hiding claims there is none — so
+    // hiding it from a reader whose measure is Duration says this activity has no physical
+    // progress when it may well have some.
     renderDialog();
-    // Default DURATION — no physical field.
-    expect(screen.queryByLabelText('Physical % complete')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('% complete type'), { target: { value: 'PHYSICAL' } });
+    expect(screen.getByLabelText('Physical % complete')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Earn value from'), { target: { value: 'PHYSICAL' } });
     expect(screen.getByLabelText('Physical % complete')).toBeInTheDocument();
   });
 
-  it('seeds the fields (minor → major) from the row and round-trips them on save', async () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('% complete type')).toHaveValue('PHYSICAL');
-    expect(screen.getByLabelText('Physical % complete')).toHaveValue(40);
-    expect(screen.getByLabelText('Budgeted expense')).toHaveValue(2500);
-    expect(screen.getByLabelText('Actual expense')).toHaveValue(1000);
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      percentCompleteType: 'PHYSICAL',
-      physicalPercentComplete: 40,
-      budgetedExpense: 250000,
-      actualExpense: 100000,
-      version: 4,
-    });
-  });
-
-  it('clears a blank expense to null on edit', async () => {
-    renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('Budgeted expense'), {
-      target: { value: '' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({ budgetedExpense: null, version: 4 });
-  });
-
-  it('hides the cost fields for a milestone (no cost meaning)', () => {
+  it('offers the cost fields to a milestone, which is what a payment milestone is (D9)', () => {
+    // They were withheld from every duration-derived type until M4, on the reasoning that a
+    // milestone has no duration to cost. A payment milestone is precisely an activity with cost
+    // and no duration, and this dialog is the only surface that makes one — so the value could
+    // never be entered. The API accepts it, confirmed by running it rather than reading the DTO
+    // (`apps/api/test/activities.e2e-spec.ts`).
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
-    expect(screen.queryByLabelText('% complete type')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Budgeted expense')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Earn value from')).toBeInTheDocument();
+    expect(screen.getByLabelText('Budgeted expense')).toBeInTheDocument();
   });
 });

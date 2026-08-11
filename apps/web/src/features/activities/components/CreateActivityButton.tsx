@@ -1,7 +1,7 @@
 import type { ActivitySummary, CalendarSummary } from '@repo/types';
 import { useState } from 'react';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { Button } from '@/components/ui/button';
 
@@ -44,7 +44,7 @@ export function CreateActivityButton({
   return (
     <>
       <Button onClick={() => setOpen(true)}>New activity</Button>
-      <ActivityFormDialog
+      <ActivityCreateDialog
         orgSlug={orgSlug}
         planId={planId}
         open={open}

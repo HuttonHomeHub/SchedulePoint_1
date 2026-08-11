@@ -27,7 +27,6 @@ import { ActivityEditorDialog } from './ActivityEditorDialog';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: false,
-  ACTIVITY_EDITOR_TABS_ENABLED: true,
   RESOURCES_ENABLED: true,
 }));
 

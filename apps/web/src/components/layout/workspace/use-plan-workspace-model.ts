@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_EDITOR_TABS_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   NOTES_ENABLED,
@@ -246,10 +245,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    */
   const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
   const onEditActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_TABS_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'edit'))
-        : setEditActivityId(a.id),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'edit')),
     [],
   );
   // The **Logic** entry point, shared by the canvas selection bar, the canvas keyboard (Enter on a
@@ -299,21 +295,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
     [],
   );
-  // The activity targeted by the canvas selection bar's **Steps** action (entry-route, `VITE_ENTRY_ROUTES`
-  // + earned-value/steps flags) — held as an id like the crud/resources targets so a refetch re-derives
-  // the current row and the dialog closes when it vanishes. Drives the workspace-hosted `ActivityStepsDialog`.
-  const [stepsActivityId, setStepsActivityId] = useState<string | null>(null);
-  // Flag-on, **Steps** is no longer a dialog of its own: it opens the editor's Progress tab with
-  // focus on the Weighted-steps panel, beside the physical % it overrides (ADR-0060 §7).
+  // **Steps** is not a dialog of its own: it opens the editor's Progress tab with focus on the
+  // Weighted-steps panel, beside the physical % it overrides (ADR-0060 §7). It held its own id and
+  // its own dialog until `VITE_ACTIVITY_EDITOR_TABS` retired (ADR-0089) and there was no longer a
+  // second surface for it to open.
   const onStepsActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_TABS_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'steps'))
-        : setStepsActivityId(a.id),
-    [],
-  );
-  const setStepsActivity = useCallback(
-    (a: ActivitySummary | undefined) => setStepsActivityId(a?.id ?? null),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'steps')),
     [],
   );
   // The canvas selection lifted to the workspace (toolbar quick-wins F0, spec
@@ -338,21 +325,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   useEffect(() => {
     clipboardRef.current = null;
   }, [planId]);
-  // The activity targeted by the toolbar's **Update progress…** action (F3), driving the
-  // workspace-hosted `ActivityProgressDialog` (beside `ActivityCrudDialogs`). Held as an id like the
-  // crud dialogs so a 409 retry re-derives the current version; the derived row (below) closes the
-  // dialog when its target vanishes.
-  const [progressActivityId, setProgressActivityId] = useState<string | null>(null);
-  // The canvas selection bar's **Report progress** action (entry-route, `VITE_ENTRY_ROUTES`) reuses this
-  // same `progressActivityId` state the toolbar's Report-progress drives, so both entry points open the
-  // ONE workspace-hosted `ActivityProgressDialog` (no second dialog). Stable opener like `onEditActivity`.
-  // Flag-on, both entry points open the editor's Progress tab instead — where the reported % sits
-  // beside the measure it does NOT control (ADR-0060 §7).
+  // The toolbar's **Update progress…** action (F3) and the canvas selection bar's **Report
+  // progress** both open the editor's Progress tab — where the reported % sits beside the measure
+  // it does NOT control (ADR-0060 §7). Each held its own id and its own dialog until
+  // `VITE_ACTIVITY_EDITOR_TABS` retired (ADR-0089).
   const onProgressActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_TABS_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'progress'))
-        : setProgressActivityId(a.id),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'progress')),
     [],
   );
 
@@ -455,13 +433,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         : undefined,
     [selectedActivityId, activities.data],
   );
-  const progressActivity = useMemo(
-    () =>
-      progressActivityId
-        ? (activities.data ?? []).find((a) => a.id === progressActivityId)
-        : undefined,
-    [progressActivityId, activities.data],
-  );
   // **Float paths** (audit F4, `VITE_FLOAT_PATHS`) — the ranked driving chains into one activity.
   // Hosted here rather than in either view because the emphasis id-set it derives is handed to BOTH
   // the canvas and the Gantt: two derivations of "which activities are on the path" would differ
@@ -489,11 +460,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
   // The resolved Steps-dialog target (entry-route), derived from the live query like the resources/
   // progress targets — closes the dialog the moment its activity is deleted.
-  const stepsActivity = useMemo(
-    () =>
-      stepsActivityId ? (activities.data ?? []).find((a) => a.id === stepsActivityId) : undefined,
-    [stepsActivityId, activities.data],
-  );
 
   // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
   // the canvas *or* the activities table — triggers a coalesced recalculation, so the canvas plots
@@ -2019,9 +1985,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     selectedActivityId,
     onSelectionChange,
     selectedActivity,
-    progressActivityId,
-    setProgressActivityId,
-    progressActivity,
     // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag +
     // setter the toolbar Comments button and the drawer's Close control drive. Inert flag-off.
     notesOpen,
@@ -2043,8 +2006,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Steps dialog target from the canvas selection bar (entry-route + earned-value/steps flags): the
     // opener + resolved row + close setter, mirroring the resources trio. Inert flag-off.
     onStepsActivity,
-    stepsActivity,
-    setStepsActivity,
     // Clear a hand-placed `visualStart` (toolbar quick-wins F5) — the null-visualStart PATCH + undo
     // inverse + auto-recalc; only the existing PATCH hook, so the parity gate is untouched.
     clearVisualPlacement,

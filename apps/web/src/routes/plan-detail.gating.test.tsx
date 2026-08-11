@@ -309,6 +309,12 @@ describe('PlanDetailScreen — pen gating (flag on)', () => {
     renderScreen();
     expect(screen.getByTestId('activities-table').dataset.canProgress).toBe('true');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('false');
+    // **The create affordance is absent, not shaded.** The gating suites prove the gate *object*;
+    // this proves the surface it governs, which is a different claim — ADR-0082's rule is "omit when
+    // the action does not apply to this reader's role", and a Contributor never creates activities.
+    // The Planner cases above assert the same control PRESENT, so this cannot pass on a layout that
+    // stopped rendering it at all.
+    expect(screen.queryByTestId('create-activity')).not.toBeInTheDocument();
     // Not a would-be editor → no read-only hint.
     expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });

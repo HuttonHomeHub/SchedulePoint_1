@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
@@ -12,7 +12,17 @@ import { apiFetch } from '@/lib/api/client';
  * the surface ships dark by default, so this suite pins the flag to prove the secondary constraint
  * (paired), the ALAP toggle and the expected-finish date render, persist, round-trip a seeded value,
  * and enforce the secondary pair rule. (The flag-off behaviour — fields hidden, seeded value still
- * round-trips — is covered by `ActivityFormDialog.test.tsx`.)
+ * round-trips — is covered by `ActivityCreateDialog.test.tsx`.)
+ *
+ * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
+ * (activity-dialog-unification epic): "seeds the advanced fields from the row and round-trips them
+ * on save" ported to `ActivityEditorDialog.round-trips.test.tsx` — "seeds the secondary constraint,
+ * ALAP and expected finish from the row (flag on)"; "clears the secondary constraint to null and the
+ * ALAP flag to false on save" is covered by
+ * `apps/web/src/features/activities/api/activity-body-builders.structural.test.ts` (both
+ * `secondaryConstraintType`/`secondaryConstraintDate` are in its `CLEARABLE_KEYS`, and the boolean
+ * `scheduleAsLateAsPossible`-false-on-update case by its "keeps a false as a false on an update"
+ * case).
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -83,16 +93,16 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityCreateDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
     </QueryClientProvider>,
   );
 }
 
-describe('ActivityFormDialog — advanced constraints (flag on)', () => {
+describe('ActivityCreateDialog — advanced constraints (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
@@ -119,30 +129,6 @@ describe('ActivityFormDialog — advanced constraints (flag on)', () => {
       secondaryConstraintDate: '2026-06-15',
       scheduleAsLateAsPossible: true,
       expectedFinish: '2026-06-10',
-    });
-  });
-
-  it('seeds the advanced fields from the row and round-trips them on save', () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('Secondary constraint')).toHaveValue('FNLT');
-    expect(screen.getByLabelText('Secondary constraint date')).toHaveValue('2026-06-01');
-    expect(screen.getByLabelText('Schedule as late as possible')).toBeChecked();
-    expect(screen.getByLabelText('Expected finish')).toHaveValue('2026-05-20');
-  });
-
-  it('clears the secondary constraint to null and the ALAP flag to false on save', async () => {
-    renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('Secondary constraint'), { target: { value: '' } });
-    fireEvent.click(screen.getByLabelText('Schedule as late as possible')); // toggle off
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      version: 4,
-      secondaryConstraintType: null,
-      secondaryConstraintDate: null,
-      scheduleAsLateAsPossible: false,
     });
   });
 

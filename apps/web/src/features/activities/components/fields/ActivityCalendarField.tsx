@@ -1,10 +1,11 @@
 import type { ActivityType, CalendarSummary } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
-import { INHERIT_CALENDAR_LABEL } from '../schemas/activity-schemas';
+import { INHERIT_CALENDAR_LABEL } from '../../schemas/activity-schemas';
+import type { ActivitySchedulingValues } from '../../schemas/activity-scope-schemas';
 
 import { Combobox } from '@/components/ui/combobox';
-import { FieldGateLock, useFieldGate } from '@/components/ui/field-gate';
+import { FieldGateLock, resolveFieldGate, useFieldGate } from '@/components/ui/field-gate';
 import { Label } from '@/components/ui/label';
 import {
   CALENDAR_TIER_GROUP_LABELS,
@@ -15,8 +16,28 @@ import {
 import { matchesLibraryQuery } from '@/lib/library-filters';
 
 /**
- * The per-activity working-time calendar picker (ADR-0037), shared by {@link ActivityFormDialog} and
+ * The one field this group renders.
+ *
+ * **Declared later than its siblings', and that is the point.** This component predates the group
+ * convention — it takes `value`/`onChange` rather than a scope form, because it was extracted to
+ * stop the editor re-implementing a combobox, not to partition a schema. Without this tuple the
+ * partition gate (`field-group-partition.structural.test.ts`) could not see `calendarId` at all,
+ * and would have reported the scheduling scope as complete while one field was rendered by
+ * something it could not account for.
+ */
+export const CALENDAR_FIELDS = [
+  'calendarId',
+] as const satisfies readonly (keyof ActivitySchedulingValues)[];
+
+/**
+ * The per-activity working-time calendar picker (ADR-0037), shared by {@link ActivityCreateDialog} and
  * the tabbed {@link ActivityEditorDialog}'s Scheduling tab.
+ *
+ * **That sentence was false for a year and is worth leaving corrected rather than quietly fixed.**
+ * the create dialog did not import this file; it inlined its own `Combobox` — so the docblock
+ * asserting one implementation was itself the evidence that there were two, and the two had already
+ * drifted (native `disabled` against `readOnly`, and a hint differing by one clause). Create adopted
+ * it at M3-T1, which is what made the claim true.
  *
  * Extracted, not re-implemented. The tabbed editor's first draft rebuilt this as a plain
  * `SelectField` and lost four shipped behaviours at once — the ADR-0053 §4 `Combobox` (default-on
@@ -66,7 +87,13 @@ export function ActivityCalendarField({
   // than a `disabled` prop the caller had to remember to pass (ADR-0083 D4). Either rule shades the
   // field; the RESOURCE_DEPENDENT sentence below is the more specific one and is what the reader
   // sees, which is exactly the nearest-reason rule the ADR states.
-  const penShut = useFieldGate()?.writable === false;
+  // Through `resolveFieldGate`, not by reading `writable` directly — the group's reason paragraph is
+  // rendered ONCE above the fields and published by id, and reaching for the boolean alone shades
+  // the control while leaving that sentence unassociated with it. Every sibling field gets this
+  // from the shared `*Field` primitives; this component predates them and has to do it by hand.
+  // WCAG 1.3.1: the relationship between a control and the text explaining why it is read-only has
+  // to be programmatically determinable, not merely visible above it.
+  const { shut: penShut, groupReasonId } = resolveFieldGate(undefined, useFieldGate());
   const shaded = penShut || resourceDependent;
   // A bound value that matches no option (the list is still loading, or failed): inject a synthetic
   // option so the Select shows it as selected — never blank, which would read as "inherit".
@@ -83,7 +110,15 @@ export function ActivityCalendarField({
     return toCalendarOptions(offerable, { grouped });
   }, [calendars, value, query, grouped]);
 
-  const describedBy = errored ? `${helpId} ${errorId}` : helpId;
+  // The group's reason joins the chain when it applies. The RESOURCE_DEPENDENT sentence is already
+  // in `helpId` and is the more specific of the two, which is the nearest-reason rule (ADR-0083 D4).
+  const describedBy = [
+    helpId,
+    errored ? errorId : undefined,
+    resourceDependent ? undefined : groupReasonId,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className="flex flex-col gap-1.5">

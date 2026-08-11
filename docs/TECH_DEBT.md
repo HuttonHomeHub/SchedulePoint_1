@@ -1986,14 +1986,48 @@ The real remedy, if one is wanted, is to stop recording the path at all — whic
 investigative value the column exists for. Open, unowned, and cheap to leave open: the throttle
 bounds a sustained flood and the sweep bounds the residue after one stops.
 
+## 123. One create-dialog earned-value case failed once in a full run and has not repeated
+
+`ActivityCreateDialog.earned-value.test.tsx` → "creates an activity carrying the %-complete type
+and expense (major → minor)" failed exactly once, during a full `pnpm test` on 2026-08-11, and has
+not reproduced: the same file passes in isolation five times over, the feature suite passes, and
+the next full run was green. It is recorded rather than shrugged at because a test that fails once
+has told you something, and the thing it might have told you here is timing-shaped.
+
+**What was ruled out.** Not the flag mock added to `ActivityWorkFields.test.tsx` in the same
+session — Vitest gives each file its own module registry, so a getter-backed flag cannot leak
+across files. Not obviously the submit button either, though that is the change with the best
+motive: M7 swapped its native `disabled` for `aria-disabled` + a `preventDefault` guard (ADR-0060
+M6's rule), and a natively disabled button is the one thing that made a second click during an
+in-flight save structurally impossible. The case clicks once, so this is a hypothesis and not a
+diagnosis.
+
+**What would settle it**: run the file under `--repeat` with the suite's own concurrency, or add a
+counter assertion on `apiFetch` calls rather than on the last call's body, which would tell a
+double-submit apart from a slow one. Left open rather than guessed at.
+
 ## 122. Two Class A flags are deferred, and the payoff is not where the register said it was
 
+**Half closed 2026-08-11**: `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE`
+remains open with five harnesses left rather than seven.
+
 `VITE_ACTIVITY_EDITOR_TABS` and `VITE_CANVAS_WORKSPACE` are the two alternative surfaces the batch-2
-retirement did **not** take. Both carry `deferredUntil` in `scripts/flag-retirement.json` (ADR-0088
+retirement did **not** take. Both carried `deferredUntil` in `scripts/flag-retirement.json` (ADR-0088
 D3a), which suspends their batch dates against a **named event** rather than a date — so this row is
 the thing the gate points at, and deleting it fails `pnpm check:flags`.
 
-**`VITE_ACTIVITY_EDITOR_TABS` — trigger: the next epic touching the activity editor.**
+**`VITE_ACTIVITY_EDITOR_TABS` — RETIRED 2026-08-11 (ADR-0089). This half is closed.**
+Its trigger — the next epic touching the activity editor — fired, and the analysis below held
+exactly: the dialog-unification epic closed all ten create/edit divergences and extracted eleven
+shared field groups **first**, so the retirement collected the payoff this row said a bare
+retirement would not. Both flag-off harnesses (`sub-day`, `assignment-lag`) were **converted to the
+shipping surface before the flag went**, which is the ADR-0084 batch-1 lesson applied in advance
+rather than re-learnt. `classACap` ratcheted 2 → 1. The `VITE_CANVAS_WORKSPACE` half below stays
+open, and is now two harnesses cheaper for exactly the reason this row predicted.
+
+The original analysis is kept below because it is the argument, not just the outcome:
+
+**`VITE_ACTIVITY_EDITOR_TABS` — trigger was: the next epic touching the activity editor.**
 The register described this as the estate's worst case, on the strength of nine unrelated features
 having had to patch both branches. That is **true about the codebase and false about the flag**, and
 the distinction is the whole point of this row:

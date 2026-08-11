@@ -115,3 +115,57 @@ describe('WeightedStepsPanel', () => {
     );
   });
 });
+
+/**
+ * M0.5 — how this panel reports its problems (`ActivityProgressPanels.tsx:554`).
+ *
+ * Updated **here, at M0.5** rather than at M4: this file is the suite for the panel that holds the
+ * seventh `FormProblemCount` call site, so M4-T3's bar is "unchanged by M4", not "unchanged".
+ *
+ * The rule, from `FormProblemCount`'s docblock and ADR-0077 §9: a field's problem belongs to the
+ * field; the alert belongs to the form. One problem is silent, because `handleSubmit` has already
+ * moved focus to the control carrying it. Two or more earn a count.
+ *
+ * **The second half of that rule does not arrive on this panel, and the case below pins the gap
+ * rather than the rule.** This is the one call site whose form is a `useFieldArray`: every step's
+ * error is nested under `steps.<i>.<field>`, so the top-level `errors` object holds a single
+ * `steps` entry — an array, carrying no `message` of its own. `FormProblemCount` counts entries
+ * that carry a message, so it counts zero here whatever the reader typed.
+ *
+ * Two things follow, and both matter for reading this file later. It is **not a regression**:
+ * `FormErrorSummary`, the component M0.5 replaced, read `Object.values(errors)` the same way and was
+ * equally silent, so the swap changed nothing observable on this panel. And it is **not fixed here**,
+ * because M0.5 is forbidden production changes; the case is named as a gap so that a later fix
+ * flips a named assertion instead of quietly making a passing test wrong.
+ */
+describe('WeightedStepsPanel — how problems are reported', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset().mockResolvedValue([]);
+  });
+
+  it('states one step’s problem once, beside that step’s field', async () => {
+    renderPanel();
+    fireEvent.change(screen.getByLabelText('Step 1 name'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save steps' }));
+
+    expect(await screen.findAllByText('Step name is required.')).toHaveLength(1);
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('GAP: says nothing at two problems either, because a step’s error is not the form’s', async () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    fireEvent.change(screen.getByLabelText('Step 1 name'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Step 2 name'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save steps' }));
+
+    // Each row still states its own problem beside its own control — the half of the rule that does
+    // arrive, and the half a keyboard user reaches by the focus `handleSubmit` has already moved.
+    expect(await screen.findAllByText('Step name is required.')).toHaveLength(2);
+    // …and nothing tells a reader standing on row 2 that row 1 is wrong too. Asserted, not assumed:
+    // this is the state a fix has to change, and it is the reason the gap is legible at all.
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+});

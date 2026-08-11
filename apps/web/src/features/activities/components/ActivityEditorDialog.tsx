@@ -1,10 +1,4 @@
-import {
-  SELECTABLE_CONSTRAINT_TYPES,
-  type ActivitySummary,
-  type CalendarSummary,
-  type DependencySummary,
-} from '@repo/types';
-import { DURATION_TYPES } from '@repo/types';
+import { type ActivitySummary, type CalendarSummary, type DependencySummary } from '@repo/types';
 import { useCallback, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 
@@ -13,23 +7,12 @@ import { useUpdateActivityFields } from '../api/use-activities';
 import { activityContextFacts, activitySubtitle } from '../lib/activity-editor-context';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import type { ActivityEditorIntent, ActivityEditorTab } from '../lib/activity-editor-intent';
-import {
-  DURATION_NEEDS_WHOLE_DAYS,
-  durationHelp,
-  durationInputProps,
-  durationLabel,
-  durationWriteFields,
-} from '../model/duration-field';
+import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
 import {
-  ACCRUAL_TYPE_LABELS,
-  ACCRUAL_TYPE_OPTIONS,
   ACTIVITY_TYPE_LABELS,
-  CONSTRAINT_TYPE_LABELS,
-  DURATION_TYPE_LABELS,
   isDurationDerivedType,
   isMilestoneType,
-  selectableActivityTypes,
 } from '../schemas/activity-schemas';
 import {
   activityCostSchema,
@@ -38,12 +21,21 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedScheduling } from './activity-editor-seeds';
-import { ActivityCalendarField } from './ActivityCalendarField';
 import {
   ReportedProgressPanel,
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
+import { ActivityAccrualField } from './fields/ActivityAccrualField';
+import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
+import { ActivityCalendarField } from './fields/ActivityCalendarField';
+import { ActivityConstraintFields } from './fields/ActivityConstraintFields';
+import { ActivityExpenseFields } from './fields/ActivityExpenseFields';
+import { ActivityExternalDatesFields } from './fields/ActivityExternalDatesFields';
+import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
+import { ActivityLevellingField } from './fields/ActivityLevellingField';
+import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
+import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -51,20 +43,8 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { FieldGateProvider } from '@/components/ui/field-gate';
-import {
-  CheckboxField,
-  FormErrorSummary,
-  SelectField,
-  TextField,
-  TextareaField,
-} from '@/components/ui/form';
-import {
-  ContextStrip,
-  FieldGrid,
-  FieldGridContainer,
-  FieldGridFull,
-  FormSection,
-} from '@/components/ui/form-layout';
+import { FormProblemCount } from '@/components/ui/form';
+import { ContextStrip, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
@@ -73,9 +53,7 @@ import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
-  ADVANCED_CONSTRAINTS_ENABLED,
   COST_ACCRUAL_ENABLED,
-  DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   NOTES_ENABLED,
@@ -92,8 +70,8 @@ import { cn } from '@/lib/utils';
 type TabKey = ActivityEditorTab;
 
 /**
- * The tabbed activity editor (ADR-0060). Behind `VITE_ACTIVITY_EDITOR_TABS`; the flag-off path
- * keeps {@link ActivityFormDialog} unchanged.
+ * The tabbed activity editor (ADR-0060). Unconditional since ADR-0089 retired
+ * `VITE_ACTIVITY_EDITOR_TABS`; there is no other edit surface.
  *
  * **Saves per write scope, not per dialog.** Each tab owns an independent form and its own Save,
  * because the three write paths this editor spans do not share a permission: definition writes need
@@ -120,7 +98,7 @@ type TabKey = ActivityEditorTab;
  * per-scope save structural — the scopes carry *different permissions*, and a horizontal tab strip
  * has nowhere to say so. In the rail, a Contributor sees "General 🔒 / Scheduling 🔒 / Progress" on
  * arrival instead of discovering each shut form by clicking into it. Inside the pane, fields are
- * grouped with {@link FormSection} and paired with {@link FieldGrid}; above it, {@link ContextStrip}
+ * grouped into field components that both this editor and the create dialog render; above it, {@link ContextStrip}
  * keeps the computed dates and float on screen, which the previous version showed nowhere at all.
  */
 export function ActivityEditorDialog({
@@ -137,6 +115,8 @@ export function ActivityEditorDialog({
   calendarsError = false,
   planCalendarId,
   planActivities = [],
+  planActivitiesLoading = false,
+  planActivitiesError = false,
   logic,
   notesSlot,
 }: {
@@ -151,7 +131,7 @@ export function ActivityEditorDialog({
   intent?: ActivityEditorIntent;
   /** Called after a scope saves, with the pre-save row and the server's post-save row (ADR-0048). */
   onSaved?: (before: ActivitySummary, after: ActivitySummary) => void;
-  /** The row being edited. This editor is edit-only; creation stays with `ActivityFormDialog`. */
+  /** The row being edited. This editor is edit-only; creation is {@link ActivityCreateDialog}. */
   activity: ActivitySummary | undefined;
   /** Per-scope writability and its reason (`deriveActivityEditorGating`). */
   gating: ActivityEditorGating;
@@ -167,6 +147,15 @@ export function ActivityEditorDialog({
    */
   planCalendarId?: string;
   planActivities?: ActivitySummary[];
+  /**
+   * The plan's activities are still in flight — the WBS picker says so rather than reading as
+   * "this plan has no summaries", which is the same distinction {@link calendarsLoading} draws.
+   * Both mount sites already held this signal and were passing it to the create dialog; the editor
+   * had nowhere to put it until M2-T3.
+   */
+  planActivitiesLoading?: boolean;
+  /** The plan's activities failed to load — surfaced in the WBS picker, not swallowed. */
+  planActivitiesError?: boolean;
   /**
    * Composition-root wiring for the **Logic** tab, grouped so the tab's seams arrive and leave
    * together rather than as four loose props (the cross-plan slot is the `notesSlot` precedent:
@@ -239,12 +228,17 @@ export function ActivityEditorDialog({
 
   // The live factor follows the calendar the SCHEDULING scope currently selects — a planner can
   // change the calendar and the duration in one visit, and the two tabs must agree (ADR-0070 §3).
+  //
+  // `useWatch`, never `form.watch`, and on a multi-form host that is not a style choice:
+  // `form.watch` subscribes the WHOLE component to that form's every field, so a keystroke in any
+  // Scheduling control re-renders all four tabs' worth of markup. This value is also the one the
+  // calendar field renders, which is why there is exactly one subscription rather than two.
   const scopeCalendarId = useWatch({ control: scheduling.form.control, name: 'calendarId' });
   const hoursPerDay = effectiveHoursPerDay(calendars, {
     activityCalendarId: scopeCalendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
-  // Hoisted rather than inlined, for the same reason as in `ActivityFormDialog`: an arrow rebuilt
+  // Hoisted rather than inlined, for the same reason as in `ActivityCreateDialog`: an arrow rebuilt
   // per render defeats the React Compiler's memoization downstream of it.
   const generalSetValue = general.form.setValue;
   const generalGetValues = general.form.getValues;
@@ -263,11 +257,6 @@ export function ActivityEditorDialog({
   });
 
   const type = useWatch({ control: general.form.control, name: 'type' });
-  const constraintType = useWatch({ control: scheduling.form.control, name: 'constraintType' });
-  const secondaryConstraintType = useWatch({
-    control: scheduling.form.control,
-    name: 'secondaryConstraintType',
-  });
 
   const parentOptions = planActivities.filter(
     (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
@@ -490,101 +479,35 @@ export function ActivityEditorDialog({
                   }}
                   className="flex flex-col gap-4"
                 >
-                  <FormErrorSummary errors={general.form.formState.errors} />
+                  <FormProblemCount errors={general.form.formState.errors} />
                   {scopeError('general')}
 
                   <FieldGateProvider gate={gating.general}>
-                    <FormSection title="Identity">
-                      <FieldGrid columns="lead">
-                        <TextField
-                          label="Name"
-                          error={general.form.formState.errors.name?.message}
-                          {...general.form.register('name')}
-                        />
-                        <TextField
-                          label="Code"
-                          autoComplete="off"
-                          error={general.form.formState.errors.code?.message}
-                          {...general.form.register('code')}
-                        />
-                        <FieldGridFull>
-                          <TextareaField
-                            label="Description"
-                            error={general.form.formState.errors.description?.message}
-                            {...general.form.register('description')}
-                          />
-                        </FieldGridFull>
-                      </FieldGrid>
-                    </FormSection>
+                    <ActivityIdentityFields form={general.form} />
 
-                    <FormSection
-                      title="Work"
-                      description="What kind of activity this is, and how long it takes."
-                    >
-                      <FieldGrid>
-                        <SelectField
-                          label="Type"
-                          error={general.form.formState.errors.type?.message}
-                          {...general.form.register('type')}
-                        >
-                          {selectableActivityTypes(
-                            ADVANCED_ACTIVITY_TYPES_ENABLED,
-                            activity?.type,
-                          ).map((value) => (
-                            <option key={value} value={value}>
-                              {ACTIVITY_TYPE_LABELS[value]}
-                            </option>
-                          ))}
-                        </SelectField>
-                        {/* A derived type computes its own duration, so both controls disappear
-                          together — the pair has always been one decision. */}
-                        {!isDurationDerivedType(type) ? (
-                          <TextField
-                            label={durationLabel(hoursPerDay)}
-                            {...durationInputProps(hoursPerDay)}
-                            {...(durationHelp(hoursPerDay) === undefined
-                              ? {}
-                              : { hint: durationHelp(hoursPerDay) })}
-                            error={general.form.formState.errors.duration?.message}
-                            {...general.form.register('duration')}
-                          />
-                        ) : null}
-                        {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
-                          <FieldGridFull>
-                            <SelectField
-                              label="Duration type"
-                              hint="Sets how editing one of duration, units or units/time recomputes the others, so units = duration × units/time stays true. A crew installing a fixed quantity takes longer if its rate drops."
-                              {...general.form.register('durationType')}
-                            >
-                              {DURATION_TYPES.map((value) => (
-                                <option key={value} value={value}>
-                                  {DURATION_TYPE_LABELS[value]}
-                                </option>
-                              ))}
-                            </SelectField>
-                          </FieldGridFull>
-                        ) : null}
-                      </FieldGrid>
-                    </FormSection>
+                    <ActivityWorkFields
+                      form={general.form}
+                      hoursPerDay={hoursPerDay}
+                      {...(activity?.type === undefined ? {} : { savedType: activity.type })}
+                    />
 
+                    {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it
+                      never asserts a false state while the plan activities are still resolving.
+                      The "no summaries yet" guidance is a distinct, appended clause shown only
+                      once the list has resolved empty — not conflated with loading or a load
+                      failure.
+
+                      The section's `aside` is deliberately gone: it read "No summaries in this
+                      plan" whenever the offerable list was empty, which is exactly when a stored
+                      but unresolvable parent is most likely — so the one activity that disproves
+                      the sentence was the one it was shown to. */}
                     {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-                      <FormSection
-                        title="Breakdown"
-                        aside={parentOptions.length === 0 ? 'No summaries in this plan' : undefined}
-                      >
-                        <SelectField
-                          label="Parent WBS summary"
-                          hint="Groups this activity under a WBS summary, whose dates roll up from its members."
-                          {...general.form.register('parentId')}
-                        >
-                          <option value="">None (top level)</option>
-                          {parentOptions.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.name}
-                            </option>
-                          ))}
-                        </SelectField>
-                      </FormSection>
+                      <ActivityBreakdownField
+                        form={general.form}
+                        parentOptions={parentOptions}
+                        loading={planActivitiesLoading}
+                        errored={planActivitiesError}
+                      />
                     ) : null}
                     <ScopeSaveBar
                       gate={gating.general}
@@ -610,7 +533,7 @@ export function ActivityEditorDialog({
                   }}
                   className="flex flex-col gap-4"
                 >
-                  <FormErrorSummary errors={scheduling.form.formState.errors} />
+                  <FormProblemCount errors={scheduling.form.formState.errors} />
                   {scopeError('scheduling')}
 
                   <FieldGateProvider gate={gating.scheduling}>
@@ -620,7 +543,7 @@ export function ActivityEditorDialog({
                         description="Which calendar's working days this activity's duration is measured in."
                       >
                         <ActivityCalendarField
-                          value={scheduling.form.watch('calendarId') ?? ''}
+                          value={scopeCalendarId ?? ''}
                           onChange={(calendarId) =>
                             scheduling.form.setValue('calendarId', calendarId, {
                               shouldDirty: true,
@@ -635,128 +558,19 @@ export function ActivityEditorDialog({
                       </FormSection>
                     ) : null}
 
-                    <FormSection
-                      title="Constraints"
-                      description="Dates you impose on the network. A constraint overrides what the logic would otherwise decide."
-                      aside={constraintType ? undefined : 'None set'}
-                    >
-                      {/* The pair that made the flat list unreadable: a constraint type and its date
-                        are one decision, and stacking them made them look like two. */}
-                      <FieldGrid columns="lead">
-                        <SelectField
-                          label="Constraint"
-                          hint="Pins the activity’s start or finish to a date. Only constraints the scheduler applies exactly as named are listed."
-                          {...scheduling.form.register('constraintType')}
-                        >
-                          <option value="">None</option>
-                          {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                            <option key={value} value={value}>
-                              {CONSTRAINT_TYPE_LABELS[value]}
-                            </option>
-                          ))}
-                        </SelectField>
-                        {constraintType ? (
-                          <TextField
-                            label="Constraint date"
-                            type="date"
-                            error={scheduling.form.formState.errors.constraintDate?.message}
-                            {...scheduling.form.register('constraintDate')}
-                          />
-                        ) : null}
-                        {ADVANCED_CONSTRAINTS_ENABLED ? (
-                          <>
-                            <SelectField
-                              label="Secondary constraint"
-                              hint="A second date constraint that drives the activity’s late dates. The primary constraint drives its early dates."
-                              {...scheduling.form.register('secondaryConstraintType')}
-                            >
-                              <option value="">None</option>
-                              {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                                <option key={value} value={value}>
-                                  {CONSTRAINT_TYPE_LABELS[value]}
-                                </option>
-                              ))}
-                            </SelectField>
-                            {secondaryConstraintType ? (
-                              <TextField
-                                label="Secondary constraint date"
-                                type="date"
-                                error={
-                                  scheduling.form.formState.errors.secondaryConstraintDate?.message
-                                }
-                                {...scheduling.form.register('secondaryConstraintDate')}
-                              />
-                            ) : null}
-                          </>
-                        ) : null}
-                      </FieldGrid>
-                    </FormSection>
+                    <ActivityConstraintFields form={scheduling.form} />
 
-                    <FormSection
-                      title="Placement &amp; targets"
-                      description="How the activity is positioned once its dates are known."
-                    >
-                      <FieldGrid>
-                        <CheckboxField
-                          label="Schedule as late as possible"
-                          hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
-                          {...scheduling.form.register('scheduleAsLateAsPossible')}
-                        />
-                        {ADVANCED_CONSTRAINTS_ENABLED && !isDurationDerivedType(type) ? (
-                          <TextField
-                            label="Expected finish"
-                            type="date"
-                            hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
-                            {...scheduling.form.register('expectedFinish')}
-                          />
-                        ) : null}
-                      </FieldGrid>
-                    </FormSection>
+                    <ActivityPlacementFields form={scheduling.form} activityType={type} />
 
                     {INTER_PROJECT_DATES_ENABLED ? (
-                      <FormSection
-                        title="External interfaces"
-                        description="Dates imported from another plan or programme. They bound this activity but never pin it."
-                        aside={
-                          activity?.externalDriven === true ? 'Driving this activity' : undefined
-                        }
-                      >
-                        <FieldGrid>
-                          <TextField
-                            label="External early start"
-                            type="date"
-                            hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins."
-                            {...scheduling.form.register('externalEarlyStart')}
-                          />
-                          <TextField
-                            label="External late finish"
-                            type="date"
-                            hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
-                            error={scheduling.form.formState.errors.externalLateFinish?.message}
-                            {...scheduling.form.register('externalLateFinish')}
-                          />
-                        </FieldGrid>
-                      </FormSection>
+                      <ActivityExternalDatesFields
+                        form={scheduling.form}
+                        externalDriven={activity?.externalDriven === true}
+                      />
                     ) : null}
 
                     {RESOURCE_LEVELLING_ENABLED ? (
-                      <FormSection
-                        title="Levelling"
-                        description="Used only when the plan is levelled."
-                      >
-                        <FieldGrid>
-                          <TextField
-                            label="Levelling priority"
-                            type="number"
-                            min={0}
-                            hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
-                            error={scheduling.form.formState.errors.levelingPriority?.message}
-                            {...scheduling.form.register('levelingPriority', {
-                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                            })}
-                          />
-                        </FieldGrid>
-                      </FormSection>
+                      <ActivityLevellingField form={scheduling.form} activityType={type} />
                     ) : null}
                     <ScopeSaveBar
                       gate={gating.scheduling}
@@ -893,59 +707,12 @@ export function ActivityEditorDialog({
                   }}
                   className="flex flex-col gap-4"
                 >
-                  <FormErrorSummary errors={cost.form.formState.errors} />
+                  <FormProblemCount errors={cost.form.formState.errors} />
                   {scopeError('cost')}
 
                   <FieldGateProvider gate={gating.cost}>
-                    {EARNED_VALUE_ENABLED ? (
-                      <FormSection
-                        title="Expenses"
-                        description="Lump sums carried directly on this activity, on top of any resource-derived cost."
-                      >
-                        <FieldGrid>
-                          <TextField
-                            label="Budgeted expense"
-                            type="number"
-                            step="0.01"
-                            hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost."
-                            error={cost.form.formState.errors.budgetedExpense?.message}
-                            {...cost.form.register('budgetedExpense', {
-                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                            })}
-                          />
-                          <TextField
-                            label="Actual expense"
-                            type="number"
-                            step="0.01"
-                            hint="The lump-sum cost booked against this activity so far, in the plan’s currency."
-                            error={cost.form.formState.errors.actualExpense?.message}
-                            {...cost.form.register('actualExpense', {
-                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                            })}
-                          />
-                        </FieldGrid>
-                      </FormSection>
-                    ) : null}
-                    {COST_ACCRUAL_ENABLED ? (
-                      <FormSection
-                        title="Recognition"
-                        description="Changes only when cost is recognised in Earned value — never a date."
-                      >
-                        <FieldGrid>
-                          <SelectField
-                            label="Cost accrual"
-                            hint="Sets when this activity’s cost is recognised: Start (all at the start), Uniform (spread evenly), or End (all at the finish)."
-                            {...cost.form.register('accrualType')}
-                          >
-                            {ACCRUAL_TYPE_OPTIONS.map((value) => (
-                              <option key={value} value={value}>
-                                {ACCRUAL_TYPE_LABELS[value]}
-                              </option>
-                            ))}
-                          </SelectField>
-                        </FieldGrid>
-                      </FormSection>
-                    ) : null}
+                    {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
+                    {COST_ACCRUAL_ENABLED ? <ActivityAccrualField form={cost.form} /> : null}
                     <ScopeSaveBar
                       gate={gating.cost}
                       dirty={cost.isDirty}

@@ -80,7 +80,12 @@ test('a sub-day duration and lag round-trip through the real API', async ({ page
   // The field is seeded with the exact value, in the grammar it was typed in.
   await expect(editDialog.getByLabel('Duration', { exact: true })).toHaveValue('4h');
   await editDialog.getByLabel('Name').fill('Lift plant (revised)');
-  await editDialog.getByRole('button', { name: /^Save/ }).click();
+  // **Per scope, not per dialog** (ADR-0060 §3): the editor's Save commits the General scope and
+  // leaves the editor open, because the scopes it spans do not share a permission. So the close is
+  // explicit here where the legacy dialog closed itself — the same edit, one more click.
+  await editDialog.getByRole('button', { name: 'Save general' }).click();
+  await expect(editDialog.getByText('Saved.')).toBeVisible();
+  await editDialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(editDialog).toBeHidden();
 
   await page.reload();

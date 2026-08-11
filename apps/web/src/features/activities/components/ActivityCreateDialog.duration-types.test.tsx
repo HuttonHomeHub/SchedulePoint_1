@@ -3,15 +3,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
 /**
  * The duration-type picker (ADR-0040, M7 rung 4) with `VITE_DURATION_TYPES` forced ON — the surface
- * ships dark by default, so this suite pins the flag to prove the picker renders, persists, round-trips
- * a seeded value, and is hidden for a type with no entered duration (a milestone). (The flag-off
- * behaviour — picker hidden, seeded value still round-trips — is covered by `ActivityFormDialog.test.tsx`.)
+ * ships dark by default, so this suite pins the flag to prove the picker renders, persists, and is
+ * hidden for a type with no entered duration (a milestone). (The flag-off behaviour — picker hidden,
+ * seeded value still round-trips — is covered by `ActivityCreateDialog.test.tsx`.)
+ *
+ * **The seed+round-trip case moved.** `ActivityCreateDialog` lost its edit path in the
+ * activity-dialog-unification epic (create-only now, no `activity` prop), so "seeds the duration
+ * type from the row and round-trips it on save" ported to
+ * `ActivityEditorDialog.round-trips.test.tsx` — "seeds the duration type from the row and
+ * round-trips it on a General save".
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -82,16 +88,16 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityCreateDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
     </QueryClientProvider>,
   );
 }
 
-describe('ActivityFormDialog — duration type (flag on)', () => {
+describe('ActivityCreateDialog — duration type (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
@@ -107,19 +113,6 @@ describe('ActivityFormDialog — duration type (flag on)', () => {
     expect(path).toBe('/organizations/acme/plans/pl1/activities');
     expect(JSON.parse(init?.body as string)).toMatchObject({
       name: 'Pour slab',
-      durationType: 'FIXED_UNITS',
-    });
-  });
-
-  it('seeds the duration type from the row and round-trips it on save', async () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('Duration type')).toHaveValue('FIXED_UNITS');
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      version: 4,
       durationType: 'FIXED_UNITS',
     });
   });

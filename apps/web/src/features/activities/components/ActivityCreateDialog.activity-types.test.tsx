@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
@@ -13,7 +13,13 @@ import { apiFetch } from '@/lib/api/client';
  * one hides the Duration/Expected-finish inputs (their duration is derived) and shows the explanatory
  * hint, that the WBS parent picker offers the plan's summaries, and that a create submits the derived
  * type with a zeroed duration (and the chosen `parentId`). Flag-off behaviour (options absent, a seeded
- * value still shown) is covered in `ActivityFormDialog.test.tsx`.
+ * value still shown) is covered in `ActivityCreateDialog.test.tsx`.
+ *
+ * **The self-parenting case moved.** `ActivityCreateDialog` lost its edit path in the
+ * activity-dialog-unification epic (create-only now, no `activity` prop), so "does not parent an
+ * activity to itself in edit mode" ported to
+ * `ActivityEditorDialog.round-trips.test.tsx` — "does not offer the activity being edited as its own
+ * WBS parent".
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -84,16 +90,16 @@ const BASE_LOE: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityCreateDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
     </QueryClientProvider>,
   );
 }
 
-describe('ActivityFormDialog — advanced activity types (flag on)', () => {
+describe('ActivityCreateDialog — advanced activity types (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch)
       .mockReset()
@@ -152,7 +158,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
 
   it('offers the plan’s summaries in the WBS parent picker (excluding the edited activity)', () => {
     renderDialog({ planActivities: [SUMMARY] });
-    const parent = screen.getByLabelText('WBS summary');
+    const parent = screen.getByLabelText('Parent WBS summary');
     expect(parent).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'TT.4 · Superstructure' })).toBeInTheDocument();
     // The "None (top-level)" default is always present.
@@ -171,7 +177,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     expect(
       screen.queryByText(/There are no WBS summaries in this plan yet/i),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('WBS summary')).toBeDisabled();
+    expect(screen.getByLabelText('Parent WBS summary')).toBeDisabled();
   });
 
   it('surfaces an honest error (not a false empty) when the plan activities fail to load', () => {
@@ -186,7 +192,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
   it('creates an activity nested under the chosen WBS summary', async () => {
     renderDialog({ planActivities: [SUMMARY] });
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour columns' } });
-    fireEvent.change(screen.getByLabelText('WBS summary'), {
+    fireEvent.change(screen.getByLabelText('Parent WBS summary'), {
       target: { value: 'wbs1' },
     });
     fireEvent.click(screen.getByRole('button', { name: /create|save/i }));
@@ -194,12 +200,6 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
     expect(body.parentId).toBe('wbs1');
-  });
-
-  it('does not parent an activity to itself in edit mode', () => {
-    // Editing the summary itself: it must not appear as its own parent option.
-    renderDialog({ activity: SUMMARY, planActivities: [SUMMARY] });
-    expect(screen.queryByRole('option', { name: 'TT.4 · Superstructure' })).not.toBeInTheDocument();
   });
 });
 
@@ -212,7 +212,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
  * two derived types), and the calendar picker it cannot use is shaded with the reason rather than
  * left live to save a value that the service overrides.
  */
-describe('ActivityFormDialog — resource-dependent type (flag on)', () => {
+describe('ActivityCreateDialog — resource-dependent type (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch)
       .mockReset()
@@ -240,7 +240,11 @@ describe('ActivityFormDialog — resource-dependent type (flag on)', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'RESOURCE_DEPENDENT' } });
 
-    expect(screen.getByLabelText(/Calendar/)).toBeDisabled();
+    // `readOnly`, not `disabled` (ADR-0083 D1 row 4, adopted here at M3-T1): the picker still shows
+    // which calendar the activity carries, focusable and copyable, which is what the reader being
+    // told it is overridden most needs to see.
+    expect(screen.getByLabelText(/Calendar/)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/Calendar/)).not.toBeDisabled();
     expect(
       screen.getByText(/scheduled on its driving resource’s calendar instead/i),
     ).toBeInTheDocument();
@@ -251,8 +255,8 @@ describe('ActivityFormDialog — resource-dependent type (flag on)', () => {
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'RESOURCE_DEPENDENT' } });
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'TASK' } });
 
-    // A disabled spell must not be permanent: the shading is a function of the current type, not a
+    // A shaded spell must not be permanent: the shading is a function of the current type, not a
     // one-way latch.
-    expect(screen.getByLabelText(/Calendar/)).not.toBeDisabled();
+    expect(screen.getByLabelText(/Calendar/)).not.toHaveAttribute('readonly');
   });
 });

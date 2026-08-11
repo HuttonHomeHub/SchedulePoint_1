@@ -30,11 +30,28 @@ export interface ScopeForm<TValues extends FieldValues> {
   errorCount: number;
 }
 
+/** Per-scope form options. Every member is optional and defaults to RHF's own default, so a host
+ * that passes nothing is byte-identical to one that cannot pass anything. */
+export interface ScopeFormOptions {
+  /**
+   * Whether **this form's** `handleSubmit` focuses its own first invalid control on a failed
+   * submit. RHF's default is `true` (`react-hook-form@7.84.0`, `dist/index.esm.mjs:3007-3009` —
+   * `_focusError` is gated on it), and that is right for a host with ONE form.
+   *
+   * A host that validates several scope forms in one submit passes `false` on all of them: four
+   * forms each focusing their own first problem is four competing focus calls whose winner is
+   * whichever promise settles last, which drags the reader past the problems it skipped. Such a
+   * host owns the single ordered focus decision itself.
+   */
+  shouldFocusError?: boolean;
+}
+
 export function useScopeForm<TValues extends FieldValues>(
   schema: z.ZodType,
   seed: (activity: ActivitySummary | undefined) => TValues,
   activity: ActivitySummary | undefined,
   open: boolean,
+  options: ScopeFormOptions = {},
 ): ScopeForm<TValues> {
   const form = useForm<TValues>({
     // The scope schemas are plain Zod objects (Scheduling behind three refinements); the resolver's
@@ -42,6 +59,9 @@ export function useScopeForm<TValues extends FieldValues>(
     // here rather than at four call sites.
     resolver: zodResolver(schema as never) as never,
     defaultValues: seed(activity) as never,
+    // `?? true` restates RHF's own default rather than widening behaviour: a caller that omits the
+    // option gets exactly what it got before this parameter existed.
+    shouldFocusError: options.shouldFocusError ?? true,
   });
 
   const { reset } = form;

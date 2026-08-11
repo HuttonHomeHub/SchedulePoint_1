@@ -143,17 +143,35 @@ describe('CANVAS_TIME_AXIS_ENABLED', () => {
 });
 
 describe('ACTIVITY_EDITOR_CONVERGENCE_ENABLED', () => {
-  // The convergence flag is DERIVED from the tabbed-editor flag, not read beside it. With tabs off
-  // and convergence on, the row menu's Logic and Resources items would build an editor intent for a
-  // dialog that never renders — both entry points stranded on a surface that opens nothing. The
-  // security review asked for the two to be coupled; deriving the constant makes that combination
-  // unrepresentable rather than merely untested.
-  it('is off whenever the tabbed editor is off, however it is set', async () => {
+  /**
+   * **This case used to assert a derivation, and it is kept rather than deleted because what
+   * replaced the derivation is worth stating** (ADR-0084 D5: coverage moves with a named
+   * destination).
+   *
+   * The convergence flag was `AND`-ed with `VITE_ACTIVITY_EDITOR_TABS`. With tabs off and
+   * convergence on, the row menu's Logic and Resources items built an editor intent for a dialog
+   * that never rendered — both entry points stranded on a surface that opened nothing. The
+   * security review asked for the two to be coupled, and deriving the constant made that
+   * combination unrepresentable rather than merely untested.
+   *
+   * The tabbed editor is now unconditional (ADR-0089), so the stranding is unreachable by
+   * construction: there is no configuration in which an editor intent has no editor to open. The
+   * flag is a plain read again, and this asserts that it is — a stray `&&` reintroduced against a
+   * constant that no longer exists would not compile, but one against a *different* flag would.
+   */
+  it('is read on its own, with no surviving conjunct', async () => {
     vi.resetModules();
-    vi.stubEnv('VITE_ACTIVITY_EDITOR_TABS', 'false');
     vi.stubEnv('VITE_ACTIVITY_EDITOR_CONVERGENCE', 'true');
     const env = await import('./env');
-    expect(env.ACTIVITY_EDITOR_TABS_ENABLED).toBe(false);
+    expect(env.ACTIVITY_EDITOR_CONVERGENCE_ENABLED).toBe(true);
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('is off when it is set off', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_ACTIVITY_EDITOR_CONVERGENCE', 'false');
+    const env = await import('./env');
     expect(env.ACTIVITY_EDITOR_CONVERGENCE_ENABLED).toBe(false);
     vi.unstubAllEnvs();
     vi.resetModules();

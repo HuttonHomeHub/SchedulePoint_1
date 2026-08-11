@@ -71,8 +71,12 @@ export default defineConfig({
               // rail would add a dozen reasons to fail for something the epic is not about. The
               // panel is the SAME component either way (ADR-0062), which is what makes that safe.
               VITE_CANVAS_WORKSPACE: 'false',
-              VITE_ACTIVITY_EDITOR_TABS: 'false',
-              VITE_ACTIVITY_EDITOR_CONVERGENCE: 'false',
+              // The tabbed editor, which is what every shipped bundle contains. This suite pinned
+              // it OFF until the dialog-unification epic, proving the field on a surface no
+              // operator can produce (ADR-0088 D1). Converting it is cheap for exactly the reason
+              // the note above gives: `ActivityResourcesPanel` is the same component whether it is
+              // reached as a dialog or as the editor's Resources tab (ADR-0062), so only the route
+              // to it changes.
               // The pen must be real: an assignment write is pen-gated (ADR-0028), and a lag that
               // saves without the lock is not the thing being tested.
               VITE_PLAN_EDIT_LOCK: 'true',

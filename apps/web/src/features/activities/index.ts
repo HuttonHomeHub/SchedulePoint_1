@@ -26,9 +26,7 @@ export {
 } from './api/use-activity-steps';
 export { ActivitiesTable } from './components/ActivitiesTable';
 export { CreateActivityButton } from './components/CreateActivityButton';
-export { ActivityFormDialog } from './components/ActivityFormDialog';
-export { ActivityProgressDialog } from './components/ActivityProgressDialog';
-export { ActivityStepsDialog } from './components/ActivityStepsDialog';
+export { ActivityCreateDialog } from './components/ActivityCreateDialog';
 export { ActivityEditorDialog } from './components/ActivityEditorDialog';
 export {
   deriveActivityEditorGating,

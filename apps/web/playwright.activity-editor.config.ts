@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * **Flag-ON** end-to-end configuration for the **tabbed activity editor**
- * (`VITE_ACTIVITY_EDITOR_TABS`, ADR-0060, `docs/specs/activity-editor-restructure/`).
+ * (ADR-0060, `docs/specs/activity-editor-restructure/`). Its flag retired in ADR-0089 — the
+ * editor is now the only activity surface, so this config no longer pins anything to reach it.
  *
  * The pen is on **and enforced at the API** (`PLAN_EDIT_LOCK_ENFORCED`), because the property this
  * journey exists to prove is a permission one: a Contributor reports progress while a Planner holds
@@ -62,7 +63,6 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             env: {
-              VITE_ACTIVITY_EDITOR_TABS: 'true',
               // The convergence epic on top: Logic, Resources and Notes are tabs of this editor,
               // and the permission claims they make (a link needs the pen; a note does not) can
               // only be tested against a server that actually enforces the lock.

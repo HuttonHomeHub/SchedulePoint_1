@@ -218,8 +218,8 @@ export function ToolbarPlanWorkspace({
   const rootRef = useRef<HTMLDivElement>(null);
   // "A modal is open" — the plan dialogs + the edit-plan form + the activity edit/delete dialogs.
   // Gates both the `?` shortcut (don't stack the sheet on an open modal) and the undo/redo keybindings
-  // (don't mutate plan state from beneath an open `ConfirmDialog`/`ActivityFormDialog`, ADR-0048).
-  // `editorIntent` is listed because with `VITE_ACTIVITY_EDITOR_TABS` on (default) it is the state
+  // (don't mutate plan state from beneath an open `ConfirmDialog`/`ActivityCreateDialog`, ADR-0048).
+  // `editorIntent` is listed because it is the state
   // that opens the editor — `editActivityId` is never set on that path, so without this line the
   // undo/redo chords were live underneath the open editor, which is the exact thing this guard
   // exists to prevent.

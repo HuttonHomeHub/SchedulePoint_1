@@ -919,37 +919,6 @@ export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
 export const GANTT_VIEW_ENABLED = flagDefaultOn(import.meta.env.VITE_GANTT_VIEW);
 
 /**
- * Tabbed activity editor (ADR-0060, spec `docs/specs/activity-editor-restructure/`). **ON by
- * default** (flipped 2026-07-29 at the M6 gate). Replaces the 22-field single-submit
- * `ActivityFormDialog` with a four-tab editor (General / Scheduling / Progress / Cost) that saves
- * **per write scope**, and co-locates the progress model that was spread across four dialogs.
- *
- * Per-scope save is not a styling choice. Progress writes are deliberately not pen-gated
- * (ADR-0028 Q-C) while definition writes are, so one merged Save would fuse a Contributor's
- * capability with a Planner's and quietly remove the former.
- *
- * The M6 gate is why this is on. Four specialist reviews over the combined M1–M5 diff found six
- * defects in code that had already passed a human read — a dropped calendar Combobox with its
- * loading/error states, Save buttons that blurred to `<body>` on every save, a reason sentence
- * placed beside its control instead of associated with it, an invented pen message that was false
- * whenever nobody held the pen, a missing discard confirmation, and a duplicated save bar already
- * diverging between its two copies. All six are folded, with regression tests; two lower-priority
- * findings are recorded as TECH_DEBT #63/#64. That is the epic's own premise landing on itself, and
- * it is the reason the flip is a separate decision from the build.
- *
- * Flag-off renders the three existing dialogs byte-for-byte — the rollback contract the parity
- * suites pin, kept rather than weakened. Frontend-only: no schema, DTO or engine change, and no
- * path into `computeSchedule`. (The steps edit-lock gate that shipped alongside this epic is
- * **not** behind this flag: a server check cannot be gated by a client build-time constant — see
- * ADR-0060 §5.)
- *
- * @enabled 2026-07-29
- */
-export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_ACTIVITY_EDITOR_TABS,
-);
-
-/**
  * Activity-editor convergence (ADR-0062; spec
  * `docs/specs/activity-editor-logic-resources-convergence/`). **ON by default since 2026-07-29**,
  * once the four specialist gates ran over the combined M0–M5 diff and every blocking finding was
@@ -975,20 +944,22 @@ export const ACTIVITY_EDITOR_TABS_ENABLED = flagDefaultOn(
  * `computeSchedule`. Note that flag-off is **not** byte-for-byte the pre-epic surface: the inline
  * add-link form (M1) landed unflagged in the Logic dialog, deliberately and early so it soaks.
  *
- * **It is `AND`-ed with {@link ACTIVITY_EDITOR_TABS_ENABLED}, not read alone.** There is no such
- * thing as a Logic *tab* without the tabbed editor to hold it: with tabs off and convergence on,
- * the row menu's Logic and Resources items would build an editor intent for a dialog that never
- * renders, stranding both entry points on a surface that opens nothing. Deriving the constant makes
- * that combination unrepresentable rather than merely untested (the security review's finding on
- * the combined diff), and the flag-matrix suite asserts all four combinations.
+ * **It was `AND`-ed with `ACTIVITY_EDITOR_TABS_ENABLED` until that flag retired** (ADR-0089): there
+ * is no such thing as a Logic *tab* without the tabbed editor to hold it, so with tabs off and
+ * convergence on the row menu's Logic and Resources items built an editor intent for a dialog that
+ * never rendered — both entry points stranded on a surface that opened nothing. Deriving the
+ * constant made that combination unrepresentable rather than merely untested (the security
+ * review's finding on the combined diff). The editor is now unconditional, so the stranding is
+ * unreachable and the conjunct has nothing left to guard against.
  *
  * Rollback: set `VITE_ACTIVITY_EDITOR_CONVERGENCE=false` and rebuild the web image. Nothing
  * persisted depends on it.
  *
  * @enabled 2026-07-29
  */
-export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
-  ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_ACTIVITY_EDITOR_CONVERGENCE);
+export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED = flagDefaultOn(
+  import.meta.env.VITE_ACTIVITY_EDITOR_CONVERGENCE,
+);
 
 /**
  * **WBS improvements** (`VITE_WBS_IMPROVEMENTS`, default **on** since 2026-07-30) — making the shipped WBS
@@ -1001,10 +972,10 @@ export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
  * endpoints are permission-, pen- and scope-gated regardless of whether any UI reaches them. Nor is
  * the honest WBS delete warning, which is a strict improvement that stands alone.
  *
- * **It is `AND`-ed with {@link ACTIVITY_EDITOR_TABS_ENABLED}**, for the ADR-0062 reason: the
- * Members surface is a tab, and a tab with tabs off would strand the summary's own entry point on
- * an editor that never renders. Deriving the constant makes that combination unrepresentable
- * rather than merely untested.
+ * **It was `AND`-ed with `ACTIVITY_EDITOR_TABS_ENABLED` until that flag retired** (ADR-0089), for
+ * the ADR-0062 reason: the Members surface is a tab, and a tab with tabs off would have stranded
+ * the summary's own entry point on an editor that never rendered. The editor is now
+ * unconditional, so there is no such combination to make unrepresentable.
  *
  * **Default-on 2026-07-30 (ADR-0063 M6)**, once the deferred specialist gates had run over the
  * whole epic diff and every blocking finding was folded with a regression test. Those gates found
@@ -1026,8 +997,7 @@ export const ACTIVITY_EDITOR_CONVERGENCE_ENABLED =
  *
  * @enabled 2026-07-30
  */
-export const WBS_IMPROVEMENTS_ENABLED =
-  ACTIVITY_EDITOR_TABS_ENABLED && flagDefaultOn(import.meta.env.VITE_WBS_IMPROVEMENTS);
+export const WBS_IMPROVEMENTS_ENABLED = flagDefaultOn(import.meta.env.VITE_WBS_IMPROVEMENTS);
 
 /**
  * **Canvas authoring flow** (`VITE_CANVAS_AUTHORING_FLOW`, default **on** since 2026-07-31) — the
