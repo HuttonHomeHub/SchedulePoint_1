@@ -10,6 +10,29 @@
 - **Stage 5 (implementation plan) is deliberately not in this file.** It follows approval of
   the recommendation below.
 
+> ## ⚠ §2's numbers are withdrawn — read [`m0-measurement.md`](./m0-measurement.md) first
+>
+> This document ends with **M0**, two falsifiable predictions, precisely because it was written
+> without a shell and every pixel figure in §2 is arithmetic over class names plus an assumed
+> 6.6 px/character metric. **M0 has since been run** in Chromium against the real workspace at the
+> shipped flag defaults (`apps/web/e2e-measure-toolbar/`). **Both predictions were falsified**, and
+> so was §2.4's headline claim that a 2560 px monitor is needed before the labels appear — at 1920
+> the labels are already on, and that is _why_ the row breaks.
+>
+> The measurement also found what neither prediction anticipated: at **1920 × 1080 @ 100%** no `⋯`
+> renders at all, and `legend` and `shortcuts` sit **entirely outside** their `overflow-hidden`
+> container — 0 px visible, pointer-unreachable. At **1440** the `⋯` itself has 1 px visible while
+> holding the only route to 14 commands; at **960** it has none, on both rows.
+>
+> So: **§2.3's pinned-floor table, §2.4's label arithmetic and the 2560/2700 px figures must not be
+> quoted**, §1.2's "every command is reachable" is false at four of the five widths measured, and
+> §4's recommendation needs re-deriving against the measured numbers rather than these. The rest of
+> the document — the item census, the group/tier/order/row facts, the eight structural findings, the
+> flag analysis and §6's answers — is read from code and stands.
+>
+> That the predictions failed is the mechanism working. Leaving the failed numbers in place without
+> this banner is the ADR-0058 failure this repository exists to gate against.
+
 ---
 
 ## 0. Evidence, and its limits
