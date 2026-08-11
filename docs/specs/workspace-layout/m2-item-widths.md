@@ -198,6 +198,41 @@ apply — the non-default width is only spent when a planner has actually change
 Remaining pinned: `search` 240, `finish-chip` 150, `go-to-date` 132, `summary` 126, `zoom-preset`
 102, `view` 91, `filter` 93. `finish-chip` is M2-T3.
 
+## After M2-T2 in full (lenses + Legend into `View ▾`)
+
+|                   | M2 start | after T1 |     after T2 |
+| ----------------- | -------: | -------: | -----------: |
+| Row 1 items       |       25 |       23 |       **18** |
+| Row 1 total @2304 |     1911 |     1798 |     **1487** |
+| Pinned floor      |     1198 |     1117 |      **934** |
+| Inline @1920      |       15 |       17 | **18 (all)** |
+
+**And the label arithmetic, re-derived rather than assumed — it got worse, not better.** Seven
+`'auto'` items now survive on Row 1, not the six Option B projected: `zoom-out` 59, `zoom-in` 51,
+`fit` 61, `today` 72, `next-conflict` 76, **`float-paths` 69** and `shortcuts` 121. That is 509 px
+of text, 607 px with the 14 px per-item chrome.
+
+| term                        |       px |
+| --------------------------- | -------: |
+| items                       |     1487 |
+| chrome (5 groups, 18 items) |      176 |
+| label requirement           |      607 |
+| promotion margin            |       32 |
+| **required**                | **2302** |
+| container @1920             |     1832 |
+| **shortfall**               | **−470** |
+
+`float-paths` is in the list because M2-T1 correctly declined to move it (it runs in the Gantt).
+So the earlier hope — that clearing enough width would let labels promote without cutting anything
+— **does not survive measurement**: the reduction so far is 424 px and the shortfall is 470.
+
+`finish-chip` (150 px, M2-T3) and the Row-2 consolidation do not change the label term at all; only
+removing an `'auto'` item does. `shortcuts` remains the single largest at 135 px all-in, and on
+these numbers cutting it alone still would not close a 470 px gap. **This is the question to put to
+the product owner at M2-T5, with these figures** — and the honest framing is no longer "cut one
+control and labels appear", it is "labels at 1920 need roughly three of the seven to go, or a
+different mechanism".
+
 ## Follow-ups this task opens
 
 - ~~**Fix the `labelled` flag**~~ — done in this task; `visibleText` / `labelWidth` / `nameWidth`

@@ -2206,3 +2206,19 @@ click, so exercising it needs a canvas gesture the fit gate has no other reason 
 subject anyway, and assert the thing that can actually go wrong — that the bar stays fully inside the
 viewport at 960 and 768 with its widest plausible item set. Raised by `component-reviewer` during the
 ADR-0090 pre-approval pass as a suggestion, and recorded rather than silently left out of scope.
+
+## 125. `View ▾` holds one toggle that ejects you from it
+
+**Raised:** 2026-08-11 (ADR-0090 M2-T2) · **Size:** S · **Owner:** the M5 gate pass
+
+`resource-view` moved from Row 1 into the `View ▾` popover. Revealing the resource strip moves
+focus into the strip (ADR-0049, deliberate — a revealed panel should receive focus), which from a
+Row-1 button was unremarkable and from inside an open popover means the planner is ejected from the
+surface they were still using. Every other member of `View ▾` leaves the popover open, so this one
+behaves unlike its neighbours in a list that invites toggling several things at once.
+
+Recorded rather than fixed mid-relocation, because the fix is a judgement between two defensible
+behaviours (keep the popover open and lose the panel's focus move, or keep the focus move and
+accept the eject) and it belongs with the specialist reviews at M5. Observed, not inferred:
+`e2e-resource-view/resource-view.spec.ts` asserts the focus move immediately after the toggle, and
+its comment records why the assertion sits exactly there.
