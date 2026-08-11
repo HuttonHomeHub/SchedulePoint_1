@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   DURATION_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
@@ -7,7 +6,13 @@ import {
   type CalendarSummary,
 } from '@repo/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import {
+  useWatch,
+  type FieldErrors,
+  type FieldPath,
+  type FieldValues,
+  type UseFormReturn,
+} from 'react-hook-form';
 
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import {
@@ -16,7 +21,6 @@ import {
   durationInputProps,
   durationLabel,
   durationWriteFields,
-  seedDurationText,
 } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
 import {
@@ -28,11 +32,23 @@ import {
   INHERIT_CALENDAR_LABEL,
   PERCENT_COMPLETE_TYPE_LABELS,
   PERCENT_COMPLETE_TYPE_OPTIONS,
-  activityFormSchema,
   isDurationDerivedType,
   selectableActivityTypes,
   type ActivityFormValues,
 } from '../schemas/activity-schemas';
+import {
+  activityCostSchema,
+  activityGeneralSchema,
+  activityMeasureSchema,
+  activitySchedulingSchema,
+  type ActivityCostValues,
+  type ActivityGeneralValues,
+  type ActivityMeasureValues,
+  type ActivitySchedulingValues,
+} from '../schemas/activity-scope-schemas';
+
+import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
+import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -71,8 +87,67 @@ import {
 } from '@/lib/calendar-tiers';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
-import { minorToMajorInput } from '@/lib/format-money';
 import { matchesLibraryQuery } from '@/lib/library-filters';
+
+/** One field, named against the scope form that owns it. The scope tag is what makes the list below
+ * checkable: `{ scope: 'general', name: 'constraintType' }` does not compile, because
+ * `FieldPath<ActivityGeneralValues>` has no such member. */
+type SubmitFieldEntry =
+  | { scope: 'general'; name: FieldPath<ActivityGeneralValues> }
+  | { scope: 'scheduling'; name: FieldPath<ActivitySchedulingValues> }
+  | { scope: 'measure'; name: FieldPath<ActivityMeasureValues> }
+  | { scope: 'cost'; name: FieldPath<ActivityCostValues> };
+
+/**
+ * The order a failed submit walks to choose the **one** control it focuses.
+ *
+ * **Declared, not derived, and it mirrors the sections below rather than the scopes.** Neither
+ * available derivation is right: scope order (general → scheduling → measure → cost) is not what the
+ * planner sees, because this form interleaves scheduling fields both *before* Cost & earned value
+ * (Working time, Levelling) and *after* it (Constraints, External interfaces); and the DOM cannot be
+ * walked at all, since a field hidden by an off flag or by the current activity type is absent from
+ * it while still able to carry an error. So the list is written out, in the order the sections
+ * render, and has to be edited when a section moves — which is the cost of the guarantee that the
+ * reader is sent to the first problem they can see rather than the first one a scope happens to hold.
+ *
+ * Until M1 this ordering was RHF's: `handleSubmit` focuses by registration order, which is render
+ * order. The four-form submit still validates through each scope's own `handleSubmit` — but with
+ * `shouldFocusError: false`, because four forms each focusing their own first problem is four
+ * competing focus calls — so the host owns the decision instead, and `FormProblemCount`'s silence
+ * at one problem is only lawful because this still moves focus (ADR-0077 §9 / spec §4.5).
+ */
+const SUBMIT_FIELD_ORDER = [
+  // Identity
+  { scope: 'general', name: 'name' },
+  { scope: 'general', name: 'code' },
+  { scope: 'general', name: 'description' },
+  // Work
+  { scope: 'general', name: 'type' },
+  { scope: 'general', name: 'duration' },
+  { scope: 'general', name: 'durationType' },
+  // Breakdown
+  { scope: 'general', name: 'parentId' },
+  // Working time
+  { scope: 'scheduling', name: 'calendarId' },
+  // Levelling
+  { scope: 'scheduling', name: 'levelingPriority' },
+  // Cost & earned value
+  { scope: 'measure', name: 'percentCompleteType' },
+  { scope: 'measure', name: 'physicalPercentComplete' },
+  { scope: 'cost', name: 'budgetedExpense' },
+  { scope: 'cost', name: 'actualExpense' },
+  { scope: 'cost', name: 'accrualType' },
+  // Constraints
+  { scope: 'scheduling', name: 'constraintType' },
+  { scope: 'scheduling', name: 'constraintDate' },
+  { scope: 'scheduling', name: 'secondaryConstraintType' },
+  { scope: 'scheduling', name: 'secondaryConstraintDate' },
+  { scope: 'scheduling', name: 'scheduleAsLateAsPossible' },
+  { scope: 'scheduling', name: 'expectedFinish' },
+  // External interfaces
+  { scope: 'scheduling', name: 'externalEarlyStart' },
+  { scope: 'scheduling', name: 'externalLateFinish' },
+] as const satisfies readonly SubmitFieldEntry[];
 
 /**
  * Create-or-edit dialog for an activity DEFINITION (Planner/Org Admin). Progress
@@ -150,105 +225,80 @@ export function ActivityFormDialog({
     (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
   );
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    control,
-    setValue,
-    getValues,
-    setError,
-    formState: { errors },
-  } = useForm<ActivityFormValues>({
-    resolver: zodResolver(activityFormSchema),
-    defaultValues: {
-      name: '',
-      code: '',
-      type: 'TASK',
-      durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-      duration: '1',
-      constraintType: '',
-      constraintDate: '',
-      secondaryConstraintType: '',
-      secondaryConstraintDate: '',
-      scheduleAsLateAsPossible: false,
-      expectedFinish: '',
-      externalEarlyStart: '',
-      externalLateFinish: '',
-      calendarId: '',
-      parentId: '',
-      levelingPriority: undefined,
-      percentCompleteType: 'DURATION',
-      accrualType: 'UNIFORM',
-      physicalPercentComplete: undefined,
-      budgetedExpense: undefined,
-      actualExpense: undefined,
-      description: '',
-    },
+  // The General scope seeds its duration from the factor known at OPEN — the SAVED calendar, because
+  // nothing is watched yet at this point in the render. `useDurationSeed` below re-reads it once the
+  // calendar list lands, so a sub-day duration is never shown (or saved) as its rounded day.
+  const seedFactor = effectiveHoursPerDay(calendars, {
+    activityCalendarId: activity?.calendarId ?? '',
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
+  // Four scope forms, one submit (ADR-0060 §4 / the dialog-unification epic M1). The wide
+  // `useForm<ActivityFormValues>` this replaced could not feed a scope-typed field group:
+  // `UseFormReturn<ActivityFormValues>` is not assignable to `UseFormReturn<ActivityGeneralValues>`
+  // (RHF's generic is invariant — measured, M0-T2 claim 4). Every seed reads the row for EVERY
+  // field, including ones behind an off flag, so a hidden value round-trips rather than being
+  // silently cleared; `activity-editor-seeds.ts` carries that rule and its reasons.
+  //
+  // All four take `shouldFocusError: false`: this host owns the ONE ordered focus decision
+  // (`focusFirstProblem` below), and per-form focus would be four competing calls. The option is
+  // per-host rather than baked into the hook, so `ActivityEditorDialog` — one visible scope at a
+  // time — keeps RHF's default and is untouched.
+  const general = useScopeForm(
+    activityGeneralSchema,
+    (a) => seedGeneral(a, seedFactor),
+    activity,
+    open,
+    NO_SCOPE_FOCUS,
+  );
+  const scheduling = useScopeForm(
+    activitySchedulingSchema,
+    seedScheduling,
+    activity,
+    open,
+    NO_SCOPE_FOCUS,
+  );
+  const measure = useScopeForm(activityMeasureSchema, seedMeasure, activity, open, NO_SCOPE_FOCUS);
+  const cost = useScopeForm(activityCostSchema, seedCost, activity, open, NO_SCOPE_FOCUS);
 
+  // `useScopeForm` re-seeds the four forms on `[open, activity?.id]`; it has no equivalent for the
+  // MUTATION, and dropping this is silent — a failed create's server-error banner would survive into
+  // the next open of a dialog these hosts keep mounted and merely toggle.
   useEffect(() => {
-    if (open) {
-      reset({
-        name: activity?.name ?? '',
-        code: activity?.code ?? '',
-        type: activity?.type ?? 'TASK',
-        // Always seed from the row so a stored value round-trips even when the picker is hidden
-        // (flag off) — an edit then never silently resets the duration type. Defaults to the API default.
-        durationType: activity?.durationType ?? 'FIXED_DURATION_AND_UNITS_TIME',
-        // Seeded on the factor known at OPEN; `useDurationSeed` re-reads it once the calendar list
-        // lands, so a sub-day duration is never shown (or saved) as its rounded day.
-        duration: seedDurationText(
-          activity,
-          effectiveHoursPerDay(calendars, {
-            activityCalendarId: activity?.calendarId ?? '',
-            ...(planCalendarId === undefined ? {} : { planCalendarId }),
-          }),
-        ),
-        constraintType: activity?.constraintType ?? '',
-        constraintDate: activity?.constraintDate ?? '',
-        // Always seed the M4 advanced fields from the row so a stored value round-trips even when the
-        // fields are hidden (flag off) — an edit then never silently clears them.
-        secondaryConstraintType: activity?.secondaryConstraintType ?? '',
-        secondaryConstraintDate: activity?.secondaryConstraintDate ?? '',
-        scheduleAsLateAsPossible: activity?.scheduleAsLateAsPossible ?? false,
-        expectedFinish: activity?.expectedFinish ?? '',
-        // Always seed the external / inter-project dates from the row so a stored value round-trips even
-        // when the section is hidden (flag off) — an edit then never silently clears an imported bound.
-        externalEarlyStart: activity?.externalEarlyStart ?? '',
-        externalLateFinish: activity?.externalLateFinish ?? '',
-        // Always seed from the row so the value round-trips even when the picker is hidden
-        // (flag off) — an edit then never silently clears an assigned calendar. '' = inherit.
-        calendarId: activity?.calendarId ?? '',
-        // Seeded from the row so a stored WBS parent round-trips even with the picker hidden
-        // (flag off) — an edit then never silently un-nests the activity. '' = top-level.
-        parentId: activity?.parentId ?? '',
-        // Always seed from the row so a stored levelling priority round-trips even with the field
-        // hidden (flag off) — an edit then never silently clears it. `null` → undefined (blank).
-        levelingPriority: activity?.levelingPriority ?? undefined,
-        // Earned-Value inputs (EV4b): always seed from the row so a stored value round-trips even with
-        // the fields hidden (flag off) — an edit then never clears them. `percentCompleteType` defaults
-        // to the API default; `null` physical %/expense → undefined (blank), money minor → major units.
-        percentCompleteType: activity?.percentCompleteType ?? 'DURATION',
-        // Cost accrual (M7 rung 5, ADR-0044 §32): always seed from the row so a stored value round-trips
-        // even with the picker hidden (flag off) — an edit then never silently resets it. API default UNIFORM.
-        accrualType: activity?.accrualType ?? 'UNIFORM',
-        physicalPercentComplete: activity?.physicalPercentComplete ?? undefined,
-        budgetedExpense: minorToMajorInput(activity?.budgetedExpense),
-        actualExpense: minorToMajorInput(activity?.actualExpense),
-        description: activity?.description ?? '',
-      });
-      mutation.reset();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
+    if (open) mutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear only on open/target change
   }, [open, activity?.id]);
 
-  const type = useWatch({ control, name: 'type' });
-  const constraintType = useWatch({ control, name: 'constraintType' });
-  const secondaryConstraintType = useWatch({ control, name: 'secondaryConstraintType' });
-  const calendarId = useWatch({ control, name: 'calendarId' });
-  const parentId = useWatch({ control, name: 'parentId' });
-  const percentCompleteType = useWatch({ control, name: 'percentCompleteType' });
+  // Per scope, so a field reads its OWN form's errors and reaching for a neighbour's is a compile
+  // error (`schedulingErrors.name` does not exist) — the same seam `register` gets.
+  const generalErrors = general.form.formState.errors;
+  const schedulingErrors = scheduling.form.formState.errors;
+  const measureErrors = measure.form.formState.errors;
+  const costErrors = cost.form.formState.errors;
+  // The count is a property of the SUBMIT, not of one scope, so it reads all four. The keys cannot
+  // collide, and the annotation says why rather than asserting it: the four shapes partition
+  // `ActivityFormValues` exactly (`activity-scope-schemas.structural.test.ts` computes that union
+  // and fails if it drifts), so their merged errors ARE that type — no cast.
+  const allErrors: FieldErrors<ActivityFormValues> = {
+    ...generalErrors,
+    ...schedulingErrors,
+    ...measureErrors,
+    ...costErrors,
+  };
+
+  // `useWatch`, never `form.watch`: on a four-form host `watch` subscribes the WHOLE component to
+  // one form's every keystroke, so typing a name would re-render the Constraints section.
+  const type = useWatch({ control: general.form.control, name: 'type' });
+  const parentId = useWatch({ control: general.form.control, name: 'parentId' });
+  const constraintType = useWatch({ control: scheduling.form.control, name: 'constraintType' });
+  const secondaryConstraintType = useWatch({
+    control: scheduling.form.control,
+    name: 'secondaryConstraintType',
+  });
+  const calendarId = useWatch({ control: scheduling.form.control, name: 'calendarId' });
+  const percentCompleteType = useWatch({
+    control: measure.form.control,
+    name: 'percentCompleteType',
+  });
   // A seeded parent that isn't in the fetched summary list (still loading, or the parent was itself
   // deleted/changed): keep it visible as an honest one-off option so opening the form never silently
   // un-nests the activity — the same honest-selector pattern as the calendar picker.
@@ -288,8 +338,13 @@ export function ActivityFormDialog({
   });
   // Hoisted rather than inlined: an arrow rebuilt per render defeats the React Compiler's
   // memoization of everything downstream of it (`Existing memoization could not be preserved`).
-  const setDuration = useCallback((text: string) => setValue('duration', text), [setValue]);
-  const readDuration = useCallback(() => getValues('duration'), [getValues]);
+  const generalSetValue = general.form.setValue;
+  const generalGetValues = general.form.getValues;
+  const setDuration = useCallback(
+    (text: string) => generalSetValue('duration', text),
+    [generalSetValue],
+  );
+  const readDuration = useCallback(() => generalGetValues('duration'), [generalGetValues]);
   useDurationSeed({
     open,
     hoursPerDay,
@@ -311,7 +366,71 @@ export function ActivityFormDialog({
       ? secondaryConstraintType
       : null;
 
-  const onSubmit = handleSubmit((values) => {
+  /**
+   * The first problem in {@link SUBMIT_FIELD_ORDER}, focused — **one** decision, taken by the host.
+   *
+   * `getFieldState(name)` reads the form's live internal state rather than the render-time
+   * `formState` snapshot, so it is accurate in the same tick the four `trigger()` calls settled in.
+   * `setFocus` is a no-op for a name with no mounted control, which is what makes it safe to walk
+   * fields whose sections are behind an off flag (or hidden by the current activity type).
+   */
+  const focusFirstProblem = (): void => {
+    for (const entry of SUBMIT_FIELD_ORDER) {
+      switch (entry.scope) {
+        case 'general':
+          if (general.form.getFieldState(entry.name).error) {
+            general.form.setFocus(entry.name);
+            return;
+          }
+          break;
+        case 'scheduling':
+          if (scheduling.form.getFieldState(entry.name).error) {
+            scheduling.form.setFocus(entry.name);
+            return;
+          }
+          break;
+        case 'measure':
+          if (measure.form.getFieldState(entry.name).error) {
+            measure.form.setFocus(entry.name);
+            return;
+          }
+          break;
+        case 'cost':
+          if (cost.form.getFieldState(entry.name).error) {
+            cost.form.setFocus(entry.name);
+            return;
+          }
+          break;
+      }
+    }
+  };
+
+  const onSubmit = async (): Promise<void> => {
+    // Focus is OFF on all four, and that is load-bearing rather than tidy: `trigger`'s focus is
+    // opt-in (`react-hook-form@7.84.0`, `dist/index.esm.mjs:2751-2753`, registered in
+    // `scripts/dependency-claims.json`), so switched on here it would issue up to four competing
+    // focus calls whose winner is whichever promise settles last. The host decides instead, once.
+    const valid = await Promise.all([
+      general.form.trigger(undefined, { shouldFocus: false }),
+      scheduling.form.trigger(undefined, { shouldFocus: false }),
+      measure.form.trigger(undefined, { shouldFocus: false }),
+      cost.form.trigger(undefined, { shouldFocus: false }),
+    ]);
+    if (valid.some((ok) => !ok)) {
+      focusFirstProblem();
+      return;
+    }
+
+    // The four scopes partition `activityFormSchema`'s keys exactly (no key in two scopes, none
+    // dropped — `activity-scope-schemas.structural.test.ts` computes that union and fails if it
+    // drifts), so the merge is assignable with no cast and the body builders below are unmodified.
+    const values: ActivityFormValues = {
+      ...general.form.getValues(),
+      ...scheduling.form.getValues(),
+      ...measure.form.getValues(),
+      ...cost.form.getValues(),
+    };
+
     // The one check the schema deliberately cannot make (ADR-0070): whether this text converts on
     // THIS activity's calendar. Only reachable on the degraded whole-days path, where `4h` is a
     // well-formed duration the field simply cannot express.
@@ -319,7 +438,11 @@ export function ActivityFormDialog({
       !isDurationDerivedType(values.type) &&
       durationWriteFields(values.duration, hoursPerDay) === null
     ) {
-      setError('duration', { message: DURATION_NEEDS_WHOLE_DAYS }, { shouldFocus: true });
+      general.form.setError(
+        'duration',
+        { message: DURATION_NEEDS_WHOLE_DAYS },
+        { shouldFocus: true },
+      );
       return;
     }
     if (isEdit) {
@@ -351,7 +474,7 @@ export function ActivityFormDialog({
         },
       );
     }
-  });
+  };
 
   return (
     <Dialog
@@ -362,8 +485,17 @@ export function ActivityFormDialog({
       {...(isEdit ? {} : { description: 'Add an activity to this plan.' })}
     >
       <FieldGridContainer>
-        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
-          <FormProblemCount errors={errors} />
+        <form
+          noValidate
+          onSubmit={(event) => {
+            // `handleSubmit` used to do this; the four-form submit is the host's own function, so
+            // the default is prevented here rather than inside RHF.
+            event.preventDefault();
+            void onSubmit();
+          }}
+          className="flex flex-col gap-5"
+        >
+          <FormProblemCount errors={allErrors} />
           {mutation.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
               {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
@@ -381,20 +513,20 @@ export function ActivityFormDialog({
                 <TextField
                   label="Name"
                   autoComplete="off"
-                  error={errors.name?.message}
-                  {...register('name')}
+                  error={generalErrors.name?.message}
+                  {...general.form.register('name')}
                 />
                 <TextField
                   label="Code"
                   autoComplete="off"
-                  error={errors.code?.message}
-                  {...register('code')}
+                  error={generalErrors.code?.message}
+                  {...general.form.register('code')}
                 />
                 <FieldGridFull>
                   <TextareaField
                     label="Description"
-                    error={errors.description?.message}
-                    {...register('description')}
+                    error={generalErrors.description?.message}
+                    {...general.form.register('description')}
                   />
                 </FieldGridFull>
               </FieldGrid>
@@ -408,8 +540,8 @@ export function ActivityFormDialog({
                 <SelectField
                   label="Type"
                   id="activity-type"
-                  error={errors.type?.message}
-                  {...register('type')}
+                  error={generalErrors.type?.message}
+                  {...general.form.register('type')}
                 >
                   {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
                     <option key={value} value={value}>
@@ -443,8 +575,8 @@ export function ActivityFormDialog({
                     {...(durationHelp(hoursPerDay) === undefined
                       ? {}
                       : { hint: durationHelp(hoursPerDay) })}
-                    error={errors.duration?.message}
-                    {...register('duration')}
+                    error={generalErrors.duration?.message}
+                    {...general.form.register('duration')}
                   />
                 )}
                 {/* A resource-dependent activity keeps its own duration (it behaves exactly like a task for
@@ -479,7 +611,7 @@ export function ActivityFormDialog({
                         'duration; with the two fixed-duration types, editing the duration here also updates ' +
                         'the driving resource’s units or rate.'
                       }
-                      {...register('durationType')}
+                      {...general.form.register('durationType')}
                     >
                       {DURATION_TYPES.map((value) => (
                         <option key={value} value={value}>
@@ -518,7 +650,7 @@ export function ActivityFormDialog({
                       ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
                       : '')
                   }
-                  {...register('parentId')}
+                  {...general.form.register('parentId')}
                 >
                   <option value="">None (top-level)</option>
                   {/* A seeded parent not in the list stays selected under an honest label so the form
@@ -551,7 +683,10 @@ export function ActivityFormDialog({
                     id="activity-calendar"
                     value={calendarId ?? ''}
                     onChange={(value) =>
-                      setValue('calendarId', value, { shouldDirty: true, shouldValidate: true })
+                      scheduling.form.setValue('calendarId', value, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
                     }
                     query={calendarQuery}
                     onQueryChange={setCalendarQuery}
@@ -609,8 +744,8 @@ export function ActivityFormDialog({
                     step={1}
                     inputMode="numeric"
                     hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
-                    error={errors.levelingPriority?.message}
-                    {...register('levelingPriority', {
+                    error={schedulingErrors.levelingPriority?.message}
+                    {...scheduling.form.register('levelingPriority', {
                       setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                     })}
                   />
@@ -634,7 +769,7 @@ export function ActivityFormDialog({
                         label="% complete type"
                         id="activity-percent-complete-type"
                         hint={`${PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates — only how Earned value measures progress.`}
-                        {...register('percentCompleteType')}
+                        {...measure.form.register('percentCompleteType')}
                       >
                         {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
                           <option key={value} value={value}>
@@ -651,8 +786,8 @@ export function ActivityFormDialog({
                           step={1}
                           inputMode="numeric"
                           hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
-                          error={errors.physicalPercentComplete?.message}
-                          {...register('physicalPercentComplete', {
+                          error={measureErrors.physicalPercentComplete?.message}
+                          {...measure.form.register('physicalPercentComplete', {
                             setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                           })}
                         />
@@ -664,8 +799,8 @@ export function ActivityFormDialog({
                         step="any"
                         inputMode="decimal"
                         hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
-                        error={errors.budgetedExpense?.message}
-                        {...register('budgetedExpense', {
+                        error={costErrors.budgetedExpense?.message}
+                        {...cost.form.register('budgetedExpense', {
                           setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                         })}
                       />
@@ -676,8 +811,8 @@ export function ActivityFormDialog({
                         step="any"
                         inputMode="decimal"
                         hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
-                        error={errors.actualExpense?.message}
-                        {...register('actualExpense', {
+                        error={costErrors.actualExpense?.message}
+                        {...cost.form.register('actualExpense', {
                           setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                         })}
                       />
@@ -694,7 +829,7 @@ export function ActivityFormDialog({
                         '(spread evenly), or End (all at the finish). It changes only when cost is ' +
                         'recognised in Earned value — never a date.'
                       }
-                      {...register('accrualType')}
+                      {...cost.form.register('accrualType')}
                     >
                       {ACCRUAL_TYPE_OPTIONS.map((value) => (
                         <option key={value} value={value}>
@@ -716,12 +851,12 @@ export function ActivityFormDialog({
                 <SelectField
                   label="Constraint"
                   id="activity-constraint-type"
-                  error={errors.constraintType?.message}
+                  error={schedulingErrors.constraintType?.message}
                   hint={
                     'Pins the activity’s start or finish to a date. Only constraints the scheduler applies ' +
                     'exactly as named are listed (an existing value keeps its own label).'
                   }
-                  {...register('constraintType')}
+                  {...scheduling.form.register('constraintType')}
                 >
                   <option value="">None</option>
                   {/* Only the six kinds the scheduler applies exactly as labelled (the engine parks
@@ -743,8 +878,8 @@ export function ActivityFormDialog({
                   <TextField
                     label="Constraint date"
                     type="date"
-                    error={errors.constraintDate?.message}
-                    {...register('constraintDate')}
+                    error={schedulingErrors.constraintDate?.message}
+                    {...scheduling.form.register('constraintDate')}
                   />
                 ) : null}
                 {ADVANCED_CONSTRAINTS_ENABLED ? (
@@ -752,13 +887,13 @@ export function ActivityFormDialog({
                     <SelectField
                       label="Secondary constraint"
                       id="activity-secondary-constraint-type"
-                      error={errors.secondaryConstraintType?.message}
+                      error={schedulingErrors.secondaryConstraintType?.message}
                       hint={
                         'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
                         '“start no earlier than” with a secondary “finish no later than”. The primary ' +
                         'constraint drives its early dates.'
                       }
-                      {...register('secondaryConstraintType')}
+                      {...scheduling.form.register('secondaryConstraintType')}
                     >
                       <option value="">None</option>
                       {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
@@ -776,14 +911,14 @@ export function ActivityFormDialog({
                       <TextField
                         label="Secondary constraint date"
                         type="date"
-                        error={errors.secondaryConstraintDate?.message}
-                        {...register('secondaryConstraintDate')}
+                        error={schedulingErrors.secondaryConstraintDate?.message}
+                        {...scheduling.form.register('secondaryConstraintDate')}
                       />
                     ) : null}
                     <CheckboxField
                       label="Schedule as late as possible"
                       hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
-                      {...register('scheduleAsLateAsPossible')}
+                      {...scheduling.form.register('scheduleAsLateAsPossible')}
                     />
                     {/* Expected finish sizes work to a target finish, so it's meaningless for a type whose
                 duration isn't entered — a milestone (a point in time) or a level-of-effort (span-
@@ -793,8 +928,8 @@ export function ActivityFormDialog({
                         label="Expected finish"
                         type="date"
                         hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
-                        error={errors.expectedFinish?.message}
-                        {...register('expectedFinish')}
+                        error={schedulingErrors.expectedFinish?.message}
+                        {...scheduling.form.register('expectedFinish')}
                       />
                     )}
                   </>
@@ -814,15 +949,15 @@ export function ActivityFormDialog({
                     label="External early start"
                     type="date"
                     hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins. A date before the data date is honoured but can’t pull work earlier."
-                    error={errors.externalEarlyStart?.message}
-                    {...register('externalEarlyStart')}
+                    error={schedulingErrors.externalEarlyStart?.message}
+                    {...scheduling.form.register('externalEarlyStart')}
                   />
                   <TextField
                     label="External late finish"
                     type="date"
                     hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
-                    error={errors.externalLateFinish?.message}
-                    {...register('externalLateFinish')}
+                    error={schedulingErrors.externalLateFinish?.message}
+                    {...scheduling.form.register('externalLateFinish')}
                   />
                 </FieldGrid>
               </FormSection>
