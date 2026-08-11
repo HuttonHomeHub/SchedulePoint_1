@@ -379,3 +379,62 @@ describe('ActivityCreateDialog — recovering from a failed submit', () => {
     expect(screen.getByText('Name is required.')).toBeVisible();
   });
 });
+
+/**
+ * **A problem on a field the current activity type hides.**
+ *
+ * The scope schemas validate every field unconditionally; the groups render some of them
+ * conditionally. `levelingPriority` is the clearest pair — `activity-scope-schemas.ts` gives it a
+ * `.min(0)` and `ActivityLevellingField` returns `null` for any duration-derived type — and a
+ * planner reaches the mismatch by an ordinary sequence: type a value, change the type, submit.
+ *
+ * **This shipped broken, and the comment on `focusFirstProblem` had the reason inverted.** It said
+ * `setFocus` being "a no-op for a name with no mounted control … is what makes it safe to walk
+ * fields whose sections are behind an off flag". The no-op is what makes it UNSAFE: the walk called
+ * it and then `return`ed, so the first erroring entry consumed the one focus decision whether or
+ * not it could receive focus. Nothing else spoke, because `FormProblemCount` is deliberately silent
+ * at one problem — and that silence is lawful **only** while focus moves (WCAG 4.1.3's exemption is
+ * for a message delivered by focus). With neither happening, Create did nothing at all: no request,
+ * no message, no focus move, on either a sighted or a screen-reader path. WCAG 3.3.1.
+ */
+describe('ActivityCreateDialog — a problem the reader cannot see', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
+  });
+
+  /** Put a negative levelling priority on the form, then hide the field that holds it. */
+  const errorOnAHiddenField = (): void => {
+    fireEvent.change(screen.getByLabelText('Levelling priority'), { target: { value: '-1' } });
+    fireEvent.change(screen.getByLabelText('Type', { exact: true }), {
+      target: { value: 'START_MILESTONE' },
+    });
+    expect(screen.queryByLabelText('Levelling priority')).toBeNull();
+  };
+
+  it('says so, rather than failing in silence', async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Handover' } });
+    errorOnAHiddenField();
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    // The submit is correctly refused — the stored value really is invalid.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(apiFetch).not.toHaveBeenCalled();
+    // …and the reader is told why, and what to do about it, since no field on screen can show it.
+    expect(screen.getByRole('alert')).toHaveTextContent(/this activity type hides/i);
+  });
+
+  it('still reaches a later problem the reader CAN see', async () => {
+    // The worse half: an unreachable error earlier in the walk used to mask every later one, so a
+    // field that was on screen with its own red message underneath it never received focus.
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Handover' } });
+    fireEvent.change(screen.getByLabelText('Budgeted expense'), { target: { value: '-5' } });
+    errorOnAHiddenField();
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    await waitFor(() => expect(screen.getByText('Cost cannot be negative.')).toBeVisible());
+    expect(document.activeElement).toBe(screen.getByLabelText('Budgeted expense'));
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+});

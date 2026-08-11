@@ -1,5 +1,5 @@
 import { type ActivitySummary, type CalendarSummary } from '@repo/types';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   useWatch,
   type FieldErrors,
@@ -317,43 +317,64 @@ export function ActivityCreateDialog({
   });
 
   /**
-   * The first problem in {@link SUBMIT_FIELD_ORDER}, focused — **one** decision, taken by the host.
+   * The first problem in {@link SUBMIT_FIELD_ORDER} **that the reader can actually reach**, focused
+   * — one decision, taken by the host. Returns whether it found one.
    *
    * `getFieldState(name)` reads the form's live internal state rather than the render-time
    * `formState` snapshot, so it is accurate in the same tick the four scope validations settled in.
-   * `setFocus` is a no-op for a name with no mounted control, which is what makes it safe to walk
-   * fields whose sections are behind an off flag (or hidden by the current activity type).
+   *
+   * **An entry with no mounted control is skipped, and the walk continues.** The scope schemas
+   * validate every field unconditionally while the groups render some of them conditionally — a
+   * negative `levelingPriority` survives a change to a milestone type, which hides the field that
+   * holds it. This walk used to call `setFocus` on such an entry and `return`, and `setFocus` on an
+   * unmounted name is a silent no-op: the first erroring field consumed the one focus decision
+   * whether or not it could receive it, masking every later, visible problem. The comment that
+   * stood here called that no-op "what makes it safe", which is exactly backwards, and is why the
+   * behaviour survived a human read.
    */
-  const focusFirstProblem = (): void => {
+  const focusFirstProblem = (): boolean => {
+    // A control RHF can focus is one that is in the document. `setFocus` consults its own ref
+    // registry, which keeps an entry for an unmounted field, so asking RHF is not enough.
+    const isOnScreen = (name: string): boolean => document.getElementsByName(name).length > 0;
+
     for (const entry of SUBMIT_FIELD_ORDER) {
+      if (!isOnScreen(entry.name)) continue;
       switch (entry.scope) {
         case 'general':
           if (general.form.getFieldState(entry.name).error) {
             general.form.setFocus(entry.name);
-            return;
+            return true;
           }
           break;
         case 'scheduling':
           if (scheduling.form.getFieldState(entry.name).error) {
             scheduling.form.setFocus(entry.name);
-            return;
+            return true;
           }
           break;
         case 'measure':
           if (measure.form.getFieldState(entry.name).error) {
             measure.form.setFocus(entry.name);
-            return;
+            return true;
           }
           break;
         case 'cost':
           if (cost.form.getFieldState(entry.name).error) {
             cost.form.setFocus(entry.name);
-            return;
+            return true;
           }
           break;
       }
     }
+    return false;
   };
+
+  /**
+   * The last submit failed on a field this activity type hides, so no control on screen carries the
+   * message. Cleared on the next submit rather than on every keystroke: the reader's way out is to
+   * change the type back, which re-renders the field with its own error attached.
+   */
+  const [hiddenProblem, setHiddenProblem] = useState(false);
 
   const onSubmit = async (): Promise<void> => {
     // Each scope validates through its OWN `handleSubmit` — see {@link validateScope} for why that
@@ -367,9 +388,15 @@ export function ActivityCreateDialog({
       validateScope(cost.form),
     ]);
     if (valid.some((ok) => !ok)) {
-      focusFirstProblem();
+      // Whether the reader can SEE the problem decides whether anything has to say so.
+      // `FormProblemCount` is deliberately silent at one problem, and that silence is lawful only
+      // while focus delivers the message instead (WCAG 4.1.3's exemption). When focus cannot land
+      // — every erroring field is hidden by the current activity type — nothing else on screen is
+      // saying anything, so the form says it (WCAG 3.3.1).
+      setHiddenProblem(!focusFirstProblem());
       return;
     }
+    setHiddenProblem(false);
 
     // The four scopes partition `activityFormSchema`'s keys exactly (no key in two scopes, none
     // dropped — `activity-scope-schemas.structural.test.ts` computes that union and fails if it
@@ -426,6 +453,13 @@ export function ActivityCreateDialog({
           className="flex flex-col gap-5"
         >
           <FormProblemCount errors={allErrors} />
+          {hiddenProblem ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              One of this activity’s values can’t be saved, and the field holding it is one this
+              activity type hides. Change the type back to see and correct it.
+            </p>
+          ) : null}
+
           {mutation.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
               {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
