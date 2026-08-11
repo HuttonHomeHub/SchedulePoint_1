@@ -81,13 +81,15 @@ beforeEach(() => vi.clearAllMocks());
 describe('selection bar — Zoom to (re-homed from Row 1)', () => {
   it('frames the selection', () => {
     renderBar(ctx());
-    fireEvent.click(screen.getByRole('button', { name: 'Zoom to' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom to selection' }));
     expect(canvasSpies.zoomToSelection).toHaveBeenCalledOnce();
   });
 
   it('is simply enabled — every Row-1 shade reason is unreachable on this surface', () => {
     renderBar(ctx());
-    expect(screen.getByRole('button', { name: 'Zoom to' })).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('button', { name: 'Zoom to selection' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
   });
 });
 
@@ -140,7 +142,9 @@ describe('selection bar — the canvas half is optional', () => {
   it('renders neither command when the host supplies no canvas context', () => {
     renderBar(ctx(null));
     const bar = screen.getByRole('toolbar', { name: /Excavate/ });
-    expect(within(bar).queryByRole('button', { name: 'Zoom to' })).not.toBeInTheDocument();
+    expect(
+      within(bar).queryByRole('button', { name: 'Zoom to selection' }),
+    ).not.toBeInTheDocument();
     expect(
       within(bar).queryByRole('button', { name: /^Isolate logic path/ }),
     ).not.toBeInTheDocument();

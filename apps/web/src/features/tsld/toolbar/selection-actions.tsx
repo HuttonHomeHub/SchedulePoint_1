@@ -537,7 +537,12 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             tier: 1,
             showLabel: 'always',
             order: 7,
-            label: 'Zoom to',
+            // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
+            // named "Actions for <activity>", so in context the short form reads fine — but an
+            // accessible name has to stand on its own in a screen reader's control list, where
+            // "Zoom to" is a sentence with its object missing (WCAG 2.4.6). The e2e journey caught
+            // it, which no unit test could: the suite was rewritten alongside the rename.
+            label: 'Zoom to selection',
             icon: <Crosshair className="size-4" />,
             isVisible: (ctx: SelectionBarContext) => ctx.canvas !== null,
             onActivate: (ctx: SelectionBarContext) => ctx.canvas?.zoomToSelection(),
