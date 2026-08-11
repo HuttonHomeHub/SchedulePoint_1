@@ -371,6 +371,50 @@ describe('ActivityFormDialog — how problems are reported', () => {
     }
   });
 
+  it('focuses the offending control when the only problem is outside the general scope', async () => {
+    // The M1 acceptance gate, and it is only meaningful CROSS-SCOPE. Before M1, focus was RHF's own
+    // (`handleSubmit` walks the one form's registration order); now the host walks
+    // `SUBMIT_FIELD_ORDER` across four forms, so a lone problem in `scheduling` is the case that
+    // proves the walk reaches past the first form rather than stopping at it. `levelingPriority`
+    // is deliberate: it is a scheduling field the base flags render, sitting mid-list.
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Slab' } });
+    fireEvent.change(screen.getByLabelText('Levelling priority'), { target: { value: '-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    expect(await screen.findByText('Priority cannot be negative.')).toBeVisible();
+    expect(document.activeElement).toBe(screen.getByLabelText('Levelling priority'));
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('moves focus exactly once when the two problems are in different scopes', async () => {
+    // The plural-focus failure mode, in the shape that can actually produce it: one problem in
+    // `general` and one in `scheduling`, i.e. two DIFFERENT forms. Each form validating with its
+    // own focus switched on would move focus twice and leave the reader on whichever settled last
+    // — dragged past the problem `SUBMIT_FIELD_ORDER` says comes first. Counting `focusin` is the
+    // only way to see that: `activeElement` is a single value by definition and would report the
+    // correct final control in both the correct and the broken world.
+    const focused: string[] = [];
+    const record = (event: FocusEvent): void => {
+      const target = event.target as HTMLElement;
+      focused.push(target.getAttribute('name') ?? target.tagName);
+    };
+    document.addEventListener('focusin', record);
+    try {
+      renderDialog();
+      // Name left empty (general), levelling priority negative (scheduling).
+      fireEvent.change(screen.getByLabelText('Levelling priority'), { target: { value: '-1' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+      await screen.findByText('2 problems — check the highlighted fields below.');
+
+      // `name` is first in SUBMIT_FIELD_ORDER; `levelingPriority` is never focused at all.
+      expect(focused).toEqual(['name']);
+      expect(document.activeElement).toBe(screen.getByLabelText('Name'));
+    } finally {
+      document.removeEventListener('focusin', record);
+    }
+  });
+
   it('reports an edit’s problems the same way it reports a create’s', async () => {
     // The same form serves both, so the presentation cannot differ — but the edit path is the one
     // the two flag-off Playwright harnesses drive, so it is pinned rather than assumed.
@@ -383,5 +427,59 @@ describe('ActivityFormDialog — how problems are reported', () => {
       await screen.findByText('2 problems — check the highlighted fields below.'),
     ).toBeVisible();
     expect(apiFetch).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Recovery from a failed submit — `reValidateMode: 'onChange'`, which is RHF's default and which
+ * this form has always had.
+ *
+ * **Pinned because M1 lost it silently.** The four-form submit first validated with
+ * `trigger(undefined, { shouldFocus: false })`. `trigger()` runs the resolver and writes the
+ * errors, but it never sets `isSubmitted` — RHF sets that flag only in `handleSubmit`'s own state
+ * emission (`react-hook-form@7.84.0`, `dist/index.esm.mjs:3075`) — and `isSubmitted` is exactly
+ * what the change handler passes to `skipValidation` to decide whether re-validation is on
+ * (`dist/index.esm.mjs:2608`). With the form's mode at the default `onSubmit` and the flag never
+ * set, every keystroke was skipped: a corrected field kept showing its old error until the planner
+ * submitted again. Nothing failed, because nothing covered it.
+ *
+ * That is a behaviour change riding along inside a refactor declared DARK with zero user value,
+ * which is the drift this epic exists to remove. The fix validates through each scope's own
+ * `handleSubmit` with `shouldFocusError: false`, so the flag is set and the host still owns the one
+ * ordered focus decision.
+ */
+describe('ActivityFormDialog — recovering from a failed submit', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
+  });
+
+  it('clears a corrected field’s error without a second submit', async () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+    expect(await screen.findByText('Name is required.')).toBeVisible();
+
+    // Fix the offending field — and do nothing else. No second submit.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
+
+    await waitFor(() => expect(screen.queryByText('Name is required.')).toBeNull());
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('clears a corrected problem outside the general scope too', async () => {
+    // Re-validation is a property of EACH scope form, not of the one the host happens to check
+    // first — so a scheduling field is pinned alongside a general one. The count alert falling
+    // silent is the second reader-visible half of the same recovery.
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Levelling priority'), { target: { value: '-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+    expect(
+      await screen.findByText('2 problems — check the highlighted fields below.'),
+    ).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('Levelling priority'), { target: { value: '3' } });
+    await waitFor(() => expect(screen.queryByText('Priority cannot be negative.')).toBeNull());
+    // One problem remains (the empty name), so the count goes silent rather than reading "1".
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+    expect(screen.getByText('Name is required.')).toBeVisible();
   });
 });

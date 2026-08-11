@@ -149,6 +149,41 @@ const SUBMIT_FIELD_ORDER = [
   { scope: 'scheduling', name: 'externalLateFinish' },
 ] as const satisfies readonly SubmitFieldEntry[];
 
+/** Hoisted so the four `useScopeForm` calls share one object identity rather than allocating a
+ * fresh options literal on every render. */
+const NO_SCOPE_FOCUS = { shouldFocusError: false } as const;
+
+/**
+ * Validate ONE scope form, returning whether it passed — through that form's own `handleSubmit`.
+ *
+ * **`handleSubmit`, not `trigger`, and that is a behaviour fix rather than a style choice.**
+ * `trigger()` runs the resolver and writes the errors, but it never sets `isSubmitted`: RHF sets
+ * that flag only in `handleSubmit`'s own state emission (`react-hook-form@7.84.0`,
+ * `dist/index.esm.mjs:3075`). And `isSubmitted` is exactly what turns `reValidateMode: 'onChange'`
+ * on — the change handler passes it to `skipValidation`, which returns `true` (skip) while the
+ * form's mode is the default `onSubmit` and nothing has been submitted
+ * (`dist/index.esm.mjs:2608`). So a `trigger()`-validated submit leaves a corrected field showing
+ * its old error until the planner submits again. Validating through `handleSubmit` restores
+ * error-clears-as-you-fix, which is the behaviour this form has always had.
+ *
+ * Focus is suppressed at the FORM (`shouldFocusError: false`, {@link NO_SCOPE_FOCUS}) rather than
+ * per call, so `handleSubmit`'s two `_focusError()` calls are both no-ops
+ * (`dist/index.esm.mjs:3007-3009`) and {@link ActivityFormDialog}'s `focusFirstProblem` stays the
+ * single ordered decision.
+ *
+ * The `onValid` callback deliberately does no work: the submit's real work needs all four scopes'
+ * values merged, which no single scope's callback can see.
+ */
+async function validateScope<TValues extends FieldValues>(
+  form: UseFormReturn<TValues>,
+): Promise<boolean> {
+  let valid = false;
+  await form.handleSubmit(() => {
+    valid = true;
+  })();
+  return valid;
+}
+
 /**
  * Create-or-edit dialog for an activity DEFINITION (Planner/Org Admin). Progress
  * (status / % / actual dates) is changed elsewhere, so it is not here. Duration
@@ -370,7 +405,7 @@ export function ActivityFormDialog({
    * The first problem in {@link SUBMIT_FIELD_ORDER}, focused — **one** decision, taken by the host.
    *
    * `getFieldState(name)` reads the form's live internal state rather than the render-time
-   * `formState` snapshot, so it is accurate in the same tick the four `trigger()` calls settled in.
+   * `formState` snapshot, so it is accurate in the same tick the four scope validations settled in.
    * `setFocus` is a no-op for a name with no mounted control, which is what makes it safe to walk
    * fields whose sections are behind an off flag (or hidden by the current activity type).
    */
@@ -406,15 +441,15 @@ export function ActivityFormDialog({
   };
 
   const onSubmit = async (): Promise<void> => {
-    // Focus is OFF on all four, and that is load-bearing rather than tidy: `trigger`'s focus is
-    // opt-in (`react-hook-form@7.84.0`, `dist/index.esm.mjs:2751-2753`, registered in
-    // `scripts/dependency-claims.json`), so switched on here it would issue up to four competing
-    // focus calls whose winner is whichever promise settles last. The host decides instead, once.
+    // Each scope validates through its OWN `handleSubmit` — see {@link validateScope} for why that
+    // is not interchangeable with `trigger()` (it is what sets `isSubmitted`, and so what keeps
+    // `reValidateMode: 'onChange'` clearing a corrected field's error before the next submit).
+    // Focus is suppressed at the form, so all four are silent and the host decides once, below.
     const valid = await Promise.all([
-      general.form.trigger(undefined, { shouldFocus: false }),
-      scheduling.form.trigger(undefined, { shouldFocus: false }),
-      measure.form.trigger(undefined, { shouldFocus: false }),
-      cost.form.trigger(undefined, { shouldFocus: false }),
+      validateScope(general.form),
+      validateScope(scheduling.form),
+      validateScope(measure.form),
+      validateScope(cost.form),
     ]);
     if (valid.some((ok) => !ok)) {
       focusFirstProblem();

@@ -445,7 +445,33 @@
       "path": "dist/index.esm.mjs",
       "lines": "3007-3009",
       "anchor": "const _focusError = () => _options.shouldFocusError &&",
-      "citedBy": ["docs/specs/activity-dialog-unification/feature-spec.md"]
+      "citedBy": [
+        "docs/specs/activity-dialog-unification/feature-spec.md",
+        "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
+        "apps/web/src/features/activities/components/useScopeForm.ts"
+      ]
+    },
+    {
+      "ref": "index.esm.mjs:3075",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "3075",
+      "anchor": "isSubmitted: true,",
+      "citedBy": [
+        "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
+        "apps/web/src/features/activities/components/ActivityFormDialog.test.tsx"
+      ]
+    },
+    {
+      "ref": "index.esm.mjs:2608",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "2608",
+      "anchor": "_formState.isSubmitted, _validationModeAfterSubmit",
+      "citedBy": [
+        "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
+        "apps/web/src/features/activities/components/ActivityFormDialog.test.tsx"
+      ]
     }
   ]
 }
