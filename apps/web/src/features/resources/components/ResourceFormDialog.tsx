@@ -41,7 +41,7 @@ const TOP_LEVEL_PARENT_LABEL = 'No group (top level)';
  *
  * The org calendar library (for the calendar picker) is **supplied by the composing
  * route**, not fetched here — so the resources feature stays dependency-free of the
- * calendars feature (mirroring {@link ActivityFormDialog}). Absent it, the picker still
+ * calendars feature (mirroring {@link ActivityCreateDialog}). Absent it, the picker still
  * round-trips a seeded `calendarId`.
  */
 export function ResourceFormDialog({

@@ -1,6 +1,6 @@
 import type { CalendarSummary } from '@repo/types';
 import { WorkingWeekdays } from '@repo/types';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ActivityCalendarField } from './ActivityCalendarField';
@@ -61,6 +61,10 @@ function mount(
 }
 
 const field = (): HTMLElement => screen.getByRole('combobox', { name: 'Calendar' });
+/** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
+const open = (): void => {
+  fireEvent.keyDown(field(), { key: 'ArrowDown' });
+};
 
 const describedText = (control: HTMLElement): string =>
   (control.getAttribute('aria-describedby') ?? '')
@@ -145,6 +149,36 @@ describe('ActivityCalendarField', () => {
       // question — and the one the save would then contradict.
       mount({ value: 'cal-9', calendars: [calendar()] });
       expect(field()).toHaveValue('Unavailable');
+    });
+  });
+
+  describe('an archived seeded calendar (ADR-0053 §4)', () => {
+    it('keeps it selected, badged Archived, rather than reading as an ordinary choice', () => {
+      // Ported from `ActivityCreateDialog.scope.test.tsx` (deleted with the create dialog's edit
+      // path, activity-dialog-unification epic): every list read defaults to `?archived=exclude`,
+      // so an archived row is only ever present here because the CURRENT value is archived —
+      // `offerableCalendars` keeps it in, `toCalendarOptions` badges it, and this is what makes
+      // that state honest rather than invisible.
+      const archived = calendar({
+        id: 'cal-old',
+        name: 'Winter shutdown',
+        archivedAt: '2026-07-01T00:00:00Z',
+      });
+      // A second archived calendar the seeded value is NOT on — it must never be offered for a
+      // new selection, only the current, seeded one.
+      const summer = calendar({
+        id: 'cal-summer',
+        name: 'Summer shutdown',
+        archivedAt: '2026-07-01T00:00:00Z',
+      });
+      mount({ value: 'cal-old', calendars: [calendar(), archived, summer] });
+      expect(field()).toHaveValue('Winter shutdown');
+      open();
+      expect(screen.getByRole('option', { name: 'Winter shutdown, Archived' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(within(screen.getByRole('listbox')).queryByText(/Summer/)).not.toBeInTheDocument();
     });
   });
 });

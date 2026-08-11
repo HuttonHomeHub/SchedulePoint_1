@@ -8,7 +8,7 @@ import {
   type UseFormReturn,
 } from 'react-hook-form';
 
-import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
+import { useCreateActivity } from '../api/use-activities';
 import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
 import { isDurationDerivedType, type ActivityFormValues } from '../schemas/activity-schemas';
@@ -45,13 +45,10 @@ import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
-  COST_ACCRUAL_ENABLED,
   EARNED_VALUE_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
-import {} from '@/lib/calendar-tiers';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /** One field, named against the scope form that owns it. The scope tag is what makes the list below
@@ -133,7 +130,7 @@ const NO_SCOPE_FOCUS = { shouldFocusError: false } as const;
  *
  * Focus is suppressed at the FORM (`shouldFocusError: false`, {@link NO_SCOPE_FOCUS}) rather than
  * per call, so `handleSubmit`'s two `_focusError()` calls are both no-ops
- * (`dist/index.esm.mjs:3007-3009`) and {@link ActivityFormDialog}'s `focusFirstProblem` stays the
+ * (`dist/index.esm.mjs:3007-3009`) and {@link ActivityCreateDialog}'s `focusFirstProblem` stays the
  * single ordered decision.
  *
  * The `onValid` callback deliberately does no work: the submit's real work needs all four scopes'
@@ -150,24 +147,33 @@ async function validateScope<TValues extends FieldValues>(
 }
 
 /**
- * Create-or-edit dialog for an activity DEFINITION (Planner/Org Admin). Progress
- * (status / % / actual dates) is changed elsewhere, so it is not here. Duration
- * is hidden for milestone types (a milestone is a point in time); the constraint
- * date only shows once a constraint type is chosen — both mirror the API rules.
- * Edit mode PATCHes with the row's `version`.
+ * The **New activity** dialog — an activity DEFINITION, created (ADR-0089).
+ *
+ * **A host, not a form.** It owns four scope forms, one submit, one ordered focus decision and the
+ * ADR-0070 whole-days check; every field on it is rendered by a group in `fields/`, each of which
+ * the tabbed {@link ActivityEditorDialog} renders too. That is the point of the dialog-unification
+ * epic: the two surfaces a planner meets one activity through had drifted in ten places precisely
+ * because they shared no code, and a group cannot drift from itself.
+ *
+ * **Create-only, and that is recent.** This was `ActivityFormDialog`, a create-or-edit component
+ * whose edit half served the activities table and the workspace until `VITE_ACTIVITY_EDITOR_TABS`
+ * retired and the tabbed editor became the only edit surface. Deleting that half was the last step
+ * of the epic rather than the first: while it existed, every field group had to satisfy two hosts
+ * *and* two modes.
+ *
+ * Progress (status / % / actual dates) is changed elsewhere and is not here. Which fields a given
+ * activity type shows is each group's own rule, stated where the field is.
  *
  * The org calendar library (for the per-activity calendar picker, ADR-0037) is **supplied by the
  * composing route/workspace**, not fetched here — so the activities feature stays dependency-free of
  * the calendars feature (like {@link ActivitiesTable}'s `varianceByActivityId`). `CalendarSummary`
- * is a shared `@repo/types` shape. Absent it, the picker still round-trips a seeded `calendarId`.
+ * is a shared `@repo/types` shape.
  */
-export function ActivityFormDialog({
+export function ActivityCreateDialog({
   orgSlug,
   planId,
   open,
   onClose,
-  onSaved,
-  activity,
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
@@ -180,13 +186,6 @@ export function ActivityFormDialog({
   planId: string;
   open: boolean;
   onClose: () => void;
-  /**
-   * Called after an EDIT saves, with the pre-edit row and the server's post-edit row — the seam the
-   * workspace uses to record an undo command (ADR-0048). Optional and additive: callers that don't
-   * pass it (e.g. the activities table) behave exactly as before, and it never fires on create.
-   */
-  onSaved?: (before: ActivitySummary, after: ActivitySummary) => void;
-  activity?: ActivitySummary;
   /** The org's calendars, for the calendar picker's options (route-composed). */
   calendars?: CalendarSummary[];
   /** The calendars list is still loading (its options aren't complete yet). */
@@ -202,10 +201,11 @@ export function ActivityFormDialog({
   planCalendarId?: string;
   /**
    * The plan's activities — the pool the WBS-nesting picker draws valid parents from (the summaries
-   * within it, ADR-0038, F8). The **unfiltered** list: the dialog derives the summaries (and excludes
-   * the activity being edited — it can't parent itself, and the API rejects it too). Route-composed
-   * like {@link calendars} (reusing the plan's warm activities query), so the dialog stays a pure
-   * presentation component. Only consulted when the WBS surface (`VITE_ADVANCED_ACTIVITY_TYPES`) is on.
+   * within it, ADR-0038, F8). The **unfiltered** list: the dialog derives the summaries. Nothing is
+   * excluded here, unlike the editor, which drops the row being edited — an activity that does not
+   * exist yet cannot be its own parent. Route-composed like {@link calendars} (reusing the plan's
+   * warm activities query), so the dialog stays a pure presentation component. Only consulted when
+   * the WBS surface (`VITE_ADVANCED_ACTIVITY_TYPES`) is on.
    */
   planActivities?: ActivitySummary[];
   /** The plan activities are still loading (the parent options aren't complete yet). */
@@ -213,23 +213,19 @@ export function ActivityFormDialog({
   /** The plan activities failed to load — surface it rather than reading as a confirmed "no summaries". */
   planActivitiesError?: boolean;
 }): React.ReactElement {
-  const isEdit = activity !== undefined;
-  const create = useCreateActivity(orgSlug, planId);
-  const update = useUpdateActivity(orgSlug, planId);
-  const mutation = isEdit ? update : create;
+  const mutation = useCreateActivity(orgSlug, planId);
   const announce = useAnnounce();
 
-  // The valid WBS parents: the plan's summaries minus the activity being edited (no self-parent; the
-  // API rejects it too), derived from the unfiltered plan-activities pool.
-  const parentOptions = planActivities.filter(
-    (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
-  );
+  // The valid WBS parents: every summary in the plan, derived from the unfiltered pool. Nothing is
+  // excluded — the editor drops the row being edited (it cannot parent itself), but an activity
+  // that does not exist yet cannot be its own parent either.
+  const parentOptions = planActivities.filter((a) => a.type === 'WBS_SUMMARY');
 
-  // The General scope seeds its duration from the factor known at OPEN — the SAVED calendar, because
-  // nothing is watched yet at this point in the render. `useDurationSeed` below re-reads it once the
-  // calendar list lands, so a sub-day duration is never shown (or saved) as its rounded day.
+  // A new activity inherits the plan's calendar, so the factor the General scope seeds its duration
+  // from is the plan's. `useDurationSeed` below re-reads it once the calendar list lands, so a
+  // sub-day duration is never shown (or saved) as its rounded day.
   const seedFactor = effectiveHoursPerDay(calendars, {
-    activityCalendarId: activity?.calendarId ?? '',
+    activityCalendarId: '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
   // Four scope forms, one submit (ADR-0060 §4 / the dialog-unification epic M1). The wide
@@ -246,19 +242,19 @@ export function ActivityFormDialog({
   const general = useScopeForm(
     activityGeneralSchema,
     (a) => seedGeneral(a, seedFactor),
-    activity,
+    undefined,
     open,
     NO_SCOPE_FOCUS,
   );
   const scheduling = useScopeForm(
     activitySchedulingSchema,
     seedScheduling,
-    activity,
+    undefined,
     open,
     NO_SCOPE_FOCUS,
   );
-  const measure = useScopeForm(activityMeasureSchema, seedMeasure, activity, open, NO_SCOPE_FOCUS);
-  const cost = useScopeForm(activityCostSchema, seedCost, activity, open, NO_SCOPE_FOCUS);
+  const measure = useScopeForm(activityMeasureSchema, seedMeasure, undefined, open, NO_SCOPE_FOCUS);
+  const cost = useScopeForm(activityCostSchema, seedCost, undefined, open, NO_SCOPE_FOCUS);
 
   // `useScopeForm` re-seeds the four forms on `[open, activity?.id]`; it has no equivalent for the
   // MUTATION, and dropping this is silent — a failed create's server-error banner would survive into
@@ -266,7 +262,7 @@ export function ActivityFormDialog({
   useEffect(() => {
     if (open) mutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- clear only on open/target change
-  }, [open, activity?.id]);
+  }, [open]);
 
   // Per scope, so a field reads its OWN form's errors and reaching for a neighbour's is a compile
   // error (`schedulingErrors.name` does not exist) — the same seam `register` gets.
@@ -311,7 +307,8 @@ export function ActivityFormDialog({
   useDurationSeed({
     open,
     hoursPerDay,
-    activity,
+    // No stored row to re-seed from — this is a create.
+    activity: undefined,
     // The field's LIVE value, read inside the effect — not a dirty flag captured by this render.
     // A keystroke and the calendar query are independent events, and trusting the flag lost the
     // race between them (TECH_DEBT #83). `getValues` is stable, so this needs no memoisation.
@@ -398,44 +395,24 @@ export function ActivityFormDialog({
       );
       return;
     }
-    if (isEdit) {
-      update.mutate(
-        {
-          activityId: activity.id,
-          version: activity.version,
-          ...values,
-          ...(hoursPerDay === undefined ? {} : { hoursPerDay }),
+    mutation.mutate(
+      { ...values, ...(hoursPerDay === undefined ? {} : { hoursPerDay }) },
+      {
+        onSuccess: () => {
+          announce(`Activity “${values.name}” created.`);
+          onClose();
         },
-        {
-          onSuccess: (saved) => {
-            announce(`Activity “${values.name}” saved.`);
-            // Hand the before/after rows to the workspace so it can record an undo command (ADR-0048).
-            // Optional — absent for the activities-table dialog, so that path is byte-identical.
-            onSaved?.(activity, saved);
-            onClose();
-          },
-        },
-      );
-    } else {
-      create.mutate(
-        { ...values, ...(hoursPerDay === undefined ? {} : { hoursPerDay }) },
-        {
-          onSuccess: () => {
-            announce(`Activity “${values.name}” created.`);
-            onClose();
-          },
-        },
-      );
-    }
+      },
+    );
   };
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={isEdit ? 'Edit activity' : 'New activity'}
+      title="New activity"
       size="lg"
-      {...(isEdit ? {} : { description: 'Add an activity to this plan.' })}
+      description="Add an activity to this plan."
     >
       <FieldGridContainer>
         <form
@@ -463,11 +440,7 @@ export function ActivityFormDialog({
           <div className="flex flex-col gap-5">
             <ActivityIdentityFields form={general.form} />
 
-            <ActivityWorkFields
-              form={general.form}
-              hoursPerDay={hoursPerDay}
-              {...(activity?.type === undefined ? {} : { savedType: activity.type })}
-            />
+            <ActivityWorkFields form={general.form} hoursPerDay={hoursPerDay} />
 
             {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it never asserts a
             false state while the plan activities are still resolving. The "no summaries yet"
@@ -525,12 +498,12 @@ export function ActivityFormDialog({
               </FormSection>
             ) : null}
 
-            {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
+            <ActivityExpenseFields form={cost.form} />
 
             {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the
               Earned-Value Planned-Value curve, never a date. Its own flag, mirroring the
               value-measure picker. */}
-            {COST_ACCRUAL_ENABLED ? <ActivityAccrualField form={cost.form} /> : null}
+            <ActivityAccrualField form={cost.form} />
 
             <ActivityConstraintFields form={scheduling.form} />
 
@@ -541,15 +514,12 @@ export function ActivityFormDialog({
               from a checkbox in that company. The editor had already separated them; create follows
               it, which is the section a group owns arriving with the group (ADR-0089 D5). */}
             <ActivityPlacementFields form={scheduling.form} activityType={type} />
-            {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Grouped by the same top-border
-            divider as the other stacked sections (a `<fieldset>`/`<legend>` for the semantic grouping,
-            no box). Shown for every type — a milestone can carry an external late finish too (A12500). */}
-            {INTER_PROJECT_DATES_ENABLED ? (
-              <ActivityExternalDatesFields
-                form={scheduling.form}
-                externalDriven={activity?.externalDriven === true}
-              />
-            ) : null}
+            {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Shown for every type — a
+              milestone can carry an external late finish too (A12500). The group owns its own
+              `VITE_INTER_PROJECT_DATES` guard, so there is no outer one here. `externalDriven` is
+              the engine's verdict on a scheduled activity, so a create never has one and the
+              section's aside stays silent until the plan is recalculated. */}
+            <ActivityExternalDatesFields form={scheduling.form} />
           </div>
 
           <div className="border-border flex justify-end gap-2 border-t pt-4">
@@ -557,7 +527,7 @@ export function ActivityFormDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create activity'}
+              {mutation.isPending ? 'Saving…' : 'Create activity'}
             </Button>
           </div>
         </form>

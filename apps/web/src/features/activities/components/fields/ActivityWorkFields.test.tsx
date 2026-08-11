@@ -3,7 +3,18 @@ import type { ActivityType } from '@repo/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { JSX } from 'react';
 import { useForm } from 'react-hook-form';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const flags = vi.hoisted(() => ({ advancedTypes: true }));
+
+// A getter, not a value: the constant is read at render time, so one mocked module serves both
+// branches without `vi.resetModules()`.
+vi.mock('@/config/env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  get ADVANCED_ACTIVITY_TYPES_ENABLED() {
+    return flags.advancedTypes;
+  },
+}));
 
 import { ActivityWorkFields, WORK_FIELDS } from './ActivityWorkFields';
 
@@ -113,6 +124,22 @@ describe('ActivityWorkFields', () => {
         (option) => option.getAttribute('value'),
       );
       expect(values).toContain('HAMMOCK');
+    });
+
+    it('keeps an advanced type visible when its own flag is off', () => {
+      // A DIFFERENT branch from the HAMMOCK case above, and it had no home when
+      // `ActivityFormDialog`'s edit path was deleted — `selectableActivityTypes` drops the whole
+      // advanced block when the flag is off, so a stored LEVEL_OF_EFFORT would be coerced to
+      // whatever the browser selects instead. The stored value is appended back for exactly this
+      // reason, and nothing else asserted it.
+      flags.advancedTypes = false;
+      try {
+        render(<Harness type="LEVEL_OF_EFFORT" savedType="LEVEL_OF_EFFORT" />);
+        expect(screen.getByLabelText('Type')).toHaveValue('LEVEL_OF_EFFORT');
+        expect(screen.getByRole('option', { name: 'Level of effort' })).toBeInTheDocument();
+      } finally {
+        flags.advancedTypes = true;
+      }
     });
 
     it('keeps that option after the reader changes away from it', () => {

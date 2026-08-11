@@ -1,11 +1,11 @@
 import { WorkingWeekdays } from '@repo/types';
-import type { ActivitySummary, CalendarSummary } from '@repo/types';
+import type { CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
@@ -13,7 +13,15 @@ import { ApiFetchError, apiFetch } from '@/lib/api/client';
 /**
  * The per-activity calendar picker with BOTH `VITE_ACTIVITY_CALENDAR` and `VITE_LIBRARY_SCOPING` on
  * (ADR-0053 §1): the plan's project supplies its own calendars alongside the organisation's, so the
- * options group by tier. The flag-off flat list is covered by `ActivityFormDialog.calendar.test.tsx`.
+ * options group by tier. The flag-off flat list is covered by `ActivityCreateDialog.calendar.test.tsx`.
+ *
+ * **The archived-seeded-calendar case moved.** `ActivityCreateDialog` lost its edit path in the
+ * activity-dialog-unification epic (create-only now, no `activity` prop), so "keeps an archived
+ * seeded calendar selected, badged Archived" ported to `fields/ActivityCalendarField.test.tsx` —
+ * "keeps it selected, badged Archived, rather than reading as an ordinary choice". It moved to the
+ * field-group suite rather than the editor: the tier grouping and the Archived badge are both
+ * `ActivityCalendarField`'s own behaviour (via `lib/calendar-tiers.ts`), driven identically by
+ * either host, and that suite had no coverage of the archived state at all before this.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -52,73 +60,11 @@ const OWN = calendar({
   projectId: 'proj-1',
 });
 
-const ACTIVITY: ActivitySummary = {
-  id: 'a1',
-  planId: 'pl1',
-  code: 'A100',
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
-  durationDays: 5,
-  durationMinutes: 2400,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
-  calendarId: 'cal-247',
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
-  earlyStart: null,
-  earlyFinish: null,
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
-  durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualDriftDays: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
-  accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
-  version: 4,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
-
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog
+      <ActivityCreateDialog
         orgSlug="acme"
         planId="pl1"
         open
@@ -148,7 +94,7 @@ function groupLabels(): string[] {
     });
 }
 
-describe('ActivityFormDialog — combobox calendar picker (flag on)', () => {
+describe('ActivityCreateDialog — combobox calendar picker (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue({ id: 'a1' });
   });
@@ -184,27 +130,6 @@ describe('ActivityFormDialog — combobox calendar picker (flag on)', () => {
     expect(screen.queryByRole('option', { name: '5-day week' })).not.toBeInTheDocument();
     // "Inherit" is not a search result, so it is never filtered away.
     expect(screen.getByRole('option', { name: 'Plan default (inherit)' })).toBeInTheDocument();
-  });
-
-  it('keeps an archived seeded calendar selected, badged Archived', () => {
-    const archived = calendar({
-      id: 'cal-old',
-      name: 'Winter shutdown',
-      archivedAt: '2026-07-01T00:00:00Z',
-    });
-    renderDialog({
-      calendars: [ORG, archived],
-      activity: { ...ACTIVITY, calendarId: 'cal-old' },
-    });
-
-    expect(field()).toHaveValue('Winter shutdown');
-    open();
-    expect(screen.getByRole('option', { name: 'Winter shutdown, Archived' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    // …while a DIFFERENT archived calendar is never offered for a new selection.
-    expect(screen.queryByRole('option', { name: /Summer/ })).not.toBeInTheDocument();
   });
 
   it('selects a calendar with the keyboard and submits it', async () => {

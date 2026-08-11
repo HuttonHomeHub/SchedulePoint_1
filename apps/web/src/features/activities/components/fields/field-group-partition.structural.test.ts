@@ -42,6 +42,23 @@ import {
  * never rendered — that is each group's own `it.each` render loop — and a field wired to the wrong
  * scope's form, which does not compile at all (RHF's generics are invariant, which is the only gate
  * here that cannot be talked around).
+ *
+ * **`activity-dialog-divergence.characterisation.test.tsx` no longer exists.** It mounted
+ * `ActivityFormDialog` (create-or-edit) and `ActivityEditorDialog` (tabbed edit) side by side on the
+ * same stored activity and pinned ten numbered divergences (D1–D10, plus several `NEW` ones found
+ * along the way) between the two — the calendar picker's `disabled` vs `readOnly`, the WBS parent
+ * label, a parked `MANDATORY_*` constraint's display, the Type picker's honest-selector rule, the
+ * work explanations, ALAP's section, levelling's attrs, the money inputs, where cost/EV lived, and
+ * `physicalPercentComplete` visibility — so an extraction that silently resolved one in the
+ * extractor's favour would fail there instead of being absorbed. All ten closed in M2–M4 of the
+ * activity-dialog-unification epic: the groups above are the closure, one component each host calls
+ * rather than two that had to be kept in step by hand. The activity-dialog-unification epic then
+ * retired `ActivityFormDialog`'s edit path entirely (renamed `ActivityCreateDialog`, create-only), so
+ * the file's own premise — driving the SAME two hosts on the SAME row — no longer has a create-mode
+ * host to drive. It was deleted rather than rewritten: every divergence it pinned is closed, and the
+ * per-group suites beside this one (plus `ActivityEditorDialog.test.tsx` and its siblings) now hold
+ * the editor's half of what it proved directly, not as a comparison to a surface that no longer edits
+ * anything.
  */
 
 /** Every group, named by the scope it partitions. The keys are the four scope shapes' own names. */

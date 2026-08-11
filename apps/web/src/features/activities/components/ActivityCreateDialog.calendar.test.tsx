@@ -4,22 +4,30 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
 /**
  * The per-activity calendar picker (ADR-0037, M5) with `VITE_ACTIVITY_CALENDAR` forced ON — the
  * feature ships dark by default, so this suite pins the flag to prove the Select renders, defaults to
- * inherit, persists a chosen calendar, round-trips a seeded one, and surfaces a load error without
- * masking a seeded calendar as "inherit". The org calendars are route-composed (passed as a prop),
- * so no calendars fetch is mocked here — only the create/update mutation hits `apiFetch`. (The
- * flag-off behaviour — no picker, value still round-trips — is covered by `ActivityFormDialog.test.tsx`.)
+ * inherit, persists a chosen calendar, and surfaces a load error without masking a seeded calendar as
+ * "inherit". The org calendars are route-composed (passed as a prop), so no calendars fetch is
+ * mocked here — only the create/update mutation hits `apiFetch`. (The flag-off behaviour — no
+ * picker, value still round-trips — is covered by `ActivityCreateDialog.test.tsx`.)
+ *
+ * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
+ * (activity-dialog-unification epic): "seeds the activity's calendar and clears it to inherit (null)
+ * on save" ported to `ActivityEditorDialog.round-trips.test.tsx` — "seeds the activity's calendar and
+ * clears it to inherit (null) on a Scheduling save"; "surfaces a load error and keeps a seeded
+ * calendar visibly distinct from inherit" is covered by
+ * `fields/ActivityCalendarField.test.tsx` ("says the list failed rather than offering a short one" +
+ * "still shows a bound calendar the list does not contain").
  */
 // `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE per-activity
 // calendar picker — a flat, ungrouped native `<select>` over the org library (ADR-0037). The
 // tier-grouped `Combobox` the flag turns it into has its own suite,
-// `ActivityFormDialog.scope.test.tsx` (ADR-0053 §1/§4). Pinning both directions means neither
+// `ActivityCreateDialog.scope.test.tsx` (ADR-0053 §1/§4). Pinning both directions means neither
 // behaviour can regress unnoticed when the flag default moves.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -125,11 +133,11 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog
+      <ActivityCreateDialog
         orgSlug="acme"
         planId="pl1"
         open
@@ -160,7 +168,7 @@ const chooseCombo = (name: string, option: string | RegExp): void => {
   fireEvent.pointerDown(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
 };
 
-describe('ActivityFormDialog — calendar picker (flag on)', () => {
+describe('ActivityCreateDialog — calendar picker (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
@@ -191,28 +199,5 @@ describe('ActivityFormDialog — calendar picker (flag on)', () => {
       name: 'Pour slab',
       calendarId: 'cal-5day',
     });
-  });
-
-  it('seeds the activity’s calendar and clears it to inherit (null) on save', async () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(comboField('Calendar')).toHaveValue('24/7');
-    chooseCombo('Calendar', 'Plan default (inherit)');
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(path).toBe('/organizations/acme/activities/a1');
-    expect(JSON.parse(init?.body as string)).toMatchObject({ version: 4, calendarId: null });
-  });
-
-  it('surfaces a load error and keeps a seeded calendar visibly distinct from inherit', () => {
-    // The org calendar list failed to load: empty options + calendarsError, with a seeded calendar.
-    renderDialog({ activity: ACTIVITY, calendars: [], calendarsError: true });
-
-    // The failure is announced, not silent.
-    expect(screen.getByRole('alert')).toHaveTextContent(/Couldn’t load the calendar list/);
-    // The seeded calendar still shows as selected under an honest label — never blank (= inherit),
-    // which is the whole point: blank would claim the activity inherits the plan's calendar.
-    expect(comboField('Calendar')).toHaveValue('Unavailable');
   });
 });

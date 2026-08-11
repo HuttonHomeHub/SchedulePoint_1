@@ -27,7 +27,7 @@ import { ActivityNotesSection } from '@/features/notes';
  * (ADR-0026 D8) — so the workspace hosts them here, driven by the shared model's `editActivityId` /
  * `deleteActivityId` (which the bar's callbacks set). The edit target is re-derived from the live
  * query so a 409 retry carries the current version, mirroring {@link ActivitiesTable}'s own dialogs;
- * both use the same shared `ActivityFormDialog` / `ConfirmDialog`, so their behaviour can't drift.
+ * both use the same shared `ActivityEditorDialog` / `ConfirmDialog`, so their behaviour can't drift.
  *
  * Behind `VITE_ACTIVITY_EDITOR_TABS` this becomes the workspace's **one** activity editor
  * (ADR-0060 §7, M5): the canvas's Edit, its Report-progress and its Steps actions — plus the

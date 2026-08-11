@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
@@ -13,7 +13,13 @@ import { apiFetch } from '@/lib/api/client';
  * one hides the Duration/Expected-finish inputs (their duration is derived) and shows the explanatory
  * hint, that the WBS parent picker offers the plan's summaries, and that a create submits the derived
  * type with a zeroed duration (and the chosen `parentId`). Flag-off behaviour (options absent, a seeded
- * value still shown) is covered in `ActivityFormDialog.test.tsx`.
+ * value still shown) is covered in `ActivityCreateDialog.test.tsx`.
+ *
+ * **The self-parenting case moved.** `ActivityCreateDialog` lost its edit path in the
+ * activity-dialog-unification epic (create-only now, no `activity` prop), so "does not parent an
+ * activity to itself in edit mode" ported to
+ * `ActivityEditorDialog.round-trips.test.tsx` — "does not offer the activity being edited as its own
+ * WBS parent".
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -84,16 +90,16 @@ const BASE_LOE: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityCreateDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
     </QueryClientProvider>,
   );
 }
 
-describe('ActivityFormDialog — advanced activity types (flag on)', () => {
+describe('ActivityCreateDialog — advanced activity types (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch)
       .mockReset()
@@ -195,12 +201,6 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
     const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
     expect(body.parentId).toBe('wbs1');
   });
-
-  it('does not parent an activity to itself in edit mode', () => {
-    // Editing the summary itself: it must not appear as its own parent option.
-    renderDialog({ activity: SUMMARY, planActivities: [SUMMARY] });
-    expect(screen.queryByRole('option', { name: 'TT.4 · Superstructure' })).not.toBeInTheDocument();
-  });
 });
 
 /**
@@ -212,7 +212,7 @@ describe('ActivityFormDialog — advanced activity types (flag on)', () => {
  * two derived types), and the calendar picker it cannot use is shaded with the reason rather than
  * left live to save a value that the service overrides.
  */
-describe('ActivityFormDialog — resource-dependent type (flag on)', () => {
+describe('ActivityCreateDialog — resource-dependent type (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch)
       .mockReset()

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityFormDialog } from './ActivityFormDialog';
+import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
 
@@ -81,16 +81,16 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-function renderDialog(props: Partial<React.ComponentProps<typeof ActivityFormDialog>> = {}) {
+function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityFormDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
+      <ActivityCreateDialog orgSlug="acme" planId="pl1" open onClose={vi.fn()} {...props} />
     </QueryClientProvider>,
   );
 }
 
-describe('ActivityFormDialog', () => {
+describe('ActivityCreateDialog', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
@@ -135,26 +135,17 @@ describe('ActivityFormDialog', () => {
     expect(screen.getByRole('option', { name: 'Task' })).toBeInTheDocument();
   });
 
-  it('still shows a seeded Level-of-effort value when editing with the flag off (honest selector)', () => {
-    // Editing an LOE activity while the flag is off keeps its own type visible and selected rather than
-    // silently coercing it — the same honest-selector rule the parked-constraint case follows.
-    renderDialog({ activity: { ...ACTIVITY, type: 'LEVEL_OF_EFFORT', durationDays: 0 } });
-    expect(screen.getByLabelText('Type')).toHaveValue('LEVEL_OF_EFFORT');
-    expect(screen.getByRole('option', { name: 'Level of effort' })).toBeInTheDocument();
-  });
+  // "still shows a seeded Level-of-effort value when editing with the flag off (honest selector)"
+  // moved: `ActivityCreateDialog` lost its edit path in the activity-dialog-unification epic
+  // (create-only now, no `activity` prop). The mechanism it pinned — `selectableActivityTypes`
+  // always adds the CURRENT value even when the advanced-types flag would not otherwise offer it —
+  // is proven generically, flag-independently, by
+  // `fields/ActivityWorkFields.test.tsx`'s "the type option list" describe block (using `HAMMOCK`,
+  // a type never offered even with the flag ON, which is the stronger case).
 
-  it('round-trips a seeded WBS parentId on a no-op save with the flag off', async () => {
-    // The WBS parent picker is hidden (flag off), but the dialog seeds parentId from the row so editing
-    // something else must never silently un-nest the activity — same rule as the calendar/constraint seeds.
-    renderDialog({ activity: { ...ACTIVITY, parentId: 'wbs-parent-1' } });
-    expect(screen.queryByLabelText('Parent WBS summary')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
-    expect(body.parentId).toBe('wbs-parent-1');
-    expect(body.version).toBe(4);
-  });
+  // "round-trips a seeded WBS parentId on a no-op save with the flag off" moved to
+  // `ActivityEditorDialog.flag-off-round-trips.test.tsx` — "round-trips a seeded parentId on a
+  // no-op General save with the flag off".
 
   it('reveals the date once a constraint is chosen and sends the pair', async () => {
     renderDialog();
@@ -184,125 +175,38 @@ describe('ActivityFormDialog', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows a legacy parked value honestly and round-trips it on a no-op save (no silent coercion)', async () => {
-    const parked: ActivitySummary = {
-      ...ACTIVITY,
-      constraintType: 'MANDATORY_START',
-      constraintDate: '2026-05-01',
-      calendarId: null,
-    };
-    renderDialog({ activity: parked });
-    const select = screen.getByLabelText('Constraint');
-    // The current value is shown as an honest, pre-selected option (not silently changed to MSO).
-    expect(select).toHaveValue('MANDATORY_START');
-    expect(
-      within(select).getByRole('option', { name: 'Mandatory start — applied as Must start on' }),
-    ).toBeInTheDocument();
-    // Save without touching the constraint → the stored value round-trips unchanged.
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    expect(JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string)).toMatchObject({
-      version: 4,
-      constraintType: 'MANDATORY_START',
-      constraintDate: '2026-05-01',
-    });
-  });
+  // "shows a legacy parked value honestly and round-trips it on a no-op save (no silent coercion)"
+  // split: the SELECT's own honest display is `ActivityConstraintFields.test.tsx`'s "a parked
+  // MANDATORY_* value the row already carries" describe block; the PATCH round-trip ported to
+  // `ActivityEditorDialog.round-trips.test.tsx` — "re-sends a seeded parked constraint and its date
+  // unchanged on a Scheduling save".
 
-  it('drops the parked option once the planner switches to a honoured type', () => {
-    const parked: ActivitySummary = {
-      ...ACTIVITY,
-      constraintType: 'MANDATORY_FINISH',
-      constraintDate: '2026-05-01',
-      calendarId: null,
-    };
-    renderDialog({ activity: parked });
-    const select = screen.getByLabelText('Constraint');
-    expect(within(select).getAllByRole('option')).toHaveLength(8); // None + 6 + the parked one
-    fireEvent.change(select, { target: { value: 'FNLT' } });
-    // The honest legacy option disappears — the planner can't re-pick a parked type.
-    expect(within(select).getAllByRole('option')).toHaveLength(7); // None + 6
-    expect(
-      within(select).queryByRole('option', { name: /Mandatory finish/ }),
-    ).not.toBeInTheDocument();
-  });
+  // "drops the parked option once the planner switches to a honoured type" is covered by
+  // `ActivityConstraintFields.test.tsx`'s "drops out the moment the planner chooses something else".
 
-  it('seeds edit mode and clears the constraint by sending nulls with the version', async () => {
-    renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('Name')).toHaveValue('Excavate');
-    expect(screen.getByLabelText('Constraint')).toHaveValue('SNET');
-    // Remove the constraint.
-    fireEvent.change(screen.getByLabelText('Constraint'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  // "seeds edit mode and clears the constraint by sending nulls with the version" is covered by the
+  // combination of `activity-body-builders.structural.test.ts` (`constraintType`/`constraintDate`
+  // are in its `CLEARABLE_KEYS`), `ActivityEditorDialog.test.tsx` ("reads `version` from the live
+  // row at submit time" pins the version behaviour; the base `mount()` seeds Name from the row) and
+  // `ActivityConstraintFields.test.tsx` (the select renders the row's constraint type).
 
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(path).toBe('/organizations/acme/activities/a1');
-    expect(init?.method).toBe('PATCH');
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      version: 4,
-      constraintType: null,
-      constraintDate: null,
-    });
-  });
+  // "calls onSaved with the pre-edit and server post-edit rows on a successful edit (ADR-0048)"
+  // moved to `ActivityEditorDialog.round-trips.test.tsx` — "calls onSaved with the pre-save row and
+  // the server's post-save row on a successful scope save".
 
-  it('calls onSaved with the pre-edit and server post-edit rows on a successful edit (ADR-0048)', async () => {
-    const saved = { ...ACTIVITY, name: 'Excavate deeper', version: 5 };
-    vi.mocked(apiFetch).mockReset().mockResolvedValue(saved);
-    const onSaved = vi.fn();
-    renderDialog({ activity: ACTIVITY, onSaved });
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Excavate deeper' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  // "does not call onSaved when creating (create-undo is a later milestone)" is now structurally
+  // impossible rather than merely untested: `ActivityCreateDialog` has no `onSaved` prop at all
+  // (create-only since the activity-dialog-unification epic), so there is no seam through which it
+  // could ever be called.
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalled());
-    // Pre-edit row first (the undo target), then the server's post-edit row (the redo target).
-    expect(onSaved).toHaveBeenCalledWith(ACTIVITY, saved);
-  });
-
-  it('does not call onSaved when creating (create-undo is a later milestone)', async () => {
-    const onSaved = vi.fn();
-    renderDialog({ onSaved });
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    expect(onSaved).not.toHaveBeenCalled();
-  });
-
-  it('round-trips seeded advanced-constraint values on a no-op save with the flag off', async () => {
-    // The advanced fields (secondary constraint, ALAP, expected finish) aren't rendered while
-    // VITE_ADVANCED_CONSTRAINTS is off (the default here), but the dialog still seeds them from the
-    // row, so editing something else must never silently clear a stored value.
-    renderDialog({
-      activity: {
-        ...ACTIVITY,
-        secondaryConstraintType: 'FNLT',
-        secondaryConstraintDate: '2026-06-01',
-        scheduleAsLateAsPossible: true,
-        expectedFinish: '2026-05-20',
-      },
-    });
-    // The advanced controls are hidden with the flag off.
-    expect(screen.queryByLabelText('Secondary constraint')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Schedule as late as possible')).not.toBeInTheDocument();
-    // Change only the name and save — the seeded advanced values must ride through unchanged.
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Excavate deeper' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
-    expect(JSON.parse(init?.body as string)).toMatchObject({
-      version: 4,
-      secondaryConstraintType: 'FNLT',
-      secondaryConstraintDate: '2026-06-01',
-      scheduleAsLateAsPossible: true,
-      expectedFinish: '2026-05-20',
-    });
-  });
+  // "round-trips seeded advanced-constraint values on a no-op save with the flag off" moved to
+  // `ActivityEditorDialog.flag-off-round-trips.test.tsx` — "round-trips seeded
+  // secondary-constraint/ALAP/expected-finish values on a no-op Scheduling save".
 });
 
 /**
  * M0.5 — the error presentation on the **create/edit host's one wide form**
- * (`ActivityFormDialog.tsx:366`). The rule, from `FormProblemCount`'s docblock and ADR-0077 §9: a
+ * (`ActivityCreateDialog.tsx:366`). The rule, from `FormProblemCount`'s docblock and ADR-0077 §9: a
  * field's problem belongs to the field; the alert belongs to the form. One problem is silent,
  * because `handleSubmit` has already moved focus to the control carrying it — the case WCAG 4.1.3
  * exempts. Two or more earn a count, which restates nothing and says the one thing an inline
@@ -312,7 +216,7 @@ describe('ActivityFormDialog', () => {
  * moves to four `trigger()` calls (which do not). The focus case below is therefore the assertion
  * that has to keep passing through that swap, and is the reason the silence is lawful at all.
  */
-describe('ActivityFormDialog — how problems are reported', () => {
+describe('ActivityCreateDialog — how problems are reported', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });
@@ -415,19 +319,11 @@ describe('ActivityFormDialog — how problems are reported', () => {
     }
   });
 
-  it('reports an edit’s problems the same way it reports a create’s', async () => {
-    // The same form serves both, so the presentation cannot differ — but the edit path is the one
-    // the two flag-off Playwright harnesses drive, so it is pinned rather than assumed.
-    renderDialog({ activity: ACTIVITY });
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
-    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'C'.repeat(33) } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    expect(
-      await screen.findByText('2 problems — check the highlighted fields below.'),
-    ).toBeVisible();
-    expect(apiFetch).not.toHaveBeenCalled();
-  });
+  // "reports an edit's problems the same way it reports a create's" is now `ActivityEditorDialog`'s
+  // own concern, since editing has no other host: covered by `ActivityEditorDialog.test.tsx`'s "how
+  // a scope reports its problems" describe block — "General: counts two problems without repeating
+  // either sentence" pins the identical two-problem, one-count shape on the one remaining edit
+  // surface.
 });
 
 /**
@@ -448,7 +344,7 @@ describe('ActivityFormDialog — how problems are reported', () => {
  * `handleSubmit` with `shouldFocusError: false`, so the flag is set and the host still owns the one
  * ordered focus decision.
  */
-describe('ActivityFormDialog — recovering from a failed submit', () => {
+describe('ActivityCreateDialog — recovering from a failed submit', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });

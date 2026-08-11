@@ -70,8 +70,8 @@ import { cn } from '@/lib/utils';
 type TabKey = ActivityEditorTab;
 
 /**
- * The tabbed activity editor (ADR-0060). Behind `VITE_ACTIVITY_EDITOR_TABS`; the flag-off path
- * keeps {@link ActivityFormDialog} unchanged.
+ * The tabbed activity editor (ADR-0060). Unconditional since ADR-0089 retired
+ * `VITE_ACTIVITY_EDITOR_TABS`; there is no other edit surface.
  *
  * **Saves per write scope, not per dialog.** Each tab owns an independent form and its own Save,
  * because the three write paths this editor spans do not share a permission: definition writes need
@@ -131,7 +131,7 @@ export function ActivityEditorDialog({
   intent?: ActivityEditorIntent;
   /** Called after a scope saves, with the pre-save row and the server's post-save row (ADR-0048). */
   onSaved?: (before: ActivitySummary, after: ActivitySummary) => void;
-  /** The row being edited. This editor is edit-only; creation stays with `ActivityFormDialog`. */
+  /** The row being edited. This editor is edit-only; creation is {@link ActivityCreateDialog}. */
   activity: ActivitySummary | undefined;
   /** Per-scope writability and its reason (`deriveActivityEditorGating`). */
   gating: ActivityEditorGating;
@@ -238,7 +238,7 @@ export function ActivityEditorDialog({
     activityCalendarId: scopeCalendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
-  // Hoisted rather than inlined, for the same reason as in `ActivityFormDialog`: an arrow rebuilt
+  // Hoisted rather than inlined, for the same reason as in `ActivityCreateDialog`: an arrow rebuilt
   // per render defeats the React Compiler's memoization downstream of it.
   const generalSetValue = general.form.setValue;
   const generalGetValues = general.form.getValues;

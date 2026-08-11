@@ -7,17 +7,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
-import { ActivityFormDialog } from './ActivityFormDialog';
 
 /**
- * **A duration typed before the calendar list resolves survives the re-seed — on BOTH hosts**
- * (ADR-0070; `docs/TECH_DEBT.md` #83).
+ * **A duration typed before the calendar list resolves survives the re-seed** (ADR-0070;
+ * `docs/TECH_DEBT.md` #83).
  *
  * `use-duration-seed.test.ts` proves the rule at the hook, driving `readDuration` directly. What no
- * hook test can see is that a host actually *composes* it: there are two dialogs carrying this
- * field, and this repository's signature defect is a correct pattern applied to one host and not its
- * neighbour (ADR-0064 §7, ADR-0080). So both are driven here, from one list, through the surface a
- * planner touches — the field, not the wiring.
+ * hook test can see is that a host actually *composes* it, from the field a planner touches rather
+ * than the wiring.
+ *
+ * **Single-host since the activity-dialog-unification epic.** This suite drove BOTH `ActivityFormDialog`
+ * (create) and `ActivityEditorDialog` (edit) — this repository's signature defect is a correct
+ * pattern applied to one host and not its neighbour (ADR-0064 §7, ADR-0080), and a duration that is
+ * re-seeded is exactly that shape. `ActivityFormDialog` was renamed `ActivityCreateDialog` and is
+ * now create-only: it seeds `duration` from nothing (`activity: undefined`, ADR-0070's own comment
+ * in `ActivityCreateDialog.tsx`), so there is no stored row for a late calendar list to re-seed —
+ * the case this file exists to catch cannot occur on create by construction. The editor remains the
+ * one surface where it can, and stays covered below.
  *
  * The sequence is the one #83 describes: the dialog opens with the factor unknown (the calendar
  * query is still in flight, so the field degrades to whole working days), the planner types, and
@@ -84,45 +90,26 @@ const PLANNER_WITH_PEN = deriveActivityEditorGating({
 });
 
 /**
- * Each host as a function of the calendar list, so a test can open it empty (the query in flight)
+ * The editor, as a function of the calendar list, so a test can open it empty (the query in flight)
  * and re-render it full (the query resolved) without remounting — a remount would re-seed for a
  * different reason and prove nothing.
  */
-const HOSTS = [
-  {
-    name: 'ActivityFormDialog',
-    element: (calendars: CalendarSummary[]) => (
-      <QueryClientProvider client={new QueryClient()}>
-        <ActivityFormDialog
-          orgSlug="acme"
-          planId="pl1"
-          open
-          onClose={vi.fn()}
-          activity={ACTIVITY}
-          calendars={calendars}
-          planCalendarId="cal-8"
-        />
-      </QueryClientProvider>
-    ),
-  },
-  {
-    name: 'ActivityEditorDialog',
-    element: (calendars: CalendarSummary[]) => (
-      <QueryClientProvider client={new QueryClient()}>
-        <ActivityEditorDialog
-          orgSlug="acme"
-          planId="pl1"
-          open
-          onClose={vi.fn()}
-          activity={ACTIVITY}
-          gating={PLANNER_WITH_PEN}
-          calendars={calendars}
-          planCalendarId="cal-8"
-        />
-      </QueryClientProvider>
-    ),
-  },
-] as const;
+function element(calendars: CalendarSummary[]): React.ReactElement {
+  return (
+    <QueryClientProvider client={new QueryClient()}>
+      <ActivityEditorDialog
+        orgSlug="acme"
+        planId="pl1"
+        open
+        onClose={vi.fn()}
+        activity={ACTIVITY}
+        gating={PLANNER_WITH_PEN}
+        calendars={calendars}
+        planCalendarId="cal-8"
+      />
+    </QueryClientProvider>
+  );
+}
 
 /** The degraded control's label — it states the unit precisely because the unit is then fixed. */
 const DEGRADED = 'Duration (working days)';
@@ -131,7 +118,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe.each(HOSTS)('$name — a late calendar list', ({ element }) => {
+describe('ActivityEditorDialog — a late calendar list', () => {
   it('re-seeds an untouched duration from the row’s exact minutes', () => {
     const { rerender } = render(element([]));
     // Whole working days is all the field can say without a factor, and four hours rounds to zero

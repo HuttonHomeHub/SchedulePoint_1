@@ -30,11 +30,11 @@ export const CALENDAR_FIELDS = [
 ] as const satisfies readonly (keyof ActivitySchedulingValues)[];
 
 /**
- * The per-activity working-time calendar picker (ADR-0037), shared by {@link ActivityFormDialog} and
+ * The per-activity working-time calendar picker (ADR-0037), shared by {@link ActivityCreateDialog} and
  * the tabbed {@link ActivityEditorDialog}'s Scheduling tab.
  *
  * **That sentence was false for a year and is worth leaving corrected rather than quietly fixed.**
- * `ActivityFormDialog` did not import this file; it inlined its own `Combobox` — so the docblock
+ * the create dialog did not import this file; it inlined its own `Combobox` — so the docblock
  * asserting one implementation was itself the evidence that there were two, and the two had already
  * drifted (native `disabled` against `readOnly`, and a hint differing by one clause). Create adopted
  * it at M3-T1, which is what made the claim true.
