@@ -153,6 +153,28 @@ that turned M1 around. Predicting a label promotion is exactly the move `design.
 falsified; the difference is that this prediction is falsifiable in one command and says which way
 it expects to fall.
 
+## M2-T1 landed — the first measured reduction
+
+Re-measured 2026-08-11 after `zoom-to-selection` and `isolate-logic` moved to the selection bar
+(`float-paths` did **not** — see the commit and `implementation-plan.md`; it is a view-agnostic
+analysis that runs in the Gantt).
+
+|                   | before |    after |       Δ |
+| ----------------- | -----: | -------: | ------: |
+| Row 1 items       |     25 |   **23** |      −2 |
+| Row 1 total @2304 |   1911 | **1798** |    −113 |
+| **Pinned floor**  |   1198 | **1117** | **−81** |
+| Inline @1920      |     15 |   **17** |      +2 |
+
+The pinned saving is `isolate-logic` alone (81 px): it was a `render` item, so it could never demote
+and its width was paid at every viewport. `zoom-to-selection` was a 32 px demotable. Together they
+are **113 px of Option B's projected 699 px removal** — and the two remaining big-ticket items
+(`colour-by` 183 px and `finish-chip` 150 px, both pinned) are M2-T2 and M2-T3.
+
+**Conclusion 2 is unaffected**, which is worth stating so nobody re-derives it: neither moved
+command was among the six `'auto'` items whose labels the 524 px figure counts. The label question
+still resolves at M2-T5, by measurement.
+
 ## Follow-ups this task opens
 
 - ~~**Fix the `labelled` flag**~~ — done in this task; `visibleText` / `labelWidth` / `nameWidth`
