@@ -1,9 +1,4 @@
-import {
-  SELECTABLE_CONSTRAINT_TYPES,
-  isParkedConstraintType,
-  type ActivitySummary,
-  type CalendarSummary,
-} from '@repo/types';
+import { type ActivitySummary, type CalendarSummary } from '@repo/types';
 import { useCallback, useEffect } from 'react';
 import {
   useWatch,
@@ -19,7 +14,6 @@ import { useDurationSeed } from '../model/use-duration-seed';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
-  CONSTRAINT_TYPE_LABELS,
   PERCENT_COMPLETE_TYPE_LABELS,
   PERCENT_COMPLETE_TYPE_OPTIONS,
   isDurationDerivedType,
@@ -39,19 +33,21 @@ import {
 import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityCalendarField } from './fields/ActivityCalendarField';
+import { ActivityConstraintFields } from './fields/ActivityConstraintFields';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
+import { ActivityLevellingField } from './fields/ActivityLevellingField';
+import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { CheckboxField, FormProblemCount, SelectField, TextField } from '@/components/ui/form';
+import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
-  ADVANCED_CONSTRAINTS_ENABLED,
   COST_ACCRUAL_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
@@ -59,7 +55,6 @@ import {
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import {} from '@/lib/calendar-tiers';
-import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /** One field, named against the scope form that owns it. The scope tag is what makes the list below
@@ -296,11 +291,6 @@ export function ActivityFormDialog({
   // `useWatch`, never `form.watch`: on a four-form host `watch` subscribes the WHOLE component to
   // one form's every keystroke, so typing a name would re-render the Constraints section.
   const type = useWatch({ control: general.form.control, name: 'type' });
-  const constraintType = useWatch({ control: scheduling.form.control, name: 'constraintType' });
-  const secondaryConstraintType = useWatch({
-    control: scheduling.form.control,
-    name: 'secondaryConstraintType',
-  });
   const calendarId = useWatch({ control: scheduling.form.control, name: 'calendarId' });
   const percentCompleteType = useWatch({
     control: measure.form.control,
@@ -335,16 +325,6 @@ export function ActivityFormDialog({
     readDuration,
     setDuration,
   });
-  // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off
-  // option so opening the form never coerces it (US-2). Derived from the live field value, so
-  // it appears when a parked value is selected and disappears once the planner changes away.
-  const parkedValue =
-    constraintType && isParkedConstraintType(constraintType) ? constraintType : null;
-  // A parked secondary value round-trips as its own honest option, exactly like the primary.
-  const secondaryParkedValue =
-    secondaryConstraintType && isParkedConstraintType(secondaryConstraintType)
-      ? secondaryConstraintType
-      : null;
 
   /**
    * The first problem in {@link SUBMIT_FIELD_ORDER}, focused — **one** decision, taken by the host.
@@ -534,22 +514,7 @@ export function ActivityFormDialog({
             activities, so it is meaningless for a type levelling never moves (a milestone, LOE or WBS
             summary) — hidden for those, mirroring the Duration/Duration-type fields. */}
             {RESOURCE_LEVELLING_ENABLED && !isDurationDerivedType(type) ? (
-              <FormSection title="Levelling" description="Used only when the plan is levelled.">
-                <FieldGrid>
-                  <TextField
-                    label="Levelling priority"
-                    type="number"
-                    min={0}
-                    step={1}
-                    inputMode="numeric"
-                    hint="Lower wins the resource when two activities contend under resource levelling. Leave blank for lowest priority."
-                    error={schedulingErrors.levelingPriority?.message}
-                    {...scheduling.form.register('levelingPriority', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
-                  />
-                </FieldGrid>
-              </FormSection>
+              <ActivityLevellingField form={scheduling.form} activityType={type} />
             ) : null}
             {/* Earned-Value inputs (EV4b, ADR-0042): the %-complete measure that earns value, an optional
             hand-entered physical % (only relevant to the PHYSICAL measure), and the lump-sum budgeted /
@@ -641,100 +606,15 @@ export function ActivityFormDialog({
               </FormSection>
             ) : null}
 
-            <FormSection
-              title="Constraints"
-              description="Dates you impose on the network. A constraint overrides what the logic would otherwise decide."
-              aside={constraintType ? undefined : 'None set'}
-            >
-              <FieldGrid columns="lead">
-                <SelectField
-                  label="Constraint"
-                  id="activity-constraint-type"
-                  error={schedulingErrors.constraintType?.message}
-                  hint={
-                    'Pins the activity’s start or finish to a date. Only constraints the scheduler applies ' +
-                    'exactly as named are listed (an existing value keeps its own label).'
-                  }
-                  {...scheduling.form.register('constraintType')}
-                >
-                  <option value="">None</option>
-                  {/* Only the six kinds the scheduler applies exactly as labelled (the engine parks
-                MANDATORY_* — see @repo/types SELECTABLE_CONSTRAINT_TYPES), so a planner never
-                sets a constraint that behaves differently than it reads. */}
-                  {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                    <option key={value} value={value}>
-                      {CONSTRAINT_TYPE_LABELS[value]}
-                    </option>
-                  ))}
-                  {/* An activity that already carries a parked value keeps it as an honest, labelled
-                option so opening the form never silently changes it; it drops out once the
-                planner picks something else. Driven by the live field value, not the original. */}
-                  {parkedValue ? (
-                    <option value={parkedValue}>{PARKED_CONSTRAINT_LABELS[parkedValue]}</option>
-                  ) : null}
-                </SelectField>
-                {constraintType ? (
-                  <TextField
-                    label="Constraint date"
-                    type="date"
-                    error={schedulingErrors.constraintDate?.message}
-                    {...scheduling.form.register('constraintDate')}
-                  />
-                ) : null}
-                {ADVANCED_CONSTRAINTS_ENABLED ? (
-                  <>
-                    <SelectField
-                      label="Secondary constraint"
-                      id="activity-secondary-constraint-type"
-                      error={schedulingErrors.secondaryConstraintType?.message}
-                      hint={
-                        'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
-                        '“start no earlier than” with a secondary “finish no later than”. The primary ' +
-                        'constraint drives its early dates.'
-                      }
-                      {...scheduling.form.register('secondaryConstraintType')}
-                    >
-                      <option value="">None</option>
-                      {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                        <option key={value} value={value}>
-                          {CONSTRAINT_TYPE_LABELS[value]}
-                        </option>
-                      ))}
-                      {secondaryParkedValue ? (
-                        <option value={secondaryParkedValue}>
-                          {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
-                        </option>
-                      ) : null}
-                    </SelectField>
-                    {secondaryConstraintType ? (
-                      <TextField
-                        label="Secondary constraint date"
-                        type="date"
-                        error={schedulingErrors.secondaryConstraintDate?.message}
-                        {...scheduling.form.register('secondaryConstraintDate')}
-                      />
-                    ) : null}
-                    <CheckboxField
-                      label="Schedule as late as possible"
-                      hint="Draws the activity at its latest position without changing its dates or float. A display preference, not a date constraint."
-                      {...scheduling.form.register('scheduleAsLateAsPossible')}
-                    />
-                    {/* Expected finish sizes work to a target finish, so it's meaningless for a type whose
-                duration isn't entered — a milestone (a point in time) or a level-of-effort (span-
-                derived) — hidden for those, mirroring the Duration field. */}
-                    {isDurationDerivedType(type) ? null : (
-                      <TextField
-                        label="Expected finish"
-                        type="date"
-                        hint="A target finish date. When the plan’s “Expected-finish scheduling” option is on, the engine sizes this activity’s work so it finishes on this date (Recalculate to apply)."
-                        error={schedulingErrors.expectedFinish?.message}
-                        {...scheduling.form.register('expectedFinish')}
-                      />
-                    )}
-                  </>
-                ) : null}
-              </FieldGrid>
-            </FormSection>
+            <ActivityConstraintFields form={scheduling.form} />
+
+            {/* **Placement is not a constraint, and putting it here says so.** "Schedule as late as
+              possible" changes where the bar is DRAWN and touches neither dates nor float; expected
+              finish is a target the engine sizes work towards. Both sat inside Constraints, beside
+              five controls that pin a date — which is the reading a planner is most likely to take
+              from a checkbox in that company. The editor had already separated them; create follows
+              it, which is the section a group owns arriving with the group (ADR-0089 D5). */}
+            <ActivityPlacementFields form={scheduling.form} activityType={type} />
             {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Grouped by the same top-border
             divider as the other stacked sections (a `<fieldset>`/`<legend>` for the semantic grouping,
             no box). Shown for every type — a milestone can carry an external late finish too (A12500). */}

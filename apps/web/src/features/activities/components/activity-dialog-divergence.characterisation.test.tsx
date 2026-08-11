@@ -500,8 +500,12 @@ describe('divergence D5 (CLOSED, M2-T2 commit A2) — the work explanations', ()
   });
 });
 
-describe('divergence D6 — “Schedule as late as possible”', () => {
-  it('create files it under Constraints and gates it behind VITE_ADVANCED_CONSTRAINTS; the editor puts it under Placement & targets, ungated', () => {
+describe('divergence D6 (CLOSED, M3-T3) — “Schedule as late as possible”', () => {
+  it('both hosts gate it behind VITE_ADVANCED_CONSTRAINTS', () => {
+    // A flag's off-branch should be coherent: the editor hid the expected-finish field the checkbox
+    // belongs with and left the checkbox itself standing. **No shipped image differs** — every
+    // `VITE_` flag is inlined at build time and none is passed to the image build (ADR-0088 D1) —
+    // so this makes the off-branch honest rather than changing anything a user sees.
     flags.advancedConstraints = false;
 
     const created = mountCreate();
@@ -510,20 +514,31 @@ describe('divergence D6 — “Schedule as late as possible”', () => {
 
     mountEditor();
     openTab('Scheduling');
-    expect(screen.getByLabelText(/schedule as late as possible/i)).toBeInTheDocument();
-    expect(sectionHeadings()).toContain('Placement & targets');
+    expect(screen.queryByLabelText(/schedule as late as possible/i)).not.toBeInTheDocument();
   });
 
-  it('with the flag on, create renders it inside the Constraints section rather than a placement one', () => {
-    mountCreate();
-    const constraints = screen.getByRole('group', { name: /Constraints/ });
-    expect(within(constraints).getByLabelText(/schedule as late as possible/i)).toBeInTheDocument();
-    expect(sectionHeadings()).not.toContain('Placement & targets');
+  it('both hosts file it under Placement & targets, not under Constraints', () => {
+    // It changes where the bar is DRAWN and touches neither dates nor float — so a checkbox sitting
+    // among five controls that pin a date invited exactly the wrong reading.
+    const created = mountCreate();
+    expect(sectionHeadings()).toContain('Placement & targets');
+    const createConstraints = screen.getByRole('group', { name: /Constraints/ });
+    expect(
+      within(createConstraints).queryByLabelText(/schedule as late as possible/i),
+    ).not.toBeInTheDocument();
+    created.unmount();
+
+    mountEditor();
+    openTab('Scheduling');
+    expect(sectionHeadings()).toContain('Placement & targets');
   });
 });
 
-describe('divergence D7 — levelling priority', () => {
-  it('create hides levelling for a duration-derived type; the editor always shows it', () => {
+describe('divergence D7 (CLOSED, M3-T3) — levelling priority', () => {
+  it('both hosts hide levelling for a type levelling never moves', () => {
+    // ADR-0041 delays activities that consume a resource for an entered duration. A milestone
+    // consumes nothing; a level of effort and a WBS summary derive their span from other work. A
+    // priority field on one of those is a control whose value can have no effect.
     const milestone = row({ type: 'FINISH_MILESTONE' });
 
     const created = mountCreate({ activity: milestone });
@@ -532,10 +547,10 @@ describe('divergence D7 — levelling priority', () => {
 
     mountEditor({ activity: milestone });
     openTab('Scheduling');
-    expect(screen.getByLabelText('Levelling priority')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Levelling priority')).not.toBeInTheDocument();
   });
 
-  it('NEW — the levelling number input carries a step and an inputMode on create, and neither in the editor', () => {
+  it('NEW (CLOSED) — the levelling input carries a step and an inputMode on both', () => {
     const created = mountCreate();
     const createInput = screen.getByLabelText('Levelling priority');
     expect(createInput).toHaveAttribute('step', '1');
@@ -546,8 +561,8 @@ describe('divergence D7 — levelling priority', () => {
     openTab('Scheduling');
     const editorInput = screen.getByLabelText('Levelling priority');
     expect(editorInput).toHaveAttribute('min', '0');
-    expect(editorInput).not.toHaveAttribute('step');
-    expect(editorInput).not.toHaveAttribute('inputmode');
+    expect(editorInput).toHaveAttribute('step', '1');
+    expect(editorInput).toHaveAttribute('inputmode', 'numeric');
   });
 });
 
@@ -625,6 +640,9 @@ describe('divergence D9 — where cost and earned value live', () => {
       'Levelling',
       'Cost & earned value',
       'Constraints',
+      // Gained at M3-T3: placement is not a constraint, so it is no longer filed as one. The
+      // ORDER still differs from the editor's, which is D9's row and M4-T1's to settle.
+      'Placement & targets',
       'External interfaces',
     ]);
     created.unmount();
