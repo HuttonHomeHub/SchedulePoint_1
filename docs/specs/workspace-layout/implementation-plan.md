@@ -653,6 +653,50 @@ relocation walk that presses each moved command at its new entry point.
 > **doubles** `SelectionActionContext` and imports canvas-viewport and lens concepts into a context
 > whose docblock says it is the commands that act on the selected activity.
 >
+> ##### Correction to the correction — it is **seven** fields, and the reason is the point of the move
+>
+> Four of the eleven are **true by construction at the destination**, so they are not fields at all.
+> The selection bar renders only from the canvas, and only when something is selected
+> (`SelectionActionsBar` takes `context: SelectionActionContext | null` and renders nothing for
+> `null`; `TsldPanel.tsx:1319-1322` returns `null` unless a selected activity resolves). So
+> `canvasActive` holds, `selectedActivity != null` holds, and `hasDiagram` / `activityCount > 0`
+> follow from there being an activity to select. The real set is **seven** — `isolateActive`,
+> `isolateMode`, `toggleIsolate`, `setIsolateMode`, `floatPathsOpen`, `toggleFloatPaths`,
+> `zoomToSelection` — state and callbacks only, no predicates.
+>
+> **Which collapses every shade reason these three commands carry.** `CANVAS_ONLY_REASON`,
+> `'Add an activity first'` and `'Select an activity first'` all become unreachable, and all three
+> commands are simply **enabled** wherever they appear. That is not a side effect; it is ADR-0082's
+> discriminating rule landing correctly — _omit when the action does not apply to the object_ —
+> because with no selection there is no object.
+>
+> **It is still a change a planner will notice, and it belongs in the record rather than in a
+> support conversation.** Today someone with nothing selected sees `Float paths` and `Isolate logic
+path` on Row 1, shaded, saying _"Select an activity first"_ — which teaches the precondition.
+> Afterwards they are absent until a bar is selected, and nothing announces that they exist. The
+> trade is deliberate (they stop holding 1,177 px of pinned Row-1 floor in order to teach a
+> precondition that selecting anything also teaches), but **M3 must check that discoverability is
+> not what got optimised away** — this is the one place M2 removes something from the planner's view
+> rather than relocating it.
+>
+> ##### And the host cannot supply them either — the state lives one level up
+>
+> The seven fields are **not available where the bar is hosted**. `SelectionActionsBar` is rendered
+> by `TsldPanel` (`TsldPanel.tsx:2732`), and `TsldPanel` holds `navState` but not `toggleIsolate` /
+> `setIsolateMode` (it destructures only what it reads, `:608`), receives float paths as the
+> **result** `floatPathIds` rather than the toggle (`:455`), and has no `zoomToSelection` at all —
+> that is built by `useViewportCommands` inside `use-tsld-toolbar-context.tsx:363`, at the
+> **workspace** level.
+>
+> So the move is not "retype the items"; it needs a route from the workspace to the bar. **Threading
+> seven props through `TsldPanel` is the wrong one** — `TsldPanel` would gain isolate and float-path
+> vocabulary it otherwise has no reason to know, and each prop is a separate chance for a host to
+> wire six of seven. **One optional `selectionCanvas?: SelectionCanvasContext` prop**, assembled by
+> the workspace (which already builds every field for the toolbar context) and merged into
+> `selectionCtx`, adds one prop instead of seven and keeps `TsldPanel` unaware of what the commands
+> mean. Absent ⇒ the three items do not register ⇒ today's bar, byte-for-byte, which is also the
+> rollback contract.
+>
 > **Recommended shape (decide before writing code):** introduce a separate
 > `SelectionCanvasContext` holding exactly those fields, and type the bar's items as
 > `ToolbarItem<SelectionActionContext & SelectionCanvasContext>`. The intersection costs the host
