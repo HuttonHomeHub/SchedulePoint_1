@@ -641,6 +641,15 @@ composing the eleven groups; `activityFormSchema` retires with its last consumer
 
 > **Complexity:** L · **Dependencies:** M5 (the harnesses no longer drive the edit path)
 > **Risks:** retiring `activityFormSchema` removes a gate unless its replacement lands first.
+>
+> **rev 4 — M6 is smaller than drafted, and M5 is why.** With the flag retired, `ActivityFormDialog`
+> has exactly one renderer left (`CreateActivityButton.tsx:47`) and it never passes `activity`, so
+> the `isEdit` half — the update mutation, the "Save changes" label, the edit title — is **dead
+> code** rather than a path to migrate. The two other files naming the component are comments. That
+> is the sequencing paying off: retiring the flag first turned "replace a dual-mode 844-line
+> component" into "delete the half nothing reaches and rename what is left". Verified by grep on
+> 2026-08-11, after commit `ba28dae`. The file is 567 lines, not the 844 the outcome line quotes —
+> M2–M4 removed the rest.
 
 ##### Task M6-T1 — Both partition tests land **before** the schema goes
 

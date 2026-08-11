@@ -1988,12 +1988,26 @@ bounds a sustained flood and the sweep bounds the residue after one stops.
 
 ## 122. Two Class A flags are deferred, and the payoff is not where the register said it was
 
+**Half closed 2026-08-11**: `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE`
+remains open with five harnesses left rather than seven.
+
 `VITE_ACTIVITY_EDITOR_TABS` and `VITE_CANVAS_WORKSPACE` are the two alternative surfaces the batch-2
-retirement did **not** take. Both carry `deferredUntil` in `scripts/flag-retirement.json` (ADR-0088
+retirement did **not** take. Both carried `deferredUntil` in `scripts/flag-retirement.json` (ADR-0088
 D3a), which suspends their batch dates against a **named event** rather than a date — so this row is
 the thing the gate points at, and deleting it fails `pnpm check:flags`.
 
-**`VITE_ACTIVITY_EDITOR_TABS` — trigger: the next epic touching the activity editor.**
+**`VITE_ACTIVITY_EDITOR_TABS` — RETIRED 2026-08-11 (ADR-0089). This half is closed.**
+Its trigger — the next epic touching the activity editor — fired, and the analysis below held
+exactly: the dialog-unification epic closed all ten create/edit divergences and extracted eleven
+shared field groups **first**, so the retirement collected the payoff this row said a bare
+retirement would not. Both flag-off harnesses (`sub-day`, `assignment-lag`) were **converted to the
+shipping surface before the flag went**, which is the ADR-0084 batch-1 lesson applied in advance
+rather than re-learnt. `classACap` ratcheted 2 → 1. The `VITE_CANVAS_WORKSPACE` half below stays
+open, and is now two harnesses cheaper for exactly the reason this row predicted.
+
+The original analysis is kept below because it is the argument, not just the outcome:
+
+**`VITE_ACTIVITY_EDITOR_TABS` — trigger was: the next epic touching the activity editor.**
 The register described this as the estate's worst case, on the strength of nine unrelated features
 having had to patch both branches. That is **true about the codebase and false about the flag**, and
 the distinction is the whole point of this row:
