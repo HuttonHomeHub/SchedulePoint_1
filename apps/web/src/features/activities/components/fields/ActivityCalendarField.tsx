@@ -1,7 +1,7 @@
 import type { ActivityType, CalendarSummary } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
-import { INHERIT_CALENDAR_LABEL } from '../schemas/activity-schemas';
+import { INHERIT_CALENDAR_LABEL } from '../../schemas/activity-schemas';
 
 import { Combobox } from '@/components/ui/combobox';
 import { FieldGateLock, useFieldGate } from '@/components/ui/field-gate';

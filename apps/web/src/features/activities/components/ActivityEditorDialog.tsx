@@ -29,13 +29,13 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedScheduling } from './activity-editor-seeds';
-import { ActivityCalendarField } from './ActivityCalendarField';
 import {
   ReportedProgressPanel,
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
+import { ActivityCalendarField } from './fields/ActivityCalendarField';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';

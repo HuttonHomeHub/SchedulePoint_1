@@ -37,8 +37,8 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
-import { ActivityCalendarField } from './ActivityCalendarField';
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
+import { ActivityCalendarField } from './fields/ActivityCalendarField';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
