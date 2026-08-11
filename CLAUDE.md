@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 22 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 924 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 88 ADRs.
+> 89 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1827,6 +1827,56 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   in the project's history (ADR-0070's `+1d` rounding); every other catch belongs to a flag-on journey
   or a specialist review. Seventeen flags have no off-branch test at all.
   **Nothing about the running application changes** — every flag is already on and unreachable.
+
+- **ADR-0089** _(Accepted; M0–M7 landed 2026-08-11)_ — One activity field vocabulary, and what a
+  field group is. An activity's ~20 definition fields were rendered by **two components sharing no
+  code** — the New-activity dialog and the tabbed editor — and nine features had each added a field
+  to both, by hand, twice. `docs/TECH_DEBT.md` #122 blamed the alternative-surface flag for the
+  cost and was **wrong**: the editor's own docblock said _"creation stays with
+  `ActivityFormDialog`"_, so retiring the flag alone would have left the monolith alive as the
+  create surface with every field those nine features added. The receipts belonged to create and
+  edit being two components (ADR-0060), not to the flag. **The divergence set was re-derived from
+  code rather than trusted** — the spec listed nine, a reviewer found a tenth incidentally, and the
+  characterisation suite found **~26 measurable differences**. Six were defects a planner could
+  hit: an activity nested under an unresolvable summary rendered as **top level** while the save
+  re-sent the real parent (screen and record disagreeing, which is worse than either being wrong);
+  a `MANDATORY_*` constraint rendered as **no constraint at all** with its date filled in below it;
+  the option keeping the Type selector honest was a **one-way door**; the editor removed the
+  duration field for three types and **said nothing**; a resource-dependent calendar was `disabled`
+  rather than read-only; and cost fields were withheld from every duration-derived type, so a
+  **payment milestone** could not be given its value on the only surface that creates one (the API
+  accepts it — established by running a Supertest case, not by reading the DTO).
+  **The decisions.** A field is rendered by exactly one component, gated by a partition test that
+  imports the four Zod scope shapes and asserts every key has exactly one owning group — it catches
+  what a per-group suite structurally cannot, a field claimed twice or by nobody. A group takes
+  **exactly one concrete `UseFormReturn`, and the compiler is the enforcement** (RHF's generics are
+  invariant, so a general-scope group cannot register a scheduling field); three weaker instruments
+  sit on top, **each recorded with its blind spot**, because two earlier drafts of this decision
+  overclaimed their mechanism — the first claimed the `FieldGateProvider` forced it, which is false
+  since that hands seven scopes one shared object by identity and a `general`+`cost` group would
+  have been a **disclosure path**. A cross-scope fact is host-resolved and passed as a plain prop
+  (D2b), which is what stops the next one being solved with a second form prop. **Creation is one
+  act with one permission, so it is one scope by construction** — a single submit over four scope
+  forms, with focus suppressed at each form and **one** ordered decision at the host, because four
+  forms each focusing their own first problem is four competing calls whose winner is whichever
+  promise settles last. Validation goes through each scope's `handleSubmit` and not `trigger`,
+  which is a behaviour fix rather than a style choice: `trigger()` never sets `isSubmitted`, and
+  that flag is exactly what turns re-validation on, so a corrected field kept showing its old error
+  until the planner submitted again.
+  **Five decision-bearing claims failed once executed, and every one was a document trusted instead
+  of checked.** D4's verdict was backwards — the plan said to converge the editor onto create's
+  live value, and the characterisation case written to pin D4 calls that behaviour a one-way door
+  in its own comments, in the same repository, before the plan was written. D2's label row was
+  backwards, with the reason sitting in the editor's own suite since it shipped. Two copy
+  placements were resolved and then corrected. And during M6 a migrated test case was **claimed as
+  "already covered" and was not** — caught by spot-checking the claim rather than accepting it,
+  restored, and verified red; that is precisely the failure ADR-0084 D5 exists to prevent, found
+  because the rule says to check and not because anything failed. The flag retired at **M5, after**
+  the divergences closed, which made M6 small: by then the monolith's edit half had no renderer
+  left and was dead code rather than a path to migrate. Its two flag-off harnesses were
+  **converted before the flag went** — the ADR-0084 batch-1 lesson applied in advance.
+  **The CPM engine is not imported and no migration runs**, so the ADR-0034 parity gate is
+  untouched by construction.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
