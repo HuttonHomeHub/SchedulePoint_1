@@ -511,6 +511,121 @@ describe('ActivityEditorDialog — review findings', () => {
 });
 
 /**
+ * M0.5 — how a scope reports its problems (`ActivityEditorDialog.tsx:493`, `:613`, `:896`).
+ *
+ * The rule, from `FormProblemCount`'s docblock and ADR-0077 §9: a field's problem belongs to the
+ * field; the alert belongs to the form. One problem is silent, because `handleSubmit` has already
+ * moved focus to the control carrying it — the case WCAG 4.1.3 exempts. Two or more earn a count,
+ * which restates nothing.
+ *
+ * Three scopes, three forms, three counts — asserted per scope rather than once, because each is a
+ * separate `useScopeForm` with its own `formState.errors` and its own resolver. A count wired to the
+ * wrong scope's errors would be invisible from any other tab, and would look right on the tab it
+ * was written for.
+ *
+ * These are the **Planner-facing** definition scopes. The Progress tab's panels are asserted in
+ * their own file against their own gate prop, so a change to the pen rule cannot take that coverage
+ * with it.
+ */
+describe('ActivityEditorDialog — how a scope reports its problems', () => {
+  it('General: states a single problem once, beside its field', async () => {
+    mount();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+
+    expect(await screen.findAllByText('Name is required.')).toHaveLength(1);
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+    expect(PATCHES).toHaveLength(0);
+  });
+
+  it('General: counts two problems without repeating either sentence', async () => {
+    mount();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'C'.repeat(33) } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+
+    const count = await screen.findByText('2 problems — check the highlighted fields below.');
+    expect(screen.getAllByText('Name is required.')).toHaveLength(1);
+    expect(screen.getAllByText('Code is too long.')).toHaveLength(1);
+    expect(count).not.toHaveTextContent('Name is required.');
+    expect(count).not.toHaveTextContent('Code is too long.');
+    expect(PATCHES).toHaveLength(0);
+  });
+
+  it('Scheduling: states a single problem once, beside its field', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Scheduling' }));
+    // A constraint type with no date — the cross-field rule, whose message is attached by `path`
+    // and so lands on a control like any other.
+    fireEvent.change(screen.getByLabelText('Constraint'), { target: { value: 'SNET' } });
+    fireEvent.click(screen.getByRole('button', { name: /save scheduling/i }));
+
+    expect(await screen.findAllByText('Choose a date for this constraint.')).toHaveLength(1);
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+    expect(PATCHES).toHaveLength(0);
+  });
+
+  it('Scheduling: counts two problems without repeating either sentence', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Scheduling' }));
+    fireEvent.change(screen.getByLabelText('Constraint'), { target: { value: 'SNET' } });
+    fireEvent.change(screen.getByLabelText('Secondary constraint'), { target: { value: 'FNLT' } });
+    fireEvent.click(screen.getByRole('button', { name: /save scheduling/i }));
+
+    const count = await screen.findByText('2 problems — check the highlighted fields below.');
+    expect(screen.getAllByText('Choose a date for this constraint.')).toHaveLength(1);
+    expect(screen.getAllByText('Choose a date for the secondary constraint.')).toHaveLength(1);
+    expect(count).not.toHaveTextContent('Choose a date for this constraint.');
+    expect(count).not.toHaveTextContent('Choose a date for the secondary constraint.');
+    expect(PATCHES).toHaveLength(0);
+  });
+
+  it('Cost: states a single problem once, beside its field', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Cost' }));
+    fireEvent.change(screen.getByLabelText('Budgeted expense'), { target: { value: '-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /save cost/i }));
+
+    expect(await screen.findAllByText('Cost cannot be negative.')).toHaveLength(1);
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+    expect(PATCHES).toHaveLength(0);
+  });
+
+  it('Cost: counts two problems without repeating either sentence', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Cost' }));
+    fireEvent.change(screen.getByLabelText('Budgeted expense'), { target: { value: '-1' } });
+    fireEvent.change(screen.getByLabelText('Actual expense'), { target: { value: '1.234' } });
+    fireEvent.click(screen.getByRole('button', { name: /save cost/i }));
+
+    const count = await screen.findByText('2 problems — check the highlighted fields below.');
+    expect(screen.getAllByText('Cost cannot be negative.')).toHaveLength(1);
+    expect(screen.getAllByText('Use at most 2 decimal places.')).toHaveLength(1);
+    expect(count).not.toHaveTextContent('Cost cannot be negative.');
+    expect(count).not.toHaveTextContent('Use at most 2 decimal places.');
+    expect(PATCHES).toHaveLength(0);
+  });
+
+  it('counts only the scope being saved, never its siblings’ problems', async () => {
+    // The defect a per-scope count exists to avoid: three forms in one dialog, and a count reading
+    // the wrong `errors` object would report a sibling tab's problems as this one's. Two problems on
+    // General, none on Cost — so Cost must stay silent after its own (valid) submit.
+    mount();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'C'.repeat(33) } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+    await screen.findByText('2 problems — check the highlighted fields below.');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Cost' }));
+    fireEvent.change(screen.getByLabelText('Budgeted expense'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: /save cost/i }));
+
+    await waitFor(() => expect(PATCHES).toHaveLength(1));
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+  });
+});
+
+/**
  * The ADR-0061 layout. These assert what the *previous* editor could not do at all — say where the
  * activity sits while you edit it, and say which scopes are shut before you click into them.
  */

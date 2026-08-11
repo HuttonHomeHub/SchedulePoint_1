@@ -299,3 +299,89 @@ describe('ActivityFormDialog', () => {
     });
   });
 });
+
+/**
+ * M0.5 — the error presentation on the **create/edit host's one wide form**
+ * (`ActivityFormDialog.tsx:366`). The rule, from `FormProblemCount`'s docblock and ADR-0077 §9: a
+ * field's problem belongs to the field; the alert belongs to the form. One problem is silent,
+ * because `handleSubmit` has already moved focus to the control carrying it — the case WCAG 4.1.3
+ * exempts. Two or more earn a count, which restates nothing and says the one thing an inline
+ * message cannot say from where the reader is standing.
+ *
+ * This host is the one M1 changes: it validates through `handleSubmit` today (which focuses) and
+ * moves to four `trigger()` calls (which do not). The focus case below is therefore the assertion
+ * that has to keep passing through that swap, and is the reason the silence is lawful at all.
+ */
+describe('ActivityFormDialog — how problems are reported', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
+  });
+
+  it('states a single problem once, beside its field', async () => {
+    renderDialog();
+    // Name is the only invalid field: `duration` defaults to '1' and every other control is a
+    // select over its own values.
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    expect(await screen.findAllByText('Name is required.')).toHaveLength(1);
+    expect(screen.queryByText(/problems — check the highlighted fields below\./)).toBeNull();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('counts two problems without repeating either sentence', async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'C'.repeat(33) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    expect(
+      await screen.findByText('2 problems — check the highlighted fields below.'),
+    ).toBeVisible();
+    // Each field's own sentence still appears exactly once, and the count adds no third copy.
+    expect(screen.getAllByText('Name is required.')).toHaveLength(1);
+    expect(screen.getAllByText('Code is too long.')).toHaveLength(1);
+    // The count says how many, never which — restating them here is the duplication ADR-0077 §9
+    // removed, in a new costume.
+    const alert = screen.getByText('2 problems — check the highlighted fields below.');
+    expect(alert).not.toHaveTextContent('Name is required.');
+    expect(alert).not.toHaveTextContent('Code is too long.');
+  });
+
+  it('moves focus to exactly one control when a submit fails with two problems', async () => {
+    // The property that makes the silence lawful. It is asserted with two problems rather than one
+    // because the failure M1 risks is *plural* focus: four `trigger()` calls each focusing their own
+    // scope's first invalid field would leave the reader wherever the last one landed, having
+    // dragged them past the others. Counting `focusin` is the only way to see that — `activeElement`
+    // is a single value by definition and cannot report how many times it moved.
+    const focused: string[] = [];
+    const record = (event: FocusEvent): void => {
+      const target = event.target as HTMLElement;
+      focused.push(target.getAttribute('name') ?? target.tagName);
+    };
+    document.addEventListener('focusin', record);
+    try {
+      renderDialog();
+      fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'C'.repeat(33) } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+      await screen.findByText('2 problems — check the highlighted fields below.');
+
+      expect(focused).toEqual(['name']);
+      expect(document.activeElement).toBe(screen.getByLabelText('Name'));
+    } finally {
+      document.removeEventListener('focusin', record);
+    }
+  });
+
+  it('reports an edit’s problems the same way it reports a create’s', async () => {
+    // The same form serves both, so the presentation cannot differ — but the edit path is the one
+    // the two flag-off Playwright harnesses drive, so it is pinned rather than assumed.
+    renderDialog({ activity: ACTIVITY });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'C'.repeat(33) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(
+      await screen.findByText('2 problems — check the highlighted fields below.'),
+    ).toBeVisible();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+});

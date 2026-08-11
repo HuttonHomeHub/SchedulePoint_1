@@ -267,10 +267,37 @@ the form.
 
 - **Complexity:** M (rev 3: was S — seven sites, not five)
 - **Dependencies:** M0
-- **Risks:** `ActivityProgressPanels.tsx:139` and `:554` are **Contributor-facing** surfaces
-  (reported progress is never pen-gated, ADR-0028 Q-C) — assert them separately from the
-  Planner-facing ones. `:554` is inside `WeightedStepsPanel`, whose suite M4-T3 must then leave
-  alone; that bar is re-worded there rather than being discovered as a conflict.
+- **Risks:** `ActivityProgressPanels.tsx:139` is a **Contributor-facing** surface (reported progress
+  is never pen-gated, ADR-0028 Q-C) — assert it separately from the Planner-facing ones. `:554` is
+  inside `WeightedStepsPanel`, whose suite M4-T3 must then leave alone; that bar is re-worded there
+  rather than being discovered as a conflict.
+
+  **CORRECTED at M0.5 (executed):** this said `:139` **and `:554`** were Contributor-facing. `:554`
+  is **not** — `WeightedStepsPanel` receives `gating.steps` (`ActivityEditorDialog.tsx:874`), and
+  `steps` is the pen-gated `definition` object (`activity-editor-gating.ts:115`), which ADR-0060 §5
+  and its M0 server change put there deliberately. Only `:139` is never pen-gated. All three panels
+  are nonetheless asserted against a **literal gate prop** rather than through
+  `deriveActivityEditorGating`, which is the substance of the risk: routing this coverage through the
+  derivation is how a change to the pen rule takes progress coverage with it silently.
+
+- **FINDING — `:554` can never render the count, and no production change is permitted to fix it.**
+  `WeightedStepsPanel` is the one site whose form is a `useFieldArray`. Two blank step names produce
+  `errors.steps[0].name` and `errors.steps[1].name`; the **top-level** `errors` object holds a single
+  `steps` entry — an array carrying no `message` — and `FormProblemCount` counts entries that carry
+  one. So the count is **0**, not merely below the threshold. Measured, not reasoned: a probe against
+  the real panel returned `count: 0` with two row errors, and the case stayed silent with the
+  threshold temporarily lowered to `< 1`.
+  **This is not a regression** — `FormErrorSummary` read `Object.values(errors)` identically and was
+  equally silent, so the M0.5 swap changed nothing observable there. It is pinned as a **named gap**
+  rather than as the rule, so a later fix flips a named assertion instead of quietly making a passing
+  test wrong.
+
+- **FINDING — two further reachability facts M1 should know before it rearranges these forms.**
+  `:277` (`ValueMeasurePanel`) has only one field that can fail — the other is a `<select>` over its
+  own enum, which cannot be driven to a value it does not offer — so its silence is asserted
+  behaviourally rather than commented, and adding a third validated field turns that silence into a
+  visible failure. And an object-level `.refine()` **never runs while any field error exists** (Zod
+  short-circuits), so a two-problem case must be two field errors or two refines, never one of each.
 - **Testing:** new cases on each of the seven live sites.
 - **Development steps:** decide (recommended: `FormProblemCount` on all seven) → apply → assert one
   problem and two problems on each surface → confirm `WeightedStepsPanel.test.tsx` is updated **here**
