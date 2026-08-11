@@ -31,7 +31,6 @@ import {
   Maximize2,
   MessageSquare,
   Minus,
-  Palette,
   Plus,
   Printer,
   RefreshCw,
@@ -841,87 +840,22 @@ function FilterMenuControl({
   );
 }
 
-/** The Colour-by modes the picker offers, in menu order (insight lenses; ADR-0031 taxonomy). Criticality
- * is the default and byte-for-byte today's fills; driving-resource is a deferred fast-follow (CQ-1). */
-const COLOUR_MODES: ReadonlyArray<{ mode: ColourMode; label: string }> = [
-  { mode: 'criticality', label: 'Criticality' },
-  { mode: 'totalFloat', label: 'Total float' },
-  { mode: 'wbs', label: 'WBS group' },
-];
+/**
+ * Presentation order for the colour modes — default first, then the two analytical lenses.
+ * (Driving-resource is a deferred fast-follow, CQ-1.)
+ *
+ * This replaced a `COLOUR_MODES` array that carried **both** the order and the labels, duplicating
+ * `COLOUR_MODE_LABELS` right below it — two answers to "what is this mode called", which had been
+ * sitting in the file since the picker shipped. Order and labels are now one each.
+ */
+const COLOUR_MODE_ORDER: readonly ColourMode[] = ['criticality', 'totalFloat', 'wbs'];
+
 const COLOUR_MODE_LABELS: Record<ColourMode, string> = {
   criticality: 'Criticality',
   totalFloat: 'Total float',
   wbs: 'WBS group',
 };
 
-/**
- * The **Colour-by picker** (insight lenses, flag-on) — a single APG menu-button (mirroring
- * {@link ZoomPresetControl}) that shows the active mode and opens a `Menu` of single-choice radio items
- * to recolour bars by Criticality (default) / Total float / WBS group. Picking a mode drives
- * `ctx.setColourMode`; the canvas repaints from the precomputed colour map and the Legend swaps to the
- * mode's key. Pressed (non-default active) state is reflected by the item's `isActive`.
- */
-function ColourByControl({
-  ctx,
-  api,
-}: {
-  ctx: TsldToolbarContext;
-  api: ToolbarItemRenderApi;
-}): React.ReactElement {
-  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  const disabled = api.disabled;
-  const activeLabel = COLOUR_MODE_LABELS[ctx.colourMode];
-  return (
-    <>
-      <button
-        {...api.itemProps}
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-disabled={disabled || undefined}
-        // The accessible name matches the visible text verbatim (WCAG 2.5.3 Label in Name) — a11y
-        // review caught "Colour by: {mode}" drifting from the new "Colour · {mode}" visible text.
-        aria-label={`Colour · ${activeLabel}`}
-        title={disabled ? (api.disabledReason ?? 'Colour by…') : `Colour · ${activeLabel}`}
-        onClick={() => {
-          if (!disabled) toggle();
-        }}
-        className={cn(toolbarControlVariants({ active: api.active || open, disabled }))}
-      >
-        <Palette aria-hidden="true" className="size-4" />
-        {/* Visible "Colour ·" prefix (mirrors IsolateControl's "Isolating · {mode}" idiom) so the bar
-            reads as a picker showing its active mode, not a fixed setting named e.g. "Criticality"
-            (ux review: the sighted-user affordance previously lived only in the aria-label/title). */}
-        <span className="truncate">Colour · {activeLabel}</span>
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
-      </button>
-      <Menu
-        open={open}
-        onClose={close}
-        anchor={anchor}
-        label="Colour by"
-        restoreFocusRef={triggerRef}
-      >
-        {COLOUR_MODES.map(({ mode, label }) => (
-          <MenuItem
-            key={mode}
-            selected={ctx.colourMode === mode}
-            onSelect={() => ctx.setColourMode(mode)}
-          >
-            <Check
-              aria-hidden="true"
-              className={cn('size-4', ctx.colourMode === mode ? 'opacity-100' : 'opacity-0')}
-            />
-            {label}
-          </MenuItem>
-        ))}
-      </Menu>
-    </>
-  );
-}
-
-/** Shared disabled reason for Export / Print on an empty/uncomputed canvas (spec `docs/specs/export-print/`). */
 const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
 
 /**
@@ -1130,6 +1064,31 @@ function CurrentConflictStatus({
  * overflow-y-auto` is fixed locally here (not in `ToolbarPopover`, whose `ESTIMATED_HEIGHT` anchor
  * assumed a shorter, ungrouped panel) since the primitive is shared with `Summary` and `Legend`
  * and has no reason to change for this panel's height alone. */
+/**
+ * The default colour mode (`use-tsld-canvas-ui-state.ts:149`). Named here rather than compared
+ * against a literal so the two cannot drift apart silently — a drift that would show up only as the
+ * `View ▾` trigger annotating (or failing to annotate) the wrong state.
+ */
+const DEFAULT_COLOUR_MODE: ColourMode = 'criticality';
+
+/**
+ * `View ▾`'s trigger label, which carries the active colour mode **only when it is not the
+ * default** (ADR-0090 M2-T2 — the decision is written up in
+ * `docs/specs/workspace-layout/m2-suite-impact.md`).
+ *
+ * The `colour-by` menu-button used to say this on Row 1 (`Colour · Criticality`) and cost 183 px of
+ * pinned width to do it. Colour is the diagram's dominant encoding, so losing the read-out
+ * altogether was not acceptable — a planner who has coloured by WBS group and forgotten reads every
+ * criticality judgement wrong. Annotating *always* would spend ~90 px permanently to state the
+ * thing that is already true, on the surface whose entire problem is width. So it annotates the
+ * surprising state and stays silent in the ordinary one.
+ */
+function viewTriggerLabel(ctx: TsldToolbarContext): string {
+  return ctx.colourMode === DEFAULT_COLOUR_MODE
+    ? 'View'
+    : `View · ${COLOUR_MODE_LABELS[ctx.colourMode]}`;
+}
+
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
     <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
@@ -1141,6 +1100,30 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
             <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
               {label}
             </legend>
+            {/* Colour-by leads the Insight group (ADR-0090 M2-T2): it is the one control here that
+                changes what every bar MEANS rather than adding a mark on top, so it reads first.
+                A radio group, not checkboxes — the three modes are exclusive, which the old
+                menu-button expressed with `menuitemradio` and this expresses natively. */}
+            {id === 'insight' && CANVAS_LENSES_ENABLED ? (
+              <div
+                role="radiogroup"
+                aria-label="Colour bars by"
+                className="border-border mb-1 flex flex-col gap-2 border-b pb-2"
+              >
+                {COLOUR_MODE_ORDER.map((mode) => (
+                  <label key={mode} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="tsld-colour-mode"
+                      checked={ctx.colourMode === mode}
+                      onChange={() => ctx.setColourMode(mode)}
+                      className="accent-primary size-4"
+                    />
+                    Colour · {COLOUR_MODE_LABELS[mode]}
+                  </label>
+                ))}
+              </div>
+            ) : null}
             {keys.map((key) => (
               <label key={key} className="flex items-center gap-2 text-sm">
                 <input
@@ -1387,15 +1370,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Filter',
     icon: <Filter className="size-4" />,
   };
-  const colourByShape = {
-    id: 'colour-by',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 3,
-    label: 'Colour by…',
-    icon: <Palette className="size-4" />,
-  };
   const baselineOverlayShape = {
     id: 'baseline-overlay',
     group: 'lens' as const,
@@ -1607,7 +1581,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <SlidersHorizontal className="size-4" />,
       render: (ctx, api) => (
         <ToolbarPopover
-          label="View"
+          label={viewTriggerLabel(ctx)}
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
         >
@@ -1703,15 +1677,15 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // Colour-by — flag-on recolours bars by Criticality (default, today's fills) / Total float / WBS
     // group with a mode-aware Legend (spec `docs/specs/canvas-lenses/`); flag-off the "Coming soon"
     // placeholder, byte-for-byte. Pressed when a non-default mode is active.
-    CANVAS_LENSES_ENABLED
-      ? {
-          ...colourByShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
-          isActive: (ctx) => ctx.colourMode !== 'criticality',
-          render: (ctx, api) => <ColourByControl ctx={ctx} api={api} />,
-        }
-      : placeholderItem(colourByShape),
+    // `colour-by` moved INTO `View ▾` in ADR-0090 M2-T2, as a radio group in the Insight overlays
+    // section. It was the largest remaining pinned item on Row 1 at 183 px — a `render` item, so
+    // that width was paid at every viewport. Its at-a-glance read-out survives as the `View ▾`
+    // trigger's conditional annotation (see `viewTriggerLabel`), not as a lost affordance.
+    //
+    // Its flag-off "Coming soon" placeholder goes with it rather than staying on Row 1: the whole
+    // point of the move is that Row 1 stops carrying this control, and a placeholder occupying the
+    // width the live control just vacated would defeat it exactly. Flag-off, the Insight section
+    // simply has no colour group — which is what `CANVAS_LENSES_ENABLED` guards there.
     // Baseline overlay — flag-on a pressed-state toggle that ghosts the active baseline behind the live
     // bars (spec `docs/specs/canvas-lenses/`), disabled-with-reason when there's no diagram / the
     // variance query is loading or errored / there's no active baseline; flag-off the "Coming soon"

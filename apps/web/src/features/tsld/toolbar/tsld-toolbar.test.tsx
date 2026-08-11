@@ -289,7 +289,11 @@ describe('TSLD toolbar registry (two-row)', () => {
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
     // The rest are inline "Coming soon" icon buttons whose tooltip names them.
-    for (const name of ['Export…', 'Print…', 'Share…', 'Colour by…']) {
+    // `Colour by…` left this list in ADR-0090 M2-T2 along with the live control. Its flag-off
+    // placeholder was NOT left behind on Row 1: a placeholder occupying the width the live control
+    // just vacated defeats the move exactly. Flag-off, `View ▾`'s Insight section has no colour
+    // group at all.
+    for (const name of ['Export…', 'Print…', 'Share…']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);
