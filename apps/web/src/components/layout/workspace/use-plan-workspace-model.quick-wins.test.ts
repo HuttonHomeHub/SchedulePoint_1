@@ -210,15 +210,16 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     expect(result.current.selectedActivity).toBeUndefined();
   });
 
-  it('F3: setProgressActivityId drives progressActivity, which clears when the row is gone', () => {
-    const { result, rerender } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    expect(result.current.progressActivity).toBeUndefined();
-    act(() => result.current.setProgressActivityId('a1'));
-    expect(result.current.progressActivity?.id).toBe('a1');
+  it('F3: onProgressActivity opens the editor on the Progress tab', () => {
+    // It used to set a `progressActivityId` that drove a workspace-hosted dialog, and this case
+    // asserted that id resolving to a row. That dialog was deleted when
+    // `VITE_ACTIVITY_EDITOR_TABS` retired (ADR-0089), so the id resolved to nothing anybody read.
+    // What the entry point has to do now is name the tab, which is what this asserts.
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    expect(result.current.editorIntent).toBeNull();
 
-    h2.activities = [OTHER];
-    rerender();
-    expect(result.current.progressActivity).toBeUndefined();
+    act(() => result.current.onProgressActivity(ACTIVITY));
+    expect(result.current.editorIntent).toMatchObject({ activityId: 'a1', tab: 'progress' });
   });
 
   it('F5: clearVisualPlacement sends exactly { activityId, visualStart: null, version } and notifies recalc', async () => {

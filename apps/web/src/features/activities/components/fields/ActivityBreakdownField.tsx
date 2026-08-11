@@ -64,9 +64,14 @@ export function ActivityBreakdownField({
         }
         hint={
           'Groups this activity under a WBS summary, whose dates roll up from its members.' +
-          (!loading && !errored && parentOptions.length === 0 && !missingParent
-            ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
-            : '')
+          // The honest option says the stored parent cannot be resolved; on its own it does not say
+          // what to do about it, and "Unavailable" invites the reading that the SAVE will drop it.
+          // It will not — the value is re-sent untouched — so the sentence says both halves.
+          (missingParent && !loading
+            ? ' Its current summary isn’t in this plan’s list — it may have been deleted. Saving keeps it as it is; choose another to change it.'
+            : !loading && !errored && parentOptions.length === 0
+              ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
+              : '')
         }
         {...form.register('parentId')}
       >

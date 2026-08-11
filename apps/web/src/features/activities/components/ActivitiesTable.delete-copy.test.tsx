@@ -17,7 +17,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   // The tabbed editor owns Edit; Delete stays a plain confirm either way. Pinned so a flag flip
   // elsewhere cannot quietly change which dialog this test is looking at.
-  ACTIVITY_EDITOR_TABS_ENABLED: false,
 }));
 
 const BASE: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {

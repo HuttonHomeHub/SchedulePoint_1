@@ -107,6 +107,20 @@ describe('ActivityBreakdownField', () => {
       render(<Harness parentId="gone-1" parentOptions={[]} />);
       expect(hint()).not.toContain('There are no WBS summaries in this plan yet');
     });
+
+    it('says what happens on save, because “Unavailable” alone does not', () => {
+      // The word names a state and no action, and it invites the reading that saving will drop the
+      // nesting. It will not — the value is re-sent untouched — so the hint says both halves.
+      render(<Harness parentId="gone-1" />);
+      expect(hint()).toContain('it may have been deleted');
+      expect(hint()).toContain('Saving keeps it as it is');
+    });
+
+    it('says nothing of the sort while the list is still loading', () => {
+      // "It may have been deleted" is a claim, and nothing is known yet.
+      render(<Harness parentId="gone-1" loading />);
+      expect(hint()).not.toContain('may have been deleted');
+    });
   });
 
   describe('the list’s own states', () => {

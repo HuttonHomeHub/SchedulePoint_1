@@ -11,7 +11,7 @@ import { ActivitiesTable } from './ActivitiesTable';
 import { expectInert } from '@/components/ui/scope-save-bar-assertions';
 
 /**
- * M5 — entry-point convergence, with `VITE_ACTIVITY_EDITOR_TABS` forced ON.
+ * M5 — entry-point convergence. The flag it forced ON retired in ADR-0089; the editor is now the only surface, so there is nothing to force.
  *
  * The property under test is that **Edit**, **Report progress** and **Steps** are three doors into
  * one room. Before this milestone they were three dialogs, and the drift that produced was real: a
@@ -24,7 +24,6 @@ import { expectInert } from '@/components/ui/scope-save-bar-assertions';
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_EDITOR_TABS_ENABLED: true,
   EARNED_VALUE_ENABLED: true,
   ACTIVITY_STEPS_ENABLED: true,
 }));

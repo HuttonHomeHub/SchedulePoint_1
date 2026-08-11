@@ -182,3 +182,21 @@ describe('ActivityCalendarField', () => {
     });
   });
 });
+
+describe('the group gate’s reason is reachable, not merely visible', () => {
+  it('points the control at the enclosing provider’s reason', () => {
+    // WCAG 1.3.1. The reason paragraph is rendered once above the fields and published by id; this
+    // component read `useFieldGate()?.writable` directly, so it shaded the control and never joined
+    // that sentence to it. A sighted reader saw the explanation; nothing connected it to the field.
+    // Every sibling gets this from the shared `*Field` primitives — this one predates them.
+    mount({}, { writable: false, reason: 'Someone else is editing this plan.' });
+    expect(describedText(field())).toContain('Someone else is editing this plan.');
+  });
+
+  it('prefers the resource-dependent reason alone, being the more specific', () => {
+    // The nearest-reason rule (ADR-0083 D4): two sentences would say the field is shut twice, and
+    // the type-specific one is the actionable half.
+    mount({ activityType: 'RESOURCE_DEPENDENT' }, { writable: false, reason: 'No pen.' });
+    expect(describedText(field())).toBe(RESOURCE_DEPENDENT_REASON);
+  });
+});

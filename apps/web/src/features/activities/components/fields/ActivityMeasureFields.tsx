@@ -20,6 +20,20 @@ export const MEASURE_FIELDS = [
 ] as const satisfies readonly (keyof ActivityMeasureValues)[];
 
 /**
+ * The heading and the sentence under it, exported because **both hosts render them and neither owns
+ * them**.
+ *
+ * This group is the one exception to "a group owns its `FormSection`" (ADR-0089 D5): the editor
+ * frames it as a progress panel whose heading names an effect, create as an ordinary form section,
+ * and both framings are right for where they sit. The words, though, are the same words — and they
+ * were the same words typed twice, in two files, with nothing asserting they agreed. That is
+ * precisely the drift this epic exists to close, reintroduced by the exception meant to accommodate
+ * two honest framings. The frame stays the host's; the copy stops being.
+ */
+export const MEASURE_SECTION_TITLE = 'How value is measured';
+export const MEASURE_SECTION_DESCRIPTION = 'Earns value in Earned Value. Changes no dates.';
+
+/**
  * How value is measured — which %-complete earns value, and the hand-entered physical figure.
  *
  * **This group deliberately owns no `FormSection`**, unlike its siblings. Its two hosts frame it

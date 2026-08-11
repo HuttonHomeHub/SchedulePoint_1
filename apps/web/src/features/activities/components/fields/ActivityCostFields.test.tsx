@@ -6,7 +6,12 @@ import { describe, expect, it } from 'vitest';
 
 import { ACCRUAL_FIELDS, ActivityAccrualField } from './ActivityAccrualField';
 import { ActivityExpenseFields, EXPENSE_FIELDS } from './ActivityExpenseFields';
-import { ActivityMeasureFields, MEASURE_FIELDS } from './ActivityMeasureFields';
+import {
+  ActivityMeasureFields,
+  MEASURE_FIELDS,
+  MEASURE_SECTION_DESCRIPTION,
+  MEASURE_SECTION_TITLE,
+} from './ActivityMeasureFields';
 
 import { FieldGateProvider } from '@/components/ui/field-gate';
 import { FieldGridContainer } from '@/components/ui/form-layout';
@@ -96,6 +101,17 @@ describe('ActivityExpenseFields', () => {
     expect(input).toHaveAttribute('inputmode', 'decimal');
   });
 
+  it('renders its controls in the tuple’s order', () => {
+    // ADR-0089 D2 gate 2, which the ADR claims for every group — and did not have here. The
+    // create host's `SUBMIT_FIELD_ORDER` relies on this order for where a failed submit sends the
+    // reader, so it is load-bearing rather than tidy.
+    render(<Cost>{(form) => <ActivityExpenseFields form={form} />}</Cost>);
+    const rendered = Array.from(document.querySelectorAll<HTMLElement>('input[name], select[name]'))
+      .map((element) => element.getAttribute('name') ?? '')
+      .filter((name) => (EXPENSE_FIELDS as readonly string[]).includes(name));
+    expect(rendered).toEqual([...EXPENSE_FIELDS]);
+  });
+
   it.each(EXPENSE_FIELDS)('says a blank %s means none', (field) => {
     // Both fields say it, which is why this is a loop rather than a single lookup — asserting one
     // and finding two is how a shared sentence gets attributed to the wrong control.
@@ -147,11 +163,31 @@ describe('ActivityMeasureFields', () => {
     },
   );
 
+  it('renders its controls in the tuple’s order', () => {
+    // ADR-0089 D2 gate 2, which the ADR claims for every group — and did not have here. The
+    // create host's `SUBMIT_FIELD_ORDER` relies on this order for where a failed submit sends the
+    // reader, so it is load-bearing rather than tidy.
+    render(<Measure />);
+    const rendered = Array.from(document.querySelectorAll<HTMLElement>('input[name], select[name]'))
+      .map((element) => element.getAttribute('name') ?? '')
+      .filter((name) => (MEASURE_FIELDS as readonly string[]).includes(name));
+    expect(rendered).toEqual([...MEASURE_FIELDS]);
+  });
+
   it('renders no section of its own — the frame belongs to the host', () => {
     // Its two hosts frame it differently and correctly: a progress panel with an effect heading in
     // the editor, an ordinary form section on create. Only the controls are shared.
     render(<Measure />);
     expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  it('publishes its heading copy for both hosts rather than each typing it', () => {
+    // The exception to "a group owns its FormSection" is that its two hosts FRAME it differently —
+    // a progress panel in the editor, a form section on create. They were also typing the same
+    // WORDS twice, in two files, with nothing asserting they agreed: the drift this epic exists to
+    // close, reintroduced by the exception meant to accommodate two honest framings.
+    expect(MEASURE_SECTION_TITLE).toBe('How value is measured');
+    expect(MEASURE_SECTION_DESCRIPTION).toBe('Earns value in Earned Value. Changes no dates.');
   });
 
   it('shows the panel’s reason on the physical field when it is given one', () => {

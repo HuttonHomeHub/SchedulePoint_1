@@ -86,6 +86,17 @@ describe('ActivityPlacementFields', () => {
     expect(screen.getByLabelText(LABELS[field])).toHaveAttribute('name', field);
   });
 
+  it('renders its controls in the tuple’s order', () => {
+    // ADR-0089 D2 gate 2, which the ADR claims for every group — and did not have here. The
+    // create host's `SUBMIT_FIELD_ORDER` relies on this order for where a failed submit sends the
+    // reader, so it is load-bearing rather than tidy.
+    render(<Placement activityType="TASK" />);
+    const rendered = Array.from(document.querySelectorAll<HTMLElement>('input[name], select[name]'))
+      .map((element) => element.getAttribute('name') ?? '')
+      .filter((name) => (PLACEMENT_FIELDS as readonly string[]).includes(name));
+    expect(rendered).toEqual([...PLACEMENT_FIELDS]);
+  });
+
   it('renders nothing at all with the advanced-constraints flag off', () => {
     // Both members are behind it, so the section itself goes rather than leaving a heading over an
     // empty grid.

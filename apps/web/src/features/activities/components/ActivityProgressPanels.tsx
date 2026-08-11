@@ -28,7 +28,11 @@ import {
 } from '../schemas/step-schemas';
 
 import { seedMeasure } from './activity-editor-seeds';
-import { ActivityMeasureFields } from './fields/ActivityMeasureFields';
+import {
+  ActivityMeasureFields,
+  MEASURE_SECTION_DESCRIPTION,
+  MEASURE_SECTION_TITLE,
+} from './fields/ActivityMeasureFields';
 import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
@@ -269,10 +273,7 @@ export function ValueMeasurePanel({
       className="flex flex-col gap-4"
     >
       <FieldGateProvider gate={gate}>
-        <PanelHeading
-          title="How value is measured"
-          effect="Earns value in Earned Value. Changes no dates."
-        />
+        <PanelHeading title={MEASURE_SECTION_TITLE} effect={MEASURE_SECTION_DESCRIPTION} />
         <FormProblemCount errors={form.formState.errors} />
         {EARNED_VALUE_ENABLED ? (
           <>

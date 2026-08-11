@@ -16,7 +16,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
-  ACTIVITY_EDITOR_TABS_ENABLED: true,
   CANVAS_DIRECT_MANIPULATION_ENABLED: true,
   ENTRY_ROUTES_ENABLED: true,
   RESOURCES_ENABLED: true,

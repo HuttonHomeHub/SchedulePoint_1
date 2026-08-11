@@ -1986,6 +1986,26 @@ The real remedy, if one is wanted, is to stop recording the path at all — whic
 investigative value the column exists for. Open, unowned, and cheap to leave open: the throttle
 bounds a sustained flood and the sweep bounds the residue after one stops.
 
+## 123. One create-dialog earned-value case failed once in a full run and has not repeated
+
+`ActivityCreateDialog.earned-value.test.tsx` → "creates an activity carrying the %-complete type
+and expense (major → minor)" failed exactly once, during a full `pnpm test` on 2026-08-11, and has
+not reproduced: the same file passes in isolation five times over, the feature suite passes, and
+the next full run was green. It is recorded rather than shrugged at because a test that fails once
+has told you something, and the thing it might have told you here is timing-shaped.
+
+**What was ruled out.** Not the flag mock added to `ActivityWorkFields.test.tsx` in the same
+session — Vitest gives each file its own module registry, so a getter-backed flag cannot leak
+across files. Not obviously the submit button either, though that is the change with the best
+motive: M7 swapped its native `disabled` for `aria-disabled` + a `preventDefault` guard (ADR-0060
+M6's rule), and a natively disabled button is the one thing that made a second click during an
+in-flight save structurally impossible. The case clicks once, so this is a hypothesis and not a
+diagnosis.
+
+**What would settle it**: run the file under `--repeat` with the suite's own concurrency, or add a
+counter assertion on `apiFetch` calls rather than on the last call's body, which would tell a
+double-submit apart from a slow one. Left open rather than guessed at.
+
 ## 122. Two Class A flags are deferred, and the payoff is not where the register said it was
 
 **Half closed 2026-08-11**: `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE`

@@ -32,7 +32,11 @@ import { ActivityExpenseFields } from './fields/ActivityExpenseFields';
 import { ActivityExternalDatesFields } from './fields/ActivityExternalDatesFields';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityLevellingField } from './fields/ActivityLevellingField';
-import { ActivityMeasureFields } from './fields/ActivityMeasureFields';
+import {
+  ActivityMeasureFields,
+  MEASURE_SECTION_DESCRIPTION,
+  MEASURE_SECTION_TITLE,
+} from './fields/ActivityMeasureFields';
 import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
@@ -46,7 +50,6 @@ import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
-  RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
@@ -64,11 +67,15 @@ type SubmitFieldEntry =
  * The order a failed submit walks to choose the **one** control it focuses.
  *
  * **Declared, not derived, and it mirrors the sections below rather than the scopes.** Neither
- * available derivation is right: scope order (general → scheduling → measure → cost) is not what the
- * planner sees, because this form interleaves scheduling fields both *before* Cost & earned value
- * (Working time, Levelling) and *after* it (Constraints, External interfaces); and the DOM cannot be
- * walked at all, since a field hidden by an off flag or by the current activity type is absent from
- * it while still able to carry an error. So the list is written out, in the order the sections
+ * available derivation is right. Scope order is close but not identical — `general` covers three
+ * sections and `scheduling` five, and the reader meets them as sections rather than as scopes. And
+ * the DOM cannot be walked at all, since a field hidden by an off flag or by the current activity
+ * type is absent from it while still able to carry an error, which is exactly the case that made
+ * this walk fail silently before M7.
+ *
+ * **The sections themselves were reordered at M7** so create reads General → Scheduling → Cost, the
+ * grouping the editor's tabs already had: the cost sections used to interrupt scheduling, and
+ * levelling sat second among the scheduling sections here and last there. So the list is written out, in the order the sections
  * render, and has to be edited when a section moves — which is the cost of the guarantee that the
  * reader is sent to the first problem they can see rather than the first one a scope happens to hold.
  *
@@ -91,24 +98,26 @@ const SUBMIT_FIELD_ORDER = [
   { scope: 'general', name: 'parentId' },
   // Working time
   { scope: 'scheduling', name: 'calendarId' },
-  // Levelling
-  { scope: 'scheduling', name: 'levelingPriority' },
-  // Cost & earned value
-  { scope: 'measure', name: 'percentCompleteType' },
-  { scope: 'measure', name: 'physicalPercentComplete' },
-  { scope: 'cost', name: 'budgetedExpense' },
-  { scope: 'cost', name: 'actualExpense' },
-  { scope: 'cost', name: 'accrualType' },
   // Constraints
   { scope: 'scheduling', name: 'constraintType' },
   { scope: 'scheduling', name: 'constraintDate' },
   { scope: 'scheduling', name: 'secondaryConstraintType' },
   { scope: 'scheduling', name: 'secondaryConstraintDate' },
+  // Placement & targets
   { scope: 'scheduling', name: 'scheduleAsLateAsPossible' },
   { scope: 'scheduling', name: 'expectedFinish' },
   // External interfaces
   { scope: 'scheduling', name: 'externalEarlyStart' },
   { scope: 'scheduling', name: 'externalLateFinish' },
+  // Levelling
+  { scope: 'scheduling', name: 'levelingPriority' },
+  // How value is measured
+  { scope: 'measure', name: 'percentCompleteType' },
+  { scope: 'measure', name: 'physicalPercentComplete' },
+  // Expenses / Recognition
+  { scope: 'cost', name: 'budgetedExpense' },
+  { scope: 'cost', name: 'actualExpense' },
+  { scope: 'cost', name: 'accrualType' },
 ] as const satisfies readonly SubmitFieldEntry[];
 
 /** Hoisted so the four `useScopeForm` calls share one object identity rather than allocating a
@@ -510,24 +519,47 @@ export function ActivityCreateDialog({
               </FormSection>
             ) : null}
 
+            <ActivityConstraintFields form={scheduling.form} />
+
+            {/* **Placement is not a constraint, and putting it here says so.** "Schedule as late as
+              possible" changes where the bar is DRAWN and touches neither dates nor float; expected
+              finish is a target the engine sizes work towards. Both sat inside Constraints, beside
+              five controls that pin a date — which is the reading a planner is most likely to take
+              from a checkbox in that company. The editor had already separated them; create follows
+              it, which is the section a group owns arriving with the group (ADR-0089 D5). */}
+            <ActivityPlacementFields form={scheduling.form} activityType={type} />
+
+            {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Shown for every type — a
+              milestone can carry an external late finish too (A12500). The group owns its own
+              `VITE_INTER_PROJECT_DATES` guard, so there is no outer one here. `externalDriven` is
+              the engine's verdict on a scheduled activity, so a create never has one and the
+              section's aside stays silent until the plan is recalculated. */}
+            <ActivityExternalDatesFields form={scheduling.form} />
+
             {/* Levelling priority (ADR-0041) only breaks ties when levelling delays over-allocated
-            activities, so it is meaningless for a type levelling never moves (a milestone, LOE or WBS
-            summary) — hidden for those, mirroring the Duration/Duration-type fields. */}
-            {RESOURCE_LEVELLING_ENABLED && !isDurationDerivedType(type) ? (
-              <ActivityLevellingField form={scheduling.form} activityType={type} />
-            ) : null}
+              activities, so it is meaningless for a type levelling never moves (a milestone, LOE or
+              WBS summary) — the group hides it for those, mirroring the Duration fields.
+
+              It sits LAST among the scheduling sections, matching the editor's Scheduling tab: a
+              tie-break rule that applies only once the plan is levelled reads last. It sat second
+              here and last there until M7 — the drift this epic exists to close, appearing inside
+              the epic, because the audit tracked levelling's VISIBILITY rule and never its
+              position. */}
+            <ActivityLevellingField form={scheduling.form} activityType={type} />
+
             {/* **Cost is not one section, and a milestone is not exempt.** These fields spanned two
               write scopes — the value MEASURE (which earns value and moves nothing) and the COST
               itself — under one heading, and were withheld from every duration-derived type. That
               withholding is the defect D9 names: a payment milestone is precisely an activity with
               cost and no duration, and create is the only surface that makes one, so the value
               could never be entered. The API accepts it (`apps/api/test/activities.e2e-spec.ts`,
-              run rather than reasoned), so the gate goes. */}
+              run rather than reasoned), so the gate goes.
+
+              The three of them sit AFTER every scheduling section since M7, so this form reads
+              General → Scheduling → Cost — the grouping the editor's tabs already had. They used to
+              interrupt scheduling in the middle. */}
             {EARNED_VALUE_ENABLED ? (
-              <FormSection
-                title="How value is measured"
-                description="Earns value in Earned Value. Changes no dates."
-              >
+              <FormSection title={MEASURE_SECTION_TITLE} description={MEASURE_SECTION_DESCRIPTION}>
                 <ActivityMeasureFields form={measure.form} />
               </FormSection>
             ) : null}
@@ -538,29 +570,27 @@ export function ActivityCreateDialog({
               Earned-Value Planned-Value curve, never a date. Its own flag, mirroring the
               value-measure picker. */}
             <ActivityAccrualField form={cost.form} />
-
-            <ActivityConstraintFields form={scheduling.form} />
-
-            {/* **Placement is not a constraint, and putting it here says so.** "Schedule as late as
-              possible" changes where the bar is DRAWN and touches neither dates nor float; expected
-              finish is a target the engine sizes work towards. Both sat inside Constraints, beside
-              five controls that pin a date — which is the reading a planner is most likely to take
-              from a checkbox in that company. The editor had already separated them; create follows
-              it, which is the section a group owns arriving with the group (ADR-0089 D5). */}
-            <ActivityPlacementFields form={scheduling.form} activityType={type} />
-            {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Shown for every type — a
-              milestone can carry an external late finish too (A12500). The group owns its own
-              `VITE_INTER_PROJECT_DATES` guard, so there is no outer one here. `externalDriven` is
-              the engine's verdict on a scheduled activity, so a create never has one and the
-              section's aside stays silent until the plan is recalculated. */}
-            <ActivityExternalDatesFields form={scheduling.form} />
           </div>
 
           <div className="border-border flex justify-end gap-2 border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
+            {/* `aria-disabled`, never native `disabled` (ADR-0060 M6, ADR-0063 M6, ADR-0064 §7).
+              A natively disabled control is removed from the focus order the instant it flips, and
+              this one flips twice per save — so a keyboard user pressing Create is dropped to
+              `<body>` and their next Tab starts from the top of the document. `ScopeSaveBar` has
+              done it this way since ADR-0060; this button predates that and kept the old shape
+              through the rewrite, which is how a defect class three ADRs are dedicated to survives
+              an epic that had the file open. */}
+            <Button
+              type="submit"
+              aria-disabled={mutation.isPending}
+              aria-busy={mutation.isPending}
+              onClick={(event) => {
+                if (mutation.isPending) event.preventDefault();
+              }}
+            >
               {mutation.isPending ? 'Saving…' : 'Create activity'}
             </Button>
           </div>

@@ -14,7 +14,7 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
  * The `useTsldToolbarContext` glue (T3): the selection-aware quick-wins openers must call the model
- * seams they claim to — `openProgress` → `setProgressActivityId(selectedActivityId)`, `openActivityNotes`
+ * seams they claim to — `openProgress` → `onProgressActivity(selectedActivity)`, `openActivityNotes`
  * → `revealActivityNotes(selectedActivity)` (the U4 reveal-notes intent) — and the read-only Late overlay
  * must surface on the context so the Clear-visual item can explain an overlay-disabled state (A1). Proven
  * against the REAL builder (mocking only the leaf query hooks), so a renamed seam would fail.
@@ -41,7 +41,7 @@ vi.mock('./plan-summary-panel', () => ({ PlanSummaryPanel: () => null }));
 const SELECTED = { id: 'a1', version: 7, name: 'Excavate' } as unknown as ActivitySummary;
 
 const spies = {
-  setProgressActivityId: vi.fn(),
+  onProgressActivity: vi.fn(),
   revealActivityNotes: vi.fn(),
   clearVisualPlacement: vi.fn(),
 };
@@ -61,7 +61,7 @@ function makeModel(): PlanWorkspaceModel {
     canProgress: true,
     canWriteNotes: true,
     revealActivityNotes: spies.revealActivityNotes,
-    setProgressActivityId: spies.setProgressActivityId,
+    onProgressActivity: spies.onProgressActivity,
     clearVisualPlacement: spies.clearVisualPlacement,
     undoRedo: {
       canUndo: false,
@@ -141,10 +141,13 @@ function build(lateOverlay = false) {
 describe('useTsldToolbarContext — quick-wins glue', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('openProgress sets the progress target to the current selection (F3)', () => {
+  it('openProgress opens the editor on the current selection (F3)', () => {
+    // It set a workspace-hosted dialog's target id until that dialog was deleted with
+    // `VITE_ACTIVITY_EDITOR_TABS` (ADR-0089) — after which the command lit up and opened nothing.
+    // It now passes the ROW, because the editor intent needs the row rather than an id.
     const ctx = build();
     ctx.current.openProgress();
-    expect(spies.setProgressActivityId).toHaveBeenCalledWith('a1');
+    expect(spies.onProgressActivity).toHaveBeenCalledWith(SELECTED);
   });
 
   it('openActivityNotes reveals the selected activity notes (F4/U4 intent)', () => {

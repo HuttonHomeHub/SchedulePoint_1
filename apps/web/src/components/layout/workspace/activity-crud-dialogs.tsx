@@ -29,11 +29,11 @@ import { ActivityNotesSection } from '@/features/notes';
  * query so a 409 retry carries the current version, mirroring {@link ActivitiesTable}'s own dialogs;
  * both use the same shared `ActivityEditorDialog` / `ConfirmDialog`, so their behaviour can't drift.
  *
- * Behind `VITE_ACTIVITY_EDITOR_TABS` this becomes the workspace's **one** activity editor
- * (ADR-0060 §7, M5): the canvas's Edit, its Report-progress and its Steps actions — plus the
- * toolbar's Update-progress — all resolve to the same `editorIntent`, so `plan-dialogs.tsx` stops
- * mounting the separate progress and steps dialogs entirely. Flag-off, every line below is what it
- * was.
+ * This is the workspace's **one** activity editor (ADR-0060 §7): the canvas's Edit, its
+ * Report-progress and its Steps actions — plus the toolbar's Update-progress — all resolve to the
+ * same `editorIntent`. The separate progress and steps dialogs it replaced were deleted with
+ * `VITE_ACTIVITY_EDITOR_TABS` (ADR-0089); there is no longer another surface for an entry point to
+ * open.
  */
 export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): React.ReactElement {
   const { orgSlug, planId } = model;

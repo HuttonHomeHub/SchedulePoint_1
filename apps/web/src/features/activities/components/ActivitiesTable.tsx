@@ -154,7 +154,7 @@ export function ActivitiesTable({
   canReportProgress?: boolean;
   /**
    * The tabbed editor's per-scope gate (ADR-0060 §6), derived once by the plan workspace and passed
-   * down. Required in practice behind `VITE_ACTIVITY_EDITOR_TABS`; optional in the type so the
+   * down. Required in practice, since the editor is the only edit surface; optional in the type so the
    * flag-off path — and every existing test that mounts this table — is untouched. It cannot be
    * rebuilt from `canEditSchedule`, which has already fused the role and the pen into one boolean and so
    * cannot say WHICH of the two is missing.
