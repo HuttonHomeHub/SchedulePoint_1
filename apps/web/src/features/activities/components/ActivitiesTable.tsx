@@ -940,6 +940,8 @@ export function ActivitiesTable({
           calendarsError={calendarsError}
           {...(planCalendarId === undefined ? {} : { planCalendarId })}
           planActivities={activities.data ?? []}
+          planActivitiesLoading={activities.isPending}
+          planActivitiesError={activities.isError}
           activity={intended}
           {...(editorIntent ? { intent: editorIntent } : {})}
         />

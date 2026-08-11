@@ -128,6 +128,8 @@ describe('ActivityEditorDialog — copy review applied', () => {
   it('names the WBS field as the parent it selects', () => {
     mount();
     // The old label was "WBS summary", which collided with the Type option of the same name.
+    // Since M2-T3 that reasoning is the CREATE dialog's too, which had kept the colliding label.
+    expect(screen.getByLabelText('Parent WBS summary')).toBeInTheDocument();
     expect(screen.queryByLabelText('WBS summary')).not.toBeInTheDocument();
   });
 });

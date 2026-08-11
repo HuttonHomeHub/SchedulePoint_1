@@ -155,6 +155,8 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
             ? {}
             : { planCalendarId: model.plan.data.calendarId })}
           planActivities={model.activities.data ?? []}
+          planActivitiesLoading={model.activities.isPending}
+          planActivitiesError={model.activities.isError}
           activity={intended}
           {...(model.editorIntent ? { intent: model.editorIntent } : {})}
           {...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED

@@ -122,6 +122,8 @@ export function ActivityEditorDialog({
   calendarsError = false,
   planCalendarId,
   planActivities = [],
+  planActivitiesLoading = false,
+  planActivitiesError = false,
   logic,
   notesSlot,
 }: {
@@ -152,6 +154,15 @@ export function ActivityEditorDialog({
    */
   planCalendarId?: string;
   planActivities?: ActivitySummary[];
+  /**
+   * The plan's activities are still in flight — the WBS picker says so rather than reading as
+   * "this plan has no summaries", which is the same distinction {@link calendarsLoading} draws.
+   * Both mount sites already held this signal and were passing it to the create dialog; the editor
+   * had nowhere to put it until M2-T3.
+   */
+  planActivitiesLoading?: boolean;
+  /** The plan's activities failed to load — surfaced in the WBS picker, not swallowed. */
+  planActivitiesError?: boolean;
   /**
    * Composition-root wiring for the **Logic** tab, grouped so the tab's seams arrive and leave
    * together rather than as four loose props (the cross-plan slot is the `notesSlot` precedent:
@@ -262,6 +273,11 @@ export function ActivityEditorDialog({
   const parentOptions = planActivities.filter(
     (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
   );
+  // A stored parent the list cannot resolve — soft-deleted, outside the loaded page, or still in
+  // flight. Watched rather than read from `activity`, because clearing the picker must remove the
+  // honest option rather than leave it selected.
+  const parentId = useWatch({ control: general.form.control, name: 'parentId' });
+  const missingParent = Boolean(parentId) && !parentOptions.some((p) => p.id === parentId);
 
   /**
    * The scopes with unsaved edits, named for the discard confirmation. Progress's three panels own
@@ -492,20 +508,55 @@ export function ActivityEditorDialog({
                       {...(activity?.type === undefined ? {} : { savedType: activity.type })}
                     />
 
+                    {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it
+                      never asserts a false state while the plan activities are still resolving.
+                      The "no summaries yet" guidance is a distinct, appended clause shown only
+                      once the list has resolved empty — not conflated with loading or a load
+                      failure.
+
+                      The section's `aside` is deliberately gone: it read "No summaries in this
+                      plan" whenever the offerable list was empty, which is exactly when a stored
+                      but unresolvable parent is most likely — so the one activity that disproves
+                      the sentence was the one it was shown to. */}
                     {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-                      <FormSection
-                        title="Breakdown"
-                        aside={parentOptions.length === 0 ? 'No summaries in this plan' : undefined}
-                      >
+                      <FormSection title="Breakdown">
                         <SelectField
+                          // "Parent WBS summary", not "WBS summary": the Type selector on this
+                          // same form offers an OPTION labelled exactly "WBS summary", so the
+                          // shorter label reads as if it sets the type. The editor disambiguated
+                          // this and create never did — the one row in D2 where create loses.
                           label="Parent WBS summary"
-                          hint="Groups this activity under a WBS summary, whose dates roll up from its members."
+                          disabled={planActivitiesLoading}
+                          aria-busy={planActivitiesLoading}
+                          errorRole="alert"
+                          error={
+                            planActivitiesError
+                              ? 'Couldn’t load the plan’s activities, so no WBS summaries are available to choose.'
+                              : undefined
+                          }
+                          hint={
+                            'Groups this activity under a WBS summary, whose dates roll up from its members.' +
+                            (!planActivitiesLoading &&
+                            !planActivitiesError &&
+                            parentOptions.length === 0 &&
+                            !missingParent
+                              ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
+                              : '')
+                          }
                           {...general.form.register('parentId')}
                         >
-                          <option value="">None (top level)</option>
-                          {parentOptions.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.name}
+                          <option value="">None (top-level)</option>
+                          {/* A seeded parent not in the list stays selected under an honest label
+                            so the form never silently un-nests the activity (never blank, which
+                            reads as "top-level"). */}
+                          {missingParent ? (
+                            <option value={parentId}>
+                              {planActivitiesLoading ? 'Loading…' : 'Unavailable'}
+                            </option>
+                          ) : null}
+                          {parentOptions.map((summary) => (
+                            <option key={summary.id} value={summary.id}>
+                              {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
                             </option>
                           ))}
                         </SelectField>

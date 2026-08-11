@@ -538,8 +538,10 @@ export function ActivityFormDialog({
             {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
               <FormSection title="Breakdown">
                 <SelectField
-                  label="WBS summary"
-                  id="activity-parent"
+                  // "Parent WBS summary", not "WBS summary": the Type selector on this same form
+                  // offers an OPTION labelled exactly "WBS summary", so the shorter label reads as
+                  // if it sets the type. Adopted from the editor, which disambiguated it first.
+                  label="Parent WBS summary"
                   disabled={planActivitiesLoading}
                   aria-busy={planActivitiesLoading}
                   errorRole="alert"

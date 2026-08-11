@@ -147,7 +147,7 @@ describe('ActivityFormDialog', () => {
     // The WBS parent picker is hidden (flag off), but the dialog seeds parentId from the row so editing
     // something else must never silently un-nest the activity — same rule as the calendar/constraint seeds.
     renderDialog({ activity: { ...ACTIVITY, parentId: 'wbs-parent-1' } });
-    expect(screen.queryByLabelText('WBS summary')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Parent WBS summary')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());

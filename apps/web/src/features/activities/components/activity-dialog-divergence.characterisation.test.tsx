@@ -255,24 +255,25 @@ describe('divergence D1 — the calendar picker', () => {
   });
 });
 
-describe('divergence D2 — the WBS parent picker', () => {
+describe('divergence D2 (CLOSED, M2-T3 commit A) — the WBS parent picker', () => {
   const nested = row({ parentId: 'gone-1' });
 
-  it('the editor shows a stored parent absent from the list as nothing selected; create names it “Unavailable”', () => {
+  it('both hosts name a stored parent absent from the list “Unavailable”', () => {
+    // **The sharpest case in the table.** Before this converge the editor rendered nothing
+    // selected, and read back `''` — the same value "None" carries — so nothing on screen or in
+    // the DOM distinguished "nested under a summary I cannot resolve" from "top level". The save
+    // still re-sent the real parent (the case below), which is worse rather than better: the
+    // screen said one thing and the record held another.
     const created = mountCreate({ activity: nested });
-    const createSelect = screen.getByLabelText('WBS summary');
+    const createSelect = screen.getByLabelText('Parent WBS summary');
     expect(createSelect).toHaveValue('gone-1');
     expect(optionLabels(createSelect)).toContain('Unavailable');
     created.unmount();
 
     mountEditor({ activity: nested });
     const editorSelect = screen.getByLabelText('Parent WBS summary');
-    // Nothing is selected at all, and the read-back value is `''` — the same value the
-    // "None (top level)" option carries, so nothing distinguishes "nested under a summary I
-    // cannot resolve" from "top level" on screen or in the DOM.
-    expect((editorSelect as HTMLSelectElement).selectedIndex).toBe(-1);
-    expect((editorSelect as HTMLSelectElement).value).toBe('');
-    expect(optionValues(editorSelect)).toEqual(['', 'sum-1']);
+    expect(editorSelect).toHaveValue('gone-1');
+    expect(optionLabels(editorSelect)).toContain('Unavailable');
   });
 
   it('but a General save still re-sends the unresolvable parent unchanged — the editor displays it wrongly, it does not drop it', async () => {
@@ -284,15 +285,19 @@ describe('divergence D2 — the WBS parent picker', () => {
     expect(bodyOfLastRequest().parentId).toBe('gone-1');
   });
 
-  it('NEW — the editor’s Breakdown aside claims “No summaries in this plan” while the activity is nested under one', () => {
+  it('NEW (CLOSED) — neither host claims “No summaries in this plan” while the activity is nested under one', () => {
+    // The editor's `FormSection` aside said that whenever the offerable list was empty, which is
+    // exactly when a stored-but-unresolvable parent is most likely — so the one activity that
+    // disproves the sentence was the one it was shown to. Create carries no aside at all, and the
+    // honest option above is the better answer to the same question.
     mountEditor({ activity: nested, planActivities: [] });
-    expect(screen.getByText('No summaries in this plan')).toBeInTheDocument();
+    expect(screen.queryByText('No summaries in this plan')).toBeNull();
   });
 
-  it('create surfaces the plan-activities loading and error states; the editor is given neither', () => {
+  it('both hosts surface the plan-activities loading and error states', () => {
     const loading = mountCreate({ planActivitiesLoading: true });
-    expect(screen.getByLabelText('WBS summary')).toBeDisabled();
-    expect(screen.getByLabelText('WBS summary')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByLabelText('Parent WBS summary')).toBeDisabled();
+    expect(screen.getByLabelText('Parent WBS summary')).toHaveAttribute('aria-busy', 'true');
     loading.unmount();
 
     const errored = mountCreate({ planActivitiesError: true, planActivities: [] });
@@ -303,38 +308,53 @@ describe('divergence D2 — the WBS parent picker', () => {
     ).toBeInTheDocument();
     errored.unmount();
 
-    // The editor takes no such props at all: its picker cannot say either thing.
-    mountEditor({ planActivities: [] });
-    expect(screen.getByLabelText('Parent WBS summary')).not.toBeDisabled();
-    expect(screen.getByLabelText('Parent WBS summary')).not.toHaveAttribute('aria-busy');
+    // The editor now takes both props. Its two mount sites already held the signals and were
+    // passing them to create; the editor simply had nowhere to put them.
+    const editorLoading = mountEditor({ planActivitiesLoading: true });
+    expect(screen.getByLabelText('Parent WBS summary')).toBeDisabled();
+    expect(screen.getByLabelText('Parent WBS summary')).toHaveAttribute('aria-busy', 'true');
+    editorLoading.unmount();
+
+    mountEditor({ planActivitiesError: true, planActivities: [] });
+    expect(
+      screen.getByText(
+        'Couldn’t load the plan’s activities, so no WBS summaries are available to choose.',
+      ),
+    ).toBeInTheDocument();
   });
 
-  it('NEW — the hosts differ on the field’s label, its empty option and how an option reads', () => {
+  it('NEW (CLOSED) — the hosts agree on the field’s label, its empty option and how an option reads', () => {
+    // The LABEL converges onto the EDITOR, which is the one row in D2 where create loses: the Type
+    // selector on the same form offers an OPTION labelled exactly “WBS summary”, so the shorter
+    // label reads as if it sets the type. `ActivityEditorDialog.test.tsx:130` had recorded that
+    // reason since the editor shipped. Everything else here converges onto create.
     const created = mountCreate();
-    const createSelect = screen.getByLabelText('WBS summary');
+    const createSelect = screen.getByLabelText('Parent WBS summary');
     expect(optionLabels(createSelect)).toEqual(['None (top-level)', 'W1 · Phase 1']);
     expect(hintOf(createSelect)).toContain(
       'Groups this activity under a WBS summary, whose dates roll up from its members.',
     );
     created.unmount();
 
+    // The option carries its CODE, which is how a planner refers to a phase on a programme; the
+    // editor showed the name alone, so two phases sharing a name were indistinguishable.
     mountEditor();
-    expect(screen.queryByLabelText('WBS summary')).not.toBeInTheDocument();
-    expect(optionLabels(screen.getByLabelText('Parent WBS summary'))).toEqual([
-      'None (top level)',
-      'Phase 1',
-    ]);
+    const editorSelect = screen.getByLabelText('Parent WBS summary');
+    expect(optionLabels(editorSelect)).toEqual(['None (top-level)', 'W1 · Phase 1']);
+    expect(hintOf(editorSelect)).toContain(
+      'Groups this activity under a WBS summary, whose dates roll up from its members.',
+    );
   });
 
-  it('NEW — only create appends the “no summaries yet” guidance once the list has resolved empty', () => {
+  it('NEW (CLOSED) — both hosts append the “no summaries yet” guidance once the list has resolved empty', () => {
     const created = mountCreate({ planActivities: [] });
-    expect(hintOf(screen.getByLabelText('WBS summary'))).toContain(
+    expect(hintOf(screen.getByLabelText('Parent WBS summary'))).toContain(
       'There are no WBS summaries in this plan yet',
     );
     created.unmount();
 
     mountEditor({ planActivities: [] });
-    expect(hintOf(screen.getByLabelText('Parent WBS summary'))).not.toContain(
+    expect(hintOf(screen.getByLabelText('Parent WBS summary'))).toContain(
       'There are no WBS summaries in this plan yet',
     );
   });
