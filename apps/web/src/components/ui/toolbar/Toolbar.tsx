@@ -400,14 +400,23 @@ export function Toolbar<Ctx>({
           role="group"
           aria-label={labels[group]}
           className={cn(
-            // `min-w-0` is the sub-floor remedy (M1-T5). Below the row's pinned floor — Row 1's
-            // `render` items measure 1177 px against an 872 px container at Surface Pro portrait,
-            // and a `render` item can never demote — correct arithmetic has nothing left to give.
-            // Without this a group refuses to shrink below its content and the surplus is paid by
-            // whatever is furthest right falling out of the `overflow-hidden` box; with it, the row
-            // truncates inside its own bounds instead. Decided in a browser, not reasoned: see
-            // `docs/specs/workspace-layout/m0-measurement.md`.
-            'flex min-w-0 items-center gap-1',
+            // `min-w-0 overflow-hidden` is the sub-floor remedy (M1-T5). Below the row's pinned
+            // floor — Row 1's `render` items measure 1177 px against an 872 px container at Surface
+            // Pro portrait, and a `render` item can never demote — correct arithmetic has nothing
+            // left to give. Without `min-w-0` a group refuses to shrink below its content and the
+            // surplus is paid by whatever is furthest right falling out of the row's
+            // `overflow-hidden` box; with it, the row truncates inside its own bounds instead.
+            //
+            // **`overflow-hidden` is not decoration and must not be dropped.** `min-w-0` shrinks the
+            // group's BOX; its buttons are `whitespace-nowrap` and keep their width, so without a
+            // clip they spill out of the group and paint over whatever follows — which at Row 1's
+            // trailing edge is the `⋯` itself. Measured: Playwright reported the overflow button
+            // "visible, enabled and stable" and then could not click it, because a chevron from the
+            // Plan-actions group intercepted the pointer at its centre. A control can be perfectly
+            // positioned and still unreachable, which is this milestone's whole subject.
+            //
+            // Decided in a browser, not reasoned: see `docs/specs/workspace-layout/m0-measurement.md`.
+            'flex min-w-0 items-center gap-1 overflow-hidden',
             i > 0 && 'border-border ml-1 border-l pl-2', // a hairline separates groups
             // Right-align this group (and everything after it) — the trailing status read-outs on Row 1.
             group === alignEndGroup && 'ml-auto',

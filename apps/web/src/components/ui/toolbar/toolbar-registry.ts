@@ -112,8 +112,44 @@ export interface ToolbarItem<Ctx> {
    * own their own chrome.
    */
   showLabel?: ToolbarLabelPolicy;
-  /** Sort order **within the group** (ascending). Ties break by registry order. */
+  /**
+   * Sort order **within the group** (ascending), i.e. left-to-right position. Ties break by
+   * registry order.
+   *
+   * **This is not the demotion key.** It used to be — `computeOverflow` sorted the whole row's
+   * demotion queue by `order` descending — which quietly made "where does this sit in its group"
+   * answer "what leaves the bar first", two questions that only coincide by accident. The measured
+   * consequence on Row 1 was that Zoom −, Zoom +, Fit and Go-to-today demoted **before** Legend and
+   * Keyboard shortcuts. See {@link priority}.
+   */
   order: number;
+  /**
+   * How much this row wants to keep the item: **higher survives longer, lowest goes into the `⋯`
+   * first.** Separate from `order` because they answer different questions — `order` is *where does
+   * this sit*, `priority` is *what can this row afford to lose*. A zoom control is worth more than a
+   * link to the keyboard-shortcuts sheet even though it sits further left.
+   *
+   * **Defaults to `-order`, not `order`**, which is the only default that reads correctly *and*
+   * preserves today's behaviour. The old rule was "highest `order` demotes first", so importance
+   * runs *opposite* to position; defaulting to `order` would have made an unset item's priority say
+   * the reverse of what it does. The first draft did exactly that, and its own test caught it.
+   * Because the default is exact, every item that does not set this behaves as it always has —
+   * which is what keeps the existing suites a before/after oracle.
+   */
+  priority?: number;
+  /**
+   * Items sharing a `demotionGroup` demote **together or not at all**.
+   *
+   * For a two-state segment — Early | Visual, Diagram | Gantt — where each half is an independently
+   * demotable button with adjacent `order` values. Without this the higher `order` goes first and
+   * the planner is left with a lone "Diagram" button on the bar and "Gantt" inside a menu: a
+   * two-state switch with one state hidden. Declared on the item rather than special-cased by id in
+   * the primitive, which is TSLD knowledge the primitive must not carry.
+   *
+   * Recorded as **latent, not observed** (`docs/specs/workspace-layout/m0-measurement.md`): no
+   * measured width reproduced the split. The test is what keeps it latent.
+   */
+  demotionGroup?: string;
   /** Accessible name — always required (icon-only buttons still need it). */
   label: string;
   /**
@@ -328,17 +364,32 @@ export function computeOverflow<Ctx>(
   // Everything fits (no overflow button needed) → all inline.
   if (totalWidth + chromeWidth <= availableWidth) return { inline: ids, overflow: [] };
 
-  // Demotion priority: highest tier number first, then highest order, then latest registry position.
+  // Demotion order: highest tier number first, then LOWEST `priority` (which defaults to `-order`,
+  // reproducing the old "highest order goes first"), then latest registry position.
   const byIndex = new Map(bar.map((r, i) => [r.item.id, i]));
+  const priorityOf = (item: ToolbarItem<Ctx>): number => item.priority ?? -item.order;
   const demotionQueue = [...bar]
     .sort((a, b) => {
       const byTier = b.item.tier - a.item.tier; // tier 2 demotes before tier 1
       if (byTier !== 0) return byTier;
-      const byOrder = b.item.order - a.item.order; // higher order demotes first
-      if (byOrder !== 0) return byOrder;
+      const byPriority = priorityOf(a.item) - priorityOf(b.item); // least wanted leaves first
+      if (byPriority !== 0) return byPriority;
       return (byIndex.get(b.item.id) ?? 0) - (byIndex.get(a.item.id) ?? 0);
     })
     .map((r) => r.item.id);
+
+  // Items sharing a `demotionGroup` leave together, so a two-state segment cannot end up with one
+  // half on the bar and the other in the menu.
+  const pairsOf = new Map<string, string[]>();
+  for (const r of bar) {
+    const key = r.item.demotionGroup;
+    if (!key) continue;
+    pairsOf.set(key, [...(pairsOf.get(key) ?? []), r.item.id]);
+  }
+  const companionsOf = (id: string): string[] => {
+    const key = bar.find((r) => r.item.id === id)?.item.demotionGroup;
+    return key ? (pairsOf.get(key) ?? []).filter((other) => other !== id) : [];
+  };
 
   const overflowed = new Set<string>();
   // Once anything overflows, the ⋯ button occupies width too — reserve it up front, along with the
@@ -346,10 +397,14 @@ export function computeOverflow<Ctx>(
   let inlineWidth = totalWidth + chromeWidth + overflowButtonWidth;
   for (const id of demotionQueue) {
     if (inlineWidth <= availableWidth) break;
-    overflowed.add(id);
-    // A demoted item takes its gap with it — crediting only the item's own width is what left the
-    // budget short by one gap per demotion.
-    inlineWidth -= widthOf(id) + gapWidth;
+    if (overflowed.has(id)) continue; // already taken by a companion
+    for (const memberId of [id, ...companionsOf(id)]) {
+      if (overflowed.has(memberId)) continue;
+      overflowed.add(memberId);
+      // A demoted item takes its gap with it — crediting only the item's own width is what left the
+      // budget short by one gap per demotion.
+      inlineWidth -= widthOf(memberId) + gapWidth;
+    }
   }
 
   return {

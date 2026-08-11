@@ -312,4 +312,89 @@ describe('computeOverflow', () => {
       expect(computeOverflow(one, w, 1832, 32, 159).overflow).toEqual([one[0]!.item.id]);
     });
   });
+
+  describe('priority is not order, and a segment is one unit (M1-T6/T7)', () => {
+    /**
+     * `order` answers "where does this sit in its group"; `priority` answers "what can this row
+     * afford to lose". They were the same number, so the first question silently answered the
+     * second — and on Row 1 that demoted Zoom −/+/Fit/Go-to-today **before** Legend and Keyboard
+     * shortcuts (`docs/specs/workspace-layout/m0-measurement.md`).
+     */
+    const priced = (
+      id: string,
+      order: number,
+      extra: Partial<ToolbarItem<Ctx>> = {},
+    ): ResolvedToolbarItem<Ctx> => ({
+      item: {
+        id,
+        group: 'frame',
+        tier: 2,
+        order,
+        label: id,
+        onActivate: () => {},
+        ...extra,
+      } as ToolbarItem<Ctx>,
+      enabled: true,
+      active: false,
+      disabledReason: undefined,
+    });
+
+    it('demotes the low-priority item even though it sits leftmost', () => {
+      // `zoom` sits at order 0 (leftmost) and `help` at order 9 (rightmost). Under the old rule the
+      // rightmost went first; priority says the help link is the cheaper loss.
+      const bar = [priced('zoom', 0, { priority: 90 }), priced('help', 9, { priority: 1 })];
+      const widths = new Map([
+        ['zoom', 100],
+        ['help', 100],
+      ]);
+      const { inline, overflow } = computeOverflow(bar, widths, 150, 40);
+      expect(inline).toEqual(['zoom']);
+      expect(overflow).toEqual(['help']);
+    });
+
+    it('falls back to order when no priority is set — the existing suites stay the oracle', () => {
+      const bar = [priced('a', 0), priced('b', 9)];
+      const widths = new Map([
+        ['a', 100],
+        ['b', 100],
+      ]);
+      expect(computeOverflow(bar, widths, 150, 40).overflow).toEqual(['b']);
+    });
+
+    it('takes both halves of a segment or neither', () => {
+      // `left`/`right` are one switch. Without `demotionGroup` the higher order goes first and the
+      // planner is left with one state on the bar and the other inside a menu.
+      const bar = [
+        priced('keep', 0, { priority: 90, tier: 1 }),
+        priced('left', 1, { demotionGroup: 'view-mode' }),
+        priced('right', 2, { demotionGroup: 'view-mode' }),
+      ];
+      const widths = new Map([
+        ['keep', 100],
+        ['left', 100],
+        ['right', 100],
+      ]);
+      // Budget forces one demotion's worth of space; the pair must still leave together.
+      const { inline, overflow } = computeOverflow(bar, widths, 210, 40);
+      expect(overflow).toEqual(['left', 'right']);
+      expect(inline).toEqual(['keep']);
+    });
+
+    it('never splits the pair at any width', () => {
+      const bar = [
+        priced('keep', 0, { priority: 90, tier: 1 }),
+        priced('left', 1, { demotionGroup: 'view-mode' }),
+        priced('right', 2, { demotionGroup: 'view-mode' }),
+      ];
+      const widths = new Map([
+        ['keep', 100],
+        ['left', 100],
+        ['right', 100],
+      ]);
+      for (let available = 0; available <= 400; available += 1) {
+        const { overflow } = computeOverflow(bar, widths, available, 40);
+        expect(overflow.includes('left')).toBe(overflow.includes('right'));
+      }
+    });
+  });
 });
