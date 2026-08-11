@@ -182,6 +182,28 @@ The pinned floor is real — `render` items measure ~1177 px against an 872 px c
 demote — so the row is legible and fully operable there rather than correct. Closing it needs fewer
 pinned items, which is M2, or a designed collapse, which is M3.
 
+## What M1 costs the flag-on suites, and the width that settles it
+
+The honest budget means fewer commands fit, so **more of Row 1 lives in the `⋯` than before** — the
+regression the product owner approved knowingly. Measured on a real plan after the fix:
+
+| Viewport | Row 1 inline | in the `⋯`                                                                                  |
+| -------- | -----------: | ------------------------------------------------------------------------------------------- |
+| **2304** |       **25** | **none — the first width at which Row 1 is fully inline**                                   |
+| 2133     |           21 | Resource view, Flag over-allocated, Legend, Keyboard shortcuts                              |
+| 1920     |           15 | + Fit to plan, Zoom to selection, Go to today, Baseline overlay, Next conflict, Float paths |
+| 1440     |            9 | 16 items                                                                                    |
+
+Row 2 is fully inline at 1920 and above.
+
+Two flag-on suites asserted a lens button was **inline** at 1920, and their configs said so in a
+comment — `playwright.float-paths.config.ts` and `playwright.resource-view.config.ts`. That premise
+is no longer true, so both are pinned to **2304**: measured, not chosen, and temporary. M2 cuts the
+row from 46 commands to ~24, after which they can come back down.
+
+Every other flag-on suite was checked against the demoted set rather than left to fail one CI round
+at a time — none of the rest queries a command that moved.
+
 ## The finding that outranks the design
 
 _The figures in this section are from the **empty-plan** pass and are lower bounds; see M0c above for

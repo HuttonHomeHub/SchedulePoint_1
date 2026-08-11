@@ -40,7 +40,13 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         // Wide enough that the docked panel does not push the diagram below its floor — the
         // narrow single-pane behaviour is a separate concern and is covered by unit tests.
-        viewport: { width: 1920, height: 1080 },
+        // **2304, measured, not chosen.** This was 1920 with a comment saying that width kept the
+        // whole Row 1 lens group inline. M1's honest budget ended that: the row now counts its own
+        // gaps and dividers, so at 1920 six commands live in the `⋯` and at 2133 four still do.
+        // 2304 is the first width at which Row 1 is fully inline on a real plan
+        // (`docs/specs/workspace-layout/m0-measurement.md`). M2 cuts the row from 46 commands to
+        // ~24, after which this can go back down — it is a temporary accommodation, not a target.
+        viewport: { width: 2304, height: 1080 },
         ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
           ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
           : {}),

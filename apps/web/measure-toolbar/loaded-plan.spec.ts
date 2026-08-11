@@ -19,6 +19,9 @@ import { writeMeasurement } from './output';
  */
 
 const WIDTHS = [
+  // The first width at which Row 1 is fully inline on a real plan — measured, and the reason
+  // two flag-on suites pin their viewport there (M1).
+  { label: '2304 (Row 1 fully inline)', width: 2304, height: 1080 },
   { label: '2133 (1920 @ 90%)', width: 2133, height: 1080 },
   { label: '1920 @100%', width: 1920, height: 1080 },
   { label: '1440 (Surface Pro landscape)', width: 1440, height: 960 },
