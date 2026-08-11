@@ -139,11 +139,18 @@ export async function addActivity(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
 }
 
-/** Open the Resources dialog for an activity from its row actions menu. */
+/**
+ * Open an activity's resources from its row actions menu.
+ *
+ * With the tabbed editor — which is what every shipped bundle contains — this lands on the
+ * editor's **Resources tab** rather than a dialog of its own (ADR-0062). The panel inside is the
+ * same component either way, which is why this suite's assertions did not have to move with it.
+ */
 export async function openResources(page: Page, activityName: string): Promise<void> {
   await page.getByRole('button', { name: `Actions for ${activityName}` }).click();
   await page.getByRole('menuitem', { name: 'Resources' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Resources', selected: true })).toBeVisible();
 }
 
 /**

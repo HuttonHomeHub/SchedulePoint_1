@@ -142,5 +142,6 @@ export async function addActivity(page: Page, name: string, duration: string): P
 export async function openEdit(page: Page, activityName: string): Promise<void> {
   await page.getByRole('button', { name: `Actions for ${activityName}` }).click();
   await page.getByRole('menuitem', { name: 'Edit' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  // The tabbed editor, landing on General — where the duration field lives (ADR-0060 §7).
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeVisible();
 }

@@ -70,10 +70,11 @@ export default defineConfig({
               // duration that saves without the lock is not the thing being tested.
               VITE_PLAN_EDIT_LOCK: 'true',
               VITE_TSLD_EDITING: 'true',
-              // The flag-off activity dialog, not the tabbed editor: one Save, one duration field,
-              // one place for this suite's assertions to look.
-              VITE_ACTIVITY_EDITOR_TABS: 'false',
-              VITE_ACTIVITY_EDITOR_CONVERGENCE: 'false',
+              // The tabbed editor, which is what every shipped bundle contains. This suite pinned
+              // it OFF until the dialog-unification epic, so it proved the duration field on a
+              // surface no operator can produce (ADR-0088 D1: a `VITE_` flag is inlined at build
+              // time and none is passed to the image build). Converted rather than deleted
+              // (ADR-0084 D5) — the coverage moved to the surface that ships.
             },
           },
         ],
