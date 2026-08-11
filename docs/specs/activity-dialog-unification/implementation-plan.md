@@ -139,6 +139,27 @@ confirmed or dismissed by execution; the one proposition that could cancel M1 is
      on an accepting result: **keep M1.**
   6. Delete the spike file.
 
+- **RESULT (M0-T2 executed 2026-08-11 — `[V]`, this replaces every `[R]` marker on §4.4):**
+
+  | #   | Proposition                                                                                                         | Outcome                                                                                                                                                           |
+  | --- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | 1   | A concrete `{ form: UseFormReturn<ActivityGeneralValues> }` accepts `useForm<ActivityGeneralValues>()` with no cast | **compiles** — holds                                                                                                                                              |
+  | 2   | The four-way `getValues()` spread is assignable to `ActivityFormValues` with no cast                                | **compiles** — holds                                                                                                                                              |
+  | 3   | `FIELDS ... satisfies readonly (keyof T)[]` rejects a foreign name                                                  | **RED** — `TS2322: Type '"constraintType"' is not assignable to type '"type" \| "name" \| "code" \| "durationType" \| "duration" \| "parentId" \| "description"'` |
+  | 4   | `UseFormReturn<ActivityFormValues>` is **not** assignable to `UseFormReturn<ActivityGeneralValues>`                 | **RED — the generic is invariant** (`TS2322`)                                                                                                                     |
+  | 5   | A narrow form rejects an out-of-scope `setValue` at the call site                                                   | **RED** — `TS2345`, `'constraintType'` not in the general `FieldPath`                                                                                             |
+
+  **M1 is required, not chosen, and does not re-open.** Claim 4 was the proposition M1 exists
+  because of, and it holds: a wide create form structurally _cannot_ feed the narrow groups. So the
+  rev-2 concern — that a green claim 4 might be a soundness artefact of RHF's method-shorthand
+  bivariance — **is moot and needs no `dependency-claims.json` entry**, because the empirical
+  result decided it without the claim. That unverified dependency-internals assertion is therefore
+  dropped rather than registered (ADR-0076 Class 2: do not cite what you did not need).
+
+  Claim 5 is the other half worth keeping: the protection M1 buys is real at the call site, not
+  merely at the prop boundary — a group handed its own scope's form **cannot** write a field outside
+  it, and the compiler says so where the mistake is made.
+
 ##### Task M0-T3 — Pin the seam invariants nothing currently holds
 
 - **Complexity:** S · **Dependencies:** none · **Risks:** none
