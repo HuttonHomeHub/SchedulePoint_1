@@ -102,7 +102,7 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
   it('creates an activity carrying the %-complete type and expense (major → minor)', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    fireEvent.change(screen.getByLabelText('% complete type'), { target: { value: 'UNITS' } });
+    fireEvent.change(screen.getByLabelText('Earn value from'), { target: { value: 'UNITS' } });
     fireEvent.change(screen.getByLabelText('Budgeted expense'), {
       target: { value: '1000' },
     });
@@ -134,17 +134,20 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
     expect(body).not.toHaveProperty('actualExpense');
   });
 
-  it('shows the physical %-field only for the PHYSICAL measure', () => {
+  it('shows the physical %-field whatever the measure (D10)', () => {
+    // It was rendered only for PHYSICAL until M4. `physicalPercentComplete` is a STORED value, and
+    // ADR-0060 §6 is the rule: shading implies a value is there, hiding claims there is none — so
+    // hiding it from a reader whose measure is Duration says this activity has no physical
+    // progress when it may well have some.
     renderDialog();
-    // Default DURATION — no physical field.
-    expect(screen.queryByLabelText('Physical % complete')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('% complete type'), { target: { value: 'PHYSICAL' } });
+    expect(screen.getByLabelText('Physical % complete')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Earn value from'), { target: { value: 'PHYSICAL' } });
     expect(screen.getByLabelText('Physical % complete')).toBeInTheDocument();
   });
 
   it('seeds the fields (minor → major) from the row and round-trips them on save', async () => {
     renderDialog({ activity: ACTIVITY });
-    expect(screen.getByLabelText('% complete type')).toHaveValue('PHYSICAL');
+    expect(screen.getByLabelText('Earn value from')).toHaveValue('PHYSICAL');
     expect(screen.getByLabelText('Physical % complete')).toHaveValue(40);
     expect(screen.getByLabelText('Budgeted expense')).toHaveValue(2500);
     expect(screen.getByLabelText('Actual expense')).toHaveValue(1000);
@@ -173,10 +176,15 @@ describe('ActivityFormDialog — Cost & Earned Value (flag on)', () => {
     expect(JSON.parse(init?.body as string)).toMatchObject({ budgetedExpense: null, version: 4 });
   });
 
-  it('hides the cost fields for a milestone (no cost meaning)', () => {
+  it('offers the cost fields to a milestone, which is what a payment milestone is (D9)', () => {
+    // They were withheld from every duration-derived type until M4, on the reasoning that a
+    // milestone has no duration to cost. A payment milestone is precisely an activity with cost
+    // and no duration, and this dialog is the only surface that makes one — so the value could
+    // never be entered. The API accepts it, confirmed by running it rather than reading the DTO
+    // (`apps/api/test/activities.e2e-spec.ts`).
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
-    expect(screen.queryByLabelText('% complete type')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Budgeted expense')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Earn value from')).toBeInTheDocument();
+    expect(screen.getByLabelText('Budgeted expense')).toBeInTheDocument();
   });
 });

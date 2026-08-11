@@ -517,92 +517,111 @@ export function ActivityFormDialog({
             {RESOURCE_LEVELLING_ENABLED && !isDurationDerivedType(type) ? (
               <ActivityLevellingField form={scheduling.form} activityType={type} />
             ) : null}
-            {/* Earned-Value inputs (EV4b, ADR-0042): the %-complete measure that earns value, an optional
-            hand-entered physical % (only relevant to the PHYSICAL measure), and the lump-sum budgeted /
-            actual expense carried on the activity. Meaningless for a type with no entered
-            duration/units/cost (a milestone, LOE or WBS summary) — hidden for those, mirroring the
-            Duration / Duration-type fields. Money is entered in major units (e.g. dollars). */}
-            {(EARNED_VALUE_ENABLED || COST_ACCRUAL_ENABLED) && !isDurationDerivedType(type) ? (
+            {/* **Cost is not one section, and a milestone is not exempt.** These fields spanned two
+              write scopes — the value MEASURE (which earns value and moves nothing) and the COST
+              itself — under one heading, and were withheld from every duration-derived type. That
+              withholding is the defect D9 names: a payment milestone is precisely an activity with
+              cost and no duration, and create is the only surface that makes one, so the value
+              could never be entered. The API accepts it (`apps/api/test/activities.e2e-spec.ts`,
+              run rather than reasoned), so the gate goes. */}
+            {EARNED_VALUE_ENABLED ? (
               <FormSection
-                title="Cost &amp; earned value"
-                description="How progress earns value, and what this activity costs. Never a date."
+                title="How value is measured"
+                description="Earns value in Earned Value. Changes no dates."
+              >
+                <FieldGrid columns="lead">
+                  <SelectField
+                    label="Earn value from"
+                    hint={`${PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates — only how Earned value measures progress.`}
+                    {...measure.form.register('percentCompleteType')}
+                  >
+                    {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {PERCENT_COMPLETE_TYPE_LABELS[value].label}
+                      </option>
+                    ))}
+                  </SelectField>
+                  {/* Rendered whatever the measure, which is D10 and the ADR-0060 §6 rule: shading
+                    implies a value is there, hiding claims there is none. `physicalPercentComplete`
+                    is stored, so hiding it from a reader whose measure is Duration says the
+                    activity has no physical progress when it may well have some. */}
+                  <TextField
+                    label="Physical % complete"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    inputMode="numeric"
+                    hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
+                    error={measureErrors.physicalPercentComplete?.message}
+                    {...measure.form.register('physicalPercentComplete', {
+                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                    })}
+                  />
+                </FieldGrid>
+              </FormSection>
+            ) : null}
+
+            {EARNED_VALUE_ENABLED ? (
+              <FormSection
+                title="Expenses"
+                description="Lump sums carried directly on this activity, on top of any resource-derived cost."
               >
                 <FieldGrid>
-                  {EARNED_VALUE_ENABLED ? (
-                    <>
-                      <SelectField
-                        label="% complete type"
-                        id="activity-percent-complete-type"
-                        hint={`${PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates — only how Earned value measures progress.`}
-                        {...measure.form.register('percentCompleteType')}
-                      >
-                        {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-                          <option key={value} value={value}>
-                            {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-                          </option>
-                        ))}
-                      </SelectField>
-                      {percentCompleteType === 'PHYSICAL' ? (
-                        <TextField
-                          label="Physical % complete"
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={1}
-                          inputMode="numeric"
-                          hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
-                          error={measureErrors.physicalPercentComplete?.message}
-                          {...measure.form.register('physicalPercentComplete', {
-                            setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                          })}
-                        />
-                      ) : null}
-                      <TextField
-                        label="Budgeted expense"
-                        type="number"
-                        min={0}
-                        step="any"
-                        inputMode="decimal"
-                        hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
-                        error={costErrors.budgetedExpense?.message}
-                        {...cost.form.register('budgetedExpense', {
-                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                        })}
-                      />
-                      <TextField
-                        label="Actual expense"
-                        type="number"
-                        min={0}
-                        step="any"
-                        inputMode="decimal"
-                        hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
-                        error={costErrors.actualExpense?.message}
-                        {...cost.form.register('actualExpense', {
-                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                        })}
-                      />
-                    </>
-                  ) : null}
-                  {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the Earned-Value
-                Planned-Value curve, never a date. Its own flag, mirroring the %-complete-type picker. */}
-                  {COST_ACCRUAL_ENABLED ? (
-                    <SelectField
-                      label="Cost accrual"
-                      id="activity-accrual-type"
-                      hint={
-                        'Sets when this activity’s cost is recognised: Start (all at the start), Uniform ' +
-                        '(spread evenly), or End (all at the finish). It changes only when cost is ' +
-                        'recognised in Earned value — never a date.'
-                      }
-                      {...cost.form.register('accrualType')}
-                    >
-                      {ACCRUAL_TYPE_OPTIONS.map((value) => (
-                        <option key={value} value={value}>
-                          {ACCRUAL_TYPE_LABELS[value]}
-                        </option>
-                      ))}
-                    </SelectField>
-                  ) : null}
+                  <TextField
+                    label="Budgeted expense"
+                    type="number"
+                    min={0}
+                    // The UNION of the two hosts (D8): hundredths from the editor, because money is
+                    // stored in minor units and `step="any"` invites a third decimal that is then
+                    // silently rounded; the floor and the decimal keypad from create.
+                    step="0.01"
+                    inputMode="decimal"
+                    hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
+                    error={costErrors.budgetedExpense?.message}
+                    {...cost.form.register('budgetedExpense', {
+                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                    })}
+                  />
+                  <TextField
+                    label="Actual expense"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
+                    error={costErrors.actualExpense?.message}
+                    {...cost.form.register('actualExpense', {
+                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                    })}
+                  />
+                </FieldGrid>
+              </FormSection>
+            ) : null}
+
+            {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the
+              Earned-Value Planned-Value curve, never a date. Its own flag, mirroring the
+              value-measure picker. */}
+            {COST_ACCRUAL_ENABLED ? (
+              <FormSection
+                title="Recognition"
+                description="Changes only when cost is recognised in Earned value — never a date."
+              >
+                <FieldGrid>
+                  <SelectField
+                    label="Cost accrual"
+                    hint={
+                      'Sets when this activity’s cost is recognised: Start (all at the start), Uniform ' +
+                      '(spread evenly), or End (all at the finish).'
+                    }
+                    {...cost.form.register('accrualType')}
+                  >
+                    {ACCRUAL_TYPE_OPTIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {ACCRUAL_TYPE_LABELS[value]}
+                      </option>
+                    ))}
+                  </SelectField>
                 </FieldGrid>
               </FormSection>
             ) : null}

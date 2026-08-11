@@ -725,8 +725,12 @@ export function ActivityEditorDialog({
                           <TextField
                             label="Budgeted expense"
                             type="number"
+                            min={0}
+                            // The UNION of the two hosts (D8): hundredths from here, the floor and
+                            // the decimal keypad from create. A negative expense is not a thing.
                             step="0.01"
-                            hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost."
+                            inputMode="decimal"
+                            hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
                             error={cost.form.formState.errors.budgetedExpense?.message}
                             {...cost.form.register('budgetedExpense', {
                               setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
@@ -735,8 +739,12 @@ export function ActivityEditorDialog({
                           <TextField
                             label="Actual expense"
                             type="number"
+                            min={0}
+                            // The UNION of the two hosts (D8): hundredths from here, the floor and
+                            // the decimal keypad from create. A negative expense is not a thing.
                             step="0.01"
-                            hint="The lump-sum cost booked against this activity so far, in the plan’s currency."
+                            inputMode="decimal"
+                            hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
                             error={cost.form.formState.errors.actualExpense?.message}
                             {...cost.form.register('actualExpense', {
                               setValueAs: (v: string) => (v === '' ? undefined : Number(v)),

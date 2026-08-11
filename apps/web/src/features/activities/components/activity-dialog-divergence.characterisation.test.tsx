@@ -566,12 +566,16 @@ describe('divergence D7 (CLOSED, M3-T3) — levelling priority', () => {
   });
 });
 
-describe('divergence D8 — the money inputs', () => {
-  it('create takes any decimal from zero up; the editor takes hundredths with no floor', () => {
+describe('divergence D8 (CLOSED, M4) — the money inputs', () => {
+  it('both hosts take hundredths, from zero up, on a decimal keypad', () => {
+    // **The union, and each half is the better answer to a different question.** Hundredths are
+    // the editor's: money is stored in minor units, so `step="any"` invites a third decimal that
+    // is then silently rounded. The floor and the keypad are create's: a negative expense is not a
+    // thing, and `decimal` is the difference between a phone offering a number pad and a keyboard.
     const created = mountCreate();
     for (const label of ['Budgeted expense', 'Actual expense']) {
       const input = screen.getByLabelText(label);
-      expect(input).toHaveAttribute('step', 'any');
+      expect(input).toHaveAttribute('step', '0.01');
       expect(input).toHaveAttribute('min', '0');
       expect(input).toHaveAttribute('inputmode', 'decimal');
     }
@@ -582,44 +586,52 @@ describe('divergence D8 — the money inputs', () => {
     for (const label of ['Budgeted expense', 'Actual expense']) {
       const input = screen.getByLabelText(label);
       expect(input).toHaveAttribute('step', '0.01');
-      expect(input).not.toHaveAttribute('min');
-      expect(input).not.toHaveAttribute('inputmode');
+      expect(input).toHaveAttribute('min', '0');
+      expect(input).toHaveAttribute('inputmode', 'decimal');
     }
   });
 
-  it('NEW — create tells the reader a blank expense means none; the editor does not', () => {
+  it('NEW (CLOSED) — both tell the reader a blank expense means none', () => {
     const created = mountCreate();
     expect(hintOf(screen.getByLabelText('Budgeted expense'))).toContain('Leave blank for none.');
     created.unmount();
 
     mountEditor();
     openTab('Cost');
-    expect(hintOf(screen.getByLabelText('Budgeted expense'))).not.toContain('Leave blank');
+    expect(hintOf(screen.getByLabelText('Budgeted expense'))).toContain('Leave blank for none.');
   });
 
-  it('NEW — create’s accrual hint keeps the “never a date” disclaimer the editor moved into a section description', () => {
+  it('NEW (CLOSED) — the “never a date” disclaimer is a section description on both', () => {
+    // Converged onto the EDITOR's placement rather than its wording: the disclaimer is true of the
+    // whole section, so saying it once above the section beats repeating it inside one field's
+    // hint — and create had only one field there to attach it to.
     const created = mountCreate();
-    expect(hintOf(screen.getByLabelText('Cost accrual'))).toContain(
-      'It changes only when cost is recognised in Earned value — never a date.',
-    );
+    expect(
+      screen.getByText('Changes only when cost is recognised in Earned value — never a date.'),
+    ).toBeInTheDocument();
+    expect(hintOf(screen.getByLabelText('Cost accrual'))).not.toContain('never a date');
     created.unmount();
 
     mountEditor();
     openTab('Cost');
-    expect(hintOf(screen.getByLabelText('Cost accrual'))).not.toContain('never a date');
     expect(
       screen.getByText('Changes only when cost is recognised in Earned value — never a date.'),
     ).toBeInTheDocument();
+    expect(hintOf(screen.getByLabelText('Cost accrual'))).not.toContain('never a date');
   });
 });
 
-describe('divergence D9 — where cost and earned value live', () => {
-  it('create withholds every cost and EV field from a finish milestone; the editor offers them all', () => {
+describe('divergence D9 (CLOSED, M4) — where cost and earned value live', () => {
+  it('both hosts offer every cost and EV field to a finish milestone', () => {
+    // A payment milestone is precisely an activity with cost and no duration, and create is the
+    // only surface that makes one — so withholding these fields meant the value could never be
+    // entered. The API accepts it, confirmed by running it (`apps/api/test/activities.e2e-spec.ts`)
+    // rather than by reading the DTO.
     const paymentMilestone = row({ type: 'FINISH_MILESTONE', percentCompleteType: 'PHYSICAL' });
 
     const created = mountCreate({ activity: paymentMilestone });
-    for (const label of ['Budgeted expense', 'Actual expense', 'Cost accrual', '% complete type']) {
-      expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+    for (const label of ['Budgeted expense', 'Actual expense', 'Cost accrual', 'Earn value from']) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
     created.unmount();
 
@@ -630,7 +642,10 @@ describe('divergence D9 — where cost and earned value live', () => {
     }
   });
 
-  it('NEW — create names one “Cost & earned value” section where the editor uses two tabs and four headings', () => {
+  it('NEW (CLOSED) — create names the same sections the editor does, in the same order', () => {
+    // One "Cost & earned value" heading spanned two write scopes — the value MEASURE, which earns
+    // value and moves nothing, and the COST itself. A group owns its section (ADR-0089 D5), so
+    // splitting them was forced by the extraction rather than chosen for tidiness.
     const created = mountCreate();
     expect(sectionHeadings()).toEqual([
       'Identity',
@@ -638,10 +653,10 @@ describe('divergence D9 — where cost and earned value live', () => {
       'Breakdown',
       'Working time',
       'Levelling',
-      'Cost & earned value',
+      'How value is measured',
+      'Expenses',
+      'Recognition',
       'Constraints',
-      // Gained at M3-T3: placement is not a constraint, so it is no longer filed as one. The
-      // ORDER still differs from the editor's, which is D9's row and M4-T1's to settle.
       'Placement & targets',
       'External interfaces',
     ]);
@@ -662,13 +677,15 @@ describe('divergence D9 — where cost and earned value live', () => {
   });
 });
 
-describe('divergence D10 — `physicalPercentComplete` visibility', () => {
+describe('divergence D10 (CLOSED, M4) — `physicalPercentComplete` visibility', () => {
   it.each(['DURATION' as const, 'UNITS' as const, 'PHYSICAL' as const])(
-    'with percentCompleteType %s, create renders the physical %% only for PHYSICAL',
+    'with percentCompleteType %s, create renders the physical %% too',
     (percentCompleteType) => {
+      // ADR-0060 §6: shading implies a value is there, hiding claims there is none. The field
+      // holds a STORED value, so hiding it from a reader whose measure is Duration says the
+      // activity has no physical progress when it may well have some.
       mountCreate({ activity: row({ percentCompleteType }) });
-      const present = screen.queryByLabelText('Physical % complete') !== null;
-      expect(present).toBe(percentCompleteType === 'PHYSICAL');
+      expect(screen.getByLabelText('Physical % complete')).toBeInTheDocument();
     },
   );
 
@@ -683,9 +700,12 @@ describe('divergence D10 — `physicalPercentComplete` visibility', () => {
     },
   );
 
-  it('NEW — the two hosts give the %-complete chooser different labels and different hints', async () => {
+  it('NEW (CLOSED, label) — both hosts label the chooser “Earn value from”', async () => {
+    // The editor's label, which says what the control DOES; create's "% complete type" named a
+    // taxonomy. Its hint keeps create's extra sentence, which is the clause answering the question
+    // the label raises: this changes no dates.
     const created = mountCreate({ activity: row({ percentCompleteType: 'PHYSICAL' }) });
-    const createSelect = screen.getByLabelText('% complete type');
+    const createSelect = screen.getByLabelText('Earn value from');
     expect(hintOf(createSelect)).toBe(
       'Earns value from a hand-entered physical %-complete, independent of dates. It changes no dates — only how Earned value measures progress.',
     );

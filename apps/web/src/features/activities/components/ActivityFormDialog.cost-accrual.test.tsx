@@ -133,9 +133,11 @@ describe('ActivityFormDialog — Cost accrual (flag on)', () => {
     expect(JSON.parse(init?.body as string)).toMatchObject({ accrualType: 'START', version: 3 });
   });
 
-  it('hides the accrual select for a milestone (no cost meaning)', () => {
+  it('offers the accrual select to a milestone, which can carry a cost (D9)', () => {
+    // A payment milestone has a cost and no duration, so WHEN that cost is recognised is a real
+    // question for it. Withheld until M4 for the same reason the expense fields were.
     renderDialog();
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
-    expect(screen.queryByLabelText('Cost accrual')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Cost accrual')).toBeInTheDocument();
   });
 });
