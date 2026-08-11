@@ -631,6 +631,44 @@ relocation walk that presses each moved command at its new entry point.
 - **Note:** two of the three are `render` items and therefore part of the measured **1177 px pinned
   floor** — this is the single largest reduction available to Row 1.
 
+> #### Correction, recorded in place (2026-08-11) — the destination context cannot evaluate them
+>
+> **"Keep their `isEnabled`/`disabledReason` verbatim" presumes the selection bar's context can run
+> those predicates. It cannot**, and the step as written is not implementable.
+> `selectionActionItems` is `ToolbarItem<SelectionActionContext>` — a deliberately narrow
+> object-actions context (`selection-actions.tsx:29-83`: six facts about the selected activity plus
+> eight `on*` callbacks). It carries **none** of the canvas/lens state these three predicates read.
+>
+> Established by extracting each registration by brace-matching and collecting its `ctx.` references
+> — **not** by a fixed-width window, whose first attempt reported `isolate-logic` as using
+> `plannedStart` and nothing else, because it had bled into the neighbouring items:
+>
+> | command             | fields required                                                                                                                                      |
+> | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | `zoom-to-selection` | `canvasActive`, `hasDiagram`, `selectedActivity`, `zoomToSelection`                                                                                  |
+> | `isolate-logic`     | `canvasActive`, `hasDiagram`, `selectedActivity`, `isolateActive` — **plus** `IsolateControl`'s own `isolateMode`, `setIsolateMode`, `toggleIsolate` |
+> | `float-paths`       | `activityCount`, `floatPathsOpen`, `selectedActivity`, `toggleFloatPaths`                                                                            |
+>
+> Eleven distinct fields against a destination that holds fourteen — so the naive move roughly
+> **doubles** `SelectionActionContext` and imports canvas-viewport and lens concepts into a context
+> whose docblock says it is the commands that act on the selected activity.
+>
+> **Recommended shape (decide before writing code):** introduce a separate
+> `SelectionCanvasContext` holding exactly those fields, and type the bar's items as
+> `ToolbarItem<SelectionActionContext & SelectionCanvasContext>`. The intersection costs the host
+> nothing — it already owns both halves — and it keeps the two concerns distinguishable **in the
+> type**, which is the ADR-0062 lesson stated as a rule: a fused gate object cannot say which half
+> is missing, and the fusion is invisible at every call site afterwards.
+>
+> **Rejected:** a second `<Toolbar>` inside the selection bar over the TSLD context. It duplicates
+> the bar's chrome and, more seriously, splits the single roving tabindex the floating bar depends
+> on — two toolbars means two tab stops where a planner expects one.
+>
+> `isolate-logic` also needs a second look that the step does not mention: it is registered from a
+> **shared `isolateShape` spread into both the flag-on and flag-off branches**
+> (`tsld-toolbar-items.tsx:1597`, `:2012`, `:2030`), so moving it moves the placeholder too — which is
+> the same flag-off destination question `m2-suite-impact.md` raises for Feature 2.2.
+
 #### Feature 2.2: Display lenses move into `View ▾`
 
 > **Complexity:** M · **Dependencies:** M2-T0 · **Entry point:** `View ▾` on Row 1 → new **Panels**
