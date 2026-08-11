@@ -1,6 +1,6 @@
 # Feature Spec: Activity dialog unification — one field vocabulary for create and edit
 
-- **Status:** Draft **rev 2** — **awaiting approval**
+- **Status:** Draft **rev 3** — **awaiting approval**
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-11
 - **Tracking issue / epic:** TBD
@@ -17,7 +17,14 @@ blocking). Ten conditions were corrections to claims rev 1 made about code the a
 ten were re-verified against the source here and **all ten hold**. The largest is that rev 1's
 stated enforcement mechanism was false — see §4.1, which now records the retraction rather than
 quietly replacing it (ADR-0071's rule: noticing drift and stepping over it leaves the record as
-wrong as not noticing). Full changelog at §6.
+wrong as not noticing).
+
+**rev 3 (2026-08-11)** — after re-review returned AGREE WITH CONDITIONS (five, mechanical; the seam,
+the thesis and converge-then-extract unchanged). The sharpest is that **rev 2's replacement mechanism
+had a hole one layer up**: `FIELDS` was checked for _spelling_, not for _rendering_. That is the
+second time in this spec's history that a stated enforcement mechanism has been weaker than claimed,
+which is itself the finding — so §4.1 now states, for each gate, **what it does not catch**. Full
+changelog at §6.
 
 ---
 
@@ -427,13 +434,36 @@ function ActivityIdentityFields({ form }: { form: UseFormReturn<ActivityGeneralV
 does not contain it. This is a **compile error at the point of the mistake**, and it closes the
 disclosure path above for free: a cost field cannot be registered on a general form at all.
 
-The one erosion path is a group that takes **two** form props. Two mechanisms close it:
+**Three gates sit on top of that, and each is stated with what it does NOT catch** — rev 3 adds this
+discipline because a stated mechanism has now been weaker than claimed twice in this document's
+history, and the second time it was the mechanism introduced to fix the first.
 
-1. **`export const FIELDS = [...] as const satisfies readonly (keyof ActivityGeneralValues)[]`** —
-   a foreign field name becomes a **compile error**, not a test failure. The tuple is **ordered**,
-   which §4.4 then reuses for focus ordering.
-2. **A structural assertion** that each group module exports exactly one `FIELDS` and that its props
-   type contains exactly one `UseFormReturn`. Verified red by adding a second form prop.
+1. **`export const FIELDS = [...] as const satisfies readonly (keyof ActivityGeneralValues)[]`.**
+   A foreign field name is a **compile error**. The tuple is **ordered**, which §4.4 reuses for focus.
+   **What it does not catch: whether any of those names is actually rendered.** `satisfies` proves
+   _spelling_, not _behaviour_ — a group may export `['name','code','description']` and register only
+   two. The partition test then passes while `description` stops rendering **on both hosts at once**,
+   which is strictly worse than today: the hosts are currently independent, so a drop in one is
+   visible against the other. That is the scope-schema docblock's own "silent field drop" relocated
+   one layer up **by the mechanism introduced to prevent it**. Hence gate 2.
+2. **Each group's suite loops its own `FIELDS` tuple and asserts a rendered control per name** — one
+   `it.each`, not eleven hand-written cases — **and asserts that tuple order matches render order**,
+   which is free once the loop exists and which §4.4 makes load-bearing. This is what makes the tuple
+   a _specification_ rather than a declaration.
+   **What it does not catch:** a field rendered but wired to the wrong scope form — which is gate 0's
+   job (it would not compile).
+3. **A shared `GroupProps<T extends FieldValues> = { form: UseFormReturn<T> } & …` that every group
+   satisfies.** rev 2 proposed a _structural test_ asserting one `UseFormReturn` per module; that was
+   wrong, because **a Vitest structural test cannot read a TypeScript type**. It would be a regex over
+   source with real false negatives — props declared in a sibling file, or a
+   `UseFormReturn<A> | UseFormReturn<B>` union. (Elsewhere in this repository "structural test" has
+   meant reflecting a live tree, which is not available here.) A shared type is the better instrument.
+   **What it does not catch, stated rather than overclaimed a third time: this is not a hard gate.**
+   `GroupProps<T> & { other: UseFormReturn<U> }` still compiles. It makes the one-form shape the
+   default and any deviation visible in a props declaration at review time; **the real gate on
+   cross-scope registration remains gate 0** — a second form prop only buys you the ability to
+   register out-of-scope fields, which is the thing D2b exists to make unnecessary. Residual risk:
+   accepted and named.
 
 **D2b — a group receives derived facts as props and never reaches across scopes.** The duration
 field's `hoursPerDay` is read from the **scheduling** scope's live calendar selection and feeds the
@@ -576,11 +606,35 @@ silent:
   docblock says it is _"The alternative to `FormErrorSummary`"_, introduced by ADR-0077 §9 because
   listing restated what each field already said.
 
-**Both activity dialogs use the listing one today**, in five places
-(`ActivityFormDialog.tsx:366`; `ActivityEditorDialog.tsx:493,613,896`; `ActivityProgressPanels.tsx:139`).
+**The activities feature uses the listing one in nine places, seven of which survive this epic. [V]**
+rev 2 named five; that was wrong, and the miscount mattered because one omitted site sits inside a
+panel another milestone promised not to touch.
+
+| Site                                                                                                    | Fate                                |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `ActivityFormDialog.tsx:366`                                                                            | becomes `ActivityCreateDialog` (M6) |
+| `ActivityEditorDialog.tsx:493` general, `:613` scheduling, `:896` cost                                  | live                                |
+| `ActivityProgressPanels.tsx:139` reported progress, **`:277` value measure**, **`:554` weighted steps** | live                                |
+| `ActivityProgressDialog.tsx:117`, `ActivityStepsDialog.tsx:190`                                         | deleted with the legacy trio (M5)   |
+
 So ADR-0077 §9's rule — _a field's problem belongs to the field; the alert belongs to the form_ —
-implies all five are currently wrong, and rev 1 was quietly proposing to change create's error
-presentation in passing, with no divergence row and no acceptance criterion behind it.
+implies all seven live sites are currently wrong, and rev 1 was quietly proposing to change create's
+presentation in passing with no acceptance criterion behind it.
+
+**Decision: M0.5 covers all seven.** Leaving one panel on the listing component while its six
+siblings move is precisely the divergence class this epic exists to remove, reintroduced by the
+milestone that decides presentation. Two consequences, both named rather than discovered later:
+
+- **M4-T3's bar is re-worded.** rev 2 required `WeightedStepsPanel.test.tsx` and the progress suites
+  to pass _unchanged_, which is impossible once M0.5 touches `:554`. The bar becomes **"unchanged by
+  M4"** — they were last touched at M0.5, deliberately, and M4 must not touch them again.
+- **The ~20 `FormErrorSummary` callers outside this feature are explicitly out of scope**, with a
+  written reason rather than silence: they are not this epic's subject, and pulling them in turns a
+  field-vocabulary epic into an app-wide error-presentation change. `server-error.test.tsx:68`
+  already records _"its twenty other callers outside the auth screens"_ **[V]**, so this is a
+  pre-existing known state, not new drift. It becomes a named `docs/TECH_DEBT.md` row at M7, because
+  "consistent inside the activities feature and not with the rest of the app" is a state somebody
+  should be able to find deliberately.
 
 **And there is a coupling rev 1 could not have seen, which makes this non-obvious.**
 `FormProblemCount`'s docblock justifies its "silence below two problems" threshold explicitly on RHF's
@@ -658,14 +712,25 @@ Next free number **0089** **[V]** (`docs/adr/` runs to `0088-flag-classification
 > partition the field set.
 >
 > **D2. A group takes exactly one concrete `UseFormReturn`, and the compiler is the enforcement.**
-> A group over `ActivityGeneralValues` cannot `register('constraintType')`. An ordered
-> `FIELDS ... as const satisfies readonly (keyof TScopeValues)[]` makes a foreign field a compile
-> error; a structural assertion pins one `FIELDS` and one form prop per group.
-> **An earlier draft of this decision claimed the `FieldGateProvider` forced it. That was false** —
+> A group over `ActivityGeneralValues` cannot `register('constraintType')`. On top of that sit three
+> gates, **each recorded with what it does not catch** (§4.1): an ordered
+> `FIELDS ... as const satisfies readonly (keyof TScopeValues)[]` (catches spelling, **not
+> rendering**); a per-group `it.each` over that tuple asserting a rendered control per name **and
+> that tuple order matches render order** (this is what makes the tuple a specification rather than
+> a declaration, and it closes the "declared but never registered" hole the tuple alone opens —
+> which would drop a field on **both** hosts at once, strictly worse than today's independent
+> hosts); and a shared `GroupProps<T>` type, which is **not a hard gate** — `GroupProps<T> & { other:
+UseFormReturn<U> }` still compiles — but is the right instrument, because a Vitest structural test
+> cannot read a TypeScript type and a regex over source has real false negatives.
+> **Two earlier drafts of this decision overclaimed their mechanism, and both are recorded.** The
+> first claimed the `FieldGateProvider` forced it. That was false —
 > `activity-editor-gating.ts:101-125` returns one shared `definition` object for seven scopes, so a
 > two-scope group would render identically in either provider with nothing to catch it, and a
 > `general`+`cost` group would have been a **disclosure path** for a role with
-> `gating.cost.readable === false`. Recorded rather than replaced.
+> `gating.cost.readable === false`. The second — its replacement — claimed `FIELDS` closed the gap
+> when it checked only spelling, and asserted a structural test that could not have been written.
+> Both recorded rather than replaced, because the pattern is the point: **a mechanism is stated with
+> its blind spot, or it will be overclaimed again.**
 >
 > **D2b. A cross-scope fact is resolved by the host and passed down as a plain prop.** The duration
 > field's `hoursPerDay` comes from the scheduling scope's calendar and feeds the general scope's seed.
@@ -687,9 +752,14 @@ Next free number **0089** **[V]** (`docs/adr/` runs to `0088-flag-classification
 > declared group order and each group's ordered `FIELDS`. Merge/focus order is not document order.
 > This is coupled to D7 and ships with it.
 >
-> **D7. Error presentation is decided once for both hosts, in its own commit.** `FormProblemCount`'s
-> below-two-problems silence is justified on `handleSubmit`'s `shouldFocusError`, which a
-> `trigger()`-based host does not get — so adopting it without D6 is a WCAG 4.1.3 regression.
+> **D7. Error presentation is decided once for all seven live sites, in its own commit.**
+> `FormProblemCount`'s below-two-problems silence is justified on `handleSubmit`'s
+> `shouldFocusError`, which a `trigger()`-based host does not get — so adopting it without D6 is a
+> WCAG 4.1.3 regression. **The coupling binds at M1, not at M0.5**: at M0.5 the create host still
+> validates through `handleSubmit`, so the count is lawful there for free and the regression only
+> becomes reachable when M1 swaps to `trigger()`. "They ship together" is therefore an **M1
+> acceptance gate with a named assertion**, not a property of the milestone boundary. Callers
+> outside the activities feature are out of scope with a written reason (§4.5).
 >
 > **D8. No feature flag.** ADR-0061 (gating a structural refactor means two copies in one file),
 > ADR-0088 D1 (a `VITE_` flag cannot be switched off on a deployed container — there has never been
@@ -828,6 +898,21 @@ note in a task; it is decided here.
 | 14  | **Partial pushback:** M0-T2 re-scoped as directed, **plus a fourth claim** re-aimed at the proposition that actually justifies M1. See plan M0-T2.                                                                                                                                         | **modified** |
 
 Nothing in the review was rejected.
+
+## 6b. Changelog — rev 2 → rev 3
+
+| #   | Change                                                                                                                                                                                                                                                                                                         | Status       |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | **§4.1 rewritten as three gates, each stated with what it does NOT catch.** `FIELDS` checks spelling, not rendering — a group could declare a field and never register it, dropping it on **both** hosts at once. Closed by a per-group `it.each` over the tuple asserting a rendered control per name.        | **folded**   |
+| 2   | **Tuple order must match render order**, asserted in the same loop — free, and §4.4 already makes tuple order load-bearing for focus.                                                                                                                                                                          | **folded**   |
+| 3   | **rev 2's "structural assertion of one `UseFormReturn` per module" withdrawn** — a Vitest test cannot read a TS type; it would be a regex with real false negatives. Replaced by a shared `GroupProps<T>`, **explicitly recorded as not a hard gate**.                                                         | **folded**   |
+| 4   | **§4.5 corrected from five sites to nine (seven live). [V]** `ActivityProgressPanels.tsx:277` and `:554` were omitted. Decision: M0.5 covers all seven; M4-T3's bar re-worded to "unchanged by M4"; the ~20 callers outside this feature are out of scope **with a written reason** and a TECH_DEBT row at M7. | **folded**   |
+| 5   | **ADR-0089 D7: the coupling binds at M1, not M0.5** — at M0.5 the create host still uses `handleSubmit`, so the count is lawful for free there. Now an M1 acceptance gate with a named assertion.                                                                                                              | **folded**   |
+| 6   | **ADR-0089 D2 records both overclaimed mechanisms**, not just the first, and states the rule that produced the fix: a mechanism is stated with its blind spot or it will be overclaimed again.                                                                                                                 | **added**    |
+| 7   | **Pushback retained, consequence softened:** M0-T2 claim 4's consequence changes from "M1 is cancelled" to "**M1 re-opens as a decision**", gated on an empirical probe — see plan M0-T2.                                                                                                                      | **modified** |
+
+Nothing in the re-review was rejected. One condition (the `GroupProps` type) is folded **with its
+limitation stated**, which the condition itself did not claim.
 
 ## 7. Links
 

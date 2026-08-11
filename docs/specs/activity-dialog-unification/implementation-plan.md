@@ -1,14 +1,19 @@
 # Implementation Plan: Activity dialog unification
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md) (rev 2)
-- **Status:** Draft **rev 2** — **awaiting approval**
+- **Status:** Draft **rev 3** — **awaiting approval**
 - **Owner:** TBD
 - **Draft ADR:** ADR-0089 (spec §4.8; written at M7)
 
-> **rev 2** folds twelve `ui-architect` conditions. Three change the plan's shape: **M5 and M6 are
+> **rev 2** folded twelve `ui-architect` conditions. Three changed the plan's shape: **M5 and M6
 > swapped** (the flag retires before the monolith is deleted, because two live CI harnesses drive its
-> edit path); **M2–M4 become converge-then-extract commit pairs**; and **M1's value claim was false
-> and is withdrawn**. Changelog at the end.
+> edit path); **M2–M4 became converge-then-extract commit pairs**; and **M1's value claim was false
+> and was withdrawn**.
+>
+> **rev 3** folds five mechanical conditions from the re-review. None changes the seam, the thesis or
+> converge-then-extract. Two change a milestone's **acceptance bar** rather than its content (M1, and
+> M4-T3's "unchanged" promise), and one adds two local e2e runs at M6 that rev 2 omitted one
+> milestone downstream of where it already guards against exactly that. Changelog at the end.
 
 ---
 
@@ -114,11 +119,25 @@ confirmed or dismissed by execution; the one proposition that could cancel M1 is
   2. The four-way `getValues()` spread is assignable to `ActivityFormValues` with **no cast**.
   3. `FIELDS = [...] as const satisfies readonly (keyof ActivityGeneralValues)[]` **rejects** a
      foreign field name (verified by adding `'constraintType'` and expecting a compile error).
-  4. **Added in rev 2:** `UseFormReturn<ActivityFormValues>` is **not** assignable to
-     `UseFormReturn<ActivityGeneralValues>`. This is the claim M1 exists because of, it is marked
-     **[R]** in spec §4.4, and RHF's generic is not obviously invariant to a reader. **If it turns
-     out to be assignable, M1 is cancelled** and the create host keeps one wide form.
-  5. Delete the spike file.
+  4. **Added in rev 2, consequence softened in rev 3:** `UseFormReturn<ActivityFormValues>` is
+     **not** assignable to `UseFormReturn<ActivityGeneralValues>`. This is the claim M1 exists
+     because of, it is marked **[R]** in spec §4.4, and RHF's generic is not obviously invariant to
+     a reader.
+     **If it compiles, M1 does _not_ auto-cancel — it re-opens as a decision**, because a green
+     result may be a soundness artefact rather than a safety guarantee: RHF declares `register`,
+     `setValue`, `trigger` and `setFocus` as **method-shorthand** members, which TypeScript checks
+     **bivariantly even under `strictFunctionTypes`**.
+     **That last sentence is an unverified dependency-internals claim** (ADR-0076 Class 2) — I have
+     not opened RHF's `.d.ts`. So the decision must **not** rest on it. Step 5 settles the question
+     empirically instead, which is decisive without needing the claim at all; if the claim is
+     nonetheless cited in ADR-0089, it must first be registered in
+     `scripts/dependency-claims.json` or `pnpm check:claims` fails.
+  5. **The decisive probe:** on the wide-typed form, does `setValue('constraintType', …)` /
+     `reset({ constraintType: … })` **reject at the call site**, or silently accept? If it accepts,
+     assignability is a **hole, not a licence** — and cancelling M1 on it would put the silent
+     mis-wiring risk back at **eleven call sites forever** rather than paying for it once. Default
+     on an accepting result: **keep M1.**
+  6. Delete the spike file.
 
 ##### Task M0-T3 — Pin the seam invariants nothing currently holds
 
@@ -142,16 +161,26 @@ confirmed or dismissed by execution; the one proposition that could cancel M1 is
 
 ## Milestone M0.5 — Error presentation and ordered focus (one commit, both hosts)
 
-**Outcome:** the five `FormErrorSummary` call sites across the two dialogs are decided once, and the
-create host's ordered-focus behaviour lands with them, because the two are coupled.
-**Entry point:** any activity dialog with an invalid field — the error region above the form.
+**Outcome:** the **seven live** `FormErrorSummary` call sites in the activities feature are decided
+once, and the create host's ordered-focus behaviour lands with them.
+**Entry point:** any activity dialog or progress panel with an invalid field — the error region above
+the form.
 **Journey:** none yet; asserted by unit tests. The journey arrives at M2.
 
 > **Why this is its own milestone.** rev 1 proposed changing create's error presentation as a
 > side effect of M1, with no divergence row and no acceptance criterion. **[V]**
 > `FormErrorSummary` (`form.tsx:424-446`) lists messages; `FormProblemCount` (`:470-491`) is a count
-> and its docblock calls itself _the alternative to_ it. Both dialogs use the listing one in five
-> places, so ADR-0077 §9 implies all five are currently wrong. That is a decision, not fallout.
+> and its docblock calls itself _the alternative to_ it. That is a decision, not fallout.
+>
+> **rev 3 correction — nine sites in this feature, seven live, not five. [V]**
+> `ActivityFormDialog.tsx:366`; `ActivityEditorDialog.tsx:493,613,896`;
+> **`ActivityProgressPanels.tsx:139, 277, 554`** (rev 2 named only `:139` from that file); plus
+> `ActivityProgressDialog.tsx:117` and `ActivityStepsDialog.tsx:190`, which M5 deletes.
+> **M0.5 covers all seven live sites** — `:554` included, which is why M4-T3's bar changes below.
+> Leaving one panel on the listing component while its six siblings move would reintroduce, inside
+> the milestone that decides presentation, exactly the divergence class this epic removes.
+> The ~20 `FormErrorSummary` callers **outside** this feature are out of scope with a written reason
+> (spec §4.5) and get a `docs/TECH_DEBT.md` row at M7 — not silence.
 
 #### Feature: One error-presentation rule, and the focus that makes it lawful
 
@@ -160,17 +189,27 @@ create host's ordered-focus behaviour lands with them, because the two are coupl
 > RHF's `shouldFocusError` under **`handleSubmit`** (`form.tsx:460-468`). The create host will
 > validate with `trigger()`, which does **not** focus. Adopting the count without the ordered focus
 > makes a one-problem submit silent **and** unfocused — a WCAG 4.1.3 regression assembled from two
-> individually-reasonable choices. **They ship together or neither ships.**
-> **Testing requirements:** one-problem and two-problem cases on both hosts; an a11y assertion that
-> exactly one control receives focus.
+> individually-reasonable choices.
+> **rev 3: the coupling binds at M1, not here.** At M0.5 the create host still validates through
+> `handleSubmit`, so `FormProblemCount` is lawful at this milestone **for free**; the regression only
+> becomes reachable when M1 swaps to `trigger()`. rev 2's "they ship together or neither ships" was
+> _asserted_ by the milestone boundary and not _achieved_ by it. It is therefore an **M1 acceptance
+> gate with a named assertion** (M1-T2 step 2), not a property of ordering.
+> **Testing requirements:** one-problem and two-problem cases on every touched site; an a11y
+> assertion that exactly one control receives focus.
 
-##### Task M0.5-T1 — Decide and apply the presentation
+##### Task M0.5-T1 — Decide and apply the presentation across all seven live sites
 
-- **Complexity:** S · **Dependencies:** M0 · **Risks:** touching `ActivityProgressPanels.tsx:139`
-  changes a **Contributor-facing** surface — assert it separately.
-- **Testing:** new cases on each of the five call sites.
-- **Development steps:** decide (recommended: `FormProblemCount` on both hosts) → apply → assert one
-  problem and two problems on each surface.
+- **Complexity:** M (rev 3: was S — seven sites, not five)
+- **Dependencies:** M0
+- **Risks:** `ActivityProgressPanels.tsx:139` and `:554` are **Contributor-facing** surfaces
+  (reported progress is never pen-gated, ADR-0028 Q-C) — assert them separately from the
+  Planner-facing ones. `:554` is inside `WeightedStepsPanel`, whose suite M4-T3 must then leave
+  alone; that bar is re-worded there rather than being discovered as a conflict.
+- **Testing:** new cases on each of the seven live sites.
+- **Development steps:** decide (recommended: `FormProblemCount` on all seven) → apply → assert one
+  problem and two problems on each surface → confirm `WeightedStepsPanel.test.tsx` is updated **here**
+  and not again at M4.
 
 ##### Task M0.5-T2 — Register the RHF dependency claims
 
@@ -201,6 +240,12 @@ create host's ordered-focus behaviour lands with them, because the two are coupl
 > prerequisite is fine; a false value claim inside a plan written under ADR-0076 is Class 3.
 > **Acceptance = all 11 create suites pass unchanged, plus the new focus/summary tests.**
 
+> **rev 3 — M1 carries the M0.5 coupling as an explicit acceptance gate.** M1 is the milestone that
+> makes `FormProblemCount` unlawful-without-focus, because it is where validation moves from
+> `handleSubmit` (which focuses) to `trigger()` (which does not). **M1 does not merge unless a
+> one-problem submit on the create host moves focus to that control.** Stated as a gate because the
+> milestone boundary cannot enforce it and rev 2 wrongly implied it could.
+
 #### Feature: Scope-form create host
 
 > **Complexity:** L · **Dependencies:** M0-T2 step 4 (may cancel this milestone), M0.5
@@ -229,9 +274,16 @@ create host's ordered-focus behaviour lands with them, because the two are coupl
 - **Complexity:** S · **Dependencies:** M1-T1 · **Risks:** none
 - **Testing:** new `ActivityFormDialog.multi-scope-submit.test.tsx`, verified red against a
   deliberately-broken merge.
-- **Development steps:** invalid fields in two scopes → assert **exactly one** control focused and
-  that it is first in declared group order, not document order; invalid field in one scope → assert
-  the M0.5 presentation; failed create then reopen → assert no stale banner.
+- **Development steps:**
+  1. Invalid fields in **two** scopes → assert **exactly one** control focused, and that it is first
+     in **declared group order**, not document order.
+  2. **rev 3 — the assertion rev 2 omitted.** Invalid field in **one** scope → assert **focus moves
+     to that control**. rev 2 said only "assert the M0.5 presentation" here, which is precisely the
+     case `FormProblemCount` is **silent** for: with the count showing nothing and `trigger()` not
+     focusing, a one-problem submit would report nothing at all through any channel. This is the
+     M1 acceptance gate above, and it is verified red against the naive
+     `Promise.all(trigger())`.
+  3. Failed create, then reopen → assert no stale banner (`mutation.reset()`).
 
 ##### Task M1-T3 — Standardise the editor on `useWatch` too
 
@@ -272,12 +324,20 @@ and asserts the same labels and hints. Lands **here, not at M7** (ADR-0081 §2).
 > **Testing:** group suites land **first and green**; host suites thin in the same PR; `it(`-counts
 > recorded (spec §2.6).
 
-##### Task M2-T1 — `ActivityIdentityFields` (extract only, no divergence)
+##### Task M2-T1 — `ActivityIdentityFields` (two commits, like every other group)
 
 - **Complexity:** S · **Dependencies:** M1 · **Risks:** low.
-- **Testing:** `fields/ActivityIdentityFields.test.tsx`; both hosts' suites green.
-- **Development steps:** align `autoComplete` attributes (converge) → extract → move comments
-  **verbatim** (ADR-0078: they record shipped defects) → export the ordered `FIELDS` tuple → thin.
+- **Testing:** `fields/ActivityIdentityFields.test.tsx` including the `FIELDS` `it.each` render loop
+  and the tuple-order assertion; both hosts' suites green.
+- **Risks (process):** **rev 3 splits this.** rev 2 wrote it as "align `autoComplete` (converge) →
+  extract" in **one** commit, three lines below the two-commit rule and immediately above M2-T2 doing
+  it correctly as A1/A2/B. The content is trivial; modelling the exception directly under the rule is
+  not — it is how the rule stops being followed by task four.
+- **Development steps:**
+  1. **Commit A (converge):** align the `autoComplete` attributes on the losing host, with a
+     regression test verified red.
+  2. **Commit B (extract):** move the markup, comments **verbatim** (ADR-0078: they record shipped
+     defects), export the ordered `FIELDS` tuple, add the render loop, thin the host suites.
 
 ##### Task M2-T2 — `ActivityWorkFields` (converge D4 + D5, then extract)
 
@@ -387,7 +447,12 @@ and assert it persists. This is D9's proof and is only provable against a real A
   fact — it stays a prop into the group, not part of it. D10 makes create render
   `physicalPercentComplete` always, shaded when it does not apply.
 - **Testing:** `fields/ActivityMeasureFields.test.tsx`; `earned-value` thinned; `WeightedStepsPanel`
-  and the progress suites pass **unchanged**.
+  and the progress suites pass **unchanged by M4**.
+- **rev 3 — the bar is re-worded, because rev 2's was unsatisfiable.** rev 2 required those suites to
+  pass _unchanged_, full stop. M0.5 touches `ActivityProgressPanels.tsx:554`, which is inside
+  `WeightedStepsPanel`, so they were **already** changed — deliberately, one milestone earlier. The
+  bar is therefore "M4 does not touch them", and the check is that their last modification is M0.5's
+  commit.
 
 ---
 
@@ -422,8 +487,14 @@ the legacy trio are deleted. `classACap` ratchets 2 → 1. #122's named trigger,
   - `:68` `VITE_CANVAS_WORKSPACE: 'false'` — **keep**. A different, still-deferred Class A flag. The
     ADR-0088 `playwright.library.config.ts` note records this mistake being nearly made.
 - **Testing:** `scripts/e2e-local.sh web:sub-day`, run and reported.
+- **The assumption this conversion rests on, stated rather than left to a failing run (rev 3):**
+  converting the edit half against the **tabbed editor** works while `VITE_CANVAS_WORKSPACE: 'false'`
+  keeps the **legacy stacked plan page**, because that page renders `ActivitiesTable`, which mounts
+  `ActivityEditorDialog` itself when the tabs flag is on **[V]** `ActivitiesTable.tsx:931-946`. The
+  two flags are independent here; an implementer who assumed the editor needs the canvas workspace
+  would conclude this conversion is blocked on the _other_ deferred Class A flag, and it is not.
 - **Development steps:** rewrite the edit half against the editor's General tab (create's duration
-  field is unaffected by the flag) → remove the two pins → run locally.
+  field is unaffected by the flag) → remove the two pins, keeping `:68` → run locally.
 
 ##### Task M5-T2 — Convert `playwright.assignment-lag.config.ts` and its specs
 
@@ -490,7 +561,15 @@ composing the eleven groups; `activityFormSchema` retires with its last consumer
 - **Complexity:** L · **Dependencies:** M6-T1
 - **Risks:** the largest-blast-radius PR in the epic. Its protection is that every group already ships
   and every converge already landed, so this PR moves composition only.
-- **Testing:** every re-homed suite; the journey; `pnpm typecheck` as the completeness oracle.
+- **Testing:** every re-homed suite; `pnpm typecheck` as the completeness oracle; and **three** local
+  journeys, not one:
+  - `scripts/e2e-local.sh web:activity-editor` (the epic's own journey), **plus**
+  - `scripts/e2e-local.sh web:sub-day` **and** `web:assignment-lag`.
+    **rev 3 adds the latter two.** M6 deletes `ActivityFormDialog` and repoints
+    `CreateActivityButton`; both converted harnesses still drive **create-side** flows and were last
+    touched at M5 **against the old component**. Omitting them here is the ADR-0084 batch-1 shape one
+    milestone downstream of where this plan already guards against it — a retirement that passed its
+    own milestone and broke a harness in the next one.
 - **Development steps:** compose → rename → update the barrel exports and `CreateActivityButton` →
   delete `ActivityFormDialog.tsx` → delete `activityFormSchema` and re-point
   `activity-scope-schemas.structural.test.ts` → update `docs/DESIGN_SYSTEM.md` "Form layout".
@@ -539,19 +618,20 @@ called out because they are the ones most often skipped:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                   | Likelihood | Impact     | Mitigation                                                                                                                                                                                                                                                      |
-| --------------------------------------------------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The divergence set is still incomplete after M0     | med        | **high**   | M0-T1 derives field-by-field rather than pinning a list; budget for 11–12. The tenth was found incidentally, which is the evidence for this row.                                                                                                                |
-| D2 / D3 / D10 do not reproduce as reasoned          | med        | med        | M0-T1 runs before any fix is designed; the spec row is corrected, never the test bent.                                                                                                                                                                          |
-| M0-T2 step 4 shows the wide form _is_ assignable    | low        | low (good) | M1 is cancelled and the plan shortens.                                                                                                                                                                                                                          |
-| Coverage silently lost in the 11-suite migration    | med        | **high**   | Named-destination table (spec §2.6, with the missing-file correction); group suites green **before** hosts thin; `it(`-counts per PR.                                                                                                                           |
-| A field stops being registered during an extraction | med        | **high**   | `FIELDS ... satisfies` makes it a **compile** error; M6-T1's two partition tests; M0-T3's body-builder assertions.                                                                                                                                              |
-| A two-form group erodes the scope rule              | low        | **high**   | The one-`UseFormReturn`-per-module structural assertion, verified red. Note the failure it prevents is a **disclosure** path, not a tidiness one (spec §4.1).                                                                                                   |
-| Flag retirement strands a pinned config             | med        | **high**   | ADR-0084 batch 1, verbatim. `check:flags`' fifth assertion; harnesses converted first; **remove named lines, never the env block**; the third pin decided explicitly.                                                                                           |
-| A permission moves unnoticed                        | low        | **high**   | `activity-editor-gating.ts` unmodified; identity tests as the oracle; security-reviewer at M7.                                                                                                                                                                  |
-| Error presentation regresses a11y                   | med        | med        | M0.5 couples the count to the ordered focus; both proved before any group moves.                                                                                                                                                                                |
-| Large diff, no unit rollback contract               | high       | med        | One revertible commit per **behaviour change** (only true under converge-then-extract). ADR-0088 D7 records unit flag-off suites catching one defect in this project's history — so the journey and the gate pass are the protection, and are budgeted as such. |
-| `pnpm check:counts` / `check:claims` fail           | high       | low        | Named as explicit steps (M5-T3, M0.5-T2).                                                                                                                                                                                                                       |
+| Risk / assumption                                   | Likelihood | Impact     | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The divergence set is still incomplete after M0     | med        | **high**   | M0-T1 derives field-by-field rather than pinning a list; budget for 11–12. The tenth was found incidentally, which is the evidence for this row.                                                                                                                                                                                                                                                                                                                         |
+| D2 / D3 / D10 do not reproduce as reasoned          | med        | med        | M0-T1 runs before any fix is designed; the spec row is corrected, never the test bent.                                                                                                                                                                                                                                                                                                                                                                                   |
+| M0-T2 step 4 shows the wide form _is_ assignable    | low        | low (good) | M1 is cancelled and the plan shortens.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Coverage silently lost in the 11-suite migration    | med        | **high**   | Named-destination table (spec §2.6, with the missing-file correction); group suites green **before** hosts thin; `it(`-counts per PR.                                                                                                                                                                                                                                                                                                                                    |
+| A field is declared in `FIELDS` but never rendered  | med        | **high**   | **rev 3.** `satisfies` checks spelling, not rendering — and a drop here lands on **both** hosts at once, worse than today's independent hosts. Closed by each group suite's `it.each` over its own tuple asserting a rendered control per name, plus a tuple-order-equals-render-order assertion (spec §4.1 gate 2).                                                                                                                                                     |
+| A field stops being registered during an extraction | med        | **high**   | Gate 0 (the compiler on `register`); M6-T1's two partition tests; M0-T3's body-builder assertions.                                                                                                                                                                                                                                                                                                                                                                       |
+| A two-form group erodes the scope rule              | low        | **high**   | **rev 3: no hard gate exists, and that is recorded rather than overclaimed a third time.** A shared `GroupProps<T>` makes one form the default and a deviation visible in review; `GroupProps<T> & { other: UseFormReturn<U> }` still compiles. The real protection is gate 0 — a second form prop only buys the ability to register out-of-scope fields, which D2b makes unnecessary. The failure it prevents is a **disclosure** path, not a tidiness one (spec §4.1). |
+| Flag retirement strands a pinned config             | med        | **high**   | ADR-0084 batch 1, verbatim. `check:flags`' fifth assertion; harnesses converted first; **remove named lines, never the env block**; the third pin decided explicitly.                                                                                                                                                                                                                                                                                                    |
+| A permission moves unnoticed                        | low        | **high**   | `activity-editor-gating.ts` unmodified; identity tests as the oracle; security-reviewer at M7.                                                                                                                                                                                                                                                                                                                                                                           |
+| Error presentation regresses a11y                   | med        | med        | **rev 3: the coupling binds at M1, not M0.5** — at M0.5 the create host still uses `handleSubmit`, so the count is lawful for free and nothing there would fail. Enforced as an **M1 acceptance gate** with the one-problem focus assertion (M1-T2 step 2), verified red against the naive `Promise.all(trigger())`.                                                                                                                                                     |
+| Large diff, no unit rollback contract               | high       | med        | One revertible commit per **behaviour change** (only true under converge-then-extract). ADR-0088 D7 records unit flag-off suites catching one defect in this project's history — so the journey and the gate pass are the protection, and are budgeted as such.                                                                                                                                                                                                          |
+| `pnpm check:counts` / `check:claims` fail           | high       | low        | Named as explicit steps (M5-T3, M0.5-T2).                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Changelog — rev 1 → rev 2
 
@@ -570,3 +650,17 @@ called out because they are the ones most often skipped:
 | 11  | **M6-T1 anchors the replacement gate to the body builders**, and is verified red twice — the self-referential failure mode is now an explicit test case.                             |
 | 12  | **M1-T3 added** — `useWatch` standardisation extended to the editor, which is itself inconsistent. `mutation.reset()` folded into M1-T1.                                             |
 | 13  | **M0.5-T2 added** — register the `react-hook-form` claims; the file has no RHF entry today.                                                                                          |
+
+## Changelog — rev 2 → rev 3
+
+| #   | Change                                                                                                                                                                                                                                                                                                                                                            |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Every group suite gains an `it.each` loop over its own `FIELDS` tuple**, asserting a rendered control per name and that tuple order matches render order. Closes the hole rev 2's own mechanism opened — `satisfies` checks spelling, not rendering, and an unrendered declared field drops on **both** hosts at once. New risk row.                            |
+| 2   | **rev 2's "structural assertion of one `UseFormReturn` per module" withdrawn** — a Vitest test cannot read a TS type. Replaced by a shared `GroupProps<T>`, **recorded as not a hard gate**; the risk row now says so rather than overclaiming a third time.                                                                                                      |
+| 3   | **M0.5 corrected from five sites to seven live [V]** (`ActivityProgressPanels.tsx:277`, `:554` omitted in rev 2); complexity S → M; the ~20 callers outside this feature are out of scope with a written reason plus a TECH_DEBT row at M7.                                                                                                                       |
+| 4   | **M4-T3's bar re-worded** from "pass unchanged" to "**unchanged by M4**" — unsatisfiable once M0.5 touches `:554` inside `WeightedStepsPanel`.                                                                                                                                                                                                                    |
+| 5   | **The M0.5 coupling moved to an M1 acceptance gate**, because it binds where validation becomes `trigger()`, not where the count is chosen. **M1-T2 gains the one-problem focus assertion** rev 2 omitted — the exact case the count is silent for.                                                                                                               |
+| 6   | **M0-T2 claim 4's consequence softened** from "M1 is cancelled" to "**M1 re-opens as a decision**", gated on a decisive empirical probe (does `setValue`/`reset` reject an out-of-scope field on the wide form?), default "keep M1" if it accepts. The supporting bivariance claim is marked **unverified dependency-internals** and must be registered if cited. |
+| 7   | **M2-T1 split into commit A / commit B**, so the two-commit rule is not broken by the first task under it.                                                                                                                                                                                                                                                        |
+| 8   | **M5-T1's unstated assumption written down [V]** — the tabbed editor is reachable on the legacy stacked page (`ActivitiesTable.tsx:931-946` mounts it); the two flags are independent.                                                                                                                                                                            |
+| 9   | **M6-T2's local e2e gate extended** to `web:sub-day` and `web:assignment-lag` — both drive create-side flows and were last touched at M5 against the component M6 deletes.                                                                                                                                                                                        |
