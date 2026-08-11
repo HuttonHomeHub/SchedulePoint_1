@@ -237,46 +237,98 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
   4. Update `toolbar-registry.ts:115`'s `order` docblock to say it is **position within the group**
      and is **not** the demotion key (that lands in M1-T3).
 
-##### Task M1-T3 — Measure the chrome in `Toolbar.measure()`
+##### Task M1-T3 — **Derive** the chrome — do not measure it
 
-- **Description:** put a ref on each `role="group"` wrapper, read the container's computed
-  `column-gap`, derive `chrome = ΣgroupWidths + (groups − 1) × gap − Σitemwidths` once per pass, and
-  pass it plus the gap to `computeOverflow`. Cost the label-promotion projection (`Toolbar.tsx:210`)
-  against the same honest total.
+> **Rewritten after the pre-approval review.** This task previously said to put a ref on each
+> `role="group"` wrapper and read `getBoundingClientRect()`. **`performance-reviewer` and
+> `component-reviewer` independently concluded that measuring it creates a feedback loop**, and both
+> identified the same trigger. See `pre-approval-review.md` for the full argument; the short form:
+>
+> The group wrappers are rendered from `groups` (`Toolbar.tsx:300-311`), derived from `inlineBar`
+> (`:232`), which is `bar.filter((r) => !overflowedIds.has(r.item.id))` — **filtered by the very
+> state `computeOverflow` is about to set.** So a measured chrome is not an independent input to the
+> decision; it is downstream of the previous decision. When a group's last inline member demotes the
+> wrapper stops rendering, its `ml-1 border-l pl-2` rule (~13 px, `:331`) leaves the DOM, the next
+> pass sees more budget and can promote the item back — recreating the rule.
+>
+> **The group this happens to is `help`, whose only members are `legend` and `shortcuts`** — the
+> exact two items M0 measured as unreachable at 1920, and the two M1-T7 gives the lowest Row-1
+> priority. The loop would sit precisely at the width this milestone exists to fix.
+>
+> `measure()`'s deps are `[bar, demotable, autoLabelsFit]` (`:212`), **not** `overflowedIds`, so
+> `setOverflowedIds` alone does not force a second pass — but a chrome change that flips
+> `autoLabelsFit` does, and `:38-50` documents that toggle forcing one. The result would then be a
+> React re-render loop **with no user interaction at all**, each pass forcing a synchronous layout
+> read inside a `useLayoutEffect`, above a canvas already 4–6× over its ADR-0065 budget.
+>
+> The previous mitigation — "derive once per pass and hold it constant within the pass", plus
+> `widthCacheRef` — addressed a **different, already-solved problem**: `widthCacheRef` (`:130-137`)
+> damps a _demoted item's_ width collapsing to 0 because its node unmounted, and intra-pass
+> constancy says nothing about pass N+1 differing from pass N.
+
+- **Description:** derive the row's chrome as a **pure function of the registry's static group
+  membership** — which `computeOverflow` already receives as `bar` — using named constants, in the
+  manner of the existing `LABEL_CHROME_PX` (`Toolbar.tsx:23-29`). No new DOM reads. Cost the
+  label-promotion projection (`:210`) against the same honest total.
 - **Complexity:** M
 - **Dependencies:** M1-T2
-- **Risks:** **this fix is expected to remove the 21 labels the product owner currently sees at 1920**
-  (feature-spec §4.5 fact 3 — _reasoned from the code, not observed_). That is correct behaviour and
-  a visible regression at the same time. Mitigated by: measuring the post-fix state at all eight
-  widths **before merge** and reporting it in the PR; and by M2 being the milestone that buys the
-  labels back honestly. **If the measurement shows something else, believe the measurement.**
+- **Risks:** a derived constant silently rots when a class changes. Covered twice: a structural
+  string assertion (the container's class list contains `gap-1`; the group wrapper's contains
+  `ml-1 border-l pl-2`), and the M1 browser gate itself, which is running anyway and fails the moment
+  the constants desync from reality.
+  Separately, **this fix is expected to remove the 21 labels the product owner currently sees at
+  1920** (_reasoned from the code, not observed_) — correct behaviour and a visible regression at the
+  same time. Mitigated by measuring at all eight widths **before merge** and by M2 buying them back.
+  **If the measurement shows something else, believe the measurement.**
 - **Testing:**
-  - the browser gate (M1-T5), which is the only thing that can see this.
-  - a `Toolbar` unit test asserting `computeOverflow` receives non-zero chrome when groups render — a
-    weak test by construction (jsdom boxes are 0), so it asserts the **wiring**, and its docblock says
-    that is all it asserts.
+  - the browser gate (M1-T8), which is the only thing that can see the layout at all.
+  - **oscillation A — steady state.** At 1920×1080 on a populated plan, capture the inline id-set and
+    each item's labelled state for 20 consecutive `requestAnimationFrame` ticks **with no input**.
+    Assert all 20 identical. This is the direct test for a loop with no user interaction.
+  - **oscillation B — the boundary.** Sweep 1900→1960 in 1 px steps, bracketing the width at which
+    `help` first empties. Assert the inline set and the labelled set are each **monotonic** — nothing
+    that disappears reappears within a monotonic sweep.
+  - unit: chrome derived from a `bar` with N groups equals `N × GROUP_RULE_PX + (items − 1) × GAP_PX`,
+    and drops one rule when a demotion empties a group of **all** its bar members.
 - **Development steps:**
-  1. Add a `groupRefs` map alongside `itemRefs`; set it on the group wrapper at `Toolbar.tsx:325`.
-  2. Read `getComputedStyle(container).columnGap` once per pass (fall back to 0 when unparseable).
-  3. Derive chrome once; hold it constant for the pass.
-  4. Pass `chromeWidth`/`gapWidth` into `computeOverflow` and into the promotion projection at `:210`.
+  1. Add named constants `GROUP_GAP_PX = 4` (Tailwind `gap-1`) and `GROUP_RULE_PX = 13`
+     (`ml-1` + `border-l` + `pl-2`), each with a docblock naming the class it encodes.
+  2. Derive chrome from `bar`'s static group membership, attributing the rule+gap saving to whichever
+     demotion empties a group of all its bar members — **never** from `overflowedIds` or the DOM.
+  3. Pass `chromeWidth`/`gapWidth` into `computeOverflow` and into the promotion projection at `:210`.
+  4. Add the structural class assertions from the risk row.
   5. Run the harness at all eight widths and record before/after in the PR body.
 
 ##### Task M1-T4 — Confirm the measurement pass has not become expensive
 
-- **Description:** `measure()` runs per resolve pass and per `ResizeObserver` tick. This adds one
-  `getComputedStyle` and N group-box reads.
+> **Amended after the pre-approval review**, twice. M1-T3 no longer adds any DOM reads at all — the
+> chrome is derived, not measured — so the cost question is now "did the derivation change the number
+> of passes?" rather than "did it make each pass heavier". And `performance-reviewer` noted the
+> original testing step exercised only the **resize** trigger, while
+> `use-tsld-toolbar-context.tsx:388-391` documents that `measure()` also refires on legitimate context
+> changes — selection, zoom preset, search, isolate mode — which is the path most likely to compete
+> with canvas paint during actual use.
+
+- **Description:** `measure()` runs per resolve pass and per `ResizeObserver` tick. Establish that the
+  honest budget has not increased how often it runs.
 - **Complexity:** S
 - **Dependencies:** M1-T3
 - **Risks:** a layout-thrash regression on a surface that also paints a canvas at 2,000 activities.
   This is a **claim to measure, not to assert** — ADR-0075's risk table asserted "no request-path
   cost" and was wrong.
-- **Testing:** a browser measurement, not a unit test: time 50 consecutive `ResizeObserver`-triggered
-  passes before and after, at 1920 with a populated plan, and report both.
+- **Testing:**
+  - **C — interaction-driven cost.** On a populated plan at 1920, script five seconds of ordinary
+    interaction — ten selections in sequence, three zoom-preset changes, a search typed then cleared —
+    with `performance.mark`/`performance.measure` bracketing `measure()`'s body, read back via
+    `page.evaluate`. Report invocation count and total time inside `measure()`, before and after.
+  - **D — call-count budget**, the house convention (ADR-0026/0065; `docs/TECH_DEBT.md` #75 records
+    that CI timings are noise): a jsdom test spying on `getBoundingClientRect`/`getComputedStyle`,
+    asserting the per-pass call **shape** rather than a millisecond figure. Post-M1-T3 that shape must
+    be **unchanged from today's**, since nothing was added.
+  - the 50-resize-pass timing, kept as the coarse before/after.
 - **Development steps:**
-  1. Extend the harness with a timing pass.
-  2. Record the numbers in the PR. If the delta is material, hoist the `getComputedStyle` read behind
-     a per-container cache invalidated on resize, and re-measure.
+  1. Extend the harness with the interaction pass and the timing pass.
+  2. Record all three numbers in the PR.
 
 ---
 
@@ -305,14 +357,34 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
     **Recommended default: (a)**, because it preserves the layout and M3 removes the need entirely.
     **Try both in the browser and let the measurement choose.** Whichever ships, the residual is
     recorded as a debt row and closed by M3, not claimed closed here.
-- **Testing:** the gate asserts S1/S2/S3 at 960 and 768 (reachability and no clipping); S4 (honest
-  fit) is asserted only at 1920 and 1440 in this milestone, with M3 extending it downward.
+- **Testing:**
+
+  > **Amended after the pre-approval review — `test-engineer` and `accessibility-reviewer`
+  > independently found the same hole, and it is this milestone's own defect in miniature.**
+  > `data-toolbar-item` is present on a control **regardless of its rendered width**. So a control
+  > shrunk by remedy (a) to zero visible width satisfies **S1** (a 0-width box has 0 overhang) and
+  > **S3** (it is still in the DOM, so still "reachable" by set membership) while being **exactly as
+  > unclickable as the original defect**. Remedy (a) is the one recommended above, and an icon button
+  > at 960 has no label left to truncate — there is nothing to absorb the shrink but the button.
+  >
+  > Consequently the milestone's outcome statement ("no toolbar command is pointer-unreachable at any
+  > width, on either row") **overclaimed against its own gate** at 960/768. Either the gate proves it
+  > or the statement is narrowed; the gate is cheaper.
+  - S1/S2/S3 at 960 and 768, **plus a positive pointer-reachability assertion**: `elementFromPoint`
+    at each pinned Row-1 control's own centre returns that control or a descendant — the instrument
+    `e2e-measure-toolbar/reachability.spec.ts` already implements and which is what caught the
+    original defect. Equivalently, a rendered-width floor of **≥ 24 px** (WCAG 2.5.8's minimum).
+  - S4 (honest fit) is asserted only at 1920 and 1440 in this milestone, with M3 extending it
+    downward.
+
 - **Development steps:**
   1. Add `shrink-0` to the overflow wrapper; assert its box is fully inside the container at every
      width in the gate.
   2. Implement (a); run the harness at 960 and 768; screenshot the outcome into the PR.
-  3. If (a) still clips, implement (b) and re-run.
+  3. If (a) still clips **or drives any control below the 24 px floor**, implement (b) and re-run.
   4. Record the residual in `docs/TECH_DEBT.md` with the measured floor and container widths.
+  5. State in M1-T9's changeset that Surface Pro **portrait** is defined-but-not-fully-resolved until
+     M3, rather than implying M1 covers the device the brief added.
 
 ---
 
@@ -389,7 +461,13 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
     `print` is clipped at 960.
   - **It must pin no `VITE_` flags at all**, which is the property
     `playwright.measure-toolbar.config.ts:16-18` already identified and wrote down (ADR-0088 D1: a
-    published image carries every flag at its default). No other config in the estate has it.
+    published image carries every flag at its default). ~~No other config in the estate has it.~~
+    **Corrected by the pre-approval review and verified by running it:**
+    `playwright.calendar-shifts.config.ts` and `playwright.staff.config.ts` also pin zero `VITE_`
+    vars — for unrelated reasons (a retired flag; a server-only gate). The conclusion is unchanged
+    (neither is a candidate host for a toolbar gate), but an unverified uniqueness claim asserted in
+    a plan is exactly what ADR-0076 exists to stop. **The same correction must be made in
+    feature-spec §4.4 and in ADR-0090.**
   - **It must populate the plan**, or it repeats M0's blind spot and never sees `finish-chip`.
   - CI cost: one more `webServer` boot, in line with the other 20+ suites.
 - **Testing:** run it against `main` before the fix and record the failures; then against the fix.
@@ -406,12 +484,43 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
        against **what this build shows when it has room**, never a list typed into the file (the
        property `measure.spec.ts:20-22` established)
      - **S4** at 1920 and 1440 only: `scrollWidth ≤ clientWidth + 1`
+     - **S5 (added by the pre-approval review) — pointer reachability.** For every pinned Row-1
+       control at 960 and 768: `elementFromPoint` at its own centre returns it or a descendant, or
+       equivalently its rendered width is ≥ 24 px. **S1 and S3 alone would pass a control shrunk to
+       zero visible width** — the original defect's exact shape. Reuse
+       `reachability.spec.ts`'s implementation rather than writing a second one.
+     - **S6 (added) — stability.** Settle, snapshot, settle again, snapshot: the inline id-set and
+       labelled-set must be identical. S1–S4 are single snapshots and would pass on a
+       settled-but-wrong state, missing a slow oscillation entirely (`component-reviewer`). This is
+       the assertion form of M1-T3's oscillation tests A and B.
+     - Cover the **selection bar's** `<Toolbar>` (`selection-actions.tsx:395`) too, as a third mounted
+       instance of the same `measure()`/`computeOverflow` path.
   3. Add `test:e2e:toolbar-fit` to `apps/web/package.json`; add `e2e-toolbar-fit` to
-     `apps/web/tsconfig.json`'s `include`.
+     `apps/web/tsconfig.json`'s `include`. **Also add `e2e-measure-toolbar` to that `include` list and
+     give it a script** — it is currently in neither, so the harness typechecks and lints with
+     nothing (`component-reviewer`).
   4. Add the CI step in `.github/workflows/ci.yml` beside `test:e2e:toolbar` (`:227`).
-  5. **Verified red first**: run against pre-fix `main` and paste the failures into the PR — expected
-     at 1920 (S1, S4), 1440 (S2, S4), 960 (S1, S2), 768 (S1).
-  6. Update `apps/web/e2e-measure-toolbar/*.spec.ts` docblocks: "reports; asserts nothing; the gate is
+  5. **Widen the axe scan, as a second and independent gate.** `e2e-toolbar/toolbar.spec.ts:122`
+     scans `withTags(['wcag2a', 'wcag2aa'])`. **Verified by running axe-core 4.12.1:**
+
+     ```
+     id: target-size | enabled: false | tags: ["cat.sensory-and-visual-cues","wcag22aa","wcag258"]
+     selected by withTags([wcag2a,wcag2aa])?  false
+     selected by withTags([wcag22aa])?        true
+     ```
+
+     So the one rule that names this defect is excluded **twice over** — by tag, and by axe shipping
+     new-in-2.2 rules opt-in. "The axe scan stays green" is true and proves nothing about 2.5.8. Add
+     `wcag22a`/`wcag22aa` to the tag list and `rules: { 'target-size': { enabled: true } }`, and
+     record any pre-existing noise it surfaces rather than silencing it.
+
+  6. **Verified red first**: run against pre-fix `main` and paste the failures into the PR — expected
+     at 1920 (S1, S4), 1440 (S2, S4), 960 (S1, S2), 768 (S1). Two of the eight widths (1600, 1280)
+     were **never in M0's output**, so report actual rather than predicted results for those.
+  7. Carry `measure.spec.ts:150-153`'s settle strategy deliberately — a hardcoded
+     `waitForTimeout(400)` is a CI-flake source on a slower runner. Prefer a poll-until-stable read,
+     which S6 needs anyway.
+  8. Update `apps/web/e2e-measure-toolbar/*.spec.ts` docblocks: "reports; asserts nothing; the gate is
      `e2e-toolbar-fit`" (ADR-0081 §3).
 
 ##### Task M1-T9 — Changeset, docs, and an honest release note
@@ -441,6 +550,26 @@ both rows label themselves at 1920 with no `⋯`; zero non-operable read-outs re
 trailing edge; the **plan header** for the project finish read-out.
 **Journey:** `e2e-toolbar-fit/fit.spec.ts` extends with S5 (labelled, no `⋯` at 1920) and a
 relocation walk that presses each moved command at its new entry point.
+
+> ### Added by the pre-approval review — which existing suites this milestone invalidates, and how
+>
+> M1's oracle argument (optional zero-default parameters, so every existing suite runs untouched) is
+> correct and verified. **M2's is not, and only one of five relocation features admitted it.** Feature
+> 2.3 promises a grep-and-rename for `finish-chip` in `e2e-toolbar/toolbar.spec.ts:61` and calls it
+> "a rename of location, not of capability". Two suites need something stronger:
+>
+> - `tsld-toolbar-lenses.test.tsx:107-138` queries `Colour · Criticality` and `Baseline overlay` as
+>   **top-level toolbar buttons**;
+> - `tsld-toolbar-resource-view.test.tsx:29-49` does the same for `Resource view`.
+>
+> Feature 2.2 turns `colour-by` into a **radio group** inside `View ▾` and moves the rest into that
+> popover — **a different interaction model, not a relocated button**. These need rewrites, not
+> renames.
+>
+> **Every relocation feature (2.1, 2.2, 2.4, 2.5) must name its affected suites and say, per suite,
+> whether the change is a rename or a rewrite — before M2 starts.** Otherwise "the existing suites are
+> the before/after oracle" quietly stops being true for the milestone that most needs one, which is
+> the ADR-0084 D5 failure (coverage moves with a **named** destination, never quietly).
 
 ---
 
@@ -537,6 +666,27 @@ relocation walk that presses each moved command at its new entry point.
 
 ##### Task M2-T5 — Add `Plan ▾` (baselines · schedule settings · earned value · resource histogram)
 
+> **Rewritten after the pre-approval review.** This task shipped as a heading with **no development
+> steps**, unlike every sibling in M2 — and `ux-reviewer` found that the missing steps are exactly
+> the contested ones.
+
+- **Blocking decision 1 — the trigger's name collides with its own container.** `Toolbar.tsx:96-97`
+  records that `lens` was named "Display" rather than "View" **specifically** so a group named "View"
+  would not contain a "View ▾" trigger. `DEFAULT_GROUP_LABELS.object` is **"Plan actions"**
+  (`:102`), and every candidate member of `Plan ▾` is `group: 'object'` — so `Plan ▾` lands inside a
+  region literally named "Plan actions". M2-T6 step 2 overrides only **Row 1's** `object` label;
+  Row 2 is where this sits. **This is the fix for one ux finding recreating that finding one level
+  down.** Override Row 2's label too, and extend M2-T6's test from group-vs-group to
+  **trigger-name-vs-containing-group-name**.
+- **Blocking decision 2 — `Plan ▾` and `Summary ▾` do not differentiate.** `Summary ▾` is already
+  described as the hub that absorbed Plan details and Edit plan (`tsld-toolbar-items.tsx:2443-2445`).
+  Two triggers, one literally "Plan", on a surface about one plan, is the leftovers problem relocated
+  rather than resolved. **Either fold `Plan ▾`'s contents into `Summary ▾`, or rename one so the two
+  names say what each opens.** Decide before building, not at the M5 gate.
+- **ADR-0082 check.** None of the four candidate members is `penGated` and none gates on role, so an
+  all-shaded `Plan ▾` is probably unreachable — **but "probably" is the class of claim this epic
+  exists to distrust.** Add the explicit test (see M2-T7).
+
 #### Feature 2.6: The information architecture repairs
 
 > **Complexity:** M · **Dependencies:** M2-T1…T5 · **Entry point:** the two rows themselves and the
@@ -554,17 +704,46 @@ relocation walk that presses each moved command at its new entry point.
      (`plan-workspace-toolbar.tsx:80-87`, `:757-762`, `:773-777`). **One edit fixes three things**:
      73 px per row, the "Navigate" caption/`aria-label` collision (`:760` vs `Toolbar.tsx:98`), and
      the ux finding that neither caption describes its row.
-  2. Pass a per-row `groupLabels` override so Row 1's `object` group is not also "Plan actions" — the
-     prop already exists (`Toolbar.tsx:85`, applied at `:313`).
-  3. Group `ToolbarOverflow`'s items into `MenuSection`s with separators
-     (`ToolbarOverflow.tsx:74-110`), matching Add/Link/Export in the same feature.
+  2. Pass a per-row `groupLabels` override so **neither row's** `object` group is also "Plan actions"
+     — the prop already exists (`Toolbar.tsx:85`, applied at `:313`). **Row 2 matters as much as
+     Row 1**, because that is where `Plan ▾` and `Share & export ▾` sit (see M2-T5).
+  3. **Extract `MenuSection` and a real separator into `components/ui/menu.tsx` first, then** section
+     `ToolbarOverflow`'s items (`ToolbarOverflow.tsx:74-110`).
 
-##### Task M2-T7 — Assert the pen cluster cannot scatter
+     > **Blocking, from the pre-approval review, and verified independently.** This step previously
+     > said to section the `⋯` "matching Add/Link/Export in the same feature". **`MenuSection` is not
+     > a shared primitive**: it is a private, non-exported function at
+     > `tsld-toolbar-items.tsx:270` — a bare `<p>` with **no ARIA role** — and `menu.tsx` exports only
+     > `useMenuTrigger`, `Menu` and `MenuItem`. The separators are hand-written inline per call site
+     > (`:388`). As written this task points a **`components/ui/` primitive** at a **`features/tsld/`**
+     > component: the implementer would either import across that boundary (a dependency-direction
+     > violation) or grow a private copy inside the primitive — one-off styling by another name.
+     >
+     > Extract it once, give it a real role, and have both the Add/Link/Export menus and
+     > `ToolbarOverflow` consume it.
+
+  4. **Thread `groupLabels` down to `ToolbarOverflow`.** It never receives them today —
+     `Toolbar.tsx:313` computes `labels` and `:387-393` does not pass them — so the section headings
+     step 3 adds have no names to use.
+
+##### Task M2-T7 — Assert the pen cluster cannot scatter, **and that no trigger opens nothing**
 
 - **Description:** a registry test over `buildTsldToolbarItems()` asserting every `penGated: true`
   item is in `tools`/`do`. Nine today: `add-activity`, `link-tool`, `auto-arrange`, `add-note`,
   `snap-to-grid`, `clear-visual-placement`, `recalculate`, `undo`, `redo`.
-- **Complexity:** S · **Dependencies:** none · **Risks:** none · **Testing:** it is the test.
+- **Added by the pre-approval review — found independently by `ux-reviewer` and
+  `accessibility-reviewer`.** One test per new menu trigger applying ADR-0082's rule: **a menu whose
+  every item would be shaded renders no trigger.** The plan cites that rule to reject Option D and
+  does not apply it to its own new controls.
+
+  **`Share & export ▾` is not hypothetical.** `export` and `print` are
+  `isEnabled: (ctx) => ctx.hasDiagram` (`tsld-toolbar-items.tsx:2492-2494`); `share` is
+  `isEnabled: (ctx) => ctx.canShare`, and `plan:share` is Planner/Org-Admin only (ADR-0051). So for
+  **any Viewer or Contributor on a freshly created plan** — the state of every new plan, not an edge
+  case — all three shade simultaneously. Decide and test what the caret does: render no trigger, or
+  render with a reason. Do the same for `View ▾` and `Plan ▾`.
+
+- **Complexity:** S · **Dependencies:** M2-T4, M2-T5 · **Testing:** it is the test.
 
 ##### Task M2-T8 — Extend the fit gate with S5 and the relocation walk
 
@@ -634,9 +813,30 @@ collision. `scrollWidth ≤ clientWidth + 1` extends to 960 and 768.
 
 ##### Task M3-T4 — Coarse-pointer padding, the split-button caret, and the debt row
 
-- **Note:** the split caret is `toolbarControlVariants(...) + 'rounded-l-none px-1'` around a
-  `size-3.5` chevron (`tsld-toolbar-items.tsx:1157`,`:1159`) ⇒ **24 × 36**, exactly on the WCAG 2.5.8
-  limit. It is re-examined here, not shrunk.
+- ~~**Note:** the split caret is `toolbarControlVariants(...) + 'rounded-l-none px-1'` around a
+  `size-3.5` chevron ⇒ **24 × 36**, exactly on the WCAG 2.5.8 limit. It is re-examined here, not
+  shrunk.~~
+
+  > **Blocking for M3, from the pre-approval review — the "24 × 36" figure is disputed, and it was
+  > the whole reason this task leaves the control alone.**
+  >
+  > `IsolateControl`'s caret (`tsld-toolbar-items.tsx:1145-1160`) merges `'rounded-l-none px-1'` over
+  > `toolbarControlVariants`. **tailwind-merge resolves same-axis conflicts by replacement**, so
+  > `px-1` removes `px-2` entirely rather than adding to it, and the base carries **no `border`
+  > utility at all**. That gives `size-3.5` (14 px) + 4 + 4 = **≈22 px** — _under_ the 24 px minimum,
+  > not on it. Note this is a **different** implementation from the Add/Link carets, which use the
+  > shared `toolbarSplitCaretVariants` (`toolbar-styles.ts:37-39`); that file's own docblock already
+  > records the duplication as `docs/TECH_DEBT.md` #76.
+  >
+  > `accessibility-reviewer` flags that this is **arithmetic against arithmetic, not a measurement**,
+  > and could itself be wrong. That is precisely the point: the original claim was stated **without**
+  > the "derived, not observed" hedge this document applies to every other pixel figure, and a
+  > milestone decision rests on it.
+  >
+  > **Capture this control's real rendered box in M2-T0 before M3 decides.** If it is failing today,
+  > that is a pre-existing, independent 2.5.8 defect to fix in this pass or carry as its own debt
+  > row — not to leave unaddressed behind a wrong "already compliant" number. The same applies to any
+  > other control using the ad hoc `rounded-l-none px-1` pattern rather than the shared variant.
 
 ---
 
@@ -658,7 +858,19 @@ the chrome band above Row 1.
 > **Risks:** the toolbar reaches the band through a portal and the shell is deliberately plan-unaware
 > (ADR-0029/ADR-0055 S2) → the header must not make the shell plan-aware; it portals the same way.
 > Focus order and the `<h1 class="sr-only">` (`plan-workspace-toolbar.tsx:716`) must survive.
-> **Testing:** axe; a DOM-order assertion; the height measurement below.
+>
+> **Added by the pre-approval review — this exact file has already shipped this exact bug twice.**
+> `plan-workspace-toolbar.tsx:164-169` and `:330-338` both carry comments explaining that a
+> `rootRef`-scoped `querySelector` **silently found nothing and stranded focus**, because
+> `ChromePortal` moves the toolbar's DOM node into the chrome band while keeping it in the React
+> tree; both were fixed by searching from `document` instead. Folding the plan header into that same
+> portal-backed band is the same architectural shape, and the header carries focus-bearing controls
+> (the Edit-plan button at `:722-733`, `CompactPenStatus`). **Any new focus-return code this milestone
+> introduces must be `document`-scoped like its two neighbours** — as a task requirement, not
+> something the M5 gate pass discovers as a third instance.
+>
+> **Testing:** axe; a DOM-order assertion; the height measurement below; and a keyboard pass proving
+> focus returns to a real element after every control the merge relocates.
 
 ##### Task M4-T1 — Measure the vertical stack **first**
 
@@ -748,6 +960,19 @@ unswitchable on any deployed container. What ships is the removal of a second pr
   touched.** ADR-0089 did exactly this and it worked.
 - **Testing:** each converted suite run locally via `scripts/e2e-local.sh web:<suite>`, not delegated
   to CI.
+- **Decompose into seven subtasks before execution** — added by the pre-approval review. This task is
+  Complexity **L**, is described as the largest conversion cost in the estate, and is a **file list
+  with no per-suite steps**, unlike every other Feature in this plan. That is the shape ADR-0084
+  batch 1 failed in.
+
+  **Two of the seven are not the same kind of conversion as the rest, and the plan did not notice.**
+  `playwright.programme.config.ts:59-63` and `playwright.notes.config.ts:58-61` pin
+  `VITE_CANVAS_WORKSPACE: 'false'` **together with `VITE_TSLD_EDITING: 'false'` and
+  `VITE_PLAN_EDIT_LOCK: 'false'`, specifically to stay pen-free** — their docblocks say so ("canvas +
+  pen off, so the journey is pen-free"; "notes are not pen-gated anyway"). That is a deliberate
+  simplification, not an incidental rollback pin. For the base and edit suites, conversion changes
+  selectors; **for these two it is not established that the journey works pen-free against the
+  surviving workspace at all.** Establish that first, per suite, before the flag is touched.
 
 ##### Task M6-T2 — Delete `LegacyPlanLayout` and retire the flag
 
