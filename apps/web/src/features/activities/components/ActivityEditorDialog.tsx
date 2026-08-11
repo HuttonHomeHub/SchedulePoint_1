@@ -35,6 +35,7 @@ import {
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
+import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
@@ -273,11 +274,6 @@ export function ActivityEditorDialog({
   const parentOptions = planActivities.filter(
     (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
   );
-  // A stored parent the list cannot resolve — soft-deleted, outside the loaded page, or still in
-  // flight. Watched rather than read from `activity`, because clearing the picker must remove the
-  // honest option rather than leave it selected.
-  const parentId = useWatch({ control: general.form.control, name: 'parentId' });
-  const missingParent = Boolean(parentId) && !parentOptions.some((p) => p.id === parentId);
 
   /**
    * The scopes with unsaved edits, named for the discard confirmation. Progress's three panels own
@@ -519,48 +515,12 @@ export function ActivityEditorDialog({
                       but unresolvable parent is most likely — so the one activity that disproves
                       the sentence was the one it was shown to. */}
                     {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-                      <FormSection title="Breakdown">
-                        <SelectField
-                          // "Parent WBS summary", not "WBS summary": the Type selector on this
-                          // same form offers an OPTION labelled exactly "WBS summary", so the
-                          // shorter label reads as if it sets the type. The editor disambiguated
-                          // this and create never did — the one row in D2 where create loses.
-                          label="Parent WBS summary"
-                          disabled={planActivitiesLoading}
-                          aria-busy={planActivitiesLoading}
-                          errorRole="alert"
-                          error={
-                            planActivitiesError
-                              ? 'Couldn’t load the plan’s activities, so no WBS summaries are available to choose.'
-                              : undefined
-                          }
-                          hint={
-                            'Groups this activity under a WBS summary, whose dates roll up from its members.' +
-                            (!planActivitiesLoading &&
-                            !planActivitiesError &&
-                            parentOptions.length === 0 &&
-                            !missingParent
-                              ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
-                              : '')
-                          }
-                          {...general.form.register('parentId')}
-                        >
-                          <option value="">None (top-level)</option>
-                          {/* A seeded parent not in the list stays selected under an honest label
-                            so the form never silently un-nests the activity (never blank, which
-                            reads as "top-level"). */}
-                          {missingParent ? (
-                            <option value={parentId}>
-                              {planActivitiesLoading ? 'Loading…' : 'Unavailable'}
-                            </option>
-                          ) : null}
-                          {parentOptions.map((summary) => (
-                            <option key={summary.id} value={summary.id}>
-                              {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
-                            </option>
-                          ))}
-                        </SelectField>
-                      </FormSection>
+                      <ActivityBreakdownField
+                        form={general.form}
+                        parentOptions={parentOptions}
+                        loading={planActivitiesLoading}
+                        errored={planActivitiesError}
+                      />
                     ) : null}
                     <ScopeSaveBar
                       gate={gating.general}

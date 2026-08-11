@@ -38,6 +38,7 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
+import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
@@ -303,7 +304,6 @@ export function ActivityFormDialog({
   // `useWatch`, never `form.watch`: on a four-form host `watch` subscribes the WHOLE component to
   // one form's every keystroke, so typing a name would re-render the Constraints section.
   const type = useWatch({ control: general.form.control, name: 'type' });
-  const parentId = useWatch({ control: general.form.control, name: 'parentId' });
   const constraintType = useWatch({ control: scheduling.form.control, name: 'constraintType' });
   const secondaryConstraintType = useWatch({
     control: scheduling.form.control,
@@ -314,10 +314,6 @@ export function ActivityFormDialog({
     control: measure.form.control,
     name: 'percentCompleteType',
   });
-  // A seeded parent that isn't in the fetched summary list (still loading, or the parent was itself
-  // deleted/changed): keep it visible as an honest one-off option so opening the form never silently
-  // un-nests the activity — the same honest-selector pattern as the calendar picker.
-  const missingParent = Boolean(parentId) && !parentOptions.some((p) => p.id === parentId);
   // A seeded non-inherit value that doesn't match any option (the list is still loading, or failed
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
@@ -536,46 +532,12 @@ export function ActivityFormDialog({
             guidance is a distinct, appended clause shown only once the list has resolved empty —
             not conflated with loading or a load failure. */}
             {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-              <FormSection title="Breakdown">
-                <SelectField
-                  // "Parent WBS summary", not "WBS summary": the Type selector on this same form
-                  // offers an OPTION labelled exactly "WBS summary", so the shorter label reads as
-                  // if it sets the type. Adopted from the editor, which disambiguated it first.
-                  label="Parent WBS summary"
-                  disabled={planActivitiesLoading}
-                  aria-busy={planActivitiesLoading}
-                  errorRole="alert"
-                  error={
-                    planActivitiesError
-                      ? 'Couldn’t load the plan’s activities, so no WBS summaries are available to choose.'
-                      : undefined
-                  }
-                  hint={
-                    'Groups this activity under a WBS summary, whose dates roll up from its members.' +
-                    (!planActivitiesLoading &&
-                    !planActivitiesError &&
-                    parentOptions.length === 0 &&
-                    !missingParent
-                      ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
-                      : '')
-                  }
-                  {...general.form.register('parentId')}
-                >
-                  <option value="">None (top-level)</option>
-                  {/* A seeded parent not in the list stays selected under an honest label so the form
-                  never silently un-nests the activity (never blank, which reads as "top-level"). */}
-                  {missingParent ? (
-                    <option value={parentId}>
-                      {planActivitiesLoading ? 'Loading…' : 'Unavailable'}
-                    </option>
-                  ) : null}
-                  {parentOptions.map((summary) => (
-                    <option key={summary.id} value={summary.id}>
-                      {summary.code ? `${summary.code} · ${summary.name}` : summary.name}
-                    </option>
-                  ))}
-                </SelectField>
-              </FormSection>
+              <ActivityBreakdownField
+                form={general.form}
+                parentOptions={parentOptions}
+                loading={planActivitiesLoading}
+                errored={planActivitiesError}
+              />
             ) : null}
 
             {ACTIVITY_CALENDAR_ENABLED ? (
