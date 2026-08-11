@@ -261,4 +261,55 @@ describe('computeOverflow', () => {
     expect(inline).toEqual([]);
     expect(overflow).toEqual(['t1a', 't1b', 't2a', 't2b']);
   });
+
+  describe('the row’s own chrome (M1-T2)', () => {
+    /**
+     * `computeOverflow` was handed only ITEM widths, so it answered "do these boxes sum to less
+     * than this number" while the caller needed "does this row fit as laid out". The row also
+     * carries a `gap-1` between every child and an `ml-1 border-l pl-2` rule before every group
+     * after the first, and `Toolbar.measure()` passed none of it (`Toolbar.tsx:172-181`).
+     *
+     * Measured consequence, from `docs/specs/workspace-layout/m0-measurement.md`: at 1920 Row 1
+     * reported `scrollWidth` 1941 against a `clientWidth` of 1832 while this function said it fit,
+     * so the `⋯` never rendered and two controls were painted outside an `overflow-hidden` box.
+     */
+
+    it('demotes when the chrome pushes a row over, where item widths alone would fit', () => {
+      // 400 of items against 420 available fits on widths alone; 40 of chrome does not.
+      expect(computeOverflow(bar, widths, 420, 40).overflow).toEqual([]);
+      expect(computeOverflow(bar, widths, 420, 40, 40).overflow).not.toEqual([]);
+    });
+
+    it('reclaims the gap that leaves with a demoted item, not just its width', () => {
+      // Four 100 px items, ⋯ 40 ⇒ the loop starts at 440. Ignoring the gap it steps 340 → 240 → 140;
+      // crediting a 10 px gap per demotion it steps 330 → 220. At an available width of 235 that is
+      // the difference between three demotions and two, i.e. between one item inline and two.
+      // Chosen deliberately: at 250 both credit schemes demote twice and the test proves nothing,
+      // which is what the first draft of this case did.
+      const withGap = computeOverflow(bar, widths, 235, 40, 0, 10);
+      const withoutGap = computeOverflow(bar, widths, 235, 40, 0, 0);
+      expect(withoutGap.inline).toEqual(['t1a']);
+      expect(withGap.inline).toEqual(['t1a', 't1b']);
+    });
+
+    it('is byte-identical to the old behaviour when the chrome is absent', () => {
+      // The zero default is what lets every existing call site and suite stay untouched.
+      expect(computeOverflow(bar, widths, 260, 40, 0, 0)).toEqual(
+        computeOverflow(bar, widths, 260, 40),
+      );
+      expect(computeOverflow(bar, widths, 150, 40, 0, 0)).toEqual(
+        computeOverflow(bar, widths, 150, 40),
+      );
+    });
+
+    it('reproduces the measured 1920 Row-1 case: fits on items, does not fit as laid out', () => {
+      // Row 1 at 1920: container 1832, item widths 1782, chrome 128 + a 31 px residual the
+      // group-level walk does not attribute (m0-measurement.md, M1-T1 addendum). 1782 < 1832, so
+      // the old signature said "everything fits" — which is exactly what shipped.
+      const one = [bar[0]!];
+      const w = new Map([[one[0]!.item.id, 1782]]);
+      expect(computeOverflow(one, w, 1832, 32).overflow).toEqual([]);
+      expect(computeOverflow(one, w, 1832, 32, 159).overflow).toEqual([one[0]!.item.id]);
+    });
+  });
 });

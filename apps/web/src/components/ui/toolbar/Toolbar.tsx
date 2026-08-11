@@ -36,6 +36,57 @@ const LABEL_CHROME_PX = 14;
 const LABEL_PROMOTION_MARGIN_PX = 32;
 
 /**
+ * The row's own chrome, **derived from the registry — never read from the DOM**.
+ *
+ * `computeOverflow` was handed only item widths, so it answered "do these boxes sum to less than
+ * this number" while the row needed "does this fit as laid out". Measured at 1920, Row 1's items
+ * summed to 1782 against an 1832 px container while the row laid out at 1941: the function said it
+ * fitted, no `⋯` rendered, and two controls were painted outside this `overflow-hidden` box at zero
+ * visible width (`docs/specs/workspace-layout/m0-measurement.md`).
+ *
+ * **Why derived and not measured.** The obvious implementation puts a ref on each `role="group"`
+ * wrapper and reads its box. Those wrappers are rendered from `groups` → `inlineBar` → *the very
+ * `overflowedIds` this calculation is about to set*, so a measured chrome is downstream of the
+ * previous decision: when a group's last inline member demotes the wrapper unmounts, its rule leaves
+ * the DOM, the next pass sees more budget and can promote the item back, which recreates the rule.
+ * The group that happens to is `help` — `legend` and `shortcuts` — i.e. exactly the two controls
+ * this repair exists to make clickable. Deriving from static group membership removes the
+ * entanglement rather than damping it, and costs no layout reads at all. Same argument as
+ * {@link measureLabelWidth}'s, one level down.
+ *
+ * **Erring high is the safe direction here**, and it is the opposite of {@link LABEL_CHROME_PX}'s:
+ * over-estimating demotes a command that would just have fitted, which costs a click;
+ * under-estimating paints it outside the box, which costs the command.
+ */
+const ITEM_GAP_PX = 4; // `gap-1` — between the container's children, and within each group
+const GROUP_RULE_PX = 13; // `ml-1` (4) + `border-l` (1) + `pl-2` (8), on every group after the first
+
+/**
+ * What no group-level accounting can attribute: per-item margins (the search field's `ml-3`), the
+ * overflow wrapper's own `border-l pl-1`, and sub-pixel box rounding.
+ *
+ * **Measured, not guessed** (M1-T1, `m0-measurement.md`): after naming every gap and group rule, the
+ * unattributed remainder is a *constant* 26–31 px on Row 1 at all eight widths and 50–55 px on Row 2.
+ * This takes the worst measured case and rounds up — deliberately generous, for the reason above.
+ */
+const CHROME_RESIDUAL_PX = 56;
+
+/**
+ * Derive the fixed chrome a row carries, from the resolved bar alone. Independent of
+ * `overflowedIds` by construction — which is the property that matters (see above), and the reason
+ * this takes `bar` rather than `inlineBar`.
+ */
+function deriveChromeWidth<Ctx>(bar: ResolvedToolbarItem<Ctx>[]): number {
+  if (bar.length === 0) return 0;
+  const groupCount = new Set(bar.map((r) => r.item.group)).size;
+  const rules = Math.max(0, groupCount - 1) * GROUP_RULE_PX;
+  // One gap between each pair of adjacent children, whether the boundary is inside a group or
+  // between two groups — which totals `items − 1` either way.
+  const gaps = Math.max(0, bar.length - 1) * ITEM_GAP_PX;
+  return rules + gaps + CHROME_RESIDUAL_PX;
+}
+
+/**
  * Measure a label's rendered width **without touching layout**, memoised per `font` + text.
  *
  * The obvious implementation — render the labels, measure the row, retract if it didn't fit — is a
@@ -159,6 +210,11 @@ export function Toolbar<Ctx>({
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
     const available = container.clientWidth;
+    // A row with no width has not been laid out — it is inside a `hidden` pane, or in an environment
+    // with no layout engine at all. Deciding anything from that is deciding from nothing, and now
+    // that the budget carries a non-zero chrome term it would decide to demote **everything**: the
+    // old arithmetic happened to survive it only because 0 ≤ 0. Hold the previous state instead.
+    if (available <= 0) return;
     // Read the live width when the item is inline (caching it), else fall back to its last-known width
     // so overflowed items don't collapse to 0 and cause an overflow flip-flop (see widthCacheRef).
     const widthOf = (id: string): number => {
@@ -175,11 +231,24 @@ export function Toolbar<Ctx>({
     const widths = new Map(demotable.map((r) => [r.item.id, widthOf(r.item.id)]));
     const overflowWidth =
       itemRefs.current.get(OVERFLOW_ID)?.getBoundingClientRect().width ?? OVERFLOW_WIDTH_FALLBACK;
+    // Derived from the WHOLE bar, not the inline set — see `deriveChromeWidth`. Charged to the
+    // demotable budget, because the pinned items cannot pay it.
+    //
+    // **Only once something has actually measured.** A row whose every item reports zero width has
+    // not been laid out — no layout engine, or not yet painted — and charging it a chrome it cannot
+    // yet be carrying would demote every command on the strength of nothing. This also keeps the
+    // ~25 existing suites a genuine before/after oracle: under jsdom every box is zero, so the
+    // budget stays byte-identical to the pre-M1 arithmetic and those tests keep testing what they
+    // were written to test.
+    const anythingMeasured = bar.some((r) => widthOf(r.item.id) > 0);
+    const chromeWidth = anythingMeasured ? deriveChromeWidth(bar) : 0;
     const { overflow } = computeOverflow(
       demotable,
       widths,
       Math.max(0, available - pinnedWidth),
       overflowWidth,
+      chromeWidth,
+      ITEM_GAP_PX,
     );
     const next = new Set(overflow);
     setOverflowedIds((prev) => (sameSet(prev, next) ? prev : next));
@@ -207,7 +276,11 @@ export function Toolbar<Ctx>({
       }
       labelCost += autoLabelsFit ? 0 : text + LABEL_CHROME_PX;
     }
-    const projected = inlineTotal + labelCost + (overflow.length > 0 ? overflowWidth : 0);
+    // Costed against the same honest total the overflow decision uses. Without `chromeWidth` here
+    // the two halves of one pass disagree about how wide the row is — which is how a row could
+    // promote labels it had already been told it could not afford, then overflow its container.
+    const projected =
+      inlineTotal + chromeWidth + labelCost + (overflow.length > 0 ? overflowWidth : 0);
     setAutoLabelsFit(projected + LABEL_PROMOTION_MARGIN_PX <= available);
   }, [bar, demotable, autoLabelsFit]);
 

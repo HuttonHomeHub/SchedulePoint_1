@@ -283,11 +283,30 @@ export interface MeasuredItem {
 }
 
 /**
- * Given the bar items' measured widths, the available width, and the overflow `⋯` button's width,
- * decide which bar items stay inline and which demote into overflow. **Deterministic**: demotion
- * runs from the lowest-priority end — highest tier first (tier-2 before tier-1), then highest
- * `order` — so the demotion order never depends on measurement noise, only on the registry. The
- * overflow button's width is always reserved whenever anything overflows, so `⋯` stays reachable.
+ * Given the bar items' measured widths, the available width, the overflow `⋯` button's width and
+ * **the chrome the row itself carries**, decide which bar items stay inline and which demote into
+ * overflow. **Deterministic**: demotion runs from the lowest-priority end — highest tier first
+ * (tier-2 before tier-1), then highest `order` — so the demotion order never depends on measurement
+ * noise, only on the registry. The overflow button's width is always reserved whenever anything
+ * overflows, so `⋯` stays reachable.
+ *
+ * **The question this answers is "does this row fit _as laid out_", not "do these boxes sum to less
+ * than this number".** Those are different, and the difference shipped: this function was handed
+ * only item widths, so it saw none of the `gap-1` between the container's children, none of each
+ * group's `ml-1 border-l pl-2` rule, and none of each group's internal `gap-1`. Measured at 1920
+ * (`docs/specs/workspace-layout/m0-measurement.md`), Row 1's items summed to 1782 against a 1832 px
+ * container — a comfortable fit by that arithmetic — while the row actually laid out at 1941. The
+ * function said everything fitted, no `⋯` rendered, and `legend` and `shortcuts` were painted
+ * outside an `overflow-hidden` box at zero visible width: **a WCAG 2.2 §2.5.8 failure produced by a
+ * missing addend.**
+ *
+ * `chromeWidth` and `gapWidth` are **derived by the caller from the registry's static group
+ * membership, never measured from the DOM** — see `Toolbar.measure()`. Measuring them would make
+ * this decision a function of the previous decision's output (the group wrappers are rendered from
+ * the non-overflowed set), which oscillates.
+ *
+ * Both default to `0`, which reproduces the pre-M1 behaviour exactly — that is what lets every
+ * existing call site and unit case stay untouched as the before/after oracle (ADR-0078).
  *
  * Kept pure (widths in, ids out) so it is unit-testable without a DOM — the component supplies the
  * real measurements from a single `ResizeObserver`.
@@ -297,13 +316,17 @@ export function computeOverflow<Ctx>(
   measured: Map<string, number>,
   availableWidth: number,
   overflowButtonWidth: number,
+  /** Fixed chrome the row carries irrespective of which items are inline (group rules, residual). */
+  chromeWidth = 0,
+  /** The gap between two adjacent inline children, reclaimed with each demotion. */
+  gapWidth = 0,
 ): { inline: string[]; overflow: string[] } {
   const ids = bar.map((r) => r.item.id);
   const widthOf = (id: string): number => measured.get(id) ?? 0;
   const totalWidth = ids.reduce((sum, id) => sum + widthOf(id), 0);
 
   // Everything fits (no overflow button needed) → all inline.
-  if (totalWidth <= availableWidth) return { inline: ids, overflow: [] };
+  if (totalWidth + chromeWidth <= availableWidth) return { inline: ids, overflow: [] };
 
   // Demotion priority: highest tier number first, then highest order, then latest registry position.
   const byIndex = new Map(bar.map((r, i) => [r.item.id, i]));
@@ -318,12 +341,15 @@ export function computeOverflow<Ctx>(
     .map((r) => r.item.id);
 
   const overflowed = new Set<string>();
-  // Once anything overflows, the ⋯ button occupies width too — reserve it up front.
-  let inlineWidth = totalWidth + overflowButtonWidth;
+  // Once anything overflows, the ⋯ button occupies width too — reserve it up front, along with the
+  // chrome the row carries whatever is inline.
+  let inlineWidth = totalWidth + chromeWidth + overflowButtonWidth;
   for (const id of demotionQueue) {
     if (inlineWidth <= availableWidth) break;
     overflowed.add(id);
-    inlineWidth -= widthOf(id);
+    // A demoted item takes its gap with it — crediting only the item's own width is what left the
+    // budget short by one gap per demotion.
+    inlineWidth -= widthOf(id) + gapWidth;
   }
 
   return {
