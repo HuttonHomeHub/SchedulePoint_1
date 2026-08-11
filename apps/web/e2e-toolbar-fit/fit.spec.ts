@@ -195,11 +195,12 @@ async function openPlan(page: Page, stamp: number): Promise<void> {
     await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
     await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
   }
-  await expect(
-    page
-      .getByRole('toolbar', { name: 'View and navigate' })
-      .locator('[data-toolbar-item="finish-chip"]'),
-  ).toHaveCount(1, { timeout: 30_000 });
+  // Wait for the schedule to compute before measuring, or the row is narrower than the one a
+  // planner sees. The signal is the plan header's Project-finish read-out, which renders nothing
+  // until `projectFinish` is non-null — it was the Row-1 `finish-chip` until ADR-0090 M2-T3 moved
+  // it off the toolbar. A readiness gate has to be something that appears when the work is done,
+  // and this fixture's whole point is that the toolbar's own contents are what changes.
+  await expect(page.getByText('Finish', { exact: true })).toBeVisible({ timeout: 30_000 });
 }
 
 test('every toolbar command is reachable at every targeted width', async ({ page }) => {
