@@ -333,7 +333,7 @@ describe('computeOverflow', () => {
         label: id,
         onActivate: () => {},
         ...extra,
-      } as ToolbarItem<Ctx>,
+      },
       enabled: true,
       active: false,
       disabledReason: undefined,

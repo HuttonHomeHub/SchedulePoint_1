@@ -392,7 +392,24 @@ export function Toolbar<Ctx>({
       aria-label={label}
       aria-orientation="horizontal"
       onKeyDown={onKeyDown}
-      className={cn('flex min-w-0 items-center gap-1 overflow-hidden', className)}
+      /*
+       * `overflow-x-auto` is the sub-floor remedy (M1-T5, remedy (b)), chosen after remedy (a) was
+       * measured and failed.
+       *
+       * Below the row's pinned floor there is nothing left to demote: Row 1's `render` items measure
+       * ~1177 px against an 872 px container at Surface Pro portrait, and a `render` item can never
+       * demote (`Toolbar.tsx` "you don't stuff a popover into a menu"). So the width has to go
+       * somewhere, and there are only two honest answers — hide part of the row, or let the reader
+       * reach it. `overflow-hidden` chose the first and that is precisely the defect this milestone
+       * exists to remove: at 1024 it clipped `isolate-logic` to 0 px visible with no `⋯` route,
+       * which is the shipped bug in a tidier costume.
+       *
+       * The accepted cost is a scroll affordance on the two narrowest widths in the target list.
+       * `overflow-y-hidden` keeps it to one axis so the row can never grow a vertical scrollbar and
+       * eat canvas height. M3's responsive ladder should make this unreachable in practice; until
+       * then, reachable-by-scrolling beats hidden.
+       */
+      className={cn('flex min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden', className)}
     >
       {groups.map(({ group, items: groupItems }, i) => (
         <div
@@ -400,23 +417,18 @@ export function Toolbar<Ctx>({
           role="group"
           aria-label={labels[group]}
           className={cn(
-            // `min-w-0 overflow-hidden` is the sub-floor remedy (M1-T5). Below the row's pinned
-            // floor — Row 1's `render` items measure 1177 px against an 872 px container at Surface
-            // Pro portrait, and a `render` item can never demote — correct arithmetic has nothing
-            // left to give. Without `min-w-0` a group refuses to shrink below its content and the
-            // surplus is paid by whatever is furthest right falling out of the row's
-            // `overflow-hidden` box; with it, the row truncates inside its own bounds instead.
+            // Groups keep their natural width and are never clipped: the sub-floor remedy is the
+            // row's `overflow-x-auto` (see the container below), not shrinking the groups.
             //
-            // **`overflow-hidden` is not decoration and must not be dropped.** `min-w-0` shrinks the
-            // group's BOX; its buttons are `whitespace-nowrap` and keep their width, so without a
-            // clip they spill out of the group and paint over whatever follows — which at Row 1's
-            // trailing edge is the `⋯` itself. Measured: Playwright reported the overflow button
-            // "visible, enabled and stable" and then could not click it, because a chevron from the
-            // Plan-actions group intercepted the pointer at its centre. A control can be perfectly
-            // positioned and still unreachable, which is this milestone's whole subject.
-            //
-            // Decided in a browser, not reasoned: see `docs/specs/workspace-layout/m0-measurement.md`.
-            'flex min-w-0 items-center gap-1 overflow-hidden',
+            // **Two earlier attempts are recorded because each looked right and was measured wrong.**
+            // `min-w-0` alone let a group's box shrink while its `whitespace-nowrap` buttons kept
+            // theirs, so the content spilled over the `⋯` — Playwright called that button "visible,
+            // enabled and stable" and then could not click it. Adding `overflow-hidden` fixed the
+            // overlap and traded it for something worse: at 1024 `isolate-logic` was clipped to
+            // **0 px visible**, and a `render` item can never demote, so there was no route to it at
+            // all. Hiding a command inside a tidy row is the same defect as pushing it out of an
+            // untidy one.
+            'flex items-center gap-1',
             i > 0 && 'border-border ml-1 border-l pl-2', // a hairline separates groups
             // Right-align this group (and everything after it) — the trailing status read-outs on Row 1.
             group === alignEndGroup && 'ml-auto',

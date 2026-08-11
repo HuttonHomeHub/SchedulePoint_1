@@ -18,6 +18,7 @@
     "e2e",
     "e2e-edit",
     "e2e-toolbar",
+    "e2e-toolbar-fit",
     "measure-toolbar",
     "e2e-authoring",
     "e2e-authoring-flow",

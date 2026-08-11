@@ -2177,3 +2177,32 @@ those would be a real defect in the suite's isolation, and calling it flake is h
 independently. But a gate that fails one run in three and is green on the retry is a gate people
 learn to re-run rather than read, which is the failure mode `docs/RECONCILE.md` describes for
 documentation and applies just as well here.
+
+---
+
+## 124. The selection bar's `<Toolbar>` has no fit coverage, and its failure mode is a different one
+
+**Status:** open. Opened by ADR-0090 M1.
+
+`apps/web/e2e-toolbar-fit/` gates the two persistent command rows: at every targeted width, every
+control is a ≥ 24 px target that a pointer can actually land on. `selection-actions.tsx:395` mounts a
+**third** `<Toolbar>` on the identical `measure()` / `computeOverflow` path, so M1's repair reaches it
+by construction — there is one primitive and this consumer instantiates it, which is why this is a
+coverage gap rather than a correctness one.
+
+**But the gate's assertions would be meaningless about it.** The floating bar shrink-wraps to its
+content and is clamped to the **viewport** (`:358-361`), not to a container it can overflow. It
+cannot fail S1/S2/S4 because there is nothing for it to overflow; what it _can_ do is run off a
+viewport edge, which none of those assertions describe. Post-M2 it may carry 8–9
+`showLabel: 'always'` items with entry-route + WBS + copy-paste flags on, so the question is real.
+
+**A test for it was written during M1 and removed.** It located the bar by a guessed accessible name
+(`/selection|selected/i`), matched nothing, and `test.skip`ped — reporting success for never having
+run, which is worse than no coverage because it looks like coverage. The bar's real name is built
+from its target (`Actions for <activity>`), and it mounts from a canvas selection rather than a table
+click, so exercising it needs a canvas gesture the fit gate has no other reason to perform.
+
+**What to do:** cover it when M3 does the responsive/touch work, where viewport-edge behaviour is the
+subject anyway, and assert the thing that can actually go wrong — that the bar stays fully inside the
+viewport at 960 and 768 with its widest plausible item set. Raised by `component-reviewer` during the
+ADR-0090 pre-approval pass as a suggestion, and recorded rather than silently left out of scope.

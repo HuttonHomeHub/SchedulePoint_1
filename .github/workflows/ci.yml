@@ -226,6 +226,20 @@ jobs:
       - name: Web end-to-end tests (canvas toolbar flag on)
         run: pnpm --filter @repo/web test:e2e:toolbar
 
+      # The toolbar FIT gate (playwright.toolbar-fit.config.ts, ADR-0090 M1). One invariant: a
+      # command a planner can see is a command a planner can click, at eight widths on both rows.
+      #
+      # It is a separate config because it must pin NO VITE_ flags at all — a published image
+      # carries every flag at its default (ADR-0088 D1), so the shipped surface IS the default
+      # surface, and the step above deliberately pins VITE_CANVAS_AUTHORING off, which changes
+      # Row 2's composition at exactly the width where `print` used to clip.
+      #
+      # This cannot be a unit test and never could: jsdom has no layout, so ~25 suites rendering
+      # <Toolbar> stayed green while two controls sat outside the row, pointer-unreachable, on a
+      # 1920x1080 monitor.
+      - name: Web end-to-end tests (toolbar fit)
+        run: pnpm --filter @repo/web test:e2e:toolbar-fit
+
       # Flag-ON canvas-first authoring journey (playwright.authoring.config.ts) serving the app with
       # VITE_CANVAS_AUTHORING on (layered on the toolbar/workspace/editing/pen flags), so building a
       # plan directly on the canvas — blank-canvas first draw, inline start date, auto-recalc,
