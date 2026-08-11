@@ -72,6 +72,31 @@ const GROUP_RULE_PX = 13; // `ml-1` (4) + `border-l` (1) + `pl-2` (8), on every 
 const CHROME_RESIDUAL_PX = 56;
 
 /**
+ * Is this row's width **imposed by its container**, or does it size to its own content?
+ *
+ * **A shrink-to-fit row can never need demotion**, because its `clientWidth` *is* its content: ask
+ * "does the content fit?" and the answer is always yes, by construction. Charging such a row the
+ * chrome makes the answer falsely no by exactly the chrome, and it demotes commands for no reason.
+ *
+ * That is not hypothetical — it is what this function was written for. The chrome charge landed on
+ * all three `<Toolbar>` instances, and the third is the floating **selection bar**
+ * (`selection-actions.tsx:395`), which shrink-wraps to its content and is only centre-clamped to the
+ * viewport. CI caught it: `e2e-library` timed out clicking **Resources**, because that command had
+ * been pushed into the `⋯` on a bar with no width problem at all. The component review predicted the
+ * shape ("the fix propagates by construction") and this is its inverse — propagating somewhere the
+ * premise does not hold.
+ *
+ * `flexGrow` is the right signal precisely because it is **not** downstream of the overflow decision:
+ * a flex item that grows has its width handed to it, one that does not sizes to content, and neither
+ * changes when an item moves into the `⋯`. Reading `scrollWidth` instead would have been the
+ * oscillation trap one level along — it shrinks the moment a demotion succeeds.
+ */
+function isWidthConstrained(container: HTMLElement): boolean {
+  if (typeof getComputedStyle !== 'function') return true;
+  return parseFloat(getComputedStyle(container).flexGrow || '0') > 0;
+}
+
+/**
  * Derive the fixed chrome a row carries, from the resolved bar alone. Independent of
  * `overflowedIds` by construction — which is the property that matters (see above), and the reason
  * this takes `bar` rather than `inlineBar`.
@@ -241,7 +266,8 @@ export function Toolbar<Ctx>({
     // budget stays byte-identical to the pre-M1 arithmetic and those tests keep testing what they
     // were written to test.
     const anythingMeasured = bar.some((r) => widthOf(r.item.id) > 0);
-    const chromeWidth = anythingMeasured ? deriveChromeWidth(bar) : 0;
+    const chromeWidth =
+      anythingMeasured && isWidthConstrained(container) ? deriveChromeWidth(bar) : 0;
     const { overflow } = computeOverflow(
       demotable,
       widths,

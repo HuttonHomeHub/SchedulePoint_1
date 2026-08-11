@@ -1,6 +1,6 @@
-import { writeFileSync } from 'node:fs';
-
 import { expect, test, type Page } from '@playwright/test';
+
+import { writeMeasurement } from './output';
 
 /**
  * **M0** for `docs/specs/workspace-layout/design.md` — the measurement that design asks for, and
@@ -157,5 +157,5 @@ test('M0 — measure the two toolbar rows across five viewport widths', async ({
     ];
   }
 
-  writeFileSync(process.env.MEASURE_OUT ?? '/tmp/toolbar-m0.json', JSON.stringify(report, null, 2));
+  writeMeasurement('toolbar-m0', report);
 });

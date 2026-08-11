@@ -1,6 +1,6 @@
-import { writeFileSync } from 'node:fs';
-
 import { expect, test, type Page } from '@playwright/test';
+
+import { writeMeasurement } from './output';
 
 /**
  * **M0b** — the follow-up the first pass forced.
@@ -134,8 +134,5 @@ test('M0b — is a clipped toolbar control actually reachable?', async ({ page }
   }
   report['click Summary at 1920'] = clickOutcome;
 
-  writeFileSync(
-    process.env.MEASURE_OUT ?? '/tmp/toolbar-m0b.json',
-    JSON.stringify(report, null, 2),
-  );
+  writeMeasurement('toolbar-m0b', report);
 });

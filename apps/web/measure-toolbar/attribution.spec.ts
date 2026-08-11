@@ -1,6 +1,6 @@
-import { writeFileSync } from 'node:fs';
-
 import { expect, test, type Page } from '@playwright/test';
+
+import { writeMeasurement } from './output';
 
 /**
  * **M1-T1** — attribute the overshoot before anything is changed.
@@ -194,8 +194,5 @@ test('M1-T1 — attribute the row overshoot to a mechanism', async ({ page }) =>
     'Build and manage': await frames(page, 'Build and manage', 8),
   };
 
-  writeFileSync(
-    process.env.MEASURE_OUT ?? '/tmp/toolbar-attribution.json',
-    JSON.stringify(report, null, 2),
-  );
+  writeMeasurement('toolbar-attribution', report);
 });

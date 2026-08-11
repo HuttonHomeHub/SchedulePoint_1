@@ -20,9 +20,13 @@ cd apps/web
 DATABASE_URL='postgresql://app:app@localhost:5432/app_test?schema=public' \
 BETTER_AUTH_SECRET='local-e2e-secret-at-least-32-characters-long' \
 PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
-MEASURE_OUT=/tmp/toolbar-m0.json \
 npx playwright test --config=playwright.measure-toolbar.config.ts
 ```
+
+Readings land in `apps/web/measure-output/` (gitignored). The destination used to come from a
+`MEASURE_OUT` environment variable and does not any more: CodeQL flagged it as `js/path-injection`
+— four high-severity alerts, one per spec — and it bought nothing, since every caller wanted "put
+the JSON where I can read it", which a known directory answers.
 
 ## M0c — the correction, and the numbers that should be quoted
 

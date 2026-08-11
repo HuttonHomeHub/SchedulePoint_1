@@ -1,6 +1,6 @@
-import { writeFileSync } from 'node:fs';
-
 import { expect, test, type Page } from '@playwright/test';
+
+import { writeMeasurement } from './output';
 
 /**
  * **M0c** — the correction the feature-analyst forced, and the one that makes the numbers honest.
@@ -141,8 +141,5 @@ test('M0c — measure a plan that has a computed diagram', async ({ page }) => {
     };
   }
 
-  writeFileSync(
-    process.env.MEASURE_OUT ?? '/tmp/toolbar-m0c.json',
-    JSON.stringify(report, null, 2),
-  );
+  writeMeasurement('toolbar-m0c', report);
 });
