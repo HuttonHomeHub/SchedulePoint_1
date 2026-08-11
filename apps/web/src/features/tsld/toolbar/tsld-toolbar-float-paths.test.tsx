@@ -114,13 +114,10 @@ describe('TSLD toolbar — Float paths (flag on)', () => {
     expect(floatPathsButton()).not.toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('shades Isolate in the Gantt, where it drives a canvas that is not mounted', () => {
-    // Not a Float-paths behaviour, but a defect this epic made reachable: the Gantt now feeds the
-    // workspace selection, so Isolate would otherwise be lit and inert there.
-    renderRows(ctx({ planView: 'gantt', canvasActive: false }));
-    // The main button of the split control (the chevron is 'Isolate logic path options').
-    const isolate = screen.getByRole('button', { name: 'Isolate logic path' });
-    expect(isolate).toHaveAttribute('aria-disabled', 'true');
-    expect(isolate.getAttribute('title')).toMatch(/only in the diagram view/i);
-  });
+  // *"shades Isolate in the Gantt, where it drives a canvas that is not mounted"* was here
+  // until ADR-0090 M2-T1. Isolate is now **absent** from the Gantt rather than shaded there —
+  // it lives on the canvas selection bar — which is the stronger form of the same guarantee,
+  // so the ADR-0059 M6 rule it defended now holds by construction. Float paths itself did NOT
+  // move, and deliberately: it is a view-agnostic analysis that runs in the Gantt too, which
+  // `float-paths-view-agnostic.structural.test.ts` exists to keep true.
 });

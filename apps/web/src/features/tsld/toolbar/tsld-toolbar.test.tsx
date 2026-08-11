@@ -311,7 +311,10 @@ describe('TSLD toolbar registry (two-row)', () => {
     // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the three
     // ids must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
     renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
-    for (const name of ['Isolate logic path', 'Next conflict', 'Snap to grid']) {
+    // `Isolate logic path` left this list in ADR-0090 M2-T1: it moved to the selection bar, and its
+    // Row-1 "Coming soon" placeholder went with it rather than being reproduced there — a
+    // placeholder earns its place on a persistent row a planner scans, not on a transient bar.
+    for (const name of ['Next conflict', 'Snap to grid']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       expect(btn).toHaveAttribute('title', `${name} — Coming soon`);

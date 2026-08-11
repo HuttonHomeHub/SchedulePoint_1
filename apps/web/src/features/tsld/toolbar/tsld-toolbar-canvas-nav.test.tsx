@@ -1,4 +1,3 @@
-import type { ActivitySummary } from '@repo/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,8 +15,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   CANVAS_NAV_ENABLED: true,
   SCHEDULING_MODES_ENABLED: true,
 }));
-
-const SELECTED = { id: 'a1', version: 1, name: 'Excavate' } as unknown as ActivitySummary;
 
 const spies = {
   toggleIsolate: vi.fn(),
@@ -55,69 +52,10 @@ function renderRows(context: TsldToolbarContext) {
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar — canvas nav (flag on)', () => {
+  // The `Isolate logic path` cases moved to the SELECTION BAR in ADR-0090 M2-T1, re-homed to
+  // `selection-actions.canvas.test.tsx`. Next conflict and Snap to grid stay on the toolbar and
+  // keep their coverage below.
   // ── Isolate logic path (U1 — split button: main toggles, chevron opens the menu) ──────────
-  it('starts isolation when the unpressed main button is clicked (not just open a menu)', () => {
-    renderRows(ctx({ selectedActivity: SELECTED, isolateActive: false }));
-    const main = screen.getByRole('button', { name: 'Isolate logic path' });
-    expect(main).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(main);
-    // The primary affordance STARTS isolation (in the current/last mode) — it doesn't open a menu.
-    expect(spies.toggleIsolate).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-  });
-
-  it('exits isolation when the pressed main button is clicked (toggle-off, U1)', () => {
-    renderRows(ctx({ selectedActivity: SELECTED, isolateActive: true, isolateMode: 'driving' }));
-    const main = screen.getByRole('button', { name: 'Isolate logic path: Driving path' });
-    expect(main).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(main);
-    // Clicking the PRESSED button exits — it no longer re-opens the mode menu.
-    expect(spies.toggleIsolate).toHaveBeenCalledOnce();
-    expect(spies.setIsolateMode).not.toHaveBeenCalled();
-  });
-
-  it('opens the mode menu from the chevron (arm-vs-pick), picking Driving path', () => {
-    renderRows(ctx({ selectedActivity: SELECTED }));
-    const chevron = screen.getByRole('button', { name: 'Isolate logic path options' });
-    fireEvent.click(chevron);
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Driving path only' }));
-    expect(spies.setIsolateMode).toHaveBeenCalledWith('driving');
-    // Picking a mode is a distinct gesture from the main-button toggle.
-    expect(spies.toggleIsolate).not.toHaveBeenCalled();
-  });
-
-  it('opens the mode menu from the main button via ArrowDown (keyboard parity)', () => {
-    renderRows(ctx({ selectedActivity: SELECTED }));
-    const main = screen.getByRole('button', { name: 'Isolate logic path' });
-    fireEvent.keyDown(main, { key: 'ArrowDown' });
-    expect(screen.getByRole('menu', { name: 'Isolate logic path' })).toBeInTheDocument();
-    expect(spies.toggleIsolate).not.toHaveBeenCalled();
-  });
-
-  it('offers "Stop isolating" in the menu while active', () => {
-    renderRows(ctx({ selectedActivity: SELECTED, isolateActive: true, isolateMode: 'driving' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Isolate logic path options' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Stop isolating' }));
-    expect(spies.toggleIsolate).toHaveBeenCalledOnce();
-  });
-
-  it('shades Isolate with "Select an activity first" when nothing is selected', () => {
-    renderRows(ctx({ selectedActivity: undefined }));
-    const main = screen.getByRole('button', { name: 'Isolate logic path' });
-    expect(main).toHaveAttribute('aria-disabled', 'true');
-    expect(main).toHaveAttribute('title', 'Select an activity first');
-    fireEvent.click(main);
-    expect(spies.toggleIsolate).not.toHaveBeenCalled();
-  });
-
-  it('shades Isolate with "Add an activity first" on an empty canvas (diagram gate wins)', () => {
-    renderRows(ctx({ selectedActivity: undefined, hasDiagram: false }));
-    expect(screen.getByRole('button', { name: 'Isolate logic path' })).toHaveAttribute(
-      'title',
-      'Add an activity first',
-    );
-  });
-
   // ── Next-conflict visible status chip (U2) ────────────────────────────────────────────────
   it('renders the visible "Conflict i of n · reason" status chip while cycling', () => {
     renderRows(

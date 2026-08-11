@@ -357,6 +357,28 @@ export function ToolbarPlanWorkspace({
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
   // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
   // tools read as live while doing nothing on the canvas (ux/a11y review).
+  // The canvas commands the floating selection bar offers (ADR-0090 M2-T1). Assembled HERE because
+  // this is where both halves already live — `canvasUi` owns isolation, `ctx` owns the viewport
+  // commands — and passed to `TsldPanel` as one prop, so that component never learns what isolating
+  // means. Memoised: `selectionCtx` is a `useMemo` dependency down there, and a fresh object each
+  // render would rebuild the bar's context on every frame of a pan.
+  const selectionCanvas = useMemo(
+    () => ({
+      isolateActive: canvasUi.navState.isolateActive,
+      isolateMode: canvasUi.navState.isolateMode,
+      toggleIsolate: canvasUi.toggleIsolate,
+      setIsolateMode: canvasUi.setIsolateMode,
+      zoomToSelection: ctx.zoomToSelection,
+    }),
+    [
+      canvasUi.navState.isolateActive,
+      canvasUi.navState.isolateMode,
+      canvasUi.toggleIsolate,
+      canvasUi.setIsolateMode,
+      ctx.zoomToSelection,
+    ],
+  );
+
   const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
 
   // The workspace keyboard scope — `?` plus the ADR-0048 undo/redo accelerators — as ONE React
@@ -480,6 +502,7 @@ export function ToolbarPlanWorkspace({
       // Float-path emphasis (audit F4): the ONE derived set, handed to the canvas here and to the
       // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
       floatPathIds={floatPaths.emphasisIds}
+      selectionCanvas={selectionCanvas}
     />
   );
 

@@ -28,7 +28,6 @@ import {
   ListChecks,
   Loader2,
   LocateFixed,
-  Crosshair,
   Maximize2,
   MessageSquare,
   Minus,
@@ -37,7 +36,6 @@ import {
   Printer,
   RefreshCw,
   Redo2,
-  Route,
   Split,
   Rows3,
   Search,
@@ -54,7 +52,6 @@ import {
 import { useRef } from 'react';
 
 import { FILTER_ATTRS, type ColourMode } from '../render/lenses';
-import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_RANGE_LABELS } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
@@ -536,6 +533,9 @@ function LinkControl({
  * (ADR-0059 §2) — panning, stepping and fitting are the canvas's own, and the Gantt's chart already
  * spans the plan, so there is nothing to fit it to.
  */
+/** Both remaining Find-group commands need a selection to act on. */
+const ISOLATE_NO_SELECTION_REASON = 'Select an activity first';
+
 const CANVAS_ONLY_REASON = 'Only in the diagram view';
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
@@ -1062,160 +1062,7 @@ function ExportMenuControl({
 
 /** The isolate chain modes the picker offers, in menu order (CQ-1). Full = the whole transitive chain;
  * Driving = only the binding driving edges. Short labels for the compact button, long names in the menu. */
-const ISOLATE_MODE_LABELS: Record<LogicPathMode, string> = {
-  full: 'Full path',
-  driving: 'Driving path',
-};
 
-const ISOLATE_NO_SELECTION_REASON = 'Select an activity first';
-
-const ISOLATE_OPTIONS_LABEL = 'Isolate logic path options';
-
-/**
- * The **Isolate logic path** control (canvas nav, `docs/specs/canvas-nav/`, flag-on) — a **split
- * button** (mirroring {@link AddActivityControl}'s arm-vs-pick model): the **main** button starts /
- * exits isolation directly, and a separate **chevron** opens the mode menu (Full logic path / Driving
- * path only / Stop isolating). This is a deliberate TOGGLE-with-mode control — the main button carries
- * `aria-pressed` (unlike {@link ColourByControl}, which omits it, a11y-rec-3), so clicking the pressed
- * button EXITS isolate (`toggleIsolate`) rather than re-opening the menu (U1); when off it activates
- * isolate in the current/last mode. Keep this split + `aria-pressed`; don't "align" it to the plain
- * menu-buttons. The main button is the single roving stop (spreads `itemProps`); the chevron is a
- * pointer affordance (`tabIndex -1`) with a keyboard equivalent (ArrowDown/Up on the main button opens
- * the menu, the standard split-button keystroke). View-only (never pen-gated); shaded with a reason
- * when nothing is selected / no diagram. The dim + its a11y listbox marking + the live-region
- * announcement carry the state for SR users (WCAG 1.4.1 — never colour/dim alone).
- */
-function IsolateControl({
-  ctx,
-  api,
-}: {
-  ctx: TsldToolbarContext;
-  api: ToolbarItemRenderApi;
-}): React.ReactElement {
-  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  const mainButtonRef = useRef<HTMLButtonElement>(null);
-  const disabled = api.disabled;
-  const modeLabel = ISOLATE_MODE_LABELS[ctx.isolateMode];
-  return (
-    <>
-      <span className="inline-flex items-center">
-        <button
-          {...api.itemProps}
-          ref={mainButtonRef}
-          type="button"
-          aria-pressed={ctx.isolateActive}
-          aria-disabled={disabled || undefined}
-          aria-label={ctx.isolateActive ? `Isolate logic path: ${modeLabel}` : 'Isolate logic path'}
-          title={disabled ? (api.disabledReason ?? 'Isolate logic path') : 'Isolate logic path'}
-          onClick={() => {
-            // Primary affordance TOGGLES isolate (off → start in the current/last mode; on → exit),
-            // so a pressed button exits rather than re-opening the menu (U1).
-            if (!disabled) ctx.toggleIsolate();
-          }}
-          onKeyDown={(event) => {
-            // Split-button keyboard equivalent: ArrowDown/Up (from the main button) opens the mode menu,
-            // so keyboard users reach Full / Driving / Stop without a pointer on the chevron.
-            if (!disabled && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-              event.preventDefault();
-              toggle();
-            }
-          }}
-          className={cn(
-            toolbarControlVariants({ active: ctx.isolateActive, disabled }),
-            'rounded-r-none pr-1',
-          )}
-        >
-          <Route aria-hidden="true" className="size-4" />
-          <span className="truncate">
-            {ctx.isolateActive ? `Isolating · ${modeLabel}` : 'Isolate'}
-          </span>
-        </button>
-        <button
-          ref={triggerRef}
-          type="button"
-          tabIndex={-1}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-disabled={disabled || undefined}
-          aria-label={ISOLATE_OPTIONS_LABEL}
-          title={ISOLATE_OPTIONS_LABEL}
-          onClick={() => {
-            if (!disabled) toggle();
-          }}
-          className={cn(toolbarControlVariants({ active: open, disabled }), 'rounded-l-none px-1')}
-        >
-          <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
-        </button>
-      </span>
-      <Menu
-        open={open}
-        onClose={close}
-        anchor={anchor}
-        label="Isolate logic path"
-        restoreFocusRef={mainButtonRef}
-      >
-        <MenuSection label="Show the logic path" />
-        <MenuItem
-          selected={ctx.isolateActive && ctx.isolateMode === 'full'}
-          onSelect={() => ctx.setIsolateMode('full')}
-        >
-          <Check
-            aria-hidden="true"
-            className={cn(
-              'size-4',
-              ctx.isolateActive && ctx.isolateMode === 'full' ? 'opacity-100' : 'opacity-0',
-            )}
-          />
-          Full logic path
-        </MenuItem>
-        <MenuItem
-          selected={ctx.isolateActive && ctx.isolateMode === 'driving'}
-          onSelect={() => ctx.setIsolateMode('driving')}
-        >
-          <Check
-            aria-hidden="true"
-            className={cn(
-              'size-4',
-              ctx.isolateActive && ctx.isolateMode === 'driving' ? 'opacity-100' : 'opacity-0',
-            )}
-          />
-          Driving path only
-        </MenuItem>
-        {ctx.isolateActive ? (
-          <MenuItem onSelect={() => ctx.toggleIsolate()}>
-            <span aria-hidden="true" className="size-4" />
-            Stop isolating
-          </MenuItem>
-        ) : null}
-      </Menu>
-    </>
-  );
-}
-
-/**
- * The **Next-conflict status chip** (canvas nav, U2) — a compact, VISIBLE `role="status"` read-out
- * pinned beside the Next-conflict button that names the conflict being reviewed ("Conflict 2 of 5 ·
- * constraint conflict"), so a sighted planner gets the reason on screen (4 of the 5 flag types have no
- * on-canvas badge), not only in the polite announcement. Presentational (spreads `itemProps`, never a
- * roving-tabindex stop, mirrors the Project-finish chip); it renders nothing — and the registry item
- * hides — unless a conflict is being cycled (`ctx.currentConflict != null`, i.e. not while isolating /
- * before the first press / with no conflicts / flag-off). The reason truncates at narrow widths; the
- * full reason list is in the `title`. `goToNextConflict` keeps speaking the full polite announcement,
- * so this doubles as its visible half rather than replacing it.
- */
-/**
- * The **find read-out** (`VITE_CANVAS_SEARCH_NAV`) — how many activities the live search matches, and
- * which one the planner is standing on.
- *
- * Modelled on {@link CurrentConflictStatus} down to the `aria-hidden`, and for the same reason: the
- * spoken channel is the shared polite announcer `goToMatch` already writes to, so a second live region
- * here would say "Match 3 of 12" twice to a screen-reader user and once to nobody else. This is the
- * visible half only.
- *
- * Two states, and the difference matters: **"12 matches"** before the first Enter (the planner has
- * typed and wants to know whether it was worth pressing), **"3 of 12"** after (they are walking them).
- * Collapsing the two into one would make the read-out say a position the planner has not reached.
- */
 function SearchMatchStatus({
   ctx,
   itemProps,
@@ -1594,15 +1441,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens
   // shared-shape pattern). isolate/next-conflict lead the Find cluster (Row 1 · Look, view-only);
   // snap-to-grid rides the pen-gated authoring cluster (Row 2 · Do).
-  const isolateShape = {
-    id: 'isolate-logic',
-    group: 'find' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 1,
-    label: 'Isolate logic path',
-    icon: <Route className="size-4" />,
-  };
   const nextConflictShape = {
     id: 'next-conflict',
     group: 'find' as const,
@@ -1734,39 +1572,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             : CANVAS_ONLY_REASON,
       onActivate: (ctx) => ctx.fit(),
     },
-    // Zoom to selection (search navigation M3) — the companion to `Fit to plan`, ordered right after
-    // it, for the planner who has just landed on a match and wants to read it. Registered only
-    // flag-on, so flag-off the toolbar is byte-for-byte today's.
-    //
-    // Three shade reasons, layered most-actionable first, because three different things can make it
-    // impossible and a single reason would be wrong for two of them. `canvasActive` is in the FIRST
-    // version, not added after a review: `zoomToActivity` is a canvas-handle command and the Gantt
-    // does not mount one, so without it this is exactly the lit-but-inert control ADR-0059 M6 found.
-    ...(CANVAS_SEARCH_NAV_ENABLED
-      ? [
-          {
-            id: 'zoom-to-selection',
-            group: 'frame' as const,
-            row: 'look' as const,
-            tier: 2 as const,
-            order: 13,
-            priority: 100,
-            label: 'Zoom to selection',
-            icon: <Crosshair className="size-4" />,
-            isEnabled: (ctx: TsldToolbarContext) =>
-              ctx.hasDiagram && ctx.canvasActive && ctx.selectedActivity != null,
-            disabledReason: (ctx: TsldToolbarContext) =>
-              !ctx.hasDiagram
-                ? 'Add an activity to zoom to'
-                : !ctx.canvasActive
-                  ? CANVAS_ONLY_REASON
-                  : ctx.selectedActivity == null
-                    ? 'Select an activity first'
-                    : undefined,
-            onActivate: (ctx: TsldToolbarContext) => ctx.zoomToSelection(),
-          },
-        ]
-      : []),
+    // `zoom-to-selection` moved to the SELECTION BAR in ADR-0090 M2-T1 (`selection-actions.tsx`),
+    // with `isolate-logic` and `float-paths`. All three required a selection, so all three spent
+    // most of their life on Row 1 shaded — holding width to say "Select an activity first".
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
     // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
@@ -2007,27 +1815,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // activity's logic chain (full or driving-only, CQ-1), reusing the Stage A dim seam (spec
     // `docs/specs/canvas-nav/`); flag-off the "Coming soon" placeholder, byte-for-byte. Enabled only with
     // a selection AND a computed diagram; never pen-gated (navigating never mutates). Pressed when active.
-    CANVAS_NAV_ENABLED
-      ? {
-          ...isolateShape,
-          isActive: (ctx) => ctx.isolateActive,
-          // Diagram gate BEFORE the selection gate (an empty plan can't be traced at all), and
-          // `canvasActive` before both: isolate dims the CANVAS by driving `canvasUi.navState`,
-          // which only `TsldPanel` reads — so in the Gantt it was lit and did nothing. That became
-          // reachable the moment the Gantt started feeding the workspace selection (audit F4); it
-          // is the ADR-0059 M6 rule applied where it belongs — shade what only the canvas can do.
-          isEnabled: (ctx) => ctx.canvasActive && ctx.hasDiagram && ctx.selectedActivity != null,
-          disabledReason: (ctx) =>
-            !ctx.canvasActive
-              ? CANVAS_ONLY_REASON
-              : !ctx.hasDiagram
-                ? LENS_NO_DIAGRAM_REASON
-                : ctx.selectedActivity == null
-                  ? ISOLATE_NO_SELECTION_REASON
-                  : undefined,
-          render: (ctx, api) => <IsolateControl ctx={ctx} api={api} />,
-        }
-      : placeholderItem(isolateShape),
     // Next conflict — flag-on a view-only button that cycles the plan's flagged activities (CQ-2), each
     // centred + selected + announced (spec `docs/specs/canvas-nav/`); flag-off the "Coming soon"
     // placeholder, byte-for-byte. Enabled only when there is ≥ 1 conflict; never pen-gated.
