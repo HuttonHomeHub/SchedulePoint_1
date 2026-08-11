@@ -239,6 +239,11 @@ export function ActivityEditorDialog({
 
   // The live factor follows the calendar the SCHEDULING scope currently selects — a planner can
   // change the calendar and the duration in one visit, and the two tabs must agree (ADR-0070 §3).
+  //
+  // `useWatch`, never `form.watch`, and on a multi-form host that is not a style choice:
+  // `form.watch` subscribes the WHOLE component to that form's every field, so a keystroke in any
+  // Scheduling control re-renders all four tabs' worth of markup. This value is also the one the
+  // calendar field renders, which is why there is exactly one subscription rather than two.
   const scopeCalendarId = useWatch({ control: scheduling.form.control, name: 'calendarId' });
   const hoursPerDay = effectiveHoursPerDay(calendars, {
     activityCalendarId: scopeCalendarId ?? '',
@@ -620,7 +625,7 @@ export function ActivityEditorDialog({
                         description="Which calendar's working days this activity's duration is measured in."
                       >
                         <ActivityCalendarField
-                          value={scheduling.form.watch('calendarId') ?? ''}
+                          value={scopeCalendarId ?? ''}
                           onChange={(calendarId) =>
                             scheduling.form.setValue('calendarId', calendarId, {
                               shouldDirty: true,
