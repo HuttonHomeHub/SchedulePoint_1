@@ -109,3 +109,39 @@ the decision is put to the product owner: nothing in the test estate argues for 
 **Fourteen rewrites is the finding.** The plan's Feature 2.3 offered one rename and called the
 milestone's test impact "a rename of location, not of capability". That is true of exactly one
 assertion out of fifteen.
+
+---
+
+## Decision — what replaces `Colour · Criticality` (M2-T2, taken 2026-08-11)
+
+The table above raises this as a blocker: `colour-by` becomes a radio group inside `View ▾`, and a
+radio group in a popover **has no trigger to name the active mode**, so
+`tsld-toolbar-lenses.test.tsx:114-117` — which asserts the trigger reads `Colour · WBS group` — has
+no successor. That assertion is not fussy. Colour is the diagram's dominant encoding: a planner who
+has coloured by WBS group and forgotten reads every criticality judgement wrong, and the control
+that would have told them is the one being moved.
+
+**Decision: annotate the `View ▾` trigger, but only when the mode is not the default.**
+`View` at `criticality` (the default, `use-tsld-canvas-ui-state.ts:149`); `View · WBS group` and
+`View · Total float` otherwise.
+
+Why this rather than the alternatives:
+
+- **Not "accept the loss".** The lost information is a _mode_, and a mode with no indicator is the
+  defect class this epic keeps finding — a control that looks one way and behaves another.
+- **Not a canvas-corner read-out.** It is a new persistent surface on a canvas that already carries
+  the ADR-0054 cursor chip, the ADR-0056 Today pill, the ADR-0063 band and the ADR-0064 mode
+  statement. Adding a fifth to preserve a label is how the canvas gets taken away a strip at a time.
+- **Not "the legend already says".** It does, and only while the legend panel is open — which is a
+  toggle, and which M2-T2 is _also_ moving into `View ▾`. Two hidden things do not make one visible.
+- **Not keeping it on Row 1 shrunk.** It is a `render` item, so its width is paid at every viewport;
+  183 px is the single largest remaining pinned cost, and removing it is most of what M2-T2 buys.
+
+**Non-default-only is the load-bearing half.** Annotating always would put a permanent ~90 px on a
+trigger to say the thing that is already true, on the surface whose whole problem is width. Showing
+it only when the diagram is coloured unusually spends width exactly when the information is worth
+having, and costs nothing in the state most planners are in most of the time.
+
+The test rewrite follows: the assertion moves from "the Colour trigger names the mode" to "the View
+trigger names a **non-default** mode and does **not** name the default one" — a stronger claim than
+the one it replaces, because it pins both halves.
