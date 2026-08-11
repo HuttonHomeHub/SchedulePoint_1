@@ -101,6 +101,43 @@ confirmed or dismissed by execution; the one proposition that could cancel M1 is
   5. Record every result — including any rev-2 row that fails to reproduce — in the PR body, and
      correct the spec rather than bending the test.
 
+- **RESULT (M0-T1 executed 2026-08-11 — `[V]`):**
+  `components/activity-dialog-divergence.characterisation.test.tsx`, 42 cases, green.
+  **All ten listed rows reproduce. Sixteen further measurable differences were found** — fourteen
+  genuinely new, two (autocomplete on `Name`, the external-dates `aside`) named elsewhere in this
+  plan but absent from the §1.3 table. At row granularity the honest count is **~26, not ten**. Rev
+  2's "budget for eleven or twelve" was low, and the instruction to _derive_ rather than _pin_ is
+  what found the difference.
+
+  **Two of this plan's risk framings are now known to be wrong, both in the safe direction:**
+
+  - **D3 is a legibility defect, NOT a data defect.** M3-T2 said "a save that clears a mandatory
+    constraint is a data defect". Measured: with `constraintType: 'MANDATORY_START'` the editor's
+    select shows nothing selected while the paired Constraint date sits below it filled in — but a
+    Scheduling save after dirtying an unrelated field re-sends `constraintType` and `constraintDate`
+    **unchanged**, because RHF submits `_formValues`, not the DOM. Verified red by perturbing the
+    expected value. The residual hazard is user-initiated: a planner reading the blank select as
+    "None" and confirming it clears both sides. **M3-T2's changeset and release-note framing must be
+    revised accordingly** — this is a UX fix, not a data fix.
+  - **D2 is likewise display-only.** An unresolvable `parentId` leaves the editor's select at
+    `selectedIndex === -1` reading back `''` — indistinguishable from "None (top level)" — but a
+    General save re-sends `parentId` unchanged. One extra finding pinned: with an empty activity
+    list _and_ a stored parent, the Breakdown `aside` asserts "No summaries in this plan" about an
+    activity that is nested under one.
+
+  **D10 reproduces exactly and is a live defect on the create side** (ADR-0060 §6: hiding a field
+  that holds a stored value claims there is none).
+
+  **D4's "create wins" is a choice with a cost, not a defect fix.** Create reads the live `type`, so
+  once a planner changes away from an out-of-set value the honest option **disappears with no way
+  back** — a one-way door, pinned. The editor reads the saved value and stays reversible. Record the
+  cost in M2-T2 rather than presenting the convergence as a straight improvement.
+
+  **Two notes the extractions must carry:** create hard-codes nine DOM ids where the editor uses
+  `useId` — the extracted groups must not inherit the fixed ids; and `setValueAs` differs on three
+  numeric fields (create guards `v == null`, the editor does not), which is **not observable through
+  the DOM** and must therefore be resolved by reading during extraction, not by test.
+
 ##### Task M0-T2 — The type spike (re-scoped in rev 2, with one addition)
 
 - **Description:** A compile-only file settling four propositions, then deleted.
