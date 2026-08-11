@@ -64,6 +64,81 @@ Three things this changes:
 > **14** items in the same button. Do not quote "the overflow menu is empty"; quote "the overflow
 > button holding ~15 commands has zero visible width".
 
+## M1-T1 addendum — the mechanism, attributed
+
+> Run 2026-08-11 by `apps/web/measure-toolbar/attribution.spec.ts` (same harness, same command,
+> `attribution` instead of `measure`), on a populated plan at eight widths. It decomposes each row's
+> `scrollWidth` into item widths, group boxes, container gaps, intra-group gaps and each group's
+> `margin-left + border-left + padding-left`, and probes all three candidates the plan refused to
+> choose between by argument.
+
+### Candidate (a) — chrome the calculation cannot see: **confirmed, and it is the mechanism**
+
+|    Width | Row 1 overshoot | Σ item widths | chrome named | residual |
+| -------: | --------------: | ------------: | -----------: | -------: |
+|     2133 |              35 |          1910 |          144 |   **26** |
+| **1920** |         **109** |          1782 |          128 |   **31** |
+|     1600 |              25 |          1427 |           79 |   **31** |
+|     1440 |              79 |          1325 |           75 |   **31** |
+|     1280 |             139 |          1229 |           71 |   **31** |
+|     1024 |             395 |          1229 |           71 |   **31** |
+|      960 |             459 |          1229 |           71 |   **31** |
+|      768 |             651 |          1229 |           71 |   **31** |
+
+The chrome that can be named — the container's `gap-1` between children, each group's
+`ml-1 border-l pl-2`, and each group's internal `gap-1` — accounts for **71–144 px** depending on how
+many groups render, and `computeOverflow` is shown **none** of it (`Toolbar.tsx:172-181`). What is
+left over is a **constant 31 px**, at every width, which is the strongest possible signature that the
+model is structurally incomplete rather than noisy. Five of those 31 are the overflow wrapper's own
+`border-l pl-1` (`:386`), which this walk skips because it is not a `role="group"` — and the row
+where the `⋯` is absent reports **26**, exactly as that predicts.
+
+**Row 2 is not exempt**; it merely fits at desktop widths. At 1024 it overshoots by **34 px with no
+`⋯` rendered at all**, and at 960/768 by 67/43 with a residual of 50–55.
+
+> Reading note: `unexplainedByItems` is only meaningful on a row that **overflows**. When a row fits,
+> `scrollWidth` equals `clientWidth`, so the figure is just container slack — which is why Row 2's
+> reads 1210 at 2133 and means nothing.
+
+### Candidate (b) — two `ml-auto` boxes on one flex line: **present, and not the cause**
+
+Row 1 carries two (`alignEndGroup` at `Toolbar.tsx:333`, the overflow wrapper at `:386`) wherever the
+`⋯` renders. But the overshoot occurs at **all three** counts:
+
+|              | `ml-auto` boxes | `⋯` rendered | overshoot |
+| ------------ | --------------: | ------------ | --------: |
+| Row 1 @ 2133 |           **1** | no           |     35 px |
+| Row 1 @ 1920 |           **2** | yes          |    109 px |
+| Row 2 @ 1024 |           **0** | no           |     34 px |
+
+A cause that is absent while the effect is present is not the cause. It may still be a wrinkle worth
+tidying; it is not what makes a row lie about its width.
+
+> **This probe was wrong on its first run and would have recorded (b) as refuted for a false reason.**
+> It tested `getComputedStyle(child).marginLeft === 'auto'`, which can never be true — computed style
+> reports the **used** value in pixels — so it counted **zero** `ml-auto` boxes everywhere, including
+> where two exist. Corrected to read the class list. The conclusion is unchanged; the evidence for it
+> was not. Recorded because a probe that reports what you expected, for the wrong reason, is the
+> failure this whole epic is about.
+
+### Candidate (c) — promotion/overflow pass ordering: **refuted, and that matters later**
+
+Eight consecutive settled frames at 1920 with no input: **one distinct state**, `scrollWidth`
+constant at 1941 on Row 1 and 1832 on Row 2. There is no oscillation in the shipped code.
+
+That is not a null result. It means any oscillation observed after M1 would be **introduced by the
+fix** — which is precisely what the pre-approval review predicted would happen if the chrome were
+measured from the DOM rather than derived, and it is why M1-T3's tests A and B assert against this
+baseline rather than against nothing.
+
+### What M1 must therefore do
+
+Teach `computeOverflow` the chrome, **derived** from static registry data — never read from group
+boxes, which are themselves a function of the overflow decision. The constant residual says the
+derivation must also carry a per-row allowance for the chrome no group-level walk attributes (the
+overflow wrapper's rule; the search field's leading margin), or the budget stays wrong by ~31 px —
+which at 1600 would be the entire difference between fitting and not.
+
 ## The finding that outranks the design
 
 _The figures in this section are from the **empty-plan** pass and are lower bounds; see M0c above for
