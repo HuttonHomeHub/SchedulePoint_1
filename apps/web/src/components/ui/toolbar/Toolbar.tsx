@@ -400,7 +400,14 @@ export function Toolbar<Ctx>({
           role="group"
           aria-label={labels[group]}
           className={cn(
-            'flex items-center gap-1',
+            // `min-w-0` is the sub-floor remedy (M1-T5). Below the row's pinned floor — Row 1's
+            // `render` items measure 1177 px against an 872 px container at Surface Pro portrait,
+            // and a `render` item can never demote — correct arithmetic has nothing left to give.
+            // Without this a group refuses to shrink below its content and the surplus is paid by
+            // whatever is furthest right falling out of the `overflow-hidden` box; with it, the row
+            // truncates inside its own bounds instead. Decided in a browser, not reasoned: see
+            // `docs/specs/workspace-layout/m0-measurement.md`.
+            'flex min-w-0 items-center gap-1',
             i > 0 && 'border-border ml-1 border-l pl-2', // a hairline separates groups
             // Right-align this group (and everything after it) — the trailing status read-outs on Row 1.
             group === alignEndGroup && 'ml-auto',
@@ -455,8 +462,14 @@ export function Toolbar<Ctx>({
         </div>
       ))}
 
+      {/*
+        `shrink-0`: the `⋯` is the escape hatch, so it must be the **last** thing to lose width,
+        never the first. Measured before this: at 1440 it was 32 px wide with **1 px visible**, and
+        at 960 with **none** — a button holding the only route to ~15 commands, shrunk out of
+        existence by the flex line it shares with the groups it exists to rescue.
+      */}
       {overflowItems.length > 0 && (
-        <div className="border-border ml-auto flex items-center border-l pl-1">
+        <div className="border-border ml-auto flex shrink-0 items-center border-l pl-1">
           <ToolbarOverflow
             ref={(node) => setItemRef(OVERFLOW_ID, node)}
             items={overflowItems}

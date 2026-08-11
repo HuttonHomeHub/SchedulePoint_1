@@ -139,6 +139,45 @@ derivation must also carry a per-row allowance for the chrome no group-level wal
 overflow wrapper's rule; the search field's leading margin), or the budget stays wrong by ~31 px —
 which at 1600 would be the entire difference between fitting and not.
 
+## M1 result — measured after the repair
+
+> Same harness, same command, `loaded-plan` and `reachability`, on a populated plan. This is the
+> before/after the milestone claims, and it is measured rather than asserted.
+
+| Viewport | Row 1 before                                           | Row 1 after                                | Row 2 before         | Row 2 after           |
+| -------- | ------------------------------------------------------ | ------------------------------------------ | -------------------- | --------------------- |
+| 2133     | 35 px over, **no `⋯`**, `shortcuts` 0 px               | **0 over, `⋯` 32 px**                      | clean                | clean                 |
+| **1920** | 109 px over, `⋯` **0 px**, `legend` + `shortcuts` 0 px | **0 over, `⋯` 32 px**                      | clean                | clean                 |
+| 1440     | 79 px over, `⋯` **0 px**                               | **0 over, `⋯` 32 px**                      | clean                | clean                 |
+| 960      | 459 px over, `⋯` **0 px**, three controls 0 px         | **62 px over, `⋯` 32 px, nothing at 0 px** | 67 px over, `⋯` 0 px | **0 over, `⋯` 32 px** |
+
+**No control is at zero visible width at any measured viewport, on either row.** The `⋯` is a real
+32 px target everywhere it renders. The single control still clipped anywhere is `summary` at 960,
+which retains **63 px** — 2.6× the WCAG 2.5.8 minimum of 24 px, so it is a cosmetic trim rather than
+a conformance failure. That distinction is why the harness now reports the _surviving_ width instead
+of a bare "partly clipped": the two are indistinguishable in a boolean and only one of them matters.
+
+### M1-T5 — the sub-floor remedy, decided in the browser
+
+The plan named two candidates and refused to choose by argument, because `design.md` reasoned about
+this case once and was wrong. Measured:
+
+- **(a) `min-w-0` on the group wrappers** (truncate within the row's own bounds) — **adopted.** It
+  takes 960 from three controls at zero visible width to none, and the `⋯` from 0 px to 32 px.
+- **(b) `overflow-x-auto` on the container** (scroll) — **not needed, and therefore not taken.** It
+  would buy the last 62 px at the cost of a scrollbar eating vertical space on the shortest viewport
+  in the target list, and a scrollable region with no visible affordance is its own discoverability
+  problem. Recorded as available if M3's responsive ladder does not close the residual.
+
+`shrink-0` on the overflow wrapper is the other half: the `⋯` was being shrunk out of existence by
+the flex line it shares with the very groups it exists to rescue. It is the escape hatch, so it is
+now the last thing to lose width rather than the first.
+
+**What M1 does not fix, stated plainly.** Row 1 at 960 still lays out 62 px wider than its container.
+The pinned floor is real — `render` items measure ~1177 px against an 872 px container and can never
+demote — so the row is legible and fully operable there rather than correct. Closing it needs fewer
+pinned items, which is M2, or a designed collapse, which is M3.
+
 ## The finding that outranks the design
 
 _The figures in this section are from the **empty-plan** pass and are lower bounds; see M0c above for

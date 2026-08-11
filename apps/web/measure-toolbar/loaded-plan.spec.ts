@@ -48,7 +48,10 @@ async function readRow(page: Page, ariaLabel: string): Promise<unknown> {
       }
       inline.push(id);
       if (visible <= 0) zeroVisible.push(id);
-      else if (visible < Math.round(b.width) - 1) partlyClipped.push(id);
+      // WCAG 2.2 §2.5.8 sizes a pointer target by the part that is actually there, so a partly
+      // clipped control is reported with the width that survives — "partly clipped" alone cannot
+      // tell a cosmetic trim from a target below the 24 px minimum.
+      else if (visible < Math.round(b.width) - 1) partlyClipped.push(`${id}:${visible}px`);
     }
     return {
       containerWidth: container.clientWidth,
