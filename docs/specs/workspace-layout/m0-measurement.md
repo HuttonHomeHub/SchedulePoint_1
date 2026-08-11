@@ -24,9 +24,52 @@ MEASURE_OUT=/tmp/toolbar-m0.json \
 npx playwright test --config=playwright.measure-toolbar.config.ts
 ```
 
+## M0c — the correction, and the numbers that should be quoted
+
+**The first two passes measured an empty plan, so every figure below them is a lower bound.**
+The feature-analyst caught it: `measure.spec.ts` and `reachability.spec.ts` never add an activity,
+so `ctx.hasDiagram` is false and three Row-1 items self-hide — `finish-chip`
+(`isVisible: (ctx) => ctx.hasDiagram`, `tsld-toolbar-items.tsx:2360`, up to 160 px of
+`max-w-[10rem]`), `next-conflict-status` and `search-status`. The inline census confirms it:
+`finish-chip` appears in neither the bar nor the `⋯` at any width in those runs.
+
+`loaded-plan.spec.ts` re-measures with the pen taken, two activities created and the schedule
+computed — i.e. **any plan a planner would actually be looking at**. These are the numbers to quote:
+
+| Viewport                         | Row 1 overshoot | `⋯`                       | Pointer-unreachable (0 px visible)        |
+| -------------------------------- | --------------: | ------------------------- | ----------------------------------------- |
+| **2133** (1920 @ 90%)            |       **35 px** | **absent**                | `shortcuts`                               |
+| **1920 @100%**                   |      **109 px** | present, **0 px visible** | `legend`, `shortcuts`                     |
+| **1440** (Surface Pro landscape) |       **79 px** | present, **0 px visible** | — (`summary` partly clipped)              |
+| **960** (Surface Pro portrait)   |      **459 px** | present, **0 px visible** | `isolate-logic`, `finish-chip`, `summary` |
+
+Row 2 is clean at 2133/1920/1440 and overshoots 67 px at 960, where `print` is partly clipped and
+its `⋯` is also 0 px visible.
+
+Three things this changes:
+
+1. **The defect reaches 2133 — the configuration the product owner said looked _better_.** On an
+   empty plan 2133 was clean (`scroll` = `client` = 2045). On a real plan Row 1 overshoots by 35 px
+   and `shortcuts` is pointer-unreachable, with **no `⋯` rendered at all**. There is no measured
+   desktop width at which this surface is correct on a real plan.
+2. **At 1920 the `⋯` now renders — at zero visible width.** On the empty plan it was absent
+   entirely; loaded, it exists, is focusable, and cannot be seen or clicked. That is arguably worse
+   than absent, because the code believes it has provided a route.
+3. **At 1440 the `⋯` went from 1 px visible to 0.**
+
+> **A precision note, so this is not over-read.** Where the table says the `⋯` is 0 px visible,
+> `loaded-plan.spec.ts` deliberately **does not open it** (it skips enumeration below 2 px, because
+> a menu that cannot be clicked cannot be enumerated the way a user would). So its item count in the
+> raw JSON is `0` meaning _not enumerated_, **not** _empty_. The empty-plan run at 1440 enumerated
+> **14** items in the same button. Do not quote "the overflow menu is empty"; quote "the overflow
+> button holding ~15 commands has zero visible width".
+
 ## The finding that outranks the design
 
-**At 1920 × 1080 @ 100% — the product owner's exact configuration — two Row-1 commands are
+_The figures in this section are from the **empty-plan** pass and are lower bounds; see M0c above for
+the loaded-plan numbers._
+
+**At 1920 × 1080 @ 100% — the product owner’s exact configuration — two Row-1 commands are
 rendered outside their `overflow-hidden` container with no `⋯` offering them.**
 
 | Item        |  width | overhang past the container's right edge | visible width | pointer reaches it | keyboard                |
