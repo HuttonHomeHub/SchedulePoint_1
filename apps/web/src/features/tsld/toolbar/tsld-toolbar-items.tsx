@@ -63,7 +63,7 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { useFirstUseHint } from './use-first-use-hint';
 
 import { Input } from '@/components/ui/input';
-import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
+import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import type { ToolbarItemRenderApi, ToolbarRow } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
@@ -266,15 +266,6 @@ function SoonTag(): React.ReactElement {
   );
 }
 
-/** A non-interactive section heading inside the Add menu (grouping draw-vs-span kinds). */
-function MenuSection({ children }: { children: React.ReactNode }): React.ReactElement {
-  return (
-    <p className="text-muted-foreground px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
-      {children}
-    </p>
-  );
-}
-
 /**
  * The **Add split-button** (ADR-0032 M4) — the canvas-first replacement for the plain "Add activity"
  * toggle. A **true** split button (ADR-0064 T3, matching {@link LinkControl}): the primary region
@@ -362,7 +353,7 @@ function AddActivityControl({
         label="Add activity type"
         restoreFocusRef={mainButtonRef}
       >
-        <MenuSection>Draw on the canvas</MenuSection>
+        <MenuSection label="Draw on the canvas" />
         {ADD_ACTIVITY_TYPES.map((type) => (
           <MenuItem
             key={type}
@@ -387,8 +378,7 @@ function AddActivityControl({
             live **Level of Effort (hammock)** item that arms the endpoint-pick tool — the LOE is the
             span-derived hammock, so there is no separate Hammock item and no raw `HAMMOCK` create (Q1).
             Flag-off it stays today's two disabled "Soon" placeholders, byte-for-byte. */}
-        <div role="separator" className="bg-border my-1 h-px" />
-        <MenuSection>Span between activities</MenuSection>
+        <MenuSection divider label="Span between activities" />
         {CANVAS_ACTIVITY_TYPES_ENABLED ? (
           // Disabled-with-reason (shade-don't-hide) below two activities — the span needs two drivers to
           // hang off (B5) — mirroring the Export menu's "No matching activities" pattern. Stays a
@@ -975,7 +965,7 @@ function ExportMenuControl({
       </button>
       <Menu open={open} onClose={close} anchor={anchor} label="Export" restoreFocusRef={triggerRef}>
         {/* Grouped into Schedule / Diagram sections (ux S2), mirroring the Add split-button's sections. */}
-        <MenuSection>Schedule</MenuSection>
+        <MenuSection label="Schedule" />
         <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>
           <FileSpreadsheet aria-hidden="true" className="size-4" />
           {/* When the conditional filtered item is present, name the default one "All activities" so the
@@ -997,8 +987,7 @@ function ExportMenuControl({
             ) : null}
           </MenuItem>
         ) : null}
-        <div role="separator" className="bg-border my-1 h-px" />
-        <MenuSection>Diagram</MenuSection>
+        <MenuSection divider label="Diagram" />
         {/* Diagram PNG (M2, CQ-1: offer BOTH extents). The whole-plan render re-frames an off-screen
             canvas to the full activity extent (raster-capped, scale-to-fit); the current-view render
             crops to the live viewport. Both paint off-screen with the light print palette + legend. */}
@@ -1038,8 +1027,7 @@ function ExportMenuControl({
             section after the Diagram group. */}
         {SCHEDULE_INTERCHANGE_ENABLED && ctx.canInterchangeExport ? (
           <>
-            <div role="separator" className="bg-border my-1 h-px" />
-            <MenuSection>Interchange</MenuSection>
+            <MenuSection divider label="Interchange" />
             {/* Both items show a loading spinner and are disabled while an export is in flight
                 (`interchangeExporting`), which also guards a double-click / concurrent export — mirroring
                 the Diagram-PDF items above. Uppercase-acronym labels match the sibling CSV/PNG/PDF verbs. */}
@@ -1166,7 +1154,7 @@ function IsolateControl({
         label="Isolate logic path"
         restoreFocusRef={mainButtonRef}
       >
-        <MenuSection>Show the logic path</MenuSection>
+        <MenuSection label="Show the logic path" />
         <MenuItem
           selected={ctx.isolateActive && ctx.isolateMode === 'full'}
           onSelect={() => ctx.setIsolateMode('full')}

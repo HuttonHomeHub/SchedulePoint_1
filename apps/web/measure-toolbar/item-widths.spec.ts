@@ -71,7 +71,7 @@ async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
       })();
 
       const font = getComputedStyle(node).font || '14px sans-serif';
-      const ctx = (document.createElement('canvas') as HTMLCanvasElement).getContext('2d');
+      const ctx = document.createElement('canvas').getContext('2d');
       const measure = (text: string): number | null => {
         if (!ctx || typeof ctx.measureText !== 'function' || !text) return null;
         ctx.font = font;

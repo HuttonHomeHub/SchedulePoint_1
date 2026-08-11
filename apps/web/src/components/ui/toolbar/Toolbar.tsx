@@ -520,6 +520,7 @@ export function Toolbar<Ctx>({
           <ToolbarOverflow
             ref={(node) => setItemRef(OVERFLOW_ID, node)}
             items={overflowItems}
+            groupLabels={labels}
             context={context}
             tabIndex={tabIndexFor(OVERFLOW_ID)}
             onFocus={() => setActiveId(OVERFLOW_ID)}

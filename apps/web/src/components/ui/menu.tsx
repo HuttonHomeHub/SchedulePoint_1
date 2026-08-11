@@ -230,6 +230,55 @@ function portalTarget(): HTMLElement {
 }
 
 /**
+ * A **labelled section break** inside a {@link Menu} — the rule plus the heading above the group it
+ * introduces.
+ *
+ * Extracted from `tsld-toolbar-items.tsx`, where it was a private component rendering a bare `<p>`.
+ * Two things were wrong with that, and only one of them is why it moved. **ARIA restricts a
+ * `role="menu"`'s children** to `menuitem`/`menuitemradio`/`menuitemcheckbox`/`group`/`separator`,
+ * so a stray paragraph is an `aria-required-children` violation and the heading reached AT as
+ * nothing at all — the sections were a purely visual grouping. And every section after the first was
+ * preceded by a hand-written `<div role="separator">`, so the two halves of one idea were separate
+ * markup that a new section could get half-right.
+ *
+ * **It renders as a named `separator`, not a `group`.** The obvious shape — wrap the items in
+ * `role="group" aria-labelledby` — is the stronger semantic, and it was rejected here for a reason
+ * worth stating: it requires the section to *contain* its items, and the call sites are flat runs of
+ * conditionals hundreds of lines long. Re-indenting them buys the better role at the cost of a diff
+ * nobody can review. A separator may carry an accessible name, its children are presentational, and
+ * it is a permitted child of `menu` — so the heading becomes announceable without moving a single
+ * item. If a future menu needs true group semantics, add a `MenuGroup` beside this rather than
+ * changing what this one does.
+ *
+ * `divider` draws the rule. It defaults **off** so the first section in a menu opens without a line
+ * above it, which is what every existing menu already looked like.
+ */
+export function MenuSection({
+  label,
+  divider = false,
+}: {
+  /** The section heading. Also the separator's accessible name — the visible text is presentational. */
+  label: string;
+  /** Draw a rule above the heading. Off for the first section in a menu. */
+  divider?: boolean;
+}): React.ReactElement {
+  return (
+    <div
+      role="separator"
+      aria-label={label}
+      className={cn(divider && 'border-border mt-1 border-t pt-1')}
+    >
+      <span
+        aria-hidden="true"
+        className="text-muted-foreground block px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase"
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/**
  * One menu action. Renders a `role="menuitem"` button that is not a tab stop
  * (roving focus is driven by {@link Menu}); selecting it runs `onSelect` and then
  * closes the menu, restoring focus to the trigger. `destructive` tints the item

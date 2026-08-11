@@ -49,8 +49,26 @@ function resolved(over: Partial<ResolvedToolbarItem<Ctx>> = {}): ResolvedToolbar
   };
 }
 
+/** The same names {@link Toolbar} resolves; the overflow renders one section heading per group. */
+const GROUP_LABELS = {
+  frame: 'Navigate',
+  lens: 'Display',
+  find: 'Find',
+  tools: 'Author',
+  object: 'Plan actions',
+  history: 'History',
+  help: 'Help',
+};
+
 function openOverflow(items: ResolvedToolbarItem<Ctx>[]): HTMLElement {
-  render(<ToolbarOverflow items={items} context={{ ok: true }} tabIndex={0} />);
+  render(
+    <ToolbarOverflow
+      items={items}
+      context={{ ok: true }}
+      groupLabels={GROUP_LABELS}
+      tabIndex={0}
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: /more/i }));
   return screen.getByRole('menu');
 }
@@ -141,5 +159,52 @@ describe('ToolbarOverflow — the disabled row (ADR-0082)', () => {
     ]);
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Fit to window' }));
     expect(fired).toBe(true);
+  });
+});
+
+/**
+ * **The sectioning** (ADR-0090 M2-T6). `LIVE` sits in `frame` and `SHUT` in `tools`, so a two-item
+ * menu spans two groups — which is the smallest case that can tell a section break from a heading
+ * printed unconditionally.
+ *
+ * **Verified red by running it** against a build with the section render removed — the file's own
+ * standard, one describe block up. Two of the three go red; the roving-focus one passes there
+ * **vacuously**, because with no headings rendered there is nothing that could be in the roving set.
+ * It is kept regardless, and it is the assertion that matters going forward: it is the only one that
+ * fails if a future change renders a section as something `Menu.itemsOf` matches, which would put a
+ * non-actionable heading in the arrow-key order — a trap in a list of commands. Recorded so nobody
+ * reads three green assertions as three independent proofs.
+ */
+describe('ToolbarOverflow — group sections (ADR-0090 M2-T6)', () => {
+  it('breaks the list at each group, under the names the bar uses', () => {
+    const menu = openOverflow([LIVE, SHUT]);
+    expect(
+      within(menu)
+        .getAllByRole('separator')
+        .map((n) => n.getAttribute('aria-label')),
+    ).toEqual(['Navigate', 'Author']);
+  });
+
+  it('prints one heading per group, not one per item', () => {
+    const second = resolved({
+      item: {
+        id: 'today',
+        group: 'frame',
+        tier: 1,
+        order: 1,
+        label: 'Today',
+        onActivate: () => {},
+      },
+    });
+    const menu = openOverflow([LIVE, second, SHUT]);
+    expect(within(menu).getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('leaves the headings out of the roving set', () => {
+    const menu = openOverflow([LIVE, SHUT]);
+    // Opening focuses the first ITEM. One ArrowDown crosses a section break and must land on the
+    // next command — a heading in the roving order would swallow the keystroke.
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(within(menu).getByRole('menuitem', { name: 'Add activity' })).toHaveFocus();
   });
 });
