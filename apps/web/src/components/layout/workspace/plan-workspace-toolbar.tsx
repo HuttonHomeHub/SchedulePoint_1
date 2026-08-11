@@ -55,6 +55,7 @@ import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
+import { ProjectFinishChip } from '@/features/schedule/components/ProjectFinishChip';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
@@ -740,6 +741,13 @@ export function ToolbarPlanWorkspace({
         <div className="flex min-w-0 items-center gap-2">
           <Breadcrumbs items={crumbs} />
           <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+          {/* The Project-finish read-out (ADR-0090 M2-T3), moved off Row 1 where it was a
+              non-operable stop inside a `role="toolbar"` costing 150 px of pinned width. It self-
+              hides until the plan has been calculated, so the header shows nothing rather than an
+              em dash on a fresh plan. */}
+          <span className="ml-1 hidden shrink-0 items-center text-sm sm:inline-flex">
+            <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
+          </span>
           {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
               the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
           {model.canWrite ? (

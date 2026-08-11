@@ -20,7 +20,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return makeTsldToolbarContext({ summaryContent: null, projectFinishContent: null, ...over });
+  return makeTsldToolbarContext({ summaryContent: null, ...over });
 }
 
 function renderRows(context: TsldToolbarContext) {

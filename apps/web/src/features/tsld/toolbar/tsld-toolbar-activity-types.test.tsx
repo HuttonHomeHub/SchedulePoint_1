@@ -24,7 +24,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     summaryContent: null,
-    projectFinishContent: null,
     hasDiagram: false,
     ...over,
   });

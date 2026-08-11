@@ -2118,26 +2118,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
     ...undoRedoToolbarItems(),
 
-    // --- 5 · Object / plan actions ------------------------------------------------------------
-    // Finish read-out + Summary popover stay on Row 1 (Look): they report the computed schedule and
-    // don't need the pen. They right-align via the toolbar's `alignEndGroup="object"` on Row 1.
-    {
-      id: 'finish-chip',
-      group: 'object',
-      row: 'look',
-      tier: 1,
-      order: 0,
-      label: 'Project finish',
-      // A read-out, not a control: rendered inline but never a roving-tabindex stop (a11y review —
-      // a focusable-but-inert stop breaks the APG toolbar contract and can be nameless mid-load).
-      presentational: true,
-      isVisible: (ctx) => ctx.hasDiagram,
-      render: (ctx, api) => (
-        <span {...api.itemProps} className={toolbarControlVariants({ tone: 'info' })}>
-          {ctx.projectFinishContent}
-        </span>
-      ),
-    },
+    // The Project-finish read-out moved to the PLAN HEADER in ADR-0090 M2-T3
+    // (`features/schedule/components/ProjectFinishChip.tsx`). It cost 150 px of pinned Row-1 width
+    // — a `render` item can never demote — to show a number that is not a command, in a
+    // `role="toolbar"` whose other members all are.
     {
       id: 'summary',
       group: 'object',

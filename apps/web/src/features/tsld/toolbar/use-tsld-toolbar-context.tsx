@@ -44,38 +44,8 @@ import {
   type InterchangeExportFormat,
 } from '@/features/interchange';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
-import { useRecalculateCommand, useScheduleSummary } from '@/features/schedule/api/use-schedule';
+import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import { formatCalendarDate } from '@/lib/format-date';
-
-/** The pinned Tier-1 Project-finish chip (product-owner decision #1) — the number planners glance
- * at most, kept inline even though the rest of the summary moves into `Summary▾`. Loading shows a
- * subtle placeholder so the chip's slot doesn't flicker in/out; a not-yet-calculated plan or a load
- * error renders nothing here (the full states live in the `Summary▾` popover, which reuses the same
- * `ScheduleSummaryStrip` — so the chip stays a glance, never a second error surface). */
-function ProjectFinishChip({
-  orgSlug,
-  planId,
-}: {
-  orgSlug: string;
-  planId: string;
-}): React.ReactElement | null {
-  const summary = useScheduleSummary(orgSlug, planId);
-  if (summary.isPending) {
-    return (
-      <span className="text-muted-foreground" aria-hidden="true">
-        Finish …
-      </span>
-    );
-  }
-  const finish = summary.data?.projectFinish ?? null;
-  if (finish === null) return null;
-  return (
-    <>
-      <span className="text-muted-foreground mr-1">Finish</span>
-      <span className="text-foreground font-medium">{formatCalendarDate(finish)}</span>
-    </>
-  );
-}
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */
 export type PlanDialogKind =
@@ -227,10 +197,6 @@ export function useTsldToolbarContext({
       />
     ),
     [orgSlug, planId, plan.status, plan.plannedStart, plan.schedulingMode, editPlan],
-  );
-  const projectFinishContent = useMemo(
-    () => <ProjectFinishChip orgSlug={orgSlug} planId={planId} />,
-    [orgSlug, planId],
   );
   const { open: legendOpen, toggle: toggleLegend } = legend;
 
@@ -527,7 +493,6 @@ export function useTsldToolbarContext({
 
       // Summary popover + pinned finish chip
       summaryContent,
-      projectFinishContent,
 
       hasDiagram,
 
@@ -859,7 +824,6 @@ export function useTsldToolbarContext({
     model.toggleOverAllocation,
     hasOverAllocation,
     summaryContent,
-    projectFinishContent,
     hasDiagram,
     // Toolbar quick-wins — re-identify the context only when the selection / resolved row / a
     // capability actually changes (the callbacks are stable). `todayIso` is value-stable (a fresh

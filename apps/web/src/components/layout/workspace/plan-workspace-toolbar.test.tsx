@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -257,10 +257,21 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     }
   });
 
-  it('pins the Project-finish chip inline in the toolbar (decision #1)', () => {
+  it('shows the Project-finish read-out in the PLAN HEADER (ADR-0090 M2-T3)', () => {
+    // This assertion kept passing across the move without being touched, because it was scoped to
+    // the document — which is exactly why it is being rewritten rather than left alone. A test that
+    // passes for a new reason is worse than one that fails: it reads as coverage of a thing it has
+    // stopped covering. `m2-suite-impact.md` names this file as one of two in that category.
     renderScreen();
-    expect(screen.getByText('Finish')).toBeInTheDocument();
-    expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
+    // Scoped via the plan's own `<h1>`, not `getByRole('banner')`: this `<header>` is nested inside
+    // the workspace, and a `<header>` that is not a direct child of `<body>` is not a banner
+    // landmark. Asserting on the element rather than the role is the honest scope here.
+    const header = screen.getByRole('heading', { level: 1 }).closest('header');
+    expect(header).not.toBeNull();
+    expect(within(header as HTMLElement).getByText('Finish')).toBeInTheDocument();
+    expect(
+      within(header as HTMLElement).getByText(formatCalendarDate('2026-08-01')),
+    ).toBeInTheDocument();
   });
 
   it('collapses the activities panel by default (canvas-maximal)', () => {

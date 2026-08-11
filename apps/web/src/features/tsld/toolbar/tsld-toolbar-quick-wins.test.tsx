@@ -40,7 +40,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     goToDate: spies.goToDate,
     summaryContent: null,
-    projectFinishContent: null,
     revealComments: spies.revealComments,
     openProgress: spies.openProgress,
     openActivityNotes: spies.openActivityNotes,

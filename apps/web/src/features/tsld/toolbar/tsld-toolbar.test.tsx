@@ -146,10 +146,15 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
   });
 
-  it('pins the Project-finish chip inline on Row 1 (product-owner decision #1)', () => {
+  it('keeps the Project-finish read-out OUT of the toolbar (ADR-0090 M2-T3)', () => {
+    // It was pinned inline here on the product owner's own decision #1, and it is not a reversal of
+    // that decision — the read-out is more prominent in the plan header than it was at the far end
+    // of a 25-item row. What changed is where a *number* belongs: 150 px of pinned width inside a
+    // `role="toolbar"` whose every other member is a command, kept legal only by a `presentational`
+    // escape hatch that exists to describe it.
     renderRows(ctx());
     const lookRow = screen.getByRole('toolbar', { name: 'View and navigate' });
-    expect(within(lookRow).getByText('Finish: 01 Aug 2026')).toBeInTheDocument();
+    expect(within(lookRow).queryByText(/^Finish/)).not.toBeInTheDocument();
   });
 
   it('renders the Summary popover body from the context', () => {

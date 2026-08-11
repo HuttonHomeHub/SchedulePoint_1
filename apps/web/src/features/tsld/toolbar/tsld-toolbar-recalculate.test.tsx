@@ -38,7 +38,6 @@ function renderDoRow(over: Partial<TsldToolbarContext> = {}) {
       items={rows.do}
       context={makeTsldToolbarContext({
         summaryContent: null,
-        projectFinishContent: null,
         canRecalc: true,
         ...over,
       })}

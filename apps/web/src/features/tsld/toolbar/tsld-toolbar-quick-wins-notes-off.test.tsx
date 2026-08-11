@@ -29,7 +29,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     schedulingMode: 'VISUAL',
     summaryContent: null,
-    projectFinishContent: null,
     selectedActivityId: 'a1',
     selectedActivity: SELECTED,
     ...over,
