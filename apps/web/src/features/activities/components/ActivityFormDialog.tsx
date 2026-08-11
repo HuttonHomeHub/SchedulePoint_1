@@ -551,11 +551,20 @@ export function ActivityFormDialog({
                   error={generalErrors.type?.message}
                   {...general.form.register('type')}
                 >
-                  {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, type).map((value) => (
-                    <option key={value} value={value}>
-                      {ACTIVITY_TYPE_LABELS[value]}
-                    </option>
-                  ))}
+                  {/* The SAVED type, not the live watched one. The extra option exists only
+                    because this row carries a type the selector does not otherwise offer, so
+                    anchoring it on the live value makes it a one-way door: select anything else
+                    and the option keeping the selector honest vanishes, with no way back. The
+                    saved value cannot lose an option either — a live value is always one just
+                    picked from the list. Visibility below still follows the live `type`, which is
+                    a different question with a different right answer. */}
+                  {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, activity?.type).map(
+                    (value) => (
+                      <option key={value} value={value}>
+                        {ACTIVITY_TYPE_LABELS[value]}
+                      </option>
+                    ),
+                  )}
                 </SelectField>
                 {isDurationDerivedType(type) ? (
                   type === 'LEVEL_OF_EFFORT' ? (

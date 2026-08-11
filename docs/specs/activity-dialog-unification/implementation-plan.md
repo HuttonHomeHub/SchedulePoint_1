@@ -441,8 +441,18 @@ and asserts the same labels and hints. Lands **here, not at M7** (ADR-0081 §2).
   the rule, not the exception rev 1 called it.**
 - **Testing:** `fields/ActivityWorkFields.test.tsx`; field assertions from `sub-day`,
   `duration-types`, `activity-types` land here.
-- **Development steps:** commit A1 — editor's type picker reads the live watched value (D4); commit
+- **Development steps:** commit A1 — **CREATE's** type picker reads the **saved** value (D4); commit
   A2 — editor gains the three explanations (D5), each verified absent first; commit B — extract.
+- **rev 4 — A1 is reversed, and the plan was wrong rather than ambiguous.** rev 3 wrote A1 as
+  _"editor's type picker reads the live watched value"_, following §1.3's "create wins". The M0
+  characterisation case written to pin D4 records the opposite in its own comments — create's live
+  value makes the honest out-of-set option a **one-way door**, because it is in the list only while
+  the row's own type is selected. Following the plan would have imported a defect into the editor
+  under a refactor declared to have no user-visible effect, which is the exact drift this epic
+  exists to remove. The evidence was in the repository before the plan was written and nobody
+  re-read it: ADR-0076 Class 3, and the fourth plan claim in this epic to fail once executed.
+  Converging the other way is also **strictly safe** — the saved value is a superset, since a live
+  value is always one the planner just picked from the list.
 
 ##### Task M2-T3 — `ActivityBreakdownField` (converge D2, then extract)
 

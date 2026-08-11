@@ -423,24 +423,31 @@ describe('divergence D3 — a parked MANDATORY_* constraint', () => {
   });
 });
 
-describe('divergence D4 — where the Type picker’s option list comes from', () => {
-  it('create drops the activity’s own out-of-set type once you change away from it; the editor keeps it', () => {
+describe('divergence D4 (CLOSED, M2-T2 commit A1) — where the Type picker’s option list comes from', () => {
+  it('both hosts keep the activity’s own out-of-set type after you change away from it', () => {
     // `HAMMOCK` is deliberately never offered (no engine behaviour), so it is only in the list
     // because this activity carries it — the honest-selector case both hosts claim to support.
+    //
+    // **Converged onto the EDITOR, which reverses the spec's §1.3 verdict.** That table says
+    // "create wins", and this case — written before anything moved, which is what it is for —
+    // records why that is wrong: reading the LIVE value makes the honest option a ONE-WAY DOOR.
+    // It is in the list only because the stored row carries it, so the moment the planner selects
+    // anything else the option that was keeping the selector honest disappears and there is no way
+    // back without cancelling the dialog. The saved value cannot do that, and it cannot lose an
+    // option either: a live value is always one the planner just picked FROM the list, so anchoring
+    // on the stored row is a superset. Create's real create path is unaffected — with no activity
+    // there is no out-of-set type to keep.
     const hammock = row({ type: 'HAMMOCK' });
 
     const created = mountCreate({ activity: hammock });
     expect(optionValues(screen.getByLabelText('Type'))).toContain('HAMMOCK');
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'TASK' } });
-    // A one-way door: create reads the LIVE value, so the option it was keeping honest disappears
-    // and there is no way back to `HAMMOCK` in this dialog.
-    expect(optionValues(screen.getByLabelText('Type'))).not.toContain('HAMMOCK');
+    expect(optionValues(screen.getByLabelText('Type'))).toContain('HAMMOCK');
     created.unmount();
 
     mountEditor({ activity: hammock });
     expect(optionValues(screen.getByLabelText('Type'))).toContain('HAMMOCK');
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'TASK' } });
-    // The editor reads the SAVED value, so the option survives and the change is reversible.
     expect(optionValues(screen.getByLabelText('Type'))).toContain('HAMMOCK');
   });
 });
