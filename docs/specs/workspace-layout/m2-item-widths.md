@@ -175,6 +175,29 @@ are **113 px of Option B's projected 699 px removal** — and the two remaining 
 command was among the six `'auto'` items whose labels the 524 px figure counts. The label question
 still resolves at M2-T5, by measurement.
 
+## M2-T2 (colour-by) landed — Row 1 stops overflowing at 1920
+
+Re-measured 2026-08-11 after `colour-by` moved into `View ▾`.
+
+|                   | M2 start | after T1 | after T2 (colour-by) |  total Δ |
+| ----------------- | -------: | -------: | -------------------: | -------: |
+| Row 1 items       |       25 |       23 |               **22** |       −3 |
+| Row 1 total @2304 |     1911 |     1798 |             **1615** |     −296 |
+| **Pinned floor**  |     1198 |     1117 |              **934** | **−264** |
+| Inline @1920      |       15 |       17 |         **22 (all)** |       +7 |
+
+**The headline is the last row.** At 1920 the row now holds _every_ item inline — the `⋯` is empty
+and nothing demotes. That is `design.md` §1.4 success criterion 2 met at 1920 rather than at the
+1440 it was written for, and it is the first time in this epic that Row 1 has not overflowed on the
+product owner's own monitor.
+
+`view` still measures **91 px**, unchanged: the trigger annotation is conditional, and the fixture's
+plan is at the default `criticality`. That is the decision working, not the feature failing to
+apply — the non-default width is only spent when a planner has actually changed the encoding.
+
+Remaining pinned: `search` 240, `finish-chip` 150, `go-to-date` 132, `summary` 126, `zoom-preset`
+102, `view` 91, `filter` 93. `finish-chip` is M2-T3.
+
 ## Follow-ups this task opens
 
 - ~~**Fix the `labelled` flag**~~ — done in this task; `visibleText` / `labelWidth` / `nameWidth`
