@@ -1,36 +1,40 @@
 import { WorkingWeekdays } from '@repo/types';
 import type { ActivitySummary, CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
-import { useDurationSeed } from '../model/use-duration-seed';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
 import { ActivityFormDialog } from './ActivityFormDialog';
 
 /**
- * **Both hosts hand `useDurationSeed` a live reader, not a captured value** (ADR-0070; `TECH_DEBT`
- * #83).
+ * **A duration typed before the calendar list resolves survives the re-seed — on BOTH hosts**
+ * (ADR-0070; `docs/TECH_DEBT.md` #83).
  *
- * The hook's own suite proves the rule — a late-arriving working-hours factor never overwrites what
- * a planner typed — by driving `readDuration` itself. What it cannot see is the wiring: the defect
- * that shipped was a **host** passing something captured by the render its effect belonged to (a
- * `dirtyFields` flag then; a watched value would do it again now), so the hook asked a question that
- * had already gone stale. There are two hosts, and this repository's signature defect is a correct
- * pattern applied to one and not its neighbour — so both are asserted here, in one file, from one
- * list.
+ * `use-duration-seed.test.ts` proves the rule at the hook, driving `readDuration` directly. What no
+ * hook test can see is that a host actually *composes* it: there are two dialogs carrying this
+ * field, and this repository's signature defect is a correct pattern applied to one host and not its
+ * neighbour (ADR-0064 §7, ADR-0080). So both are driven here, from one list, through the surface a
+ * planner touches — the field, not the wiring.
  *
- * **Why the wiring and not the race.** The race cannot be reproduced in jsdom: `fireEvent` flushes
- * React synchronously, so even a re-captured value is current by the time the effect runs, and a
- * regressed host would pass a behavioural test. What distinguishes the two implementations is
- * whether the reader **stays** live — so the reader is captured before the field changes and called
- * after it, which is exactly the ordering the real race produces and the only part of it a unit test
- * can hold. The end-to-end behaviour stays `apps/web/e2e-sub-day/`, which is where #83 was found.
+ * The sequence is the one #83 describes: the dialog opens with the factor unknown (the calendar
+ * query is still in flight, so the field degrades to whole working days), the planner types, and
+ * *then* the list resolves. Both directions are asserted, because only the pair is a statement:
+ * an untouched field **is** re-seeded from the row's exact minutes, and a typed one **is not**.
+ * Without the first, this would pass on a host that had stopped re-seeding altogether — the
+ * ADR-0080 "assert the unsqueezed control too" rule.
+ *
+ * **What it does not cover, and where that lives.** jsdom flushes React synchronously inside
+ * `fireEvent`, so the genuine interleaving — a keystroke and a network response as independent
+ * events, with no render between them — is not reproducible here; a host that regressed to a
+ * render-captured flag could still pass this file. That case is held at the hook (`does NOT
+ * overwrite a value typed before the factor arrives`) and end-to-end in `apps/web/e2e-sub-day/`,
+ * which is where #83 was found in the first place. This file's job is the composition either side
+ * of it.
  */
 
-vi.mock('../model/use-duration-seed', () => ({ useDurationSeed: vi.fn() }));
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn().mockResolvedValue({}) }));
 
 function calendar(id: string, hoursPerDay: number): CalendarSummary {
@@ -51,8 +55,10 @@ function calendar(id: string, hoursPerDay: number): CalendarSummary {
   };
 }
 
+/** The list once the query settles. Before that the hosts are handed `[]` — nothing resolves. */
 const CALENDARS = [calendar('cal-8', 8)];
 
+/** Four hours on an eight-hour calendar: the shape the whole ADR exists for. `durationDays` is 0. */
 const ACTIVITY = {
   id: 'a1',
   planId: 'pl1',
@@ -77,78 +83,73 @@ const PLANNER_WITH_PEN = deriveActivityEditorGating({
   canReadCost: true,
 });
 
-/** The last `{ readDuration, setDuration }` pair the host handed the hook. */
-function lastWiring(): { readDuration: () => string; setDuration: (text: string) => void } {
-  const call = vi.mocked(useDurationSeed).mock.calls.at(-1);
-  expect(call).toBeDefined();
-  return call![0];
-}
-
 /**
- * The two hosts, each rendered on the same sub-day row. `ActivityFormDialog` is the create/legacy
- * edit host; `ActivityEditorDialog` is the tabbed editor, whose General tab owns the field.
+ * Each host as a function of the calendar list, so a test can open it empty (the query in flight)
+ * and re-render it full (the query resolved) without remounting — a remount would re-seed for a
+ * different reason and prove nothing.
  */
 const HOSTS = [
   {
     name: 'ActivityFormDialog',
-    render: () =>
-      render(
-        <QueryClientProvider client={new QueryClient()}>
-          <ActivityFormDialog
-            orgSlug="acme"
-            planId="pl1"
-            open
-            onClose={vi.fn()}
-            activity={ACTIVITY}
-            calendars={CALENDARS}
-            planCalendarId="cal-8"
-          />
-        </QueryClientProvider>,
-      ),
+    element: (calendars: CalendarSummary[]) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <ActivityFormDialog
+          orgSlug="acme"
+          planId="pl1"
+          open
+          onClose={vi.fn()}
+          activity={ACTIVITY}
+          calendars={calendars}
+          planCalendarId="cal-8"
+        />
+      </QueryClientProvider>
+    ),
   },
   {
     name: 'ActivityEditorDialog',
-    render: () =>
-      render(
-        <QueryClientProvider client={new QueryClient()}>
-          <ActivityEditorDialog
-            orgSlug="acme"
-            planId="pl1"
-            open
-            onClose={vi.fn()}
-            activity={ACTIVITY}
-            gating={PLANNER_WITH_PEN}
-            calendars={CALENDARS}
-            planCalendarId="cal-8"
-          />
-        </QueryClientProvider>,
-      ),
+    element: (calendars: CalendarSummary[]) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <ActivityEditorDialog
+          orgSlug="acme"
+          planId="pl1"
+          open
+          onClose={vi.fn()}
+          activity={ACTIVITY}
+          gating={PLANNER_WITH_PEN}
+          calendars={calendars}
+          planCalendarId="cal-8"
+        />
+      </QueryClientProvider>
+    ),
   },
 ] as const;
 
+/** The degraded control's label — it states the unit precisely because the unit is then fixed. */
+const DEGRADED = 'Duration (working days)';
+
 beforeEach(() => {
-  vi.mocked(useDurationSeed).mockClear();
+  vi.clearAllMocks();
 });
 
-describe.each(HOSTS)('$name — the duration seed wiring', ({ render: renderHost }) => {
-  it('reads the field’s value at the moment it is asked, not the one its render captured', () => {
-    renderHost();
-    // Captured BEFORE the edit — a reader closed over a render-scope value would answer with what
-    // it saw here for the rest of that render's life, which is the whole of #83.
-    const { readDuration } = lastWiring();
-    expect(readDuration()).toBe('4h');
+describe.each(HOSTS)('$name — a late calendar list', ({ element }) => {
+  it('re-seeds an untouched duration from the row’s exact minutes', () => {
+    const { rerender } = render(element([]));
+    // Whole working days is all the field can say without a factor, and four hours rounds to zero
+    // — the value the planner used to be shown, and used to save over the top of the real one.
+    expect(screen.getByLabelText(DEGRADED)).toHaveValue(0);
 
-    fireEvent.change(screen.getByLabelText('Duration'), { target: { value: '2d 4h' } });
+    rerender(element(CALENDARS));
 
-    expect(readDuration()).toBe('2d 4h');
+    expect(screen.getByLabelText('Duration')).toHaveValue('4h');
   });
 
-  it('writes through to the field, so a re-seed the planner has not pre-empted lands', () => {
-    renderHost();
-    const { setDuration } = lastWiring();
+  it('leaves a duration typed before it arrived exactly as typed', () => {
+    const { rerender } = render(element([]));
+    fireEvent.change(screen.getByLabelText(DEGRADED), { target: { value: '2' } });
 
-    act(() => setDuration('90m'));
+    rerender(element(CALENDARS));
 
-    expect(screen.getByLabelText('Duration')).toHaveValue('90m');
+    // Not '4h': a value the planner entered always outranks a default that arrives after it.
+    expect(screen.getByLabelText('Duration')).toHaveValue('2');
   });
 });

@@ -206,9 +206,16 @@ confirmed or dismissed by execution; the one proposition that could cancel M1 is
   1. `createBody` **omits** blank optional keys; `updateBody` **sends null** for them. Verify red by
      inverting one. This becomes the external anchor M6 needs when `activityFormSchema` retires.
   2. The ADR-0070 `useDurationSeed` race fix still holds on both hosts (TECH_DEBT #83).
-  3. **`useScopeForm`'s `[open, activity?.id]` re-seed on a create host** — it works today only
-     because the dialog stays mounted and toggles `open` **[V]** `useScopeForm.ts:48-57`. A future
-     host that conditionally mounts would break it with nothing failing.
+  3. **`useScopeForm`'s `[open, activity?.id]` re-seed on a create host** — it works today because
+     the dialog stays mounted and toggles `open` **[V]** `useScopeForm.ts:48-57`.
+
+     **CORRECTED at M0-T3 (executed):** rev 3 said "a future host that conditionally mounts would
+     break it with nothing failing". That is **false**, and asserting it rather than repeating it is
+     what showed so — `defaultValues: seed(activity)` (`useScopeForm.ts:44`) seeds at **mount**, so a
+     `{open && <Dialog/>}` host re-seeds on every opening. The real precondition is narrower and M1
+     must not lean on the wrong one: **a host that mounts once and never toggles `open`** carries one
+     draft into the next create.
+
   4. Confirm the gating identity assertions (`gating.logic === gating.general`,
      `gating.members === gating.general`) and leave them as this epic's "no permission moved" oracle.
   5. **Contributor sees no create button at _both_ mount sites** — `plan-detail.tsx:331` and
