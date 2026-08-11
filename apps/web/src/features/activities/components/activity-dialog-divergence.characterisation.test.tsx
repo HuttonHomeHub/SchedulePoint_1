@@ -752,8 +752,11 @@ describe('NEW divergence (CLOSED, M2-T2 commit A2) — the duration-type hint', 
   });
 });
 
-describe('NEW divergence — the external-dates copy', () => {
-  it('create’s external early start warns about the data date; the editor’s does not', () => {
+describe('NEW divergence (CLOSED, M3-T4 commit A) — the external-dates copy', () => {
+  it('both hosts warn that a date before the data date cannot pull work earlier', () => {
+    // The clause answers the question the field invites: an external early start is a bound, not a
+    // pull, so a date in the past is honoured and changes nothing. Without it a planner who sets
+    // one and sees no movement has been told nothing.
     const created = mountCreate();
     expect(hintOf(screen.getByLabelText('External early start'))).toContain(
       'A date before the data date is honoured but can’t pull work earlier.',
@@ -762,19 +765,34 @@ describe('NEW divergence — the external-dates copy', () => {
 
     mountEditor();
     openTab('Scheduling');
-    expect(hintOf(screen.getByLabelText('External early start'))).not.toContain('data date');
+    expect(hintOf(screen.getByLabelText('External early start'))).toContain(
+      'A date before the data date is honoured but can’t pull work earlier.',
+    );
   });
 
-  it('only the editor flags an externally-driven activity in its section aside', () => {
+  it('both hosts flag an externally-driven activity in the section aside', () => {
+    // The editor's, converged the other way: `externalDriven` is engine-computed, and it is the
+    // only thing on this section that says the imported date is currently WINNING rather than
+    // merely being present.
     const driven = row({ externalDriven: true });
 
     const created = mountCreate({ activity: driven });
-    expect(screen.queryByText('Driving this activity')).not.toBeInTheDocument();
+    expect(screen.getByText('Driving this activity')).toBeInTheDocument();
     created.unmount();
 
     mountEditor({ activity: driven });
     openTab('Scheduling');
     expect(screen.getByText('Driving this activity')).toBeInTheDocument();
+  });
+
+  it('neither shows the aside for an activity the external dates do not drive', () => {
+    const created = mountCreate({ activity: row() });
+    expect(screen.queryByText('Driving this activity')).not.toBeInTheDocument();
+    created.unmount();
+
+    mountEditor({ activity: row() });
+    openTab('Scheduling');
+    expect(screen.queryByText('Driving this activity')).not.toBeInTheDocument();
   });
 });
 

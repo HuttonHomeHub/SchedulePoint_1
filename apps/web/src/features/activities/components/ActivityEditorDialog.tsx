@@ -31,6 +31,7 @@ import {
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityCalendarField } from './fields/ActivityCalendarField';
 import { ActivityConstraintFields } from './fields/ActivityConstraintFields';
+import { ActivityExternalDatesFields } from './fields/ActivityExternalDatesFields';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityLevellingField } from './fields/ActivityLevellingField';
 import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
@@ -567,29 +568,10 @@ export function ActivityEditorDialog({
                     <ActivityPlacementFields form={scheduling.form} activityType={type} />
 
                     {INTER_PROJECT_DATES_ENABLED ? (
-                      <FormSection
-                        title="External interfaces"
-                        description="Dates imported from another plan or programme. They bound this activity but never pin it."
-                        aside={
-                          activity?.externalDriven === true ? 'Driving this activity' : undefined
-                        }
-                      >
-                        <FieldGrid>
-                          <TextField
-                            label="External early start"
-                            type="date"
-                            hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins."
-                            {...scheduling.form.register('externalEarlyStart')}
-                          />
-                          <TextField
-                            label="External late finish"
-                            type="date"
-                            hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
-                            error={scheduling.form.formState.errors.externalLateFinish?.message}
-                            {...scheduling.form.register('externalLateFinish')}
-                          />
-                        </FieldGrid>
-                      </FormSection>
+                      <ActivityExternalDatesFields
+                        form={scheduling.form}
+                        externalDriven={activity?.externalDriven === true}
+                      />
                     ) : null}
 
                     {RESOURCE_LEVELLING_ENABLED ? (

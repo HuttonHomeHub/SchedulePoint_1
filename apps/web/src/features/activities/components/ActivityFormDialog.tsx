@@ -34,6 +34,7 @@ import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-e
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityCalendarField } from './fields/ActivityCalendarField';
 import { ActivityConstraintFields } from './fields/ActivityConstraintFields';
+import { ActivityExternalDatesFields } from './fields/ActivityExternalDatesFields';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityLevellingField } from './fields/ActivityLevellingField';
 import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
@@ -619,27 +620,10 @@ export function ActivityFormDialog({
             divider as the other stacked sections (a `<fieldset>`/`<legend>` for the semantic grouping,
             no box). Shown for every type — a milestone can carry an external late finish too (A12500). */}
             {INTER_PROJECT_DATES_ENABLED ? (
-              <FormSection
-                title="External interfaces"
-                description="Imported commitments from outside this plan (a vendor delivery, a downstream commissioning window). The later of the activity’s logic and the external early start drives its start; an external late finish earlier than the logic can achieve shows as negative float. They never override a hard constraint."
-              >
-                <FieldGrid>
-                  <TextField
-                    label="External early start"
-                    type="date"
-                    hint="The earliest an upstream plan or project hands this activity over. Recalculate to apply; the later of this and the activity’s logic wins. A date before the data date is honoured but can’t pull work earlier."
-                    error={schedulingErrors.externalEarlyStart?.message}
-                    {...scheduling.form.register('externalEarlyStart')}
-                  />
-                  <TextField
-                    label="External late finish"
-                    type="date"
-                    hint="The latest a downstream plan or project allows this activity to finish. Earlier than the logic can achieve, it shows as negative float."
-                    error={schedulingErrors.externalLateFinish?.message}
-                    {...scheduling.form.register('externalLateFinish')}
-                  />
-                </FieldGrid>
-              </FormSection>
+              <ActivityExternalDatesFields
+                form={scheduling.form}
+                externalDriven={activity?.externalDriven === true}
+              />
             ) : null}
           </div>
 
