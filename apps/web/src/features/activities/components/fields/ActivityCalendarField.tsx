@@ -2,6 +2,7 @@ import type { ActivityType, CalendarSummary } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
 import { INHERIT_CALENDAR_LABEL } from '../../schemas/activity-schemas';
+import type { ActivitySchedulingValues } from '../../schemas/activity-scope-schemas';
 
 import { Combobox } from '@/components/ui/combobox';
 import { FieldGateLock, useFieldGate } from '@/components/ui/field-gate';
@@ -13,6 +14,20 @@ import {
   toCalendarOptions,
 } from '@/lib/calendar-tiers';
 import { matchesLibraryQuery } from '@/lib/library-filters';
+
+/**
+ * The one field this group renders.
+ *
+ * **Declared later than its siblings', and that is the point.** This component predates the group
+ * convention — it takes `value`/`onChange` rather than a scope form, because it was extracted to
+ * stop the editor re-implementing a combobox, not to partition a schema. Without this tuple the
+ * partition gate (`field-group-partition.structural.test.ts`) could not see `calendarId` at all,
+ * and would have reported the scheduling scope as complete while one field was rendered by
+ * something it could not account for.
+ */
+export const CALENDAR_FIELDS = [
+  'calendarId',
+] as const satisfies readonly (keyof ActivitySchedulingValues)[];
 
 /**
  * The per-activity working-time calendar picker (ADR-0037), shared by {@link ActivityFormDialog} and
