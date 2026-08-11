@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_EDITOR_TABS_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   NOTES_ENABLED,
@@ -246,10 +245,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    */
   const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
   const onEditActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_TABS_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'edit'))
-        : setEditActivityId(a.id),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'edit')),
     [],
   );
   // The **Logic** entry point, shared by the canvas selection bar, the canvas keyboard (Enter on a
@@ -306,10 +302,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Flag-on, **Steps** is no longer a dialog of its own: it opens the editor's Progress tab with
   // focus on the Weighted-steps panel, beside the physical % it overrides (ADR-0060 §7).
   const onStepsActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_TABS_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'steps'))
-        : setStepsActivityId(a.id),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'steps')),
     [],
   );
   const setStepsActivity = useCallback(
@@ -349,10 +342,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Flag-on, both entry points open the editor's Progress tab instead — where the reported % sits
   // beside the measure it does NOT control (ADR-0060 §7).
   const onProgressActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_TABS_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'progress'))
-        : setProgressActivityId(a.id),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'progress')),
     [],
   );
 

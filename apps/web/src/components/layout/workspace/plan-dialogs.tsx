@@ -4,20 +4,13 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_EDITOR_TABS_ENABLED,
-  ACTIVITY_STEPS_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
-  EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
   RESOURCES_ENABLED,
 } from '@/config/env';
-import {
-  ActivityProgressDialog,
-  ActivityStepsDialog,
-  isMilestoneType,
-} from '@/features/activities';
+import { isMilestoneType } from '@/features/activities';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { DependencyEditor } from '@/features/dependencies';
 import { ActivityNotesSection } from '@/features/notes';
@@ -151,44 +144,6 @@ export function PlanDialogs({
                 ),
               }
             : {})}
-        />
-      ) : null}
-
-      {/* The progress editor, shared by BOTH the toolbar's Report-progress command and the canvas
-          selection bar's Report-progress action (entry-route), driven off `model.progressActivity`
-          (the id reused by both entry points, so there's exactly ONE progress dialog per workspace).
-          Superseded behind `VITE_ACTIVITY_EDITOR_TABS`, where both entry points open the tabbed
-          editor's Progress tab instead and `ActivityCrudDialogs` is the workspace's only editor.
-          Role-gated (Contributor+), NOT pen-gated (the progress precedent, ADR-0046). This component
-          was shared by both canvas layouts so progress worked regardless of `VITE_CANVAS_TOOLBAR`;
-          ADR-0088 D3 retired that flag and deleted the other layout, so there is now one host. */}
-      {model.canProgress && !ACTIVITY_EDITOR_TABS_ENABLED ? (
-        <ActivityProgressDialog
-          orgSlug={model.orgSlug}
-          planId={model.planId}
-          open={model.progressActivity !== undefined}
-          onClose={() => model.setProgressActivityId(null)}
-          {...(model.progressActivity ? { activity: model.progressActivity } : {})}
-        />
-      ) : null}
-
-      {/* The weighted-steps editor the canvas selection bar's **Steps** action opens (entry-route +
-          earned-value/steps flags), driven off `model.stepsActivity`. Same dialog + gates as the
-          activities-table Steps row action (writer surface; the item hides for a duration-derived
-          selection). Superseded behind `VITE_ACTIVITY_EDITOR_TABS` — Steps then opens the editor's
-          Progress tab, focused on the Weighted-steps panel beside the physical % it overrides.
-          Flag-off / flags-off ⇒ not rendered (byte-for-byte). */}
-      {ENTRY_ROUTES_ENABLED &&
-      EARNED_VALUE_ENABLED &&
-      ACTIVITY_STEPS_ENABLED &&
-      !ACTIVITY_EDITOR_TABS_ENABLED &&
-      model.canEditSchedule ? (
-        <ActivityStepsDialog
-          orgSlug={model.orgSlug}
-          planId={model.planId}
-          open={model.stepsActivity !== undefined}
-          onClose={() => model.setStepsActivity(undefined)}
-          {...(model.stepsActivity ? { activity: model.stepsActivity } : {})}
         />
       ) : null}
     </>

@@ -82,7 +82,6 @@ interface ImportMetaEnv {
   /** Gantt view — a grid-and-bar projection of the same model, reached through the TSLD | Gantt view switch, for the audience that does not read logic diagrams (ADR-0059, docs/specs/gantt-view/). Read-only in the first slices. "true"/"1" enables it; off by default until the M6 enablement gate. */
   readonly VITE_GANTT_VIEW?: string;
   /** Tabbed activity editor — the 22-field single-submit dialog split into four tabs that save per write scope, with the progress model co-located (ADR-0060, docs/specs/activity-editor-restructure/). "true"/"1" enables it; off by default until the M6 enablement gate. */
-  readonly VITE_ACTIVITY_EDITOR_TABS?: string;
   /** Activity-editor convergence — the per-activity Logic and Resources pop-outs folded into tabs of the editor above, rendering the same panels the dialogs render (docs/specs/activity-editor-logic-resources-convergence/). No permission change: the new scopes reuse the existing definition gate. "true"/"1" enables it; off by default until the M6 enablement gate. */
   readonly VITE_ACTIVITY_EDITOR_CONVERGENCE?: string;
   /** WBS improvements — managing a summary's membership from the summary, dissolving a grouping without deleting the work in it, the derived Unassigned bucket, and the pinned WBS band on the canvas (docs/specs/wbs-improvements/). "true"/"1" enables it; off by default until the enablement gate. */

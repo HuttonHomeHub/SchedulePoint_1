@@ -16,9 +16,6 @@ import {
 } from '../schemas/activity-schemas';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
-import { ActivityFormDialog } from './ActivityFormDialog';
-import { ActivityProgressDialog } from './ActivityProgressDialog';
-import { ActivityStepsDialog } from './ActivityStepsDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +26,6 @@ import { Menu, MenuItem } from '@/components/ui/menu';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_EDITOR_TABS_ENABLED,
   ACTIVITY_COPY_PASTE_ENABLED,
   ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
@@ -235,12 +231,10 @@ export function ActivitiesTable({
   }, [activities.data]);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [progressId, setProgressId] = useState<string | null>(null);
   const [resourcesId, setResourcesId] = useState<string | null>(null);
-  const [stepsId, setStepsId] = useState<string | null>(null);
-  // Flag-on, the row menu's Edit / Report progress / Steps all resolve to ONE intent and ONE editor
-  // (ADR-0060 §7). Flag-off this stays null and the three legacy ids above still drive.
+  // The row menu's Edit / Report progress / Steps all resolve to ONE intent and ONE editor
+  // (ADR-0060 §7) — they carried three separate ids and three separate dialogs until the tabbed
+  // editor's flag retired.
   const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -260,8 +254,6 @@ export function ActivitiesTable({
   } | null>(null);
   const menuTriggerRef = useRef<HTMLElement | null>(null);
 
-  const editing = editingId ? activities.data?.find((a) => a.id === editingId) : undefined;
-  const reporting = progressId ? activities.data?.find((a) => a.id === progressId) : undefined;
   const managingResources = resourcesId
     ? activities.data?.find((a) => a.id === resourcesId)
     : undefined;
@@ -272,7 +264,6 @@ export function ActivitiesTable({
     activityCalendarId: managingResources?.calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
-  const editingSteps = stepsId ? activities.data?.find((a) => a.id === stepsId) : undefined;
   const intended = editorIntent
     ? activities.data?.find((a) => a.id === editorIntent.activityId)
     : undefined;
@@ -331,15 +322,9 @@ export function ActivitiesTable({
   };
   const clearSelection = (): void => setSelectedIds(new Set());
 
-  /** Open the tabbed editor if it is on, else fall back to this purpose's own legacy dialog. */
+  /** Open the tabbed editor on the tab this purpose belongs to (ADR-0060 §7). */
   const openFor = (activity: ActivitySummary, purpose: 'edit' | 'progress' | 'steps'): void => {
-    if (ACTIVITY_EDITOR_TABS_ENABLED) {
-      setEditorIntent(openActivityEditor(activity, purpose));
-      return;
-    }
-    if (purpose === 'edit') setEditingId(activity.id);
-    else if (purpose === 'progress') setProgressId(activity.id);
-    else setStepsId(activity.id);
+    setEditorIntent(openActivityEditor(activity, purpose));
   };
 
   // The per-row action list, role-/flag-gated (ADR-0039/0044). Feeds both the decision to show a
@@ -875,16 +860,6 @@ export function ActivitiesTable({
         }
       />
 
-      {canReportProgress && !ACTIVITY_EDITOR_TABS_ENABLED ? (
-        <ActivityProgressDialog
-          orgSlug={orgSlug}
-          planId={planId}
-          open={reporting !== undefined}
-          onClose={() => setProgressId(null)}
-          {...(reporting ? { activity: reporting } : {})}
-        />
-      ) : null}
-
       {RESOURCES_ENABLED && !hostOwnsResources ? (
         <ActivityResourcesDialog
           orgSlug={orgSlug}
@@ -912,23 +887,10 @@ export function ActivitiesTable({
         />
       ) : null}
 
-      {ACTIVITY_STEPS_ENABLED &&
-      EARNED_VALUE_ENABLED &&
-      canEditSchedule &&
-      !ACTIVITY_EDITOR_TABS_ENABLED ? (
-        <ActivityStepsDialog
-          orgSlug={orgSlug}
-          planId={planId}
-          open={editingSteps !== undefined}
-          onClose={() => setStepsId(null)}
-          {...(editingSteps ? { activity: editingSteps } : {})}
-        />
-      ) : null}
-
-      {/* The ONE editor behind the flag — the same component the canvas workspace hosts, opened by
-          all three row actions. Mounted for any role that can reach a scope (a Contributor reaches
-          Progress), unlike the legacy edit dialog which was writer-only. */}
-      {ACTIVITY_EDITOR_TABS_ENABLED && editorGating ? (
+      {/* The table's ONE editor — the same component the canvas workspace hosts, opened by all
+          three row actions. Mounted for any role that can reach a scope (a Contributor reaches
+          Progress), unlike the legacy edit dialog it replaced, which was writer-only. */}
+      {editorGating ? (
         <ActivityEditorDialog
           orgSlug={orgSlug}
           planId={planId}
@@ -949,22 +911,6 @@ export function ActivitiesTable({
 
       {canEditSchedule ? (
         <>
-          {ACTIVITY_EDITOR_TABS_ENABLED ? null : (
-            <ActivityFormDialog
-              orgSlug={orgSlug}
-              planId={planId}
-              open={editing !== undefined}
-              onClose={() => setEditingId(null)}
-              calendars={calendars}
-              calendarsLoading={calendarsLoading}
-              calendarsError={calendarsError}
-              {...(planCalendarId === undefined ? {} : { planCalendarId })}
-              planActivities={activities.data ?? []}
-              planActivitiesLoading={activities.isPending}
-              planActivitiesError={activities.isError}
-              {...(editing ? { activity: editing } : {})}
-            />
-          )}
           <ConfirmDialog
             open={deleting !== null}
             onClose={() => {

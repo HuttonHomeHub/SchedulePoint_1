@@ -7,14 +7,12 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_EDITOR_TABS_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
 import {
   ActivityEditorDialog,
-  ActivityFormDialog,
   deleteActivityDescription,
   dissolveSummaryDescription,
   useDeleteActivity,
@@ -47,11 +45,8 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
   const [bandCopyError, setBandCopyError] = useState<string | null>(null);
   const [bandCopyPending, setBandCopyPending] = useState(false);
 
-  const editing = model.editActivityId
-    ? model.activities.data?.find((a) => a.id === model.editActivityId)
-    : undefined;
-  // Same rule as `editing`: the intent holds an id, the row comes from the live query, so a save
-  // that bumps `version` feeds the next one and the editor closes when its target is deleted.
+  // The intent holds an id, the row comes from the live query, so a save that bumps `version` feeds
+  // the next one and the editor closes when its target is deleted.
   const intended = model.editorIntent
     ? model.activities.data?.find((a) => a.id === model.editorIntent?.activityId)
     : undefined;
@@ -140,93 +135,73 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
 
   return (
     <>
-      {ACTIVITY_EDITOR_TABS_ENABLED ? (
-        <ActivityEditorDialog
-          orgSlug={orgSlug}
-          planId={planId}
-          open={intended !== undefined}
-          onClose={() => model.setEditorIntent(null)}
-          onSaved={model.recordActivityUpdate}
-          gating={model.activityEditorGating}
-          calendars={model.calendars.data ?? []}
-          calendarsLoading={model.calendars.isPending}
-          calendarsError={model.calendars.isError}
-          {...(model.plan.data?.calendarId == null
-            ? {}
-            : { planCalendarId: model.plan.data.calendarId })}
-          planActivities={model.activities.data ?? []}
-          planActivitiesLoading={model.activities.isPending}
-          planActivitiesError={model.activities.isError}
-          activity={intended}
-          {...(model.editorIntent ? { intent: model.editorIntent } : {})}
-          {...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
-            ? {
-                // The Logic tab's seams, which `plan-dialogs` wired into the Logic dialog before
-                // this. Each is named in the plan as a thing that dies silently if it is dropped
-                // in the move — the undo recording for a removed link, the keyboard lag nudge, and
-                // the cross-plan section this feature must not import sideways — so each has its
-                // own regression test.
-                logic: {
-                  onAdded: model.recordDependencyAdd,
-                  onRemoved: model.recordDependencyRemove,
-                  ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
-                    ? { onNudgeLag: model.nudgeDependencyLag }
-                    : {}),
-                  ...(PROGRAMME_SCHEDULING_ENABLED && intended
-                    ? {
-                        crossPlanSlot: (
-                          <CrossPlanLinksSection
-                            orgSlug={orgSlug}
-                            planId={planId}
-                            activity={intended}
-                            canManageLogic={model.canManageLogic}
-                            // `intended` is already narrowed truthy by this branch's own
-                            // condition (`PROGRAMME_SCHEDULING_ENABLED && intended`), so this
-                            // section is always showing its subject when it renders at all.
-                            enabled
-                          />
-                        ),
-                      }
-                    : {}),
-                },
-                ...(NOTES_ENABLED && intended
+      <ActivityEditorDialog
+        orgSlug={orgSlug}
+        planId={planId}
+        open={intended !== undefined}
+        onClose={() => model.setEditorIntent(null)}
+        onSaved={model.recordActivityUpdate}
+        gating={model.activityEditorGating}
+        calendars={model.calendars.data ?? []}
+        calendarsLoading={model.calendars.isPending}
+        calendarsError={model.calendars.isError}
+        {...(model.plan.data?.calendarId == null
+          ? {}
+          : { planCalendarId: model.plan.data.calendarId })}
+        planActivities={model.activities.data ?? []}
+        planActivitiesLoading={model.activities.isPending}
+        planActivitiesError={model.activities.isError}
+        activity={intended}
+        {...(model.editorIntent ? { intent: model.editorIntent } : {})}
+        {...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+          ? {
+              // The Logic tab's seams, which `plan-dialogs` wired into the Logic dialog before
+              // this. Each is named in the plan as a thing that dies silently if it is dropped
+              // in the move — the undo recording for a removed link, the keyboard lag nudge, and
+              // the cross-plan section this feature must not import sideways — so each has its
+              // own regression test.
+              logic: {
+                onAdded: model.recordDependencyAdd,
+                onRemoved: model.recordDependencyRemove,
+                ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
+                  ? { onNudgeLag: model.nudgeDependencyLag }
+                  : {}),
+                ...(PROGRAMME_SCHEDULING_ENABLED && intended
                   ? {
-                      notesSlot: (
-                        <ActivityNotesSection
+                      crossPlanSlot: (
+                        <CrossPlanLinksSection
                           orgSlug={orgSlug}
                           planId={planId}
                           activity={intended}
-                          canWrite={model.canWriteNotes}
-                          // Same reasoning as the cross-plan slot above: `intended` is already
-                          // narrowed truthy by this branch's own condition (`NOTES_ENABLED &&
-                          // intended`).
+                          canManageLogic={model.canManageLogic}
+                          // `intended` is already narrowed truthy by this branch's own
+                          // condition (`PROGRAMME_SCHEDULING_ENABLED && intended`), so this
+                          // section is always showing its subject when it renders at all.
                           enabled
                         />
                       ),
                     }
                   : {}),
-              }
-            : {})}
-        />
-      ) : (
-        <ActivityFormDialog
-          orgSlug={orgSlug}
-          planId={planId}
-          open={editing !== undefined}
-          onClose={() => model.setEditActivityId(null)}
-          onSaved={model.recordActivityUpdate}
-          calendars={model.calendars.data ?? []}
-          calendarsLoading={model.calendars.isPending}
-          calendarsError={model.calendars.isError}
-          {...(model.plan.data?.calendarId == null
-            ? {}
-            : { planCalendarId: model.plan.data.calendarId })}
-          planActivities={model.activities.data ?? []}
-          planActivitiesLoading={model.activities.isPending}
-          planActivitiesError={model.activities.isError}
-          {...(editing ? { activity: editing } : {})}
-        />
-      )}
+              },
+              ...(NOTES_ENABLED && intended
+                ? {
+                    notesSlot: (
+                      <ActivityNotesSection
+                        orgSlug={orgSlug}
+                        planId={planId}
+                        activity={intended}
+                        canWrite={model.canWriteNotes}
+                        // Same reasoning as the cross-plan slot above: `intended` is already
+                        // narrowed truthy by this branch's own condition (`NOTES_ENABLED &&
+                        // intended`).
+                        enabled
+                      />
+                    ),
+                  }
+                : {}),
+            }
+          : {})}
+      />
       <ConfirmDialog
         open={deleting !== undefined}
         onClose={closeDelete}
