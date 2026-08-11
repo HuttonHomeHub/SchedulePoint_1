@@ -1,5 +1,4 @@
 import {
-  DURATION_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
   isParkedConstraintType,
   type ActivitySummary,
@@ -15,25 +14,16 @@ import {
 } from 'react-hook-form';
 
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
-import {
-  DURATION_NEEDS_WHOLE_DAYS,
-  durationHelp,
-  durationInputProps,
-  durationLabel,
-  durationWriteFields,
-} from '../model/duration-field';
+import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
-  ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
-  DURATION_TYPE_LABELS,
   INHERIT_CALENDAR_LABEL,
   PERCENT_COMPLETE_TYPE_LABELS,
   PERCENT_COMPLETE_TYPE_OPTIONS,
   isDurationDerivedType,
-  selectableActivityTypes,
   type ActivityFormValues,
 } from '../schemas/activity-schemas';
 import {
@@ -49,6 +39,7 @@ import {
 
 import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
+import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -56,19 +47,13 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField, FormProblemCount, SelectField, TextField } from '@/components/ui/form';
-import {
-  FieldGrid,
-  FieldGridContainer,
-  FieldGridFull,
-  FormSection,
-} from '@/components/ui/form-layout';
+import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
   COST_ACCRUAL_ENABLED,
-  DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
@@ -540,104 +525,11 @@ export function ActivityFormDialog({
           <div className="flex flex-col gap-5">
             <ActivityIdentityFields form={general.form} />
 
-            <FormSection
-              title="Work"
-              description="What kind of activity this is, and how long it takes."
-            >
-              <FieldGrid>
-                <SelectField
-                  label="Type"
-                  error={generalErrors.type?.message}
-                  {...general.form.register('type')}
-                >
-                  {/* The SAVED type, not the live watched one. The extra option exists only
-                    because this row carries a type the selector does not otherwise offer, so
-                    anchoring it on the live value makes it a one-way door: select anything else
-                    and the option keeping the selector honest vanishes, with no way back. The
-                    saved value cannot lose an option either — a live value is always one just
-                    picked from the list. Visibility below still follows the live `type`, which is
-                    a different question with a different right answer. */}
-                  {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, activity?.type).map(
-                    (value) => (
-                      <option key={value} value={value}>
-                        {ACTIVITY_TYPE_LABELS[value]}
-                      </option>
-                    ),
-                  )}
-                </SelectField>
-                {isDurationDerivedType(type) ? (
-                  type === 'LEVEL_OF_EFFORT' ? (
-                    <FieldGridFull>
-                      <p className="text-muted-foreground text-sm">
-                        A level-of-effort activity’s duration is derived from its span — the start
-                        of its earliest start-to-start predecessor to the finish of its latest
-                        finish-to-finish successor. Add those links, then Recalculate.
-                      </p>
-                    </FieldGridFull>
-                  ) : type === 'WBS_SUMMARY' ? (
-                    <FieldGridFull>
-                      <p className="text-muted-foreground text-sm">
-                        A WBS summary’s dates roll up from the activities grouped under it — the
-                        earliest start to the latest finish of its branch. It carries no logic of
-                        its own (no dependencies). To fill it, open each activity in the branch and
-                        set its WBS summary to this one, then Recalculate.
-                      </p>
-                    </FieldGridFull>
-                  ) : null
-                ) : (
-                  <TextField
-                    label={durationLabel(hoursPerDay)}
-                    {...durationInputProps(hoursPerDay)}
-                    {...(durationHelp(hoursPerDay) === undefined
-                      ? {}
-                      : { hint: durationHelp(hoursPerDay) })}
-                    error={generalErrors.duration?.message}
-                    {...general.form.register('duration')}
-                  />
-                )}
-                {/* A resource-dependent activity keeps its own duration (it behaves exactly like a task for
-            logic) — only the CALENDAR it is measured on changes, to its driving resource's
-            (ADR-0035 §23 / ADR-0039). Saying so here is the difference between a type that looks
-            inert and one whose effect is elsewhere: without an assignment the engine schedules it
-            on the ordinary calendar and flags it, which is what the Needs-a-driver badge reports. */}
-                {resourceDependent ? (
-                  <FieldGridFull>
-                    <p className="text-muted-foreground text-sm">
-                      A resource-dependent activity is scheduled on its{' '}
-                      <strong>driving resource’s</strong> calendar rather than its own, so it
-                      follows that crew or plant’s working time. Assign a resource and mark it
-                      driving, then Recalculate. Until you do, it schedules like an ordinary task
-                      and is flagged as needing a driver.
-                    </p>
-                  </FieldGridFull>
-                ) : null}
-                {/* Duration type governs the resource-units triad (ADR-0040), so it is meaningless for a type
-            with no entered duration/units (a milestone, LOE or WBS summary) — hidden for those, mirroring
-            the Duration field. */}
-                {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
-                  <FieldGridFull>
-                    <SelectField
-                      label="Duration type"
-                      hint={
-                        'Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or ' +
-                        'units/time recomputes the others so units = duration × units/time stays true — e.g. a ' +
-                        'crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or ' +
-                        '“Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s ' +
-                        'duration; with the two fixed-duration types, editing the duration here also updates ' +
-                        'the driving resource’s units or rate.'
-                      }
-                      {...general.form.register('durationType')}
-                    >
-                      {DURATION_TYPES.map((value) => (
-                        <option key={value} value={value}>
-                          {DURATION_TYPE_LABELS[value]}
-                        </option>
-                      ))}
-                    </SelectField>
-                  </FieldGridFull>
-                ) : null}
-              </FieldGrid>
-            </FormSection>
+            <ActivityWorkFields
+              form={general.form}
+              hoursPerDay={hoursPerDay}
+              {...(activity?.type === undefined ? {} : { savedType: activity.type })}
+            />
 
             {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it never asserts a
             false state while the plan activities are still resolving. The "no summaries yet"

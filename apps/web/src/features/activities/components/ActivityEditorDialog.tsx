@@ -4,7 +4,6 @@ import {
   type CalendarSummary,
   type DependencySummary,
 } from '@repo/types';
-import { DURATION_TYPES } from '@repo/types';
 import { useCallback, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 
@@ -13,23 +12,15 @@ import { useUpdateActivityFields } from '../api/use-activities';
 import { activityContextFacts, activitySubtitle } from '../lib/activity-editor-context';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import type { ActivityEditorIntent, ActivityEditorTab } from '../lib/activity-editor-intent';
-import {
-  DURATION_NEEDS_WHOLE_DAYS,
-  durationHelp,
-  durationInputProps,
-  durationLabel,
-  durationWriteFields,
-} from '../model/duration-field';
+import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
-  DURATION_TYPE_LABELS,
   isDurationDerivedType,
   isMilestoneType,
-  selectableActivityTypes,
 } from '../schemas/activity-schemas';
 import {
   activityCostSchema,
@@ -45,6 +36,7 @@ import {
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
+import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -57,7 +49,6 @@ import {
   ContextStrip,
   FieldGrid,
   FieldGridContainer,
-  FieldGridFull,
   FormSection,
 } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
@@ -70,7 +61,6 @@ import {
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
   COST_ACCRUAL_ENABLED,
-  DURATION_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   NOTES_ENABLED,
@@ -496,100 +486,11 @@ export function ActivityEditorDialog({
                   <FieldGateProvider gate={gating.general}>
                     <ActivityIdentityFields form={general.form} />
 
-                    <FormSection
-                      title="Work"
-                      description="What kind of activity this is, and how long it takes."
-                    >
-                      <FieldGrid>
-                        <SelectField
-                          label="Type"
-                          error={general.form.formState.errors.type?.message}
-                          {...general.form.register('type')}
-                        >
-                          {selectableActivityTypes(
-                            ADVANCED_ACTIVITY_TYPES_ENABLED,
-                            activity?.type,
-                          ).map((value) => (
-                            <option key={value} value={value}>
-                              {ACTIVITY_TYPE_LABELS[value]}
-                            </option>
-                          ))}
-                        </SelectField>
-                        {/* A derived type computes its own duration, so both controls disappear
-                          together — the pair has always been one decision. Where the duration
-                          field would have been, the reason it is not there. */}
-                        {isDurationDerivedType(type) ? (
-                          type === 'LEVEL_OF_EFFORT' ? (
-                            <FieldGridFull>
-                              <p className="text-muted-foreground text-sm">
-                                A level-of-effort activity’s duration is derived from its span — the
-                                start of its earliest start-to-start predecessor to the finish of
-                                its latest finish-to-finish successor. Add those links, then
-                                Recalculate.
-                              </p>
-                            </FieldGridFull>
-                          ) : type === 'WBS_SUMMARY' ? (
-                            <FieldGridFull>
-                              <p className="text-muted-foreground text-sm">
-                                A WBS summary’s dates roll up from the activities grouped under it —
-                                the earliest start to the latest finish of its branch. It carries no
-                                logic of its own (no dependencies). To fill it, open each activity
-                                in the branch and set its WBS summary to this one, then Recalculate.
-                              </p>
-                            </FieldGridFull>
-                          ) : null
-                        ) : (
-                          <TextField
-                            label={durationLabel(hoursPerDay)}
-                            {...durationInputProps(hoursPerDay)}
-                            {...(durationHelp(hoursPerDay) === undefined
-                              ? {}
-                              : { hint: durationHelp(hoursPerDay) })}
-                            error={general.form.formState.errors.duration?.message}
-                            {...general.form.register('duration')}
-                          />
-                        )}
-                        {/* A resource-dependent activity keeps its own duration (it behaves exactly
-                          like a task for logic) — only the CALENDAR it is measured on changes, to
-                          its driving resource's (ADR-0035 §23 / ADR-0039). Saying so here is the
-                          difference between a type that looks inert and one whose effect is
-                          elsewhere: without an assignment the engine schedules it on the ordinary
-                          calendar and flags it, which is what the Needs-a-driver badge reports. */}
-                        {type === 'RESOURCE_DEPENDENT' ? (
-                          <FieldGridFull>
-                            <p className="text-muted-foreground text-sm">
-                              A resource-dependent activity is scheduled on its{' '}
-                              <strong>driving resource’s</strong> calendar rather than its own, so
-                              it follows that crew or plant’s working time. Assign a resource and
-                              mark it driving, then Recalculate. Until you do, it schedules like an
-                              ordinary task and is flagged as needing a driver.
-                            </p>
-                          </FieldGridFull>
-                        ) : null}
-                        {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
-                          <FieldGridFull>
-                            <SelectField
-                              label="Duration type"
-                              hint={
-                                'Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or ' +
-                                'units/time recomputes the others so units = duration × units/time stays true — e.g. a ' +
-                                'crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or ' +
-                                '“Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s duration; ' +
-                                'with the two fixed-duration types, editing the duration here also updates the driving ' +
-                                'resource’s units or rate.'
-                              }
-                              {...general.form.register('durationType')}
-                            >
-                              {DURATION_TYPES.map((value) => (
-                                <option key={value} value={value}>
-                                  {DURATION_TYPE_LABELS[value]}
-                                </option>
-                              ))}
-                            </SelectField>
-                          </FieldGridFull>
-                        ) : null}
-                      </FieldGrid>
-                    </FormSection>
+                    <ActivityWorkFields
+                      form={general.form}
+                      hoursPerDay={hoursPerDay}
+                      {...(activity?.type === undefined ? {} : { savedType: activity.type })}
+                    />
 
                     {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
                       <FormSection
