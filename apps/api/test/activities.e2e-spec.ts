@@ -368,6 +368,35 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(422);
   });
 
+  it('accepts an expense on a FINISH_MILESTONE — a payment milestone is cost with no duration', async () => {
+    // **The evidence D9 turns on** (`docs/specs/activity-dialog-unification/`, M4-T2). The create
+    // dialog hid the cost fields for every duration-derived type, so a payment milestone — the
+    // commonest reason a milestone carries money at all — could not be given its value on the one
+    // surface that creates it. Moving the editor's rule across is only right if the API agrees, and
+    // reading the DTO is not the same as asking it: the type gates in `activities.service.ts` all
+    // touch duration, and the money fields validate on range alone, but that is an argument rather
+    // than an answer. This is the answer.
+    const { actor, planId } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Practical completion', type: 'FINISH_MILESTONE', budgetedExpense: 250_000 })
+      .expect(201);
+
+    expect(created.body.data).toMatchObject({
+      type: 'FINISH_MILESTONE',
+      durationDays: 0,
+      budgetedExpense: 250_000,
+    });
+
+    // And it survives an update, which is the other half: a milestone whose expense could be set
+    // once and never corrected would be its own defect.
+    const patched = await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${created.body.data.id as string}`)
+      .send({ budgetedExpense: 300_000, version: created.body.data.version })
+      .expect(200);
+    expect(patched.body.data.budgetedExpense).toBe(300_000);
+  });
+
   it('round-trips a secondary constraint and enforces its pairing on update (ADR-0035 §10)', async () => {
     const { actor, planId } = await setup();
     const created = await actor.agent
