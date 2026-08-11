@@ -17,7 +17,10 @@ import { writeMeasurement } from './output';
  *
  * Measured 2026-08-11: Row 1 at 2304 is 25 items totalling 1911 px, of which **1198 px is pinned**
  * — corroborating `design.md`'s ~1177 px estimate, one of the few figures in that document that
- * survived contact with a browser.
+ * survived contact with a browser. The label widths settled the milestone's open question the other
+ * way: Option B's six surviving `'auto'` items cost **524 px** to label, against 456 px of slack at
+ * 1920, so the consolidation as designed fits **icon-only** and misses success criterion 1
+ * (`docs/specs/workspace-layout/m2-item-widths.md`, Conclusion 2).
  *
  * Asserts nothing; it is a harness (ADR-0081 §3).
  */
@@ -27,7 +30,15 @@ const WIDTHS = [2304, 1920, 1440];
 async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
   return page.getByRole('toolbar', { name: ariaLabel }).evaluate((el) => {
     const container = el as HTMLElement;
-    const items: { id: string; group: string; width: number; labelled: boolean }[] = [];
+    const items: {
+      id: string;
+      group: string;
+      width: number;
+      visibleText: string;
+      labelled: boolean;
+      labelWidth: number | null;
+      nameWidth: number | null;
+    }[] = [];
     for (const node of container.querySelectorAll<HTMLElement>('[data-toolbar-item]')) {
       const id = node.getAttribute('data-toolbar-item') ?? '';
       if (id === '__overflow__') continue;
@@ -39,11 +50,47 @@ async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
       // by 800 px in the direction that makes it look easy. Whether an item can demote is a fact
       // about the **registry** (`typeof item.render === 'function'`), so it is joined there rather
       // than guessed from markup.
+      //
+      // `labelled` asks whether a **visible** label is painted, and is measured rather than
+      // inferred. Its first version was `innerText.trim().length > 0`, which is true of any item
+      // rendering text at all — `sr-only` content included — so it reported `next-conflict` as
+      // labelled at 32 px wide. Here the visible text is summed from the element's own text nodes,
+      // skipping any subtree that is `sr-only` or `aria-hidden`, and `labelWidth` measures that text
+      // with the control's real computed font: the same `measureText` call `Toolbar.tsx:54-70` makes
+      // to decide promotion in the first place, so the two cannot disagree.
+      const visibleText = (() => {
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        let text = '';
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const parent = n.parentElement;
+          if (!parent) continue;
+          if (parent.closest('.sr-only, [aria-hidden="true"]')) continue;
+          text += n.textContent ?? '';
+        }
+        return text.trim();
+      })();
+
+      const font = getComputedStyle(node).font || '14px sans-serif';
+      const ctx = (document.createElement('canvas') as HTMLCanvasElement).getContext('2d');
+      const measure = (text: string): number | null => {
+        if (!ctx || typeof ctx.measureText !== 'function' || !text) return null;
+        ctx.font = font;
+        return Math.round(ctx.measureText(text).width);
+      };
+      const labelWidth = measure(visibleText);
+      // What the label WOULD cost if promoted — the number the icon-only items exist to answer, and
+      // the one `labelWidth` cannot give because there is no text to measure. Taken from the
+      // accessible name, which is what `ToolbarButton` renders when `showLabel` is true.
+      const nameWidth = measure(node.getAttribute('aria-label') ?? visibleText);
+
       items.push({
         id,
         group,
         width: Math.round(node.getBoundingClientRect().width),
-        labelled: (node.innerText ?? '').trim().length > 0,
+        visibleText,
+        labelled: visibleText.length > 0,
+        labelWidth,
+        nameWidth,
       });
     }
     return {
