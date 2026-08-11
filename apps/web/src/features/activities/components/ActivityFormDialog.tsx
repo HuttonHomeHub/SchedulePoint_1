@@ -48,19 +48,14 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
+import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
-import {
-  CheckboxField,
-  FormProblemCount,
-  SelectField,
-  TextField,
-  TextareaField,
-} from '@/components/ui/form';
+import { CheckboxField, FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 import {
   FieldGrid,
   FieldGridContainer,
@@ -543,29 +538,7 @@ export function ActivityFormDialog({
             the tabbed editor's — so the create form and the edit surface answer the same questions
             in the same order rather than being two different shapes for one record. */}
           <div className="flex flex-col gap-5">
-            <FormSection title="Identity">
-              <FieldGrid columns="lead">
-                <TextField
-                  label="Name"
-                  autoComplete="off"
-                  error={generalErrors.name?.message}
-                  {...general.form.register('name')}
-                />
-                <TextField
-                  label="Code"
-                  autoComplete="off"
-                  error={generalErrors.code?.message}
-                  {...general.form.register('code')}
-                />
-                <FieldGridFull>
-                  <TextareaField
-                    label="Description"
-                    error={generalErrors.description?.message}
-                    {...general.form.register('description')}
-                  />
-                </FieldGridFull>
-              </FieldGrid>
-            </FormSection>
+            <ActivityIdentityFields form={general.form} />
 
             <FormSection
               title="Work"

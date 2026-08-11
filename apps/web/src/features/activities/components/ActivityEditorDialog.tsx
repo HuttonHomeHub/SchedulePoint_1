@@ -44,6 +44,7 @@ import {
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
+import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -51,13 +52,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { FieldGateProvider } from '@/components/ui/field-gate';
-import {
-  CheckboxField,
-  FormProblemCount,
-  SelectField,
-  TextField,
-  TextareaField,
-} from '@/components/ui/form';
+import { CheckboxField, FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 import {
   ContextStrip,
   FieldGrid,
@@ -499,29 +494,7 @@ export function ActivityEditorDialog({
                   {scopeError('general')}
 
                   <FieldGateProvider gate={gating.general}>
-                    <FormSection title="Identity">
-                      <FieldGrid columns="lead">
-                        <TextField
-                          label="Name"
-                          autoComplete="off"
-                          error={general.form.formState.errors.name?.message}
-                          {...general.form.register('name')}
-                        />
-                        <TextField
-                          label="Code"
-                          autoComplete="off"
-                          error={general.form.formState.errors.code?.message}
-                          {...general.form.register('code')}
-                        />
-                        <FieldGridFull>
-                          <TextareaField
-                            label="Description"
-                            error={general.form.formState.errors.description?.message}
-                            {...general.form.register('description')}
-                          />
-                        </FieldGridFull>
-                      </FieldGrid>
-                    </FormSection>
+                    <ActivityIdentityFields form={general.form} />
 
                     <FormSection
                       title="Work"
