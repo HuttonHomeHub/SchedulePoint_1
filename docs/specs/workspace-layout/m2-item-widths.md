@@ -233,6 +233,53 @@ the product owner at M2-T5, with these figures** — and the honest framing is n
 control and labels appear", it is "labels at 1920 need roughly three of the seven to go, or a
 different mechanism".
 
+## After M2-T3 (Project-finish read-out → plan header) — labels promote at 2304
+
+|              | M2 start |   T1 |  T2 |  **T3** |
+| ------------ | -------: | ---: | --: | ------: |
+| Row 1 items  |       25 |   23 |  18 |  **17** |
+| Pinned floor |     1198 | 1117 | 934 | **784** |
+| Inline @1920 |       15 |   17 |  18 |  **16** |
+
+**The new fact: at 2304 the row now labels itself.** Every one of the seven `'auto'` items measures
+its labelled width for the first time in this epic — `shortcuts` 174 (was 32), `next-conflict` 126,
+`today` 120, `float-paths` 116, `fit` 108, `zoom-out` 106, `zoom-in` 96. That is `autoLabelsFit`
+flipping true, observed rather than predicted, and it is the first evidence that the mechanism works
+at all rather than merely that the row is shorter.
+
+**At 1920 it does not.** The items stay icon-only and `shortcuts` demotes into the `⋯`:
+
+| term                                  |       px |
+| ------------------------------------- | -------: |
+| items (incl. the demoted `shortcuts`) |     1337 |
+| chrome (5 groups, 17 items)           |      172 |
+| label requirement                     |      607 |
+| `⋯` button                            |       44 |
+| promotion margin                      |       32 |
+| **required**                          | **2192** |
+| container @1920                       |     1832 |
+| **shortfall**                         | **≈360** |
+
+### What this means for the question going to the product owner
+
+Removing an `'auto'` item saves its label, its icon width and a gap. The three candidates:
+
+|                 | label+chrome | width | gap | **saved** |
+| --------------- | -----------: | ----: | --: | --------: |
+| `shortcuts`     |          135 |    32 |   4 |   **171** |
+| `next-conflict` |           90 |    32 |   4 |   **126** |
+| `float-paths`   |           83 |    32 |   4 |   **119** |
+
+Any two total 245–297 — **not enough**. All three total 416, which clears 360 with room. So the
+honest choice is: **labels at 1920 cost all three of `shortcuts`, `next-conflict` and
+`float-paths`**, and the last two are commands a planner uses to trace logic, not conveniences.
+Nothing in M2-T4/T5 changes this — they touch Row 2 and the pinned set, and the label term moves
+only when an `'auto'` item leaves.
+
+That is the trade to put, and it should be put as a trade rather than as a recommendation: labelled
+commands at 1920, or three fewer commands on the row. `design.md` §1.4 criterion 1 assumed the first
+was free.
+
 ## Follow-ups this task opens
 
 - ~~**Fix the `labelled` flag**~~ — done in this task; `visibleText` / `labelWidth` / `nameWidth`

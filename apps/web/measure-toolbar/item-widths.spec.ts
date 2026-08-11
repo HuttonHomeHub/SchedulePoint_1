@@ -144,11 +144,11 @@ test('M2-T0 — per-item widths on a populated plan', async ({ page }) => {
     await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
     await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
   }
-  await expect(
-    page
-      .getByRole('toolbar', { name: 'View and navigate' })
-      .locator('[data-toolbar-item="finish-chip"]'),
-  ).toHaveCount(1, { timeout: 30_000 });
+  // Readiness gate: the plan header's Project-finish read-out, which renders nothing until
+  // `projectFinish` is non-null. It was the Row-1 `finish-chip` until ADR-0090 M2-T3 moved the
+  // read-out off the toolbar — and gating on something inside the row was always the wrong shape
+  // for a harness whose whole subject is what the row contains.
+  await expect(page.getByText('Finish', { exact: true })).toBeVisible({ timeout: 30_000 });
 
   const report: Record<string, unknown> = {};
   for (const width of WIDTHS) {
