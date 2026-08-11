@@ -661,15 +661,20 @@ describe('divergence D10 — `physicalPercentComplete` visibility', () => {
   });
 });
 
-describe('NEW divergence — the Name field’s autocomplete', () => {
-  it('create switches browser autofill off for Name; the editor leaves it on (Code is off on both)', () => {
+describe('NEW divergence (CLOSED, M2-T1 commit A) — the Name field’s autocomplete', () => {
+  it('both hosts switch browser autofill off for Name and Code', () => {
+    // **Converged onto create, and the direction is not arbitrary.** A control registered as
+    // `name` is the classic autofill trigger: with autocomplete left at its default a browser is
+    // free to offer the reader's OWN name for an activity called "Pour slab". Create had said
+    // `off` since it was written; the editor said it on `code` and not on `name`, which is the
+    // shape of a line that was copied and then edited rather than a decision.
     const created = mountCreate();
     expect(screen.getByLabelText('Name')).toHaveAttribute('autocomplete', 'off');
     expect(screen.getByLabelText('Code')).toHaveAttribute('autocomplete', 'off');
     created.unmount();
 
     mountEditor();
-    expect(screen.getByLabelText('Name')).not.toHaveAttribute('autocomplete');
+    expect(screen.getByLabelText('Name')).toHaveAttribute('autocomplete', 'off');
     expect(screen.getByLabelText('Code')).toHaveAttribute('autocomplete', 'off');
   });
 });

@@ -503,6 +503,7 @@ export function ActivityEditorDialog({
                       <FieldGrid columns="lead">
                         <TextField
                           label="Name"
+                          autoComplete="off"
                           error={general.form.formState.errors.name?.message}
                           {...general.form.register('name')}
                         />
