@@ -53,7 +53,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { FieldGateProvider } from '@/components/ui/field-gate';
 import {
   CheckboxField,
-  FormErrorSummary,
+  FormProblemCount,
   SelectField,
   TextField,
   TextareaField,
@@ -490,7 +490,7 @@ export function ActivityEditorDialog({
                   }}
                   className="flex flex-col gap-4"
                 >
-                  <FormErrorSummary errors={general.form.formState.errors} />
+                  <FormProblemCount errors={general.form.formState.errors} />
                   {scopeError('general')}
 
                   <FieldGateProvider gate={gating.general}>
@@ -610,7 +610,7 @@ export function ActivityEditorDialog({
                   }}
                   className="flex flex-col gap-4"
                 >
-                  <FormErrorSummary errors={scheduling.form.formState.errors} />
+                  <FormProblemCount errors={scheduling.form.formState.errors} />
                   {scopeError('scheduling')}
 
                   <FieldGateProvider gate={gating.scheduling}>
@@ -893,7 +893,7 @@ export function ActivityEditorDialog({
                   }}
                   className="flex flex-col gap-4"
                 >
-                  <FormErrorSummary errors={cost.form.formState.errors} />
+                  <FormProblemCount errors={cost.form.formState.errors} />
                   {scopeError('cost')}
 
                   <FieldGateProvider gate={gating.cost}>

@@ -34,7 +34,7 @@ import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
 import { FieldGateProvider } from '@/components/ui/field-gate';
-import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
+import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
@@ -136,7 +136,7 @@ export function ReportedProgressPanel({
     >
       <FieldGateProvider gate={gate}>
         <PanelHeading title="Reported progress" effect="Moves the activity’s dates." />
-        <FormErrorSummary errors={form.formState.errors} />
+        <FormProblemCount errors={form.formState.errors} />
         {mutation.isError ? (
           <p role="alert" className="text-destructive-text text-sm">
             {mutation.error.message}
@@ -274,7 +274,7 @@ export function ValueMeasurePanel({
           title="How value is measured"
           effect="Earns value in Earned Value. Changes no dates."
         />
-        <FormErrorSummary errors={form.formState.errors} />
+        <FormProblemCount errors={form.formState.errors} />
         {EARNED_VALUE_ENABLED ? (
           <>
             {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
@@ -551,7 +551,7 @@ export function WeightedStepsPanel({
           className="flex flex-col gap-4"
         >
           <FieldGateProvider gate={gate}>
-            <FormErrorSummary errors={errors} />
+            <FormProblemCount errors={errors} />
             {replace.isError ? (
               <p role="alert" className="text-destructive-text text-sm">
                 {replace.error.message}

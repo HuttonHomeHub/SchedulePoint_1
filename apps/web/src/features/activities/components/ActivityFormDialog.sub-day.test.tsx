@@ -196,8 +196,12 @@ describe('ActivityFormDialog — sub-day durations', () => {
     fireEvent.change(screen.getByLabelText('Duration'), { target: { value: '1w' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    // Twice by design: once beside the field, once in the form's error summary.
-    expect(await screen.findAllByText(/Weeks are not supported/)).toHaveLength(2);
+    // ONCE, beside the field. It appeared twice until M0.5 of the dialog-unification epic, which
+    // is the defect ADR-0077 §9 names: a field's problem belongs to the field, the alert belongs to
+    // the form. The form-level component is now `FormProblemCount`, which is silent at one problem
+    // because RHF's `shouldFocusError` has already moved focus to the offending control.
+    expect(await screen.findAllByText(/Weeks are not supported/)).toHaveLength(1);
+    expect(screen.queryByText(/problems — check the highlighted fields below/)).toBeNull();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 

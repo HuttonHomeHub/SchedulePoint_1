@@ -40,7 +40,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import {
   CheckboxField,
-  FormErrorSummary,
+  FormProblemCount,
   SelectField,
   TextField,
   TextareaField,
@@ -363,7 +363,7 @@ export function ActivityFormDialog({
     >
       <FieldGridContainer>
         <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
-          <FormErrorSummary errors={errors} />
+          <FormProblemCount errors={errors} />
           {mutation.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
               {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
