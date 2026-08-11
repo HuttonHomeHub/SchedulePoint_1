@@ -1,5 +1,6 @@
 import {
   SELECTABLE_CONSTRAINT_TYPES,
+  isParkedConstraintType,
   type ActivitySummary,
   type CalendarSummary,
   type DependencySummary,
@@ -72,6 +73,7 @@ import {
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel } from '@/features/wbs';
+import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
@@ -270,6 +272,15 @@ export function ActivityEditorDialog({
     control: scheduling.form.control,
     name: 'secondaryConstraintType',
   });
+  // A parked (`MANDATORY_*`) value the activity already carries: shown as an honest one-off option
+  // so opening the form never coerces it. Derived from the LIVE field value, so it appears when a
+  // parked value is selected and disappears once the planner changes away from it.
+  const parkedValue =
+    constraintType && isParkedConstraintType(constraintType) ? constraintType : null;
+  const secondaryParkedValue =
+    secondaryConstraintType && isParkedConstraintType(secondaryConstraintType)
+      ? secondaryConstraintType
+      : null;
 
   const parentOptions = planActivities.filter(
     (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
@@ -581,15 +592,31 @@ export function ActivityEditorDialog({
                       <FieldGrid columns="lead">
                         <SelectField
                           label="Constraint"
-                          hint="Pins the activity’s start or finish to a date. Only constraints the scheduler applies exactly as named are listed."
+                          error={scheduling.form.formState.errors.constraintType?.message}
+                          hint={
+                            'Pins the activity’s start or finish to a date. Only constraints the scheduler applies ' +
+                            'exactly as named are listed (an existing value keeps its own label).'
+                          }
                           {...scheduling.form.register('constraintType')}
                         >
                           <option value="">None</option>
+                          {/* Only the six kinds the scheduler applies exactly as labelled (the
+                            engine parks MANDATORY_* — see @repo/types
+                            SELECTABLE_CONSTRAINT_TYPES), so a planner never sets a constraint that
+                            behaves differently than it reads. */}
                           {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
                             <option key={value} value={value}>
                               {CONSTRAINT_TYPE_LABELS[value]}
                             </option>
                           ))}
+                          {/* An activity that already carries a parked value keeps it as an honest,
+                            labelled option so opening the form never silently changes it; it drops
+                            out once the planner picks something else. */}
+                          {parkedValue ? (
+                            <option value={parkedValue}>
+                              {PARKED_CONSTRAINT_LABELS[parkedValue]}
+                            </option>
+                          ) : null}
                         </SelectField>
                         {constraintType ? (
                           <TextField
@@ -603,7 +630,14 @@ export function ActivityEditorDialog({
                           <>
                             <SelectField
                               label="Secondary constraint"
-                              hint="A second date constraint that drives the activity’s late dates. The primary constraint drives its early dates."
+                              error={
+                                scheduling.form.formState.errors.secondaryConstraintType?.message
+                              }
+                              hint={
+                                'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
+                                '“start no earlier than” with a secondary “finish no later than”. The primary ' +
+                                'constraint drives its early dates.'
+                              }
                               {...scheduling.form.register('secondaryConstraintType')}
                             >
                               <option value="">None</option>
@@ -612,6 +646,11 @@ export function ActivityEditorDialog({
                                   {CONSTRAINT_TYPE_LABELS[value]}
                                 </option>
                               ))}
+                              {secondaryParkedValue ? (
+                                <option value={secondaryParkedValue}>
+                                  {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
+                                </option>
+                              ) : null}
                             </SelectField>
                             {secondaryConstraintType ? (
                               <TextField

@@ -365,10 +365,16 @@ describe('divergence D2 (CLOSED, M2-T3 commit A) — the WBS parent picker', () 
   });
 });
 
-describe('divergence D3 — a parked MANDATORY_* constraint', () => {
+describe('divergence D3 (CLOSED, M3-T2 commit A) — a parked MANDATORY_* constraint', () => {
   const parked = row({ constraintType: 'MANDATORY_START', constraintDate: '2026-03-02' });
 
-  it('the editor shows a parked constraint as no constraint at all; create labels it honestly', () => {
+  it('both hosts label a parked constraint honestly rather than showing no constraint at all', () => {
+    // **The highest-consequence row in the table.** The engine parks `MANDATORY_*` — it accepts the
+    // value and applies it as the nearest honoured kind — so the six offered are the six that behave
+    // exactly as they read. An activity that already carries a parked value keeps it as its own
+    // labelled option, or the selector shows nothing selected and reads back `''`, which is the
+    // "None" option's own value: a constraint that IS set, displayed as unset, with its date filled
+    // in below it.
     const created = mountCreate({ activity: parked });
     const createSelect = screen.getByLabelText('Constraint');
     expect(createSelect).toHaveValue('MANDATORY_START');
@@ -378,15 +384,12 @@ describe('divergence D3 — a parked MANDATORY_* constraint', () => {
     mountEditor({ activity: parked });
     openTab('Scheduling');
     const editorSelect = screen.getByLabelText('Constraint');
-    expect(optionValues(editorSelect)).toEqual(['', 'SNET', 'SNLT', 'FNET', 'FNLT', 'MSO', 'MFO']);
-    // Nothing selected — and `''` reads back, which is the "None" option's own value.
-    expect((editorSelect as HTMLSelectElement).selectedIndex).toBe(-1);
-    expect((editorSelect as HTMLSelectElement).value).toBe('');
-    // …while the paired date sits below it, filled in, under a constraint that reads as unset.
+    expect(editorSelect).toHaveValue('MANDATORY_START');
+    expect(optionLabels(editorSelect)).toContain('Mandatory start — applied as Must start on');
     expect(screen.getByLabelText('Constraint date')).toHaveValue('2026-03-02');
   });
 
-  it('a Scheduling save re-sends the parked constraint and its date unchanged — the display is wrong, the data is not', async () => {
+  it('a Scheduling save re-sends the parked constraint and its date unchanged — the display was wrong, the data never was', async () => {
     mountEditor({ activity: parked });
     openTab('Scheduling');
     // Dirty an unrelated field in the same scope: the realistic way a planner saves this tab.
@@ -400,7 +403,7 @@ describe('divergence D3 — a parked MANDATORY_* constraint', () => {
     expect(body.scheduleAsLateAsPossible).toBe(true);
   });
 
-  it('the same holds for a parked SECONDARY constraint — honest on create, blank in the editor', () => {
+  it('the same holds for a parked SECONDARY constraint', () => {
     const secondary = row({
       secondaryConstraintType: 'MANDATORY_FINISH',
       secondaryConstraintDate: '2026-04-01',
@@ -415,27 +418,24 @@ describe('divergence D3 — a parked MANDATORY_* constraint', () => {
     mountEditor({ activity: secondary });
     openTab('Scheduling');
     const editorSelect = screen.getByLabelText('Secondary constraint');
-    expect(optionLabels(editorSelect)).not.toContain(
-      'Mandatory finish — applied as Must finish on',
-    );
-    expect((editorSelect as HTMLSelectElement).selectedIndex).toBe(-1);
+    expect(optionLabels(editorSelect)).toContain('Mandatory finish — applied as Must finish on');
+    expect(editorSelect).toHaveValue('MANDATORY_FINISH');
   });
 
-  it('NEW — only create’s constraint hint tells the reader an existing value keeps its own label', () => {
+  it('NEW (CLOSED) — both constraint hints tell the reader an existing value keeps its own label', () => {
+    const hint =
+      'Pins the activity’s start or finish to a date. Only constraints the scheduler applies exactly as named are listed (an existing value keeps its own label).';
+
     const created = mountCreate();
-    expect(hintOf(screen.getByLabelText('Constraint'))).toBe(
-      'Pins the activity’s start or finish to a date. Only constraints the scheduler applies exactly as named are listed (an existing value keeps its own label).',
-    );
+    expect(hintOf(screen.getByLabelText('Constraint'))).toBe(hint);
     created.unmount();
 
     mountEditor();
     openTab('Scheduling');
-    expect(hintOf(screen.getByLabelText('Constraint'))).toBe(
-      'Pins the activity’s start or finish to a date. Only constraints the scheduler applies exactly as named are listed.',
-    );
+    expect(hintOf(screen.getByLabelText('Constraint'))).toBe(hint);
   });
 
-  it('NEW — the secondary-constraint hint drops its worked example in the editor', () => {
+  it('NEW (CLOSED) — the secondary-constraint hint keeps its worked example on both', () => {
     const created = mountCreate();
     expect(hintOf(screen.getByLabelText('Secondary constraint'))).toContain(
       'e.g. a primary “start no earlier than” with a secondary “finish no later than”',
@@ -444,7 +444,9 @@ describe('divergence D3 — a parked MANDATORY_* constraint', () => {
 
     mountEditor();
     openTab('Scheduling');
-    expect(hintOf(screen.getByLabelText('Secondary constraint'))).not.toContain('e.g.');
+    expect(hintOf(screen.getByLabelText('Secondary constraint'))).toContain(
+      'e.g. a primary “start no earlier than” with a secondary “finish no later than”',
+    );
   });
 });
 
