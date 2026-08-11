@@ -1,9 +1,7 @@
 import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
-  BarChart3,
   ChartArea,
-  ChartColumnIncreasing,
   CalendarDays,
   CalendarRange,
   CalendarSearch,
@@ -24,8 +22,6 @@ import {
   Info,
   Keyboard,
   Layers,
-  Layers2,
-  ListChecks,
   Loader2,
   LocateFixed,
   Maximize2,
@@ -106,13 +102,108 @@ const ZOOM_LABELS: Record<string, string> = {
  * indicators), and insight overlays (the flag-gated ADR-0054 lenses + the Late-start overlay,
  * which stops being a special case set apart by an incidental border and becomes an ordinary
  * member here). */
-type ViewToggleGroupId = 'structure' | 'markers' | 'insight';
+type ViewToggleGroupId = 'structure' | 'markers' | 'insight' | 'panels';
 
 const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: string }> = [
   { id: 'structure', label: 'Structure' },
   { id: 'markers', label: 'Markers' },
   { id: 'insight', label: 'Insight overlays' },
+  // Added by ADR-0090 M2-T2 for the Legend, answering the product owner's Q2 directly. A section of
+  // its own rather than a fourth "overlay", because a panel is a surface you read *beside* the
+  // diagram, not a mark drawn *on* it — the distinction the other group names already make.
+  { id: 'panels', label: 'Panels' },
 ];
+
+/**
+ * The `View ▾` members that are **not** `TsldViewToggles` keys (ADR-0090 M2-T2).
+ *
+ * A second list rather than an extension of {@link VIEW_TOGGLE_META}, for two reasons that are both
+ * about keeping something rather than avoiding work. That record is
+ * `Record<keyof TsldViewToggles, …>`, and the compile error it produces when a toggle is added
+ * without a home is load-bearing — its own docblock records two ADR-0054 toggles being silently
+ * dropped by a bad search-and-replace while the release notes claimed they shipped. Widening its
+ * key type to admit these four would delete exactly that guarantee.
+ *
+ * And these four carry something the view toggles never do: a **reason they are shut**. Baseline
+ * overlay alone has four. A structure with no field for a reason cannot hold one, and the reasons
+ * are the part of these controls most worth preserving through a relocation — they are what
+ * ADR-0082 is about.
+ */
+interface LensToggle {
+  id: string;
+  group: ViewToggleGroupId;
+  label: string;
+  /** Offered at all — the feature's build-time flag. */
+  enabled: boolean;
+  checked: (ctx: TsldToolbarContext) => boolean;
+  toggle: (ctx: TsldToolbarContext) => void;
+  /** Why it cannot be changed right now, or `undefined` when it can. */
+  reason: (ctx: TsldToolbarContext) => string | undefined;
+}
+
+const LENS_TOGGLES: readonly LensToggle[] = [
+  {
+    id: 'baseline-overlay',
+    group: 'insight',
+    label: 'Baseline overlay',
+    enabled: CANVAS_LENSES_ENABLED,
+    checked: (ctx) => ctx.baselineOverlay,
+    toggle: (ctx) => ctx.toggleBaselineOverlay(),
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : ctx.varianceLoading
+          ? 'Loading baseline…'
+          : ctx.varianceError
+            ? 'Baseline unavailable'
+            : !ctx.hasActiveBaseline
+              ? 'No active baseline'
+              : undefined,
+  },
+  {
+    id: 'resource-view',
+    group: 'insight',
+    label: 'Resource view',
+    enabled: CANVAS_RESOURCE_VIEW_ENABLED,
+    checked: (ctx) => ctx.resourceViewOpen,
+    toggle: (ctx) => ctx.toggleResourceView(),
+    reason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+  },
+  {
+    id: 'over-allocation',
+    group: 'insight',
+    label: 'Flag over-allocated',
+    enabled: CANVAS_RESOURCE_VIEW_ENABLED,
+    checked: (ctx) => ctx.overAllocationHighlight,
+    toggle: (ctx) => ctx.toggleOverAllocation(),
+    // Enabled whenever there is something to flag OR the highlight is already ON — an active
+    // toggle must always be clickable-to-off, so a recalculation that clears all over-allocation
+    // while the mode is on can never leave it checked AND shut (a stuck-on dead end, UX review B5).
+    // Carried across the move verbatim; it is exactly the kind of rule a relocation loses.
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : ctx.hasOverAllocation || ctx.overAllocationHighlight
+          ? undefined
+          : OVER_ALLOCATION_EMPTY_REASON,
+  },
+  {
+    // The direct answer to the product owner's Q2. Filed under **Panels**, not Insight overlays: a
+    // panel is a surface you read *beside* the diagram, not a mark drawn *on* it — which is the
+    // distinction the other group names already make.
+    id: 'legend',
+    group: 'panels',
+    label: 'Legend',
+    enabled: true,
+    checked: (ctx) => ctx.legendOpen,
+    toggle: (ctx) => ctx.toggleLegend(),
+    reason: () => undefined,
+  },
+];
+
+function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
+  return LENS_TOGGLES.filter((t) => t.group === group && t.enabled);
+}
 
 /**
  * **Single source of truth** for every `View▾` toggle: its group, its label, and (for a flag-gated
@@ -1094,7 +1185,8 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
     <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
       {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
         const keys = visibleViewToggleKeysIn(id);
-        if (keys.length === 0) return null;
+        const lenses = lensTogglesIn(id);
+        if (keys.length === 0 && lenses.length === 0) return null;
         return (
           <fieldset key={id} className="flex flex-col gap-2">
             <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
@@ -1135,6 +1227,46 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                 {VIEW_TOGGLE_META[key].label}
               </label>
             ))}
+            {/* The relocated lens toggles (ADR-0090 M2-T2). `aria-disabled` + a guard rather than
+                native `disabled`, per ADR-0083: a control whose only operation is changing its value
+                takes the ARIA form, so the row stays focusable and its REASON stays readable —
+                which is the whole point of moving these rather than dropping them. The reason is
+                `aria-describedby`-linked to the input (never folded into its name) and shown
+                visibly beside it, because this surface has no `title` tooltip to fall back on and a
+                sighted planner needs it as much as a screen-reader one. */}
+            {lenses.map((lens) => {
+              const reason = lens.reason(ctx);
+              const shut = reason !== undefined;
+              const reasonId = shut ? `tsld-view-${lens.id}-reason` : undefined;
+              return (
+                <div key={lens.id} className="flex flex-col gap-0.5">
+                  <label
+                    className={cn(
+                      'flex items-center gap-2 text-sm',
+                      shut && 'text-muted-foreground',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      data-view-lens={lens.id}
+                      checked={lens.checked(ctx)}
+                      aria-disabled={shut || undefined}
+                      {...(reasonId ? { 'aria-describedby': reasonId } : {})}
+                      onChange={() => {
+                        if (!shut) lens.toggle(ctx);
+                      }}
+                      className="accent-primary size-4"
+                    />
+                    {lens.label}
+                  </label>
+                  {shut ? (
+                    <span id={reasonId} className="text-muted-foreground pl-6 text-xs">
+                      {reason}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
           </fieldset>
         );
       })}
@@ -1369,46 +1501,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     order: 0,
     label: 'Filter',
     icon: <Filter className="size-4" />,
-  };
-  const baselineOverlayShape = {
-    id: 'baseline-overlay',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 4,
-    label: 'Baseline overlay',
-    icon: <Layers2 className="size-4" />,
-  };
-  // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) shared shape — the id/group/row/tier/order/
-  // label/icon carried in BOTH its real (flag-on) toggle and its `placeholderItem()` (flag-off) stub,
-  // declared once and spread into both branches so they can't drift (mirrors the lens / canvas-nav
-  // shared-shape pattern). Sits on Row 1 · Look in the Lens group, gated on a computed diagram.
-  const resourceViewShape = {
-    id: 'resource-view',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 5,
-    label: 'Resource view',
-    icon: <BarChart3 className="size-4" />,
-  };
-  // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) shared shape — the id/group/row/
-  // tier/order/label/icon carried in BOTH its real (flag-on) toggle and its `placeholderItem()`
-  // (flag-off) stub, declared once and spread into both branches so they can't drift (mirrors the
-  // resource-view / lens / canvas-nav shared-shape pattern). A SECOND, independent Look-row lens-group
-  // item (not a split-button on resource-view): the highlight is its own mode, and — like Next-conflict
-  // — it carries its own `isEnabled`/`disabledReason` empty state cleanly. Sits right after resource-view.
-  const overAllocationShape = {
-    id: 'over-allocation',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 6,
-    label: 'Flag over-allocated',
-    // A rising-bars icon mirroring the on-canvas over-allocation badge glyph — a "resource climbing past
-    // capacity" metaphor, distinct from resource-view's `BarChart3` and next-conflict's `TriangleAlert`
-    // (component/icon review N5).
-    icon: <ChartColumnIncreasing className="size-4" />,
   };
   // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/tier/order/label/icon each of the
   // three ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
@@ -1670,85 +1762,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isActive: (ctx) => ctx.planView === 'gantt',
       onActivate: (ctx) => ctx.setPlanView('gantt'),
     },
-    // Analyse placeholders (Row 1) — shown **inline** (tier 2 icon buttons) rather than parked in `⋯`,
-    // so the intended lenses read at a glance beside the search field (ADR-0031 two-row amendment).
-    // Colour-by recolours bars by status/WBS/critical/resource; baseline-overlay ghosts the active
-    // baseline; resource-view is the second (histogram) lens that folds into `view-mode` when built.
-    // Colour-by — flag-on recolours bars by Criticality (default, today's fills) / Total float / WBS
-    // group with a mode-aware Legend (spec `docs/specs/canvas-lenses/`); flag-off the "Coming soon"
-    // placeholder, byte-for-byte. Pressed when a non-default mode is active.
-    // `colour-by` moved INTO `View ▾` in ADR-0090 M2-T2, as a radio group in the Insight overlays
-    // section. It was the largest remaining pinned item on Row 1 at 183 px — a `render` item, so
-    // that width was paid at every viewport. Its at-a-glance read-out survives as the `View ▾`
-    // trigger's conditional annotation (see `viewTriggerLabel`), not as a lost affordance.
-    //
-    // Its flag-off "Coming soon" placeholder goes with it rather than staying on Row 1: the whole
-    // point of the move is that Row 1 stops carrying this control, and a placeholder occupying the
-    // width the live control just vacated would defeat it exactly. Flag-off, the Insight section
-    // simply has no colour group — which is what `CANVAS_LENSES_ENABLED` guards there.
-    // Baseline overlay — flag-on a pressed-state toggle that ghosts the active baseline behind the live
-    // bars (spec `docs/specs/canvas-lenses/`), disabled-with-reason when there's no diagram / the
-    // variance query is loading or errored / there's no active baseline; flag-off the "Coming soon"
-    // placeholder, byte-for-byte.
-    CANVAS_LENSES_ENABLED
-      ? {
-          ...baselineOverlayShape,
-          isActive: (ctx) => ctx.baselineOverlay,
-          isEnabled: (ctx) =>
-            ctx.hasDiagram && !ctx.varianceLoading && !ctx.varianceError && ctx.hasActiveBaseline,
-          disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? LENS_NO_DIAGRAM_REASON
-              : ctx.varianceLoading
-                ? 'Loading baseline…'
-                : ctx.varianceError
-                  ? 'Baseline unavailable'
-                  : !ctx.hasActiveBaseline
-                    ? 'No active baseline'
-                    : undefined,
-          onActivate: (ctx) => ctx.toggleBaselineOverlay(),
-        }
-      : placeholderItem(baselineOverlayShape),
-    // Resource view — flag-on (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) a pressed-state toggle that reveals
-    // the canvas-axis-aligned resource strip (a demand strip pinned to the TSLD time axis + the reused
-    // accessible table); flag-off the "Coming soon" placeholder, byte-for-byte. Shaded (disabled-with-
-    // reason) on an empty/uncomputed canvas, like the other lenses — there's no timeline to strip yet.
-    // View-only (every role), never pen-gated. The shared shape is spread into both branches so they
-    // can't drift (mirrors the C1/quick-wins pattern).
-    CANVAS_RESOURCE_VIEW_ENABLED
-      ? {
-          ...resourceViewShape,
-          isActive: (ctx) => ctx.resourceViewOpen,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
-          onActivate: (ctx) => ctx.toggleResourceView(),
-        }
-      : placeholderItem(resourceViewShape),
-    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) — flag-on a view-only toggle that
-    // flags every bar carrying the engine-owned levelling over-allocation flags (ADR-0041), reusing the
-    // Stage-A/B `TsldScene` seam (spec `docs/specs/canvas-resource-view/`); flag-off the "Coming soon"
-    // placeholder, byte-for-byte. Disabled-with-reason when the canvas is empty/uncomputed OR nothing is
-    // over-allocated (shade-don't-hide, mirroring Next-conflict's empty state). View-only, never
-    // pen-gated. The shared shape is spread into both branches so they can't drift (C1/quick-wins pattern).
-    CANVAS_RESOURCE_VIEW_ENABLED
-      ? {
-          ...overAllocationShape,
-          isActive: (ctx) => ctx.overAllocationHighlight,
-          // Enabled whenever there's something to flag OR the highlight is already ON — an active
-          // toggle must always be clickable-to-off, so a recalc that clears all over-allocation while
-          // the mode is on can never leave it aria-pressed AND aria-disabled (a stuck-on dead-end, UX
-          // review B5). The disabled-with-reason empty state is kept only for the OFF→ON activation case.
-          isEnabled: (ctx) =>
-            ctx.hasDiagram && (ctx.hasOverAllocation || ctx.overAllocationHighlight),
-          disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? LENS_NO_DIAGRAM_REASON
-              : ctx.hasOverAllocation || ctx.overAllocationHighlight
-                ? undefined
-                : OVER_ALLOCATION_EMPTY_REASON,
-          onActivate: (ctx) => ctx.toggleOverAllocation(),
-        }
-      : placeholderItem(overAllocationShape),
+    // `over-allocation` moved INTO `View ▾` (Insight overlays) in ADR-0090 M2-T2, keeping the
+    // clickable-to-off rule that stops it becoming a stuck-on dead end — see `LENS_TOGGLES`.
 
     // --- 3 · Find / focus (Row 1 · Look) ------------------------------------------------------
     // Search / filter field — leads the Find cluster as a real (disabled) input, so the affordance
@@ -2283,25 +2298,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         }
       : placeholderItem(commentsShape),
 
-    // --- 6 · Help -----------------------------------------------------------------------------
-    // Legend rides Row 1 (Look) at the far right; Shortcuts sits beside it. (Undo/Redo moved to the
-    // Row-2 authoring cluster above, so the History group holds no toolbar items now.)
-    // The legend lives **on the canvas** now (ADR-0031 amendment): this is a show/hide toggle for the
-    // floating Legend panel (draggable + pinnable over the diagram), not a popover that renders the key.
-    {
-      id: 'legend',
-      group: 'help',
-      row: 'look',
-      tier: 2,
-      order: 0,
-      // The two cheapest losses on Row 1: both open a reference surface, neither changes the
-      // plan or the view. They were also the two the old `order`-as-priority rule kept LONGEST.
-      priority: -100,
-      label: 'Legend',
-      icon: <ListChecks className="size-4" />,
-      isActive: (ctx) => ctx.legendOpen,
-      onActivate: (ctx) => ctx.toggleLegend(),
-    },
+    // `legend` moved INTO `View ▾` in ADR-0090 M2-T2, under a new **Panels** section — the direct
+    // answer to the product owner's Q2. A panel is a surface you read beside the diagram, not a
+    // mark drawn on it, which is why it is not filed with the Insight overlays.
     {
       // Keyboard shortcuts belong with the reference controls, not the authoring row: shown at the
       // far right of Row 1 (help group, beside Legend) and also bound to the `?` key by the workspace

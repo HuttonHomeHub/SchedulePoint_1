@@ -49,6 +49,19 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
+/** Open `View ▾` and return a relocated lens checkbox (ADR-0090 M2-T2). */
+function viewLens(name: string): HTMLElement {
+  const trigger = screen.getByRole('button', { name: /^View/ });
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+  return screen.getByRole('checkbox', { name });
+}
+
+/** The reason text linked to a shut lens checkbox — an `aria-describedby` target now, not a `title`. */
+function lensReason(el: HTMLElement): string | null {
+  const id = el.getAttribute('aria-describedby');
+  return id ? (document.getElementById(id)?.textContent ?? null) : null;
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar — insight lenses (flag on)', () => {
@@ -135,7 +148,7 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
 
   it('toggles the Baseline overlay when an active baseline exists', () => {
     renderRows(ctx());
-    const overlay = screen.getByRole('button', { name: 'Baseline overlay' });
+    const overlay = viewLens('Baseline overlay');
     expect(overlay).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(overlay);
     expect(spies.toggleBaselineOverlay).toHaveBeenCalledOnce();
@@ -143,19 +156,18 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
 
   it('disables the Baseline overlay with a reason when there is no active baseline', () => {
     renderRows(ctx({ hasActiveBaseline: false }));
-    const overlay = screen.getByRole('button', { name: 'Baseline overlay' });
+    const overlay = viewLens('Baseline overlay');
     expect(overlay).toHaveAttribute('aria-disabled', 'true');
-    expect(overlay).toHaveAttribute('title', 'Baseline overlay — No active baseline');
+    // The reason is `aria-describedby`-linked now rather than a `title` tooltip — which is why the
+    // move is safe: a `title` on a shut control is not reliably announced (ADR-0083).
+    expect(lensReason(overlay)).toBe('No active baseline');
     fireEvent.click(overlay);
     expect(spies.toggleBaselineOverlay).not.toHaveBeenCalled();
   });
 
   it('disables the Baseline overlay while variance is loading / errored', () => {
     renderRows(ctx({ varianceLoading: true }));
-    expect(screen.getByRole('button', { name: 'Baseline overlay' })).toHaveAttribute(
-      'title',
-      'Baseline overlay — Loading baseline…',
-    );
+    expect(lensReason(viewLens('Baseline overlay'))).toBe('Loading baseline…');
   });
 
   // U4 — the pinned Look-row lens render controls (search / Filter / View) never demote into `⋯`
