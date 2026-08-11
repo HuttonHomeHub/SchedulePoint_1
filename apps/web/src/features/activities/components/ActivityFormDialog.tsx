@@ -11,14 +11,7 @@ import {
 import { useCreateActivity, useUpdateActivity } from '../api/use-activities';
 import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
-import {
-  ACCRUAL_TYPE_LABELS,
-  ACCRUAL_TYPE_OPTIONS,
-  PERCENT_COMPLETE_TYPE_LABELS,
-  PERCENT_COMPLETE_TYPE_OPTIONS,
-  isDurationDerivedType,
-  type ActivityFormValues,
-} from '../schemas/activity-schemas';
+import { isDurationDerivedType, type ActivityFormValues } from '../schemas/activity-schemas';
 import {
   activityCostSchema,
   activityGeneralSchema,
@@ -31,12 +24,15 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
+import { ActivityAccrualField } from './fields/ActivityAccrualField';
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityCalendarField } from './fields/ActivityCalendarField';
 import { ActivityConstraintFields } from './fields/ActivityConstraintFields';
+import { ActivityExpenseFields } from './fields/ActivityExpenseFields';
 import { ActivityExternalDatesFields } from './fields/ActivityExternalDatesFields';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityLevellingField } from './fields/ActivityLevellingField';
+import { ActivityMeasureFields } from './fields/ActivityMeasureFields';
 import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
@@ -44,8 +40,8 @@ import { useScopeForm } from './useScopeForm';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
-import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
+import { FormProblemCount } from '@/components/ui/form';
+import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
@@ -293,10 +289,6 @@ export function ActivityFormDialog({
   // one form's every keystroke, so typing a name would re-render the Constraints section.
   const type = useWatch({ control: general.form.control, name: 'type' });
   const calendarId = useWatch({ control: scheduling.form.control, name: 'calendarId' });
-  const percentCompleteType = useWatch({
-    control: measure.form.control,
-    name: 'percentCompleteType',
-  });
   // A seeded non-inherit value that doesn't match any option (the list is still loading, or failed
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
@@ -529,102 +521,16 @@ export function ActivityFormDialog({
                 title="How value is measured"
                 description="Earns value in Earned Value. Changes no dates."
               >
-                <FieldGrid columns="lead">
-                  <SelectField
-                    label="Earn value from"
-                    hint={`${PERCENT_COMPLETE_TYPE_LABELS[percentCompleteType].description} It changes no dates — only how Earned value measures progress.`}
-                    {...measure.form.register('percentCompleteType')}
-                  >
-                    {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-                      <option key={value} value={value}>
-                        {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-                      </option>
-                    ))}
-                  </SelectField>
-                  {/* Rendered whatever the measure, which is D10 and the ADR-0060 §6 rule: shading
-                    implies a value is there, hiding claims there is none. `physicalPercentComplete`
-                    is stored, so hiding it from a reader whose measure is Duration says the
-                    activity has no physical progress when it may well have some. */}
-                  <TextField
-                    label="Physical % complete"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    inputMode="numeric"
-                    hint="The hand-entered physical progress that earns value when the measure is Physical. 0–100."
-                    error={measureErrors.physicalPercentComplete?.message}
-                    {...measure.form.register('physicalPercentComplete', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
-                  />
-                </FieldGrid>
+                <ActivityMeasureFields form={measure.form} />
               </FormSection>
             ) : null}
 
-            {EARNED_VALUE_ENABLED ? (
-              <FormSection
-                title="Expenses"
-                description="Lump sums carried directly on this activity, on top of any resource-derived cost."
-              >
-                <FieldGrid>
-                  <TextField
-                    label="Budgeted expense"
-                    type="number"
-                    min={0}
-                    // The UNION of the two hosts (D8): hundredths from the editor, because money is
-                    // stored in minor units and `step="any"` invites a third decimal that is then
-                    // silently rounded; the floor and the decimal keypad from create.
-                    step="0.01"
-                    inputMode="decimal"
-                    hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
-                    error={costErrors.budgetedExpense?.message}
-                    {...cost.form.register('budgetedExpense', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
-                  />
-                  <TextField
-                    label="Actual expense"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    inputMode="decimal"
-                    hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
-                    error={costErrors.actualExpense?.message}
-                    {...cost.form.register('actualExpense', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
-                  />
-                </FieldGrid>
-              </FormSection>
-            ) : null}
+            {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
 
             {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the
               Earned-Value Planned-Value curve, never a date. Its own flag, mirroring the
               value-measure picker. */}
-            {COST_ACCRUAL_ENABLED ? (
-              <FormSection
-                title="Recognition"
-                description="Changes only when cost is recognised in Earned value — never a date."
-              >
-                <FieldGrid>
-                  <SelectField
-                    label="Cost accrual"
-                    hint={
-                      'Sets when this activity’s cost is recognised: Start (all at the start), Uniform ' +
-                      '(spread evenly), or End (all at the finish).'
-                    }
-                    {...cost.form.register('accrualType')}
-                  >
-                    {ACCRUAL_TYPE_OPTIONS.map((value) => (
-                      <option key={value} value={value}>
-                        {ACCRUAL_TYPE_LABELS[value]}
-                      </option>
-                    ))}
-                  </SelectField>
-                </FieldGrid>
-              </FormSection>
-            ) : null}
+            {COST_ACCRUAL_ENABLED ? <ActivityAccrualField form={cost.form} /> : null}
 
             <ActivityConstraintFields form={scheduling.form} />
 

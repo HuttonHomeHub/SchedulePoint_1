@@ -16,8 +16,6 @@ import {
   seedRemainingText,
 } from '../model/remaining-field';
 import {
-  PERCENT_COMPLETE_TYPE_LABELS,
-  PERCENT_COMPLETE_TYPE_OPTIONS,
   deriveStatusLabel,
   progressFormSchema,
   type ProgressFormValues,
@@ -30,11 +28,12 @@ import {
 } from '../schemas/step-schemas';
 
 import { seedMeasure } from './activity-editor-seeds';
+import { ActivityMeasureFields } from './fields/ActivityMeasureFields';
 import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
 import { FieldGateProvider } from '@/components/ui/field-gate';
-import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 import { FieldGrid } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
@@ -279,46 +278,17 @@ export function ValueMeasurePanel({
           <>
             {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
               overriding this" legible at a glance instead of two rows apart. */}
-            <FieldGrid columns="lead">
-              <SelectField
-                label="Earn value from"
-                hint={PERCENT_COMPLETE_TYPE_LABELS[measure].description}
-                {...form.register('percentCompleteType')}
-              >
-                {PERCENT_COMPLETE_TYPE_OPTIONS.map((value) => (
-                  <option key={value} value={value}>
-                    {PERCENT_COMPLETE_TYPE_LABELS[value].label}
-                  </option>
-                ))}
-              </SelectField>
-
-              <TextField
-                label="Physical % complete"
-                type="number"
-                min={0}
-                max={100}
-                hint={
-                  'The hand-entered physical progress that earns value when the measure is Physical.'
-                }
-                // A field-level gate, which the nearest-reason rule prefers over the panel's
-                // (ADR-0083 D4): "weighted steps are driving this" is a domain rule the reader can
-                // act on, and it is strictly more useful than "start editing to report progress".
-                // `undefined` — not `null` — so the panel's gate still applies when steps are not
-                // winning; `null` would opt this field out of the pen entirely.
-                gate={
-                  stepsWin
-                    ? {
-                        writable: false,
-                        reason: `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`,
-                      }
-                    : undefined
-                }
-                error={form.formState.errors.physicalPercentComplete?.message}
-                {...form.register('physicalPercentComplete', {
-                  setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                })}
-              />
-            </FieldGrid>
+            <ActivityMeasureFields
+              form={form}
+              {...(stepsWin
+                ? {
+                    physicalGate: {
+                      writable: false,
+                      reason: `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`,
+                    },
+                  }
+                : {})}
+            />
 
             {measure === 'UNITS' ? (
               <p className="text-muted-foreground text-sm">

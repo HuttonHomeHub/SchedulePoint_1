@@ -10,8 +10,6 @@ import type { ActivityEditorIntent, ActivityEditorTab } from '../lib/activity-ed
 import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
 import {
-  ACCRUAL_TYPE_LABELS,
-  ACCRUAL_TYPE_OPTIONS,
   ACTIVITY_TYPE_LABELS,
   isDurationDerivedType,
   isMilestoneType,
@@ -28,9 +26,11 @@ import {
   ValueMeasurePanel,
   WeightedStepsPanel,
 } from './ActivityProgressPanels';
+import { ActivityAccrualField } from './fields/ActivityAccrualField';
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityCalendarField } from './fields/ActivityCalendarField';
 import { ActivityConstraintFields } from './fields/ActivityConstraintFields';
+import { ActivityExpenseFields } from './fields/ActivityExpenseFields';
 import { ActivityExternalDatesFields } from './fields/ActivityExternalDatesFields';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityLevellingField } from './fields/ActivityLevellingField';
@@ -43,13 +43,8 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { FieldGateProvider } from '@/components/ui/field-gate';
-import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
-import {
-  ContextStrip,
-  FieldGrid,
-  FieldGridContainer,
-  FormSection,
-} from '@/components/ui/form-layout';
+import { FormProblemCount } from '@/components/ui/form';
+import { ContextStrip, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
@@ -103,7 +98,7 @@ type TabKey = ActivityEditorTab;
  * per-scope save structural — the scopes carry *different permissions*, and a horizontal tab strip
  * has nowhere to say so. In the rail, a Contributor sees "General 🔒 / Scheduling 🔒 / Progress" on
  * arrival instead of discovering each shut form by clicking into it. Inside the pane, fields are
- * grouped with {@link FormSection} and paired with {@link FieldGrid}; above it, {@link ContextStrip}
+ * grouped into field components that both this editor and the create dialog render; above it, {@link ContextStrip}
  * keeps the computed dates and float on screen, which the previous version showed nowhere at all.
  */
 export function ActivityEditorDialog({
@@ -716,63 +711,8 @@ export function ActivityEditorDialog({
                   {scopeError('cost')}
 
                   <FieldGateProvider gate={gating.cost}>
-                    {EARNED_VALUE_ENABLED ? (
-                      <FormSection
-                        title="Expenses"
-                        description="Lump sums carried directly on this activity, on top of any resource-derived cost."
-                      >
-                        <FieldGrid>
-                          <TextField
-                            label="Budgeted expense"
-                            type="number"
-                            min={0}
-                            // The UNION of the two hosts (D8): hundredths from here, the floor and
-                            // the decimal keypad from create. A negative expense is not a thing.
-                            step="0.01"
-                            inputMode="decimal"
-                            hint="A lump-sum budgeted cost for this activity, in the plan’s currency, on top of any resource-derived cost. Leave blank for none."
-                            error={cost.form.formState.errors.budgetedExpense?.message}
-                            {...cost.form.register('budgetedExpense', {
-                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                            })}
-                          />
-                          <TextField
-                            label="Actual expense"
-                            type="number"
-                            min={0}
-                            // The UNION of the two hosts (D8): hundredths from here, the floor and
-                            // the decimal keypad from create. A negative expense is not a thing.
-                            step="0.01"
-                            inputMode="decimal"
-                            hint="The lump-sum cost booked against this activity so far, in the plan’s currency. Leave blank for none."
-                            error={cost.form.formState.errors.actualExpense?.message}
-                            {...cost.form.register('actualExpense', {
-                              setValueAs: (v: string) => (v === '' ? undefined : Number(v)),
-                            })}
-                          />
-                        </FieldGrid>
-                      </FormSection>
-                    ) : null}
-                    {COST_ACCRUAL_ENABLED ? (
-                      <FormSection
-                        title="Recognition"
-                        description="Changes only when cost is recognised in Earned value — never a date."
-                      >
-                        <FieldGrid>
-                          <SelectField
-                            label="Cost accrual"
-                            hint="Sets when this activity’s cost is recognised: Start (all at the start), Uniform (spread evenly), or End (all at the finish)."
-                            {...cost.form.register('accrualType')}
-                          >
-                            {ACCRUAL_TYPE_OPTIONS.map((value) => (
-                              <option key={value} value={value}>
-                                {ACCRUAL_TYPE_LABELS[value]}
-                              </option>
-                            ))}
-                          </SelectField>
-                        </FieldGrid>
-                      </FormSection>
-                    ) : null}
+                    {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
+                    {COST_ACCRUAL_ENABLED ? <ActivityAccrualField form={cost.form} /> : null}
                     <ScopeSaveBar
                       gate={gating.cost}
                       dirty={cost.isDirty}

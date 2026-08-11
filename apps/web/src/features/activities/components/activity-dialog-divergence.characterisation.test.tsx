@@ -706,8 +706,11 @@ describe('divergence D10 (CLOSED, M4) — `physicalPercentComplete` visibility',
     // the label raises: this changes no dates.
     const created = mountCreate({ activity: row({ percentCompleteType: 'PHYSICAL' }) });
     const createSelect = screen.getByLabelText('Earn value from');
+    // Create's hint used to append "It changes no dates — only how Earned value measures
+    // progress." That sentence is now the SECTION's description on both hosts, so keeping it in
+    // the hint too would say it twice on one screen.
     expect(hintOf(createSelect)).toBe(
-      'Earns value from a hand-entered physical %-complete, independent of dates. It changes no dates — only how Earned value measures progress.',
+      'Earns value from a hand-entered physical %-complete, independent of dates.',
     );
     created.unmount();
 
@@ -720,7 +723,7 @@ describe('divergence D10 (CLOSED, M4) — `physicalPercentComplete` visibility',
     );
   });
 
-  it('NEW — the physical %% input keeps its step, inputMode and 0–100 hint on create and loses all three in the editor', async () => {
+  it('NEW (CLOSED) — the physical %% input keeps its step, inputMode and 0–100 hint on both', async () => {
     const created = mountCreate({ activity: row({ percentCompleteType: 'PHYSICAL' }) });
     const createInput = screen.getByLabelText('Physical % complete');
     expect(createInput).toHaveAttribute('step', '1');
@@ -731,9 +734,9 @@ describe('divergence D10 (CLOSED, M4) — `physicalPercentComplete` visibility',
     mountEditor({ activity: row({ percentCompleteType: 'PHYSICAL' }) });
     openTab('Progress');
     const editorInput = await screen.findByLabelText('Physical % complete');
-    expect(editorInput).not.toHaveAttribute('step');
-    expect(editorInput).not.toHaveAttribute('inputmode');
-    expect(hintOf(editorInput)).not.toContain('0–100');
+    expect(editorInput).toHaveAttribute('step', '1');
+    expect(editorInput).toHaveAttribute('inputmode', 'numeric');
+    expect(hintOf(editorInput)).toContain('0–100.');
   });
 });
 
