@@ -5,7 +5,8 @@
     "@better-fetch/fetch": "1.3.1",
     "nodemailer": "9.0.3",
     "zod": "4.4.3",
-    "@nestjs/throttler": "6.5.0"
+    "@nestjs/throttler": "6.5.0",
+    "react-hook-form": "7.84.0"
   },
   "claims": [
     {
@@ -429,6 +430,22 @@
       "lines": "148-150",
       "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
       "citedBy": ["scripts/measure-band-copy.mjs"]
+    },
+    {
+      "ref": "index.esm.mjs:2751-2753",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "2751-2753",
+      "anchor": "options.shouldFocus &&",
+      "citedBy": ["docs/specs/activity-dialog-unification/feature-spec.md"]
+    },
+    {
+      "ref": "index.esm.mjs:3007-3009",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "3007-3009",
+      "anchor": "const _focusError = () => _options.shouldFocusError &&",
+      "citedBy": ["docs/specs/activity-dialog-unification/feature-spec.md"]
     }
   ]
 }

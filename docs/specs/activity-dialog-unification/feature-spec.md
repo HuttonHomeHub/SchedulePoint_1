@@ -552,8 +552,16 @@ is the _entire_ justification for the M1 milestone, it is spiked before M1 is bu
 
 **The submit shape — rev 2 rewrote this; the naive version is actively broken.**
 
-`react-hook-form@^7.84.0` **[V]** `apps/web/package.json:66`. Two facts about its public API decide
-the design, and **both must be registered in `scripts/dependency-claims.json` before this merges**:
+`react-hook-form@^7.84.0` **[V]** `apps/web/package.json:66`. Two facts about its behaviour decide
+the design, and both are now **registered** in `scripts/dependency-claims.json` against
+`react-hook-form@7.84.0`, so a Dependabot bump fails CI and someone re-reads them — which is the
+point, because a bump is exactly when a behavioural claim needs re-checking (ADR-0076 Class 2):
+
+- `dist/index.esm.mjs`, lines **2751-2753** — `trigger`'s focus is guarded by `options.shouldFocus`,
+  so it is **opt-in** and does nothing at its default.
+- `dist/index.esm.mjs`, lines **3007-3009** — `handleSubmit`'s `_focusError` is guarded by
+  `_options.shouldFocusError`, which **defaults to `true`**, so today's create submit already focuses
+  the first invalid control.
 
 - `trigger(name?, { shouldFocus })` — focus is **opt-in**. Left at its default, the naive
   `Promise.all(forms.map(f => f.trigger()))` focuses **nothing**, which is _worse than today_:
