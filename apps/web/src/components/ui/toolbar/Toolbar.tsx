@@ -41,8 +41,8 @@ const LABEL_PROMOTION_MARGIN_PX = 32;
  * `computeOverflow` was handed only item widths, so it answered "do these boxes sum to less than
  * this number" while the row needed "does this fit as laid out". Measured at 1920, Row 1's items
  * summed to 1782 against an 1832 px container while the row laid out at 1941: the function said it
- * fitted, no `⋯` rendered, and two controls were painted outside this `overflow-hidden` box at zero
- * visible width (`docs/specs/workspace-layout/m0-measurement.md`).
+ * fitted, no `⋯` rendered, and two controls were painted outside the row — which was then
+ * `overflow-hidden` — at zero visible width (`docs/specs/workspace-layout/m0-measurement.md`).
  *
  * **Why derived and not measured.** The obvious implementation puts a ref on each `role="group"`
  * wrapper and reads its box. Those wrappers are rendered from `groups` → `inlineBar` → *the very
@@ -418,7 +418,7 @@ export function Toolbar<Ctx>({
           aria-label={labels[group]}
           className={cn(
             // Groups keep their natural width and are never clipped: the sub-floor remedy is the
-            // row's `overflow-x-auto` (see the container below), not shrinking the groups.
+            // row's `overflow-x-auto` (on the container above), not shrinking the groups.
             //
             // **Two earlier attempts are recorded because each looked right and was measured wrong.**
             // `min-w-0` alone let a group's box shrink while its `whitespace-nowrap` buttons kept
