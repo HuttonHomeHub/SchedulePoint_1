@@ -4,7 +4,7 @@ import {
   type ActivitySummary,
   type CalendarSummary,
 } from '@repo/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   useWatch,
   type FieldErrors,
@@ -20,7 +20,6 @@ import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
   CONSTRAINT_TYPE_LABELS,
-  INHERIT_CALENDAR_LABEL,
   PERCENT_COMPLETE_TYPE_LABELS,
   PERCENT_COMPLETE_TYPE_OPTIONS,
   isDurationDerivedType,
@@ -38,6 +37,7 @@ import {
 } from '../schemas/activity-scope-schemas';
 
 import { seedCost, seedGeneral, seedMeasure, seedScheduling } from './activity-editor-seeds';
+import { ActivityCalendarField } from './ActivityCalendarField';
 import { ActivityBreakdownField } from './fields/ActivityBreakdownField';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
@@ -45,11 +45,9 @@ import { useScopeForm } from './useScopeForm';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
-import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { CheckboxField, FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
-import { Label } from '@/components/ui/label';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
@@ -60,15 +58,9 @@ import {
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
-import {
-  CALENDAR_TIER_GROUP_LABELS,
-  groupCalendarsByTier,
-  offerableCalendars,
-  toCalendarOptions,
-} from '@/lib/calendar-tiers';
+import {} from '@/lib/calendar-tiers';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
-import { matchesLibraryQuery } from '@/lib/library-filters';
 
 /** One field, named against the scope form that owns it. The scope tag is what makes the list below
  * checkable: `{ scope: 'general', name: 'constraintType' }` does not compile, because
@@ -317,29 +309,6 @@ export function ActivityFormDialog({
   // A seeded non-inherit value that doesn't match any option (the list is still loading, or failed
   // to load): inject a synthetic option so the Select shows it as selected — never blank, which
   // would read as "inherit".
-  // A RESOURCE_DEPENDENT activity schedules on its DRIVING RESOURCE's calendar (ADR-0035 §23 /
-  // ADR-0039), so its own `calendarId` is resolved and then overridden by the service. Leaving the
-  // picker live would be a control that saves a value with no effect — the lit-but-inert defect this
-  // codebase keeps re-finding. It is shaded with the reason instead of hidden, so the binding an
-  // imported or re-typed activity already carries stays visible and is not silently dropped.
-  const resourceDependent = type === 'RESOURCE_DEPENDENT';
-  // The list spans two tiers (ADR-0053 §1) — the project's own
-  // calendars alongside the organisation's — so the options are grouped under named `<optgroup>`s,
-  // which a screen reader announces with the option. Not grouped when the project has none of its
-  // own: a single-group list reads better flat.
-  const calendarTiers = groupCalendarsByTier(calendars);
-  const groupCalendars = calendarTiers.project.length > 0;
-  // The combobox's search term (ADR-0053 §4 / US-8). Not debounced: `calendars` is already the
-  // COMPLETE project-usable library (paged in full), so this is a client-side array pass.
-  const [calendarQuery, setCalendarQuery] = useState('');
-  // Archived calendars are offered only when one IS the current value (US-8) — a calendar retired
-  // after this activity was bound to it stays selected, badged, rather than reading as "inherit".
-  const calendarOptions = useMemo(() => {
-    const offerable = offerableCalendars(calendars, calendarId ?? '').filter((calendar) =>
-      matchesLibraryQuery(calendarQuery, calendar.name),
-    );
-    return toCalendarOptions(offerable, { grouped: groupCalendars });
-  }, [calendars, calendarId, calendarQuery, groupCalendars]);
   // The duration field's day↔minute factor, read from the calendar the FORM currently selects — not
   // the saved one, because a planner can change the calendar and the duration in the same edit
   // (ADR-0070 §3). `undefined` = not known, which degrades the field to whole working days.
@@ -545,60 +514,19 @@ export function ActivityFormDialog({
                 title="Working time"
                 description="Which calendar's working days this activity's duration is measured in."
               >
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="activity-calendar">Calendar</Label>
-                  {/* The shared APG combobox (ADR-0053 §4 / US-8): type-ahead over a large
-                      library, the tiers as labelled option groups, and the empty = inherit choice
-                      as `emptyOption`. */}
-                  <Combobox
-                    id="activity-calendar"
-                    value={calendarId ?? ''}
-                    onChange={(value) =>
-                      scheduling.form.setValue('calendarId', value, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      })
-                    }
-                    query={calendarQuery}
-                    onQueryChange={setCalendarQuery}
-                    options={calendarOptions}
-                    // The seeded calendar isn't resolvable from the list — still loading, or the list
-                    // failed to load. The combobox falls back to "Loading…"/"Unavailable" itself, so the
-                    // field is never blank (which would read as "inherit").
-                    selectedLabel={calendars.find((c) => c.id === calendarId)?.name}
-                    groupLabels={CALENDAR_TIER_GROUP_LABELS}
-                    emptyOption={{ label: INHERIT_CALENDAR_LABEL }}
-                    disabled={resourceDependent}
-                    loading={calendarsLoading}
-                    errored={calendarsError}
-                    describedBy={
-                      calendarsError
-                        ? 'activity-calendar-help activity-calendar-error'
-                        : 'activity-calendar-help'
-                    }
-                    invalid={calendarsError}
-                    toggleLabel="Show calendars"
-                    emptyMessage="No calendars match your search."
-                  />
-                  <p id="activity-calendar-help" className="text-muted-foreground text-sm">
-                    {resourceDependent
-                      ? // Says WHY it is unavailable, not merely that it is. A disabled control with no
-                        // reason reads as a bug; this one is disabled because another field already
-                        // decides the answer.
-                        'Not used by a resource-dependent activity — it is scheduled on its driving resource’s calendar instead. Change the type back to set a calendar here.'
-                      : 'The working-time calendar this activity is scheduled on. Inherits the plan’s calendar unless you pick one. Recalculate to apply the calendar to the activity’s dates.'}
-                  </p>
-                  {calendarsError ? (
-                    <p
-                      id="activity-calendar-error"
-                      role="alert"
-                      className="text-destructive-text text-sm"
-                    >
-                      Couldn’t load the calendar list, so only “{INHERIT_CALENDAR_LABEL}” is
-                      available.
-                    </p>
-                  ) : null}
-                </div>
+                <ActivityCalendarField
+                  value={calendarId ?? ''}
+                  onChange={(value) =>
+                    scheduling.form.setValue('calendarId', value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                  calendars={calendars}
+                  loading={calendarsLoading}
+                  errored={calendarsError}
+                  activityType={type}
+                />
               </FormSection>
             ) : null}
 

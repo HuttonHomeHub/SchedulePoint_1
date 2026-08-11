@@ -18,6 +18,12 @@ import { matchesLibraryQuery } from '@/lib/library-filters';
  * The per-activity working-time calendar picker (ADR-0037), shared by {@link ActivityFormDialog} and
  * the tabbed {@link ActivityEditorDialog}'s Scheduling tab.
  *
+ * **That sentence was false for a year and is worth leaving corrected rather than quietly fixed.**
+ * `ActivityFormDialog` did not import this file; it inlined its own `Combobox` — so the docblock
+ * asserting one implementation was itself the evidence that there were two, and the two had already
+ * drifted (native `disabled` against `readOnly`, and a hint differing by one clause). Create adopted
+ * it at M3-T1, which is what made the claim true.
+ *
  * Extracted, not re-implemented. The tabbed editor's first draft rebuilt this as a plain
  * `SelectField` and lost four shipped behaviours at once — the ADR-0053 §4 `Combobox` (default-on
  * since 2026-07-26), the loading and error states, the "the seeded id isn't in the list yet"

@@ -193,14 +193,18 @@ beforeEach(() => {
     );
 });
 
-describe('divergence D1 — the calendar picker', () => {
-  it('create shades a resource-dependent calendar with `disabled`; the editor uses `readOnly` (ADR-0083)', () => {
+describe('divergence D1 (CLOSED, M3-T1 commit B) — the calendar picker', () => {
+  it('both hosts shade a resource-dependent calendar with `readOnly`, never `disabled` (ADR-0083)', () => {
+    // Create inlined its own `Combobox` and reached for native `disabled`; the editor called the
+    // shared component, which had already taken ADR-0083's rule. `disabled` on this control hides
+    // which calendar the activity carries from the one reader who most needs to know it is being
+    // overridden — the value stops being focusable, selectable and copyable to buy nothing.
     const resourceDependent = row({ type: 'RESOURCE_DEPENDENT' });
 
     const created = mountCreate({ activity: resourceDependent });
     const createField = screen.getByRole('combobox', { name: 'Calendar' });
-    expect(createField).toBeDisabled();
-    expect(createField).not.toHaveAttribute('readonly');
+    expect(createField).toHaveAttribute('readonly');
+    expect(createField).not.toBeDisabled();
     created.unmount();
 
     mountEditor({ activity: resourceDependent });
@@ -210,18 +214,17 @@ describe('divergence D1 — the calendar picker', () => {
     expect(editorField).not.toBeDisabled();
   });
 
-  it('NEW — the two hosts word the ordinary calendar hint differently by one clause', () => {
+  it('NEW (CLOSED) — the two hosts word the ordinary calendar hint identically', () => {
+    const hint =
+      'The working-time calendar this activity is scheduled on. Inherits the plan’s calendar unless you pick one. Recalculate to apply it to the activity’s dates.';
+
     const created = mountCreate({ activity: row() });
-    expect(hintOf(screen.getByRole('combobox', { name: 'Calendar' }))).toBe(
-      'The working-time calendar this activity is scheduled on. Inherits the plan’s calendar unless you pick one. Recalculate to apply the calendar to the activity’s dates.',
-    );
+    expect(hintOf(screen.getByRole('combobox', { name: 'Calendar' }))).toBe(hint);
     created.unmount();
 
     mountEditor();
     openTab('Scheduling');
-    expect(hintOf(screen.getByRole('combobox', { name: 'Calendar' }))).toBe(
-      'The working-time calendar this activity is scheduled on. Inherits the plan’s calendar unless you pick one. Recalculate to apply it to the activity’s dates.',
-    );
+    expect(hintOf(screen.getByRole('combobox', { name: 'Calendar' }))).toBe(hint);
   });
 
   it('the resource-dependent reason itself is already identical — the one thing D1 must not change', () => {
@@ -238,9 +241,11 @@ describe('divergence D1 — the calendar picker', () => {
     expect(hintOf(screen.getByRole('combobox', { name: 'Calendar' }))).toBe(reason);
   });
 
-  it('NEW — create gives its calendar control a fixed DOM id; the editor generates one', () => {
+  it('NEW (CLOSED) — neither host pins a fixed DOM id on its calendar control', () => {
+    // Create's `activity-calendar` was referenced by nothing outside its own markup, and a fixed id
+    // is a hazard the moment two of anything mount together. The shared component generates one.
     const created = mountCreate({ activity: row() });
-    expect(screen.getByRole('combobox', { name: 'Calendar' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: 'Calendar' })).not.toHaveAttribute(
       'id',
       'activity-calendar',
     );
