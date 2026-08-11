@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 22 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 919 web
 > source files with 29 flag-scoped Playwright suites beside the base journey, and
-> 89 ADRs.
+> 90 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1877,6 +1877,46 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   **converted before the flag went** — the ADR-0084 batch-1 lesson applied in advance.
   **The CPM engine is not imported and no migration runs**, so the ADR-0034 parity gate is
   untouched by construction.
+
+- **ADR-0090** _(Accepted 2026-08-11; M1 in progress)_ — The plan-workspace command surface: a row
+  is a budget, and `order` is not a priority. Opened as a layout complaint — the two-row TSLD
+  toolbar "doesn't work well" on a 24" 1920×1080 monitor, and its behaviour on a Surface Pro was
+  unknown — and it turned out to sit on a **live defect in shipped software**. The command surface
+  carries **46 registered items** across two rows, and `computeOverflow` sums only _item_ widths
+  (`Toolbar.tsx:172-181`): it sees none of the row's own chrome — the container's `gap-1` (`:322`)
+  and each group's `gap-1` + `ml-1 border-l pl-2` (`:331`). So the row believes it fits when it does
+  not, the `⋯` never renders, and the surplus is paid by controls falling out of an
+  `overflow-hidden` box. **Measured in Chromium on a plan with a computed schedule: at 1920×1080 @
+  100% Row 1 exceeds its container by 109 px, no `⋯` renders at all, and `legend` and `shortcuts`
+  are painted at 0 px visible — pointer-unreachable, keyboard-reachable only** (a browser scrolls a
+  hidden box to reveal focus). At **1440** the `⋯` itself has 0 px visible while holding the only
+  route to ~15 commands; at **960** it has none on either row, alongside two pinned `render` items
+  that could never demote. The failure is **WCAG 2.2 §2.5.8 Target Size (Minimum), AA**, with no
+  exception available — the Equivalent exception fails _because_ there is no `⋯`. 2.1.1 is
+  **satisfied**; 2.4.11 and 1.4.10 do **not** apply.
+  **What this ADR is really about is the method.** It was drafted without a shell and ended in two
+  falsifiable predictions for that reason; **both were falsified on the first run**, along with its
+  headline claim that a 2560 px monitor was needed before the labels appear — at 1920, 21 of 24
+  inline items _are_ labelled, and **the labels are why the row breaks**. Those figures are
+  withdrawn in place rather than deleted. Then a **five-specialist review of the plan, before
+  approval**, found blocking defects in the repair itself, three of them reached independently by
+  two reviewers each: the first draft proposed to _measure_ group chrome from the DOM, which is
+  derived from the very overflow state the calculation sets, and would have oscillated at the `help`
+  group — i.e. at `legend` and `shortcuts`, i.e. at exactly the two controls the milestone exists to
+  fix. The chrome is now **derived** from static registry data with named constants (the
+  `LABEL_CHROME_PX` pattern). A second convergence: the proposed gate would have **passed a control
+  shrunk to zero visible width** — a 0-width box has 0 overhang and is still in the DOM, which is
+  this defect's exact shape — so the gate asserts pointer reachability via `elementFromPoint`.
+  **The existing accessibility gate structurally cannot see any of this**, verified by running
+  axe-core 4.12.1: `target-size` is tagged `wcag22aa` while the scan requests `wcag2a`/`wcag2aa`,
+  **and** it ships `enabled: false`. "The axe scan is green" was true and meaningless.
+  Sliced **M1 the repair (ships alone)** → M2 consolidation (46 items → ~24 stops, nothing deleted,
+  12 commands behind _named_ triggers) → M3 the responsive ladder + touch → M4 the header merge →
+  M5 the gate pass → **M6 retiring `VITE_CANVAS_WORKSPACE`**, the estate's last Class A flag, whose
+  deferral trigger this epic fires. The product owner approved shipping M1 alone knowing it will
+  probably withdraw today's labels until M2 restores them: a correct icon-only row beats an
+  unclickable labelled one. **Frontend-only — the CPM engine is not imported and no migration runs**,
+  so the ADR-0034 recalculation parity gate is untouched by construction.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down

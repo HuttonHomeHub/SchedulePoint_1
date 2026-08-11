@@ -25,7 +25,7 @@ plan, so it is stated first.
 
 **Every pixel figure in this spec is one of two kinds, and each is labelled.** Either it is
 _measured_ — reproduced from `m0-measurement.md`'s raw output, which came from
-`apps/web/e2e-measure-toolbar/{measure,reachability}.spec.ts` — or it is _derived from a measured
+`apps/web/measure-toolbar/{measure,reachability}.spec.ts` — or it is _derived from a measured
 anchor_, in which case it says so and names the anchor. Nothing here repeats design.md §2's
 6.6 px/character estimates. Every code claim names its file and line, checked in this session
 against the working tree (CLAUDE.md §19.10, ADR-0076).
@@ -391,7 +391,7 @@ were right and the debt row is wrong**; corrected in this epic's first PR rather
 
 ### Two further register/tooling facts, found while checking
 
-- **`e2e-measure-toolbar` is outside the repo's own gates.** It is absent from
+- **`measure-toolbar` is outside the repo's own gates.** It is absent from
   `apps/web/tsconfig.json`'s `include` list (which names 30 other `e2e-*` directories, `:13-48`) and
   has no `test:e2e:*` script in `apps/web/package.json`. So the harness that produced the numbers
   this epic rests on does not typecheck or lint with the repository — the exact failure
@@ -532,7 +532,7 @@ Three reasons, each checkable:
    is the default build. **No other config in the estate has that property**; every one of the other
    31 pins something.
 
-**So `apps/web/e2e-measure-toolbar/` stays a harness and does not become the gate**, and its
+**So `apps/web/measure-toolbar/` stays a harness and does not become the gate**, and its
 docblocks say so in both directions (ADR-0081 §3): `measure.spec.ts` reports and asserts nothing;
 `e2e-toolbar-fit/fit.spec.ts` asserts and reports nothing. The harness is repaired in the same PR by
 adding it to `apps/web/tsconfig.json`'s `include` and giving it a `measure:toolbar` script, so it

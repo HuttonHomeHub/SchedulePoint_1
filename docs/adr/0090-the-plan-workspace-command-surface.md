@@ -1,6 +1,8 @@
 # ADR-0090: The plan-workspace command surface — a row is a budget, and `order` is not a priority
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-08-11) — approved by the product owner after the M0 measurement and a
+  five-specialist pre-approval review. **Corrected in place rather than superseded**, on the product
+  owner's decision: it had never been Accepted, so nothing downstream depended on the withdrawn text.
 - **Date:** 2026-08-11
 - **Deciders:** James Ewbank (with Claude Code — ui-architect)
 - **Related:** amends **ADR-0031** (toolbar registry, 7-group taxonomy, tiers, and its
@@ -17,20 +19,59 @@ The TSLD command surface is two rows holding **46 registered items** — 27 on R
 1920×1080 monitor at 100% browser scaling, and that **fewer controls are visible at 100% than at
 90%**. Behaviour on a Surface Pro was unknown.
 
-The reported symptom is not a bug. `Toolbar.tsx:385-395` renders a visible `⋯` whenever anything
+> ### Correction — this ADR was drafted without a shell, and M0 disproved three of its claims
+>
+> The paragraph immediately below said the reported symptom **is not a bug**. That is **false at
+> every measured width except one**, and the three withdrawn claims are corrected in place below
+> rather than deleted, because what this document got wrong is part of its record.
+>
+> **What was actually measured** (`docs/specs/workspace-layout/m0-measurement.md`, Chromium, real
+> workspace, shipped flag defaults, on a plan with a computed schedule):
+>
+> | Viewport          | Row 1 over its container | `⋯`                       | Pointer-unreachable                       |
+> | ----------------- | -----------------------: | ------------------------- | ----------------------------------------- |
+> | 2133 (1920 @ 90%) |                    35 px | **absent**                | `shortcuts`                               |
+> | **1920 @100%**    |               **109 px** | present, **0 px visible** | `legend`, `shortcuts`                     |
+> | 1440              |                    79 px | present, **0 px visible** | —                                         |
+> | 960               |                   459 px | present, **0 px visible** | `isolate-logic`, `finish-chip`, `summary` |
+>
+> 1. **"Every demoted command is reachable" — withdrawn.** At 1920 no `⋯` renders at all and two
+>    controls are painted outside an `overflow-hidden` box at 0 px visible: pointer-unreachable,
+>    keyboard-reachable only. **This fails WCAG 2.2 §2.5.8 Target Size (Minimum), AA**, with no
+>    exception available — the Equivalent exception fails precisely because there is no `⋯` and
+>    therefore no second route anywhere on the page. (2.1.1 is _satisfied_; 2.4.11 and 1.4.10 do
+>    **not** apply — three citations claimed less after review, not more.)
+> 2. **"≈2560 px before Row 1 can label itself" — withdrawn, and backwards.** At 1920, **21 of 24**
+>    inline items are labelled. The 6.6 px/character estimate was substantially wrong. The labels are
+>    not missing; **the labels are why the row breaks** — the promotion pass decides the row can
+>    afford them, the row grows past its container, and the overflow pass does not catch the result.
+> 3. **The ≈1256 px pinned-floor figure — withdrawn.** Measured at **1177 px** for Row 1, against an
+>    872 px container at 960. The conclusion it supported survives: `render` items can never demote
+>    (`Toolbar.tsx:153-156`), so no arithmetic closes a 305 px gap — only removing pinned items does.
+>
+> The 90%-vs-100% framing below is also incomplete: on a real plan the defect reaches **2133** too.
+> There is no measured desktop width at which this surface is correct.
+
+~~The reported symptom is not a bug. `Toolbar.tsx:385-395` renders a visible `⋯` whenever anything
 overflows and every demoted command is reachable inside it with its reason
 (`ToolbarOverflow.tsx:74-109`, ADR-0082); 90% zoom simply gives a 2133 CSS px viewport against
-1920, and the row sits within one control's width of its demotion boundary.
+1920, and the row sits within one control's width of its demotion boundary.~~
 
 **Reading the surface produced a larger finding, and it is the reason for this ADR.** ADR-0031's
 2026-07-15 amendment adopted two rows on an explicit product-owner request: _"every control
 visible **with its label**"_ and _"nothing working hidden in a `⋯`"_
-(`0031-tsld-toolbar-registry-and-taxonomy.md:252-259`). Computed from the shipped code
-(`docs/specs/workspace-layout/design.md` §2.4): `'auto'` labels cannot promote on Row 1 below a
-container of roughly **2560 px**, and on Row 2 below roughly **2600 px**. **The design has
-never met its own acceptance criterion on the monitor it was designed for, and nothing measured
-it.** What the owner sees instead is ~26 unlabelled glyphs with four arbitrarily-labelled words
-among them — the four `showLabel: 'always'` segment halves.
+(`0031-tsld-toolbar-registry-and-taxonomy.md:252-259`). ~~Computed from the shipped code: `'auto'`
+labels cannot promote on Row 1 below a container of roughly **2560 px**, and on Row 2 below roughly
+**2600 px** … what the owner sees instead is ~26 unlabelled glyphs.~~
+
+**Measured, and the opposite is true: at 1920 Row 1 labels 21 of its 24 inline items.** The
+acceptance criterion is met on the labelling axis and violated on the one nobody stated — the row
+does not fit. The two rows exceed their containers by 109 px and 0 px respectively at 1920, and the
+overflow pass does not fire, so the surplus is paid by controls falling out of an
+`overflow-hidden` box rather than by labels being withheld. **The design has never met its own
+acceptance criterion on the monitor it was designed for** — but the failure is _fit_, not
+_labelling_, and this ADR asserted the reverse for the same reason it asserted the rest: nobody
+had run it.
 
 Three structural causes, each read from code rather than inferred:
 
@@ -188,10 +229,18 @@ corrected in the same PR rather than stepped over (the ADR-0071 lesson).
 ## Alternatives considered
 
 - **Repair in place only** (fix `priority`, cut the gutter, fold Legend/Shortcuts, densify).
-  Rejected as a _terminus_, adopted as **Milestone 1**: it moves the Row-1 pinned floor
-  1256 → ~1160 px and the label requirement 1169 → ~960 px against 663 px available at 1920 —
-  **still no labels**, and Surface Pro portrait is still below the floor. It is necessary and
-  insufficient, and nothing measured after this design means anything until D2 is in.
+  Rejected as a _terminus_, adopted as **Milestone 1**. ~~It moves the Row-1 pinned floor
+  1256 → ~1160 px and the label requirement 1169 → ~960 px against 663 px available at 1920 — still
+  no labels.~~ **Those figures are withdrawn** (see the correction in Context). What survives
+  unchanged is the conclusion: the measured pinned floor is **1177 px** against an **872 px**
+  container at Surface Pro portrait, `render` items can never demote (`Toolbar.tsx:153-156`), and no
+  correction to the arithmetic closes a 305 px gap — only removing pinned items does. M1 is
+  necessary and insufficient.
+
+  **Approved to ship alone** (product owner, 2026-08-11), accepting that an honest budget will
+  probably withdraw the 21 labels currently showing at 1920 until M2 restores them: a correct
+  icon-only row beats an unclickable labelled one, and the 2.5.8 failure is live in production.
+
 - **A vertical command rail beside the canvas.** The strongest answer to the height question —
   it trades the axis the surface has spare, since a TSLD is wide and starved of height.
   Rejected because both edges are spoken for: the left is the ADR-0029 Project Explorer rail, and
@@ -210,6 +259,20 @@ corrected in the same PR rather than stepped over (the ADR-0071 lesson).
   `TOOLBAR_GROUPS` is the property ADR-0031 §2 exists to defend. D4 renames instead.
 
 ## Consequences
+
+**The first consequence, and the one this ADR exists to record: it was wrong three times, and the
+mechanism that caught it was its own.** The document ended in two falsifiable predictions
+specifically because it was written without a shell. Both were falsified on the first run. That is
+the mechanism working — but it means no figure here may be quoted without checking it against
+`m0-measurement.md`, and it is why the M1 gate runs in a real browser rather than in jsdom, which
+has no layout and would have reported this surface healthy forever.
+
+**The second: a five-specialist review of the plan, before approval, found blocking defects in the
+repair itself** — three of them reached independently by two reviewers each. Most consequentially,
+the first draft of M1 proposed to _measure_ group chrome from the DOM, which would have created a
+render loop at the `help` group, i.e. at `legend` and `shortcuts`, i.e. at exactly the two controls
+this decision exists to make clickable. The chrome is now **derived** from static registry data.
+Reviewing a plan rather than a diff is unusual here; on this evidence it should not be.
 
 **Positive.** Both rows label themselves at 1920 — the outcome ADR-0031's 2026-07-15 amendment
 asked for and has never delivered. Toolbar stops fall 46 → 24 with nothing deleted; roving-focus
@@ -233,14 +296,22 @@ been stable since ADR-0031.
 against the house `≥44 px` rule; D7 improves the major axis and does not close the gap. That is
 a debt row, not a fixed problem.
 
-**Risk, stated plainly.** **Every pixel figure in the design and in this ADR is computed from
-class names and an assumed 6.6 px/character metric at `text-sm`, not measured in a browser** —
-the authoring session had no shell. The design's **M0** is a measurement task carrying two
-falsifiable predictions (P1: at 1920 the Row-1 `⋯` holds exactly _Go to today_ and _Zoom to
-selection_; P2: at 960 every command is still reachable and the failure is truncation, not
-clipping). If M0 disagrees, the numbers are re-derived before Milestone 2 rather than defended.
-P2 is the sharp one: if any command proves unreachable at 960, that is a live WCAG 2.1.1 defect
-and it outranks this ADR.
+**Risk, stated plainly — and then resolved.** Every pixel figure in the design and in the first
+draft of this ADR was computed from class names and an assumed 6.6 px/character metric at
+`text-sm`, not measured; the authoring session had no shell. **M0 has since been run**
+(`docs/specs/workspace-layout/m0-measurement.md`), and both predictions were **falsified**:
+
+- **P1** predicted the Row-1 `⋯` at 1920 would hold exactly _Go to today_ and _Zoom to selection_.
+  There is **no `⋯` at all** at 1920 — the row does not demote two items, it demotes nothing and
+  lets controls fall out of the box.
+- **P2** predicted every command would still be reachable at 960, with truncation rather than loss.
+  The `⋯` is itself clipped to **0 px visible** there, and two pinned `render` items are too. **P2
+  was named as the sharp one — "if any command proves unreachable, that outranks this ADR" — and it
+  is the case.** The criterion is **2.5.8**, not the 2.1.1 guessed here: keyboard operation is
+  intact, which is what makes this pointer-specific.
+
+That resolution is why this ADR is now Accepted rather than Proposed, and why its Context carries a
+correction block instead of the withdrawn text alone.
 
 **Follow-ups.** `docs/DESIGN_SYSTEM.md` gains the toolbar layout-mode ladder; ADR-0031's
 "add a command" recipe gains `priority` and the D5 rule; `docs/TECH_DEBT.md:2011-2012` is

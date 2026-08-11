@@ -1,10 +1,34 @@
 # Implementation Plan: The plan-workspace command surface — repair, then consolidate
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Measurement (authoritative):** [`./m0-measurement.md`](./m0-measurement.md)
-- **ADR:** [ADR-0090](../../adr/0090-the-plan-workspace-command-surface.md) (Proposed; corrected by M0)
-- **Status:** Draft — **awaiting product-owner approval**
+- **Pre-approval review:** [`./pre-approval-review.md`](./pre-approval-review.md) — five specialists;
+  every blocking finding is folded into the tasks below, which therefore differ from their first draft
+- **ADR:** [ADR-0090](../../adr/0090-the-plan-workspace-command-surface.md) (Accepted; corrected in
+  place by M0)
+- **Status:** **Approved 2026-08-11** — in progress
 - **Owner:** James Ewbank
+
+## Product-owner decisions (2026-08-11)
+
+Four questions were put to the product owner with the review findings; all four took the recommended
+option. They are recorded here because each one changes what gets built, and a plan that does not say
+who decided is a plan somebody re-litigates.
+
+1. **M1 ships alone, even though it probably withdraws the 21 labels currently visible at 1920.**
+   A correct icon-only row beats an unclickable labelled one, and the 2.5.8 failure is live. M1-T9's
+   changeset must say plainly that the label loss is **temporary and already scheduled for reversal
+   at M2** — not merely that the labels changed, which reads as a second complaint landing on the
+   first.
+2. **M2 proceeds as designed** — 46 items → ~24 stops, nothing deleted, 12 commands behind **named**
+   triggers. The 2026-07-15 amendment reversed _icons in an undifferentiated `⋯`_; these are named
+   menus, and the product already ships six of them.
+3. **`VITE_CANVAS_WORKSPACE` retires as terminal M6, with a written off-ramp.** If it threatens
+   M1–M4 it is deferred and the trigger is **re-recorded with a reason** in `flag-retirement.json`
+   and `docs/TECH_DEBT.md` #122 — deferring is a decision, ignoring is a defect.
+4. **ADR-0090 is corrected in place, not superseded.** It was never Accepted, so nothing downstream
+   depended on the withdrawn text. Done: its Context now carries a correction block naming all three
+   falsified claims, and it is Accepted.
 
 ## Breakdown
 
@@ -176,10 +200,10 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
 - **Risks:** measuring an empty plan again → the harness **must** populate the plan first
   (`finish-chip` is `isVisible: hasDiagram`, `tsld-toolbar-items.tsx:2360`, and was absent from every
   M0 reading).
-- **Testing:** none (this is measurement). It runs from `apps/web/e2e-measure-toolbar/`, which stays
+- **Testing:** none (this is measurement). It runs from `apps/web/measure-toolbar/`, which stays
   a harness.
 - **Development steps:**
-  1. Add `apps/web/e2e-measure-toolbar/attribution.spec.ts`; reuse `measure.spec.ts`'s onboarding, then
+  1. Add `apps/web/measure-toolbar/attribution.spec.ts`; reuse `measure.spec.ts`'s onboarding, then
      take the pen, add two activities and recalculate (as `e2e-toolbar/toolbar.spec.ts:51-54` does).
   2. Emit the decomposition per row per width to `MEASURE_OUT`.
   3. **Discriminate the three candidates explicitly:**
@@ -191,7 +215,7 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
        across consecutive commits at a fixed width, to see whether the second pass reaches a
        different conclusion from the first.
   4. Write the attribution into `m0-measurement.md` as an addendum, naming the command that produced it.
-  5. Add `e2e-measure-toolbar` to `apps/web/tsconfig.json`'s `include` and add a
+  5. Add `measure-toolbar` to `apps/web/tsconfig.json`'s `include` and add a
      `"measure:toolbar"` script to `apps/web/package.json` — the harness currently typechecks and
      lints with nothing (verified: absent from `tsconfig.json:13-48`, no script in `package.json`).
      Its config docblock already declares it a harness (`playwright.measure-toolbar.config.ts:4-5`);
@@ -372,7 +396,7 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
   > or the statement is narrowed; the gate is cheaper.
   - S1/S2/S3 at 960 and 768, **plus a positive pointer-reachability assertion**: `elementFromPoint`
     at each pinned Row-1 control's own centre returns that control or a descendant — the instrument
-    `e2e-measure-toolbar/reachability.spec.ts` already implements and which is what caught the
+    `measure-toolbar/reachability.spec.ts` already implements and which is what caught the
     original defect. Equivalently, a rendered-width floor of **≥ 24 px** (WCAG 2.5.8's minimum).
   - S4 (honest fit) is asserted only at 1920 and 1440 in this milestone, with M3 extending it
     downward.
@@ -496,7 +520,7 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
      - Cover the **selection bar's** `<Toolbar>` (`selection-actions.tsx:395`) too, as a third mounted
        instance of the same `measure()`/`computeOverflow` path.
   3. Add `test:e2e:toolbar-fit` to `apps/web/package.json`; add `e2e-toolbar-fit` to
-     `apps/web/tsconfig.json`'s `include`. **Also add `e2e-measure-toolbar` to that `include` list and
+     `apps/web/tsconfig.json`'s `include`. **Also add `measure-toolbar` to that `include` list and
      give it a script** — it is currently in neither, so the harness typechecks and lints with
      nothing (`component-reviewer`).
   4. Add the CI step in `.github/workflows/ci.yml` beside `test:e2e:toolbar` (`:227`).
@@ -520,7 +544,7 @@ test:e2e:toolbar-fit`, wired as its own CI step. It lands **with this milestone*
   7. Carry `measure.spec.ts:150-153`'s settle strategy deliberately — a hardcoded
      `waitForTimeout(400)` is a CI-flake source on a slower runner. Prefer a poll-until-stable read,
      which S6 needs anyway.
-  8. Update `apps/web/e2e-measure-toolbar/*.spec.ts` docblocks: "reports; asserts nothing; the gate is
+  8. Update `apps/web/measure-toolbar/*.spec.ts` docblocks: "reports; asserts nothing; the gate is
      `e2e-toolbar-fit`" (ADR-0081 §3).
 
 ##### Task M1-T9 — Changeset, docs, and an honest release note

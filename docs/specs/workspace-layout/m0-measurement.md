@@ -3,7 +3,7 @@
 > Status: **complete**. Taken 2026-08-11 against the real plan workspace in Chromium 1194, at the
 > shipped flag defaults, through the real sign-up → client → project → plan journey.
 > Harness: `apps/web/playwright.measure-toolbar.config.ts` +
-> `apps/web/e2e-measure-toolbar/{measure,reachability}.spec.ts`.
+> `apps/web/measure-toolbar/{measure,reachability}.spec.ts`.
 > Raw output: reproduced in full below.
 >
 > `design.md` §0 states that every pixel figure in its §2 is arithmetic over class names and an

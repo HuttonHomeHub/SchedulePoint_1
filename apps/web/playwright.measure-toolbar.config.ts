@@ -18,7 +18,7 @@ import { defineConfig, devices } from '@playwright/test';
  * ADR-0088 D1 established that a shipped image carries every flag at its default anyway.
  */
 export default defineConfig({
-  testDir: './e2e-measure-toolbar',
+  testDir: './measure-toolbar',
   fullyParallel: false,
   workers: 1,
   reporter: 'list',

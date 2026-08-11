@@ -15,7 +15,7 @@
 > This document ends with **M0**, two falsifiable predictions, precisely because it was written
 > without a shell and every pixel figure in §2 is arithmetic over class names plus an assumed
 > 6.6 px/character metric. **M0 has since been run** in Chromium against the real workspace at the
-> shipped flag defaults (`apps/web/e2e-measure-toolbar/`). **Both predictions were falsified**, and
+> shipped flag defaults (`apps/web/measure-toolbar/`). **Both predictions were falsified**, and
 > so was §2.4's headline claim that a 2560 px monitor is needed before the labels appear — at 1920
 > the labels are already on, and that is _why_ the row breaks.
 >
