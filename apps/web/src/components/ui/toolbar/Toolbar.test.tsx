@@ -351,4 +351,108 @@ describe('Toolbar (APG primitive)', () => {
     render(<Toolbar items={makeItems()} context={{ count: 1 }} label="Plan toolbar" />);
     expect((await axe(screen.getByRole('toolbar'))).violations).toEqual([]);
   });
+
+  describe('the row chrome is charged only where the width is imposed (ADR-0090 M1)', () => {
+    /**
+     * **A shrink-to-fit row can never need demotion.** Its `clientWidth` *is* its content, so "does
+     * the content fit?" is always yes by construction — and charging it the honest-budget chrome
+     * makes the answer falsely no by exactly the chrome.
+     *
+     * This shipped for one CI round. The chrome charge landed on all three `<Toolbar>` instances,
+     * and the third is the floating selection bar (`selection-actions.tsx:395`), which shrink-wraps.
+     * `e2e-library` timed out clicking **Resources**, because that command had been pushed into the
+     * `⋯` on a bar with no width problem at all. jsdom could not have caught it — it has no layout —
+     * so this test mocks the two readings the decision actually depends on.
+     */
+    const three = defineToolbar<Ctx>([
+      {
+        id: 'a',
+        group: 'frame',
+        tier: 2,
+        order: 0,
+        showLabel: 'never',
+        label: 'A',
+        onActivate: () => {},
+      },
+      {
+        id: 'b',
+        group: 'frame',
+        tier: 2,
+        order: 1,
+        showLabel: 'never',
+        label: 'B',
+        onActivate: () => {},
+      },
+      {
+        id: 'c',
+        group: 'frame',
+        tier: 2,
+        order: 2,
+        showLabel: 'never',
+        label: 'C',
+        onActivate: () => {},
+      },
+    ]);
+
+    /**
+     * 3 × 100 px of items in a 320 px row: they fit on widths alone, and do not once the derived
+     * chrome (two gaps + the residual) is added. That is the exact window the bug lived in.
+     */
+    function renderWith(flexGrow: string) {
+      const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(320);
+      const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+        width: 100,
+        height: 36,
+        top: 0,
+        left: 0,
+        right: 100,
+        bottom: 36,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
+      // Delegate to the real implementation and override one property. Replacing the whole object
+      // breaks Testing Library's accessible-name computation, which calls `getPropertyValue` —
+      // the first version of this test did exactly that and failed for a reason unrelated to the
+      // behaviour under test.
+      const real = window.getComputedStyle.bind(window);
+      const computed = vi
+        .spyOn(window, 'getComputedStyle')
+        .mockImplementation((el: Element, pseudo?: string | null) => {
+          const style = real(el, pseudo ?? undefined);
+          return new Proxy(style, {
+            get: (target, key) =>
+              key === 'flexGrow'
+                ? flexGrow
+                : typeof Reflect.get(target, key) === 'function'
+                  ? Reflect.get(target, key).bind(target)
+                  : Reflect.get(target, key),
+          });
+        });
+      const utils = render(<Toolbar items={three} context={{ count: 1 }} label="T" />);
+      return {
+        ...utils,
+        restore: () => {
+          width.mockRestore();
+          rect.mockRestore();
+          computed.mockRestore();
+        },
+      };
+    }
+
+    it('demotes when the row fills its container, because the chrome is real there', () => {
+      const { restore } = renderWith('1');
+      expect(screen.getByRole('button', { name: 'More toolbar actions' })).toBeInTheDocument();
+      restore();
+    });
+
+    it('demotes nothing when the row sizes to its own content', () => {
+      // The regression: `flex-grow: 0` means the width came FROM the content, so there is no
+      // deficit to pay and no command should move into the `⋯`.
+      const { restore } = renderWith('0');
+      expect(screen.queryByRole('button', { name: 'More toolbar actions' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'C' })).toBeInTheDocument();
+      restore();
+    });
+  });
 });

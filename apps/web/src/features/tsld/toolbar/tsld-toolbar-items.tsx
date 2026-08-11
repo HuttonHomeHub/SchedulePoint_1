@@ -1482,6 +1482,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     row: 'look' as const,
     tier: 2 as const,
     order: 13,
+    // Navigation survives longest on Row 1 — see ADR-0090 D3 / `priority`.
+    priority: 100,
     label: 'Go to today',
     icon: <LocateFixed className="size-4" />,
   };
@@ -1704,6 +1706,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'look',
       tier: 2,
       order: 10,
+      priority: 100,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
@@ -1717,6 +1720,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'look',
       tier: 2,
       order: 11,
+      priority: 100,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
@@ -1730,6 +1734,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'look',
       tier: 2,
       order: 12,
+      priority: 100,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
@@ -1757,6 +1762,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             row: 'look' as const,
             tier: 2 as const,
             order: 13,
+            priority: 100,
             label: 'Zoom to selection',
             icon: <Crosshair className="size-4" />,
             isEnabled: (ctx: TsldToolbarContext) =>
@@ -1826,6 +1832,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
       showLabel: 'always',
       order: 1,
+      demotionGroup: 'scheduling-mode',
       label: 'Early mode',
       isVisible: () => SCHEDULING_MODES_ENABLED,
       isEnabled: (ctx) => ctx.setSchedulingMode !== null,
@@ -1844,6 +1851,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
       showLabel: 'always',
       order: 2,
+      demotionGroup: 'scheduling-mode',
       label: 'Visual mode',
       isVisible: () => SCHEDULING_MODES_ENABLED,
       isEnabled: (ctx) => ctx.setSchedulingMode !== null,
@@ -1873,6 +1881,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Its name is the affordance — a nameless view switch is a coin toss (TECH_DEBT #61).
       showLabel: 'always',
       order: 10,
+      demotionGroup: 'view-mode',
       label: 'Diagram',
       isVisible: () => GANTT_VIEW_ENABLED,
       isActive: (ctx) => ctx.planView === 'tsld',
@@ -1885,6 +1894,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 1,
       showLabel: 'always',
       order: 11,
+      demotionGroup: 'view-mode',
       label: 'Gantt',
       isVisible: () => GANTT_VIEW_ENABLED,
       isActive: (ctx) => ctx.planView === 'gantt',
@@ -2535,6 +2545,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'look',
       tier: 2,
       order: 0,
+      // The two cheapest losses on Row 1: both open a reference surface, neither changes the
+      // plan or the view. They were also the two the old `order`-as-priority rule kept LONGEST.
+      priority: -100,
       label: 'Legend',
       icon: <ListChecks className="size-4" />,
       isActive: (ctx) => ctx.legendOpen,
@@ -2549,6 +2562,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'look',
       tier: 2,
       order: 1,
+      priority: -110,
       label: 'Keyboard shortcuts',
       icon: <Keyboard className="size-4" />,
       onActivate: (ctx) => ctx.openShortcuts(),

@@ -261,4 +261,140 @@ describe('computeOverflow', () => {
     expect(inline).toEqual([]);
     expect(overflow).toEqual(['t1a', 't1b', 't2a', 't2b']);
   });
+
+  describe('the row’s own chrome (M1-T2)', () => {
+    /**
+     * `computeOverflow` was handed only ITEM widths, so it answered "do these boxes sum to less
+     * than this number" while the caller needed "does this row fit as laid out". The row also
+     * carries a `gap-1` between every child and an `ml-1 border-l pl-2` rule before every group
+     * after the first, and `Toolbar.measure()` passed none of it (`Toolbar.tsx:172-181`).
+     *
+     * Measured consequence, from `docs/specs/workspace-layout/m0-measurement.md`: at 1920 Row 1
+     * reported `scrollWidth` 1941 against a `clientWidth` of 1832 while this function said it fit,
+     * so the `⋯` never rendered and two controls were painted outside an `overflow-hidden` box.
+     */
+
+    it('demotes when the chrome pushes a row over, where item widths alone would fit', () => {
+      // 400 of items against 420 available fits on widths alone; 40 of chrome does not.
+      expect(computeOverflow(bar, widths, 420, 40).overflow).toEqual([]);
+      expect(computeOverflow(bar, widths, 420, 40, 40).overflow).not.toEqual([]);
+    });
+
+    it('reclaims the gap that leaves with a demoted item, not just its width', () => {
+      // Four 100 px items, ⋯ 40 ⇒ the loop starts at 440. Ignoring the gap it steps 340 → 240 → 140;
+      // crediting a 10 px gap per demotion it steps 330 → 220. At an available width of 235 that is
+      // the difference between three demotions and two, i.e. between one item inline and two.
+      // Chosen deliberately: at 250 both credit schemes demote twice and the test proves nothing,
+      // which is what the first draft of this case did.
+      const withGap = computeOverflow(bar, widths, 235, 40, 0, 10);
+      const withoutGap = computeOverflow(bar, widths, 235, 40, 0, 0);
+      expect(withoutGap.inline).toEqual(['t1a']);
+      expect(withGap.inline).toEqual(['t1a', 't1b']);
+    });
+
+    it('is byte-identical to the old behaviour when the chrome is absent', () => {
+      // The zero default is what lets every existing call site and suite stay untouched.
+      expect(computeOverflow(bar, widths, 260, 40, 0, 0)).toEqual(
+        computeOverflow(bar, widths, 260, 40),
+      );
+      expect(computeOverflow(bar, widths, 150, 40, 0, 0)).toEqual(
+        computeOverflow(bar, widths, 150, 40),
+      );
+    });
+
+    it('reproduces the measured 1920 Row-1 case: fits on items, does not fit as laid out', () => {
+      // Row 1 at 1920: container 1832, item widths 1782, chrome 128 + a 31 px residual the
+      // group-level walk does not attribute (m0-measurement.md, M1-T1 addendum). 1782 < 1832, so
+      // the old signature said "everything fits" — which is exactly what shipped.
+      const one = [bar[0]!];
+      const w = new Map([[one[0]!.item.id, 1782]]);
+      expect(computeOverflow(one, w, 1832, 32).overflow).toEqual([]);
+      expect(computeOverflow(one, w, 1832, 32, 159).overflow).toEqual([one[0]!.item.id]);
+    });
+  });
+
+  describe('priority is not order, and a segment is one unit (M1-T6/T7)', () => {
+    /**
+     * `order` answers "where does this sit in its group"; `priority` answers "what can this row
+     * afford to lose". They were the same number, so the first question silently answered the
+     * second — and on Row 1 that demoted Zoom −/+/Fit/Go-to-today **before** Legend and Keyboard
+     * shortcuts (`docs/specs/workspace-layout/m0-measurement.md`).
+     */
+    const priced = (
+      id: string,
+      order: number,
+      extra: Partial<ToolbarItem<Ctx>> = {},
+    ): ResolvedToolbarItem<Ctx> => ({
+      item: {
+        id,
+        group: 'frame',
+        tier: 2,
+        order,
+        label: id,
+        onActivate: () => {},
+        ...extra,
+      },
+      enabled: true,
+      active: false,
+      disabledReason: undefined,
+    });
+
+    it('demotes the low-priority item even though it sits leftmost', () => {
+      // `zoom` sits at order 0 (leftmost) and `help` at order 9 (rightmost). Under the old rule the
+      // rightmost went first; priority says the help link is the cheaper loss.
+      const bar = [priced('zoom', 0, { priority: 90 }), priced('help', 9, { priority: 1 })];
+      const widths = new Map([
+        ['zoom', 100],
+        ['help', 100],
+      ]);
+      const { inline, overflow } = computeOverflow(bar, widths, 150, 40);
+      expect(inline).toEqual(['zoom']);
+      expect(overflow).toEqual(['help']);
+    });
+
+    it('falls back to order when no priority is set — the existing suites stay the oracle', () => {
+      const bar = [priced('a', 0), priced('b', 9)];
+      const widths = new Map([
+        ['a', 100],
+        ['b', 100],
+      ]);
+      expect(computeOverflow(bar, widths, 150, 40).overflow).toEqual(['b']);
+    });
+
+    it('takes both halves of a segment or neither', () => {
+      // `left`/`right` are one switch. Without `demotionGroup` the higher order goes first and the
+      // planner is left with one state on the bar and the other inside a menu.
+      const bar = [
+        priced('keep', 0, { priority: 90, tier: 1 }),
+        priced('left', 1, { demotionGroup: 'view-mode' }),
+        priced('right', 2, { demotionGroup: 'view-mode' }),
+      ];
+      const widths = new Map([
+        ['keep', 100],
+        ['left', 100],
+        ['right', 100],
+      ]);
+      // Budget forces one demotion's worth of space; the pair must still leave together.
+      const { inline, overflow } = computeOverflow(bar, widths, 210, 40);
+      expect(overflow).toEqual(['left', 'right']);
+      expect(inline).toEqual(['keep']);
+    });
+
+    it('never splits the pair at any width', () => {
+      const bar = [
+        priced('keep', 0, { priority: 90, tier: 1 }),
+        priced('left', 1, { demotionGroup: 'view-mode' }),
+        priced('right', 2, { demotionGroup: 'view-mode' }),
+      ];
+      const widths = new Map([
+        ['keep', 100],
+        ['left', 100],
+        ['right', 100],
+      ]);
+      for (let available = 0; available <= 400; available += 1) {
+        const { overflow } = computeOverflow(bar, widths, available, 40);
+        expect(overflow.includes('left')).toBe(overflow.includes('right'));
+      }
+    });
+  });
 });
