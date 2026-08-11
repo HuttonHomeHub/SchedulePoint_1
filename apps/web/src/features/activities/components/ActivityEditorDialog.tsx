@@ -516,8 +516,29 @@ export function ActivityEditorDialog({
                           ))}
                         </SelectField>
                         {/* A derived type computes its own duration, so both controls disappear
-                          together — the pair has always been one decision. */}
-                        {!isDurationDerivedType(type) ? (
+                          together — the pair has always been one decision. Where the duration
+                          field would have been, the reason it is not there. */}
+                        {isDurationDerivedType(type) ? (
+                          type === 'LEVEL_OF_EFFORT' ? (
+                            <FieldGridFull>
+                              <p className="text-muted-foreground text-sm">
+                                A level-of-effort activity’s duration is derived from its span — the
+                                start of its earliest start-to-start predecessor to the finish of
+                                its latest finish-to-finish successor. Add those links, then
+                                Recalculate.
+                              </p>
+                            </FieldGridFull>
+                          ) : type === 'WBS_SUMMARY' ? (
+                            <FieldGridFull>
+                              <p className="text-muted-foreground text-sm">
+                                A WBS summary’s dates roll up from the activities grouped under it —
+                                the earliest start to the latest finish of its branch. It carries no
+                                logic of its own (no dependencies). To fill it, open each activity
+                                in the branch and set its WBS summary to this one, then Recalculate.
+                              </p>
+                            </FieldGridFull>
+                          ) : null
+                        ) : (
                           <TextField
                             label={durationLabel(hoursPerDay)}
                             {...durationInputProps(hoursPerDay)}
@@ -527,12 +548,36 @@ export function ActivityEditorDialog({
                             error={general.form.formState.errors.duration?.message}
                             {...general.form.register('duration')}
                           />
+                        )}
+                        {/* A resource-dependent activity keeps its own duration (it behaves exactly
+                          like a task for logic) — only the CALENDAR it is measured on changes, to
+                          its driving resource's (ADR-0035 §23 / ADR-0039). Saying so here is the
+                          difference between a type that looks inert and one whose effect is
+                          elsewhere: without an assignment the engine schedules it on the ordinary
+                          calendar and flags it, which is what the Needs-a-driver badge reports. */}
+                        {type === 'RESOURCE_DEPENDENT' ? (
+                          <FieldGridFull>
+                            <p className="text-muted-foreground text-sm">
+                              A resource-dependent activity is scheduled on its{' '}
+                              <strong>driving resource’s</strong> calendar rather than its own, so
+                              it follows that crew or plant’s working time. Assign a resource and
+                              mark it driving, then Recalculate. Until you do, it schedules like an
+                              ordinary task and is flagged as needing a driver.
+                            </p>
+                          </FieldGridFull>
                         ) : null}
                         {DURATION_TYPES_ENABLED && !isDurationDerivedType(type) ? (
                           <FieldGridFull>
                             <SelectField
                               label="Duration type"
-                              hint="Sets how editing one of duration, units or units/time recomputes the others, so units = duration × units/time stays true. A crew installing a fixed quantity takes longer if its rate drops."
+                              hint={
+                                'Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or ' +
+                                'units/time recomputes the others so units = duration × units/time stays true — e.g. a ' +
+                                'crew installing a fixed quantity takes longer if its rate drops. With “Fixed units” or ' +
+                                '“Fixed units/time”, the driving resource’s units ÷ rate derive this activity’s duration; ' +
+                                'with the two fixed-duration types, editing the duration here also updates the driving ' +
+                                'resource’s units or rate.'
+                              }
                               {...general.form.register('durationType')}
                             >
                               {DURATION_TYPES.map((value) => (

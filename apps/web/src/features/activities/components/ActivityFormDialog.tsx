@@ -547,7 +547,6 @@ export function ActivityFormDialog({
               <FieldGrid>
                 <SelectField
                   label="Type"
-                  id="activity-type"
                   error={generalErrors.type?.message}
                   {...general.form.register('type')}
                 >
@@ -619,7 +618,6 @@ export function ActivityFormDialog({
                   <FieldGridFull>
                     <SelectField
                       label="Duration type"
-                      id="activity-duration-type"
                       hint={
                         'Defaults to “Fixed duration & units/time”. Sets how editing one of duration, units or ' +
                         'units/time recomputes the others so units = duration × units/time stays true — e.g. a ' +

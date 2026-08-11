@@ -452,20 +452,24 @@ describe('divergence D4 (CLOSED, M2-T2 commit A1) — where the Type picker’s 
   });
 });
 
-describe('divergence D5 — the work explanations', () => {
+describe('divergence D5 (CLOSED, M2-T2 commit A2) — the work explanations', () => {
   it.each([
     ['LEVEL_OF_EFFORT' as const, /A level-of-effort activity’s duration is derived from its span/],
     ['WBS_SUMMARY' as const, /A WBS summary’s dates roll up from the activities grouped under it/],
     // Matched on its leading text node only: the sentence is broken by a `<strong>`, and
     // Testing Library's text matcher reads a node's OWN text, not its descendants'.
     ['RESOURCE_DEPENDENT' as const, 'A resource-dependent activity is scheduled on its'],
-  ])('create explains a %s; the editor says nothing', (type, sentence) => {
+  ])('both hosts explain a %s', (type, sentence) => {
+    // An **addition** to the editor rather than a choice between two positions. Each of these three
+    // types has no duration field at all, or has one whose meaning is not what the label suggests
+    // — so the editor's Work section showed a control vanishing with nothing saying why, on the
+    // surface a planner reaches by editing an activity that is already one of these types.
     const created = mountCreate({ activity: row({ type }) });
     expect(screen.getByText(sentence, { exact: false })).toBeInTheDocument();
     created.unmount();
 
     mountEditor({ activity: row({ type }) });
-    expect(screen.queryByText(sentence, { exact: false })).not.toBeInTheDocument();
+    expect(screen.getByText(sentence, { exact: false })).toBeInTheDocument();
   });
 });
 
@@ -686,8 +690,12 @@ describe('NEW divergence (CLOSED, M2-T1 commit A) — the Name field’s autocom
   });
 });
 
-describe('NEW divergence — the duration-type hint', () => {
-  it('create explains the default and both fixed-units directions; the editor keeps two sentences', () => {
+describe('NEW divergence (CLOSED, M2-T2 commit A2) — the duration-type hint', () => {
+  it('both hosts explain the default and both fixed-units directions', () => {
+    // Converged onto create, which is a strict superset in substance: it names the default (the
+    // value three quarters of activities will keep) and describes BOTH directions of the triad,
+    // where the editor described one. Nothing in the editor's wording was lost — it was shorter,
+    // not different.
     const created = mountCreate();
     const createHint = hintOf(screen.getByLabelText('Duration type'));
     expect(createHint).toContain('Defaults to “Fixed duration & units/time”.');
@@ -695,11 +703,7 @@ describe('NEW divergence — the duration-type hint', () => {
     created.unmount();
 
     mountEditor();
-    const editorHint = hintOf(screen.getByLabelText('Duration type'));
-    expect(editorHint).not.toContain('Defaults to');
-    expect(editorHint).toBe(
-      'Sets how editing one of duration, units or units/time recomputes the others, so units = duration × units/time stays true. A crew installing a fixed quantity takes longer if its rate drops.',
-    );
+    expect(hintOf(screen.getByLabelText('Duration type'))).toBe(createHint);
   });
 });
 
