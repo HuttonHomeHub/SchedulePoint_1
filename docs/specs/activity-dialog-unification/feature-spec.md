@@ -1,27 +1,38 @@
 # Feature Spec: Activity dialog unification — one field vocabulary for create and edit
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Draft **rev 2** — **awaiting approval**
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-11
 - **Tracking issue / epic:** TBD
 - **Roadmap link:** maintainability / drift control (`docs/TECH_DEBT.md` #122)
 - **Related ADR(s):** amends **ADR-0060** (§2, §3), **ADR-0061**, **ADR-0062**; consumes
-  **ADR-0088** D1–D4 and **ADR-0084** D5; draft **ADR-0089** outlined in §4.7.
+  **ADR-0088** D1–D4, **ADR-0084** D5, **ADR-0083**, **ADR-0077** §9; draft **ADR-0089** in §4.8.
 
 ---
 
-## 0. Evidence key, and what I checked
+## Revision history
 
-Per ADR-0076 §19.10 and `docs/PROCESS.md` "Decision-bearing claims carry their evidence", every
-load-bearing claim below carries one of:
+**rev 2 (2026-08-11)** — after `ui-architect` returned AGREE WITH CONDITIONS (twelve, several
+blocking). Ten conditions were corrections to claims rev 1 made about code the architect read; all
+ten were re-verified against the source here and **all ten hold**. The largest is that rev 1's
+stated enforcement mechanism was false — see §4.1, which now records the retraction rather than
+quietly replacing it (ADR-0071's rule: noticing drift and stepping over it leaves the record as
+wrong as not noticing). Full changelog at §6.
+
+---
+
+## 0. Evidence key
+
+Per ADR-0076 §19.10 and `docs/PROCESS.md`:
 
 - **[V]** — verified by reading the named file at the named lines, in this session.
-- **[R]** — reasoned from code I read, but the _consequence_ has not been executed. Flagged for a
-  characterisation test before anything is designed around it.
-- **[I]** — inherited from the brief and **not** independently confirmed.
+- **[R]** — reasoned from code read, consequence **not** executed. Must be characterised before
+  anything is designed on it.
+- **[I]** — inherited from the brief or the review and **not** independently confirmed. **rev 2
+  contains no [I] claims**: every review finding was re-read at source before folding.
 
-**The brief was checked like any other source, and three of its claims moved.** Two were wrong in a
-way that changes the design; one was right and stronger than stated. They are in §1.2.
+Two rev-1 claims were **retracted** as false. They are marked **[RETRACTED]** in place rather than
+deleted.
 
 ---
 
@@ -29,172 +40,147 @@ way that changes the design; one was right and stronger than stated. They are in
 
 ### 1.1 Problem
 
-An activity's ~20 definition fields are rendered **twice**, by two components that share no code:
+An activity's ~20 definition fields are rendered **twice**, by two components sharing no code:
 
 |        | File                                                                   | Lines     | Role                                     |
 | ------ | ---------------------------------------------------------------------- | --------- | ---------------------------------------- |
 | Create | `apps/web/src/features/activities/components/ActivityFormDialog.tsx`   | **844**   | one form, one `zodResolver`, one submit  |
 | Edit   | `apps/web/src/features/activities/components/ActivityEditorDialog.tsx` | **1,026** | tabbed, four scope forms, per-scope save |
 
-**[V]** Line counts read directly from both files. **[V]** `ActivityEditorDialog.tsx:154` states it in
-its own docblock: _"This editor is edit-only; creation stays with `ActivityFormDialog`."_
+**[V]** Line counts read from both files. **[V]** `ActivityEditorDialog.tsx:154`: _"This editor is
+edit-only; creation stays with `ActivityFormDialog`."_
 
-Every feature that adds an activity field has had to add it to both, and **they have already drifted**
-— not hypothetically, but in nine measurable places catalogued in §1.3, at least two of which are
-live defects in the shipped product.
+Nine features have added fields to both, and **they have drifted in ten measurable places** (§1.3),
+two of which look like live defects.
 
-**Why now.** `docs/TECH_DEBT.md` #122 (filed during the ADR-0088 batch-2 retirement) is a standing
-`deferredUntil` marker on the Class A flag `VITE_ACTIVITY_EDITOR_TABS`, with the trigger
-`epic-touch: activity editor` **[V]** `scripts/flag-retirement.json:128-139`. This epic is that
-trigger. The register's own correction says the receipts belong to create and edit being two
-components, not to the flag — so retiring the flag first collects nothing, and this is the work that
-collects it.
+**Why now.** `docs/TECH_DEBT.md` #122 is a standing `deferredUntil` marker on the Class A flag
+`VITE_ACTIVITY_EDITOR_TABS`, trigger `epic-touch: activity editor` **[V]**
+`scripts/flag-retirement.json:128-139`. This epic is that trigger, and the register's own correction
+says the receipts belong to the two-component split rather than to the flag.
 
-**And it completes a decision that was made and not finished.** ADR-0060 §2 reads, verbatim:
+**It also completes a decision that was made and not finished.** ADR-0060 §2 reads, verbatim:
 _"`ActivityFormDialog` **becomes** `ActivityEditorDialog`, with four tabs"_ **[V]**
-`docs/adr/0060-tabbed-activity-editor-and-per-scope-save.md:93`. That is not what shipped. The
-editor was built beside the form dialog rather than replacing it, and ADR-0060 §8 — _"The superseded
-dialogs are not deleted at the flip"_ **[V]** line 191–194 — deferred the tidy-up without noticing
-that the _create_ surface had been left behind entirely. **This epic is not overturning ADR-0060. It
-is finishing §2.**
+`docs/adr/0060-...md:93`. The editor was built beside it instead. **This epic is not overturning
+ADR-0060; it is finishing §2.**
 
-### 1.2 Three corrections to the brief
+### 1.2 Corrections to the brief
 
-**(a) "Field overlap is near-total" is understated — it is _exact_, and it is _gated_. [V]**
+**(a) "Field overlap is near-total" is understated — it is exact, and gated. [V]**
+`activity-scope-schemas.structural.test.ts:52-53` asserts the union of the four scope shapes
+**equals** `activityFormSchema`'s keys in both directions; `:56-59` asserts no key sits in two
+scopes. **The schema layer is already unified and already gated.** The duplication is entirely in
+the JSX. This redirects the whole design.
 
-`apps/web/src/features/activities/schemas/activity-scope-schemas.structural.test.ts:52-53` computes
-the union of the four scope shapes and asserts it **equals `activityFormSchema`'s keys in both
-directions**, with a second assertion (`:56-59`) that no key is in two scopes. So there is **no field
-asymmetry at all** between the two dialogs. The schema layer is _already_ unified and already has a
-computed gate.
+**(b) Brief question 5 has a false premise. [V]** Both fields exist on both surfaces. They are the
+**`measure` scope** (`activity-scope-schemas.ts:115-126`), rendered by `ValueMeasurePanel` on the
+editor's Progress tab (`ActivityProgressPanels.tsx:241,286,317`) — a deliberate ADR-0060 §2 decision
+**[V]** ADR-0060:101. Not drift in coverage. It **is** drift in placement (D9) and in visibility
+rule (D10).
 
-This changes the design materially: **the schema is not the problem, and unifying it is not the
-prize.** The duplication is entirely in the **JSX** — ~20 controls, their labels, hints, flag guards,
-type-conditional visibility, loading/error states and honest-option fallbacks, written twice.
+**(c) Eleven create suites, not ten. [V]** The base `ActivityFormDialog.test.tsx` was omitted.
+`docs/TECH_DEBT.md:2004` says eleven and is right.
 
-**(b) Brief question 5 — `percentCompleteType` / `physicalPercentComplete` on create but not the
-editor — has a false premise. [V]** Both fields exist on both surfaces. They are the **`measure`
-scope** (`activity-scope-schemas.ts:115-126`), rendered by `ValueMeasurePanel` on the editor's
-**Progress** tab (`ActivityProgressPanels.tsx:241,286,317`). This is a deliberate ADR-0060 §2
-decision — _"`% complete type` moves out of 'Cost & earned value' and onto Progress, beside what it
-selects between"_ **[V]** ADR-0060:101.
+**(d) Both `ActivityFormDialog` edit mount sites are flag-off branches. [V]**
+`ActivitiesTable.tsx:950`, `activity-crud-dialogs.tsx:143,210`; the flag is `flagDefaultOn`
+(`env.ts:948`) and per ADR-0088 D1 cannot be switched off on a deployed container. **So no _user_
+can reach that edit path.**
 
-It is therefore **not drift in field coverage**. It _is_ drift in **placement and gating**: create
-shows both under a "Cost & earned value" section gated `!isDurationDerivedType(type)`
-(`ActivityFormDialog.tsx:625,631-659`); the editor shows them on Progress with no type gate. That
-divergence is row D9 in §1.3.
+> **rev 2 correction — "844 lines nobody can reach" was right about users and wrong about the
+> repository.** `playwright.sub-day.config.ts:75` and `playwright.assignment-lag.config.ts:74` pin
+> `VITE_ACTIVITY_EDITOR_TABS: 'false'` **[V]**, so **two live CI harnesses drive that edit path on
+> every run.** This is not a footnote: it decides the milestone order (§5, and plan M5/M6 are
+> swapped in rev 2). Code exercised by two green suites cannot simply be deleted.
 
-**(c) "Ten `ActivityFormDialog.*.test.tsx` suites" is eleven. [V]** Globbed
-`apps/web/src/features/activities/components/*.test.tsx`: `activity-types`,
-`advanced-constraints`, `calendar`, `cost-accrual`, `duration-types`, `earned-value`,
-`inter-project-dates`, `levelling`, `scope`, `sub-day`, **and the base `ActivityFormDialog.test.tsx`**.
-`docs/TECH_DEBT.md:2004` says eleven and is right. Five `ActivityEditorDialog.*.test.tsx` suites, as
-the brief says. **[V]**
+### 1.3 The divergence audit
 
-**And one thing the brief got right that is worth more than it says.** Two of the three
-`ActivityFormDialog` render sites are **flag-off branches**:
+Read line by line across both files. **rev 2 adds D10**, found by the architect while reading two
+screens for an unrelated reason — which is the finding that matters more than the row:
 
-- `ActivitiesTable.tsx:950` — `{ACTIVITY_EDITOR_TABS_ENABLED ? null : (<ActivityFormDialog …>)}` **[V]**
-- `activity-crud-dialogs.tsx:143,210` — `{ACTIVITY_EDITOR_TABS_ENABLED ? <ActivityEditorDialog…> : <ActivityFormDialog…>}` **[V]**
+> **The list is no longer presumed complete.** rev 1 found nine by reading; a reviewer found a tenth
+> incidentally. So M0-T1 is re-scoped from _pin the nine_ to **re-derive the divergence set from
+> code**, field by field across both surfaces, and the plan budgets for eleven or twelve. Completeness
+> is this epic's licence: an unlisted divergence gets silently resolved by whichever host the
+> extractor started from.
 
-The flag is `flagDefaultOn` **[V]** `env.ts:948`, and ADR-0088 D1 established that a `VITE_` flag
-cannot be switched off on a deployed container. So **in every published image, `ActivityFormDialog`
-is reachable only as the create surface** — one live mount site, `CreateActivityButton.tsx:47` **[V]**.
-Its 844 lines contain an entire edit implementation that no user can reach, and eleven test suites
-that exercise it in both modes.
+| #       | Group                                | Create                                                                                               | Edit                                                                                                                                                   | Verdict                                                                                                                                                                                                    |
+| ------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1      | Calendar                             | inlines its own `Combobox`, `disabled={resourceDependent}` (`:550-576`)                              | shared `ActivityCalendarField`, `readOnly` + `FieldGateLock` (`ActivityCalendarField.tsx:106,92`)                                                      | **Editor wins.** Create never received ADR-0083. **Not an extraction** — see §4.7. `ActivityCalendarField.tsx:18-19` claims `ActivityFormDialog` as a caller; **that docblock is false** — no such import. |
+| D2      | WBS parent                           | honest "Unavailable"/"Loading…" option, loading + error states, "no summaries yet" hint (`:504-536`) | plain `<option>` list, no fallback, no states (`:575-586`)                                                                                             | **Create wins. [R]** A stored `parentId` outside the list appears to render as nothing selected, reading as "None (top level)".                                                                            |
+| D3      | Constraints                          | honest option for a parked `MANDATORY_*` (`:306-312,738-740,769-773`)                                | **none** — `isParkedConstraintType`/`PARKED_CONSTRAINT_LABELS` appear nowhere in the editor **[V]** (feature-wide grep: only `ActivityFormDialog.tsx`) | **Create wins. [R]** Highest consequence: what a Scheduling save then sends is the half that matters.                                                                                                      |
+| D4      | Type picker                          | fed the **live watched** `type` (`:246,414`)                                                         | fed the **saved** `activity?.type` (`:532`)                                                                                                            | Create wins.                                                                                                                                                                                               |
+| D5      | Work explanations                    | three paragraphs (LOE, WBS summary, `RESOURCE_DEPENDENT`) (`:420-465`)                               | none                                                                                                                                                   | Create wins — an **addition** to the editor.                                                                                                                                                               |
+| D6      | `scheduleAsLateAsPossible`           | in Constraints, gated `ADVANCED_CONSTRAINTS_ENABLED` (`:750,783`)                                    | in "Placement & targets", **ungated** (`:700`)                                                                                                         | Create wins (§4.7). No shipped image differs (ADR-0088 D1).                                                                                                                                                |
+| D7      | Levelling priority                   | hidden for duration-derived types (`:602`)                                                           | always shown (`:742`)                                                                                                                                  | Create wins.                                                                                                                                                                                               |
+| D8      | Money inputs                         | `step="any"`, `min={0}` (`:663,675`)                                                                 | `step="0.01"`, no `min` (`:909,918`)                                                                                                                   | Union.                                                                                                                                                                                                     |
+| D9      | Cost/EV placement                    | one section, gated `!isDurationDerivedType(type)` (`:625`)                                           | Cost tab + Progress tab, no type gate                                                                                                                  | Editor wins — a payment milestone is exactly an activity with cost and no duration.                                                                                                                        |
+| **D10** | `physicalPercentComplete` visibility | rendered **only** when `percentCompleteType === 'PHYSICAL'` (`:645`)                                 | rendered **unconditionally**, shaded with a reason when weighted steps override it (`ActivityProgressPanels.tsx:295-320`) **[V]**                      | **Editor wins** — hiding a field that holds a stored value is the ADR-0060 §6 error ("shading implies a value is there"; hiding claims there is none).                                                     |
 
-### 1.3 The divergence audit — what "they have drifted" means concretely
-
-Read line-by-line across both files. Each row is a real difference in what a planner sees or what is
-saved. **Every row is [V] on the code; the marked ones are [R] on the user-visible consequence.**
-
-| #   | Field group                  | Create (`ActivityFormDialog`)                                                                                                                         | Edit (`ActivityEditorDialog`)                                                                                                                                                                        | Verdict                                                                                                                                                                                                                              |
-| --- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| D1  | Calendar picker              | inlines its own `Combobox`, `disabled={resourceDependent}` (`:550-576`)                                                                               | uses the shared `ActivityCalendarField`, `readOnly={shaded}` + `FieldGateLock` (`ActivityCalendarField.tsx:106,92`)                                                                                  | **Editor wins.** Create never received ADR-0083 D1/D4. Note `ActivityCalendarField.tsx:18-19` claims it is _"shared by `ActivityFormDialog`"_ — **that docblock is false**: `ActivityFormDialog` does not import it. Live doc drift. |
-| D2  | WBS parent picker            | honest "Unavailable"/"Loading…" option for a seeded parent absent from the list, plus loading/error states and a "no summaries yet" hint (`:504-536`) | plain `<option>` list, no fallback, no loading/error (`:575-586`)                                                                                                                                    | **Create wins.** **[R]** In the editor a stored `parentId` whose summary is not in the list renders the select with nothing selected — which reads as "None (top level)". Confirm by characterisation test before fixing.            |
-| D3  | Constraint pickers           | injects an honest option for a parked `MANDATORY_*` value (`:306-312,738-740,769-773`)                                                                | **no such option** — `isParkedConstraintType` and `PARKED_CONSTRAINT_LABELS` appear nowhere in `ActivityEditorDialog.tsx` **[V]** (grepped the whole feature: only `ActivityFormDialog.tsx` matches) | **Create wins.** **[R]** In the editor, an imported activity carrying `MANDATORY_START` shows a constraint select whose value matches no option. Highest-risk row; characterise first.                                               |
-| D4  | Type picker honest option    | fed the **live watched** `type` (`:246,414`)                                                                                                          | fed the **saved** `activity?.type` (`:532`)                                                                                                                                                          | Create wins (the option must follow the live selection).                                                                                                                                                                             |
-| D5  | Work-section explanations    | three paragraphs for LOE, WBS summary and `RESOURCE_DEPENDENT` (`:420-465`)                                                                           | none — the duration field simply disappears                                                                                                                                                          | Create wins.                                                                                                                                                                                                                         |
-| D6  | `scheduleAsLateAsPossible`   | inside Constraints, gated `ADVANCED_CONSTRAINTS_ENABLED` (`:750,783`)                                                                                 | in "Placement & targets", **ungated** (`:700`)                                                                                                                                                       | Divergent flag semantics. Default: adopt create's gate (see §4.6).                                                                                                                                                                   |
-| D7  | Levelling priority           | hidden for duration-derived types (`:602`)                                                                                                            | always shown (`:742`)                                                                                                                                                                                | Create wins — levelling never moves those types.                                                                                                                                                                                     |
-| D8  | Money fields                 | `step="any"`, `min={0}` (`:663,675`)                                                                                                                  | `step="0.01"`, no `min` (`:909,918`)                                                                                                                                                                 | Union: `step="0.01"` + `min={0}`.                                                                                                                                                                                                    |
-| D9  | Cost / EV placement + gating | one section, gated `!isDurationDerivedType(type)` (`:625`)                                                                                            | split Cost tab + Progress tab, **no type gate**                                                                                                                                                      | Editor wins. A payment milestone is exactly an activity with a cost and no duration; create hiding the section for it is a defect.                                                                                                   |
-
-Nine divergences, in code that ADR-0060 §10 says exists so that _"behaviour cannot drift between
-hosts because there is nothing left to drift"_. That claim was true of the three **edit** hosts and
-was never true of create.
+Ten divergences, in code whose own ADR says _"behaviour cannot drift between hosts because there is
+nothing left to drift"_ **[V]** ADR-0060:206-208. That was true of the three **edit** hosts and never
+true of create.
 
 ### 1.4 Users
 
-| Role                                               | Stake                                                                                                                                                                                                                     |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Planner** (`activity:update` + the ADR-0028 pen) | Creates and edits activities. Meets both surfaces daily, and meets every divergence in §1.3.                                                                                                                              |
-| **Org Admin**                                      | As Planner, plus pen override.                                                                                                                                                                                            |
-| **Contributor**                                    | Reads the editor, writes only Progress/Notes. **Cannot create** — `CreateActivityButton` renders only under `model.canEditSchedule` **[V]** `plan-detail.tsx:330-331`. Unaffected by design; must be _proven_ unaffected. |
-| **Viewer / External Guest**                        | No write surface. Guest never loads this code.                                                                                                                                                                            |
-| **This repository's engineers**                    | The real beneficiary: one place to add the next field.                                                                                                                                                                    |
+| Role                                           | Stake                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Planner** (`activity:update` + ADR-0028 pen) | Meets both surfaces daily, and every divergence.                                                                                                                                                                                                                          |
+| **Org Admin**                                  | As Planner, plus pen override.                                                                                                                                                                                                                                            |
+| **Contributor**                                | Reads the editor; writes Progress/Notes only. **Cannot create** — both create mount sites gate on `model.canEditSchedule` **[V]** `plan-detail.tsx:330-331`, `activity-bottom-panel.tsx:55-56`. Unaffected by design; must be **proven** unaffected at both sites (§2.4). |
+| **Viewer / External Guest**                    | No write surface.                                                                                                                                                                                                                                                         |
+| **This repository's engineers**                | One place to add the next field.                                                                                                                                                                                                                                          |
 
 ### 1.5 Primary use cases
 
 1. A Planner creates an activity and sets any definition field the product supports.
 2. A Planner edits an existing activity, per write scope, exactly as today.
-3. An engineer adds a new activity field in **one** component and both surfaces gain it.
-4. The `VITE_ACTIVITY_EDITOR_TABS` Class A flag retires, deleting the legacy trio with it.
+3. An engineer adds a field in **one** component and both surfaces gain it.
+4. `VITE_ACTIVITY_EDITOR_TABS` retires, taking the legacy trio with it.
 
 ### 1.6 Expected outcomes
 
-- `ActivityFormDialog` (844 lines) is replaced by a thin `ActivityCreateDialog` composing shared
-  groups; its embedded edit implementation is deleted.
-- `ActivityEditorDialog` (1,026 lines) keeps its save model and loses its field markup to the same
-  groups.
-- The nine §1.3 divergences are closed, each with a regression test.
-- `classACap` in `scripts/flag-retirement.json` ratchets **2 → 1**.
+- `ActivityFormDialog` (844 lines) replaced by a thin `ActivityCreateDialog`; its dead edit path gone.
+- `ActivityEditorDialog` (1,026 lines) keeps its save model, loses its field markup.
+- Ten divergences closed, each with a regression test verified red first.
+- `classACap` ratchets **2 → 1**.
 
 ### 1.7 Success criteria
 
-| Criterion               | Measure                                                                                                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| One rendering per field | A structural test asserts each of the ~20 field names appears in exactly one group component.                                                                  |
-| No coverage lost        | The 11 create suites have a **named destination per assertion** (§2.6 table); no assertion is deleted without a twin.                                          |
-| No permission change    | `deriveActivityEditorGating` is not modified; the existing gate-identity tests still pass unchanged.                                                           |
-| No API change           | `createBody` / `updateBody` / `generalBody` / `schedulingBody` / `costBody` / `measureBody` are **unmodified** — asserted by key-set tests that already exist. |
-| Parity gate untouched   | No `apps/web` file imports the CPM engine (§3.2).                                                                                                              |
-| Flag retired            | `VITE_ACTIVITY_EDITOR_TABS` moves to `retired[]`; `pnpm check:flags` green.                                                                                    |
+| Criterion               | Measure                                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| One rendering per field | Each group exports a `FIELDS` tuple `satisfies readonly (keyof TScopeValues)[]`; a structural test computes the partition (§4.1). |
+| No coverage lost        | Named destination per assertion (§2.6); group suites green **before** host suites thin.                                           |
+| No permission change    | `activity-editor-gating.ts` unmodified; its identity assertions are the oracle.                                                   |
+| No API change           | The six body builders unmodified; key-set assertions pin them.                                                                    |
+| Parity gate untouched   | No `apps/web` file imports the CPM engine (§3.2).                                                                                 |
+| Flag retired            | Moved to `retired[]`; `pnpm check:flags` green.                                                                                   |
 
 ### 1.8 Open questions
 
-Three are **critical** — they change scope or design. Everything else has a stated default in §4.6.
+Three critical. Everything else has a stated default in §4.7.
 
-> **CQ-1 (scope). Does the create dialog keep every definition field, or become a lean
-> identity-and-work form with the rest deferred to the editor?**
-> Today create carries all ~20 fields. A lean create — name, code, description, type, duration,
-> WBS parent — would cut this epic's surface by roughly 40% and is a defensible product position
-> ("create it, then tune it"). It is also a **capability removal** for anyone who currently sets a
-> constraint at create time.
-> **Default if unanswered: keep every field.** Removing a capability is not a refactor, and this
-> epic's licence is that it changes no capability.
+> **CQ-1 (scope). Does create keep every definition field, or become a lean identity-and-work form?**
+> **Default: keep every field**, and `ui-architect` says it would defend this harder than rev 1 did.
+> A lean create is a **capability removal** for anyone who sets a constraint or a cost at creation
+> time, and this epic's licence is that it changes no capability. Removing one is a product decision
+> with its own spec, not a refactor's side effect.
 
-> **CQ-2 (scope). Is `VITE_ACTIVITY_EDITOR_TABS` retired inside this epic (M6), including
-> converting the two flag-off Playwright harnesses that pin it?**
-> `playwright.sub-day.config.ts:75` and `playwright.assignment-lag.config.ts:74` pin it `'false'`
-> **[V]**; ADR-0084 D5 forbids retiring before that coverage is replaced. Converting them is real
-> work — and both configs **also** pin `VITE_CANVAS_WORKSPACE: 'false'` **[V]**
-> (`sub-day.config.ts:68`, `assignment-lag.config.ts:73`), so the conversion is shared with the
-> _other_ deferred Class A flag and is worth more than it costs here.
-> **Default if unanswered: yes, M6 is in scope.** #122 exists because retiring the flag alone
-> collects nothing; unifying and _not_ retiring leaves the flag pointing at a payoff already taken.
+> **CQ-2 (scope). Is `VITE_ACTIVITY_EDITOR_TABS` retired inside this epic, including converting the
+> two flag-off harnesses that pin it?**
+> **Default: yes.** rev 2 note: those harnesses also pin `VITE_CANVAS_WORKSPACE: 'false'` **[V]**
+> (`sub-day:68`, `assignment-lag:73`) and `VITE_ACTIVITY_EDITOR_CONVERGENCE: 'false'` **[V]**
+> (`sub-day:76`, `assignment-lag:75`) — so the conversion is shared with the _other_ deferred Class A
+> flag and must handle a third. §4.7 decides the third pin.
 
-> **CQ-3 (risk posture). Are the nine §1.3 divergences folded inside the extraction PRs, or landed
-> separately afterwards so each extraction is a provable no-op?**
-> Folding makes each milestone independently valuable and is what makes M2–M4 worth shipping on
-> their own. Not folding makes each extraction reviewable as "the tests did not change", which is
-> the ADR-0061 unflagged-refactor argument at its strongest.
-> **Default if unanswered: fold, one divergence per group PR, each with a regression test verified
-> red first.** But note the cost honestly: it means the extraction PRs are _not_ pure refactors and
-> the M7 review gate is load-bearing rather than ceremonial.
-
-Non-critical, defaults stated in §4.6: create's layout (flat, not the ADR-0061 rail); D6's flag
-gating; whether `activityFormSchema` is derived or retired outright.
+> **CQ-3 (method). Extract-first, or converge-then-extract?**
+> **Default, changed in rev 2: converge-then-extract.** rev 1 proposed folding each divergence
+> inside its extraction PR and justified it by analogy to ADR-0078's barrel-preserving move. The
+> architect corrected the analogy and is right: **that pattern works because the extracted module has
+> one behaviour. Here it has two, one per host.** So no extraction is a no-op for both — extract-first
+> must pick a winner, which is a behaviour change wearing a refactor's clothes.
+> **So: commit A converges the losing host in place** (one divergence, one regression test verified
+> red, 10–30 lines, revertible alone); **commit B extracts**, and now genuinely is a no-op with both
+> hosts' suites as a real oracle. Cost: ~10 extra small PRs across M2–M4. M2–M4 keep their user
+> value; it arrives in commit A.
 
 ---
 
@@ -202,214 +188,266 @@ gating; whether `activityFormSchema` is derived or retired outright.
 
 ### 2.1 User stories & acceptance criteria
 
-> **US-1** — As a **Planner**, I want the create dialog and the edit dialog to ask for a field the
-> same way, so that what I learn on one surface is true on the other.
+> **US-1** — As a **Planner**, I want both surfaces to ask for a field the same way, so what I learn
+> on one is true on the other.
 >
-> - **Given** an activity type of `RESOURCE_DEPENDENT`, **when** I open create **and** when I open
->   the editor's Scheduling tab, **then** both show the calendar control shaded with the identical
->   sentence and both keep the bound calendar visible (closes D1).
-> - **Given** a stored WBS parent whose summary is not in the loaded list, **when** I open the
->   editor, **then** the picker shows an honest "Unavailable" option and never reads as "None (top
->   level)" (closes D2).
+> - **Given** a `RESOURCE_DEPENDENT` type, **when** I open create **and** the editor's Scheduling
+>   tab, **then** both shade the calendar control with the identical sentence and keep the bound
+>   calendar visible (D1).
+> - **Given** a stored WBS parent absent from the loaded list, **when** I open the editor, **then**
+>   an honest "Unavailable" option shows and it never reads as "None (top level)" (D2).
 > - **Given** an imported activity carrying `MANDATORY_START`, **when** I open the editor's
->   Scheduling tab, **then** the constraint picker shows that value under its own label (closes D3).
+>   Scheduling tab **and save that scope**, **then** the value is displayed under its own label and
+>   round-trips unchanged (D3).
+> - **Given** any `percentCompleteType`, **when** I open either surface, **then**
+>   `physicalPercentComplete` is present — shaded with its reason where it does not apply, never
+>   hidden (D10).
 
 > **US-2** — As a **Planner**, I want to create an activity with any definition the product
-> supports, so that I do not have to create-then-edit for a constraint or a cost.
+> supports, so I need not create-then-edit.
 >
 > - **Given** the create dialog, **when** I fill any field the editor offers, **then** it is sent on
 >   the `POST` and persisted.
-> - **Given** a milestone type, **when** I create it, **then** the cost fields are available
->   (closes D9) and the duration field is not.
-> - **Given** an invalid field in any section, **when** I submit, **then** the error summary counts
->   every failing section and focus lands on the first failing control.
+> - **Given** a milestone type, **when** I create it, **then** the cost fields are available (D9) and
+>   the duration field is not.
+> - **Given** invalid fields in two different sections, **when** I submit, **then** exactly one
+>   control receives focus, and it is the first invalid field in the **declared group order** (§4.4).
 
-> **US-3** — As a **Contributor**, I want my ability to report progress to be exactly what it was,
-> so that a refactor of somebody else's surface does not take a capability from me.
+> **US-3** — As a **Contributor**, I want my capabilities to be exactly what they were.
 >
-> - **Given** a Contributor, **when** the editor opens, **then** the Progress tab is writable and
->   every definition scope is shaded with its reason — identical to today.
-> - **Given** a Contributor, **when** the plan-detail screen renders, **then** no create button
->   appears.
+> - **Given** a Contributor, **when** the editor opens, **then** Progress is writable and every
+>   definition scope is shaded with its reason — identical to today.
+> - **Given** a Contributor, **when** `plan-detail` renders **and** when the canvas bottom panel
+>   renders, **then** no create button appears **at either site**. (The gating identity tests prove
+>   the _object_; they do not prove the _absent surface_. Both sites are asserted.)
 
 > **US-4** — As an **engineer**, I want to add an activity field once.
 >
-> - **Given** a new field added to one scope shape and one group component, **when** I run the
->   suite, **then** both surfaces render it and the structural gate passes with no second edit.
-> - **Given** a field added to a scope shape but to no group, **then** a structural test **fails**
->   naming the field.
+> - **Given** a field added to one scope shape and one group, **when** I run the suite, **then** both
+>   surfaces render it with no second edit.
+> - **Given** a field named in a group's `FIELDS` that is not in that scope's values type, **then**
+>   it is a **compile error**, not a test failure (§4.1).
+> - **Given** a field in a scope shape with no group, **then** the partition test fails naming it.
 
-> **US-5** — As an **engineer**, I want the legacy edit surfaces gone, so that the next feature
-> cannot be added to a dead branch.
+> **US-5** — As an **engineer**, I want the legacy edit surfaces gone.
 >
-> - **Given** M6 is merged, **when** I grep for `ACTIVITY_EDITOR_TABS_ENABLED`, **then** there are
->   no matches in `apps/web/src` and `pnpm check:flags` is green.
+> - **Given** the flag milestone is merged, **when** I grep `ACTIVITY_EDITOR_TABS_ENABLED` in
+>   `apps/web/src`, **then** there are no matches and `pnpm check:flags` is green.
 
 ### 2.2 Workflows
 
-**Create.** Press **New activity** → dialog opens with API defaults seeded → planner fills any
-section → **Create activity** → all four scope forms validate → a single merged values object feeds
-the **unmodified** `createBody` → one `POST` → announce → close.
+**Create.** **New activity** → dialog opens with API defaults seeded → planner fills any section →
+**Create activity** → four scope forms validate with focus suppressed → the host makes **one** ordered
+focus decision → on success a merged values object feeds the **unmodified** `createBody` → one `POST`
+→ announce → close.
 
-**Edit.** Unchanged. Row/canvas action builds an `ActivityEditorIntent` → tabbed editor → per-scope
-Save → `PATCH` with that scope's keys plus the **live** `version`.
+**Edit.** Unchanged. Intent → tabbed editor → per-scope Save → `PATCH` with that scope's keys and the
+**live** `version`.
 
 ### 2.3 Edge cases
 
-| Case                                                  | Expected                                                                                                                                               |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Calendar list still loading when the dialog opens     | Picker says "Loading…", keeps the bound value; the duration field degrades to whole working days (the ADR-0070 rule, unchanged).                       |
-| Calendar list fails to load                           | Picker says "Unavailable" with the existing error sentence; create is still submittable with inherit.                                                  |
-| Duration typed before the calendar resolves           | `useDurationSeed`'s `readDuration()` getter still owns this (TECH_DEBT #83, closed). **Must not regress** — it is a named characterisation case in M0. |
-| A parked `MANDATORY_*` constraint on an edited row    | Shown under its own label, round-trips unchanged.                                                                                                      |
-| A stored `parentId` absent from the list              | Shown as "Unavailable"; saving does not un-nest.                                                                                                       |
-| Duration-derived type (milestone / LOE / WBS summary) | Duration + duration type + levelling hidden; cost **shown** (D9); explanations shown (D5).                                                             |
-| Two scopes invalid on create                          | Error summary counts both; focus goes to the first in document order.                                                                                  |
-| Create submitted twice (double-click)                 | Submit is `disabled`-free per ADR-0060 M6 — the button uses `aria-busy` + pending label. Preserve today's behaviour.                                   |
-| Contributor reaches the editor                        | Definition scopes shaded with reasons; Progress writable. Unchanged.                                                                                   |
+| Case                                        | Expected                                                                                                                                                                                                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Calendar list loading / failed              | Picker says "Loading…"/"Unavailable", keeps the bound value; duration degrades to whole working days (ADR-0070, unchanged).                                                                                                 |
+| Duration typed before the calendar resolves | `useDurationSeed`'s `readDuration()` getter owns this (TECH_DEBT #83, closed). Named characterisation case in M0 — **must not regress**.                                                                                    |
+| A failed create, then reopen                | The error banner must **not** survive. `ActivityFormDialog.tsx:241` calls `mutation.reset()` on open **[V]**; `useScopeForm` has no equivalent, so the host keeps this explicitly (M1).                                     |
+| Re-seed on reopen                           | `useScopeForm` re-seeds on `[open, activity?.id]` **[V]** `useScopeForm.ts:48-57`. On create `activity` is always `undefined`, so this works **only because the dialog stays mounted and toggles `open`**. Pinned in M0-T3. |
+| Parked `MANDATORY_*` constraint             | Displayed under its own label; round-trips unchanged through a scope save.                                                                                                                                                  |
+| Stored `parentId` absent from the list      | Shown as "Unavailable"; saving does not un-nest.                                                                                                                                                                            |
+| Duration-derived type                       | Duration, duration type, levelling hidden; cost **shown** (D9); explanations shown (D5).                                                                                                                                    |
+| Two scopes invalid on create                | One focus move, ordered; the error presentation follows §4.5.                                                                                                                                                               |
+| Double submit                               | Preserve today's `aria-busy` + pending label; **never** native `disabled` (ADR-0060 M6, ADR-0063 M6).                                                                                                                       |
 
 ### 2.4 Permissions
 
-**Nothing changes.** Mapped to ADR-0012 RBAC + organisation scope, and to the ADR-0028 pen:
+**Nothing changes**, and that is checkable rather than asserted.
 
-| Surface                                                                              | Permission                 | Pen    | Source                                                                                                 |
-| ------------------------------------------------------------------------------------ | -------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| Create                                                                               | `activity:update`          | yes    | `plan-detail.tsx:330` gates on `model.canEditSchedule`, which already fuses role + pen **[V]**         |
-| Editor — general / scheduling / cost / measure / steps / logic / resources / members | `activity:update`          | yes    | `deriveActivityEditorGating` `:101-125` — **one `definition` object reused**, not re-expressed **[V]** |
-| Editor — progress                                                                    | `activity:update_progress` | **no** | `:111-113` **[V]**                                                                                     |
-| Editor — notes                                                                       | `activity:update_progress` | **no** | `:129-131` **[V]**                                                                                     |
+| Surface                                                                              | Permission                 | Pen    | Source                                             |
+| ------------------------------------------------------------------------------------ | -------------------------- | ------ | -------------------------------------------------- |
+| Create                                                                               | `activity:update`          | yes    | both mount sites gate on `canEditSchedule` **[V]** |
+| Editor — general / scheduling / measure / cost / steps / logic / resources / members | `activity:update`          | yes    | `activity-editor-gating.ts:101-125` **[V]**        |
+| Editor — progress                                                                    | `activity:update_progress` | **no** | `:111-113` **[V]**                                 |
+| Editor — notes                                                                       | `activity:update_progress` | **no** | `:129-131` **[V]**                                 |
 
-`activity-editor-gating.ts` is **not modified by this epic**. The existing identity assertions
-(`gating.logic === gating.general`) are the gate that says so.
+`deriveActivityEditorGating` is **not modified**. Its identity assertions
+(`gating.logic === gating.general`) are the oracle.
+
+**Two docblock corrections to make while in these files** (both false today):
+
+- `ActivityCalendarField.tsx:18-19` names `ActivityFormDialog` as a caller. It is not one.
+- `activity-editor-gating.ts:122-125` calls re-parenting _"the `parentId` edit already on the
+  **Scheduling** tab"_. `parentId` is in `activityGeneralShape` **[V]** and rendered on the
+  **General** tab **[V]** `ActivityEditorDialog.tsx:570-588`.
 
 ### 2.5 Validation rules
 
-Unchanged, and that is the point. The four scope schemas stay the client-side authority; all three
-cross-field refinements are **scheduling-internal** (`constraintDate`, `secondaryConstraintDate`,
-`externalLateFinish`) **[V]** `activity-scope-schemas.ts:76-95`, so running validation per scope on
-create loses no rule. `activity-scope-schemas.structural.test.ts:75-80` already asserts every
-refinement path resolves inside its own shape.
-
-The one check no schema can make — whether a duration text converts on _this_ activity's calendar —
-stays a submit-time `setError` in both hosts **[V]** `ActivityFormDialog.tsx:318-323`,
-`ActivityEditorDialog.tsx:475-484`.
-
-The server remains the sole trust boundary.
+Unchanged. The four scope schemas stay the client-side authority; all three cross-field refinements
+are **scheduling-internal** **[V]** `activity-scope-schemas.ts:76-95`, so validating per scope on
+create loses no rule. The one check no schema can make — whether a duration text converts on _this_
+activity's calendar — stays a submit-time `setError` on the `general` form in both hosts. The server
+remains the sole trust boundary.
 
 ### 2.6 Test-coverage migration — the destination table
 
-ADR-0084 D5's rule, applied as ADR-0088 applied it: **coverage moves with a named destination, never
-deleted for convenience.** Each of the 11 create suites splits in two.
+ADR-0084 D5: coverage moves with a named destination, never deleted for convenience.
 
-| Source suite                                       | Field-level assertions →                                            | Submit/body assertions →                             |
-| -------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
-| `ActivityFormDialog.activity-types.test.tsx`       | `ActivityWorkFields.test.tsx`                                       | `ActivityCreateDialog.activity-types.test.tsx`       |
-| `ActivityFormDialog.advanced-constraints.test.tsx` | `ActivityConstraintFields.test.tsx`                                 | `ActivityCreateDialog.advanced-constraints.test.tsx` |
-| `ActivityFormDialog.calendar.test.tsx`             | `ActivityCalendarField.test.tsx` (exists)                           | `ActivityCreateDialog.calendar.test.tsx`             |
-| `ActivityFormDialog.scope.test.tsx`                | `ActivityCalendarField.test.tsx`                                    | `ActivityCreateDialog.scope.test.tsx`                |
-| `ActivityFormDialog.cost-accrual.test.tsx`         | `ActivityAccrualField.test.tsx`                                     | `ActivityCreateDialog.cost-accrual.test.tsx`         |
-| `ActivityFormDialog.duration-types.test.tsx`       | `ActivityWorkFields.test.tsx`                                       | `ActivityCreateDialog.duration-types.test.tsx`       |
-| `ActivityFormDialog.earned-value.test.tsx`         | `ActivityMeasureFields.test.tsx` + `ActivityExpenseFields.test.tsx` | `ActivityCreateDialog.earned-value.test.tsx`         |
-| `ActivityFormDialog.inter-project-dates.test.tsx`  | `ActivityExternalDatesFields.test.tsx`                              | `ActivityCreateDialog.inter-project-dates.test.tsx`  |
-| `ActivityFormDialog.levelling.test.tsx`            | `ActivityLevellingField.test.tsx`                                   | `ActivityCreateDialog.levelling.test.tsx`            |
-| `ActivityFormDialog.sub-day.test.tsx`              | `ActivityWorkFields.test.tsx`                                       | `ActivityCreateDialog.sub-day.test.tsx`              |
-| `ActivityFormDialog.test.tsx` (base)               | spread across the above                                             | `ActivityCreateDialog.test.tsx`                      |
+> **rev 2 correction. [V]** rev 1 sent two rows to "`ActivityCalendarField.test.tsx` (exists)". **It
+> does not exist** — globbing `components/*.test.tsx` returns 37 files and none is that one. The one
+> table whose job is "no assertion is deleted without a twin" named a non-existent twin, twice. It is
+> now marked **(new — must be created first)**, and creating it is a task, not an assumption.
 
-**The group suites land first and green before the host suite is thinned**, in the same PR. A
-counting check (`it(` blocks before vs after, per source suite) is recorded in the PR body — crude,
-but it makes a silent drop visible, which is the failure mode ADR-0084 D5 exists for.
+| Source suite                         | Field-level assertions →                                                                | Submit/body assertions →                             |
+| ------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `…activity-types.test.tsx`           | `fields/ActivityWorkFields.test.tsx` (new)                                              | `ActivityCreateDialog.activity-types.test.tsx`       |
+| `…advanced-constraints.test.tsx`     | `fields/ActivityConstraintFields.test.tsx` (new)                                        | `ActivityCreateDialog.advanced-constraints.test.tsx` |
+| `…calendar.test.tsx`                 | `fields/ActivityCalendarField.test.tsx` **(new — must be created first)**               | `ActivityCreateDialog.calendar.test.tsx`             |
+| `…scope.test.tsx`                    | `fields/ActivityCalendarField.test.tsx` **(new)**                                       | `ActivityCreateDialog.scope.test.tsx`                |
+| `…cost-accrual.test.tsx`             | `fields/ActivityAccrualField.test.tsx` (new)                                            | `ActivityCreateDialog.cost-accrual.test.tsx`         |
+| `…duration-types.test.tsx`           | `fields/ActivityWorkFields.test.tsx`                                                    | `ActivityCreateDialog.duration-types.test.tsx`       |
+| `…earned-value.test.tsx`             | `fields/ActivityMeasureFields.test.tsx` + `fields/ActivityExpenseFields.test.tsx` (new) | `ActivityCreateDialog.earned-value.test.tsx`         |
+| `…inter-project-dates.test.tsx`      | `fields/ActivityExternalDatesFields.test.tsx` (new)                                     | `ActivityCreateDialog.inter-project-dates.test.tsx`  |
+| `…levelling.test.tsx`                | `fields/ActivityLevellingField.test.tsx` (new)                                          | `ActivityCreateDialog.levelling.test.tsx`            |
+| `…sub-day.test.tsx`                  | `fields/ActivityWorkFields.test.tsx`                                                    | `ActivityCreateDialog.sub-day.test.tsx`              |
+| `ActivityFormDialog.test.tsx` (base) | spread across the above                                                                 | `ActivityCreateDialog.test.tsx`                      |
+
+Group suites land **first and green**; host suites thin in the same PR; `it(`-counts before/after
+recorded per source suite in the PR body.
 
 ### 2.7 Error scenarios
 
-| Scenario                               | Detection                         | User-facing result                                                                            | Status |
-| -------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------- | ------ |
-| Create rejected — calendar wrong scope | server 422 `CALENDAR_WRONG_SCOPE` | `calendarScopeErrorMessage()` sentence, as today **[V]** `ActivityFormDialog.tsx:371`         | 422    |
-| Create rejected — pen not held         | `assertHoldsPen`                  | server sentence verbatim                                                                      | 423    |
-| Edit rejected — stale version          | optimistic lock                   | scoped error + **Refresh this section**, unchanged **[V]** `ActivityEditorDialog.tsx:309-322` | 409    |
-| Duration text unconvertible            | client submit check               | inline `DURATION_NEEDS_WHOLE_DAYS`, focused                                                   | —      |
-| Any scope invalid on create            | resolver                          | error summary count + focus first                                                             | —      |
+| Scenario                               | Detection                         | User-facing result                                                                 | Status |
+| -------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------- | ------ |
+| Create rejected — calendar wrong scope | server                            | `calendarScopeErrorMessage()` sentence **[V]** `ActivityFormDialog.tsx:371`        | 422    |
+| Create rejected — pen not held         | `assertHoldsPen`                  | server sentence verbatim                                                           | 423    |
+| Edit rejected — stale version          | optimistic lock                   | scoped error + **Refresh this section** **[V]** `ActivityEditorDialog.tsx:309-322` | 409    |
+| Duration text unconvertible            | client submit check               | inline `DURATION_NEEDS_WHOLE_DAYS`, focused                                        | —      |
+| Any scope invalid on create            | four resolvers, one ordered focus | §4.5                                                                               | —      |
 
 ---
 
 ## 3. Technical analysis
 
-| Area           | Impact                                  | Notes                                                                                                                                                            |
-| -------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | **high**                                | ~11 new group components; two hosts rewritten; 16 test suites re-homed; 2 Playwright harnesses converted.                                                        |
-| Backend        | **none**                                | No module, service or endpoint touched.                                                                                                                          |
-| Database       | **none**                                | No model, column, index, constraint or migration. **The database-architect agent is therefore not triggered** — see §3.1.                                        |
-| API            | **none**                                | `createBody`/`updateBody` and the four scope bodies are unmodified; their existing key-set tests are the gate.                                                   |
-| Security       | **none by design, proven not asserted** | `activity-editor-gating.ts` untouched; the server remains the only trust boundary. security-reviewer still runs at M7.                                           |
-| Performance    | **low**                                 | Create moves from one `useForm` to four. Four small resolvers on a dialog opened by hand; no render-path cost. Measure only if the M7 performance reviewer asks. |
-| Infrastructure | **low**                                 | M6 edits two `playwright.*.config.ts` files and `scripts/flag-retirement.json`.                                                                                  |
-| Observability  | **none**                                | No log, metric or audit event. Activity CRUD is `PENDING_COVERAGE`-free and unchanged.                                                                           |
-| Testing        | **high**                                | The bulk of the work. See §2.6 and each milestone.                                                                                                               |
+| Area           | Impact                                  | Notes                                                                                                                                                          |
+| -------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | **high**                                | ~11 group components; two hosts rewritten; 16 suites re-homed; 2 Playwright harnesses converted.                                                               |
+| Backend        | **none**                                | No module, service or endpoint touched.                                                                                                                        |
+| Database       | **none**                                | No model, column, index, constraint or migration — **database-architect not triggered**; §3.1 says what would change that.                                     |
+| API            | **none**                                | The six body builders unmodified; existing key-set tests are the gate.                                                                                         |
+| Security       | **none by design, proven not asserted** | `activity-editor-gating.ts` untouched; server remains the trust boundary. **One disclosure path is closed by the mechanism in §4.1** and must not be reopened. |
+| Performance    | **low**                                 | Create moves to four resolvers on a hand-opened dialog. `useWatch` standardisation (§4.7) keeps a keystroke in Identity from re-rendering Constraints.         |
+| Infrastructure | **low**                                 | Two `playwright.*.config.ts` files, `scripts/flag-retirement.json`, `scripts/dependency-claims.json`.                                                          |
+| Observability  | **none**                                | No log, metric or audit event.                                                                                                                                 |
+| Testing        | **high**                                | The bulk of the work.                                                                                                                                          |
 
 ### 3.1 Frontend-only — and what would change that
 
-**No API or schema change is expected. [V]** Both body builders already exist, already carry every
-field, and the epic does not alter them:
-
-- `createBody` **omits** blank fields so the API default applies (`use-activities.ts:122-157`).
-- `updateBody` **sends explicit nulls** so a cleared field is cleared (`:160-213`).
-
-That asymmetry is correct and must survive: it is why create and edit cannot share a body builder,
-and it is _not_ duplication. The unified value object feeds whichever builder its host owns.
+**[V]** Both body builders exist, carry every field, and are not altered:
+`createBody` **omits** blanks so the API default applies (`use-activities.ts:122-157`); `updateBody`
+**sends explicit nulls** (`:160-213`). That asymmetry is correct, is why create and edit cannot share
+a body builder, and is **not** duplication.
 
 **If any of these appear, stop and escalate loudly:** a field the API accepts that neither builder
-sends; a new field; a validation rule that needs a server change; a permission that needs splitting.
-The first would be a real finding (an ADR-0067/0070-shaped "storage exists, nothing can author it"
-gap) and would need its own slice. **Any schema change routes to the database-architect agent
-unconditionally (CLAUDE.md §19.3) — no self-assessment of significance.**
+sends; a new field; a validation rule needing a server change; a permission needing a split. **Any
+schema change routes to the database-architect agent unconditionally (CLAUDE.md §19.3)** — no
+self-assessment of significance.
 
-### 3.2 The ADR-0034 recalculation parity gate — structurally untouched
+### 3.2 The ADR-0034 parity gate — structurally untouched
 
-**The claim, with its evidence.** The CPM engine lives in `apps/api/src/modules/schedule/engine/`;
-`apps/web` does not depend on `@repo/api` and nothing under `apps/web/src` imports `computeSchedule`.
-Grepping `computeSchedule|schedule/engine` across `apps/web/src` returns nine files, **all** of which
-are route strings, TanStack query keys or toolbar labels (`use-plan-workspace-model.ts`,
-`hierarchy-keys.ts`, `tsld-toolbar-items.tsx`, `use-float-paths.ts`, …) **[V]**.
-
-More strongly: this epic **adds no scheduling input and alters none**. The same values reach the same
-endpoints through the same unmodified body builders. There is nothing new for `computeSchedule` to
-receive, so the parity gate is untouched **by construction**, not by care.
+The engine lives in `apps/api/src/modules/schedule/engine/`; `apps/web` does not depend on
+`@repo/api`. Grepping `computeSchedule|schedule/engine` across `apps/web/src` returns nine files, all
+route strings, TanStack query keys or toolbar labels **[V]**. More strongly: this epic **adds no
+scheduling input and alters none** — the same values reach the same endpoints through the same
+unmodified builders. Untouched **by construction**.
 
 ### 3.3 Dependencies
 
-- **Must land first:** nothing external. M0 (characterisation) must precede every extraction.
-- **Affected features:** `dependencies` (Logic tab), `resources`, `wbs`, `notes`, `cross-plan-dependencies` — all reached through the editor's slots, all **untouched**; their tabs are collections, not field groups.
-- **Interacts with:** ADR-0083 (Proposed **[V]** `0083-shaded-form-fields.md:3`, yet `FieldGateProvider` / `useFieldGate` / `readOnly` are **already in the code** — `ActivityCalendarField.tsx:69,106`). The groups adopt the ADR-0083 pattern; this epic is a large second consumer and should be cited when ADR-0083 moves to Accepted.
-- **Blocks:** #122's `VITE_ACTIVITY_EDITOR_TABS` half; partially unblocks #122's `VITE_CANVAS_WORKSPACE` half (shared harness conversion).
+- **Must land first:** nothing external. M0 precedes every extraction.
+- **Affected features:** `dependencies`, `resources`, `wbs`, `notes`, `cross-plan-dependencies` —
+  reached through the editor's slots, all **untouched**; their tabs are collections, not field groups.
+- **Interacts with ADR-0083** (Proposed **[V]** `0083-shaded-form-fields.md:3`, while
+  `FieldGateProvider`/`useFieldGate`/`readOnly` are already in the code — `ActivityCalendarField.tsx:69,106`).
+  This epic is a large second consumer; cite it when ADR-0083 moves to Accepted.
+- **Interacts with ADR-0077 §9** — see §4.5.
+- **New dependency-claim registrations required** (`scripts/dependency-claims.json`): the
+  `react-hook-form` citations in §4.4/§4.5. The file currently registers `better-auth`,
+  `better-call`, `zod`, `nodemailer`, `@better-fetch/fetch`, `@nestjs/throttler` — **no
+  `react-hook-form` entry exists [V]**, so `pnpm check:claims` fails without one (ADR-0076 Class 2).
+- **Blocks:** #122's `VITE_ACTIVITY_EDITOR_TABS` half; partially unblocks its `VITE_CANVAS_WORKSPACE`
+  half (shared harness conversion).
 
 ---
 
 ## 4. Solution design
 
-### 4.1 The load-bearing idea
+### 4.1 The thesis, and what actually enforces it
 
 > **The save model belongs to the _host_. The field rendering belongs to the _group_. They are
 > orthogonal, and ADR-0060 only ever decided the first.**
 
-ADR-0060 §3 decides _who saves what, under which permission, to which endpoint_ — because the scopes
-carry different permissions and one merged Save would remove a Contributor's ability to report
-progress **[V]** ADR-0060:104-125. It says nothing about who renders the Name field. Unifying the
-rendering **does not merge the saves**, and this design does not propose merging them.
+ADR-0060 §3 decides _who saves what, under which permission, to which endpoint_, because the scopes
+carry different permissions **[V]** ADR-0060:104-125. It says nothing about who renders the Name
+field. Unifying the rendering **does not merge the saves**, and this design does not propose it.
+`ui-architect` endorsed this thesis.
 
-The corollary that answers brief question 1: **what is unified is the field groups.** Not the schema
-(already unified and gated, §1.2a), not the dialog shell beyond what is genuinely shared, and
-emphatically not the save model.
+The corollary answering brief question 1: **what is unified is the field groups.** Not the schema
+(already unified and gated), not the save model.
 
-**The constraint that fixes the group boundaries.** The editor wraps each scope's form in a single
-`<FieldGateProvider gate={gating.X}>` **[V]** `ActivityEditorDialog.tsx:496,616,899`. A group
-spanning two scopes could not be placed inside exactly one provider. So: **a group belongs to
-exactly one write scope.** That is not an aesthetic rule — it is forced, and it is already satisfied,
-because the scopes partition the fields (§1.2a). The result is a three-level structure each level of
-which is gated by a computed test:
+#### [RETRACTED] rev 1's enforcement claim was false
+
+rev 1 §4.1 said a group must belong to one scope because _"the editor wraps each scope's form in a
+single `FieldGateProvider`, so a two-scope group could not be placed inside exactly one provider"_,
+and ADR-0089 D2 called it _"forced, not chosen"_. **Both are false, and the mechanism fails in a way
+nothing would catch.**
+
+**[V]** `activity-editor-gating.ts:101-125` returns **one `definition` object** — by identity,
+deliberately, with an identity test pinning it — for `general`, `scheduling`, `measure`, `steps`,
+`logic`, `resources` and `members`. So a group spanning two definition scopes, placed inside
+**either** provider, renders identically in every reachable state: same `writable`, same reason, same
+lock. No compile error, no runtime error, nothing for a reviewer to see.
+
+And it is worse in one direction. `cost` is `canReadCost ? definition : { writable: false, reason:
+null, readable: false }` **[V]** `:109` — the **only** definition scope that is sometimes a different
+object. So a hypothetical `general`+`cost` group placed in the general provider would **render cost
+fields to a role whose `gating.cost.readable === false`**: a disclosure path, not merely an
+unenforced convention.
+
+rev 1's supporting citation was also incomplete: it named three providers on the definition tabs,
+while the Progress tab carries **three more** **[V]** (`ActivityProgressPanels.tsx:137`, `:272`,
+`:553`) — six in total, so the evidence covered half the cases.
+
+#### What actually enforces it: the compiler, through the form type
+
+A group declares one concrete form prop:
+
+```ts
+function ActivityIdentityFields({ form }: { form: UseFormReturn<ActivityGeneralValues> });
+```
+
+`form.register('constraintType')` then does not compile, because `FieldPath<ActivityGeneralValues>`
+does not contain it. This is a **compile error at the point of the mistake**, and it closes the
+disclosure path above for free: a cost field cannot be registered on a general form at all.
+
+The one erosion path is a group that takes **two** form props. Two mechanisms close it:
+
+1. **`export const FIELDS = [...] as const satisfies readonly (keyof ActivityGeneralValues)[]`** —
+   a foreign field name becomes a **compile error**, not a test failure. The tuple is **ordered**,
+   which §4.4 then reuses for focus ordering.
+2. **A structural assertion** that each group module exports exactly one `FIELDS` and that its props
+   type contains exactly one `UseFormReturn`. Verified red by adding a second form prop.
+
+**D2b — a group receives derived facts as props and never reaches across scopes.** The duration
+field's `hoursPerDay` is read from the **scheduling** scope's live calendar selection and feeds the
+**general** scope's seed **[V]** `ActivityEditorDialog.tsx:242-263`. rev 1 called this "the one place
+the group boundary does not hold". It is not an exception — it is **the rule**: a cross-scope fact is
+resolved by the **host**, which is the only thing that can see both scopes, and handed down as a
+plain prop. Stating it as the rule is what stops the next such fact being solved by a second form prop.
+
+The result is three levels, each gated:
 
 ```
-field  →  scope shape  →  group component
-        (partition proved by            (partition to be proved by
-     activity-scope-schemas.structural)  a new field-group structural test)
+field  →  scope shape  →  group FIELDS tuple
+        (partition anchored to the           (partition anchored to
+         body builders — §4.7)                the scope shapes)
 ```
 
 ### 4.2 Architecture — before and after
@@ -417,17 +455,18 @@ field  →  scope shape  →  group component
 ```mermaid
 flowchart TB
   subgraph BEFORE["BEFORE — two implementations of ~20 fields"]
-    CB1["CreateActivityButton"] --> AFD["ActivityFormDialog<br/>844 lines<br/>1 form · 1 resolver · 1 POST<br/>+ a dead edit path"]
-    T1["ActivitiesTable · activity-crud-dialogs<br/>flag-off branches only"] -.-> AFD
+    CB1["CreateActivityButton<br/>two mount sites"] --> AFD["ActivityFormDialog<br/>844 lines<br/>1 form · 1 resolver · 1 POST<br/>+ an edit path only CI reaches"]
+    T1["ActivitiesTable · activity-crud-dialogs<br/>flag-off branches"] -.-> AFD
+    H1["playwright sub-day + assignment-lag<br/>pin the flag OFF"] --> AFD
     T2["ActivitiesTable · activity-crud-dialogs<br/>flag-on = every shipped image"] --> AED["ActivityEditorDialog<br/>1026 lines<br/>4 scope forms · per-scope PATCH"]
     AFD --> F1["~20 controls, copy, flags, states"]
-    AED --> F2["~20 controls, copy, flags, states<br/>drifted in 9 places"]
+    AED --> F2["~20 controls, copy, flags, states<br/>drifted in 10 places"]
   end
 
   subgraph AFTER["AFTER — one field vocabulary, two hosts"]
-    CB2["CreateActivityButton"] --> ACD["ActivityCreateDialog<br/>thin host<br/>4 scope forms · ONE submit · 1 POST"]
-    T3["ActivitiesTable · activity-crud-dialogs"] --> AED2["ActivityEditorDialog<br/>thin host<br/>4 scope forms · per-scope PATCH<br/>+ collection tabs"]
-    ACD --> G["Scope-aligned field groups"]
+    CB2["CreateActivityButton"] --> ACD["ActivityCreateDialog<br/>thin host<br/>4 scope forms · ONE ordered submit · 1 POST"]
+    T3["ActivitiesTable · activity-crud-dialogs"] --> AED2["ActivityEditorDialog<br/>thin host<br/>4 scope forms · per-scope PATCH"]
+    ACD --> G["Scope-aligned field groups<br/>one concrete UseFormReturn each<br/>one ordered FIELDS tuple each"]
     AED2 --> G
     G --> GG["general: Identity · Work · Breakdown"]
     G --> GS["scheduling: Calendar · Constraints · Placement · External · Levelling"]
@@ -439,154 +478,246 @@ flowchart TB
   BEFORE ==>|"this epic"| AFTER
 ```
 
-### 4.3 The group inventory
+### 4.3 The group inventory, and who owns the section
 
-Eleven components, each over exactly one scope. One already exists.
+Eleven components, each over exactly one scope. One exists.
 
-| Group                         | Scope      | Fields                                                        | Status                                                                                            |
-| ----------------------------- | ---------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `ActivityIdentityFields`      | general    | `name`, `code`, `description`                                 | new                                                                                               |
-| `ActivityWorkFields`          | general    | `type`, `duration`, `durationType` + the D5 explanations      | new                                                                                               |
-| `ActivityBreakdownField`      | general    | `parentId` + honest-option fallback + loading/error           | new                                                                                               |
-| `ActivityCalendarField`       | scheduling | `calendarId`                                                  | **exists** — reuse verbatim                                                                       |
-| `ActivityConstraintFields`    | scheduling | `constraintType`/`Date`, `secondary*` + parked honest options | new                                                                                               |
-| `ActivityPlacementFields`     | scheduling | `scheduleAsLateAsPossible`, `expectedFinish`                  | new                                                                                               |
-| `ActivityExternalDatesFields` | scheduling | `externalEarlyStart`, `externalLateFinish`                    | new                                                                                               |
-| `ActivityLevellingField`      | scheduling | `levelingPriority`                                            | new                                                                                               |
-| `ActivityExpenseFields`       | cost       | `budgetedExpense`, `actualExpense`                            | new                                                                                               |
-| `ActivityAccrualField`        | cost       | `accrualType`                                                 | new                                                                                               |
-| `ActivityMeasureFields`       | measure    | `percentCompleteType`, `physicalPercentComplete`              | new — **extracted from** `ValueMeasurePanel`, which keeps its steps-rollup logic and its own save |
+| Group                         | Scope      | Fields                                               | Status                                   |
+| ----------------------------- | ---------- | ---------------------------------------------------- | ---------------------------------------- |
+| `ActivityIdentityFields`      | general    | `name`, `code`, `description`                        | new                                      |
+| `ActivityWorkFields`          | general    | `type`, `duration`, `durationType` + D5 explanations | new                                      |
+| `ActivityBreakdownField`      | general    | `parentId` + honest option + states                  | new                                      |
+| `ActivityCalendarField`       | scheduling | `calendarId`                                         | **exists** — move + correct its docblock |
+| `ActivityConstraintFields`    | scheduling | both constraint pairs + parked honest options        | new                                      |
+| `ActivityPlacementFields`     | scheduling | `scheduleAsLateAsPossible`, `expectedFinish`         | new                                      |
+| `ActivityExternalDatesFields` | scheduling | `externalEarlyStart`, `externalLateFinish`           | new                                      |
+| `ActivityLevellingField`      | scheduling | `levelingPriority`                                   | new                                      |
+| `ActivityExpenseFields`       | cost       | `budgetedExpense`, `actualExpense`                   | new                                      |
+| `ActivityAccrualField`        | cost       | `accrualType`                                        | new                                      |
+| `ActivityMeasureFields`       | measure    | `percentCompleteType`, `physicalPercentComplete`     | new — extracted from `ValueMeasurePanel` |
 
-Each group: is presentational; takes its scope's `UseFormReturn<TScopeValues>` plus the few facts it
-needs (`calendars`, `parentOptions`, `hoursPerDay`, `activityType`); owns its own `FormSection`,
-labels, hints and flag guards; and reads the ambient gate through `useFieldGate()` — **optional**, so
-a host without a provider (create) is not shaded. That optionality already works and is proven:
-`ActivityCalendarField.tsx:69` uses `useFieldGate()?.writable === false` **[V]**.
+#### Section ownership — decided (rev 2)
 
-### 4.4 The create host — four forms, one submit
+rev 1 contradicted itself: §4.3 said each group owns its `FormSection`, §4.6 said create keeps
+"today's shape". Those cannot both hold, because **create renders ONE `Cost & earned value` section
+holding `measure`-scope _and_ `cost`-scope fields** **[V]** `ActivityFormDialog.tsx:625-711`, which
+the editor splits across two tabs.
 
-This is the design decision most worth challenging, so here is why it is not the obvious alternative.
+**Decision: the group owns its `FormSection`.** A section is part of how a field group reads —
+heading, description, `aside` — and splitting ownership means the next divergence is a heading. The
+consequence is named rather than left as fallout:
 
-**Why not one `useForm<ActivityFormValues>` on create?** Because a group typed over a _narrow_ scope
-form is not consumable from a _wide_ one. RHF's `register` is `<N extends FieldPath<T>>`, and
-`FieldPath<T>` on a generic `T extends ActivityGeneralValues` is opaque to the compiler — so a
-generic group cannot call `form.register('name')` without a cast. Writing groups over the wide type
-instead makes them unusable by the editor. Either way one host gets casts, and casts are how a field
-silently stops being registered. **[R]** — this is reasoned from RHF's type signatures; **M0 carries
-a five-line spike that compiles the generic group against both form types, and the result may
-overturn this.** Say so rather than discovering it in M2.
+> **Create is re-sectioned.** Today's single "Cost & earned value" section becomes two — an expense/
+> accrual section (cost scope) and a value-measure section (measure scope). This is a **listed,
+> decided, user-visible change**, it is in the acceptance criteria, and it is the subject of a
+> converge commit of its own (plan M4).
 
-**So the create host runs `useScopeForm` four times — the same hook the editor uses — and submits
-once:**
+### 4.4 The create host — four forms, one **ordered** submit
+
+**Why not one wide `useForm<ActivityFormValues>`?** A group takes a concrete narrow form; a wide
+`UseFormReturn<ActivityFormValues>` is not assignable to `UseFormReturn<ActivityGeneralValues>`
+(RHF's generic is used in both argument and return position). **[R]** — and because that proposition
+is the _entire_ justification for the M1 milestone, it is spiked before M1 is built, not assumed
+(plan M0-T2). If it turns out to be assignable, M1 is cancelled.
+
+**The submit shape — rev 2 rewrote this; the naive version is actively broken.**
+
+`react-hook-form@^7.84.0` **[V]** `apps/web/package.json:66`. Two facts about its public API decide
+the design, and **both must be registered in `scripts/dependency-claims.json` before this merges**:
+
+- `trigger(name?, { shouldFocus })` — focus is **opt-in**. Left at its default, the naive
+  `Promise.all(forms.map(f => f.trigger()))` focuses **nothing**, which is _worse than today_:
+  today `handleSubmit` focuses the first invalid field.
+- Turning `shouldFocus` on for four forms issues up to **four competing focus calls**, and the winner
+  is whichever promise settles last — nondeterministic.
+
+So neither branch of the naive version is acceptable. The correct shape:
 
 ```
-validate  →  await Promise.all([general, scheduling, measure, cost].map(f => f.trigger()))
+validate  →  await Promise.all(forms.map(f => f.trigger(undefined, { shouldFocus: false })))
+focus     →  ONE host-owned decision: walk the DECLARED GROUP ORDER, and within each group its
+             ORDERED `FIELDS` tuple; the first name present in that group's `errors` gets
+             form.setFocus(name)
+check     →  the ADR-0070 duration-conversion check on `general`
 merge     →  { ...general.getValues(), ...scheduling.getValues(), ...measure.getValues(), ...cost.getValues() }
-check     →  the ADR-0070 duration-conversion check (unchanged)
 send      →  createBody(merged)  →  one POST
 ```
+
+**Merge and focus order is _not_ document order.** Create's sections interleave scheduling fields
+both before and after the cost/measure ones, so "first in the DOM" and "first in scope order" differ.
+The host therefore needs an explicit ordered field list — which the ordered `FIELDS` tuples plus a
+declared group order supply for free. That is the second job those tuples do, and it is why they are
+tuples rather than sets.
 
 Three properties fall out, and they are the argument:
 
 1. **The groups are byte-identical in both hosts** — same component, same form type, same props.
-2. **The difference between the hosts is exactly the save layer**, which is the thesis made
-   structural rather than asserted.
-3. **`useScopeForm` already anticipated this.** `activity-editor-seeds.ts:23` says, verbatim: _"A
-   create seeds the API defaults, so an unopened tab saves exactly what the server would default."_
-   **[V]** The seeds were written to serve a create path that was never built.
+2. **The only difference between the hosts is the save layer** — the thesis made structural.
+3. **`useScopeForm` already anticipated this.** `activity-editor-seeds.ts:23`: _"A create seeds the
+   API defaults, so an unopened tab saves exactly what the server would default."_ **[V]**
 
-One thing this owes the user: **an error summary that spans four forms.** `FormErrorSummary` takes
-one `errors` object, so the create host merges the four and passes the union — and per ADR-0077 M8,
-it shows a **count** from two problems up rather than restating each sentence. Focus goes to the
-first failing control in document order, which four independent `handleSubmit` calls would not give
-for free. This is a named risk in the plan.
+**Two host responsibilities `useScopeForm` does not carry**, both named because dropping either is
+silent:
 
-### 4.5 The editor host — what changes and what does not
+- `mutation.reset()` on open **[V]** `ActivityFormDialog.tsx:241` — without it a failed create's
+  error banner survives into the next open.
+- The `[open, activity?.id]` re-seed works on create **only because the dialog stays mounted and
+  toggles `open`** **[V]** `useScopeForm.ts:48-57`. Pinned by a test (plan M0-T3), because a future
+  host that conditionally mounts the dialog would break it with nothing failing.
 
-**Unchanged:** the tabs, the per-scope forms, `saveScope`, the live-`version` read, the scoped error
+### 4.5 Error presentation — one decision, both hosts, its own commit
 
-- **Refresh this section**, the discard confirmation, `ScopeSaveBar`, every collection tab, the
-  gating object, the intent model.
+**rev 2 adds this section; rev 1 conflated two different components.**
 
-**Changed:** the JSX inside each definition tab becomes `<Group form={scope.form} … />` calls.
+**[V]** They are not the same thing:
 
-**Answering brief question 2 explicitly: neither host absorbs the other.**
+- `FormErrorSummary` (`form.tsx:424-446`) **lists every message**.
+- `FormProblemCount` (`form.tsx:470-491`) renders **a count, and nothing below two problems**. Its
+  docblock says it is _"The alternative to `FormErrorSummary`"_, introduced by ADR-0077 §9 because
+  listing restated what each field already said.
 
-- Create does **not** become a tab-less mode of the editor. The editor's tabs _are_ its write scopes,
-  and scopes exist because saves differ. Creation has one save, so tabs would be navigation cost with
-  no meaning behind it.
-- The editor does **not** gain a create mode. Five of its tabs — Logic, Resources, Members, Notes,
-  Progress — render `activity.id` into queries and mutations **[V]** `ActivityEditorDialog.tsx:783,
-798-805, 811-835, 846-883`. A create mode ships those either absent or dead, which is ADR-0081's
+**Both activity dialogs use the listing one today**, in five places
+(`ActivityFormDialog.tsx:366`; `ActivityEditorDialog.tsx:493,613,896`; `ActivityProgressPanels.tsx:139`).
+So ADR-0077 §9's rule — _a field's problem belongs to the field; the alert belongs to the form_ —
+implies all five are currently wrong, and rev 1 was quietly proposing to change create's error
+presentation in passing, with no divergence row and no acceptance criterion behind it.
+
+**And there is a coupling rev 1 could not have seen, which makes this non-obvious.**
+`FormProblemCount`'s docblock justifies its "silence below two problems" threshold explicitly on RHF's
+`shouldFocusError` defaulting to `true` under **`handleSubmit`** — _"focus has already done the job"_
+**[V]** `form.tsx:460-468`. **A host that validates via `trigger()` does not get that focus.** So
+adopting `FormProblemCount` on the create host while validating with `trigger()` would make a
+one-problem submit **silent and unfocused** — a real WCAG 4.1.3 regression, arrived at by combining
+two individually-reasonable choices.
+
+**Decision:** the create host's explicit ordered `setFocus` (§4.4) is what keeps `FormProblemCount`'s
+threshold lawful, so **the two decisions ship together or neither ships.** Which component both
+dialogs should use is decided **once, for both hosts, in its own commit with its own test**, before
+any group extraction — so it is never fallout from a refactor. Default recommendation:
+`FormProblemCount` on both, _conditional on_ the ordered-focus host behaviour landing in the same
+commit.
+
+### 4.6 The editor host, and why neither absorbs the other
+
+**Unchanged:** tabs, per-scope forms, `saveScope`, the live-`version` read, scoped errors +
+**Refresh this section**, the discard confirmation, `ScopeSaveBar`, every collection tab, gating, intent.
+
+**Changed:** the JSX inside each definition tab becomes `<Group form={scope.form} … />`.
+
+**Answering brief question 2: neither host absorbs the other.**
+
+- Create does **not** become a tab-less editor mode. Tabs _are_ write scopes, and scopes exist
+  because saves differ. Creation has one save.
+- The editor does **not** gain a create mode. Five tabs render `activity.id` into queries **[V]**
+  `ActivityEditorDialog.tsx:783,798-805,811-835,846-883`; a create mode ships them dead — ADR-0081's
   defect class by construction.
-- A single host with an `isCreate` prop would be a component whose every other branch reads "not in
-  create" — the second product ADR-0088 D2 is about, relocated into one file.
+- A single host with `isCreate` would be a component whose every other branch reads "not in create":
+  the second product of ADR-0088 D2, relocated into one file.
 
-**Shared where it is genuinely shared:** `Dialog`, `FieldGridContainer`, `FormErrorSummary`,
-`FormSection`/`FieldGrid` (ADR-0061), and the **section order**, which both surfaces already claim to
-follow — `ActivityFormDialog.tsx:375-377` says its sections _"mirror the tabbed editor's"_ **[V]**.
-After this they do, because there is one set.
+### 4.7 Stated defaults for the non-critical questions
 
-### 4.6 Stated defaults for the non-critical questions
+| Question                                                            | Default                                                                                                                                                                                                                                                                                            | Reason                                                                                                                       |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Create's layout                                                     | Flat sections at `size="lg"`                                                                                                                                                                                                                                                                       | ADR-0061 gave the editor the rail _because its scopes carry different permissions_. Create has one.                          |
+| D6 gating                                                           | Adopt create's `ADVANCED_CONSTRAINTS_ENABLED` gate                                                                                                                                                                                                                                                 | A flag's off-branch should be coherent. Zero effect in any shipped image (ADR-0088 D1) — stated as such, not as "no change". |
+| D1's classification                                                 | **Not an extraction.** Create adopting `ActivityCalendarField` swaps `disabled` for `readOnly` + `FieldGateLock` — a real ADR-0083 behaviour change, so it is a converge commit with an a11y assertion, never folded into a "move".                                                                |
+| D5 / D9 / D10                                                       | Additions to one host; converge-first handles them naturally (add to the losing host in place, then extract). Brief, deliberate copy duplication between commit A and commit B is accepted and short-lived.                                                                                        |
+| `activityFormSchema`'s future                                       | **Retire it — but anchor its replacement elsewhere first.** See below.                                                                                                                                                                                                                             |
+| The third harness pin (`VITE_ACTIVITY_EDITOR_CONVERGENCE: 'false'`) | **Remove it in the same conversion.** See below.                                                                                                                                                                                                                                                   |
+| Watch API                                                           | Standardise **both** hosts on `useWatch`. The editor is itself inconsistent — `ActivityEditorDialog.tsx:623` uses `scheduling.form.watch('calendarId')` while its siblings use `useWatch` **[V]**. On a four-form create host `form.watch` would re-render Constraints on a keystroke in Identity. |
+| `ValueMeasurePanel`                                                 | Keeps its save, its steps rollup and its "Weighted steps are setting this to N%" reason — that reason is a **panel** fact and stays a prop into the group, not part of it. Only the two controls move.                                                                                             |
 
-| Question                                  | Default                                                                                                                                   | Reason                                                                                                                                                                                                                                                                    |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create's layout                           | Flat sections at `size="lg"`, today's shape                                                                                               | ADR-0061 gave the editor the rail _because its scopes carry different permissions_. Create has one. The rail's reason for existing does not apply.                                                                                                                        |
-| D6 — `scheduleAsLateAsPossible` gating    | Adopt create's `ADVANCED_CONSTRAINTS_ENABLED` gate                                                                                        | A flag's off-branch should be coherent; an ALAP control with the advanced-constraints section hidden is the incoherent side. Zero user-visible effect — the flag is compiled on in every image (ADR-0088 D1).                                                             |
-| `activityFormSchema`'s future             | **Retire it** at M5 with its last consumer, rather than deriving it                                                                       | Deriving it makes `activity-scope-schemas.structural.test.ts`'s first assertion trivially true, which quietly removes the gate. Retiring it is honest; the structural test re-points at the **group partition** instead (§4.1), which is the invariant that then matters. |
-| Where the duration-conversion check lives | Both hosts, on the `general` form                                                                                                         | Unchanged from today; it is a host concern, not a group one.                                                                                                                                                                                                              |
-| `ValueMeasurePanel`                       | Keeps its save, its steps rollup and its "steps are overriding this" reason; loses only its two field controls to `ActivityMeasureFields` | The rollup is progress-tab logic, not a field.                                                                                                                                                                                                                            |
+**Retiring `activityFormSchema` removes more gate than rev 1 admitted.** Today
+`activity-scope-schemas.structural.test.ts` anchors the four scope shapes to an **independent** list.
+A group↔scope partition test is **self-referential**: delete a field from a scope shape _and_ from its
+group and both stay green — the field silently stops being validated **and** rendered, which is
+precisely what that file's docblock exists to prevent. So the replacement anchor is the **body
+builders** (`use-activities.ts:163-212`), which are external to the group/scope pair and are what the
+server actually receives. **Both partitions are asserted before `activityFormSchema` goes.**
 
-### 4.7 Is this ADR-worthy? Yes — draft ADR-0089
+**The third harness pin.** `VITE_ACTIVITY_EDITOR_CONVERGENCE` is Class B and derived from the
+retiring parent **[V]** `env.ts:991`. When the conjunct drops (ADR-0084 D4) the pin **still
+functions**, and the converted suite would drive the tabbed editor **without** its Logic/Resources/
+Notes tabs — a configuration no shipped image can produce, which is verbatim ADR-0088's own criticism
+of the base config (`docs/TECH_DEBT.md` #121). **Remove `sub-day:76` and `assignment-lag:75` in the
+same conversion**, and remove **only those lines** — both files also pin `VITE_CANVAS_WORKSPACE` for
+a different, still-deferred flag.
 
-**Yes, plainly.** It amends an Accepted ADR's §2 and §3 reading, it establishes a house rule for the
-whole product, and it retires a Class A flag. Next free number is **0089** **[V]** (`docs/adr/` runs
-to `0088-flag-classification.md`).
+### 4.8 Draft ADR-0089
+
+Next free number **0089** **[V]** (`docs/adr/` runs to `0088-flag-classification.md`).
 
 > **ADR-0089 — One activity field vocabulary: the scope-aligned field group.**
 >
 > **Context.** ADR-0060 §2 decided `ActivityFormDialog` _becomes_ `ActivityEditorDialog`; the
-> implementation built the editor beside it and left create on the old component. Nine features
-> then added fields to both. The two surfaces have drifted in nine places (spec §1.3), two of them
-> live defects. `docs/TECH_DEBT.md` #122 correctly attributes the cost to the two-component split
-> rather than to the flag that was suspected of it.
+> implementation built the editor beside it. Nine features then added fields to both, and the two
+> surfaces have drifted in ten places (spec §1.3) — a tenth found incidentally by a reviewer, which
+> is why the audit is re-derived from code rather than trusted.
 >
 > **D1. A field is rendered by exactly one component.** Groups partition the scope shapes, which
-> partition the field set. A structural test computes the partition in both directions; a field in
-> a scope with no group fails CI.
+> partition the field set.
 >
-> **D2. A group belongs to exactly one write scope.** Forced, not chosen: the editor wraps each
-> scope in one `FieldGateProvider`, so a two-scope group has nowhere to sit.
+> **D2. A group takes exactly one concrete `UseFormReturn`, and the compiler is the enforcement.**
+> A group over `ActivityGeneralValues` cannot `register('constraintType')`. An ordered
+> `FIELDS ... as const satisfies readonly (keyof TScopeValues)[]` makes a foreign field a compile
+> error; a structural assertion pins one `FIELDS` and one form prop per group.
+> **An earlier draft of this decision claimed the `FieldGateProvider` forced it. That was false** —
+> `activity-editor-gating.ts:101-125` returns one shared `definition` object for seven scopes, so a
+> two-scope group would render identically in either provider with nothing to catch it, and a
+> `general`+`cost` group would have been a **disclosure path** for a role with
+> `gating.cost.readable === false`. Recorded rather than replaced.
 >
-> **D3. The save model belongs to the host; ADR-0060 §3 is affirmed and scoped.** Per-scope save is
-> a statement about _permissions_, and it binds the editor. **Creation is one act with one
-> permission, so it is one scope by construction** — a single submit over four scope forms, which
-> is not a merged save because there is nothing to merge.
+> **D2b. A cross-scope fact is resolved by the host and passed down as a plain prop.** The duration
+> field's `hoursPerDay` comes from the scheduling scope's calendar and feeds the general scope's seed.
+> This is the rule, not an exception — it is what stops the next such fact being solved with a second
+> form prop, which is D2's only erosion path.
 >
-> **D4. Neither host absorbs the other.** Five editor tabs require an activity id; a create mode
-> would ship them dead (ADR-0081).
+> **D3. The save model belongs to the host; ADR-0060 §3 is affirmed and scoped.** Per-scope save is a
+> statement about _permissions_. **Creation is one act with one permission, so it is one scope by
+> construction** — a single submit over four scope forms, which is not a merged save because there is
+> nothing to merge.
 >
-> **D5. No feature flag.** ADR-0061's reasoning (a structural refactor gated means two copies in one
-> file) plus ADR-0088 D1 (a `VITE_` flag cannot be switched off on a deployed container, so there
-> has never been an operator rollback) plus ADR-0088 D2/D3 (a new flag here would be **Class A**,
-> and `classACap` is 2 and ratchets _down_ — proposing one means arguing to raise a cap this epic
-> exists to lower). The rollback is a commit boundary: one revertible commit per milestone, the
-> ADR-0077 M6 precedent.
+> **D4. Neither host absorbs the other.** Five editor tabs require an activity id (ADR-0081).
 >
-> **D6. `VITE_ACTIVITY_EDITOR_TABS` retires with this epic**, which is #122's named trigger. The two
-> flag-off harnesses are **converted, not deleted** (ADR-0084 D5). `classACap` ratchets 2 → 1.
+> **D5. A group owns its `FormSection`.** Consequence, accepted and listed: create is re-sectioned,
+> because its single "Cost & earned value" section spans two scopes.
 >
-> **Consequences.** Positive: one place to add a field; nine divergences closed; the 844-line
-> monolith and the legacy trio deleted. Negative: a large diff across a high-traffic surface, whose
-> only real protection is the M7 specialist gate and the flag-on journey — this epic has no unit
-> flag-off suite to fall back on, and ADR-0088 D7 records that unit flag-off suites have caught
-> exactly one defect in this project's history anyway. New debt: none intended; anything found is
-> filed rather than rushed.
+> **D6. The create submit validates with focus suppressed and makes one ordered focus decision.**
+> Four `trigger()` calls with `shouldFocus: false`, then one host-owned `setFocus` walking the
+> declared group order and each group's ordered `FIELDS`. Merge/focus order is not document order.
+> This is coupled to D7 and ships with it.
 >
-> **The CPM engine is not imported and the ADR-0034 parity gate is untouched** (spec §3.2). No
-> migration runs.
+> **D7. Error presentation is decided once for both hosts, in its own commit.** `FormProblemCount`'s
+> below-two-problems silence is justified on `handleSubmit`'s `shouldFocusError`, which a
+> `trigger()`-based host does not get — so adopting it without D6 is a WCAG 4.1.3 regression.
+>
+> **D8. No feature flag.** ADR-0061 (gating a structural refactor means two copies in one file),
+> ADR-0088 D1 (a `VITE_` flag cannot be switched off on a deployed container — there has never been
+> an operator rollback), ADR-0088 D2/D3 (a new flag here would be **Class A**, and `classACap` is 2
+> and ratchets _down_; proposing one means arguing to raise a cap this epic exists to lower).
+> **The rollback unit is one revertible commit per _behaviour change_** — not per milestone, which is
+> only true under the converge-then-extract ordering (D9).
+>
+> **D9. Converge, then extract.** ADR-0078's barrel-preserving move is a no-op because the extracted
+> module has **one** behaviour; here it has two, one per host, so no extraction is a no-op for both
+> and extract-first must silently pick a winner. Commit A converges the losing host in place with one
+> regression test; commit B extracts and is then genuinely a no-op, with both hosts' suites as the
+> oracle.
+>
+> **D10. `VITE_ACTIVITY_EDITOR_TABS` retires with this epic** — #122's named trigger. The two
+> flag-off harnesses are **converted, not deleted** (ADR-0084 D5), including their third pin
+> (§4.7). `classACap` ratchets 2 → 1. **The retirement precedes the deletion of
+> `ActivityFormDialog`**, because those harnesses are what keep its edit path alive.
+>
+> **Consequences.** Positive: one place to add a field; ten divergences closed; the monolith and the
+> legacy trio deleted; a disclosure path closed by construction. Negative: a large diff on a
+> high-traffic surface whose only real protection is the M7 gate and the flag-on journey — ADR-0088
+> D7 records that unit flag-off suites have caught exactly one defect in this project's history, so
+> they are not the safety net here and are not budgeted as one.
+>
+> **The CPM engine is not imported and the ADR-0034 parity gate is untouched** (§3.2). No migration.
 
-### 4.8 Data flow — create
+### 4.9 Data flow — create
 
 ```mermaid
 sequenceDiagram
@@ -598,30 +729,32 @@ sequenceDiagram
   participant API as POST /organizations/:org/plans/:plan/activities
 
   P->>D: press "New activity"
-  D->>S: useScopeForm x4, seeded from undefined = API defaults
-  S->>G: render each group with its scope form
+  D->>S: useScopeForm x4 seeded from undefined = API defaults
+  D->>D: mutation.reset() so a prior failure does not linger
+  S->>G: render each group with its own concrete scope form
   P->>G: fill fields across sections
   P->>D: press "Create activity"
-  D->>S: trigger() on all four
+  D->>S: trigger() x4 with shouldFocus FALSE
   alt any scope invalid
-    S-->>D: merged errors
-    D-->>P: error summary count + focus first failing control
+    D->>D: walk declared group order, then each ordered FIELDS tuple
+    D->>S: setFocus on the FIRST invalid field, once
+    D-->>P: error presentation per section 4.5
   else all valid
-    D->>D: ADR-0070 duration-conversion check
-    D->>B: merge getValues() x4
+    D->>D: ADR-0070 duration-conversion check on general
+    D->>B: merge getValues() x4 in declared scope order
     B->>API: POST, blanks omitted so API defaults apply
     API-->>D: created row
-    D-->>P: announce + close
+    D-->>P: announce and close
   end
 ```
 
-### 4.9 User flow
+### 4.10 User flow
 
 ```mermaid
 flowchart TD
   A["Plan workspace"] --> B{"What does the planner want?"}
-  B -->|"New activity"| C["ActivityCreateDialog<br/>flat sections, one Save"]
-  B -->|"Edit / Report progress / Steps / Logic / Resources / Members / Notes"| D["ActivityEditorDialog<br/>tabs, per-scope Save"]
+  B -->|"New activity"| C["ActivityCreateDialog<br/>flat sections · one Save"]
+  B -->|"Edit / Report progress / Steps / Logic / Resources / Members / Notes"| D["ActivityEditorDialog<br/>tabs · per-scope Save"]
   C --> E["Shared field groups"]
   D --> E
   E --> F["Same control · same label · same hint · same states"]
@@ -629,52 +762,78 @@ flowchart TD
   D --> H["one PATCH per scope, live version"]
 ```
 
-### 4.10 Database changes
+### 4.11 Database changes
 
-**None.** No model, column, index, constraint or data migration. The database-architect agent is
-therefore not engaged — and if that assessment turns out to be wrong at any point, it becomes
-engaged **unconditionally**, with no judgement about whether the change is big enough
-(CLAUDE.md §19.3, §20).
+**None.** If that assessment turns out wrong at any point, the database-architect agent becomes
+engaged **unconditionally**, with no judgement about whether the change is big enough (CLAUDE.md
+§19.3, §20).
 
-### 4.11 API changes
+### 4.12 API changes
 
-**None.** No endpoint, DTO, status code or OpenAPI change. The six body builders are unmodified and
-their existing key-set assertions are the proof.
+**None.** No endpoint, DTO, status code or OpenAPI change.
 
-### 4.12 Component changes
+### 4.13 Component changes
 
-New, all under `apps/web/src/features/activities/components/fields/`: the ten new groups in §4.3,
-plus `ActivityCreateDialog.tsx`. `ActivityCalendarField.tsx` moves into that folder unchanged (a
-barrel-preserving move, ADR-0078's rule) and **its false docblock line is corrected** — it will then
-be true.
+New under `apps/web/src/features/activities/components/fields/`: ten groups plus
+`ActivityCreateDialog.tsx`. `ActivityCalendarField.tsx` moves there unchanged (barrel-preserving,
+ADR-0078) and **its false docblock line is corrected**.
 
-Deleted at M5: `ActivityFormDialog.tsx`. Deleted at M6: `ActivityProgressDialog.tsx`,
-`ActivityStepsDialog.tsx` and the flag-off Logic/Resources dialog mounts in `plan-dialogs.tsx`
-**[V]** `plan-dialogs.tsx:165,184`.
+Deleted: `ActivityFormDialog.tsx`; then `ActivityProgressDialog.tsx`, `ActivityStepsDialog.tsx` and
+the flag-off Logic/Resources mounts **[V]** `plan-dialogs.tsx:165,184`.
 
-No new design-system primitive. `FormSection`, `FieldGrid`, `FieldGridFull`, `ContextStrip`,
-`ScopeSaveBar`, `FieldGateProvider`, `Combobox`, `SelectField`, `TextField`, `CheckboxField`,
-`TextareaField` all already exist and are reused. **No one-off styling.**
+No new design-system primitive — `FormSection`, `FieldGrid`, `FieldGridFull`, `ScopeSaveBar`,
+`FieldGateProvider`, `Combobox`, `SelectField`, `TextField`, `CheckboxField`, `TextareaField` all
+exist and are reused. **No one-off styling.**
 
-### 4.13 Alternatives considered
+### 4.14 Alternatives considered
 
-| Alternative                                                     | Why not                                                                                                                                                                     |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unify the schema only** (brief Q1)                            | Already done and already gated (§1.2a). Collects nothing.                                                                                                                   |
-| **Create becomes a tab-less editor mode**                       | Five tabs need an id; a create mode ships them dead (ADR-0081). And tabs encode scopes, which encode differing saves — create has one save.                                 |
-| **Editor gains a create mode via `isCreate`**                   | A second product inside one file (ADR-0088 D2), with every branch reading "not in create".                                                                                  |
-| **Merge the save models**                                       | Rejected by ADR-0060 §3 on the Contributor regression and the two-phase steps/PATCH write. Not proposed, and this design does not require it.                               |
-| **Retire the flag first, unify later**                          | Exactly what #122 says buys nothing: it deletes three mount sites and leaves the monolith alive as the create surface.                                                      |
-| **Ship behind a new flag**                                      | ADR-0061 + ADR-0088 D1/D2/D3 — see ADR-0089 D5.                                                                                                                             |
-| **Groups as controlled components** (values + onChange, no RHF) | Loses `register`'s uncontrolled performance and rewrites every field rather than moving it; the comments in these files record defects and should move verbatim (ADR-0078). |
+| Alternative                                               | Why not                                                                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Unify the schema only**                                 | Already done and gated (§1.2a). Collects nothing.                                                                                                      |
+| **Create as a tab-less editor mode**                      | Five tabs need an id (ADR-0081); tabs encode scopes, which encode differing saves.                                                                     |
+| **Editor gains `isCreate`**                               | A second product inside one file (ADR-0088 D2).                                                                                                        |
+| **Merge the save models**                                 | Rejected by ADR-0060 §3; not proposed and not required.                                                                                                |
+| **Retire the flag first, unify later**                    | #122 says it buys nothing — deletes three mount sites, leaves the monolith as the create surface.                                                      |
+| **A new feature flag**                                    | ADR-0089 D8.                                                                                                                                           |
+| **Generic groups over `T extends ActivityGeneralValues`** | `FieldPath<T>` is opaque on a generic `T`, so `register('name')` needs a cast — and a cast is how a field silently stops being registered.             |
+| **Extract first, converge later**                         | ADR-0089 D9: no extraction is a no-op for both hosts, so it silently picks a winner.                                                                   |
+| **Groups as controlled components**                       | Loses `register`'s uncontrolled performance and rewrites rather than moves; these comments record shipped defects and should move verbatim (ADR-0078). |
 
 ---
 
-## 5. Links
+## 5. Sequencing consequence of §1.2(d)
+
+`playwright.sub-day.config.ts` and `playwright.assignment-lag.config.ts` drive `ActivityFormDialog`'s
+edit path on every CI run. **Therefore the flag retirement precedes the deletion of the monolith**,
+and the plan's milestones are ordered accordingly (M5 retires, M6 deletes). rev 1 left this open as a
+note in a task; it is decided here.
+
+## 6. Changelog — rev 1 → rev 2
+
+| #   | Change                                                                                                                                                                                                                                                                                     | Status       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| 1   | §4.1 enforcement mechanism replaced: `FieldGateProvider` → the compiler + `FIELDS satisfies` + a one-form-prop structural assertion. Retraction recorded in place; disclosure path named.                                                                                                  | **folded**   |
+| 2   | ADR-0089 D2 rewritten; **D2b added** (cross-scope facts are host-resolved props — the rule, not an exception).                                                                                                                                                                             | **folded**   |
+| 3   | §4.3 section ownership decided (the group owns it); create's re-sectioning listed as a user-visible change. New ADR-0089 D5.                                                                                                                                                               | **folded**   |
+| 4   | §4.4 create submit rewritten: `shouldFocus: false` ×4, then one ordered host `setFocus`; merge/focus order from ordered `FIELDS` + declared group order. RHF citations flagged for `dependency-claims.json`. New ADR-0089 D6.                                                              | **folded**   |
+| 5   | §4.5 added: `FormErrorSummary` vs `FormProblemCount` decided once for both hosts, own commit. New ADR-0089 D7.                                                                                                                                                                             | **folded**   |
+| 6   | **D10 added** to the audit; M0-T1 re-scoped to _re-derive_ the divergence set rather than pin nine.                                                                                                                                                                                        | **folded**   |
+| 7   | §2.6 corrected — `ActivityCalendarField.test.tsx` does not exist; marked "must be created first".                                                                                                                                                                                          | **folded**   |
+| 8   | §4.7 `activityFormSchema` retirement re-anchored to the **body builders** (the group↔scope test is self-referential).                                                                                                                                                                      | **folded**   |
+| 9   | §5 M5/M6 order decided: retirement precedes deletion, because two live harnesses drive the edit path.                                                                                                                                                                                      | **folded**   |
+| 10  | §4.7 third harness pin (`VITE_ACTIVITY_EDITOR_CONVERGENCE`) decided explicitly.                                                                                                                                                                                                            | **folded**   |
+| 11  | CQ-3 default changed to **converge-then-extract**; ADR-0078 analogy corrected; D1 reclassified as not-an-extraction; D8 rollback unit now per **behaviour change**. New ADR-0089 D9.                                                                                                       | **folded**   |
+| 12  | Folds as written: Contributor no-create at **both** mount sites; two stale docblocks corrected; `useWatch` standardisation (**extended to the editor**, which is itself inconsistent at `:623`); `mutation.reset()` and the `[open, activity?.id]` re-seed named as host responsibilities. | **folded**   |
+| 13  | **Addition, not in the review:** `FormProblemCount`'s <2 threshold is justified on `handleSubmit`'s `shouldFocusError`, which a `trigger()` host does not get — so §4.5 and §4.4 are **one coupled decision**, not two.                                                                    | **added**    |
+| 14  | **Partial pushback:** M0-T2 re-scoped as directed, **plus a fourth claim** re-aimed at the proposition that actually justifies M1. See plan M0-T2.                                                                                                                                         | **modified** |
+
+Nothing in the review was rejected.
+
+## 7. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Docs this change will update: `docs/adr/0089-*.md` (new), `docs/adr/README.md`,
-  `docs/TECH_DEBT.md` (#122 — the `VITE_ACTIVITY_EDITOR_TABS` half closes; #114/#64 re-checked),
-  `scripts/flag-retirement.json`, `apps/web/src/config/env.ts`, `CLAUDE.md` (§16 ADR list, and the
-  stage-banner counts — `pnpm check:counts` will fail otherwise), `docs/DESIGN_SYSTEM.md`
-  ("Form layout" gains the field-group rule).
+  `docs/TECH_DEBT.md` (#122, #121), `scripts/flag-retirement.json`,
+  `scripts/dependency-claims.json`, `apps/web/src/config/env.ts`, `CLAUDE.md` (§16 and the
+  stage-banner counts — `pnpm check:counts` fails otherwise), `docs/DESIGN_SYSTEM.md` ("Form layout"
+  gains the field-group rule).
