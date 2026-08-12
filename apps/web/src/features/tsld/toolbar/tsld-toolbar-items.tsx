@@ -1,4 +1,7 @@
-import type { DependencyType } from '@repo/types';
+// `DEPENDENCY_TYPES` is the canonical set the Prisma enum mirrors; `DEPENDENCY_TYPE_LABELS` is the
+// wording the Logic panel already uses. Taking the set from the domain and the words from the shared
+// labels is what stops this surface and that one describing the product differently.
+import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   ChartArea,
@@ -92,6 +95,7 @@ import {
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
+import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 import { cn } from '@/lib/utils';
 
 const ZOOM_LABELS: Record<string, string> = {
@@ -550,18 +554,32 @@ function AddActivityControl({
   );
 }
 
-/** The dependency kinds the two-click Link tool offers (ADR-0032 M5). SF is dialog-only (the rare
- * inverse, ADR-0026 D5). The short code labels the compact toolbar button; the long name reads in
- * the menu. */
-const LINK_TYPES: ReadonlyArray<{ type: DependencyType; label: string }> = [
-  { type: 'FS', label: 'Finish → Start' },
-  { type: 'SS', label: 'Start → Start' },
-  { type: 'FF', label: 'Finish → Finish' },
-];
-/** Long names for accessible labels (the compact button shows the FS/SS/FF code only). */
-const LINK_TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  LINK_TYPES.map(({ type, label }) => [type, label]),
+/**
+ * The dependency kinds the two-click Link tool offers (ADR-0032 M5) — **all four**, derived from
+ * `DEPENDENCY_TYPE_LABELS` rather than restated, so the canvas and the Logic panel cannot disagree
+ * about what the product supports.
+ *
+ * **It used to list three, and the reason is worth keeping.** The docblock here cited ADR-0026 D5 for
+ * *"SF is dialog-only (the rare inverse)"* — and that decision says something narrower: linking was
+ * then an **edge-drag**, whose type came from a **modifier key**, and there are only three of those
+ * (none / Shift / Alt). SF lost the ballot for a keyboard slot. It was never a statement that SF
+ * should be absent from a *menu*.
+ *
+ * ADR-0052 replaced the edge-drag with the two-click Link tool and its explicit type menu, which has
+ * no three-way limit — so the constraint evaporated and the exclusion outlived it, carried by a
+ * citation that reads as authority and does not support what it was cited for (ADR-0076 Class 2).
+ * The effect was that `Start → Finish` — a type the Prisma enum, the CPM engine (ADR-0035's SF
+ * arithmetic), the API, the Logic panel and the canvas painter (`render/geometry.ts:93`) all support,
+ * and which `docs/PROJECT_BRIEF.md` names as one of the four the product exists to offer — could not
+ * be drawn on the surface this product is built around.
+ *
+ * The short code labels the compact toolbar button; the long name reads in the menu.
+ */
+const LINK_TYPES: ReadonlyArray<{ type: DependencyType; label: string }> = DEPENDENCY_TYPES.map(
+  (type) => ({ type, label: DEPENDENCY_TYPE_LABELS[type] }),
 );
+/** Long names for accessible labels (the compact button shows the FS/SS/FF/SF code only). */
+const LINK_TYPE_LABELS: Record<string, string> = DEPENDENCY_TYPE_LABELS;
 
 /** As {@link ADD_ACTION} — the verb is what differs between these nine, which is why a shared
  * constant could not have fixed #115 and a shared *builder* could. */

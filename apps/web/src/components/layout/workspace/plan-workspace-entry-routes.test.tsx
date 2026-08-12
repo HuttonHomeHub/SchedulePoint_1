@@ -116,7 +116,13 @@ vi.mock('@/features/activities', () => ({
 // `@/features/resources` is left unmocked (the real module loads): the entry-route Resources dialog
 // mounts closed (`model.resourcesActivity` is undefined), so it renders nothing — like the notes/
 // programme sections, it just needs its component definitions available.
-vi.mock('@/features/dependencies', () => ({
+// **Partial**, not total. These four files stub the dependencies feature's *hooks* — they never meant
+// to blank its constants, and a total mock silently did, so the day the TSLD toolbar imported
+// `DEPENDENCY_TYPE_LABELS` at module scope (to stop restating the dependency types, ADR-0090 follow-up)
+// all four failed at COLLECTION with "no export is defined on the mock". Spreading the original keeps
+// the stubs deliberate and stops the next constant breaking an unrelated suite.
+vi.mock('@/features/dependencies', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   usePlanDependencies: () => query([]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
