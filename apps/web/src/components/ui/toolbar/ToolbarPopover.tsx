@@ -28,6 +28,7 @@ export function ToolbarPopover({
   active,
   title,
   align = 'start',
+  compact = false,
   children,
 }: {
   label: string;
@@ -44,6 +45,20 @@ export function ToolbarPopover({
   title?: string;
   /** Align the panel's inline-start (`start`) or inline-end (`end`) to the trigger. */
   align?: 'start' | 'end';
+  /**
+   * Icon-only trigger (ADR-0090 M3-T3): the visible label is withheld and moves to `aria-label` +
+   * the native tooltip, so the control keeps its **name** while giving back roughly 60 px.
+   *
+   * Set from the row's `collapsed` band and nothing else. The measured reason: at 960 px Row 1's six
+   * remaining controls lay out 11 px wider than their container and at 768 px 203 px wider, and four
+   * of the six are this component — so one prop here is most of the collapse.
+   *
+   * **The name moves; it does not disappear.** An icon-only `<button>` whose only child is an
+   * `aria-hidden` glyph has no accessible name at all, which is the failure mode a `sr-only` span
+   * would also solve — `aria-label` is chosen because this trigger's name is a plain string it
+   * already receives, with no markup to preserve.
+   */
+  compact?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -120,7 +135,10 @@ export function ToolbarPopover({
         aria-haspopup="dialog"
         aria-expanded={open}
         {...(active !== undefined ? { 'aria-pressed': open || active } : {})}
-        {...(title ? { title } : {})}
+        {...(compact ? { 'aria-label': label } : {})}
+        // A disabled reason still wins the tooltip: "why can't I press this" outranks "what is it",
+        // and in that state the `aria-label` is already carrying the name.
+        {...(title ? { title } : compact ? { title: label } : {})}
         onClick={() => {
           if (disabled) return;
           if (open) close(false);
@@ -135,7 +153,7 @@ export function ToolbarPopover({
             {icon}
           </span>
         ) : null}
-        <span className="truncate">{label}</span>
+        {compact ? null : <span className="truncate">{label}</span>}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
 

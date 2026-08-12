@@ -6,8 +6,11 @@ import {
   groupRank,
   partitionByTier,
   resolveItems,
+  resolveLayoutMode,
+  TOOLBAR_LAYOUT_HYSTERESIS_PX,
   type ResolvedToolbarItem,
   type ToolbarItem,
+  type ToolbarLayoutMode,
 } from './toolbar-registry';
 
 interface Ctx {
@@ -396,5 +399,77 @@ describe('computeOverflow', () => {
         expect(overflow.includes('left')).toBe(overflow.includes('right'));
       }
     });
+  });
+});
+
+/**
+ * **The layout ladder and its hysteresis** (ADR-0090 M3-T1).
+ *
+ * The plan asks for "unit at all six boundary edges" — three boundaries, each in both directions —
+ * and that count is the point. Each boundary therefore appears twice, and the widening half is the
+ * half that carries the weight.
+ *
+ * **Verified red by replacing the body with a bare `width >= min` ladder**, rather than assumed:
+ * five assertions fail (all three widening cases, the rung-by-rung case and the sweep) and the three
+ * narrowing cases pass. So a suite that only walked the width downwards would have been green
+ * against a build with no hysteresis at all — which is why the direction is spelt out in each name.
+ *
+ * The thresholds are computed from `TOOLBAR_LAYOUT_HYSTERESIS_PX` rather than typed in, so changing
+ * the margin changes the test's expectations rather than breaking it — the constant is the decision,
+ * and a literal here would silently become a second, disagreeing one.
+ */
+describe('resolveLayoutMode', () => {
+  const H = TOOLBAR_LAYOUT_HYSTERESIS_PX;
+  const BOUNDARIES: { min: number; wider: ToolbarLayoutMode; narrower: ToolbarLayoutMode }[] = [
+    { min: 1536, wider: 'comfortable', narrower: 'compact' },
+    { min: 1280, wider: 'compact', narrower: 'condensed' },
+    { min: 1024, wider: 'condensed', narrower: 'collapsed' },
+  ];
+
+  for (const { min, wider, narrower } of BOUNDARIES) {
+    it(`narrows to ${narrower} the moment the row drops below ${min}`, () => {
+      expect(resolveLayoutMode(min, wider)).toBe(wider);
+      expect(resolveLayoutMode(min - 1, wider)).toBe(narrower);
+    });
+
+    it(`holds ${narrower} until ${min} + ${H} on the way back up`, () => {
+      // The asymmetry itself. Every width in the hysteresis band is above the boundary and must
+      // still not promote — which is exactly what a `width >= min` implementation gets wrong.
+      expect(resolveLayoutMode(min, narrower)).toBe(narrower);
+      expect(resolveLayoutMode(min + H - 1, narrower)).toBe(narrower);
+      expect(resolveLayoutMode(min + H, narrower)).toBe(wider);
+    });
+  }
+
+  it('promotes rung by rung, never stranding the row two bands below its width', () => {
+    // Growing from `collapsed` to 1550: that width clears `compact`'s floor by 270 px but misses
+    // `comfortable`'s hysteresis by 34. Testing only the band the width falls in would answer
+    // "stay collapsed" — a row two rungs denser than the space it has.
+    expect(resolveLayoutMode(1550, 'collapsed')).toBe('compact');
+    expect(resolveLayoutMode(1536 + H, 'collapsed')).toBe('comfortable');
+  });
+
+  it('narrows by as many rungs as the width demands, in one step', () => {
+    expect(resolveLayoutMode(800, 'comfortable')).toBe('collapsed');
+  });
+
+  it('does not oscillate anywhere on a slow drag across the whole range', () => {
+    // The property the six edge cases imply but do not state: sweeping the width down and back up
+    // must cross each boundary exactly once per direction. A build with no hysteresis flips at the
+    // same pixel both ways, so the two crossing sets are identical — here they must differ.
+    const sweep = (from: number, to: number, step: number): number[] => {
+      const changes: number[] = [];
+      let mode: ToolbarLayoutMode = resolveLayoutMode(from, 'comfortable');
+      for (let w = from; step > 0 ? w <= to : w >= to; w += step) {
+        const next = resolveLayoutMode(w, mode);
+        if (next !== mode) changes.push(w);
+        mode = next;
+      }
+      return changes;
+    };
+    const down = sweep(1800, 800, -1);
+    const up = sweep(800, 1800, 1);
+    expect(down).toEqual([1535, 1279, 1023]);
+    expect(up).toEqual([1024 + H, 1280 + H, 1536 + H]);
   });
 });

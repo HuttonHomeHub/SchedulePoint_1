@@ -22,10 +22,15 @@ import { writeMeasurement } from './output';
  * 1920, so the consolidation as designed fits **icon-only** and misses success criterion 1
  * (`docs/specs/workspace-layout/m2-item-widths.md`, Conclusion 2).
  *
+ * **Re-run for M3-T3** (2026-08-12) with the narrow widths added, because that task's risk note is
+ * explicitly *"derived from the measured anchors, not observed"* and says **measure before
+ * choosing**. M2 cut Row 1's pinned floor 1198 → 784 px and M3-T2 folds four more commands away
+ * below 1280, so every figure the collapse decision was drafted against is stale by construction.
+ *
  * Asserts nothing; it is a harness (ADR-0081 §3).
  */
 
-const WIDTHS = [2304, 1920, 1440];
+const WIDTHS = [2304, 1920, 1440, 1280, 1024, 960, 768];
 
 async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
   return page.getByRole('toolbar', { name: ariaLabel }).evaluate((el) => {

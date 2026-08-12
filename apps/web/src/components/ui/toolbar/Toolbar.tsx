@@ -6,10 +6,12 @@ import {
   groupRank,
   partitionByTier,
   resolveItems,
+  resolveLayoutMode,
   type ResolvedToolbarItem,
   type ToolbarGroupId,
   type ToolbarItem,
   type ToolbarLabelPolicy,
+  type ToolbarLayoutMode,
 } from './toolbar-registry';
 import { ToolbarButton } from './ToolbarButton';
 import { ToolbarOverflow } from './ToolbarOverflow';
@@ -218,10 +220,22 @@ export function Toolbar<Ctx>({
   // response to width, and the M0 measurement found the rows are decisively on one side or the
   // other anyway (~0.1px of slack at 1280px, 760–1000px at 1680–1920px).
   const [autoLabelsFit, setAutoLabelsFit] = useState(false);
+  /**
+   * The row's measured band (M3-T1). Starts `comfortable` and stays there until something has
+   * actually been laid out — the same rule `anythingMeasured` applies to the chrome charge, and for
+   * the same reason: a row with no width has not been measured, and `resolveLayoutMode` would read
+   * that zero as `collapsed` and fold commands away on the strength of nothing. It also keeps the
+   * ~25 existing suites a genuine before/after oracle, since jsdom has no layout at all.
+   *
+   * **This is not a feedback loop, and the distinction is worth stating.** The band changes what the
+   * row renders, so it changes the row's *content* width — but the input is `clientWidth`, which the
+   * container imposes (see `isWidthConstrained`). A mode never moves its own boundary.
+   */
+  const [layout, setLayout] = useState<ToolbarLayoutMode>('comfortable');
 
   const resolved = useMemo(
-    () => resolveItems(items, context, authoringEnabled),
-    [items, context, authoringEnabled],
+    () => resolveItems(items, context, authoringEnabled, layout),
+    [items, context, authoringEnabled, layout],
   );
   const { bar, overflow: staticOverflow } = useMemo(() => partitionByTier(resolved), [resolved]);
 
@@ -240,6 +254,9 @@ export function Toolbar<Ctx>({
     // that the budget carries a non-zero chrome term it would decide to demote **everything**: the
     // old arithmetic happened to survive it only because 0 ≤ 0. Hold the previous state instead.
     if (available <= 0) return;
+    // Functional update, so `measure` need not depend on `layout` — which would rebuild the callback
+    // on every band change and re-run the layout effect for no reason.
+    setLayout((prev) => resolveLayoutMode(available, prev));
     // Read the live width when the item is inline (caching it), else fall back to its last-known width
     // so overflowed items don't collapse to 0 and cause an overflow flip-flop (see widthCacheRef).
     const widthOf = (id: string): number => {
@@ -471,6 +488,7 @@ export function Toolbar<Ctx>({
                   disabled: !r.enabled,
                   disabledReason: r.disabledReason,
                   active: r.active,
+                  layout,
                   itemProps: r.item.presentational
                     ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
                     : {

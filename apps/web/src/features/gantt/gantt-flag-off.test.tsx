@@ -38,7 +38,10 @@ describe('flag-off: the toolbar', () => {
     expect(viewItems).toHaveLength(2);
     // Registered but never painted — the seam stays in the code, the surface stays dark.
     for (const item of viewItems) {
-      expect(item.isVisible?.({} as never)).toBe(false);
+      // The band is irrelevant here — this seam is flag-gated, not width-gated — but the predicate
+      // now takes it, and passing the roomiest band is the strongest form of the claim: not even a
+      // row with every pixel it wants paints this item.
+      expect(item.isVisible?.({} as never, { layout: 'comfortable' })).toBe(false);
     }
   });
 });

@@ -56,7 +56,11 @@ import { useFirstUseHint } from './use-first-use-hint';
 
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
-import type { ToolbarItemRenderApi, ToolbarRow } from '@/components/ui/toolbar/toolbar-registry';
+import type {
+  ToolbarItemRenderApi,
+  ToolbarLayoutMode,
+  ToolbarRow,
+} from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
@@ -289,9 +293,12 @@ const GOTO_HINT_ID = 'tsld-goto-date-hint';
 function GoToDateControl({
   ctx,
   itemProps,
+  compact,
 }: {
   ctx: TsldToolbarContext;
   itemProps: ToolbarItemRenderApi['itemProps'];
+  /** The row's `collapsed` band — see {@link triggersAreCompact}. */
+  compact: boolean;
 }): React.ReactElement {
   // First-use-only disclosure (feature-spec.md §4.2): marked seen on the first successful PICK
   // (not the first open) — opening and closing without reading proves nothing. The sentence never
@@ -302,6 +309,7 @@ function GoToDateControl({
       label="Go to date"
       icon={<CalendarSearch className="size-4" />}
       itemProps={itemProps}
+      compact={compact}
     >
       <div className="flex flex-col gap-1.5 text-sm">
         {/* Inner field is "Date" (not another "Go to date") so AT doesn't echo the dialog name; the
@@ -659,12 +667,77 @@ const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
 const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
 
 /**
+ * **Where the viewport commands live below 1280 px** (ADR-0090 M3-T2).
+ *
+ * `condensed` and `collapsed` are the two bands in which four separate 32 px buttons for one
+ * subject — the viewport — are a worse use of the row than one trigger that already names that
+ * subject. Above them the four stay inline, because the row can afford them and a click is cheaper
+ * than a menu.
+ *
+ * Read by two things that must agree: the four items' `isVisible` predicates, and
+ * {@link ZoomPresetControl}'s decision to render the fold. One predicate, so they cannot disagree —
+ * the failure mode otherwise is a command that is in neither place, which is the exact defect
+ * ADR-0081 was written about.
+ */
+function viewportCommandsAreFolded(layout: ToolbarLayoutMode): boolean {
+  return layout !== 'comfortable';
+}
+
+/**
+ * **The collapsed band's trigger treatment** (ADR-0090 M3-T3): Row 1's popover triggers give up
+ * their visible labels, and the search field gives up its preferred width for its floor.
+ *
+ * **Measured, and the measurement moved the task.** M3-T3's own risk note is flagged *"derived from
+ * the measured anchors, not observed"* and predicts a 305 px collision at 960. After M2's cuts and
+ * M3-T2's fold, the real figures (`docs/specs/workspace-layout/m3-narrow-widths.md`) are Row 1
+ * laying out **883 px against an 872 px container at 960 — 11 px over — and against 680 px at 768**.
+ * Row 2 already fits at every width. So the collapse is a Row-1 problem of two very different sizes,
+ * and the honest remedy is sized to it rather than to the drafted number.
+ *
+ * `search` alone is **240 px of Row 1's 784**, exactly as the note predicted, and its `min-w-36`
+ * floor gives 96 px back — enough for 960 and not for 768. The four popover triggers give ~60 px
+ * each, which closes 768 with room to spare.
+ */
+function triggersAreCompact(layout: ToolbarLayoutMode): boolean {
+  return layout === 'collapsed';
+}
+
+/**
+ * The search field's width, by band. `w-[min(15rem,32vw)]` resolves to a flat **240 px** at any
+ * viewport at or above 750 px, so on the narrow widths the field never actually responds to `32vw` —
+ * it is simply the widest thing on Row 1. In the collapsed band it drops to the `min-w-36` floor it
+ * already declares, which is 144 px and still a field rather than an icon.
+ *
+ * An icon-triggered field (the other option M3-T3's note names) was not taken: it costs a click on
+ * the one control a planner most often arrives wanting to use, and the measurement says the floor is
+ * enough. Kept as one constant because two call sites render this field — the live one and the
+ * flag-off stub — and a width that differed between them would show up only with the flag off.
+ */
+function searchFieldWidth(layout: ToolbarLayoutMode): string {
+  return triggersAreCompact(layout) ? 'w-36' : 'w-[min(15rem,32vw)] min-w-36';
+}
+
+/**
  * The **zoom-preset dropdown** — a single compact menu-button replacing the five segmented
  * scale buttons (Day/Week/Month/Quarter/Year). The trigger shows the current level and opens a
  * `Menu` to pick another; every level is still one click away, but the Frame group stops overflowing
  * the bar (which used to silently demote Year/Quarter into `⋯` at narrow widths). One focusable
  * control (spreads `itemProps`) per the toolbar contract; mirrors `api.disabled` so it shades — not
  * hides — when the plan has no computed diagram yet (a stable toolbar shape, ADR-0031).
+ *
+ * **Below 1280 px it also holds the four viewport commands** — zoom out/in, Fit and Go to today —
+ * which leave the bar in those bands (see {@link viewportCommandsAreFolded}). They are shaded with
+ * their own reasons rather than dropped when they do not apply (ADR-0082), because the reason a
+ * planner cannot fit the view is a fact about the plan and does not stop being true in a narrow
+ * window.
+ *
+ * **The trigger cannot become a dead end, and that was checked rather than assumed.** The draft of
+ * this note claimed Go-to-today needed no diagram and so would be stranded behind a trigger shaded
+ * on `hasDiagram`; reading its predicate says otherwise — all four fold-ins are
+ * `hasDiagram && canvasActive`, which is the trigger's own gate plus a view test. So a shaded
+ * trigger hides only commands that were already shaded, each for a reason of the same shape. In the
+ * Gantt the trigger stays live (the preset works in both views, ADR-0059 §2) and the four shade
+ * with "Only in the diagram view" — reachable, and explained.
  */
 function ZoomPresetControl({
   ctx,
@@ -693,7 +766,12 @@ function ZoomPresetControl({
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <CalendarRange aria-hidden="true" className="size-4" />
-        <span className="truncate">{activeLabel}</span>
+        {/* The current level is real information, so withholding it in the collapsed band is a cost,
+            not a tidy-up — but it is already in this button's `aria-label` and `title`, and the
+            alternative was Row 1 laying out wider than the tablet holding it. The trigger is also
+            the one control that must survive collapse intact: below 1280 it holds the four viewport
+            commands as well (see `viewportCommandsAreFolded`). */}
+        {triggersAreCompact(api.layout) ? null : <span className="truncate">{activeLabel}</span>}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
@@ -723,9 +801,101 @@ function ZoomPresetControl({
               : (ZOOM_LABELS[level] ?? level)}
           </MenuItem>
         ))}
+        {viewportCommandsAreFolded(api.layout) && (
+          <>
+            <MenuSection label="Viewport" divider />
+            {VIEWPORT_FOLD_COMMANDS.map((cmd) => {
+              const reason = cmd.reason(ctx);
+              return (
+                <MenuItem
+                  key={cmd.id}
+                  disabled={reason !== undefined}
+                  {...(reason ? { disabledReason: reason } : {})}
+                  onSelect={() => cmd.run(ctx)}
+                >
+                  {/* The radio rows above carry a tick column; matching its width keeps the two
+                      sections' labels on one left edge rather than stepping in and out. */}
+                  <span aria-hidden="true" className="size-4" />
+                  {cmd.icon}
+                  {cmd.label}
+                </MenuItem>
+              );
+            })}
+          </>
+        )}
       </Menu>
     </>
   );
+}
+
+/**
+ * The four viewport commands as they appear **inside** `Zoom ▾` in the folded bands.
+ *
+ * Their labels, reasons and actions are stated once here and read by both the fold and the registry
+ * entries that render them inline — so the menu row and the bar button cannot drift into saying
+ * different things about the same command, which is the `routeOrthogonal` argument (ADR-0065) at
+ * registry scale. `Fit to plan` keeps its own no-diagram wording; the other three share the zoom
+ * one, exactly as they do inline.
+ */
+const VIEWPORT_FOLD_COMMANDS: {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  reason: (ctx: TsldToolbarContext) => string | undefined;
+  run: (ctx: TsldToolbarContext) => void;
+}[] = [
+  {
+    id: 'zoom-out',
+    label: 'Zoom out',
+    icon: <Minus aria-hidden="true" className="size-4" />,
+    reason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
+    run: (ctx) => ctx.stepZoom(0.5),
+  },
+  {
+    id: 'zoom-in',
+    label: 'Zoom in',
+    icon: <Plus aria-hidden="true" className="size-4" />,
+    reason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
+    run: (ctx) => ctx.stepZoom(2),
+  },
+  {
+    id: 'fit',
+    label: 'Fit to plan',
+    icon: <Maximize2 aria-hidden="true" className="size-4" />,
+    reason: (ctx) => canvasViewportReason(ctx, 'Add an activity to fit the view'),
+    run: (ctx) => ctx.fit(),
+  },
+  // Only where the command exists. Flag-off, `today` is a permanently-inert "Coming soon"
+  // placeholder (ADR-0031), and folding a placeholder into a menu offers the reader a row that can
+  // never do anything — the inline stub at least reads as part of a designed bar.
+  ...(TOOLBAR_QUICK_WINS_ENABLED
+    ? [
+        {
+          id: 'today',
+          label: 'Go to today',
+          icon: <LocateFixed aria-hidden="true" className="size-4" />,
+          // Its own no-diagram wording, **not** the zoom one: naming the command in the sentence is
+          // the point of having four of them. The first draft of this list reached for
+          // `ZOOM_DISABLED_REASON` here and would have shipped the menu row saying something the
+          // inline button does not — the exact drift this shared list exists to prevent, introduced
+          // while writing the thing that prevents it.
+          reason: (ctx: TsldToolbarContext) =>
+            canvasViewportReason(ctx, 'Add an activity to go to today'),
+          run: (ctx: TsldToolbarContext) => ctx.goToDate(ctx.todayIso),
+        },
+      ]
+    : []),
+];
+
+/**
+ * The shared shape of every canvas-viewport command's reason: no diagram, then not the diagram view,
+ * then actionable. Extracted because four registry entries had written it out four times and M3-T2
+ * was about to write it four more inside the fold — eight copies of one two-branch rule is how one
+ * of them ends up phrased differently from its neighbours.
+ */
+function canvasViewportReason(ctx: TsldToolbarContext, noDiagram: string): string | undefined {
+  if (!ctx.hasDiagram) return noDiagram;
+  return ctx.canvasActive ? undefined : CANVAS_ONLY_REASON;
 }
 
 /**
@@ -762,8 +932,10 @@ function placeholderItem(o: {
  */
 function SearchFieldControl({
   itemProps,
+  layout,
 }: {
   itemProps: ToolbarItemRenderApi['itemProps'];
+  layout: ToolbarLayoutMode;
 }): React.ReactElement {
   return (
     <div className="ml-3 flex items-center">
@@ -778,7 +950,7 @@ function SearchFieldControl({
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities (coming soon)"
         title="Search / filter activities (coming soon)"
-        className="h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm"
+        className={cn('h-8 pl-8 text-sm', searchFieldWidth(layout))}
       />
     </div>
   );
@@ -888,7 +1060,8 @@ function LiveSearchControl({
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
-          'h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm',
+          'h-8 pl-8 text-sm',
+          searchFieldWidth(api.layout),
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
           // absent, so the native glyph is exactly where it is today.
@@ -1032,6 +1205,7 @@ function FilterMenuControl({
       label="Filter"
       icon={<Filter className="size-4" />}
       itemProps={api.itemProps}
+      compact={triggersAreCompact(api.layout)}
       // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
@@ -1690,7 +1864,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: -2,
       label: 'Go to date',
       isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
-      render: (ctx, api) => <GoToDateControl ctx={ctx} itemProps={api.itemProps} />,
+      render: (ctx, api) => (
+        <GoToDateControl
+          ctx={ctx}
+          itemProps={api.itemProps}
+          compact={triggersAreCompact(api.layout)}
+        />
+      ),
     },
     // Zoom — one dropdown (Day…Year) plus −/+ and Fit, a compact cluster in the Frame group (ADR-0031).
     // Always on Row 1 (Look) and shaded (not hidden) until a diagram exists, so the bar keeps a stable
@@ -1715,9 +1895,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       priority: 100,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
+      // Below 1280 px this command lives inside `Zoom ▾` instead (M3-T2) — one predicate shared with
+      // the fold itself, so it can never be in both places or neither.
+      isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-      disabledReason: (ctx) =>
-        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
+      disabledReason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
       onActivate: (ctx) => ctx.stepZoom(0.5),
     },
     {
@@ -1729,9 +1911,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       priority: 100,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
+      isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-      disabledReason: (ctx) =>
-        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
+      disabledReason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
       onActivate: (ctx) => ctx.stepZoom(2),
     },
     {
@@ -1743,13 +1925,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       priority: 100,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
+      isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-      disabledReason: (ctx) =>
-        !ctx.hasDiagram
-          ? 'Add an activity to fit the view'
-          : ctx.canvasActive
-            ? undefined
-            : CANVAS_ONLY_REASON,
+      disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to fit the view'),
       onActivate: (ctx) => ctx.fit(),
     },
     // `zoom-to-selection` moved to the SELECTION BAR in ADR-0090 M2-T1 (`selection-actions.tsx`),
@@ -1763,13 +1941,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
+          isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
           isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-          disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? 'Add an activity to go to today'
-              : ctx.canvasActive
-                ? undefined
-                : CANVAS_ONLY_REASON,
+          disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to go to today'),
           onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
         }
       : placeholderItem(todayShape),
@@ -1790,6 +1964,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           label={viewTriggerLabel(ctx)}
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
+          compact={triggersAreCompact(api.layout)}
         >
           <ViewTogglesPanel ctx={ctx} />
         </ToolbarPopover>
@@ -1900,7 +2075,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       : {
           ...searchShape,
           presentational: true,
-          render: (_ctx, api) => <SearchFieldControl itemProps={api.itemProps} />,
+          render: (_ctx, api) => (
+            <SearchFieldControl itemProps={api.itemProps} layout={api.layout} />
+          ),
         },
     // Filter — flag-on a real attribute Filter menu (Critical / Has constraint / Has conflict), whose
     // match set intersects with the search query; flag-off the "Coming soon" placeholder, byte-for-byte.
@@ -2254,6 +2431,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           label="Summary"
           icon={<Info className="size-4" />}
           itemProps={api.itemProps}
+          compact={triggersAreCompact(api.layout)}
         >
           {ctx.summaryContent}
         </ToolbarPopover>

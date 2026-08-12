@@ -59,16 +59,25 @@ const ROWS = ['View and navigate', 'Build and manage'] as const;
 const WIDTHS = [2133, 1920, 1600, 1440, 1280, 1024, 960, 768];
 
 /**
- * At or above this the row must fit outright; below it the row is honestly too narrow for its
- * pinned controls and scrolls by design (M1-T5), where S1/S5 carry the guarantee instead.
+ * At or above this the row must fit outright; below it the row scrolls by design (M1-T5), where
+ * S1/S5 carry the guarantee instead.
  *
- * **1440, not 1280, and the difference was measured rather than chosen.** The first draft said 1280
- * and the gate failed there: Row 1 lays out at 1331 against a 1192 px container, because its pinned
- * `render` items alone measure ~1177 px and nothing but removing them can close that. 1440 is
- * Surface Pro landscape and is exactly what the approved acceptance criteria require to fit
- * outright; M2 is the milestone that lowers this number by cutting the pinned set.
+ * **Now every width in the list — the floor has been retired rather than lowered**, which is
+ * ADR-0090 M3's stated outcome ("`scrollWidth ≤ clientWidth + 1` extends to 960 and 768").
+ *
+ * Its history is the milestone's argument in one constant. It was drafted at 1280 and **measured**
+ * up to 1440, because Row 1's pinned `render` items alone were ~1177 px against a 1192 px container
+ * and nothing but removing them could close it. M2 removed them (1198 → 784 px), M3-T2 folded the
+ * four viewport commands behind `Zoom ▾`, and M3-T3 gave the collapsed band icon-only triggers and
+ * a 144 px search field. Re-measured at every width in `WIDTHS`, both rows now lay out inside their
+ * container — 680 px at 768 included, where Row 1 was 203 px over before this milestone
+ * (`docs/specs/workspace-layout/m3-narrow-widths.md`).
+ *
+ * Keeping the constant at 768 rather than deleting the branch is deliberate: it says *this is a
+ * measured claim about the narrowest supported width*, and it is the line to move if a future
+ * viewport is added below it rather than a branch to reconstruct.
  */
-const PINNED_FLOOR_WIDTH = 1440;
+const PINNED_FLOOR_WIDTH = 768;
 
 /** WCAG 2.2 §2.5.8 Target Size (Minimum). A pointer target is sized by the part that is there. */
 const MIN_TARGET_PX = 24;
@@ -380,4 +389,59 @@ test('the toolbar passes a WCAG 2.2 scan with target-size opted in', async ({ pa
     .analyze();
 
   expect(results.violations).toEqual([]);
+});
+
+/**
+ * **Touch geometry** (ADR-0090 M3-T4), asserted in a browser that actually reports
+ * `@media (pointer: coarse)` rather than by reading the class list.
+ *
+ * The plan asks for "a computed assertion on the coarse-pointer control geometry", and the reason it
+ * has to be computed is that every cheaper check is a check on the *source*: a unit test can see
+ * `pointer-coarse:px-3` in a `className` and cannot see whether Tailwind emitted the rule, whether
+ * the variant name is right, or whether something later in the cascade beat it. (The rule's presence
+ * in the built CSS was confirmed separately — `@media (pointer:coarse){.pointer-coarse\:px-3{…}}` —
+ * but "it compiled" and "it applies to this button" are different claims.)
+ *
+ * **What it does not claim.** The house rule is ≥ 44 px on both axes (`docs/UX_STANDARDS.md`) and
+ * this only moves the major one, 32 → 40. The minor axis stays 36 and is `docs/TECH_DEBT.md` #127,
+ * so the assertion is written against the number actually delivered — a test asserting 44 here would
+ * be red on merge, and a gate that fails on day one gets deleted rather than fixed (ADR-0058).
+ */
+test.describe('coarse pointer', () => {
+  // `hasTouch` alone, **probed rather than assumed**: a standalone script reported
+  // `matchMedia('(pointer: coarse)').matches` as `true` for `{hasTouch}` and for
+  // `{hasTouch, isMobile}`, and `false` for neither. `isMobile` was in the first draft and is left
+  // out because it also emulates the mobile meta-viewport, which reflowed the New-activity dialog
+  // until its description paragraph covered the Create button — the fixture failed on a detail with
+  // nothing to do with what is being measured.
+  test.use({ hasTouch: true });
+
+  test('widens every toolbar control without shortening it', async ({ page }) => {
+    const stamp = Date.now();
+    await page.setViewportSize({ width: 1024, height: 1366 });
+    await openPlan(page, stamp);
+
+    await settle(page);
+
+    const coarse = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches);
+    // If the emulation ever stops reporting coarse, this test would pass by measuring the fine-
+    // pointer layout against a fine-pointer expectation — green for having tested nothing.
+    expect(coarse, 'the browser must actually report a coarse pointer').toBe(true);
+
+    const boxes = await page.getByRole('toolbar', { name: 'Build and manage' }).evaluate((el) =>
+      [...(el as HTMLElement).querySelectorAll<HTMLElement>('[data-toolbar-item]')].map((n) => ({
+        id: n.getAttribute('data-toolbar-item') ?? '',
+        width: Math.round(n.getBoundingClientRect().width),
+        height: Math.round(n.getBoundingClientRect().height),
+      })),
+    );
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) {
+      expect(
+        box.width,
+        `${box.id} is narrower than the coarse-pointer floor`,
+      ).toBeGreaterThanOrEqual(40);
+      expect(box.height, `${box.id} lost height to the padding change`).toBeGreaterThanOrEqual(36);
+    }
+  });
 });

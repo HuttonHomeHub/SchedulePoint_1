@@ -2222,3 +2222,60 @@ behaviours (keep the popover open and lose the panel's focus move, or keep the f
 accept the eject) and it belongs with the specialist reviews at M5. Observed, not inferred:
 `e2e-resource-view/resource-view.spec.ts` asserts the focus move immediately after the toggle, and
 its comment records why the assertion sits exactly there.
+
+## 126. The two segmented pairs cannot go icon-only, because they have no icons
+
+**Raised:** 2026-08-12 (ADR-0090 M3-T2) · **Size:** S · **Owner:** a design pass, then M5
+
+M3-T2's own title asks that _"segments become icon pairs"_ in the condensed band, and it is the one
+task in that milestone that could not be done. `mode-early`, `mode-visual`, `view-tsld` and
+`view-gantt` **carry no `icon` field at all** — the registry warns about it twelve lines above them
+(_"Tier 1 so the labels render (a tier-2 label-less segment paints blank — ux review)"_) — so
+withholding their labels renders four blank **16 px** buttons.
+
+That is not a hypothesis. It was built, and `e2e-toolbar-fit` S5 failed on it within the hour as a
+WCAG 2.2 §2.5.8 target-size violation: `mode-early:16px, mode-visual:16px, view-tsld:16px,
+view-gantt:16px`. Reverted, along with the primitive widening written to support it (`showLabel` as
+a function of the row's band), because an unused branch is a second product (ADR-0088) and this one
+would have shipped with no consumer and no test.
+
+**Why it is debt rather than a decision taken:** choosing a glyph for **Early** versus **Visual**
+scheduling mode is a statement about what those modes _are_, and this milestone is about width.
+`Diagram | Gantt` has obvious candidates and `Early | Visual` does not, and doing the easy pair alone
+is the "one correct pattern applied to a control and not its neighbour" shape this repository keeps
+recording (ADR-0064 §7, ADR-0067 M4, ADR-0073 C4, ADR-0086 M6).
+
+**What it costs today:** Row 1's inline count is not monotone in width — 8 items at 1280 against 10
+at 1024 — because the collapsed band trades labels for commands and the condensed band cannot.
+Nothing is unreachable; the two extra sit in the `⋯` at 1280. Measured in
+`docs/specs/workspace-layout/m3-narrow-widths.md` §4 O1.
+
+**What to do:** get four icons decided, then restore the band-aware `showLabel` (the reverted
+implementation is one type widening plus a three-line `labelPolicy`), and re-run the fit gate — which
+will now catch a blank segment on the first run rather than in review.
+
+## 127. The toolbar's touch targets are 40 × 36, and the house rule is 44 × 44
+
+**Raised:** 2026-08-12 (ADR-0090 M3-T4) · **Size:** M · **Owner:** M4, or a vertical-rhythm pass
+
+`docs/UX_STANDARDS.md` says **"Touch targets ≥ 44px"**. Under `@media (pointer: coarse)` a toolbar
+control is now **40 × 36** — M3-T4 widened `px-2` → `px-3`, taking an icon-only button from 32 to 40.
+So one axis moved and the other did not, and this row exists so that is stated rather than implied by
+a milestone that says "touch" in its title.
+
+**It is not a regression and it is not new**: 32 × 36 failed the same rule on both axes before this
+epic, and nothing here made it worse. WCAG 2.2 §2.5.8 (24 px) is met and gated by
+`e2e-toolbar-fit`'s S5/S7; the house rule is stricter than the standard, deliberately, and it is the
+part still owed.
+
+**Why the minor axis was not simply raised.** It is `min-h-9` on the control whose row height this
+entire epic is trying to reduce — the reported defect was a two-row band eating canvas on a 24"
+monitor. Raising 36 → 44 adds 16 px to the vertical stack for every user, including the desktop users
+who reported the problem, and it can be done under `pointer-coarse` alone only if the band's height
+is allowed to differ by input device, which changes how much canvas a planner has depending on
+whether they are touching the screen. That is a layout decision with a measurement attached, and M4
+is the milestone that measures the vertical stack (`M4-T1 — Measure the vertical stack **first**`).
+
+**What to do:** take it with M4's numbers in hand. The assertion in `e2e-toolbar-fit`'s coarse-pointer
+test is deliberately written against 40 and 36 — the figures actually delivered — so raising the
+floor there is the one-line change that proves this closed.
