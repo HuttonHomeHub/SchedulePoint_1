@@ -28,7 +28,19 @@ import { writeMeasurement } from './output';
  *
  * So the probe reports the icon's box, its computed `position`/`z-index`, and what
  * `elementFromPoint` returns at the icon's own centre. It asserts nothing about the outcome — it is
- * a harness (ADR-0081 §3). The assertion lands at M4 **with** the fix, verified red first.
+ * a harness (ADR-0081 §3). The assertion lands at M4 **with** the fix.
+ *
+ * **Two corrections from actually running it, both recorded because the wrong version is the
+ * finding** (`docs/specs/workspace-modes/m0-modes-measurement.md` §2):
+ *
+ * 1. The first version of this probe was **unsound**. A decorative icon is `pointer-events-none`,
+ *    and `elementFromPoint` skips such elements — so it reported `COVERED` in both the broken and
+ *    the fixed state and could not have said otherwise. `pointer-events` is now neutralised for the
+ *    duration of the read.
+ * 2. The docblock's own expected fix — the `relative` wrapper plus `absolute … my-auto` house
+ *    pattern quoted above — **was applied and still measured `COVERED`**. What works, measured, is
+ *    `absolute top-1/2 left-2.5 z-10 -translate-y-1/2`. The paragraph above is left as written
+ *    because it is what a careful reader would have predicted, and it was wrong.
  */
 
 async function probeSearchIcon(page: Page): Promise<unknown> {
@@ -49,7 +61,23 @@ async function probeSearchIcon(page: Page): Promise<unknown> {
     const inputStyle = getComputedStyle(input);
     const cx = box.left + box.width / 2;
     const cy = box.top + box.height / 2;
+
+    // **`pointer-events` is neutralised for the duration of the probe, and that is the whole
+    // correctness of this instrument.** A decorative icon is `pointer-events-none` — correctly, and
+    // in the house pattern too — and `elementFromPoint` skips such elements entirely, returning
+    // whatever sits beneath. So the naive reading answers "is the icon hit-testable?" (always no,
+    // by design) while appearing to answer "is the icon painted on top?". The first version of this
+    // probe made exactly that conflation and reported COVERED in **both** states, which is a verdict
+    // the instrument could not have established either way. Restoring the inline style afterwards
+    // keeps the page as found.
+    const priorPointerEvents = (icon as SVGElement & { style: CSSStyleDeclaration }).style
+      .pointerEvents;
+    (icon as SVGElement & { style: CSSStyleDeclaration }).style.pointerEvents = 'auto';
     const atCentre = box.width > 0 && box.height > 0 ? document.elementFromPoint(cx, cy) : null;
+    // Taken inside the same window, for the same reason — a stack read with `pointer-events: none`
+    // back on omits the icon entirely and reads as though it were absent.
+    const stack = document.elementsFromPoint(cx, cy).slice(0, 6);
+    (icon as SVGElement & { style: CSSStyleDeclaration }).style.pointerEvents = priorPointerEvents;
 
     const describe = (el: Element | null): string => {
       if (!el) return 'null';
@@ -81,6 +109,12 @@ async function probeSearchIcon(page: Page): Promise<unknown> {
       },
       wrapper: { position: wrapper ? getComputedStyle(wrapper).position : null },
       elementAtIconCentre: describe(atCentre),
+      // The full hit stack at the icon's centre, topmost first — because "the input is on top" does
+      // not say WHY, and the fix depends on which box is doing the covering.
+      stackAtIconCentre: stack.map((el) => {
+        const s = getComputedStyle(el);
+        return `${el.tagName.toLowerCase()}${el === icon ? '(ICON)' : el === input ? '(INPUT)' : ''} pos=${s.position} z=${s.zIndex} bg=${s.backgroundColor}`;
+      }),
       // The plain-language verdict, derived from the evidence rather than from the hypothesis.
       verdict:
         box.width === 0 || box.height === 0

@@ -369,6 +369,53 @@ test('the layout settles rather than oscillating', async ({ page }) => {
   }
 });
 
+/**
+ * **S8 — the search field's leading icon is actually painted** (ADR-0091 M4).
+ *
+ * It had been in the DOM, correctly sized and correctly positioned, and **invisible**: a `-mr-6`
+ * negative margin on a non-positioned flex item leaves the icon in flow, and the input — later in
+ * document order, carrying an opaque `bg-field` — painted over it. Reported as a missing icon;
+ * measured (M0-T2) as a covered one.
+ *
+ * **This is why the assertion is `elementFromPoint` rather than a visibility or geometry check.**
+ * Every cheaper test passes against the broken code: the icon has a non-zero box, `opacity: 1`,
+ * `visibility: visible`, and Playwright calls it visible. Only asking *what would a click at this
+ * pixel actually hit* separates "painted" from "painted underneath something else" — the same
+ * reasoning as S5, one layer down. No unit test can see it at all: jsdom has no layout and no
+ * paint order.
+ */
+test('the search field paints its leading icon rather than hiding it under the input', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openPlan(page, stamp);
+  await page.waitForTimeout(400);
+
+  const verdict = await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('input[type="search"]');
+    if (!input) return 'no search input on the page';
+    const icon = input.parentElement?.querySelector('svg') ?? null;
+    if (!icon) return 'the search field has no leading icon';
+    const b = icon.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) return 'the icon has a zero-area box';
+    // `pointer-events` must be neutralised for the duration of the read. A decorative icon is
+    // `pointer-events-none` — correctly — and `elementFromPoint` skips such elements entirely,
+    // returning whatever is beneath. Without this the assertion asks "is the icon clickable?",
+    // whose answer is always no by design, and it could never pass in either state. The first
+    // version of this test made exactly that conflation.
+    const el = icon as SVGElement & { style: CSSStyleDeclaration };
+    const prior = el.style.pointerEvents;
+    el.style.pointerEvents = 'auto';
+    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    el.style.pointerEvents = prior;
+    if (hit === icon) return 'painted';
+    return `covered by <${hit?.tagName.toLowerCase() ?? 'nothing'}>`;
+  });
+
+  expect(verdict, 'S8: a click at the icon’s own centre must land on the icon').toBe('painted');
+});
+
 test('the toolbar passes a WCAG 2.2 scan with target-size opted in', async ({ page }) => {
   const stamp = Date.now();
   await page.setViewportSize({ width: 1920, height: 1080 });

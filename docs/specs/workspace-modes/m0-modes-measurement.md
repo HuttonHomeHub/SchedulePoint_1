@@ -54,14 +54,36 @@ The three candidate defects are distinguished by evidence, not by reading the CS
 | input `padding-left`                    | `32px`                    |
 | `elementFromPoint` at the icon's centre | **the input**             |
 
-**Verdict: COVERED.** The icon paints under the input's opaque background because neither the
-wrapper nor the icon is positioned, so the input — later in DOM order — wins.
+> **CORRECTION, 2026-08-12 (M4).** The verdict above was **not established by this evidence**, and
+> the row that produced it is the reason. The icon is `pointer-events-none` — correctly, it is
+> decorative, and the house primitive does the same — and **`elementFromPoint` skips such elements
+> entirely**, returning whatever sits beneath. So the probe was answering _"is the icon
+> hit-testable?"_, whose answer is **always no, by design**, while appearing to answer _"is the icon
+> painted on top?"_. It reported `COVERED` in **both** states and could not have said anything else.
+>
+> That is an ADR-0076 Class 3 failure inside the file written to prevent them: a decision-bearing
+> claim asserted from an instrument that could not support it. It was caught only because the fix
+> was re-measured rather than assumed to have worked — the probe still said `COVERED` afterwards.
+>
+> The probe now neutralises `pointer-events` for the duration of the read and reports the full hit
+> stack inside the same window. Re-measured, the corrected findings are:
+>
+> - The original markup **was** wrong, and the icon **was** invisible. Two non-positioned inline
+>   siblings paint in document order, so the input covered it.
+> - **The expected two-line fix does not work.** A `relative` wrapper with
+>   `absolute inset-y-0 … my-auto` still measured `COVERED`; that combination was applied, confirmed
+>   live (`position: absolute`, wrapper `relative`) and still did not put the icon on top.
+> - What **does** work, measured: `absolute top-1/2 left-2.5 z-10 -translate-y-1/2`. The stack at
+>   the icon's centre now reads `svg(ICON) pos=absolute z=10` above `input(INPUT)`.
+>
+> The one thing the original probe got right stands, because it rests on geometry rather than on
+> hit-testing: icon left **1167.5** against input left **1159.5** is 8 px inside an input whose
+> `padding-left` is 32 px, so the placement was already correct and `pl-8` stays.
 
-The probe also establishes something the hypothesis did **not**, and it makes the fix smaller: the
-icon's geometry is already right. Icon left **1167.5** against input left **1159.5** is 8 px inside
-an input whose `padding-left` is 32 px. So only the paint order is wrong; `pl-8` stays, and the fix
-is the house pattern from `components/ui/search-field.tsx` — a `relative` wrapper and an `absolute`
-icon. Both call sites share the identical markup.
+**Verdict as first reported: COVERED** — kept above rather than rewritten, because the wrong version
+is the finding. What the measurement actually supported at the time was only _"the icon is present,
+16 × 16, opaque and visible, and is not hit-testable at its own centre"_ — the last clause being
+true of any decorative icon anywhere in the product.
 
 ## 3. M0-T3 — the width budget, and the two findings
 

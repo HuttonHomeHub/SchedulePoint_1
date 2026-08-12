@@ -991,10 +991,17 @@ function SearchFieldControl({
   layout: ToolbarLayoutMode;
 }): React.ReactElement {
   return (
-    <div className="ml-3 flex items-center">
+    <div className="relative ml-3 flex items-center">
+      {/* `absolute` inside a `relative` wrapper — the house pattern from
+          `components/ui/search-field.tsx`. This was a `-mr-6` negative margin on a NON-positioned
+          flex item, which leaves the icon in flow and lets the input (later in DOM order, carrying
+          an opaque `bg-field`) paint straight over it. Measured before fixing (M0-T2): the icon was
+          present, 16x16, opacity 1, visibility visible — and `elementFromPoint` at its own centre
+          returned the input. Its geometry was already correct (icon left 1167.5 against input left
+          1159.5, inside a 32 px `padding-left`), so `pl-8` stays and only the paint order changes. */}
       <Search
         aria-hidden="true"
-        className="text-muted-foreground pointer-events-none -mr-6 size-4"
+        className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2"
       />
       <Input
         {...itemProps}
@@ -1063,10 +1070,17 @@ function LiveSearchControl({
       : `Match ${ctx.searchStatus.index} of ${ctx.searchStatus.total}. Enter for the next, Shift and Enter for the previous.`
     : null;
   return (
-    <div className="ml-3 flex items-center">
+    <div className="relative ml-3 flex items-center">
+      {/* `absolute` inside a `relative` wrapper — the house pattern from
+          `components/ui/search-field.tsx`. This was a `-mr-6` negative margin on a NON-positioned
+          flex item, which leaves the icon in flow and lets the input (later in DOM order, carrying
+          an opaque `bg-field`) paint straight over it. Measured before fixing (M0-T2): the icon was
+          present, 16x16, opacity 1, visibility visible — and `elementFromPoint` at its own centre
+          returned the input. Its geometry was already correct (icon left 1167.5 against input left
+          1159.5, inside a 32 px `padding-left`), so `pl-8` stays and only the paint order changes. */}
       <Search
         aria-hidden="true"
-        className="text-muted-foreground pointer-events-none -mr-6 size-4"
+        className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2"
       />
       <Input
         ref={inputRef}
