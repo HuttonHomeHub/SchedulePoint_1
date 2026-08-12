@@ -890,17 +890,51 @@ collision. `scrollWidth ≤ clientWidth + 1` extends to 960 and 768.
 > the mode is derived state with no new effect, and the existing suites are the before/after oracle.
 > **Testing requirements:** unit at all six boundary edges; the gate at 1440/1280/1024/960/768.
 
-##### Task M3-T1 — Add the layout mode and its hysteresis
+##### Task M3-T1 — Add the layout mode and its hysteresis — **done**
 
-##### Task M3-T2 — Condensed: fold −/+/Fit/Today into `Zoom ▾`; segments become icon pairs
+Landed as `resolveLayoutMode` in `toolbar-registry.ts`, off the row's `clientWidth` via the existing
+`ResizeObserver`. Six boundary-edge tests as required, **verified red against a bare `width >= min`
+ladder**: five fail and the three _narrowing_ cases pass, so a suite that only walked the width
+downwards would have been green with no hysteresis at all. One correction to the plan's design —
+widening walks **rung by rung**, because testing only the band the raw width falls in strands the row
+two rungs below its width when growing from `collapsed` to 1550 px.
 
-##### Task M3-T3 — Collapsed: one row
+##### Task M3-T2 — ~~Condensed:~~ **Below `comfortable`:** fold −/+/Fit/Today into `Zoom ▾`;
+
+~~segments become icon pairs~~ — **done, with one part withdrawn**
+
+Two corrections, both from measurement (`m3-narrow-widths.md`):
+
+- **The band is `!== 'comfortable'`, not "condensed and below".** At a 1352 px container — a 1440 px
+  window, this milestone's own headline target — all four commands were **already** in the anonymous
+  `⋯`. The choice there was never "inline or folded"; it was which menu, and only `Zoom ▾` names the
+  subject.
+- **"Segments become icon pairs" is withdrawn.** The four segment items carry **no `icon`**, so
+  dropping their labels renders four blank 16 px buttons — built, and failed by `e2e-toolbar-fit` S5
+  as a WCAG 2.5.8 violation within the hour. Reverted, with the primitive widening written to support
+  it. Choosing a glyph for `Early` versus `Visual` is a domain-design decision, not a layout one:
+  `docs/TECH_DEBT.md` **#126**.
+
+##### Task M3-T3 — ~~Collapsed: one row~~ **Collapsed: a row that fits** — **done**
 
 - **Risks:** _derived from the measured anchors, not observed_ — at 960 the container is 872 px and
   `search` alone is `w-[min(15rem,32vw)] min-w-36` (`tsld-toolbar-items.tsx:680`,`:777`), i.e. **240 px**
   at any viewport ≥ 750 px with a 144 px floor. Collapsed will not fit unless the search field
   collapses to an icon-triggered field or is allowed to reach its `min-w-36`. **Measure before
   choosing**; M2-T0's per-item widths are the input.
+
+  > **Measured, and the note was right about the cause and wrong about the size.** `search` was
+  > indeed 31 % of Row 1 — the one figure here that survived. But the drafted "305 px floor
+  > collision" was stale: after M2's cuts the real overshoot was **11 px at 960 and 203 px at 768**,
+  > with Row 2 fitting at every width throughout. So the remedy is sized to that: the search field
+  > takes its own floor (−96 px) and Row 1's four `ToolbarPopover` triggers go icon-only in this band
+  > (−204 px). The icon-**triggered** field was rejected — it costs a click on the control a planner
+  > most often arrives wanting, and the floor is enough.
+  >
+  > **"One row" is not what shipped and is not what the numbers support.** Merging the two rows at
+  > < 1024 would ask a 872 px container to hold what measured 784 + 659 px; the outcome the milestone
+  > actually states — `scrollWidth ≤ clientWidth + 1` at 960 and 768 — is met, at every width in the
+  > gate's list, so `PINNED_FLOOR_WIDTH` drops 1440 → 768 and S4 applies everywhere.
 
 #### Feature 3.2: Touch
 
@@ -917,7 +951,21 @@ collision. `scrollWidth ≤ clientWidth + 1` extends to 960 and 768.
 > **Testing:** a computed assertion on the coarse-pointer control geometry; the residual 36 px minor
 > axis is recorded as debt, **not claimed closed**.
 
-##### Task M3-T4 — Coarse-pointer padding, the split-button caret, and the debt row
+##### Task M3-T4 — Coarse-pointer padding, the split-button caret, and the debt row — **done**
+
+**The blocking prerequisite is discharged: the caret was failing, and by more than the review
+feared.** `e2e-toolbar-fit` gained a seventh assertion (S7) sweeping every _clickable control_ rather
+than every `[data-toolbar-item]` — the attribute sits on an item's **focusable** control, and a caret
+is deliberately `tabIndex={-1}`, so this gate had never been able to see one. The red run measured
+the two shared carets at **23 × 36** and `IsolateControl`'s bespoke third at **22 × 36**. None of
+§2.5.8's exceptions apply (_Spacing_ fails against the flush primary; _Equivalent_ fails because the
+only other route is a keyboard arrow), so all three now take one shared 24 px floor.
+
+Touch landed as `pointer-coarse:px-3` on the shared control — 32 × 36 → **40 × 36** — with the
+variant confirmed to compile by reading the built CSS and the geometry asserted in a browser that
+**reports** a coarse pointer (probed, and the test asserts that first, or it would measure the fine
+layout against a fine expectation and pass for having tested nothing). The 36 px minor axis is
+`docs/TECH_DEBT.md` **#127**, explicitly _not_ claimed closed.
 
 - ~~**Note:** the split caret is `toolbarControlVariants(...) + 'rounded-l-none px-1'` around a
   `size-3.5` chevron ⇒ **24 × 36**, exactly on the WCAG 2.5.8 limit. It is re-examined here, not

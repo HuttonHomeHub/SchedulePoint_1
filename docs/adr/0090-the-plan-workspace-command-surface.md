@@ -381,6 +381,53 @@ corrected to seven harnesses; **CLAUDE.md §16 needs this ADR's register entry**
 session was not authorised to edit that file, and an unentered ADR is exactly how ADR-0071 came
 to be cited by shipped code while absent from the register.
 
+## Milestone 3 as built (2026-08-12) — one prerequisite discharged, one task withdrawn
+
+M3 was approved with a **blocking prerequisite**: the split-button caret's real box had to be
+captured before the milestone decided anything about it, because the plan could only frame the
+question as _"arithmetic against arithmetic"_ (≈22 px against a claimed 24). Four things worth
+recording came out of doing that properly.
+
+**M3-a — the gate could not see the control the milestone was about, and the reason generalises.**
+`e2e-toolbar-fit` iterated `[data-toolbar-item]`, an attribute that sits on an item's **focusable**
+control. A split-button caret is deliberately held out of the roving sequence (`tabIndex={-1}`), so
+it carries none — while WCAG 2.2 §2.5.8 is about **pointer** targets and does not care whether a
+control is a tab stop. The gate gained a second sweep (S7) over every clickable control, measuring
+both axes rather than visible width alone, and the first red run answered the dispute: **23 × 36** on
+the two shared carets, and **22 × 36** on a _third_, bespoke copy in the selection bar that the plan
+had identified but the gate structurally cannot reach (`docs/TECH_DEBT.md` #124). None of §2.5.8's
+exceptions rescue them — _Spacing_ fails because a 24 px circle centred on the caret intersects the
+primary it sits flush against, and _Equivalent_ fails because the only other route to the menu is
+`ArrowDown`/`ArrowUp`, a keyboard affordance. One shared constant now floors all three.
+
+**M3-b — the fold's boundary was decided by measurement, against the plan.** M3-T2 was drafted as
+"condensed and below" (< 1280). At a 1352 px container — a 1440 px window, this milestone's own
+headline target — the four viewport commands were **already** in the anonymous `⋯`, because Row 1's
+pinned controls are 1113 px there and the four cost 430 more. The choice at that width was never
+"inline or folded" but _which menu_, and only `Zoom ▾` names the subject. So the predicate is
+`layout !== 'comfortable'`.
+
+**M3-c — a task was withdrawn rather than approximated.** M3-T2's title asks that _"segments become
+icon pairs"_, and the four items it names carry **no `icon` at all** — the registry says so twelve
+lines above them (_"a tier-2 label-less segment paints blank — ux review"_). Built, it rendered four
+blank **16 px** buttons and the fit gate failed it as a 2.5.8 violation the same hour. Choosing a
+glyph for `Early` versus `Visual` scheduling mode is a statement about what those modes _are_, and
+this milestone is about width, so it was not guessed: `docs/TECH_DEBT.md` #126. **The primitive
+widening written to support it was reverted with it** — a band-aware `showLabel` with no consumer is
+an untested branch, which ADR-0088 spent a decision arguing is a second product.
+
+**M3-d — a flaky assertion was attributed by running it, not by reasoning about it.** The
+`e2e-multi-select` post-delete focus assertion failed once in four runs during M3, and M3 adds an
+extra render pass to `<Toolbar>` on mount — exactly the sort of thing that shifts a timing race. The
+milestone commit was reverted with `git revert --no-commit` and the journey run four more times
+against the pre-M3 tree: **3 passed, 1 failed**, the same rate. Pre-existing, neither caused nor
+worsened, and recorded with that evidence as `docs/TECH_DEBT.md` #128 rather than absorbed as noise
+or blamed on the milestone in hand.
+
+The measured before/after is `docs/specs/workspace-layout/m3-narrow-widths.md`. **Every row now lays
+out inside its container at every width in the gate's list**, so `PINNED_FLOOR_WIDTH` retires from
+1440 to 768 and S4 applies everywhere — M3's stated outcome, met with numbers rather than asserted.
+
 ## References
 
 - Design: [`docs/specs/workspace-layout/design.md`](../specs/workspace-layout/design.md)
