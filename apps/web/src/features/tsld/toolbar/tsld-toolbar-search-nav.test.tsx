@@ -154,10 +154,12 @@ describe('the find read-out', () => {
   });
 
   it('is aria-hidden, so a screen reader hears the announcer once and not twice', () => {
-    const { container } = renderRows(ctx({ searchStatus: { total: 4, index: 2 } }));
-    const chip = container.querySelector('[aria-hidden="true"]:has(> span)');
+    renderRows(ctx({ searchStatus: { total: 4, index: 2 } }));
+    // Asserted on the read-out itself rather than on a wrapper shape. ADR-0090 M2-T3 folded this
+    // chip into the search field's own box, so it is no longer a `<span>` wrapping a `<span>`; the
+    // property that matters — the visible count is hidden from the accessibility tree, because the
+    // polite announcer already says it — is unchanged and is what this now pins.
     expect(screen.getByText('2 of 4').closest('[aria-hidden="true"]')).not.toBeNull();
-    expect(chip).not.toBeNull();
   });
 
   it('is not a tab stop', () => {

@@ -798,6 +798,19 @@ function LiveSearchControl({
   // every keystroke. A description is read when the field is focused and re-read on demand, which is
   // what "how many did that match?" actually wants.
   const describedById = CANVAS_SEARCH_NAV_ENABLED && ctx.searchStatus ? 'tsld-search-count' : null;
+  // The compact VISIBLE chip text, deliberately NOT `countText` below — that is the screen-reader
+  // sentence ("12 activities match. Press Enter to go to the first."), which is the right thing to
+  // say once, on focus, and the wrong thing to paint inside a 240 px field. Two audiences, two
+  // strings; the first draft of this fold reused `countText` for both and printed the sentence.
+  // Gated on `CANVAS_SEARCH_NAV_ENABLED`, exactly as the `search-status` item it replaces was — the
+  // flag-off parity suite caught the first version rendering where nothing rendered before, which is
+  // the whole job of that suite and the reason it is kept rather than weakened.
+  const countChip =
+    CANVAS_SEARCH_NAV_ENABLED && ctx.searchStatus
+      ? ctx.searchStatus.index === null
+        ? `${ctx.searchStatus.total} ${ctx.searchStatus.total === 1 ? 'match' : 'matches'}`
+        : `${ctx.searchStatus.index} of ${ctx.searchStatus.total}`
+      : null;
   const countText = ctx.searchStatus
     ? ctx.searchStatus.index === null
       ? `${ctx.searchStatus.total} ${ctx.searchStatus.total === 1 ? 'activity matches' : 'activities match'}. Press Enter to go to the first.`
@@ -878,6 +891,19 @@ function LiveSearchControl({
         >
           <X aria-hidden="true" className="size-3.5" />
         </button>
+      ) : null}
+      {/* The VISIBLE match count, folded into the field's own box (ADR-0090 M2-T3). It was a separate
+          `search-status` toolbar item — `presentational: true`, i.e. a non-operable member of a
+          `role="toolbar"`, legal only via the escape hatch that exists to describe it. Folding it
+          here loses nothing: the field is a pinned `render` item, so it is painted at every width,
+          which is precisely why the same fold was REFUSED for `next-conflict` (see that item). */}
+      {countChip ? (
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground ml-1 shrink-0 text-xs whitespace-nowrap"
+        >
+          {countChip}
+        </span>
       ) : null}
       {describedById && countText ? (
         <span id={describedById} className="sr-only">
@@ -1082,39 +1108,6 @@ function ExportMenuControl({
         ) : null}
       </Menu>
     </>
-  );
-}
-
-/** The isolate chain modes the picker offers, in menu order (CQ-1). Full = the whole transitive chain;
- * Driving = only the binding driving edges. Short labels for the compact button, long names in the menu. */
-
-function SearchMatchStatus({
-  ctx,
-  itemProps,
-}: {
-  ctx: TsldToolbarContext;
-  itemProps: ToolbarItemRenderApi['itemProps'];
-}): React.ReactElement | null {
-  const status = ctx.searchStatus;
-  if (!status) return null;
-  const text =
-    status.index === null
-      ? `${status.total} ${status.total === 1 ? 'match' : 'matches'}`
-      : `${status.index} of ${status.total}`;
-  return (
-    <span
-      {...itemProps}
-      aria-hidden="true"
-      title={
-        status.index === null
-          ? `${text} — press Enter to go to the first`
-          : `Match ${text} — Enter for the next, Shift+Enter for the previous`
-      }
-      className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[10rem] gap-1')}
-    >
-      <Search aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="truncate whitespace-nowrap">{text}</span>
-    </span>
   );
 }
 
@@ -1863,6 +1856,22 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which
     // is never the case when the flag is off (the ordered set is empty then) — so it is inert + adds no
     // DOM flag-off, keeping the byte-for-byte parity. Presentational ⇒ never a roving-tabindex stop.
+    // **The plan said to fold this into `next-conflict`'s label. Measurement says do not.**
+    //
+    // `design.md` §4.1 item 20/21 folds the "Conflict 2 of 7 · reason" read-out into the button's
+    // label, on the same reasoning that moved `search-status` into the search field a few lines up:
+    // a read-out is not a command and does not belong in a `role="toolbar"`.
+    //
+    // The two destinations are not comparable, and the measurement is what shows it. The search
+    // field is a `render` item — pinned, painted at every width. A **label** is painted only when
+    // `autoLabelsFit` is true, and `docs/specs/workspace-layout/m2-item-widths.md` records that at
+    // 1920 it is false: every `'auto'` item on this row measures 32 px, icon-only. So folding the
+    // count into the label would make it invisible **at the width this whole epic exists to fix**,
+    // on the product owner's own monitor — deleting information under cover of tidying.
+    //
+    // The chip costs nothing to keep: `isVisible` is false unless a conflict is being cycled, so it
+    // occupies no width at rest and none of the M2 arithmetic depends on it. It stays, and
+    // `presentational` keeps one honest consumer on this surface rather than none.
     {
       id: 'next-conflict-status',
       group: 'find',
@@ -1882,19 +1891,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // Presentational ⇒ never a roving-tabindex stop.
     ...(CANVAS_SEARCH_NAV_ENABLED
       ? [
-          {
-            id: 'search-status',
-            group: 'find' as const,
-            row: 'look' as const,
-            tier: 2 as const,
-            order: 1,
-            label: 'Search matches',
-            presentational: true,
-            isVisible: (ctx: TsldToolbarContext) => ctx.searchStatus != null,
-            render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
-              <SearchMatchStatus ctx={ctx} itemProps={api.itemProps} />
-            ),
-          },
+          // `search-status` was folded INTO the search field's own box in ADR-0090 M2-T3 — it is
+          // a read-out, and a read-out has no business being a member of a `role="toolbar"`.
         ]
       : []),
 
