@@ -1,3 +1,4 @@
+import { DEPENDENCY_TYPES } from '@repo/types';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +7,7 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 
 /**
  * Canvas-first authoring toolbar items (ADR-0032) — the Row 2 · Do authoring cluster. Gated on
@@ -175,6 +177,50 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
         'aria-pressed',
         'true',
       );
+    });
+
+    /**
+     * **Every dependency type the product supports is offerable here** — derived from the domain, not
+     * from a list typed into this test, so it cannot pass while the menu quietly drops one.
+     *
+     * It dropped one for a year. `LINK_TYPES` listed three and cited ADR-0026 D5 for *"SF is
+     * dialog-only"* — but that decision was about the **edge-drag**, whose type came from a modifier
+     * key, and there are only three (none / Shift / Alt). ADR-0052 replaced the edge-drag with this
+     * two-click tool and its explicit menu, which has no such limit; the exclusion outlived the
+     * constraint that produced it, carried by a citation that reads as authority and does not support
+     * what it was cited for. Meanwhile the Prisma enum, the engine (ADR-0035's SF arithmetic), the
+     * API, the Logic panel and the canvas painter all handled SF — so `Start → Finish` scheduled and
+     * painted correctly and simply could not be drawn.
+     *
+     * Verified red against the three-item list: `Start → Finish` is not in the menu.
+     */
+    it('offers every dependency type the domain defines, not a subset', () => {
+      // The setters must be present or the control resolves shaded and the caret opens nothing —
+      // the same shape the sibling cases use.
+      renderToolbar(ctx({ isLinking: false, toggleLinkMode: vi.fn(), setLinkType: vi.fn() }));
+      fireEvent.click(screen.getByRole('button', { name: /^Link type:/ }));
+      // The row's name is "FS — Finish → Start": the short code, then the long name. Asserting the
+      // label as a substring rather than the whole string keeps this about *which types are
+      // offered*, which is the claim, and leaves the row's wording free to change.
+      for (const type of DEPENDENCY_TYPES) {
+        expect(
+          screen.getByRole('menuitemradio', {
+            name: new RegExp(`^${type} — ${DEPENDENCY_TYPE_LABELS[type]}$`),
+          }),
+          `${type} is missing from the Link menu`,
+        ).toBeInTheDocument();
+      }
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(DEPENDENCY_TYPES.length);
+    });
+
+    it('arms link-mode with Start → Finish, the one that used to be unreachable', () => {
+      const toggleLinkMode = vi.fn();
+      const setLinkType = vi.fn();
+      renderToolbar(ctx({ isLinking: false, toggleLinkMode, setLinkType }));
+      fireEvent.click(screen.getByRole('button', { name: /^Link type:/ }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Start → Finish/ }));
+      expect(setLinkType).toHaveBeenCalledWith('SF');
+      expect(toggleLinkMode).toHaveBeenCalledOnce();
     });
 
     it('arms link-mode and the picked FS/SS/FF type from the caret menu (mirrors Add)', () => {

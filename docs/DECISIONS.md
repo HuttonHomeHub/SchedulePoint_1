@@ -2008,3 +2008,45 @@ having one caller's suffix rule quietly change the other's.
 Both truncate to `ACTIVITY_NAME_MAX_LENGTH` (200) before appending, because the constraint they are
 getting past is the same one and exceeding it is a 422 at write time rather than anything the
 reader could have predicted.
+
+## An ADR clause outlives the mechanism it was written for (2026-08-12)
+
+`Start → Finish` could not be drawn on the canvas for about a year, and the reason is worth keeping
+because the code was doing exactly what it had been told.
+
+`LINK_TYPES` listed three of the four dependency types and cited **ADR-0026 D5** — _"SF is
+dialog-only (the rare inverse)"_. Read the ADR and it says something narrower than the citation
+implies. Linking was then an **edge-drag**, whose type came from a **modifier key**, and there are
+exactly three: none, Shift, Alt. SF lost the ballot for a slot. It was never a statement about what a
+_menu_ should contain.
+
+**ADR-0052 then replaced the edge-drag with the two-click Link tool and its explicit type menu**,
+which has no three-way limit. The constraint evaporated; the exclusion did not. Meanwhile the Prisma
+enum, `@repo/types`, the CPM engine (ADR-0035's SF arithmetic), the API, the activity editor's Logic
+tab and the canvas painter all handled SF — so an SF link scheduled and painted correctly and simply
+could not be created on the surface this product is built around, while `docs/PROJECT_BRIEF.md` named
+four dependency types as a headline capability.
+
+**Three things to take from it.**
+
+A citation is not evidence — ADR-0076 Class 2 in its natural habitat. The docblock read as
+authoritative, named a real decision, and misdescribed it. Opening the ADR took a minute and was the
+whole finding.
+
+**A decision has a scope, and the scope is usually a mechanism.** When the mechanism is replaced, the
+clauses that hung off it need re-reading rather than inheriting. ADR-0052 amended ADR-0032 M5 by
+name; nobody asked what else the edge-drag had been carrying.
+
+**And a subset needs a home in the domain.** The audit found no second instance, which is the useful
+result: label maps are `Record<DomainType, string>` and the compiler forces them exhaustive, and
+where a surface legitimately offers a subset this codebase already names it in the domain
+(`SELECTABLE_CONSTRAINT_TYPES` / `PARKED_CONSTRAINT_TYPES`, which still offers a _present_ parked
+value so an imported plan round-trips) or flag-gates it with the reasoning written down (the Add
+menu's Hammock / Level-of-effort staging). `LINK_TYPES` was the only place a subset was invented in a
+UI file with no domain-level name — which is what made it invisible.
+
+**Process note.** The fix itself did not go through the feature-analyst: it is a bug fix against a
+documented capability, not a new requirement, and §7's contract for a bug fix is a regression test
+rather than a spec. What it _did_ owe was this entry and the note now in ADR-0026 — the reasoning
+originally lived only in a code docblock and a commit message, which is not the register. Recorded
+after the product owner asked whether the process had been followed.
