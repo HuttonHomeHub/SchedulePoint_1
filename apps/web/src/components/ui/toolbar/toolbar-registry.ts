@@ -196,10 +196,27 @@ export interface ToolbarItem<Ctx> {
   /** Plain-button activation. Mutually exclusive with {@link render}. */
   onActivate?: (ctx: Ctx) => void;
   /**
-   * A non-interactive **read-out** (e.g. the pinned Project-finish figure): rendered inline in its
-   * group but **excluded from the roving-tabindex order** — not a Tab/Arrow stop, since there's
-   * nothing to operate. Its `render` still receives `itemProps` (to spread `data-toolbar-item`) but
-   * without the focusable marker / `onFocus`, and with `tabIndex: -1`. Must be a `render` item.
+   * A non-interactive **read-out**: rendered inline in its group but **excluded from the
+   * roving-tabindex order** — not a Tab/Arrow stop, since there's nothing to operate. Its `render`
+   * still receives `itemProps` (to spread `data-toolbar-item`) but without the focusable marker /
+   * `onFocus`, and with `tabIndex: -1`. Must be a `render` item.
+   *
+   * **Who still uses it, recorded 2026-08-12 (ADR-0090 M2-T3).** The example this docblock used to
+   * lead with — the pinned Project-finish figure — is gone: it moved to the plan header, because a
+   * number costing 150 px of pinned width had no business in a `role="toolbar"` whose every other
+   * member is a command. `search-status` went the same way, into the search field's own box. Two
+   * consumers remain on the TSLD surface, and both are deliberate:
+   *
+   * - **`next-conflict-status`** — the "Conflict 2 of 7 · reason" chip. The plan folded this into
+   *   the button's label too; measurement refused it. A label paints only when `autoLabelsFit` is
+   *   true, and at 1920 it is false, so the fold would hide the count at the width the epic exists
+   *   to fix. The chip is `isVisible`-gated on a conflict being cycled, so it costs no width at rest.
+   * - **the flag-off search stub** — an inert `<input>` awaiting wiring, which is not a read-out at
+   *   all but is correctly excluded from the roving order for the same reason.
+   *
+   * **Do not delete this capability** on a reading that the surface has outgrown it. It has not, the
+   * floating selection bar may want it, and a read-out that is *not* excluded from the roving order
+   * is a focusable stop with nothing to operate — the exact APG defect this field prevents.
    */
   presentational?: boolean;
   /** Escape hatch for non-button controls (segmented scale, Project-finish chip, Tier-2 popovers). */
