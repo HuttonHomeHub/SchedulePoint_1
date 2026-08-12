@@ -501,7 +501,20 @@ So the trigger is **re-recorded with that measurement** in `scripts/flag-retirem
 `docs/TECH_DEBT.md` #122, per M6's own rule that _deferring is a decision; ignoring is a defect_. The
 survey and all seven probe results are in
 [`docs/specs/workspace-layout/m6-harness-conversion.md`](../specs/workspace-layout/m6-harness-conversion.md),
-so the next attempt starts from evidence rather than a file list. Nothing about the running product
+so the next attempt starts from evidence rather than a file list.
+
+**The product owner then made a stronger decision than the off-ramp** (2026-08-12), on being shown
+the number: **every flag stays on, and the estate is cleaned up in one dedicated pass** rather than a
+flag at a time. That supersedes this epic's own deferral reasoning, and it is the better argument.
+The milestone deferred because 27 conversions would have held M1–M5 behind them — a claim about
+_this_ pull request. The owner's is a claim about _how the estate is retired at all_, and the 27
+specs are cheaper to convert once, alongside their neighbours, than in isolation. The trigger is now
+`flag-cleanup pass`, a term added to the register's **closed** `deferralTriggers` vocabulary in the
+same commit — exactly the form ADR-0088 D3a requires, a decision made in a diff rather than a
+free-text escape hatch. It is also a **wider** trigger than the `epic-touch` ones, so a second flag
+deferred under it should be a deliberate choice and not a habit.
+
+Nothing about the running product
 turns on this: the flag is already default-on and, per ADR-0088 D1, cannot be switched off on any
 deployed container.
 
