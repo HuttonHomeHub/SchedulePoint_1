@@ -31,15 +31,23 @@ deliberate simplification, and its own comment says so.
 
 ## 2. Probed: does a bare pin-flip work?
 
-**`notes` — no.** Flipping `VITE_CANVAS_WORKSPACE` to `'true'` and running
-`scripts/e2e-local.sh web:notes` fails on the first interaction: `locator.click` times out after 30 s
-at `e2e-notes/notes.spec.ts:22`. So this suite needs a genuine **conversion** — new selectors against
-the surviving surface — not a configuration edit, and the plan's instruction to establish that
-per-suite before touching the flag is correct rather than cautious.
+Each row below is a bare pin-flip (`VITE_CANVAS_WORKSPACE` → `'true'`) followed by
+`scripts/e2e-local.sh web:<suite>`, with the config restored afterwards.
 
-That is one measurement, not a survey: the other six are unprobed and must each be flipped and run
-the same way before any of them is called ready. **Do not infer from `notes` that the rest need
-conversion, or that they don't.**
+| suite                         | result     | detail                                                                            |
+| ----------------------------- | ---------- | --------------------------------------------------------------------------------- |
+| `notes`                       | **fails**  | `locator.click` times out at `e2e-notes/notes.spec.ts:22` — the first interaction |
+| `edit`                        | **fails**  | all 3 specs: `keyboard-edit`, `pen-handoff`, `pen-smoke`                          |
+| `sub-day`                     | **fails**  | both specs                                                                        |
+| `programme`                   | **fails**  | 1 spec                                                                            |
+| `assignment-lag`              | **fails**  | 1 spec, after a 2-minute timeout                                                  |
+| `activity-editor`             | _unprobed_ |                                                                                   |
+| base (`playwright.config.ts`) | _unprobed_ | the largest set; probe it last                                                    |
+
+**Five of five probed so far need a real conversion, not a configuration edit** — new selectors
+against the surviving surface. That is a materially larger job than "flip seven pins", and it is
+exactly what the plan's instruction to establish it per-suite was for. The two remaining are still
+unprobed and must be run the same way; **do not infer their result from these five.**
 
 ## 3. The order to do it in
 
