@@ -2279,3 +2279,30 @@ is the milestone that measures the vertical stack (`M4-T1 — Measure the vertic
 **What to do:** take it with M4's numbers in hand. The assertion in `e2e-toolbar-fit`'s coarse-pointer
 test is deliberately written against 40 and 36 — the figures actually delivered — so raising the
 floor there is the one-line change that proves this closed.
+
+## 128. The multi-select journey's post-delete focus assertion is flaky, ~1 run in 4
+
+**Raised:** 2026-08-12 (ADR-0090 M3) · **Size:** M · **Owner:** whoever next touches the bulk delete
+
+`e2e-multi-select/multi-select.spec.ts:214` — `expect(list).toBeFocused()` after a bulk delete —
+fails intermittently with `Received: inactive`. Everything downstream of it depends on that focus:
+the undo accelerator is a **React** `onKeyDown` on the workspace root, so focus on `<body>` means the
+Ctrl+Z the next assertion presses reaches nothing (ADR-0080, which is where this fix came from).
+
+**Attributed by running it, not by reasoning.** It surfaced during M3, whose changes add an extra
+render pass to `<Toolbar>` on mount (the band resolves after the first measure), which is exactly the
+sort of thing that shifts a timing race. So the M3 commit was reverted with `git revert --no-commit`
+and the journey run **four times against the pre-M3 tree: 3 passed, 1 failed** — the same rate
+observed with M3 in place (3 of 4). It is pre-existing, and M3 neither caused nor worsened it.
+
+**The likely mechanism, stated as a hypothesis rather than a finding.** `focusListboxAfterModal`
+(`TsldPanel.tsx:655`) is a **single** `requestAnimationFrame` after the native `<dialog>` closes.
+That wins the race against the dialog's own synchronous focus restore — which is the defect it was
+written for — but it does not survive the listbox being re-created afterwards, and a bulk delete
+triggers a refetch and a recalculation. One frame is a guess about how long that takes.
+
+**What to do:** do not paper over it with a longer timeout — the assertion is about focus landing,
+not about how long it takes. Establish whether the `<ul>` remounts after the rAF (a `key` or
+conditional-render change would do it); if it does, the restore belongs on the listbox's own mount
+rather than on a frame counted from the dialog. Until then the journey should be treated as a known
+intermittent, and a red run on this assertion alone re-run before being investigated as new.
