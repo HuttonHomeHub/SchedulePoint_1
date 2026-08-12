@@ -158,6 +158,32 @@ async function stackHeights(page: Page): Promise<unknown> {
         }
         return out;
       })(),
+      // **What the identity content actually costs, horizontally.** The single number decision 2
+      // turns on: folding the identity line into the command band is only possible if its content
+      // fits the slack a row has after the mode cluster leaves it. Measured as the sum of the
+      // identity row's children — the breadcrumb nav and the pen status — not the row's own width,
+      // which is the full container and says nothing about what has to fit.
+      identityContent: (() => {
+        if (!identityRow) return null;
+        // Reported one level deeper than the other budgets, deliberately: the top-level split is
+        // only "breadcrumbs" and "pen", and the question decision 2 asks is *which parts of those
+        // could go* — which a two-number answer cannot inform.
+        const kids = [...identityRow.children].map((c) => ({
+          tag: c.tagName.toLowerCase(),
+          width: Math.round(c.getBoundingClientRect().width),
+          text: (c.textContent ?? '').trim().slice(0, 40),
+          parts: [...c.children].map((g) => ({
+            tag: g.tagName.toLowerCase(),
+            width: Math.round(g.getBoundingClientRect().width),
+            text: (g.textContent ?? '').trim().slice(0, 48),
+          })),
+        }));
+        return {
+          rowWidth: Math.round(identityRow.getBoundingClientRect().width),
+          contentWidth: kids.reduce((sum, k) => sum + k.width, 0),
+          children: kids,
+        };
+      })(),
       // **The app header row's horizontal budget** — what a plan-identity slot inside it would have
       // to fit into. Reported because M4-T2's first attempt moved the identity line into the band
       // and measured a **zero** canvas gain: relocating a row within the same column changes
