@@ -229,13 +229,13 @@ describe('TSLD toolbar registry (two-row)', () => {
     );
   });
 
-  it('shows the plan actions inline on Row 2 and drives their seams (Baselines)', () => {
+  it('drives the plan-analysis seams from the Analysis trigger (Baselines)', () => {
     renderRows(ctx());
-    // Plan & deliverable actions now sit inline (tier-2 icon buttons), not in a `⋯` overflow.
-    // A live icon-only button carries a hover tooltip naming it (not just an aria-label).
-    const baselines = screen.getByRole('button', { name: 'Baselines…' });
-    expect(baselines).toHaveAttribute('title', 'Baselines…');
-    fireEvent.click(baselines);
+    // Three Row-2 stops became one `Analysis` trigger in ADR-0090 M2-T5. The tooltip assertion went
+    // with the icon-only button it was about; what survives is what the test is for — the seam is
+    // still wired, and reachable.
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Baselines…' }));
     expect(spies.openBaselines).toHaveBeenCalledOnce();
   });
 

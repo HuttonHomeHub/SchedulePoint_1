@@ -286,10 +286,13 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByTestId('activities-table')).toBeInTheDocument();
   });
 
-  it('reaches Baselines inline on Row 2 (no capability lost)', () => {
+  it('reaches Baselines through the Analysis trigger (no capability lost)', () => {
     renderScreen();
-    // Plan actions are inline (tier-2 icon buttons) on the Do row, not behind a `⋯` overflow.
-    fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
+    // Baselines joined Earned value and Resource histogram behind one Row-2 `Analysis` trigger in
+    // ADR-0090 M2-T5. The assertion that matters is unchanged and is the one in the title: the
+    // dialog still opens, so nothing was lost to the fold.
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Baselines…' }));
     expect(screen.getByRole('dialog', { name: 'Baselines' })).toBeInTheDocument();
     expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
   });

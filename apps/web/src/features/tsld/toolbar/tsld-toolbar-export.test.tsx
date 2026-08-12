@@ -200,3 +200,48 @@ describe('TSLD toolbar — export & print (flag on)', () => {
     expect(spies.printDiagram).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * **The all-shaded case** (ADR-0090 M2-T7, ADR-0082) — a Viewer on a freshly created plan, where
+ * every row behind `Share & export` is shut: the exports need a computed diagram and Share needs a
+ * permission this caller lacks.
+ *
+ * **The milestone specified that the group should render NO trigger here, and that is wrong on this
+ * surface.** ADR-0082's no-trigger clause is about the Project Explorer's row menu, where a menu of
+ * nothing but refusals is a dead end and its absence costs nothing. A **toolbar** is the opposite
+ * case: ADR-0031 §4 makes the read-only↔editing flip legible precisely by keeping the row's shape
+ * fixed and shading its members as a set — the same reason `penGated` items may not leave the pen
+ * cluster. Removing a trigger by permission would reflow the row for a Viewer, so two people
+ * looking at the same plan would see different bars and neither could be talked through the other's.
+ *
+ * So the rule for this surface is: **shade the trigger, and say why.** These assertions pin that,
+ * and they pin the discrimination that makes it honest — the trigger is shut only when *nothing*
+ * inside it is actionable, which is the defect M2-T4 shipped and caught.
+ */
+describe('Share & export — the all-shaded case (ADR-0090 M2-T7)', () => {
+  it('shades the trigger with a reason rather than removing it', () => {
+    renderRows(ctx({ hasDiagram: false, canShare: false }));
+    const trigger = screen.getByRole('button', { name: /Share & export/ });
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger).toHaveAttribute('title', 'Add an activity first');
+  });
+
+  it('stays OPEN for a Viewer once the plan has a diagram — the exports are not permission-gated', () => {
+    // The discrimination that makes the shade honest: a Viewer can export. Shading the trigger for
+    // everyone without `plan:share` would have taken that away, and nothing would have failed.
+    renderRows(ctx({ hasDiagram: true, canShare: false }));
+    expect(screen.getByRole('button', { name: /Share & export/ })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('stays OPEN for a sharer on an uncomputed plan — sharing needs no schedule', () => {
+    renderRows(ctx({ hasDiagram: false, canShare: true }));
+    expect(screen.getByRole('button', { name: /Share & export/ })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+});

@@ -915,6 +915,84 @@ function LiveSearchControl({
 }
 
 /**
+ * The **Analysis** trigger (ADR-0090 M2-T5) — Baselines, Earned value and Resource histogram behind
+ * one Row-2 stop, where they were three.
+ *
+ * **Named "Analysis", not "Plan ▾" as the plan proposed.** Two collisions made that name unusable
+ * and the pre-approval review caught both: it would sit inside a group whose `aria-label` is
+ * already **"Plan actions"**, so a screen-reader user would hear "Plan actions, Plan, menu button";
+ * and Row 1 already carries **`Summary ▾`**, which is also about the plan as a whole — heard back to
+ * back, "Plan" and "Summary" do not say which holds what. "Analysis" names what is actually inside:
+ * three surfaces for **measuring** a plan against something (a baseline, a budget, a resource
+ * capacity).
+ *
+ * **`Schedule settings…` deliberately stays inline** rather than joining them, and that is a
+ * decision rather than an oversight. It is the only one of the four that *changes* how dates are
+ * computed rather than reporting on them — and `docs/TECH_DEBT.md` #60 renamed it from "Calendar…"
+ * precisely so a planner hunting the float measure could find it. Folding it into a menu one
+ * milestone later would undo that, quietly, for two stops' worth of width.
+ *
+ * The trigger opens whenever **any** row inside is actionable — never inheriting one row's gate,
+ * which is the defect M2-T4 shipped and caught (a `hasDiagram` gate on the deliverables trigger
+ * took Share down with it on every uncomputed plan).
+ */
+function PlanAnalysisControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const disabled = api.disabled;
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        title={disabled ? (api.disabledReason ?? ANALYSIS_LABEL) : ANALYSIS_LABEL}
+        onClick={() => {
+          if (!disabled) toggle();
+        }}
+        className={cn(toolbarControlVariants({ active: open, disabled }))}
+      >
+        <ChartArea aria-hidden="true" className="size-4" />
+        <span className="truncate">{ANALYSIS_LABEL}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+      </button>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label={ANALYSIS_LABEL}
+        restoreFocusRef={triggerRef}
+      >
+        <MenuItem onSelect={() => ctx.openBaselines()}>
+          <Layers aria-hidden="true" className="size-4" />
+          Baselines…
+        </MenuItem>
+        {EARNED_VALUE_ENABLED ? (
+          <MenuItem onSelect={() => ctx.openEarnedValue()}>
+            <DollarSign aria-hidden="true" className="size-4" />
+            Earned value…
+          </MenuItem>
+        ) : null}
+        {RESOURCE_CURVES_ENABLED ? (
+          <MenuItem onSelect={() => ctx.openResourceHistogram()}>
+            <ChartArea aria-hidden="true" className="size-4" />
+            Resource histogram…
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </>
+  );
+}
+
+/**
  * The **Filter menu** (insight lenses, flag-on) — a `View▾`-style checkbox popover offering the three
  * canvas attributes (Critical / Has constraint / Has conflict). Multi-select (the popover stays open
  * while toggling), each toggle driving `ctx.toggleFilterAttr`; the match set is the intersection of
@@ -975,6 +1053,8 @@ const COLOUR_MODE_LABELS: Record<ColourMode, string> = {
 
 /** The one name for the deliverables trigger, its menu and its tooltip (ADR-0090 M2-T4). */
 const SHARE_EXPORT_LABEL = 'Share & export';
+/** The one name for the analysis trigger, its menu and its tooltip (ADR-0090 M2-T5). */
+const ANALYSIS_LABEL = 'Analysis';
 const SHARE_NO_PERMISSION_REASON = 'You don’t have permission to share this plan';
 
 const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
@@ -2158,18 +2238,18 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         </ToolbarPopover>
       ),
     },
-    // Plan & deliverables (Row 2 · Do) — available whether or not you hold the pen (they open dialogs /
-    // export; they don't author on the canvas). Shown inline as icon buttons (tier 2). The persisted
-    // **data date** is changed here, via *Edit plan* — it no longer has its own control on the bar.
+    // Baselines, Earned value and Resource histogram are behind the **Analysis** trigger since
+    // ADR-0090 M2-T5 — three Row-2 stops for three ways of measuring a plan against something.
+    // `Schedule settings…` deliberately did NOT join them; see `PlanAnalysisControl`.
     {
-      id: 'baselines',
+      id: 'analysis',
       group: 'object',
       row: 'do',
       tier: 2,
       order: 2,
-      label: 'Baselines…',
-      icon: <Layers className="size-4" />,
-      onActivate: (ctx) => ctx.openBaselines(),
+      label: ANALYSIS_LABEL,
+      icon: <ChartArea className="size-4" />,
+      render: (ctx, api) => <PlanAnalysisControl ctx={ctx} api={api} />,
     },
     // The dialog behind this holds the plan's working-day calendar AND six other settings groups
     // that all change how its dates are calculated (critical path & float, progress/recalc mode,
@@ -2186,35 +2266,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Schedule settings…',
       icon: <CalendarDays className="size-4" />,
       onActivate: (ctx) => ctx.openCalendar(),
-    },
-    // Earned value (EV4b, ADR-0042) — opens the analysis dialog; a read action (no pen). Gated behind
-    // `VITE_EARNED_VALUE`, so it's absent from the bar until the surface ships.
-    {
-      id: 'earned-value',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 4,
-      label: 'Earned value…',
-      icon: <DollarSign className="size-4" />,
-      isVisible: () => EARNED_VALUE_ENABLED,
-      onActivate: (ctx) => ctx.openEarnedValue(),
-    },
-    // Resource histogram (M7 rung 5, ADR-0044 §3) — opens the resource-loading read dialog; a read
-    // action (no pen). Gated behind `VITE_RESOURCE_CURVES`, so it's absent until the surface ships.
-    {
-      id: 'resource-histogram',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 5,
-      label: 'Resource histogram…',
-      // Distinct from the Row-1 "Resource view" toggle's `BarChart3` (icon audit, ux review) — the
-      // two are easy to conflate (both are "resource" + "chart") when they appear together across the
-      // two toolbar rows.
-      icon: <ChartArea className="size-4" />,
-      isVisible: () => RESOURCE_CURVES_ENABLED,
-      onActivate: (ctx) => ctx.openResourceHistogram(),
     },
     // Plan details + Edit plan are no longer toolbar buttons (ADR-0031 amendment): the key facts
     // (status, data date, mode) now live in the Summary popover, which also carries an "Edit plan…"
