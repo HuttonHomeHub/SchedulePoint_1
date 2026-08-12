@@ -1,9 +1,7 @@
 import type { DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
-  BarChart3,
   ChartArea,
-  ChartColumnIncreasing,
   CalendarDays,
   CalendarRange,
   CalendarSearch,
@@ -24,20 +22,15 @@ import {
   Info,
   Keyboard,
   Layers,
-  Layers2,
-  ListChecks,
   Loader2,
   LocateFixed,
-  Crosshair,
   Maximize2,
   MessageSquare,
   Minus,
-  Palette,
   Plus,
   Printer,
   RefreshCw,
   Redo2,
-  Route,
   Split,
   Rows3,
   Search,
@@ -51,10 +44,9 @@ import {
   Waypoints,
   X,
 } from 'lucide-react';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 
 import { FILTER_ATTRS, type ColourMode } from '../render/lenses';
-import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_RANGE_LABELS } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
@@ -63,8 +55,12 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { useFirstUseHint } from './use-first-use-hint';
 
 import { Input } from '@/components/ui/input';
-import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
-import type { ToolbarItemRenderApi, ToolbarRow } from '@/components/ui/toolbar/toolbar-registry';
+import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
+import type {
+  ToolbarItemRenderApi,
+  ToolbarLayoutMode,
+  ToolbarRow,
+} from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
@@ -110,13 +106,147 @@ const ZOOM_LABELS: Record<string, string> = {
  * indicators), and insight overlays (the flag-gated ADR-0054 lenses + the Late-start overlay,
  * which stops being a special case set apart by an incidental border and becomes an ordinary
  * member here). */
-type ViewToggleGroupId = 'structure' | 'markers' | 'insight';
+type ViewToggleGroupId = 'structure' | 'markers' | 'insight' | 'panels';
 
+/**
+ * **Why four commands sit at tier 3 — always in the `⋯` — since 2026-08-12 (ADR-0090 M2).**
+ *
+ * `next-conflict`, `float-paths` and `shortcuts` on Row 1, and `clear-visual-placement` on Row 2.
+ * Row 1 was ~360 px short of labelling itself at 1920 and Row 2 ~128 px; these four are what buys
+ * both. The trade was put to the product owner with the measured numbers rather than taken here,
+ * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
+ *
+ * **Tier 3 rather than a low `priority`, and the distinction is load-bearing.** `autoLabelsFit`
+ * sums the WHOLE bar (`Toolbar.tsx`), so a merely width-demoted item still pays for its label and
+ * demoting it would buy nothing at all. `partitionByTier` takes tier 3 out of `bar` entirely.
+ *
+ * The other route — making the label sum read only the inline set — is exactly the feedback loop
+ * {@link measureLabelWidth}'s docblock exists to prevent: labelling widens the row, the widened row
+ * overflows, overflowing narrows it, and the narrower row can afford labels again.
+ *
+ * `showLabel: 'never'` was measured and rejected: it drops an item's label cost while keeping its
+ * 32 px and its gap, so the three Row-1 candidates save 308 px against a 360 px gap — not enough,
+ * and it would have pinned three of the seven promotable buttons permanently icon-only to let the
+ * other four gain text.
+ */
 const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: string }> = [
   { id: 'structure', label: 'Structure' },
   { id: 'markers', label: 'Markers' },
   { id: 'insight', label: 'Insight overlays' },
+  // Added by ADR-0090 M2-T2 for the Legend, answering the product owner's Q2 directly. A section of
+  // its own rather than a fourth "overlay", because a panel is a surface you read *beside* the
+  // diagram, not a mark drawn *on* it — the distinction the other group names already make.
+  { id: 'panels', label: 'Panels' },
 ];
+
+/**
+ * The `View ▾` members that are **not** `TsldViewToggles` keys (ADR-0090 M2-T2).
+ *
+ * A second list rather than an extension of {@link VIEW_TOGGLE_META}, for two reasons that are both
+ * about keeping something rather than avoiding work. That record is
+ * `Record<keyof TsldViewToggles, …>`, and the compile error it produces when a toggle is added
+ * without a home is load-bearing — its own docblock records two ADR-0054 toggles being silently
+ * dropped by a bad search-and-replace while the release notes claimed they shipped. Widening its
+ * key type to admit these four would delete exactly that guarantee.
+ *
+ * And these four carry something the view toggles never do: a **reason they are shut**. Baseline
+ * overlay alone has four. A structure with no field for a reason cannot hold one, and the reasons
+ * are the part of these controls most worth preserving through a relocation — they are what
+ * ADR-0082 is about.
+ */
+interface LensToggle {
+  id: string;
+  group: ViewToggleGroupId;
+  label: string;
+  /** Offered at all — the feature's build-time flag. */
+  enabled: boolean;
+  checked: (ctx: TsldToolbarContext) => boolean;
+  toggle: (ctx: TsldToolbarContext) => void;
+  /** Why it cannot be changed right now, or `undefined` when it can. */
+  reason: (ctx: TsldToolbarContext) => string | undefined;
+  /**
+   * A standing note about what this row **does**, as distinct from {@link reason}, which says why it
+   * cannot. Rendered always, and `aria-describedby`-linked like the reason.
+   *
+   * Exists for exactly one row, and that is the point (`docs/TECH_DEBT.md` #125). Every other member
+   * of `View ▾` toggles a mark on the canvas and leaves the popover open, so a planner can set
+   * several in one visit. `Resource view` reveals a **panel**, which takes focus (ADR-0049 —
+   * a revealed panel should receive it), and the popover closes behind the departing focus. From
+   * inside a list that invites toggling several things, that reads as being thrown out.
+   *
+   * **The fix is legibility, not different focus.** ADR-0049's rule is right and an `e2e-resource-view`
+   * assertion depends on it; a revealed panel a keyboard user cannot reach is the worse defect, and
+   * this section is `tabIndex={-1}` precisely so the reveal can hand focus over. So the row says what
+   * it is about to do, and the surprise goes rather than the behaviour.
+   */
+  note?: string;
+}
+
+const LENS_TOGGLES: readonly LensToggle[] = [
+  {
+    id: 'baseline-overlay',
+    group: 'insight',
+    label: 'Baseline overlay',
+    enabled: CANVAS_LENSES_ENABLED,
+    checked: (ctx) => ctx.baselineOverlay,
+    toggle: (ctx) => ctx.toggleBaselineOverlay(),
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : ctx.varianceLoading
+          ? 'Loading baseline…'
+          : ctx.varianceError
+            ? 'Baseline unavailable'
+            : !ctx.hasActiveBaseline
+              ? 'No active baseline'
+              : undefined,
+  },
+  {
+    id: 'resource-view',
+    group: 'insight',
+    label: 'Resource view',
+    enabled: CANVAS_RESOURCE_VIEW_ENABLED,
+    checked: (ctx) => ctx.resourceViewOpen,
+    toggle: (ctx) => ctx.toggleResourceView(),
+    reason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+    // The one row here that opens something rather than marking the canvas — see `note` above.
+    note: 'Opens the resource panel and moves focus to it',
+  },
+  {
+    id: 'over-allocation',
+    group: 'insight',
+    label: 'Flag over-allocated',
+    enabled: CANVAS_RESOURCE_VIEW_ENABLED,
+    checked: (ctx) => ctx.overAllocationHighlight,
+    toggle: (ctx) => ctx.toggleOverAllocation(),
+    // Enabled whenever there is something to flag OR the highlight is already ON — an active
+    // toggle must always be clickable-to-off, so a recalculation that clears all over-allocation
+    // while the mode is on can never leave it checked AND shut (a stuck-on dead end, UX review B5).
+    // Carried across the move verbatim; it is exactly the kind of rule a relocation loses.
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : ctx.hasOverAllocation || ctx.overAllocationHighlight
+          ? undefined
+          : OVER_ALLOCATION_EMPTY_REASON,
+  },
+  {
+    // The direct answer to the product owner's Q2. Filed under **Panels**, not Insight overlays: a
+    // panel is a surface you read *beside* the diagram, not a mark drawn *on* it — which is the
+    // distinction the other group names already make.
+    id: 'legend',
+    group: 'panels',
+    label: 'Legend',
+    enabled: true,
+    checked: (ctx) => ctx.legendOpen,
+    toggle: (ctx) => ctx.toggleLegend(),
+    reason: () => undefined,
+  },
+];
+
+function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
+  return LENS_TOGGLES.filter((t) => t.group === group && t.enabled);
+}
 
 /**
  * **Single source of truth** for every `View▾` toggle: its group, its label, and (for a flag-gated
@@ -181,9 +311,12 @@ const GOTO_HINT_ID = 'tsld-goto-date-hint';
 function GoToDateControl({
   ctx,
   itemProps,
+  compact,
 }: {
   ctx: TsldToolbarContext;
   itemProps: ToolbarItemRenderApi['itemProps'];
+  /** The row's `collapsed` band — see {@link triggersAreCompact}. */
+  compact: boolean;
 }): React.ReactElement {
   // First-use-only disclosure (feature-spec.md §4.2): marked seen on the first successful PICK
   // (not the first open) — opening and closing without reading proves nothing. The sentence never
@@ -194,6 +327,7 @@ function GoToDateControl({
       label="Go to date"
       icon={<CalendarSearch className="size-4" />}
       itemProps={itemProps}
+      compact={compact}
     >
       <div className="flex flex-col gap-1.5 text-sm">
         {/* Inner field is "Date" (not another "Go to date") so AT doesn't echo the dialog name; the
@@ -263,15 +397,6 @@ function SoonTag(): React.ReactElement {
     <span className="border-border text-muted-foreground ml-auto rounded-full border border-dashed px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase">
       Soon
     </span>
-  );
-}
-
-/** A non-interactive section heading inside the Add menu (grouping draw-vs-span kinds). */
-function MenuSection({ children }: { children: React.ReactNode }): React.ReactElement {
-  return (
-    <p className="text-muted-foreground px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
-      {children}
-    </p>
   );
 }
 
@@ -362,7 +487,7 @@ function AddActivityControl({
         label="Add activity type"
         restoreFocusRef={mainButtonRef}
       >
-        <MenuSection>Draw on the canvas</MenuSection>
+        <MenuSection label="Draw on the canvas" />
         {ADD_ACTIVITY_TYPES.map((type) => (
           <MenuItem
             key={type}
@@ -387,8 +512,7 @@ function AddActivityControl({
             live **Level of Effort (hammock)** item that arms the endpoint-pick tool — the LOE is the
             span-derived hammock, so there is no separate Hammock item and no raw `HAMMOCK` create (Q1).
             Flag-off it stays today's two disabled "Soon" placeholders, byte-for-byte. */}
-        <div role="separator" className="bg-border my-1 h-px" />
-        <MenuSection>Span between activities</MenuSection>
+        <MenuSection divider label="Span between activities" />
         {CANVAS_ACTIVITY_TYPES_ENABLED ? (
           // Disabled-with-reason (shade-don't-hide) below two activities — the span needs two drivers to
           // hang off (B5) — mirroring the Export menu's "No matching activities" pattern. Stays a
@@ -546,6 +670,9 @@ function LinkControl({
  * (ADR-0059 §2) — panning, stepping and fitting are the canvas's own, and the Gantt's chart already
  * spans the plan, so there is nothing to fit it to.
  */
+/** Both remaining Find-group commands need a selection to act on. */
+const ISOLATE_NO_SELECTION_REASON = 'Select an activity first';
+
 const CANVAS_ONLY_REASON = 'Only in the diagram view';
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
@@ -558,12 +685,77 @@ const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
 const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
 
 /**
+ * **Where the viewport commands live below 1280 px** (ADR-0090 M3-T2).
+ *
+ * `condensed` and `collapsed` are the two bands in which four separate 32 px buttons for one
+ * subject — the viewport — are a worse use of the row than one trigger that already names that
+ * subject. Above them the four stay inline, because the row can afford them and a click is cheaper
+ * than a menu.
+ *
+ * Read by two things that must agree: the four items' `isVisible` predicates, and
+ * {@link ZoomPresetControl}'s decision to render the fold. One predicate, so they cannot disagree —
+ * the failure mode otherwise is a command that is in neither place, which is the exact defect
+ * ADR-0081 was written about.
+ */
+function viewportCommandsAreFolded(layout: ToolbarLayoutMode): boolean {
+  return layout !== 'comfortable';
+}
+
+/**
+ * **The collapsed band's trigger treatment** (ADR-0090 M3-T3): Row 1's popover triggers give up
+ * their visible labels, and the search field gives up its preferred width for its floor.
+ *
+ * **Measured, and the measurement moved the task.** M3-T3's own risk note is flagged *"derived from
+ * the measured anchors, not observed"* and predicts a 305 px collision at 960. After M2's cuts and
+ * M3-T2's fold, the real figures (`docs/specs/workspace-layout/m3-narrow-widths.md`) are Row 1
+ * laying out **883 px against an 872 px container at 960 — 11 px over — and against 680 px at 768**.
+ * Row 2 already fits at every width. So the collapse is a Row-1 problem of two very different sizes,
+ * and the honest remedy is sized to it rather than to the drafted number.
+ *
+ * `search` alone is **240 px of Row 1's 784**, exactly as the note predicted, and its `min-w-36`
+ * floor gives 96 px back — enough for 960 and not for 768. The four popover triggers give ~60 px
+ * each, which closes 768 with room to spare.
+ */
+function triggersAreCompact(layout: ToolbarLayoutMode): boolean {
+  return layout === 'collapsed';
+}
+
+/**
+ * The search field's width, by band. `w-[min(15rem,32vw)]` resolves to a flat **240 px** at any
+ * viewport at or above 750 px, so on the narrow widths the field never actually responds to `32vw` —
+ * it is simply the widest thing on Row 1. In the collapsed band it drops to the `min-w-36` floor it
+ * already declares, which is 144 px and still a field rather than an icon.
+ *
+ * An icon-triggered field (the other option M3-T3's note names) was not taken: it costs a click on
+ * the one control a planner most often arrives wanting to use, and the measurement says the floor is
+ * enough. Kept as one constant because two call sites render this field — the live one and the
+ * flag-off stub — and a width that differed between them would show up only with the flag off.
+ */
+function searchFieldWidth(layout: ToolbarLayoutMode): string {
+  return triggersAreCompact(layout) ? 'w-36' : 'w-[min(15rem,32vw)] min-w-36';
+}
+
+/**
  * The **zoom-preset dropdown** — a single compact menu-button replacing the five segmented
  * scale buttons (Day/Week/Month/Quarter/Year). The trigger shows the current level and opens a
  * `Menu` to pick another; every level is still one click away, but the Frame group stops overflowing
  * the bar (which used to silently demote Year/Quarter into `⋯` at narrow widths). One focusable
  * control (spreads `itemProps`) per the toolbar contract; mirrors `api.disabled` so it shades — not
  * hides — when the plan has no computed diagram yet (a stable toolbar shape, ADR-0031).
+ *
+ * **Below 1280 px it also holds the four viewport commands** — zoom out/in, Fit and Go to today —
+ * which leave the bar in those bands (see {@link viewportCommandsAreFolded}). They are shaded with
+ * their own reasons rather than dropped when they do not apply (ADR-0082), because the reason a
+ * planner cannot fit the view is a fact about the plan and does not stop being true in a narrow
+ * window.
+ *
+ * **The trigger cannot become a dead end, and that was checked rather than assumed.** The draft of
+ * this note claimed Go-to-today needed no diagram and so would be stranded behind a trigger shaded
+ * on `hasDiagram`; reading its predicate says otherwise — all four fold-ins are
+ * `hasDiagram && canvasActive`, which is the trigger's own gate plus a view test. So a shaded
+ * trigger hides only commands that were already shaded, each for a reason of the same shape. In the
+ * Gantt the trigger stays live (the preset works in both views, ADR-0059 §2) and the four shade
+ * with "Only in the diagram view" — reachable, and explained.
  */
 function ZoomPresetControl({
   ctx,
@@ -592,7 +784,26 @@ function ZoomPresetControl({
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <CalendarRange aria-hidden="true" className="size-4" />
-        <span className="truncate">{activeLabel}</span>
+        {/* **The trigger names its subject once it owns more than presets** (ADR-0090 M5, ux gate).
+            M3-b's reasoning was that the four viewport commands were better in `Zoom ▾` than in the
+            anonymous `⋯` because "only `Zoom ▾` names the subject" — and the trigger does not say
+            "Zoom". It renders the current preset, so a planner on Surface Pro landscape hunting for
+            **Fit to plan** sees a button labelled "Week" beside a calendar icon, with no on-screen
+            text saying Zoom anywhere. That was asserted and never looked at: ADR-0076 Class 3, in
+            the milestone whose own gate caught it.
+
+            The prefix appears **exactly when the fold does**, so the label grows only where the menu
+            gained contents that need naming. The icon is left alone deliberately: `CalendarRange` is
+            right for a control whose presets are time ranges, and choosing a glyph for "the
+            viewport" is a design decision rather than a layout one (`docs/TECH_DEBT.md` #130).
+
+            In the collapsed band there is no visible label at all, which is the trade the whole band
+            makes; the name is in `aria-label` and `title`. */}
+        {triggersAreCompact(api.layout) ? null : (
+          <span className="truncate">
+            {viewportCommandsAreFolded(api.layout) ? `Zoom · ${activeLabel}` : activeLabel}
+          </span>
+        )}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
@@ -622,9 +833,101 @@ function ZoomPresetControl({
               : (ZOOM_LABELS[level] ?? level)}
           </MenuItem>
         ))}
+        {viewportCommandsAreFolded(api.layout) && (
+          <>
+            <MenuSection label="Viewport" divider />
+            {VIEWPORT_FOLD_COMMANDS.map((cmd) => {
+              const reason = cmd.reason(ctx);
+              return (
+                <MenuItem
+                  key={cmd.id}
+                  disabled={reason !== undefined}
+                  {...(reason ? { disabledReason: reason } : {})}
+                  onSelect={() => cmd.run(ctx)}
+                >
+                  {/* The radio rows above carry a tick column; matching its width keeps the two
+                      sections' labels on one left edge rather than stepping in and out. */}
+                  <span aria-hidden="true" className="size-4" />
+                  {cmd.icon}
+                  {cmd.label}
+                </MenuItem>
+              );
+            })}
+          </>
+        )}
       </Menu>
     </>
   );
+}
+
+/**
+ * The four viewport commands as they appear **inside** `Zoom ▾` in the folded bands.
+ *
+ * Their labels, reasons and actions are stated once here and read by both the fold and the registry
+ * entries that render them inline — so the menu row and the bar button cannot drift into saying
+ * different things about the same command, which is the `routeOrthogonal` argument (ADR-0065) at
+ * registry scale. `Fit to plan` keeps its own no-diagram wording; the other three share the zoom
+ * one, exactly as they do inline.
+ */
+const VIEWPORT_FOLD_COMMANDS: {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  reason: (ctx: TsldToolbarContext) => string | undefined;
+  run: (ctx: TsldToolbarContext) => void;
+}[] = [
+  {
+    id: 'zoom-out',
+    label: 'Zoom out',
+    icon: <Minus aria-hidden="true" className="size-4" />,
+    reason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
+    run: (ctx) => ctx.stepZoom(0.5),
+  },
+  {
+    id: 'zoom-in',
+    label: 'Zoom in',
+    icon: <Plus aria-hidden="true" className="size-4" />,
+    reason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
+    run: (ctx) => ctx.stepZoom(2),
+  },
+  {
+    id: 'fit',
+    label: 'Fit to plan',
+    icon: <Maximize2 aria-hidden="true" className="size-4" />,
+    reason: (ctx) => canvasViewportReason(ctx, 'Add an activity to fit the view'),
+    run: (ctx) => ctx.fit(),
+  },
+  // Only where the command exists. Flag-off, `today` is a permanently-inert "Coming soon"
+  // placeholder (ADR-0031), and folding a placeholder into a menu offers the reader a row that can
+  // never do anything — the inline stub at least reads as part of a designed bar.
+  ...(TOOLBAR_QUICK_WINS_ENABLED
+    ? [
+        {
+          id: 'today',
+          label: 'Go to today',
+          icon: <LocateFixed aria-hidden="true" className="size-4" />,
+          // Its own no-diagram wording, **not** the zoom one: naming the command in the sentence is
+          // the point of having four of them. The first draft of this list reached for
+          // `ZOOM_DISABLED_REASON` here and would have shipped the menu row saying something the
+          // inline button does not — the exact drift this shared list exists to prevent, introduced
+          // while writing the thing that prevents it.
+          reason: (ctx: TsldToolbarContext) =>
+            canvasViewportReason(ctx, 'Add an activity to go to today'),
+          run: (ctx: TsldToolbarContext) => ctx.goToDate(ctx.todayIso),
+        },
+      ]
+    : []),
+];
+
+/**
+ * The shared shape of every canvas-viewport command's reason: no diagram, then not the diagram view,
+ * then actionable. Extracted because four registry entries had written it out four times and M3-T2
+ * was about to write it four more inside the fold — eight copies of one two-branch rule is how one
+ * of them ends up phrased differently from its neighbours.
+ */
+function canvasViewportReason(ctx: TsldToolbarContext, noDiagram: string): string | undefined {
+  if (!ctx.hasDiagram) return noDiagram;
+  return ctx.canvasActive ? undefined : CANVAS_ONLY_REASON;
 }
 
 /**
@@ -661,8 +964,10 @@ function placeholderItem(o: {
  */
 function SearchFieldControl({
   itemProps,
+  layout,
 }: {
   itemProps: ToolbarItemRenderApi['itemProps'];
+  layout: ToolbarLayoutMode;
 }): React.ReactElement {
   return (
     <div className="ml-3 flex items-center">
@@ -677,7 +982,7 @@ function SearchFieldControl({
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities (coming soon)"
         title="Search / filter activities (coming soon)"
-        className="h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm"
+        className={cn('h-8 pl-8 text-sm', searchFieldWidth(layout))}
       />
     </div>
   );
@@ -718,6 +1023,19 @@ function LiveSearchControl({
   // every keystroke. A description is read when the field is focused and re-read on demand, which is
   // what "how many did that match?" actually wants.
   const describedById = CANVAS_SEARCH_NAV_ENABLED && ctx.searchStatus ? 'tsld-search-count' : null;
+  // The compact VISIBLE chip text, deliberately NOT `countText` below — that is the screen-reader
+  // sentence ("12 activities match. Press Enter to go to the first."), which is the right thing to
+  // say once, on focus, and the wrong thing to paint inside a 240 px field. Two audiences, two
+  // strings; the first draft of this fold reused `countText` for both and printed the sentence.
+  // Gated on `CANVAS_SEARCH_NAV_ENABLED`, exactly as the `search-status` item it replaces was — the
+  // flag-off parity suite caught the first version rendering where nothing rendered before, which is
+  // the whole job of that suite and the reason it is kept rather than weakened.
+  const countChip =
+    CANVAS_SEARCH_NAV_ENABLED && ctx.searchStatus
+      ? ctx.searchStatus.index === null
+        ? `${ctx.searchStatus.total} ${ctx.searchStatus.total === 1 ? 'match' : 'matches'}`
+        : `${ctx.searchStatus.index} of ${ctx.searchStatus.total}`
+      : null;
   const countText = ctx.searchStatus
     ? ctx.searchStatus.index === null
       ? `${ctx.searchStatus.total} ${ctx.searchStatus.total === 1 ? 'activity matches' : 'activities match'}. Press Enter to go to the first.`
@@ -774,7 +1092,8 @@ function LiveSearchControl({
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
-          'h-8 w-[min(15rem,32vw)] min-w-36 pl-8 text-sm',
+          'h-8 pl-8 text-sm',
+          searchFieldWidth(api.layout),
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
           // absent, so the native glyph is exactly where it is today.
@@ -799,12 +1118,111 @@ function LiveSearchControl({
           <X aria-hidden="true" className="size-3.5" />
         </button>
       ) : null}
+      {/* The VISIBLE match count, folded into the field's own box (ADR-0090 M2-T3). It was a separate
+          `search-status` toolbar item — `presentational: true`, i.e. a non-operable member of a
+          `role="toolbar"`, legal only via the escape hatch that exists to describe it. Folding it
+          here loses nothing: the field is a pinned `render` item, so it is painted at every width,
+          which is precisely why the same fold was REFUSED for `next-conflict` (see that item). */}
+      {countChip ? (
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground ml-1 shrink-0 text-xs whitespace-nowrap"
+        >
+          {countChip}
+        </span>
+      ) : null}
       {describedById && countText ? (
         <span id={describedById} className="sr-only">
           {countText}
         </span>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The **Analysis** trigger (ADR-0090 M2-T5) — Baselines, Earned value and Resource histogram behind
+ * one Row-2 stop, where they were three.
+ *
+ * **Named "Analysis", not "Plan ▾" as the plan proposed.** Two collisions made that name unusable
+ * and the pre-approval review caught both: it would sit inside a group whose `aria-label` is
+ * already **"Plan actions"**, so a screen-reader user would hear "Plan actions, Plan, menu button";
+ * and Row 1 already carries **`Summary ▾`**, which is also about the plan as a whole — heard back to
+ * back, "Plan" and "Summary" do not say which holds what. "Analysis" names what is actually inside:
+ * three surfaces for **measuring** a plan against something (a baseline, a budget, a resource
+ * capacity).
+ *
+ * **`Schedule settings…` deliberately stays inline** rather than joining them, and that is a
+ * decision rather than an oversight. It is the only one of the four that *changes* how dates are
+ * computed rather than reporting on them — and `docs/TECH_DEBT.md` #60 renamed it from "Calendar…"
+ * precisely so a planner hunting the float measure could find it. Folding it into a menu one
+ * milestone later would undo that, quietly, for two stops' worth of width.
+ *
+ * The trigger opens whenever **any** row inside is actionable — never inheriting one row's gate,
+ * which is the defect M2-T4 shipped and caught (a `hasDiagram` gate on the deliverables trigger
+ * took Share down with it on every uncomputed plan).
+ */
+function PlanAnalysisControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const reasonId = useId();
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const disabled = api.disabled;
+  return (
+    <>
+      <button
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-disabled={disabled || undefined}
+        title={disabled ? (api.disabledReason ?? ANALYSIS_LABEL) : ANALYSIS_LABEL}
+        {...(disabled && api.disabledReason ? { 'aria-label': ANALYSIS_LABEL } : {})}
+        {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
+        onClick={() => {
+          if (!disabled) toggle();
+        }}
+        className={cn(toolbarControlVariants({ active: open, disabled }))}
+      >
+        <ChartArea aria-hidden="true" className="size-4" />
+        <span className="truncate">{ANALYSIS_LABEL}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        {disabled && api.disabledReason ? (
+          <span id={reasonId} className="sr-only">
+            {api.disabledReason}
+          </span>
+        ) : null}
+      </button>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label={ANALYSIS_LABEL}
+        restoreFocusRef={triggerRef}
+      >
+        <MenuItem onSelect={() => ctx.openBaselines()}>
+          <Layers aria-hidden="true" className="size-4" />
+          Baselines…
+        </MenuItem>
+        {EARNED_VALUE_ENABLED ? (
+          <MenuItem onSelect={() => ctx.openEarnedValue()}>
+            <DollarSign aria-hidden="true" className="size-4" />
+            Earned value…
+          </MenuItem>
+        ) : null}
+        {RESOURCE_CURVES_ENABLED ? (
+          <MenuItem onSelect={() => ctx.openResourceHistogram()}>
+            <ChartArea aria-hidden="true" className="size-4" />
+            Resource histogram…
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </>
   );
 }
 
@@ -827,11 +1245,16 @@ function FilterMenuControl({
       label="Filter"
       icon={<Filter className="size-4" />}
       itemProps={api.itemProps}
+      compact={triggersAreCompact(api.layout)}
       // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
       {...(api.disabled ? { disabled: true } : {})}
-      {...(api.disabled && api.disabledReason ? { title: api.disabledReason } : {})}
+      // `disabledReason`, not `title` (ADR-0090 M5 accessibility gate). `Filter` is
+      // `isEnabled: ctx.hasDiagram`, so every empty or uncomputed plan reaches this state, and a
+      // native tooltip is not shown on keyboard focus by any mainstream browser — the finding
+      // `ToolbarButton`'s docblock records fixing for the plain button and not for its neighbour.
+      {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
     >
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Show only</legend>
@@ -851,87 +1274,28 @@ function FilterMenuControl({
   );
 }
 
-/** The Colour-by modes the picker offers, in menu order (insight lenses; ADR-0031 taxonomy). Criticality
- * is the default and byte-for-byte today's fills; driving-resource is a deferred fast-follow (CQ-1). */
-const COLOUR_MODES: ReadonlyArray<{ mode: ColourMode; label: string }> = [
-  { mode: 'criticality', label: 'Criticality' },
-  { mode: 'totalFloat', label: 'Total float' },
-  { mode: 'wbs', label: 'WBS group' },
-];
+/**
+ * Presentation order for the colour modes — default first, then the two analytical lenses.
+ * (Driving-resource is a deferred fast-follow, CQ-1.)
+ *
+ * This replaced a `COLOUR_MODES` array that carried **both** the order and the labels, duplicating
+ * `COLOUR_MODE_LABELS` right below it — two answers to "what is this mode called", which had been
+ * sitting in the file since the picker shipped. Order and labels are now one each.
+ */
+const COLOUR_MODE_ORDER: readonly ColourMode[] = ['criticality', 'totalFloat', 'wbs'];
+
 const COLOUR_MODE_LABELS: Record<ColourMode, string> = {
   criticality: 'Criticality',
   totalFloat: 'Total float',
   wbs: 'WBS group',
 };
 
-/**
- * The **Colour-by picker** (insight lenses, flag-on) — a single APG menu-button (mirroring
- * {@link ZoomPresetControl}) that shows the active mode and opens a `Menu` of single-choice radio items
- * to recolour bars by Criticality (default) / Total float / WBS group. Picking a mode drives
- * `ctx.setColourMode`; the canvas repaints from the precomputed colour map and the Legend swaps to the
- * mode's key. Pressed (non-default active) state is reflected by the item's `isActive`.
- */
-function ColourByControl({
-  ctx,
-  api,
-}: {
-  ctx: TsldToolbarContext;
-  api: ToolbarItemRenderApi;
-}): React.ReactElement {
-  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  const disabled = api.disabled;
-  const activeLabel = COLOUR_MODE_LABELS[ctx.colourMode];
-  return (
-    <>
-      <button
-        {...api.itemProps}
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-disabled={disabled || undefined}
-        // The accessible name matches the visible text verbatim (WCAG 2.5.3 Label in Name) — a11y
-        // review caught "Colour by: {mode}" drifting from the new "Colour · {mode}" visible text.
-        aria-label={`Colour · ${activeLabel}`}
-        title={disabled ? (api.disabledReason ?? 'Colour by…') : `Colour · ${activeLabel}`}
-        onClick={() => {
-          if (!disabled) toggle();
-        }}
-        className={cn(toolbarControlVariants({ active: api.active || open, disabled }))}
-      >
-        <Palette aria-hidden="true" className="size-4" />
-        {/* Visible "Colour ·" prefix (mirrors IsolateControl's "Isolating · {mode}" idiom) so the bar
-            reads as a picker showing its active mode, not a fixed setting named e.g. "Criticality"
-            (ux review: the sighted-user affordance previously lived only in the aria-label/title). */}
-        <span className="truncate">Colour · {activeLabel}</span>
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
-      </button>
-      <Menu
-        open={open}
-        onClose={close}
-        anchor={anchor}
-        label="Colour by"
-        restoreFocusRef={triggerRef}
-      >
-        {COLOUR_MODES.map(({ mode, label }) => (
-          <MenuItem
-            key={mode}
-            selected={ctx.colourMode === mode}
-            onSelect={() => ctx.setColourMode(mode)}
-          >
-            <Check
-              aria-hidden="true"
-              className={cn('size-4', ctx.colourMode === mode ? 'opacity-100' : 'opacity-0')}
-            />
-            {label}
-          </MenuItem>
-        ))}
-      </Menu>
-    </>
-  );
-}
+/** The one name for the deliverables trigger, its menu and its tooltip (ADR-0090 M2-T4). */
+const SHARE_EXPORT_LABEL = 'Share & export';
+/** The one name for the analysis trigger, its menu and its tooltip (ADR-0090 M2-T5). */
+const ANALYSIS_LABEL = 'Analysis';
+const SHARE_NO_PERMISSION_REASON = 'You don’t have permission to share this plan';
 
-/** Shared disabled reason for Export / Print on an empty/uncomputed canvas (spec `docs/specs/export-print/`). */
 const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
 
 /**
@@ -952,6 +1316,7 @@ function ExportMenuControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
+  const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
   return (
@@ -963,19 +1328,32 @@ function ExportMenuControl({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
-        title={disabled ? (api.disabledReason ?? 'Export…') : 'Export…'}
+        title={disabled ? (api.disabledReason ?? SHARE_EXPORT_LABEL) : SHARE_EXPORT_LABEL}
+        {...(disabled && api.disabledReason ? { 'aria-label': SHARE_EXPORT_LABEL } : {})}
+        {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
         }}
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
-        <span className="truncate">Export</span>
+        <span className="truncate">{SHARE_EXPORT_LABEL}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        {disabled && api.disabledReason ? (
+          <span id={reasonId} className="sr-only">
+            {api.disabledReason}
+          </span>
+        ) : null}
       </button>
-      <Menu open={open} onClose={close} anchor={anchor} label="Export" restoreFocusRef={triggerRef}>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label={SHARE_EXPORT_LABEL}
+        restoreFocusRef={triggerRef}
+      >
         {/* Grouped into Schedule / Diagram sections (ux S2), mirroring the Add split-button's sections. */}
-        <MenuSection>Schedule</MenuSection>
+        <MenuSection label="Schedule" />
         <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>
           <FileSpreadsheet aria-hidden="true" className="size-4" />
           {/* When the conditional filtered item is present, name the default one "All activities" so the
@@ -997,8 +1375,7 @@ function ExportMenuControl({
             ) : null}
           </MenuItem>
         ) : null}
-        <div role="separator" className="bg-border my-1 h-px" />
-        <MenuSection>Diagram</MenuSection>
+        <MenuSection divider label="Diagram" />
         {/* Diagram PNG (M2, CQ-1: offer BOTH extents). The whole-plan render re-frames an off-screen
             canvas to the full activity extent (raster-capped, scale-to-fit); the current-view render
             crops to the live viewport. Both paint off-screen with the light print palette + legend. */}
@@ -1038,8 +1415,7 @@ function ExportMenuControl({
             section after the Diagram group. */}
         {SCHEDULE_INTERCHANGE_ENABLED && ctx.canInterchangeExport ? (
           <>
-            <div role="separator" className="bg-border my-1 h-px" />
-            <MenuSection>Interchange</MenuSection>
+            <MenuSection divider label="Interchange" />
             {/* Both items show a loading spinner and are disabled while an export is in flight
                 (`interchangeExporting`), which also guards a double-click / concurrent export — mirroring
                 the Diagram-PDF items above. Uppercase-acronym labels match the sibling CSV/PNG/PDF verbs. */}
@@ -1067,194 +1443,38 @@ function ExportMenuControl({
             </MenuItem>
           </>
         ) : null}
-      </Menu>
-    </>
-  );
-}
+        {/* Print and Share join the export formats here (ADR-0090 M2-T4). They are the same act from
+          the planner's side — the plan LEAVING the product as something someone else reads — and
+          they were three separate Row-2 stops saying so three times.
 
-/** The isolate chain modes the picker offers, in menu order (CQ-1). Full = the whole transitive chain;
- * Driving = only the binding driving edges. Short labels for the compact button, long names in the menu. */
-const ISOLATE_MODE_LABELS: Record<LogicPathMode, string> = {
-  full: 'Full path',
-  driving: 'Driving path',
-};
-
-const ISOLATE_NO_SELECTION_REASON = 'Select an activity first';
-
-const ISOLATE_OPTIONS_LABEL = 'Isolate logic path options';
-
-/**
- * The **Isolate logic path** control (canvas nav, `docs/specs/canvas-nav/`, flag-on) — a **split
- * button** (mirroring {@link AddActivityControl}'s arm-vs-pick model): the **main** button starts /
- * exits isolation directly, and a separate **chevron** opens the mode menu (Full logic path / Driving
- * path only / Stop isolating). This is a deliberate TOGGLE-with-mode control — the main button carries
- * `aria-pressed` (unlike {@link ColourByControl}, which omits it, a11y-rec-3), so clicking the pressed
- * button EXITS isolate (`toggleIsolate`) rather than re-opening the menu (U1); when off it activates
- * isolate in the current/last mode. Keep this split + `aria-pressed`; don't "align" it to the plain
- * menu-buttons. The main button is the single roving stop (spreads `itemProps`); the chevron is a
- * pointer affordance (`tabIndex -1`) with a keyboard equivalent (ArrowDown/Up on the main button opens
- * the menu, the standard split-button keystroke). View-only (never pen-gated); shaded with a reason
- * when nothing is selected / no diagram. The dim + its a11y listbox marking + the live-region
- * announcement carry the state for SR users (WCAG 1.4.1 — never colour/dim alone).
- */
-function IsolateControl({
-  ctx,
-  api,
-}: {
-  ctx: TsldToolbarContext;
-  api: ToolbarItemRenderApi;
-}): React.ReactElement {
-  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  const mainButtonRef = useRef<HTMLButtonElement>(null);
-  const disabled = api.disabled;
-  const modeLabel = ISOLATE_MODE_LABELS[ctx.isolateMode];
-  return (
-    <>
-      <span className="inline-flex items-center">
-        <button
-          {...api.itemProps}
-          ref={mainButtonRef}
-          type="button"
-          aria-pressed={ctx.isolateActive}
-          aria-disabled={disabled || undefined}
-          aria-label={ctx.isolateActive ? `Isolate logic path: ${modeLabel}` : 'Isolate logic path'}
-          title={disabled ? (api.disabledReason ?? 'Isolate logic path') : 'Isolate logic path'}
-          onClick={() => {
-            // Primary affordance TOGGLES isolate (off → start in the current/last mode; on → exit),
-            // so a pressed button exits rather than re-opening the menu (U1).
-            if (!disabled) ctx.toggleIsolate();
-          }}
-          onKeyDown={(event) => {
-            // Split-button keyboard equivalent: ArrowDown/Up (from the main button) opens the mode menu,
-            // so keyboard users reach Full / Driving / Stop without a pointer on the chevron.
-            if (!disabled && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-              event.preventDefault();
-              toggle();
-            }
-          }}
-          className={cn(
-            toolbarControlVariants({ active: ctx.isolateActive, disabled }),
-            'rounded-r-none pr-1',
-          )}
-        >
-          <Route aria-hidden="true" className="size-4" />
-          <span className="truncate">
-            {ctx.isolateActive ? `Isolating · ${modeLabel}` : 'Isolate'}
-          </span>
-        </button>
-        <button
-          ref={triggerRef}
-          type="button"
-          tabIndex={-1}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-disabled={disabled || undefined}
-          aria-label={ISOLATE_OPTIONS_LABEL}
-          title={ISOLATE_OPTIONS_LABEL}
-          onClick={() => {
-            if (!disabled) toggle();
-          }}
-          className={cn(toolbarControlVariants({ active: open, disabled }), 'rounded-l-none px-1')}
-        >
-          <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
-        </button>
-      </span>
-      <Menu
-        open={open}
-        onClose={close}
-        anchor={anchor}
-        label="Isolate logic path"
-        restoreFocusRef={mainButtonRef}
-      >
-        <MenuSection>Show the logic path</MenuSection>
+          Each keeps its own gate rather than inheriting the trigger's: Print rides the diagram gate
+          the exports ride, Share rides `canShare`, which is a permission and not a state. Shaded
+          with the reason rather than hidden, so a Viewer learns that sharing exists and why they
+          cannot (ADR-0082). */}
+        <MenuSection divider label="Deliver" />
         <MenuItem
-          selected={ctx.isolateActive && ctx.isolateMode === 'full'}
-          onSelect={() => ctx.setIsolateMode('full')}
+          disabled={!ctx.hasDiagram}
+          {...(ctx.hasDiagram ? {} : { disabledReason: EXPORT_NO_DIAGRAM_REASON })}
+          onSelect={() => ctx.printDiagram()}
         >
-          <Check
-            aria-hidden="true"
-            className={cn(
-              'size-4',
-              ctx.isolateActive && ctx.isolateMode === 'full' ? 'opacity-100' : 'opacity-0',
-            )}
-          />
-          Full logic path
+          <Printer aria-hidden="true" className="size-4" />
+          Print…
         </MenuItem>
-        <MenuItem
-          selected={ctx.isolateActive && ctx.isolateMode === 'driving'}
-          onSelect={() => ctx.setIsolateMode('driving')}
-        >
-          <Check
-            aria-hidden="true"
-            className={cn(
-              'size-4',
-              ctx.isolateActive && ctx.isolateMode === 'driving' ? 'opacity-100' : 'opacity-0',
-            )}
-          />
-          Driving path only
-        </MenuItem>
-        {ctx.isolateActive ? (
-          <MenuItem onSelect={() => ctx.toggleIsolate()}>
-            <span aria-hidden="true" className="size-4" />
-            Stop isolating
+        {/* Behind `VITE_GUEST_SHARE_LINKS`, exactly as its Row-2 registration was — flag-off the row
+          is absent rather than a "Coming soon" stub, following the M2-T2 precedent. The unused-flag
+          error from the compiler is what caught this being dropped in the first version. */}
+        {GUEST_SHARE_LINKS_ENABLED ? (
+          <MenuItem
+            disabled={!ctx.canShare}
+            {...(ctx.canShare ? {} : { disabledReason: SHARE_NO_PERMISSION_REASON })}
+            onSelect={() => ctx.openShare()}
+          >
+            <Share2 aria-hidden="true" className="size-4" />
+            Share…
           </MenuItem>
         ) : null}
       </Menu>
     </>
-  );
-}
-
-/**
- * The **Next-conflict status chip** (canvas nav, U2) — a compact, VISIBLE `role="status"` read-out
- * pinned beside the Next-conflict button that names the conflict being reviewed ("Conflict 2 of 5 ·
- * constraint conflict"), so a sighted planner gets the reason on screen (4 of the 5 flag types have no
- * on-canvas badge), not only in the polite announcement. Presentational (spreads `itemProps`, never a
- * roving-tabindex stop, mirrors the Project-finish chip); it renders nothing — and the registry item
- * hides — unless a conflict is being cycled (`ctx.currentConflict != null`, i.e. not while isolating /
- * before the first press / with no conflicts / flag-off). The reason truncates at narrow widths; the
- * full reason list is in the `title`. `goToNextConflict` keeps speaking the full polite announcement,
- * so this doubles as its visible half rather than replacing it.
- */
-/**
- * The **find read-out** (`VITE_CANVAS_SEARCH_NAV`) — how many activities the live search matches, and
- * which one the planner is standing on.
- *
- * Modelled on {@link CurrentConflictStatus} down to the `aria-hidden`, and for the same reason: the
- * spoken channel is the shared polite announcer `goToMatch` already writes to, so a second live region
- * here would say "Match 3 of 12" twice to a screen-reader user and once to nobody else. This is the
- * visible half only.
- *
- * Two states, and the difference matters: **"12 matches"** before the first Enter (the planner has
- * typed and wants to know whether it was worth pressing), **"3 of 12"** after (they are walking them).
- * Collapsing the two into one would make the read-out say a position the planner has not reached.
- */
-function SearchMatchStatus({
-  ctx,
-  itemProps,
-}: {
-  ctx: TsldToolbarContext;
-  itemProps: ToolbarItemRenderApi['itemProps'];
-}): React.ReactElement | null {
-  const status = ctx.searchStatus;
-  if (!status) return null;
-  const text =
-    status.index === null
-      ? `${status.total} ${status.total === 1 ? 'match' : 'matches'}`
-      : `${status.index} of ${status.total}`;
-  return (
-    <span
-      {...itemProps}
-      aria-hidden="true"
-      title={
-        status.index === null
-          ? `${text} — press Enter to go to the first`
-          : `Match ${text} — Enter for the next, Shift+Enter for the previous`
-      }
-      className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[10rem] gap-1')}
-    >
-      <Search aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="truncate whitespace-nowrap">{text}</span>
-    </span>
   );
 }
 
@@ -1295,17 +1515,67 @@ function CurrentConflictStatus({
  * overflow-y-auto` is fixed locally here (not in `ToolbarPopover`, whose `ESTIMATED_HEIGHT` anchor
  * assumed a shorter, ungrouped panel) since the primitive is shared with `Summary` and `Legend`
  * and has no reason to change for this panel's height alone. */
+/**
+ * The default colour mode (`use-tsld-canvas-ui-state.ts:149`). Named here rather than compared
+ * against a literal so the two cannot drift apart silently — a drift that would show up only as the
+ * `View ▾` trigger annotating (or failing to annotate) the wrong state.
+ */
+const DEFAULT_COLOUR_MODE: ColourMode = 'criticality';
+
+/**
+ * `View ▾`'s trigger label, which carries the active colour mode **only when it is not the
+ * default** (ADR-0090 M2-T2 — the decision is written up in
+ * `docs/specs/workspace-layout/m2-suite-impact.md`).
+ *
+ * The `colour-by` menu-button used to say this on Row 1 (`Colour · Criticality`) and cost 183 px of
+ * pinned width to do it. Colour is the diagram's dominant encoding, so losing the read-out
+ * altogether was not acceptable — a planner who has coloured by WBS group and forgotten reads every
+ * criticality judgement wrong. Annotating *always* would spend ~90 px permanently to state the
+ * thing that is already true, on the surface whose entire problem is width. So it annotates the
+ * surprising state and stays silent in the ordinary one.
+ */
+function viewTriggerLabel(ctx: TsldToolbarContext): string {
+  return ctx.colourMode === DEFAULT_COLOUR_MODE
+    ? 'View'
+    : `View · ${COLOUR_MODE_LABELS[ctx.colourMode]}`;
+}
+
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
     <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
       {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
         const keys = visibleViewToggleKeysIn(id);
-        if (keys.length === 0) return null;
+        const lenses = lensTogglesIn(id);
+        if (keys.length === 0 && lenses.length === 0) return null;
         return (
           <fieldset key={id} className="flex flex-col gap-2">
             <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
               {label}
             </legend>
+            {/* Colour-by leads the Insight group (ADR-0090 M2-T2): it is the one control here that
+                changes what every bar MEANS rather than adding a mark on top, so it reads first.
+                A radio group, not checkboxes — the three modes are exclusive, which the old
+                menu-button expressed with `menuitemradio` and this expresses natively. */}
+            {id === 'insight' && CANVAS_LENSES_ENABLED ? (
+              <div
+                role="radiogroup"
+                aria-label="Colour bars by"
+                className="border-border mb-1 flex flex-col gap-2 border-b pb-2"
+              >
+                {COLOUR_MODE_ORDER.map((mode) => (
+                  <label key={mode} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="tsld-colour-mode"
+                      checked={ctx.colourMode === mode}
+                      onChange={() => ctx.setColourMode(mode)}
+                      className="accent-primary size-4"
+                    />
+                    Colour · {COLOUR_MODE_LABELS[mode]}
+                  </label>
+                ))}
+              </div>
+            ) : null}
             {keys.map((key) => (
               <label key={key} className="flex items-center gap-2 text-sm">
                 <input
@@ -1317,6 +1587,55 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                 {VIEW_TOGGLE_META[key].label}
               </label>
             ))}
+            {/* The relocated lens toggles (ADR-0090 M2-T2). `aria-disabled` + a guard rather than
+                native `disabled`, per ADR-0083: a control whose only operation is changing its value
+                takes the ARIA form, so the row stays focusable and its REASON stays readable —
+                which is the whole point of moving these rather than dropping them. The reason is
+                `aria-describedby`-linked to the input (never folded into its name) and shown
+                visibly beside it, because this surface has no `title` tooltip to fall back on and a
+                sighted planner needs it as much as a screen-reader one. */}
+            {lenses.map((lens) => {
+              const reason = lens.reason(ctx);
+              const shut = reason !== undefined;
+              const reasonId = shut ? `tsld-view-${lens.id}-reason` : undefined;
+              const noteId = lens.note ? `tsld-view-${lens.id}-note` : undefined;
+              // Both, space-separated, when both apply — an `aria-describedby` that names only one
+              // silently drops the other, and "why it is shut" and "what it does" are both wanted.
+              const describedBy = [reasonId, noteId].filter(Boolean).join(' ') || undefined;
+              return (
+                <div key={lens.id} className="flex flex-col gap-0.5">
+                  <label
+                    className={cn(
+                      'flex items-center gap-2 text-sm',
+                      shut && 'text-muted-foreground',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      data-view-lens={lens.id}
+                      checked={lens.checked(ctx)}
+                      aria-disabled={shut || undefined}
+                      {...(describedBy ? { 'aria-describedby': describedBy } : {})}
+                      onChange={() => {
+                        if (!shut) lens.toggle(ctx);
+                      }}
+                      className="accent-primary size-4"
+                    />
+                    {lens.label}
+                  </label>
+                  {shut ? (
+                    <span id={reasonId} className="text-muted-foreground pl-6 text-xs">
+                      {reason}
+                    </span>
+                  ) : null}
+                  {lens.note ? (
+                    <span id={noteId} className="text-muted-foreground pl-6 text-xs">
+                      {lens.note}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
           </fieldset>
         );
       })}
@@ -1504,7 +1823,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'clear-visual-placement',
     group: 'tools' as const,
     row: 'do' as const,
-    tier: 2 as const,
+    tier: 3 as const,
     order: 6,
     label: 'Clear visual placement',
     icon: <Eraser className="size-4" />,
@@ -1552,74 +1871,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Filter',
     icon: <Filter className="size-4" />,
   };
-  const colourByShape = {
-    id: 'colour-by',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 3,
-    label: 'Colour by…',
-    icon: <Palette className="size-4" />,
-  };
-  const baselineOverlayShape = {
-    id: 'baseline-overlay',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 4,
-    label: 'Baseline overlay',
-    icon: <Layers2 className="size-4" />,
-  };
-  // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) shared shape — the id/group/row/tier/order/
-  // label/icon carried in BOTH its real (flag-on) toggle and its `placeholderItem()` (flag-off) stub,
-  // declared once and spread into both branches so they can't drift (mirrors the lens / canvas-nav
-  // shared-shape pattern). Sits on Row 1 · Look in the Lens group, gated on a computed diagram.
-  const resourceViewShape = {
-    id: 'resource-view',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 5,
-    label: 'Resource view',
-    icon: <BarChart3 className="size-4" />,
-  };
-  // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) shared shape — the id/group/row/
-  // tier/order/label/icon carried in BOTH its real (flag-on) toggle and its `placeholderItem()`
-  // (flag-off) stub, declared once and spread into both branches so they can't drift (mirrors the
-  // resource-view / lens / canvas-nav shared-shape pattern). A SECOND, independent Look-row lens-group
-  // item (not a split-button on resource-view): the highlight is its own mode, and — like Next-conflict
-  // — it carries its own `isEnabled`/`disabledReason` empty state cleanly. Sits right after resource-view.
-  const overAllocationShape = {
-    id: 'over-allocation',
-    group: 'lens' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 6,
-    label: 'Flag over-allocated',
-    // A rising-bars icon mirroring the on-canvas over-allocation badge glyph — a "resource climbing past
-    // capacity" metaphor, distinct from resource-view's `BarChart3` and next-conflict's `TriangleAlert`
-    // (component/icon review N5).
-    icon: <ChartColumnIncreasing className="size-4" />,
-  };
   // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/tier/order/label/icon each of the
   // three ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens
   // shared-shape pattern). isolate/next-conflict lead the Find cluster (Row 1 · Look, view-only);
   // snap-to-grid rides the pen-gated authoring cluster (Row 2 · Do).
-  const isolateShape = {
-    id: 'isolate-logic',
-    group: 'find' as const,
-    row: 'look' as const,
-    tier: 2 as const,
-    order: 1,
-    label: 'Isolate logic path',
-    icon: <Route className="size-4" />,
-  };
   const nextConflictShape = {
     id: 'next-conflict',
     group: 'find' as const,
     row: 'look' as const,
-    tier: 2 as const,
+    tier: 3 as const,
     order: 2,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
@@ -1638,37 +1899,17 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
   // canvas-nav shared-shape pattern). Both ride the Row 2 · Do deliverables cluster (no pen — they read,
   // never author).
+  // The deliverables trigger (ADR-0090 M2-T4): one stop where there were three. It sits in the new
+  // `output` group at Row 2's trailing edge — the group renamed from the never-used `history`, so
+  // the taxonomy gained a home for "what the plan leaves as" without growing.
   const exportShape = {
     id: 'export',
-    group: 'object' as const,
+    group: 'output' as const,
     row: 'do' as const,
     tier: 2 as const,
-    order: 7,
-    label: 'Export…',
+    order: 0,
+    label: SHARE_EXPORT_LABEL,
     icon: <FileDown className="size-4" />,
-  };
-  const printShape = {
-    id: 'print',
-    group: 'object' as const,
-    row: 'do' as const,
-    tier: 2 as const,
-    order: 8,
-    label: 'Print…',
-    icon: <Printer className="size-4" />,
-  };
-  // Share (External-Guest per-plan link, VITE_GUEST_SHARE_LINKS; ADR-0051 F-M4) shared item shape — the
-  // id/group/row/tier/order/label/icon carried in BOTH its real (flag-on) item and its
-  // `placeholderItem()` (flag-off) stub, declared once and spread into both branches so they can't drift
-  // (mirrors the export/print/quick-wins shared-shape pattern). Rides the Row 2 · Do deliverables cluster
-  // (no pen — sharing grants read access, it doesn't author the plan).
-  const shareShape = {
-    id: 'share',
-    group: 'object' as const,
-    row: 'do' as const,
-    tier: 2 as const,
-    order: 9,
-    label: 'Share…',
-    icon: <Share2 className="size-4" />,
   };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -1684,7 +1925,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: -2,
       label: 'Go to date',
       isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
-      render: (ctx, api) => <GoToDateControl ctx={ctx} itemProps={api.itemProps} />,
+      render: (ctx, api) => (
+        <GoToDateControl
+          ctx={ctx}
+          itemProps={api.itemProps}
+          compact={triggersAreCompact(api.layout)}
+        />
+      ),
     },
     // Zoom — one dropdown (Day…Year) plus −/+ and Fit, a compact cluster in the Frame group (ADR-0031).
     // Always on Row 1 (Look) and shaded (not hidden) until a diagram exists, so the bar keeps a stable
@@ -1709,9 +1956,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       priority: 100,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
+      // Below 1280 px this command lives inside `Zoom ▾` instead (M3-T2) — one predicate shared with
+      // the fold itself, so it can never be in both places or neither.
+      isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-      disabledReason: (ctx) =>
-        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
+      disabledReason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
       onActivate: (ctx) => ctx.stepZoom(0.5),
     },
     {
@@ -1723,9 +1972,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       priority: 100,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
+      isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-      disabledReason: (ctx) =>
-        !ctx.hasDiagram ? ZOOM_DISABLED_REASON : ctx.canvasActive ? undefined : CANVAS_ONLY_REASON,
+      disabledReason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
       onActivate: (ctx) => ctx.stepZoom(2),
     },
     {
@@ -1737,48 +1986,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       priority: 100,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
+      isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-      disabledReason: (ctx) =>
-        !ctx.hasDiagram
-          ? 'Add an activity to fit the view'
-          : ctx.canvasActive
-            ? undefined
-            : CANVAS_ONLY_REASON,
+      disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to fit the view'),
       onActivate: (ctx) => ctx.fit(),
     },
-    // Zoom to selection (search navigation M3) — the companion to `Fit to plan`, ordered right after
-    // it, for the planner who has just landed on a match and wants to read it. Registered only
-    // flag-on, so flag-off the toolbar is byte-for-byte today's.
-    //
-    // Three shade reasons, layered most-actionable first, because three different things can make it
-    // impossible and a single reason would be wrong for two of them. `canvasActive` is in the FIRST
-    // version, not added after a review: `zoomToActivity` is a canvas-handle command and the Gantt
-    // does not mount one, so without it this is exactly the lit-but-inert control ADR-0059 M6 found.
-    ...(CANVAS_SEARCH_NAV_ENABLED
-      ? [
-          {
-            id: 'zoom-to-selection',
-            group: 'frame' as const,
-            row: 'look' as const,
-            tier: 2 as const,
-            order: 13,
-            priority: 100,
-            label: 'Zoom to selection',
-            icon: <Crosshair className="size-4" />,
-            isEnabled: (ctx: TsldToolbarContext) =>
-              ctx.hasDiagram && ctx.canvasActive && ctx.selectedActivity != null,
-            disabledReason: (ctx: TsldToolbarContext) =>
-              !ctx.hasDiagram
-                ? 'Add an activity to zoom to'
-                : !ctx.canvasActive
-                  ? CANVAS_ONLY_REASON
-                  : ctx.selectedActivity == null
-                    ? 'Select an activity first'
-                    : undefined,
-            onActivate: (ctx: TsldToolbarContext) => ctx.zoomToSelection(),
-          },
-        ]
-      : []),
+    // `zoom-to-selection` moved to the SELECTION BAR in ADR-0090 M2-T1 (`selection-actions.tsx`),
+    // with `isolate-logic` and `float-paths`. All three required a selection, so all three spent
+    // most of their life on Row 1 shaded — holding width to say "Select an activity first".
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
     // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
@@ -1787,13 +2002,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
+          isVisible: (_ctx, env) => !viewportCommandsAreFolded(env.layout),
           isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-          disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? 'Add an activity to go to today'
-              : ctx.canvasActive
-                ? undefined
-                : CANVAS_ONLY_REASON,
+          disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to go to today'),
           onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
         }
       : placeholderItem(todayShape),
@@ -1811,9 +2022,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <SlidersHorizontal className="size-4" />,
       render: (ctx, api) => (
         <ToolbarPopover
-          label="View"
+          label={viewTriggerLabel(ctx)}
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
+          compact={triggersAreCompact(api.layout)}
         >
           <ViewTogglesPanel ctx={ctx} />
         </ToolbarPopover>
@@ -1900,85 +2112,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isActive: (ctx) => ctx.planView === 'gantt',
       onActivate: (ctx) => ctx.setPlanView('gantt'),
     },
-    // Analyse placeholders (Row 1) — shown **inline** (tier 2 icon buttons) rather than parked in `⋯`,
-    // so the intended lenses read at a glance beside the search field (ADR-0031 two-row amendment).
-    // Colour-by recolours bars by status/WBS/critical/resource; baseline-overlay ghosts the active
-    // baseline; resource-view is the second (histogram) lens that folds into `view-mode` when built.
-    // Colour-by — flag-on recolours bars by Criticality (default, today's fills) / Total float / WBS
-    // group with a mode-aware Legend (spec `docs/specs/canvas-lenses/`); flag-off the "Coming soon"
-    // placeholder, byte-for-byte. Pressed when a non-default mode is active.
-    CANVAS_LENSES_ENABLED
-      ? {
-          ...colourByShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
-          isActive: (ctx) => ctx.colourMode !== 'criticality',
-          render: (ctx, api) => <ColourByControl ctx={ctx} api={api} />,
-        }
-      : placeholderItem(colourByShape),
-    // Baseline overlay — flag-on a pressed-state toggle that ghosts the active baseline behind the live
-    // bars (spec `docs/specs/canvas-lenses/`), disabled-with-reason when there's no diagram / the
-    // variance query is loading or errored / there's no active baseline; flag-off the "Coming soon"
-    // placeholder, byte-for-byte.
-    CANVAS_LENSES_ENABLED
-      ? {
-          ...baselineOverlayShape,
-          isActive: (ctx) => ctx.baselineOverlay,
-          isEnabled: (ctx) =>
-            ctx.hasDiagram && !ctx.varianceLoading && !ctx.varianceError && ctx.hasActiveBaseline,
-          disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? LENS_NO_DIAGRAM_REASON
-              : ctx.varianceLoading
-                ? 'Loading baseline…'
-                : ctx.varianceError
-                  ? 'Baseline unavailable'
-                  : !ctx.hasActiveBaseline
-                    ? 'No active baseline'
-                    : undefined,
-          onActivate: (ctx) => ctx.toggleBaselineOverlay(),
-        }
-      : placeholderItem(baselineOverlayShape),
-    // Resource view — flag-on (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) a pressed-state toggle that reveals
-    // the canvas-axis-aligned resource strip (a demand strip pinned to the TSLD time axis + the reused
-    // accessible table); flag-off the "Coming soon" placeholder, byte-for-byte. Shaded (disabled-with-
-    // reason) on an empty/uncomputed canvas, like the other lenses — there's no timeline to strip yet.
-    // View-only (every role), never pen-gated. The shared shape is spread into both branches so they
-    // can't drift (mirrors the C1/quick-wins pattern).
-    CANVAS_RESOURCE_VIEW_ENABLED
-      ? {
-          ...resourceViewShape,
-          isActive: (ctx) => ctx.resourceViewOpen,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
-          onActivate: (ctx) => ctx.toggleResourceView(),
-        }
-      : placeholderItem(resourceViewShape),
-    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) — flag-on a view-only toggle that
-    // flags every bar carrying the engine-owned levelling over-allocation flags (ADR-0041), reusing the
-    // Stage-A/B `TsldScene` seam (spec `docs/specs/canvas-resource-view/`); flag-off the "Coming soon"
-    // placeholder, byte-for-byte. Disabled-with-reason when the canvas is empty/uncomputed OR nothing is
-    // over-allocated (shade-don't-hide, mirroring Next-conflict's empty state). View-only, never
-    // pen-gated. The shared shape is spread into both branches so they can't drift (C1/quick-wins pattern).
-    CANVAS_RESOURCE_VIEW_ENABLED
-      ? {
-          ...overAllocationShape,
-          isActive: (ctx) => ctx.overAllocationHighlight,
-          // Enabled whenever there's something to flag OR the highlight is already ON — an active
-          // toggle must always be clickable-to-off, so a recalc that clears all over-allocation while
-          // the mode is on can never leave it aria-pressed AND aria-disabled (a stuck-on dead-end, UX
-          // review B5). The disabled-with-reason empty state is kept only for the OFF→ON activation case.
-          isEnabled: (ctx) =>
-            ctx.hasDiagram && (ctx.hasOverAllocation || ctx.overAllocationHighlight),
-          disabledReason: (ctx) =>
-            !ctx.hasDiagram
-              ? LENS_NO_DIAGRAM_REASON
-              : ctx.hasOverAllocation || ctx.overAllocationHighlight
-                ? undefined
-                : OVER_ALLOCATION_EMPTY_REASON,
-          onActivate: (ctx) => ctx.toggleOverAllocation(),
-        }
-      : placeholderItem(overAllocationShape),
+    // `over-allocation` moved INTO `View ▾` (Insight overlays) in ADR-0090 M2-T2, keeping the
+    // clickable-to-off rule that stops it becoming a stuck-on dead end — see `LENS_TOGGLES`.
 
     // --- 3 · Find / focus (Row 1 · Look) ------------------------------------------------------
     // Search / filter field — leads the Find cluster as a real (disabled) input, so the affordance
@@ -2001,7 +2136,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       : {
           ...searchShape,
           presentational: true,
-          render: (_ctx, api) => <SearchFieldControl itemProps={api.itemProps} />,
+          render: (_ctx, api) => (
+            <SearchFieldControl itemProps={api.itemProps} layout={api.layout} />
+          ),
         },
     // Filter — flag-on a real attribute Filter menu (Critical / Has constraint / Has conflict), whose
     // match set intersects with the search query; flag-off the "Coming soon" placeholder, byte-for-byte.
@@ -2019,27 +2156,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // activity's logic chain (full or driving-only, CQ-1), reusing the Stage A dim seam (spec
     // `docs/specs/canvas-nav/`); flag-off the "Coming soon" placeholder, byte-for-byte. Enabled only with
     // a selection AND a computed diagram; never pen-gated (navigating never mutates). Pressed when active.
-    CANVAS_NAV_ENABLED
-      ? {
-          ...isolateShape,
-          isActive: (ctx) => ctx.isolateActive,
-          // Diagram gate BEFORE the selection gate (an empty plan can't be traced at all), and
-          // `canvasActive` before both: isolate dims the CANVAS by driving `canvasUi.navState`,
-          // which only `TsldPanel` reads — so in the Gantt it was lit and did nothing. That became
-          // reachable the moment the Gantt started feeding the workspace selection (audit F4); it
-          // is the ADR-0059 M6 rule applied where it belongs — shade what only the canvas can do.
-          isEnabled: (ctx) => ctx.canvasActive && ctx.hasDiagram && ctx.selectedActivity != null,
-          disabledReason: (ctx) =>
-            !ctx.canvasActive
-              ? CANVAS_ONLY_REASON
-              : !ctx.hasDiagram
-                ? LENS_NO_DIAGRAM_REASON
-                : ctx.selectedActivity == null
-                  ? ISOLATE_NO_SELECTION_REASON
-                  : undefined,
-          render: (ctx, api) => <IsolateControl ctx={ctx} api={api} />,
-        }
-      : placeholderItem(isolateShape),
     // Next conflict — flag-on a view-only button that cycles the plan's flagged activities (CQ-2), each
     // centred + selected + announced (spec `docs/specs/canvas-nav/`); flag-off the "Coming soon"
     // placeholder, byte-for-byte. Enabled only when there is ≥ 1 conflict; never pen-gated.
@@ -2077,7 +2193,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             id: 'float-paths',
             group: 'find',
             row: 'look',
-            tier: 2,
+            tier: 3,
             order: 4,
             label: 'Float paths',
             icon: <Split className="size-4" />,
@@ -2099,6 +2215,22 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which
     // is never the case when the flag is off (the ordered set is empty then) — so it is inert + adds no
     // DOM flag-off, keeping the byte-for-byte parity. Presentational ⇒ never a roving-tabindex stop.
+    // **The plan said to fold this into `next-conflict`'s label. Measurement says do not.**
+    //
+    // `design.md` §4.1 item 20/21 folds the "Conflict 2 of 7 · reason" read-out into the button's
+    // label, on the same reasoning that moved `search-status` into the search field a few lines up:
+    // a read-out is not a command and does not belong in a `role="toolbar"`.
+    //
+    // The two destinations are not comparable, and the measurement is what shows it. The search
+    // field is a `render` item — pinned, painted at every width. A **label** is painted only when
+    // `autoLabelsFit` is true, and `docs/specs/workspace-layout/m2-item-widths.md` records that at
+    // 1920 it is false: every `'auto'` item on this row measures 32 px, icon-only. So folding the
+    // count into the label would make it invisible **at the width this whole epic exists to fix**,
+    // on the product owner's own monitor — deleting information under cover of tidying.
+    //
+    // The chip costs nothing to keep: `isVisible` is false unless a conflict is being cycled, so it
+    // occupies no width at rest and none of the M2 arithmetic depends on it. It stays, and
+    // `presentational` keeps one honest consumer on this surface rather than none.
     {
       id: 'next-conflict-status',
       group: 'find',
@@ -2118,19 +2250,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // Presentational ⇒ never a roving-tabindex stop.
     ...(CANVAS_SEARCH_NAV_ENABLED
       ? [
-          {
-            id: 'search-status',
-            group: 'find' as const,
-            row: 'look' as const,
-            tier: 2 as const,
-            order: 1,
-            label: 'Search matches',
-            presentational: true,
-            isVisible: (ctx: TsldToolbarContext) => ctx.searchStatus != null,
-            render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
-              <SearchMatchStatus ctx={ctx} itemProps={api.itemProps} />
-            ),
-          },
+          // `search-status` was folded INTO the search field's own box in ADR-0090 M2-T3 — it is
+          // a read-out, and a read-out has no business being a member of a `role="toolbar"`.
         ]
       : []),
 
@@ -2354,26 +2475,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
     ...undoRedoToolbarItems(),
 
-    // --- 5 · Object / plan actions ------------------------------------------------------------
-    // Finish read-out + Summary popover stay on Row 1 (Look): they report the computed schedule and
-    // don't need the pen. They right-align via the toolbar's `alignEndGroup="object"` on Row 1.
-    {
-      id: 'finish-chip',
-      group: 'object',
-      row: 'look',
-      tier: 1,
-      order: 0,
-      label: 'Project finish',
-      // A read-out, not a control: rendered inline but never a roving-tabindex stop (a11y review —
-      // a focusable-but-inert stop breaks the APG toolbar contract and can be nameless mid-load).
-      presentational: true,
-      isVisible: (ctx) => ctx.hasDiagram,
-      render: (ctx, api) => (
-        <span {...api.itemProps} className={toolbarControlVariants({ tone: 'info' })}>
-          {ctx.projectFinishContent}
-        </span>
-      ),
-    },
+    // The Project-finish read-out moved to the PLAN HEADER in ADR-0090 M2-T3
+    // (`features/schedule/components/ProjectFinishChip.tsx`). It cost 150 px of pinned Row-1 width
+    // — a `render` item can never demote — to show a number that is not a command, in a
+    // `role="toolbar"` whose other members all are.
     {
       id: 'summary',
       group: 'object',
@@ -2387,23 +2492,24 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           label="Summary"
           icon={<Info className="size-4" />}
           itemProps={api.itemProps}
+          compact={triggersAreCompact(api.layout)}
         >
           {ctx.summaryContent}
         </ToolbarPopover>
       ),
     },
-    // Plan & deliverables (Row 2 · Do) — available whether or not you hold the pen (they open dialogs /
-    // export; they don't author on the canvas). Shown inline as icon buttons (tier 2). The persisted
-    // **data date** is changed here, via *Edit plan* — it no longer has its own control on the bar.
+    // Baselines, Earned value and Resource histogram are behind the **Analysis** trigger since
+    // ADR-0090 M2-T5 — three Row-2 stops for three ways of measuring a plan against something.
+    // `Schedule settings…` deliberately did NOT join them; see `PlanAnalysisControl`.
     {
-      id: 'baselines',
+      id: 'analysis',
       group: 'object',
       row: 'do',
       tier: 2,
       order: 2,
-      label: 'Baselines…',
-      icon: <Layers className="size-4" />,
-      onActivate: (ctx) => ctx.openBaselines(),
+      label: ANALYSIS_LABEL,
+      icon: <ChartArea className="size-4" />,
+      render: (ctx, api) => <PlanAnalysisControl ctx={ctx} api={api} />,
     },
     // The dialog behind this holds the plan's working-day calendar AND six other settings groups
     // that all change how its dates are calculated (critical path & float, progress/recalc mode,
@@ -2420,35 +2526,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Schedule settings…',
       icon: <CalendarDays className="size-4" />,
       onActivate: (ctx) => ctx.openCalendar(),
-    },
-    // Earned value (EV4b, ADR-0042) — opens the analysis dialog; a read action (no pen). Gated behind
-    // `VITE_EARNED_VALUE`, so it's absent from the bar until the surface ships.
-    {
-      id: 'earned-value',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 4,
-      label: 'Earned value…',
-      icon: <DollarSign className="size-4" />,
-      isVisible: () => EARNED_VALUE_ENABLED,
-      onActivate: (ctx) => ctx.openEarnedValue(),
-    },
-    // Resource histogram (M7 rung 5, ADR-0044 §3) — opens the resource-loading read dialog; a read
-    // action (no pen). Gated behind `VITE_RESOURCE_CURVES`, so it's absent until the surface ships.
-    {
-      id: 'resource-histogram',
-      group: 'object',
-      row: 'do',
-      tier: 2,
-      order: 5,
-      label: 'Resource histogram…',
-      // Distinct from the Row-1 "Resource view" toggle's `BarChart3` (icon audit, ux review) — the
-      // two are easy to conflate (both are "resource" + "chart") when they appear together across the
-      // two toolbar rows.
-      icon: <ChartArea className="size-4" />,
-      isVisible: () => RESOURCE_CURVES_ENABLED,
-      onActivate: (ctx) => ctx.openResourceHistogram(),
     },
     // Plan details + Edit plan are no longer toolbar buttons (ADR-0031 amendment): the key facts
     // (status, data date, mode) now live in the Summary popover, which also carries an "Edit plan…"
@@ -2484,41 +2561,25 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     EXPORT_PRINT_ENABLED
       ? {
           ...exportShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
+          // **Enabled when ANY row inside is actionable, not when the exports are** (ADR-0082, and
+          // the rule M2-T7 exists to pin). Gating the trigger on `hasDiagram` alone — which is what
+          // the first version did, inheriting the old Export button's gate — shut the whole menu on
+          // a plan with no computed diagram and took **Share** with it. Sharing needs a permission,
+          // not a schedule, so a Planner on a freshly created plan could share before this change
+          // and could not after: a capability lost to a relocation, which is the exact failure this
+          // milestone's suite-impact pass exists to catch.
+          //
+          // Each row keeps its own gate and its own reason; the trigger only asks whether there is
+          // anything at all behind it.
+          isEnabled: (ctx) => ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare),
+          disabledReason: (ctx) =>
+            ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare)
+              ? undefined
+              : EXPORT_NO_DIAGRAM_REASON,
           render: (ctx, api) => <ExportMenuControl ctx={ctx} api={api} />,
         }
       : placeholderItem(exportShape),
-    // Print… (export & print, `docs/specs/export-print/` §Milestone 4, CQ-4 — the image path) — the real
-    // browser-print action. Flag-on it prints the WHOLE diagram: `ctx.printDiagram()` reuses the M2
-    // off-screen PNG, mounts it into the print-only `PrintSurface` (a print stylesheet hides the app-shell
-    // `#root`), and opens the browser print dialog. A plain action button (no menu); gated on a computed
-    // diagram (disabled-with-reason "Add an activity first", shade-don't-hide), matching Export. Flag-off
-    // it's the byte-for-byte `placeholderItem()` "Coming soon" stub. `printShape` is spread into both so
-    // the two branches can't drift, exactly like `exportShape`.
-    EXPORT_PRINT_ENABLED
-      ? {
-          ...printShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
-          onActivate: (ctx) => ctx.printDiagram(),
-        }
-      : placeholderItem(printShape),
-    // Share… (External-Guest per-plan link, `docs/specs/external-guest-share-link/`; ADR-0051 F-M4) —
-    // flag-on it opens the member `ShareLinksDialog` (create / list / revoke), additionally gated on the
-    // caller holding `plan:share` (`ctx.canShare`, Planner + Org Admin) — a Viewer/Contributor sees it
-    // shaded with a reason (shade-don't-hide). Flag-off it is the byte-for-byte `placeholderItem()`
-    // "Coming soon" stub. `shareShape` is spread into both branches so the two can't drift (mirrors
-    // export/print). Not pen-gated — sharing grants read access, it doesn't author the plan.
-    GUEST_SHARE_LINKS_ENABLED
-      ? {
-          ...shareShape,
-          isEnabled: (ctx) => ctx.canShare,
-          disabledReason: (ctx) =>
-            ctx.canShare ? undefined : 'You don’t have permission to share this plan',
-          onActivate: (ctx) => ctx.openShare(),
-        }
-      : placeholderItem(shareShape),
+    // `share` folded INTO the Share & export menu in ADR-0090 M2-T4 — see `ExportMenuControl`.
     // Comments — reveals + focuses the plan-level notes thread (toolbar quick-wins F2). Read action for
     // every role; absent when `VITE_NOTES` is off (there is nothing to reveal). Flag-off it is the
     // "Coming soon" placeholder, byte-for-byte.
@@ -2534,25 +2595,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         }
       : placeholderItem(commentsShape),
 
-    // --- 6 · Help -----------------------------------------------------------------------------
-    // Legend rides Row 1 (Look) at the far right; Shortcuts sits beside it. (Undo/Redo moved to the
-    // Row-2 authoring cluster above, so the History group holds no toolbar items now.)
-    // The legend lives **on the canvas** now (ADR-0031 amendment): this is a show/hide toggle for the
-    // floating Legend panel (draggable + pinnable over the diagram), not a popover that renders the key.
-    {
-      id: 'legend',
-      group: 'help',
-      row: 'look',
-      tier: 2,
-      order: 0,
-      // The two cheapest losses on Row 1: both open a reference surface, neither changes the
-      // plan or the view. They were also the two the old `order`-as-priority rule kept LONGEST.
-      priority: -100,
-      label: 'Legend',
-      icon: <ListChecks className="size-4" />,
-      isActive: (ctx) => ctx.legendOpen,
-      onActivate: (ctx) => ctx.toggleLegend(),
-    },
+    // `legend` moved INTO `View ▾` in ADR-0090 M2-T2, under a new **Panels** section — the direct
+    // answer to the product owner's Q2. A panel is a surface you read beside the diagram, not a
+    // mark drawn on it, which is why it is not filed with the Insight overlays.
     {
       // Keyboard shortcuts belong with the reference controls, not the authoring row: shown at the
       // far right of Row 1 (help group, beside Legend) and also bound to the `?` key by the workspace
@@ -2560,7 +2605,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'shortcuts',
       group: 'help',
       row: 'look',
-      tier: 2,
+      tier: 3,
       order: 1,
       priority: -110,
       label: 'Keyboard shortcuts',

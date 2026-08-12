@@ -20,7 +20,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return makeTsldToolbarContext({ summaryContent: null, projectFinishContent: null, ...over });
+  return makeTsldToolbarContext({ summaryContent: null, ...over });
 }
 
 function renderRows(context: TsldToolbarContext) {
@@ -32,11 +32,23 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
+/**
+ * Open the **Share & export** trigger (ADR-0090 M2-T4) and return to the caller.
+ *
+ * Share was its own Row-2 button; it is a row in this menu now. What the assertions below prove is
+ * unchanged — that is the point of re-homing them rather than rewriting them.
+ */
+function openDeliver(): void {
+  const trigger = screen.getByRole('button', { name: /Share & export/ });
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+}
+
 describe('TSLD toolbar Share (VITE_GUEST_SHARE_LINKS on)', () => {
   it('opens the Share dialog for a caller who holds plan:share', () => {
     const openShare = vi.fn();
     renderRows(ctx({ openShare, canShare: true }));
-    const btn = screen.getByRole('button', { name: 'Share…' });
+    openDeliver();
+    const btn = screen.getByRole('menuitem', { name: 'Share…' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(openShare).toHaveBeenCalledTimes(1);
@@ -45,10 +57,13 @@ describe('TSLD toolbar Share (VITE_GUEST_SHARE_LINKS on)', () => {
   it('shades the item with a reason for a caller without plan:share (never removed)', () => {
     const openShare = vi.fn();
     renderRows(ctx({ openShare, canShare: false }));
-    const btn = screen.getByRole('button', { name: 'Share…' });
+    openDeliver();
+    const btn = screen.getByRole('menuitem', { name: 'Share…' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    // The toolbar prefixes the label to the disabled-reason in the tooltip.
-    expect(btn.getAttribute('title')).toContain('You don’t have permission to share this plan');
+    // A `MenuItem` links its reason by `aria-describedby` rather than folding it into a `title`
+    // (ADR-0082): announced on focus, where a tooltip is not. The guarantee is unchanged; only the
+    // channel it travels on did, and this asserts the channel the destination actually uses.
+    expect(btn).toHaveAccessibleDescription('You don’t have permission to share this plan');
     fireEvent.click(btn);
     expect(openShare).not.toHaveBeenCalled();
   });

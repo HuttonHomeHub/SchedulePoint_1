@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ToolbarItemRenderApi } from './toolbar-registry';
@@ -27,7 +27,9 @@ export function ToolbarPopover({
   disabled,
   active,
   title,
+  disabledReason,
   align = 'start',
+  compact = false,
   children,
 }: {
   label: string;
@@ -39,13 +41,45 @@ export function ToolbarPopover({
    * filter is on) — `aria-pressed`/active becomes `open || active`, so the cue survives closing the
    * popover (mirrors the Colour-by picker's `api.active || open`). Absent ⇒ pressed only while open. */
   active?: boolean;
-  /** Native tooltip on the trigger — used to surface a disabled reason (an `aria-disabled` button's
-   * bare state has no explanation otherwise), matching the plain `ToolbarButton`. Absent ⇒ no title. */
+  /** Native tooltip on the trigger. Absent ⇒ no title. */
   title?: string;
+  /**
+   * Why this trigger is shut, **programmatically associated** — an `sr-only` sibling wired by
+   * `aria-describedby`, exactly as {@link ToolbarButton} and `MenuItem` do it (ADR-0082).
+   *
+   * **A `title` is not a substitute, and this component shipped believing it was.** `ToolbarButton`'s
+   * own docblock records the finding: *"no mainstream browser shows it on keyboard focus… a sighted
+   * keyboard-only planner who tabbed to a shaded control got a dimmed button and nothing else."* That
+   * fix landed on the plain button and not on its neighbour here — the shape this repository keeps
+   * recording (ADR-0064 §7, ADR-0067 M4, ADR-0073 C4, ADR-0086 M6) — and the ADR-0090 M5
+   * accessibility gate found it on the live path: `Filter` is `isEnabled: (ctx) => ctx.hasDiagram`,
+   * so every empty or uncomputed plan reaches it.
+   *
+   * Also fills the tooltip when no explicit {@link title} is given, so the two cannot disagree.
+   */
+  disabledReason?: string;
   /** Align the panel's inline-start (`start`) or inline-end (`end`) to the trigger. */
   align?: 'start' | 'end';
+  /**
+   * Icon-only trigger (ADR-0090 M3-T3): the visible label is withheld and moves to `aria-label` +
+   * the native tooltip, so the control keeps its **name** while giving back roughly 60 px.
+   *
+   * Set from the row's `collapsed` band and nothing else. The measured reason: at 960 px Row 1's six
+   * remaining controls lay out 11 px wider than their container and at 768 px 203 px wider, and four
+   * of the six are this component — so one prop here is most of the collapse.
+   *
+   * **The name moves; it does not disappear.** An icon-only `<button>` whose only child is an
+   * `aria-hidden` glyph has no accessible name at all, which is the failure mode a `sr-only` span
+   * would also solve — `aria-label` is chosen because this trigger's name is a plain string it
+   * already receives, with no markup to preserve.
+   */
+  compact?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
+  const reasonId = useId();
+  // Only when there IS a reason: an `aria-describedby` pointing at an element that renders nothing is
+  // a dangling reference, which some AT reads as an empty description rather than as absence.
+  const describedBy = disabled === true && disabledReason ? reasonId : undefined;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -120,7 +154,19 @@ export function ToolbarPopover({
         aria-haspopup="dialog"
         aria-expanded={open}
         {...(active !== undefined ? { 'aria-pressed': open || active } : {})}
-        {...(title ? { title } : {})}
+        // The name is pinned whenever a reason span is rendered, for the same reason `ToolbarButton`
+        // pins it: the span lives inside the button, and a button's name comes from its content, so
+        // without this the reason would be appended to the name as well as the description
+        // ("Filter Add an activity first").
+        {...(compact || describedBy ? { 'aria-label': label } : {})}
+        // A disabled reason still wins the tooltip: "why can't I press this" outranks "what is it",
+        // and in that state the `aria-label` is already carrying the name.
+        {...((title ?? disabledReason)
+          ? { title: title ?? disabledReason }
+          : compact
+            ? { title: label }
+            : {})}
+        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
         onClick={() => {
           if (disabled) return;
           if (open) close(false);
@@ -135,8 +181,13 @@ export function ToolbarPopover({
             {icon}
           </span>
         ) : null}
-        <span className="truncate">{label}</span>
+        {compact ? null : <span className="truncate">{label}</span>}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        {describedBy ? (
+          <span id={reasonId} className="sr-only">
+            {disabledReason}
+          </span>
+        ) : null}
       </button>
 
       {open

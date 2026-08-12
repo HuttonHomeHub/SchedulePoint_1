@@ -49,6 +49,19 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
+/** Open `View ▾` and return a relocated lens checkbox (ADR-0090 M2-T2). */
+function viewLens(name: string): HTMLElement {
+  const trigger = screen.getByRole('button', { name: /^View/ });
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+  return screen.getByRole('checkbox', { name });
+}
+
+/** The reason text linked to a shut lens checkbox — an `aria-describedby` target now, not a `title`. */
+function lensReason(el: HTMLElement): string | null {
+  const id = el.getAttribute('aria-describedby');
+  return id ? (document.getElementById(id)?.textContent ?? null) : null;
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar — insight lenses (flag on)', () => {
@@ -103,22 +116,39 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
     expect(trigger).toHaveAttribute('title', 'Add an activity first');
   });
 
-  it('opens the Colour-by picker and switches mode', () => {
+  // Colour-by moved into `View ▾` in ADR-0090 M2-T2 (183 px of pinned Row-1 width, paid at every
+  // viewport). Both assertions came with it. The second is deliberately STRONGER than the one it
+  // replaces: the old trigger always named the mode, so it could only ever pin one half. The
+  // annotation is conditional, so both halves are now pinned — it names a surprising mode, and it
+  // stays quiet in the ordinary one. Losing that second half is how a "show it only when it
+  // matters" rule decays into "show it always" without anyone deciding to.
+  it('switches colour mode from the View popover', () => {
     renderRows(ctx());
-    const trigger = screen.getByRole('button', { name: 'Colour · Criticality' });
-    fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Total float' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Colour · Total float' }));
     expect(spies.setColourMode).toHaveBeenCalledWith('totalFloat');
   });
 
-  it('reflects the active Colour-by mode on the trigger', () => {
+  it('names a NON-DEFAULT colour mode on the View trigger', () => {
     renderRows(ctx({ colourMode: 'wbs' }));
-    expect(screen.getByRole('button', { name: 'Colour · WBS group' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View · WBS group' })).toBeInTheDocument();
+  });
+
+  it('says nothing about colour on the View trigger at the default mode', () => {
+    renderRows(ctx({ colourMode: 'criticality' }));
+    expect(screen.getByRole('button', { name: 'View' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /View · / })).not.toBeInTheDocument();
+  });
+
+  it('marks the active mode as the checked radio', () => {
+    renderRows(ctx({ colourMode: 'wbs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View · WBS group' }));
+    expect(screen.getByRole('radio', { name: 'Colour · WBS group' })).toBeChecked();
   });
 
   it('toggles the Baseline overlay when an active baseline exists', () => {
     renderRows(ctx());
-    const overlay = screen.getByRole('button', { name: 'Baseline overlay' });
+    const overlay = viewLens('Baseline overlay');
     expect(overlay).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(overlay);
     expect(spies.toggleBaselineOverlay).toHaveBeenCalledOnce();
@@ -126,22 +156,21 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
 
   it('disables the Baseline overlay with a reason when there is no active baseline', () => {
     renderRows(ctx({ hasActiveBaseline: false }));
-    const overlay = screen.getByRole('button', { name: 'Baseline overlay' });
+    const overlay = viewLens('Baseline overlay');
     expect(overlay).toHaveAttribute('aria-disabled', 'true');
-    expect(overlay).toHaveAttribute('title', 'Baseline overlay — No active baseline');
+    // The reason is `aria-describedby`-linked now rather than a `title` tooltip — which is why the
+    // move is safe: a `title` on a shut control is not reliably announced (ADR-0083).
+    expect(lensReason(overlay)).toBe('No active baseline');
     fireEvent.click(overlay);
     expect(spies.toggleBaselineOverlay).not.toHaveBeenCalled();
   });
 
   it('disables the Baseline overlay while variance is loading / errored', () => {
     renderRows(ctx({ varianceLoading: true }));
-    expect(screen.getByRole('button', { name: 'Baseline overlay' })).toHaveAttribute(
-      'title',
-      'Baseline overlay — Loading baseline…',
-    );
+    expect(lensReason(viewLens('Baseline overlay'))).toBe('Loading baseline…');
   });
 
-  // U4 — the pinned Look-row lens render controls (search / Filter / Colour-by) never demote into `⋯`
+  // U4 — the pinned Look-row lens render controls (search / Filter / View) never demote into `⋯`
   // (render items stay inline), so at a constrained width they must remain KEYBOARD/AT-reachable — the
   // toolbar's roving tabindex always includes them (they carry `data-toolbar-focusable`), so a keyboard
   // user reaches them by Arrow keys and they are never a trap, even when the row is narrow. (Real
@@ -159,7 +188,10 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
         />
       </div>,
     );
-    for (const id of ['search', 'filter', 'colour-by']) {
+    // `colour-by` left this list in ADR-0090 M2-T2 — it is inside `View ▾` now, and `view` is
+    // itself a pinned render control, so the reachability guarantee still covers the same commands
+    // by covering the popover that holds them.
+    for (const id of ['search', 'filter', 'view']) {
       const el = container.querySelector(`[data-toolbar-item="${id}"]`);
       expect(el).not.toBeNull();
       // A roving-tabindex member (focusable marker present) — reachable by Arrow keys, not stranded.

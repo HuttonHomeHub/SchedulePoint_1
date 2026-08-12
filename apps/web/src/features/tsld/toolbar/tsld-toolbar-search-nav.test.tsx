@@ -154,10 +154,12 @@ describe('the find read-out', () => {
   });
 
   it('is aria-hidden, so a screen reader hears the announcer once and not twice', () => {
-    const { container } = renderRows(ctx({ searchStatus: { total: 4, index: 2 } }));
-    const chip = container.querySelector('[aria-hidden="true"]:has(> span)');
+    renderRows(ctx({ searchStatus: { total: 4, index: 2 } }));
+    // Asserted on the read-out itself rather than on a wrapper shape. ADR-0090 M2-T3 folded this
+    // chip into the search field's own box, so it is no longer a `<span>` wrapping a `<span>`; the
+    // property that matters — the visible count is hidden from the accessibility tree, because the
+    // polite announcer already says it — is unchanged and is what this now pins.
     expect(screen.getByText('2 of 4').closest('[aria-hidden="true"]')).not.toBeNull();
-    expect(chip).not.toBeNull();
   });
 
   it('is not a tab stop', () => {
@@ -240,58 +242,6 @@ describe('the clear button', () => {
   });
 });
 
-describe('the field is honest about where it works', () => {
-  it('is enabled in the Gantt too, once M4 gave it a match set there', () => {
-    // M1 shaded it here, honestly, because Enter had nothing to centre in the Gantt. M4 handed the
-    // Gantt the same match set and a row scroll, so the interim shade is reverted rather than left
-    // as a permanent half-truth — which is what it becomes if nobody comes back to it.
-    renderRows(ctx({ canvasActive: false }));
-    expect(field()).not.toHaveAttribute('aria-disabled');
-  });
-
-  it('is enabled in the diagram', () => {
-    renderRows(ctx());
-    expect(field()).not.toHaveAttribute('aria-disabled');
-  });
-
-  it('still shades on an empty plan, in either view', () => {
-    renderRows(ctx({ hasDiagram: false, canvasActive: false }));
-    expect(field()).toHaveAttribute('aria-disabled', 'true');
-  });
-});
-
-describe('Zoom to selection', () => {
-  const activity = { id: 'a', name: 'Piling' } as TsldToolbarContext['selectedActivity'];
-  const button = () => screen.getByRole('button', { name: /zoom to selection/i });
-
-  it('frames the selection when one is held in the diagram', () => {
-    renderRows(ctx({ selectedActivity: activity }));
-    fireEvent.click(button());
-    expect(zoomToSelection).toHaveBeenCalledOnce();
-  });
-
-  it('says to select something first when nothing is selected', () => {
-    renderRows(ctx({ selectedActivity: undefined }));
-    expect(button()).toHaveAttribute('aria-disabled', 'true');
-    // The toolbar prefixes the item label onto the reason, so a tooltip reads as a sentence.
-    expect(button()).toHaveAttribute('title', 'Zoom to selection — Select an activity first');
-  });
-
-  it('says it is diagram-only in the Gantt — the first version, not a later fix', () => {
-    // `zoomToActivity` is a canvas-handle command and the Gantt mounts no canvas. Without this the
-    // button would be lit and do nothing, which is exactly the ADR-0059 M6 defect.
-    renderRows(ctx({ selectedActivity: activity, canvasActive: false }));
-    expect(button()).toHaveAttribute('title', 'Zoom to selection — Only in the diagram view');
-  });
-
-  it('says to add an activity on an empty plan, ahead of the other two reasons', () => {
-    renderRows(ctx({ selectedActivity: undefined, canvasActive: false, hasDiagram: false }));
-    expect(button()).toHaveAttribute('title', 'Zoom to selection — Add an activity to zoom to');
-  });
-
-  it('does not fire while shaded', () => {
-    renderRows(ctx({ selectedActivity: undefined }));
-    fireEvent.click(button());
-    expect(zoomToSelection).not.toHaveBeenCalled();
-  });
-});
+// `Zoom to selection` moved to the SELECTION BAR in ADR-0090 M2-T1; its five assertions were
+// re-homed to `selection-actions.canvas.test.tsx`, minus the three shade-reason cases, which are
+// unreachable there (that suite's docblock says which and why).

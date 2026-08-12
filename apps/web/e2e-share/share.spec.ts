@@ -37,7 +37,9 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
 
   // (1) Open the Share… toolbar item (Row 2 · Do deliverables cluster) — the member management dialog.
   const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
-  await toolbar.getByRole('button', { name: 'Share…' }).click();
+  // Share is a row inside the `Share & export` menu since ADR-0090 M2-T4.
+  await toolbar.getByRole('button', { name: /Share & export/ }).click();
+  await page.getByRole('menuitem', { name: 'Share…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Share links' });
   await expect(dialog).toBeVisible();
 

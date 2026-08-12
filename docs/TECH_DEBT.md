@@ -2011,6 +2011,29 @@ double-submit apart from a slow one. Left open rather than guessed at.
 **Half closed 2026-08-11**: `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE`
 remains open with five harnesses left rather than seven.
 
+**Parked by the product owner 2026-08-12**, after the measurement below was put to them: **every
+flag stays ON for now, and the estate is cleaned up in one dedicated pass** rather than a flag at a
+time. So `VITE_CANVAS_WORKSPACE`'s deferral trigger is no longer `epic-touch: plan workspace` — which
+ADR-0090 fired and discharged — but a new `flag-cleanup pass` term, added to
+`scripts/flag-retirement.json`'s **closed** `deferralTriggers` vocabulary in the same commit, which is
+the form ADR-0088 D3a asks for: a decision somebody makes in a diff, not a sentence in one flag's
+reason field. Worth noting it is a **wider** trigger than the epic-touch ones, so a second flag
+deferred under it should be a deliberate choice rather than a habit.
+
+**Measured and re-deferred 2026-08-12 (ADR-0090 M6).** This epic fired the `epic-touch: plan
+workspace` trigger and took the milestone's own stated off-ramp, on evidence rather than instinct:
+all **seven** flag-off harnesses were probed with a bare pin-flip and **all seven fail — 27 specs**
+(base 8 of 17, `activity-editor` 11, `edit` 3, `sub-day` 2, and one each for `notes`, `programme`,
+`assignment-lag`). **Not one is a configuration edit**; every one needs new selectors against the
+surviving surface. Three — base, `programme`, `notes` — also pin `VITE_TSLD_EDITING` /
+`VITE_PLAN_EDIT_LOCK` off **deliberately** to stay pen-free, so converting those must first establish
+that the journey works pen-free against the surviving workspace or it silently changes what the
+journey tests. The count above ("five harnesses left rather than seven") is superseded: seven remain.
+Survey and per-suite probe results:
+[`docs/specs/workspace-layout/m6-harness-conversion.md`](specs/workspace-layout/m6-harness-conversion.md).
+The `deferredUntil.reason` in `scripts/flag-retirement.json` carries the same measurement, so the
+next attempt starts from evidence rather than a file list.
+
 `VITE_ACTIVITY_EDITOR_TABS` and `VITE_CANVAS_WORKSPACE` are the two alternative surfaces the batch-2
 retirement did **not** take. Both carried `deferredUntil` in `scripts/flag-retirement.json` (ADR-0088
 D3a), which suspends their batch dates against a **named event** rather than a date — so this row is
@@ -2206,3 +2229,194 @@ click, so exercising it needs a canvas gesture the fit gate has no other reason 
 subject anyway, and assert the thing that can actually go wrong — that the bar stays fully inside the
 viewport at 960 and 768 with its widest plausible item set. Raised by `component-reviewer` during the
 ADR-0090 pre-approval pass as a suggestion, and recorded rather than silently left out of scope.
+
+## 125. `View ▾` holds one toggle that ejects you from it — **CLOSED 2026-08-12 (ADR-0090 M5)**
+
+**Resolved by making the row legible, not by changing where focus goes.** The two candidate fixes
+were "keep the popover open and lose the panel's focus move" and "keep the focus move and accept the
+eject". Both were rejected in favour of a third: the behaviour is **right** — ADR-0049 says a
+revealed panel should receive focus, the panel is `tabIndex={-1}` precisely so it can, and an
+`e2e-resource-view` assertion depends on it, so a revealed panel a keyboard user cannot reach would
+be the worse defect. What was missing was any warning before it happened.
+
+The row now carries a standing note — _"Opens the resource panel and moves focus to it"_ —
+`aria-describedby`-linked alongside its shut reason rather than folded into its name, and visible
+beside the control because this surface has no tooltip to fall back on. It is the only row in
+`View ▾` with one, and a test asserts that a neighbour acquiring one would be a regression: the note
+exists to mark this row as different, so it is worthless if everything has it.
+
+**One thing it broke immediately, which is the useful part.** `aria-describedby` takes an id _list_,
+and the row now carries two. `tsld-toolbar-resource-view.test.tsx`'s helper read a single id and
+returned `null` the moment the second appeared — reading as "no reason at all" rather than as a
+helper that had stopped keeping up. Caught by the existing suite on the first run.
+
+_Original entry follows._
+
+**Raised:** 2026-08-11 (ADR-0090 M2-T2) · **Size:** S · **Owner:** the M5 gate pass
+
+`resource-view` moved from Row 1 into the `View ▾` popover. Revealing the resource strip moves
+focus into the strip (ADR-0049, deliberate — a revealed panel should receive focus), which from a
+Row-1 button was unremarkable and from inside an open popover means the planner is ejected from the
+surface they were still using. Every other member of `View ▾` leaves the popover open, so this one
+behaves unlike its neighbours in a list that invites toggling several things at once.
+
+Recorded rather than fixed mid-relocation, because the fix is a judgement between two defensible
+behaviours (keep the popover open and lose the panel's focus move, or keep the focus move and
+accept the eject) and it belongs with the specialist reviews at M5. Observed, not inferred:
+`e2e-resource-view/resource-view.spec.ts` asserts the focus move immediately after the toggle, and
+its comment records why the assertion sits exactly there.
+
+## 126. The two segmented pairs cannot go icon-only, because they have no icons
+
+**Raised:** 2026-08-12 (ADR-0090 M3-T2) · **Size:** S · **Owner:** a design pass, then M5
+
+M3-T2's own title asks that _"segments become icon pairs"_ in the condensed band, and it is the one
+task in that milestone that could not be done. `mode-early`, `mode-visual`, `view-tsld` and
+`view-gantt` **carry no `icon` field at all** — the registry warns about it twelve lines above them
+(_"Tier 1 so the labels render (a tier-2 label-less segment paints blank — ux review)"_) — so
+withholding their labels renders four blank **16 px** buttons.
+
+That is not a hypothesis. It was built, and `e2e-toolbar-fit` S5 failed on it within the hour as a
+WCAG 2.2 §2.5.8 target-size violation: `mode-early:16px, mode-visual:16px, view-tsld:16px,
+view-gantt:16px`. Reverted, along with the primitive widening written to support it (`showLabel` as
+a function of the row's band), because an unused branch is a second product (ADR-0088) and this one
+would have shipped with no consumer and no test.
+
+**Why it is debt rather than a decision taken:** choosing a glyph for **Early** versus **Visual**
+scheduling mode is a statement about what those modes _are_, and this milestone is about width.
+`Diagram | Gantt` has obvious candidates and `Early | Visual` does not, and doing the easy pair alone
+is the "one correct pattern applied to a control and not its neighbour" shape this repository keeps
+recording (ADR-0064 §7, ADR-0067 M4, ADR-0073 C4, ADR-0086 M6).
+
+**What it costs today:** Row 1's inline count is not monotone in width — 8 items at 1280 against 10
+at 1024 — because the collapsed band trades labels for commands and the condensed band cannot.
+Nothing is unreachable; the two extra sit in the `⋯` at 1280. Measured in
+`docs/specs/workspace-layout/m3-narrow-widths.md` §4 O1.
+
+**What to do:** get four icons decided, then restore the band-aware `showLabel` (the reverted
+implementation is one type widening plus a three-line `labelPolicy`), and re-run the fit gate — which
+will now catch a blank segment on the first run rather than in review.
+
+## 127. The toolbar's touch targets are 40 × 36, and the house rule is 44 × 44
+
+**Raised:** 2026-08-12 (ADR-0090 M3-T4) · **Size:** M · **Owner:** M4, or a vertical-rhythm pass
+
+`docs/UX_STANDARDS.md` says **"Touch targets ≥ 44px"**. Under `@media (pointer: coarse)` a toolbar
+control is now **40 × 36** — M3-T4 widened `px-2` → `px-3`, taking an icon-only button from 32 to 40.
+So one axis moved and the other did not, and this row exists so that is stated rather than implied by
+a milestone that says "touch" in its title.
+
+**It is not a regression and it is not new**: 32 × 36 failed the same rule on both axes before this
+epic, and nothing here made it worse. WCAG 2.2 §2.5.8 (24 px) is met and gated by
+`e2e-toolbar-fit`'s S5/S7; the house rule is stricter than the standard, deliberately, and it is the
+part still owed.
+
+**Why the minor axis was not simply raised.** It is `min-h-9` on the control whose row height this
+entire epic is trying to reduce — the reported defect was a two-row band eating canvas on a 24"
+monitor. Raising 36 → 44 adds 16 px to the vertical stack for every user, including the desktop users
+who reported the problem, and it can be done under `pointer-coarse` alone only if the band's height
+is allowed to differ by input device, which changes how much canvas a planner has depending on
+whether they are touching the screen. That is a layout decision with a measurement attached, and M4
+is the milestone that measures the vertical stack (`M4-T1 — Measure the vertical stack **first**`).
+
+**What to do:** take it with M4's numbers in hand. The assertion in `e2e-toolbar-fit`'s coarse-pointer
+test is deliberately written against 40 and 36 — the figures actually delivered — so raising the
+floor there is the one-line change that proves this closed.
+
+## 128. The multi-select journey's post-delete focus assertion is flaky, ~1 run in 4
+
+**Raised:** 2026-08-12 (ADR-0090 M3) · **Size:** M · **Owner:** whoever next touches the bulk delete
+
+`e2e-multi-select/multi-select.spec.ts:214` — `expect(list).toBeFocused()` after a bulk delete —
+fails intermittently with `Received: inactive`. Everything downstream of it depends on that focus:
+the undo accelerator is a **React** `onKeyDown` on the workspace root, so focus on `<body>` means the
+Ctrl+Z the next assertion presses reaches nothing (ADR-0080, which is where this fix came from).
+
+**Attributed by running it, not by reasoning.** It surfaced during M3, whose changes add an extra
+render pass to `<Toolbar>` on mount (the band resolves after the first measure), which is exactly the
+sort of thing that shifts a timing race. So the M3 commit was reverted with `git revert --no-commit`
+and the journey run **four times against the pre-M3 tree: 3 passed, 1 failed** — the same rate
+observed with M3 in place (3 of 4). It is pre-existing, and M3 neither caused nor worsened it.
+
+**The likely mechanism, stated as a hypothesis rather than a finding.** `focusListboxAfterModal`
+(`TsldPanel.tsx:655`) is a **single** `requestAnimationFrame` after the native `<dialog>` closes.
+That wins the race against the dialog's own synchronous focus restore — which is the defect it was
+written for — but it does not survive the listbox being re-created afterwards, and a bulk delete
+triggers a refetch and a recalculation. One frame is a guess about how long that takes.
+
+**What to do:** do not paper over it with a longer timeout — the assertion is about focus landing,
+not about how long it takes. Establish whether the `<ul>` remounts after the rAF (a `key` or
+conditional-render change would do it); if it does, the restore belongs on the listbox's own mount
+rather than on a frame counted from the dialog. Until then the journey should be treated as a known
+intermittent, and a red run on this assertion alone re-run before being investigated as new.
+
+## 129. The 56 px app header row is the last recoverable band above the canvas
+
+**Raised:** 2026-08-12 (ADR-0090 M4-T2) · **Size:** L · **Owner:** a shell/ADR-0055 pass, not a toolbar one
+
+The reported defect that opened ADR-0090 was a command surface eating canvas on a 24" monitor.
+Measured (`docs/specs/workspace-layout/m4-vertical-stack.md`), **257 px sat above the canvas** and the
+epic has taken it to 249. Of what remains, the largest single band is the **app header row at 56 px** —
+bigger than either command row.
+
+**M4-T2 could not take it, and the reason is structural rather than a matter of effort.** Recovering
+it means merging the plan's identity line into that row, and that row is a three-column grid whose
+organisation nav **already `overflow-x-auto`s at 1440 px** with a drawer owed against it. It is also
+shared by every screen in the product, and both ADR-0029 and ADR-0055 S2 say directly that the shell
+must stay plan-unaware — a plan breadcrumb rendered by the shell is exactly what they forbid.
+
+So M4-T2 delivered the reading order (identity above the commands it governs, one surface) and **8 px**
+of height from matching the rows' vertical rhythm, and this row records where the rest is.
+
+**What to do, if vertical space is worth another pass:** it is a shell redesign — a second chrome slot
+_inside_ the app header row, which keeps the shell plan-unaware by providing a slot rather than
+knowing about plans, plus an answer for the organisation nav that already does not fit. Measure first:
+`measure-toolbar/vertical-stack.spec.ts` reports the row's horizontal budget (`appHeaderRoom`) for
+exactly this question, and at 1920 it reported **one child using 1888 of 1920 px** — there is no gap to
+slot into today.
+
+## 130. The zoom trigger's icon says "date range", and it now owns the viewport
+
+**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass
+
+`ZoomPresetControl`'s icon is `CalendarRange`, which was right while the control did one thing: its
+presets **are** time ranges (Day / Week / Month / Quarter / Year). Below the `comfortable` band it now
+also holds Zoom out, Zoom in, Fit to plan and Go to today (ADR-0090 M3-T2), so the subject it names is
+the **viewport**, and a calendar glyph is no longer the honest cue.
+
+M5 fixed the half that could be fixed without a design decision: the visible label becomes
+`Zoom · Week` exactly when the fold is active, so there is on-screen text saying "Zoom". The icon is
+left alone deliberately — picking a glyph that means "the viewport" rather than "a date range" is a
+statement about the control, and this milestone is about width.
+
+**It matters most in the collapsed band**, where there is no visible label at all and the icon is the
+only cue a sighted pointer user gets.
+
+**What to do:** choose an icon with the design pass that also settles `docs/TECH_DEBT.md` #126's four
+segment icons — they are the same kind of question, and answering them together stops the toolbar
+acquiring two glyph vocabularies.
+
+## 131. An icon-only toolbar control names itself only on hover, and the target device has none
+
+**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** M · **Owner:** a design-system pass
+
+Every icon-only toolbar control carries its name in `aria-label` and `title`. A screen-reader user
+gets it; a **sighted, touch-only** user does not, because `title` tooltips never fire on tap. That is
+long-standing convention here and was acceptable while icon-only controls were the exception.
+
+ADR-0090 M3-T3 made it the rule in the **collapsed** band (< 1024 px container): `Go to date`, `Zoom`,
+`View`, `Filter` and `Summary` all become icon-only there. Collapsed is Surface Pro **portrait** —
+the device this epic names as its target — so the case where the names are least reachable is exactly
+the case the milestone was built for.
+
+**Not a WCAG failure**: the accessible name is present and correct, and 2.5.8 target size is met and
+gated. It is a usability gap against a real user on a named device.
+
+**Why it was not fixed here:** the answer is a tooltip primitive that opens on long-press/tap as well
+as hover, which is a design-system component with focus, dismissal (WCAG 1.4.13 Content on Hover or
+Focus) and portal concerns of its own. Inventing one inside a layout milestone is how a primitive
+ships without those. The alternative — keeping labels in the collapsed band — is what the measurement
+ruled out (`docs/specs/workspace-layout/m3-narrow-widths.md`).
+
+**What to do:** build the tooltip primitive, then adopt it on `ToolbarButton` and `ToolbarPopover`
+together, rather than on whichever control someone is holding at the time.

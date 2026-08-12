@@ -197,10 +197,13 @@ test('search that navigates: cycle, count, announce, frame — in both views', a
 
   // ---------------------------------------------------------------- the Gantt half
   await showGantt(page);
-  // Shut, with a reason, rather than lit and inert: `zoomToActivity` is a canvas-handle command and
-  // the Gantt mounts no canvas (the ADR-0059 M6 defect, guarded in the first version here).
-  await expect(zoom).toHaveAttribute('aria-disabled', 'true');
-  await expect(zoom).toHaveAttribute('title', /Only in the diagram view/);
+  // **Absent, not shaded** — and that is a strengthening, not a relaxation. Until ADR-0090 M2-T1
+  // this command sat on Row 1 and the assertion here was that the Gantt shaded it with "Only in the
+  // diagram view" (the ADR-0059 M6 defect, guarded in the first version of this journey). It now
+  // lives on the canvas selection bar, which the Gantt does not render at all, so the lit-but-inert
+  // failure this line was written to catch is impossible by construction rather than prevented by a
+  // predicate somebody has to maintain.
+  await expect(zoom).toHaveCount(0);
 
   // The same match set, walked from the same field (M4). The row is brought into view and focus
   // stays put — a Gantt that focused the row would end the search after one match, which is the

@@ -72,7 +72,8 @@ import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render
 import { useThemeVersion } from '../render/use-theme-version';
 import {
   SelectionActionsBar,
-  type SelectionActionContext,
+  type SelectionBarContext,
+  type SelectionCanvasContext,
   type SelectionAnchor,
 } from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
@@ -453,6 +454,12 @@ export interface TsldPanelProps {
    * Absent or empty ⇒ this contributes no member to `dimmedIds` ⇒ byte-for-byte today's paint.
    */
   floatPathIds?: ReadonlySet<string> | undefined;
+  /**
+   * The canvas commands the floating selection bar offers (ADR-0090 M2-T1) — Zoom to, and Isolate
+   * logic path. Assembled by the workspace, which already builds every field for the toolbar
+   * context; **absent ⇒ the bar is byte-for-byte its pre-M2 self**, which is the rollback contract.
+   */
+  selectionCanvas?: SelectionCanvasContext | undefined;
 }
 
 interface PendingCreate {
@@ -524,6 +531,7 @@ export function TsldPanel({
   resourceStrip = null,
   overAllocationHighlight = false,
   floatPathIds,
+  selectionCanvas,
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -1316,11 +1324,16 @@ export function TsldPanel({
   // context is null when nothing's selected or the host didn't opt in — the bar then renders nothing.
   const selectionActionsWired =
     onOpenLogic !== undefined && onEditActivity !== undefined && onDeleteActivity !== undefined;
-  const selectionCtx = useMemo<SelectionActionContext | null>(() => {
+  const selectionCtx = useMemo<SelectionBarContext | null>(() => {
     if (!onOpenLogic || !onEditActivity || !onDeleteActivity) return null;
     const activity = selectedId ? activities.find((a) => a.id === selectedId) : undefined;
     if (!activity) return null;
     return {
+      // The canvas half, supplied whole by the workspace or not at all (ADR-0090 M2-T1). ONE prop
+      // rather than seven: `TsldPanel` renders the bar but owns none of this state — isolation's
+      // setters, the viewport command — so threading the fields individually would give this
+      // component isolate vocabulary it has no reason to know, and seven chances to wire six.
+      canvas: selectionCanvas ?? null,
       targetName: activity.name,
       canEditSchedule: canEdit,
       scheduleRefusal,
@@ -1347,6 +1360,7 @@ export function TsldPanel({
       onSteps: () => onSteps?.(activity),
     };
   }, [
+    selectionCanvas,
     selectedId,
     activities,
     canEdit,

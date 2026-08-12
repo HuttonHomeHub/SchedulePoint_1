@@ -49,8 +49,26 @@ function resolved(over: Partial<ResolvedToolbarItem<Ctx>> = {}): ResolvedToolbar
   };
 }
 
+/** The same names {@link Toolbar} resolves; the overflow renders one section heading per group. */
+const GROUP_LABELS = {
+  frame: 'Navigate',
+  lens: 'Display',
+  find: 'Find',
+  tools: 'Author',
+  object: 'Plan actions',
+  output: 'Deliver',
+  help: 'Help',
+};
+
 function openOverflow(items: ResolvedToolbarItem<Ctx>[]): HTMLElement {
-  render(<ToolbarOverflow items={items} context={{ ok: true }} tabIndex={0} />);
+  render(
+    <ToolbarOverflow
+      items={items}
+      context={{ ok: true }}
+      groupLabels={GROUP_LABELS}
+      tabIndex={0}
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: /more/i }));
   return screen.getByRole('menu');
 }
@@ -141,5 +159,124 @@ describe('ToolbarOverflow — the disabled row (ADR-0082)', () => {
     ]);
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Fit to window' }));
     expect(fired).toBe(true);
+  });
+});
+
+/**
+ * **The sectioning** (ADR-0090 M2-T6). `LIVE` sits in `frame` and `SHUT` in `tools`, so a two-item
+ * menu spans two groups — which is the smallest case that can tell a section break from a heading
+ * printed unconditionally.
+ *
+ * **Verified red by running it** against a build with the section render removed — the file's own
+ * standard, one describe block up. Two of the three go red; the roving-focus one passes there
+ * **vacuously**, because with no headings rendered there is nothing that could be in the roving set.
+ * It is kept regardless, and it is the assertion that matters going forward: it is the only one that
+ * fails if a future change renders a section as something `Menu.itemsOf` matches, which would put a
+ * non-actionable heading in the arrow-key order — a trap in a list of commands. Recorded so nobody
+ * reads three green assertions as three independent proofs.
+ */
+describe('ToolbarOverflow — group sections (ADR-0090 M2-T6)', () => {
+  it('breaks the list at each group, under the names the bar uses', () => {
+    const menu = openOverflow([LIVE, SHUT]);
+    expect(
+      within(menu)
+        .getAllByRole('separator')
+        .map((n) => n.getAttribute('aria-label')),
+    ).toEqual(['Navigate', 'Author']);
+  });
+
+  it('prints one heading per group, not one per item', () => {
+    const second = resolved({
+      item: {
+        id: 'today',
+        group: 'frame',
+        tier: 1,
+        order: 1,
+        label: 'Today',
+        onActivate: () => {},
+      },
+    });
+    const menu = openOverflow([LIVE, second, SHUT]);
+    expect(within(menu).getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('leaves the headings out of the roving set', () => {
+    const menu = openOverflow([LIVE, SHUT]);
+    // Opening focuses the first ITEM. One ArrowDown crosses a section break and must land on the
+    // next command — a heading in the roving order would swallow the keystroke.
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(within(menu).getByRole('menuitem', { name: 'Add activity' })).toHaveFocus();
+  });
+});
+
+/**
+ * **Toggle state in the menu, and the difference between a toggle and a segment** (ADR-0090 M2/M5).
+ *
+ * An item that declares `isActive` is a toggle, and on the bar its `ToolbarButton` carries
+ * `aria-pressed`. Demoted into the `⋯` it used to become a plain `menuitem` and announce nothing, so
+ * a screen-reader user could not tell whether Float paths was open.
+ *
+ * The M5 component gate then found the fix applied one step too broadly: `checked` went on **every**
+ * `isActive` item, including the two mutually-exclusive segment pairs (`Early | Visual`,
+ * `Diagram | Gantt`), which D3 guarantees demote together. Two `menuitemcheckbox`es say a planner can
+ * hold both Early and Visual at once. `demotionGroup` is what makes them one unit, so it is the
+ * discriminator.
+ *
+ * **Verified red**: with the discriminator removed, the segment assertions fail on the role.
+ */
+describe('ToolbarOverflow — toggles vs segments (ADR-0090 M5)', () => {
+  const toggle = resolved({
+    active: true,
+    item: {
+      id: 'float-paths',
+      group: 'lens',
+      tier: 3,
+      order: 0,
+      label: 'Float paths',
+      isActive: () => true,
+      onActivate: () => {},
+    },
+  });
+  const segment = (id: string, label: string, active: boolean): ResolvedToolbarItem<Ctx> =>
+    resolved({
+      active,
+      item: {
+        id,
+        group: 'lens',
+        tier: 1,
+        order: 0,
+        label,
+        demotionGroup: 'scheduling-mode',
+        isActive: () => active,
+        onActivate: () => {},
+      },
+    });
+
+  it('announces an independent toggle as a checkbox, with its state', () => {
+    const menu = openOverflow([toggle]);
+    const item = within(menu).getByRole('menuitemcheckbox', { name: 'Float paths' });
+    expect(item).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('announces a segment pair as radios — one choice, not two switches', () => {
+    const menu = openOverflow([
+      segment('mode-early', 'Early mode', true),
+      segment('mode-visual', 'Visual mode', false),
+    ]);
+    expect(within(menu).getByRole('menuitemradio', { name: 'Early mode' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(menu).getByRole('menuitemradio', { name: 'Visual mode' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    // The failure this prevents: two checkboxes read as "you may have both".
+    expect(within(menu).queryAllByRole('menuitemcheckbox')).toHaveLength(0);
+  });
+
+  it('leaves an item with no isActive a plain menuitem', () => {
+    const menu = openOverflow([LIVE]);
+    expect(within(menu).getByRole('menuitem', { name: 'Fit to window' })).toBeInTheDocument();
   });
 });

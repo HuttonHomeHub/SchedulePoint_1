@@ -32,7 +32,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     undo,
     redo,
     summaryContent: null,
-    projectFinishContent: null,
     ...over,
   });
 }

@@ -210,8 +210,6 @@ export interface TsldToolbarContext {
   // --- Summary popover + pinned Project-finish chip -----------------------------------------
   /** The schedule-summary body for the `Summary▾` popover (`ScheduleSummaryStrip`). */
   summaryContent: ReactNode;
-  /** The Project-finish chip content (pinned Tier-1, product-owner decision #1); null while unknown. */
-  projectFinishContent: ReactNode;
 
   // --- Visibility gates ---------------------------------------------------------------------
   /** True once the plan has activities to plot — the view/summary/legend controls appear then. */

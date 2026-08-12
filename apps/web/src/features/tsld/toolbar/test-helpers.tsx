@@ -84,7 +84,6 @@ export function makeTsldToolbarContext(
     toggleLegend: vi.fn(),
     // Summary + finish chip
     summaryContent: <div data-testid="summary-body">summary</div>,
-    projectFinishContent: <span>Finish: 01 Aug 2026</span>,
     // Visibility gates
     hasDiagram: true,
     // Toolbar quick-wins

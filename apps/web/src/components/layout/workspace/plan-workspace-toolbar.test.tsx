@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -217,6 +217,19 @@ beforeEach(() => {
   h.tsldProps.current = null;
 });
 
+/**
+ * Open `View ▾` and return a relocated lens checkbox (ADR-0090 M2-T2).
+ *
+ * These two assertions are the most valuable in the group and were kept rather than rewritten:
+ * they assert the **effect** — that the strip mounts and the canvas learns about it — not that a
+ * control exists. Only the route to the control changed, so only the route changes here.
+ */
+function viewLens(name: string): HTMLElement {
+  const trigger = screen.getByRole('button', { name: /^View/ });
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+  return screen.getByRole('checkbox', { name });
+}
+
 describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
   it('renders the two command rows over the canvas', () => {
     renderScreen();
@@ -228,26 +241,70 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
   });
 
-  it('gives each row a visible purpose cue (ux review: the split otherwise lived only in aria-label)', () => {
+  /**
+   * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5). These two assertions used
+   * to pin them in place; they are replaced rather than deleted, because "the gutter is absent" is
+   * a weaker claim than "the thing it existed for is still true".
+   *
+   * A ux review asked for the captions because the Look/Do split lived only in each row's
+   * `aria-label`, invisible to sighted users. The plan's replacement is that each `role="group"`
+   * keeps its own visible hairline and its own accessible name, and that after M2's consolidation
+   * the rows are short enough to read — so what is asserted now is the replacement, not the removal.
+   */
+  it('no longer prints a row-purpose caption, and no group name is announced twice', () => {
     renderScreen();
-    expect(screen.getByText('Navigate')).toBeInTheDocument();
-    expect(screen.getByText('Build')).toBeInTheDocument();
+    // The captions themselves are gone — 64 px of gutter per row, and the collision where
+    // "Navigate" was both the visible caption and the `frame` group's `aria-label`.
+    expect(screen.queryByText('Navigate')).toBeNull();
+    expect(screen.queryByText('Build')).toBeNull();
+    // The replacement: every on-screen group region still names itself, and no two share a name.
+    // A shared name is the defect, not the absence of a caption — Row 1's `object` group holds one
+    // read-out (`Summary`) while Row 2's holds real commands, so both being "Plan actions" left two
+    // regions indistinguishable to a screen reader.
+    const names = screen
+      .getAllByRole('group')
+      .map((g) => g.getAttribute('aria-label') ?? '')
+      .filter(Boolean);
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names).size).toBe(names.length);
   });
 
-  it('reads the row cue as a true label — a fixed-width gutter with a divider, not free-floating eyebrow text', () => {
+  it('shows the Project-finish read-out on the identity line, above the commands (M2-T3/M4-T2)', () => {
+    // This assertion kept passing across the M2-T3 move without being touched, because it was scoped
+    // to the document — which is exactly why it was rewritten rather than left alone. A test that
+    // passes for a new reason is worse than one that fails: it reads as coverage of a thing it has
+    // stopped covering. `m2-suite-impact.md` names this file as one of two in that category.
+    //
+    // **Re-scoped again for M4-T2**, which folded the identity line into the chrome band above the
+    // two command rows. Two things changed with it and both are deliberate: the line is a `<div>`
+    // rather than a `<header>` (in the band it sits outside `<main>`, where a `<header>` would be a
+    // **second `banner` landmark** beside the app header row's), and the `sr-only <h1>` stayed
+    // behind so `<main>` keeps a heading. So the old anchor — the `<h1>`'s nearest `<header>` — no
+    // longer identifies this row, and reaching for it would find the app header instead.
     renderScreen();
-    // F1 (tsld-toolbar-canvas-refinements): the row word sits inside a bordered gutter that shares
-    // the toolbar's own divider treatment, rather than sitting loose above the controls.
-    for (const word of ['Navigate', 'Build']) {
-      const gutter = screen.getByText(word).parentElement;
-      expect(gutter).toHaveClass('border-r', 'w-16', 'shrink-0');
-    }
+    // Anchored on the row's own content rather than on a class or a tag: the pen status is the
+    // right-hand end of the identity line and the breadcrumb the left, so their common ancestor
+    // *is* the line. A `.closest('div')` from the chip would match its own wrapper.
+    const finish = screen.getByText('Finish');
+    const line = finish.closest('div.flex.flex-wrap');
+    expect(line).not.toBeNull();
+    expect(
+      within(line as HTMLElement).getByText(formatCalendarDate('2026-08-01')),
+    ).toBeInTheDocument();
+    // The ordering M4-T2 exists to produce: identity before commands, in the DOM, so a screen
+    // reader and a sighted user meet the plan's name and status before its verbs.
+    const row1 = screen.getByRole('toolbar', { name: 'View and navigate' });
+    expect(line!.compareDocumentPosition(row1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('pins the Project-finish chip inline in the toolbar (decision #1)', () => {
+  it('keeps the plan name as the heading inside main, not in the band (M4-T2)', () => {
     renderScreen();
-    expect(screen.getByText('Finish')).toBeInTheDocument();
-    expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
+    // The `<h1>` is what names the `main` landmark. It deliberately did NOT travel with the visible
+    // identity line: the band is outside `main`, and an `<h1>` moved there names the banner while
+    // leaving `main` a region that does not say what it is.
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('Tower');
+    expect(heading.closest('[data-chrome-slot]')).toBeNull();
   });
 
   it('collapses the activities panel by default (canvas-maximal)', () => {
@@ -262,10 +319,13 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByTestId('activities-table')).toBeInTheDocument();
   });
 
-  it('reaches Baselines inline on Row 2 (no capability lost)', () => {
+  it('reaches Baselines through the Analysis trigger (no capability lost)', () => {
     renderScreen();
-    // Plan actions are inline (tier-2 icon buttons) on the Do row, not behind a `⋯` overflow.
-    fireEvent.click(screen.getByRole('button', { name: 'Baselines…' }));
+    // Baselines joined Earned value and Resource histogram behind one Row-2 `Analysis` trigger in
+    // ADR-0090 M2-T5. The assertion that matters is unchanged and is the one in the title: the
+    // dialog still opens, so nothing was lost to the fold.
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Baselines…' }));
     expect(screen.getByRole('dialog', { name: 'Baselines' })).toBeInTheDocument();
     expect(screen.getByTestId('baselines-panel')).toBeInTheDocument();
   });
@@ -283,12 +343,14 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByText('Open-ends criticality')).toBeInTheDocument();
   });
 
-  it('toggles the floating Legend panel on the canvas from the Row-1 control', () => {
+  it('toggles the floating Legend panel on the canvas from the View popover', () => {
     renderScreen();
-    // The legend lives on the canvas now (ADR-0031 amendment): the Row-1 Legend control shows/hides
+    // The legend lives on the canvas now (ADR-0031 amendment); the control that shows/hides it moved
+    // into `View ▾`'s new Panels section in ADR-0090 M2-T2 — a panel is read BESIDE the diagram, not
+    // drawn on it, which is why it is not filed with the Insight overlays. The control shows/hides
     // a floating, draggable key overlaid on the diagram, rather than opening a toolbar popover.
     expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Legend' }));
+    fireEvent.click(viewLens('Legend'));
     const panel = screen.getByRole('group', { name: 'Diagram legend' });
     expect(panel).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Hide legend' }));
@@ -301,15 +363,15 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();
     expect(h.tsldProps.current?.resourceStripActive).toBe(false);
 
-    // Toggling the Row-1 Resource view control reveals the strip chrome AND flags the canvas active.
-    fireEvent.click(screen.getByRole('button', { name: 'Resource view' }));
+    // Toggling the Resource view lens reveals the strip chrome AND flags the canvas active.
+    fireEvent.click(viewLens('Resource view'));
     expect(screen.getByTestId('resource-strip-panel')).toBeInTheDocument();
     expect(h.tsldProps.current?.resourceStripActive).toBe(true);
     // The strip chrome publishes a snapshot that the workspace forwards into the canvas.
     await waitFor(() => expect(h.tsldProps.current?.resourceStrip).not.toBeNull());
 
     // Toggling off unmounts the chrome and clears the canvas flag (byte-for-byte the plain canvas).
-    fireEvent.click(screen.getByRole('button', { name: 'Resource view' }));
+    fireEvent.click(viewLens('Resource view'));
     expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();
     expect(h.tsldProps.current?.resourceStripActive).toBe(false);
   });
@@ -319,7 +381,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     renderScreen();
     // With no timeline origin the resource-view control is shaded (no diagram), so the strip can never
     // mount — the `resourceViewActive` guard requires a non-null `plannedStart` (ADR-0049).
-    const control = screen.getByRole('button', { name: 'Resource view' });
+    const control = viewLens('Resource view');
     expect(control).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(control);
     expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();

@@ -67,7 +67,9 @@ function clampAnchor({ x, y }: MenuAnchor): { left: number; top: number } {
 function itemsOf(container: HTMLElement | null): HTMLButtonElement[] {
   if (!container) return [];
   return Array.from(
-    container.querySelectorAll<HTMLButtonElement>('[role="menuitem"],[role="menuitemradio"]'),
+    container.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"]',
+    ),
   );
 }
 
@@ -230,6 +232,55 @@ function portalTarget(): HTMLElement {
 }
 
 /**
+ * A **labelled section break** inside a {@link Menu} — the rule plus the heading above the group it
+ * introduces.
+ *
+ * Extracted from `tsld-toolbar-items.tsx`, where it was a private component rendering a bare `<p>`.
+ * Two things were wrong with that, and only one of them is why it moved. **ARIA restricts a
+ * `role="menu"`'s children** to `menuitem`/`menuitemradio`/`menuitemcheckbox`/`group`/`separator`,
+ * so a stray paragraph is an `aria-required-children` violation and the heading reached AT as
+ * nothing at all — the sections were a purely visual grouping. And every section after the first was
+ * preceded by a hand-written `<div role="separator">`, so the two halves of one idea were separate
+ * markup that a new section could get half-right.
+ *
+ * **It renders as a named `separator`, not a `group`.** The obvious shape — wrap the items in
+ * `role="group" aria-labelledby` — is the stronger semantic, and it was rejected here for a reason
+ * worth stating: it requires the section to *contain* its items, and the call sites are flat runs of
+ * conditionals hundreds of lines long. Re-indenting them buys the better role at the cost of a diff
+ * nobody can review. A separator may carry an accessible name, its children are presentational, and
+ * it is a permitted child of `menu` — so the heading becomes announceable without moving a single
+ * item. If a future menu needs true group semantics, add a `MenuGroup` beside this rather than
+ * changing what this one does.
+ *
+ * `divider` draws the rule. It defaults **off** so the first section in a menu opens without a line
+ * above it, which is what every existing menu already looked like.
+ */
+export function MenuSection({
+  label,
+  divider = false,
+}: {
+  /** The section heading. Also the separator's accessible name — the visible text is presentational. */
+  label: string;
+  /** Draw a rule above the heading. Off for the first section in a menu. */
+  divider?: boolean;
+}): React.ReactElement {
+  return (
+    <div
+      role="separator"
+      aria-label={label}
+      className={cn(divider && 'border-border mt-1 border-t pt-1')}
+    >
+      <span
+        aria-hidden="true"
+        className="text-muted-foreground block px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase"
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/**
  * One menu action. Renders a `role="menuitem"` button that is not a tab stop
  * (roving focus is driven by {@link Menu}); selecting it runs `onSelect` and then
  * closes the menu, restoring focus to the trigger. `destructive` tints the item
@@ -257,6 +308,7 @@ function portalTarget(): HTMLElement {
  * whatever the children say, and nothing else.
  */
 export function MenuItem({
+  checked,
   onSelect,
   destructive = false,
   selected,
@@ -267,6 +319,20 @@ export function MenuItem({
 }: {
   onSelect: () => void;
   destructive?: boolean;
+  /**
+   * A **toggle**'s on/off state — renders `role="menuitemcheckbox"` + `aria-checked`.
+   *
+   * Added by ADR-0090 M2 (2026-08-12), when four commands moved to tier 3 to buy the two rows their
+   * labels at 1920 and one of them — `Float paths` — turned out to be a toggle. On the bar it
+   * carried `aria-pressed`; in the menu it became a plain `menuitem` announcing **no state at all**,
+   * so a screen-reader user could not tell whether the panel was open. The overflow had only ever
+   * held plain actions before, so nothing had needed this.
+   *
+   * Distinct from {@link selected}, which is `menuitemradio` — one of several. A toggle is not one
+   * of several, and collapsing the two would announce an independent switch as a mutually exclusive
+   * choice.
+   */
+  checked?: boolean;
   selected?: boolean;
   disabled?: boolean;
   /** Why this item is shut, for a reader who can do something about it. Announced as a description. */
@@ -283,8 +349,18 @@ export function MenuItem({
   const button = (
     <button
       type="button"
-      role={selected === undefined ? 'menuitem' : 'menuitemradio'}
-      {...(selected === undefined ? {} : { 'aria-checked': selected })}
+      role={
+        checked !== undefined
+          ? 'menuitemcheckbox'
+          : selected === undefined
+            ? 'menuitem'
+            : 'menuitemradio'
+      }
+      {...(checked !== undefined
+        ? { 'aria-checked': checked }
+        : selected === undefined
+          ? {}
+          : { 'aria-checked': selected })}
       {...(disabled ? { 'aria-disabled': true } : {})}
       {...(busy ? { 'aria-busy': true } : {})}
       {...(describedBy ? { 'aria-describedby': describedBy } : {})}

@@ -53,12 +53,14 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await addActivity(page, 'Pour slab');
   await page.getByRole('button', { name: 'Recalculate' }).click();
 
-  // With activities computed, the `hasDiagram`-gated controls light up on Row 1 · Look: the pinned
-  // Project-finish chip and the `View▾` lens popover. The canvas now plots the activities in its
-  // labelled diagram region with a focusable option each.
+  // With activities computed, the `hasDiagram`-gated controls light up on Row 1 · Look — the `View▾`
+  // lens popover — and the Project-finish read-out appears in the PLAN HEADER, where ADR-0090 M2-T3
+  // moved it. A change of location, not of capability: the number is more prominent beside the
+  // status pill than it was at the far end of a 25-item row.
   const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
-  await expect(lookRow.getByRole('button', { name: 'View', exact: true })).toBeVisible();
-  await expect(lookRow.getByText('Finish')).toBeVisible();
+  await expect(lookRow.getByRole('button', { name: /^View/ })).toBeVisible();
+  await expect(lookRow.getByText('Finish')).toHaveCount(0);
+  await expect(page.getByText('Finish', { exact: true })).toBeVisible();
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();
   await expect(diagram.getByRole('option')).toHaveCount(2);
@@ -72,8 +74,10 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(viewPanel).toBeHidden();
   await expect(diagram.getByRole('option')).toHaveCount(2);
 
-  // Baselines is an inline Row 2 action (no capability lost when the chrome band went away).
-  await page.getByRole('button', { name: 'Baselines…' }).click();
+  // Baselines sits behind the Row-2 `Analysis` trigger since ADR-0090 M2-T5 — three ways of
+  // measuring a plan against something, behind one stop. No capability lost, one click deeper.
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('menuitem', { name: 'Baselines…' }).click();
   const baselines = page.getByRole('dialog', { name: 'Baselines' });
   await expect(baselines).toBeVisible();
   await baselines.getByRole('button', { name: 'Close dialog' }).click();

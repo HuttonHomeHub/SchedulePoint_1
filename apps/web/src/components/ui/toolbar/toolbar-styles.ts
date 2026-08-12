@@ -34,12 +34,50 @@ import { cva } from 'class-variance-authority';
  * composite is now duplicated across two controls; a third should extract it rather than copy it
  * (`docs/TECH_DEBT.md` #76).
  */
+/**
+ * The **24 px pointer-target floor** for a split button's caret (WCAG 2.2 §2.5.8 Target Size
+ * (Minimum), AA). One constant rather than a literal at each caret, because there are **three** of
+ * them and the third is how this was found.
+ *
+ * **Measured, not reasoned** (ADR-0090 M3): the two shared carets rendered **23 × 36** and
+ * `IsolateControl`'s bespoke one **22 × 36** — a `size-3.5` chevron (14 px) inside `px-1` (8 px),
+ * plus this variant's 1 px divider. The M3 plan disputed ≈22 vs 24 px and called for the real box to
+ * be captured before deciding; `e2e-toolbar-fit`'s S7 sweep captured it, and both were failing.
+ *
+ * **None of §2.5.8's exceptions apply, which is why this is a fix rather than a waiver.** *Spacing*
+ * fails because a 24 px circle centred on the caret intersects the primary it sits flush against.
+ * *Equivalent* fails because the only other route to the menu is `ArrowDown`/`ArrowUp` on the
+ * primary — a keyboard affordance, and 2.5.8 is about pointer targets. *Inline* and *Essential* are
+ * not in play.
+ *
+ * `justify-center` goes with it: the floor adds width the icon would otherwise sit left of.
+ */
+export const TOOLBAR_CARET_TARGET = 'min-w-6 justify-center pointer-coarse:px-2';
+
 export const toolbarSplitCaretVariants = cva(
-  'border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70',
+  `border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70 ${TOOLBAR_CARET_TARGET}`,
 );
 
+/**
+ * **Touch** (ADR-0090 M3-T4). Under `@media (pointer: coarse)` the control keeps its `min-h-9` and
+ * widens to `px-3`, taking an icon-only button from **32 × 36 to 40 × 36**.
+ *
+ * *Toward* the house ≥ 44 px rule (`docs/UX_STANDARDS.md`), which today's 32 × 36 already fails on
+ * **both** axes — and this closes one of them. **The 36 px minor axis is not claimed closed**: it is
+ * `min-h-9` on a control whose row height the whole epic is trying to reduce, and raising it is a
+ * vertical-space decision that belongs with M4's header merge, not a padding tweak. Recorded as
+ * `docs/TECH_DEBT.md` #127.
+ *
+ * **The shared CVA is not densified in the other direction** (feature-spec §6 Q4): a global re-value
+ * would degrade every touch user to satisfy a desktop complaint, and would buy ≈ 96 px against a
+ * measured 94 px overshoot — appearing to fix the defect while leaving the miscount intact. If a
+ * compact scale is ever wanted it is a `density` variant under `@media (pointer: fine)` only.
+ *
+ * The consolidated item count is what makes this affordable at all: 46 registered commands could not
+ * have absorbed 8 px each, and 28 can. That is a real benefit of M2 rather than a claim about it.
+ */
 export const toolbarControlVariants = cva(
-  'focus-visible:ring-ring inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
+  'focus-visible:ring-ring pointer-coarse:px-3 inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
   {
     variants: {
       tone: {

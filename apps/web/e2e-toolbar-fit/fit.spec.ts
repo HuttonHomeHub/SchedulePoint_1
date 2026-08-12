@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * **The toolbar fit gate** (ADR-0090 M1). One invariant, six assertions, eight widths, both rows.
+ * **The toolbar fit gate** (ADR-0090 M1). One invariant, seven assertions, eight widths, both rows.
  *
  * **This defect was invisible to every unit suite in the repository and always would be**: jsdom has
  * no layout, so `getBoundingClientRect()` returns zeros and ~25 suites rendering `<Toolbar>` stayed
@@ -33,6 +33,17 @@ import { expect, test, type Page } from '@playwright/test';
  *   which Playwright called "visible, enabled and stable" and could not click.
  * - **S6 — the layout is stable.** Settle, snapshot, settle, snapshot. S1–S5 are single snapshots
  *   and would pass on a settled-but-wrong state, missing a slow oscillation entirely.
+ * - **S7 — every _clickable control_ is a 24 × 24 target, not just every toolbar _item_.** S1–S5
+ *   iterate `[data-toolbar-item]`, which sits on an item's **focusable control** — so a split
+ *   button's caret, which is deliberately held out of the roving sequence (`tabIndex={-1}`,
+ *   `ToolbarSplitButton.tsx:97`), carries no such attribute and was **invisible to this gate**.
+ *   WCAG 2.2 §2.5.8 is about pointer targets and does not care whether a control is a tab stop.
+ *   Added for ADR-0090 M3, whose plan makes capturing that control's real rendered box a blocking
+ *   prerequisite: *"If it is failing today, that is a pre-existing, independent 2.5.8 defect."*
+ *   **It was.** The first red run measured **23 × 36** on both shared carets, settling a dispute the
+ *   plan could only frame as "arithmetic against arithmetic"; a third, bespoke caret in the
+ *   selection bar measured 22 and is out of this gate's reach by decision (#124). Why none of
+ *   §2.5.8's exceptions rescue them is recorded at `TOOLBAR_CARET_TARGET` beside the fix.
  *
  * **The selection bar is deliberately NOT covered here, and that is a decision rather than an
  * oversight.** It mounts a third `<Toolbar>` on the identical `measure()`/`computeOverflow` path, so
@@ -48,19 +59,45 @@ const ROWS = ['View and navigate', 'Build and manage'] as const;
 const WIDTHS = [2133, 1920, 1600, 1440, 1280, 1024, 960, 768];
 
 /**
- * At or above this the row must fit outright; below it the row is honestly too narrow for its
- * pinned controls and scrolls by design (M1-T5), where S1/S5 carry the guarantee instead.
+ * At or above this the row must fit outright; below it the row scrolls by design (M1-T5), where
+ * S1/S5 carry the guarantee instead.
  *
- * **1440, not 1280, and the difference was measured rather than chosen.** The first draft said 1280
- * and the gate failed there: Row 1 lays out at 1331 against a 1192 px container, because its pinned
- * `render` items alone measure ~1177 px and nothing but removing them can close that. 1440 is
- * Surface Pro landscape and is exactly what the approved acceptance criteria require to fit
- * outright; M2 is the milestone that lowers this number by cutting the pinned set.
+ * **Now every width in the list — the floor has been retired rather than lowered**, which is
+ * ADR-0090 M3's stated outcome ("`scrollWidth ≤ clientWidth + 1` extends to 960 and 768").
+ *
+ * Its history is the milestone's argument in one constant. It was drafted at 1280 and **measured**
+ * up to 1440, because Row 1's pinned `render` items alone were ~1177 px against a 1192 px container
+ * and nothing but removing them could close it. M2 removed them (1198 → 784 px), M3-T2 folded the
+ * four viewport commands behind `Zoom ▾`, and M3-T3 gave the collapsed band icon-only triggers and
+ * a 144 px search field. Re-measured at every width in `WIDTHS`, both rows now lay out inside their
+ * container — 680 px at 768 included, where Row 1 was 203 px over before this milestone
+ * (`docs/specs/workspace-layout/m3-narrow-widths.md`).
+ *
+ * Keeping the constant at 768 rather than deleting the branch is deliberate: it says *this is a
+ * measured claim about the narrowest supported width*, and it is the line to move if a future
+ * viewport is added below it rather than a branch to reconstruct.
  */
-const PINNED_FLOOR_WIDTH = 1440;
+const PINNED_FLOOR_WIDTH = 768;
 
 /** WCAG 2.2 §2.5.8 Target Size (Minimum). A pointer target is sized by the part that is there. */
 const MIN_TARGET_PX = 24;
+
+/**
+ * The **inline text controls** inside `search`, which 2.5.8 exempts under **Inline**: "the target is
+ * in a sentence, or its size is otherwise constrained by the line-height of non-target text". A
+ * search field's own box is the target; the leading icon and the trailing clear button are sized by
+ * the field's text line and cannot be grown without growing the field.
+ *
+ * Listed by owning item rather than by selector so the exemption is **narrow and reviewable**: a
+ * blanket "skip small things" would have re-opened exactly the hole S7 exists to close.
+ */
+const INLINE_EXEMPT_ITEMS = new Set(['search']);
+
+interface Target {
+  key: string;
+  width: number;
+  height: number;
+}
 
 interface RowState {
   containerWidth: number;
@@ -71,62 +108,98 @@ interface RowState {
   pastRightEdge: string[];
   belowTargetFloor: string[];
   unclickable: string[];
+  /** S7 — every clickable control, including the ones carrying no `data-toolbar-item`. */
+  secondaryBelowFloor: Target[];
 }
 
 async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
-  return page.getByRole('toolbar', { name: ariaLabel }).evaluate((el, minTarget): RowState => {
-    const container = el as HTMLElement;
-    const inline: string[] = [];
-    const pastRightEdge: string[] = [];
-    const belowTargetFloor: string[] = [];
-    const unclickable: string[] = [];
-    let overflowPresent = false;
-    let overflowVisibleWidth = 0;
+  return page.getByRole('toolbar', { name: ariaLabel }).evaluate(
+    (el, arg): RowState => {
+      const { minTarget, inlineExempt } = arg;
+      const container = el as HTMLElement;
+      const inline: string[] = [];
+      const pastRightEdge: string[] = [];
+      const belowTargetFloor: string[] = [];
+      const unclickable: string[] = [];
+      let overflowPresent = false;
+      let overflowVisibleWidth = 0;
 
-    const startScroll = container.scrollLeft;
-    for (const node of container.querySelectorAll<HTMLElement>('[data-toolbar-item]')) {
-      const id = node.getAttribute('data-toolbar-item') ?? '';
-      if (id === '__overflow__') overflowPresent = true;
-      else inline.push(id);
+      const startScroll = container.scrollLeft;
+      for (const node of container.querySelectorAll<HTMLElement>('[data-toolbar-item]')) {
+        const id = node.getAttribute('data-toolbar-item') ?? '';
+        if (id === '__overflow__') overflowPresent = true;
+        else inline.push(id);
 
-      // **Scroll to it first.** Since M1-T5 the row is `overflow-x-auto`, so "past the right edge"
-      // no longer means "unreachable" — it means the reader scrolls. The user-level question is
-      // therefore not *where is this box* but *can a planner get a pointer onto it*, and that is
-      // what this measures. It generalises too: at every width where the row already fits,
-      // scrolling is a no-op and the reading is identical.
-      node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      const rowBox = container.getBoundingClientRect();
-      const b = node.getBoundingClientRect();
-      const left = Math.max(b.left, rowBox.left);
-      const right = Math.min(b.right, rowBox.right);
-      const visible = Math.round(Math.max(0, right - left));
-      if (id === '__overflow__') overflowVisibleWidth = visible;
+        // **Scroll to it first.** Since M1-T5 the row is `overflow-x-auto`, so "past the right edge"
+        // no longer means "unreachable" — it means the reader scrolls. The user-level question is
+        // therefore not *where is this box* but *can a planner get a pointer onto it*, and that is
+        // what this measures. It generalises too: at every width where the row already fits,
+        // scrolling is a no-op and the reading is identical.
+        node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const rowBox = container.getBoundingClientRect();
+        const b = node.getBoundingClientRect();
+        const left = Math.max(b.left, rowBox.left);
+        const right = Math.min(b.right, rowBox.right);
+        const visible = Math.round(Math.max(0, right - left));
+        if (id === '__overflow__') overflowVisibleWidth = visible;
 
-      // Unreachable even after scrolling to it — the shipped defect.
-      if (visible <= 0) pastRightEdge.push(id);
-      if (visible < minTarget) belowTargetFloor.push(`${id}:${visible}px`);
+        // Unreachable even after scrolling to it — the shipped defect.
+        if (visible <= 0) pastRightEdge.push(id);
+        if (visible < minTarget) belowTargetFloor.push(`${id}:${visible}px`);
 
-      // Does a click at the control's own visible centre land on it? A correctly positioned,
-      // fully scrolled-to control can still be covered by a neighbour's overflowing content —
-      // which happened during this milestone, and which no position check can see.
-      const cx = Math.round(left + visible / 2);
-      const cy = Math.round(b.top + b.height / 2);
-      const hit = document.elementFromPoint(cx, cy);
-      if (visible > 0 && !(hit && (node === hit || node.contains(hit)))) unclickable.push(id);
-    }
-    container.scrollLeft = startScroll;
+        // Does a click at the control's own visible centre land on it? A correctly positioned,
+        // fully scrolled-to control can still be covered by a neighbour's overflowing content —
+        // which happened during this milestone, and which no position check can see.
+        const cx = Math.round(left + visible / 2);
+        const cy = Math.round(b.top + b.height / 2);
+        const hit = document.elementFromPoint(cx, cy);
+        if (visible > 0 && !(hit && (node === hit || node.contains(hit)))) unclickable.push(id);
+      }
 
-    return {
-      containerWidth: container.clientWidth,
-      scrollWidth: container.scrollWidth,
-      inline,
-      overflowPresent,
-      overflowVisibleWidth,
-      pastRightEdge,
-      belowTargetFloor,
-      unclickable,
-    };
-  }, MIN_TARGET_PX);
+      // **S7 — the second sweep, over clickable controls rather than toolbar items.** The two are not
+      // the same set: `data-toolbar-item` marks an item's *focusable* control, so a split button's
+      // caret (`tabIndex={-1}`, outside the roving sequence by design) carries none and the first loop
+      // never saw it. Both dimensions are measured here, not just width: the first loop's width-only
+      // reading answers "is it clipped by the horizontal scroll", which is the axis M1's defect lived
+      // on; 2.5.8 is about the box.
+      const secondaryBelowFloor: Target[] = [];
+      const clickable = container.querySelectorAll<HTMLElement>(
+        'button, a[href], input, select, textarea, [role="button"]',
+      );
+      for (const node of clickable) {
+        const owner =
+          node.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item') ?? 'row';
+        if (inlineExempt.includes(owner)) continue;
+        node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const b = node.getBoundingClientRect();
+        // A control that is not laid out at all is not a target; `hidden`/`display:none` produce a
+        // zero box, and asserting on those would fail on markup no pointer can reach.
+        if (b.width === 0 && b.height === 0) continue;
+        if (b.width >= minTarget && b.height >= minTarget) continue;
+        const name =
+          node.getAttribute('aria-label') ?? (node.textContent ?? '').trim().slice(0, 24);
+        secondaryBelowFloor.push({
+          key: `${owner}/${name || node.tagName.toLowerCase()}`,
+          width: Math.round(b.width * 10) / 10,
+          height: Math.round(b.height * 10) / 10,
+        });
+      }
+      container.scrollLeft = startScroll;
+
+      return {
+        containerWidth: container.clientWidth,
+        scrollWidth: container.scrollWidth,
+        inline,
+        overflowPresent,
+        overflowVisibleWidth,
+        pastRightEdge,
+        belowTargetFloor,
+        unclickable,
+        secondaryBelowFloor,
+      };
+    },
+    { minTarget: MIN_TARGET_PX, inlineExempt: [...INLINE_EXEMPT_ITEMS] },
+  );
 }
 
 /** The full reachable set: what is inline plus whatever the `⋯` offers. */
@@ -195,11 +268,12 @@ async function openPlan(page: Page, stamp: number): Promise<void> {
     await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
     await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
   }
-  await expect(
-    page
-      .getByRole('toolbar', { name: 'View and navigate' })
-      .locator('[data-toolbar-item="finish-chip"]'),
-  ).toHaveCount(1, { timeout: 30_000 });
+  // Wait for the schedule to compute before measuring, or the row is narrower than the one a
+  // planner sees. The signal is the plan header's Project-finish read-out, which renders nothing
+  // until `projectFinish` is non-null — it was the Row-1 `finish-chip` until ADR-0090 M2-T3 moved
+  // it off the toolbar. A readiness gate has to be something that appears when the work is done,
+  // and this fixture's whole point is that the toolbar's own contents are what changes.
+  await expect(page.getByText('Finish', { exact: true })).toBeVisible({ timeout: 30_000 });
 }
 
 test('every toolbar command is reachable at every targeted width', async ({ page }) => {
@@ -228,6 +302,12 @@ test('every toolbar command is reachable at every targeted width', async ({ page
       // S5 — every control is a real, clickable target of at least 24 px.
       expect(state.belowTargetFloor, `S5 ${where}: below the 24 px target minimum`).toEqual([]);
       expect(state.unclickable, `S5 ${where}: covered by something else`).toEqual([]);
+
+      // S7 — and every clickable control inside the row, tab stop or not.
+      expect(
+        state.secondaryBelowFloor,
+        `S7 ${where}: a clickable control below the 24 px minimum (WCAG 2.2 §2.5.8)`,
+      ).toEqual([]);
 
       // S2 — if the ⋯ renders at all, it is a real target too.
       if (state.overflowPresent) {
@@ -309,4 +389,59 @@ test('the toolbar passes a WCAG 2.2 scan with target-size opted in', async ({ pa
     .analyze();
 
   expect(results.violations).toEqual([]);
+});
+
+/**
+ * **Touch geometry** (ADR-0090 M3-T4), asserted in a browser that actually reports
+ * `@media (pointer: coarse)` rather than by reading the class list.
+ *
+ * The plan asks for "a computed assertion on the coarse-pointer control geometry", and the reason it
+ * has to be computed is that every cheaper check is a check on the *source*: a unit test can see
+ * `pointer-coarse:px-3` in a `className` and cannot see whether Tailwind emitted the rule, whether
+ * the variant name is right, or whether something later in the cascade beat it. (The rule's presence
+ * in the built CSS was confirmed separately — `@media (pointer:coarse){.pointer-coarse\:px-3{…}}` —
+ * but "it compiled" and "it applies to this button" are different claims.)
+ *
+ * **What it does not claim.** The house rule is ≥ 44 px on both axes (`docs/UX_STANDARDS.md`) and
+ * this only moves the major one, 32 → 40. The minor axis stays 36 and is `docs/TECH_DEBT.md` #127,
+ * so the assertion is written against the number actually delivered — a test asserting 44 here would
+ * be red on merge, and a gate that fails on day one gets deleted rather than fixed (ADR-0058).
+ */
+test.describe('coarse pointer', () => {
+  // `hasTouch` alone, **probed rather than assumed**: a standalone script reported
+  // `matchMedia('(pointer: coarse)').matches` as `true` for `{hasTouch}` and for
+  // `{hasTouch, isMobile}`, and `false` for neither. `isMobile` was in the first draft and is left
+  // out because it also emulates the mobile meta-viewport, which reflowed the New-activity dialog
+  // until its description paragraph covered the Create button — the fixture failed on a detail with
+  // nothing to do with what is being measured.
+  test.use({ hasTouch: true });
+
+  test('widens every toolbar control without shortening it', async ({ page }) => {
+    const stamp = Date.now();
+    await page.setViewportSize({ width: 1024, height: 1366 });
+    await openPlan(page, stamp);
+
+    await settle(page);
+
+    const coarse = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches);
+    // If the emulation ever stops reporting coarse, this test would pass by measuring the fine-
+    // pointer layout against a fine-pointer expectation — green for having tested nothing.
+    expect(coarse, 'the browser must actually report a coarse pointer').toBe(true);
+
+    const boxes = await page.getByRole('toolbar', { name: 'Build and manage' }).evaluate((el) =>
+      [...(el as HTMLElement).querySelectorAll<HTMLElement>('[data-toolbar-item]')].map((n) => ({
+        id: n.getAttribute('data-toolbar-item') ?? '',
+        width: Math.round(n.getBoundingClientRect().width),
+        height: Math.round(n.getBoundingClientRect().height),
+      })),
+    );
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) {
+      expect(
+        box.width,
+        `${box.id} is narrower than the coarse-pointer floor`,
+      ).toBeGreaterThanOrEqual(40);
+      expect(box.height, `${box.id} lost height to the padding change`).toBeGreaterThanOrEqual(36);
+    }
+  });
 });

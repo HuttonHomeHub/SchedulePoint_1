@@ -315,9 +315,9 @@
       "enabledSource": "floor",
       "batch": "batch-12",
       "deferredUntil": {
-        "trigger": "epic-touch: plan workspace",
+        "trigger": "flag-cleanup pass",
         "debt": "#122",
-        "reason": "Seven flag-off Playwright configs pin this OFF and their specs are written against the legacy stacked plan-detail page — activity-editor, assignment-lag, base, edit, notes, programme, sub-day. That is the largest conversion cost in the estate and D5 forbids retiring before the coverage is replaced. Note sub-day and assignment-lag harness BOTH deferred survivors, so converting them is shared work whenever either is taken up."
+        "reason": "PARKED BY THE PRODUCT OWNER 2026-08-12: every flag stays ON for now and the estate is to be cleaned up in one dedicated pass rather than a flag at a time, so the epic-touch trigger this ADR fired is superseded by that decision. The measurement stands and is why the pass is worth batching. MEASURED 2026-08-12 (ADR-0090 M6, docs/specs/workspace-layout/m6-harness-conversion.md). Seven flag-off Playwright configs pin this OFF; all seven were probed with a bare pin-flip and ALL SEVEN FAIL — 27 specs in total: base 8 of 17, activity-editor 11, edit 3, sub-day 2, notes 1, programme 1, assignment-lag 1. Not one is a configuration edit; every one needs new selectors against the surviving surface. Three of them (base, programme, notes) additionally pin VITE_TSLD_EDITING and VITE_PLAN_EDIT_LOCK off DELIBERATELY to stay pen-free, so converting those must first establish that the journey works pen-free against the surviving workspace or it silently changes what the journey tests. ADR-0090 fired the epic-touch trigger and took the milestone-s own stated off-ramp on this number rather than holding M1-M5 behind it; the trigger is re-recorded here rather than left to rot. D5 still forbids retiring before the coverage is replaced. Note sub-day and assignment-lag harness BOTH deferred survivors, so converting them is shared work whenever either is taken up."
       },
       "class": "A"
     },
@@ -551,7 +551,9 @@
   "deferralTriggers": [
     "epic-touch: activity editor",
     "epic-touch: plan workspace",
+    "flag-cleanup pass",
     "retirement in flight"
   ],
+  "$flag-cleanup-note": "`flag-cleanup pass` was added to the vocabulary on 2026-08-12 by product-owner decision, which is exactly the form the note below asks for — a decision somebody makes, in a diff, rather than a free-text sentence in one flag's reason. It supersedes `epic-touch: plan workspace` for VITE_CANVAS_WORKSPACE: ADR-0090 FIRED that trigger and measured the cost (all seven harnesses fail a bare pin-flip, 27 specs), and the owner's call is that every flag stays ON and the estate is cleaned up in ONE batched pass rather than a flag at a time. That is a stronger reason than the epic's own off-ramp, and it is a real event rather than an indefinite opt-out — but note it is also a WIDER one, so a second flag deferred under it should be a deliberate choice and not a habit.",
   "$deferral-note": "ADR-0088 D3a. A Class A flag may be deferred past its batch date, but NOT by a bare date and NOT by `keep` — `keep` means 'Class B, guard-only, never retires', which is a written false statement about a Class A flag and corrupts the classification this register exists to defend. A deferral carries a trigger from `deferralTriggers` (a CLOSED vocabulary: adding a value is a decision somebody makes, in a diff) and a named TECH_DEBT row, so it is an event that will happen rather than an indefinite opt-out. This is the escape hatch the epic exists to remove, so it is bounded by construction."
 }

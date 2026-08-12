@@ -10,7 +10,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ENTRY_ROUTES_ENABLED: false,
 }));
 
-import { SelectionActionsBar, type SelectionActionContext } from './selection-actions';
+import { SelectionActionsBar, type SelectionBarContext } from './selection-actions';
 
 const spies = {
   onOpenLogic: vi.fn(),
@@ -24,8 +24,12 @@ const spies = {
   onDuplicateBand: vi.fn(),
 };
 
-function ctx(over: Partial<SelectionActionContext> = {}): SelectionActionContext {
+function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
   return {
+    // No canvas half by default (ADR-0090 M2-T1) — these suites are about the OBJECT actions, and
+    // `canvas: null` is exactly the pre-M2 bar, which keeps them the before/after oracle. The
+    // canvas commands have their own suite.
+    canvas: null,
     targetName: 'Excavate',
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,

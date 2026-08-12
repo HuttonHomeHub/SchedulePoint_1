@@ -55,6 +55,7 @@ import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
+import { ProjectFinishChip } from '@/features/schedule/components/ProjectFinishChip';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
@@ -74,17 +75,31 @@ import { cn } from '@/lib/utils';
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
 const MD_QUERY = '(min-width: 48rem)';
 
-/** The visible row-purpose eyebrow's type treatment — kept as one constant so the two rows can't
- * drift apart on a future edit. `text-xs` is the design system's smallest type-scale step
- * (`docs/DESIGN_SYSTEM.md` "Captions, meta"), not an arbitrary size. */
-const ROW_LABEL_CLASSNAME = 'text-muted-foreground text-xs font-semibold tracking-wide uppercase';
+/**
+ * Row 1's group-name override. Only `object` differs from the primitive's defaults, and only because
+ * that group holds a read-out on this row and commands on the other; a name shared by two visible
+ * regions is the collision M2-T6 exists to remove, not a tidy-up.
+ */
+const ROW_LOOK_GROUP_LABELS = { object: 'Plan info' } as const;
 
-/** The eyebrow's **gutter**, not just its type (feature-spec.md §4.1): a fixed-width, right-ruled
- * column so the label reads as the row's gutter rather than a control sitting in the row's own
- * button rhythm — the defect a first pass left was rhythm, not weight. Both rows share one fixed
- * width so their toolbars begin at the same x; the rule is the row's leftmost rule, so `<Toolbar>`'s
- * own between-group hairlines (`i > 0`) never double up against it. */
-const ROW_LABEL_GUTTER_CLASSNAME = 'border-border flex w-16 shrink-0 items-center border-r pr-2';
+/**
+ * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5 — see below).
+ *
+ * A ux review once asked for them, and the plan committed to removing them again with the
+ * replacement stated: each `role="group"` keeps its own visible hairline and its own accessible
+ * name, and after M2's consolidation the rows are short enough to read without a gutter telling you
+ * what they are. That is the trade, said out loud rather than quietly reversed.
+ *
+ * **One edit fixed three things.** 64 px of gutter per row; the collision where "Navigate" was both
+ * the visible Row-1 caption and the `frame` group's `aria-label`, so AT announced it twice; and the
+ * ux finding that neither caption described more than a fraction of its row — Row 1's "Navigate"
+ * captioned five taxonomy groups, most of which do not navigate.
+ *
+ * **It is recorded here because it did not ship when it was supposed to.** M2-T6 specified this as
+ * concrete steps, M2 shipped without them, and neither ADR-0090's "as built" section nor
+ * `docs/TECH_DEBT.md` recorded the omission — a committed-to fix that silently did not happen,
+ * which is the mirror image of the drift ADR-0058 was written about. The M5 ux gate found it.
+ */
 
 /**
  * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — and, since ADR-0088 D3 retired
@@ -165,7 +180,17 @@ export function ToolbarPlanWorkspace({
   // the chrome band and is no longer a DOM descendant of the workspace root.
   const closeFloatPathsAndFocus = useCallback(() => {
     closeFloatPaths();
-    document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]')?.focus();
+    // **Falls back to the `⋯` trigger, and that is not defensive coding.** ADR-0090 M2 moved this
+    // command to tier 3, so it is a menu item that UNMOUNTS with the menu the moment it is chosen —
+    // by the time the panel closes there is no `[data-toolbar-item="float-paths"]` to return to, and
+    // focus was landing on `<body>` (WCAG 2.4.3). The `⋯` is the stable ancestor of wherever the
+    // command actually lives, so it is the honest destination: the planner is returned to the
+    // control they opened this from. Found by `e2e-float-paths`, which asserts the restore — no unit
+    // test could, because the element only goes missing once a real menu closes.
+    const target =
+      document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]') ??
+      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
+    target?.focus();
   }, [closeFloatPaths]);
 
   const toggleFloatPaths = useCallback(() => {
@@ -357,6 +382,28 @@ export function ToolbarPlanWorkspace({
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
   // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
   // tools read as live while doing nothing on the canvas (ux/a11y review).
+  // The canvas commands the floating selection bar offers (ADR-0090 M2-T1). Assembled HERE because
+  // this is where both halves already live — `canvasUi` owns isolation, `ctx` owns the viewport
+  // commands — and passed to `TsldPanel` as one prop, so that component never learns what isolating
+  // means. Memoised: `selectionCtx` is a `useMemo` dependency down there, and a fresh object each
+  // render would rebuild the bar's context on every frame of a pan.
+  const selectionCanvas = useMemo(
+    () => ({
+      isolateActive: canvasUi.navState.isolateActive,
+      isolateMode: canvasUi.navState.isolateMode,
+      toggleIsolate: canvasUi.toggleIsolate,
+      setIsolateMode: canvasUi.setIsolateMode,
+      zoomToSelection: ctx.zoomToSelection,
+    }),
+    [
+      canvasUi.navState.isolateActive,
+      canvasUi.navState.isolateMode,
+      canvasUi.toggleIsolate,
+      canvasUi.setIsolateMode,
+      ctx.zoomToSelection,
+    ],
+  );
+
   const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
 
   // The workspace keyboard scope — `?` plus the ADR-0048 undo/redo accelerators — as ONE React
@@ -480,6 +527,7 @@ export function ToolbarPlanWorkspace({
       // Float-path emphasis (audit F4): the ONE derived set, handed to the canvas here and to the
       // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
       floatPathIds={floatPaths.emphasisIds}
+      selectionCanvas={selectionCanvas}
     />
   );
 
@@ -711,32 +759,14 @@ export function ToolbarPlanWorkspace({
     // the accessible answer here is the disable, not the "fix".
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div ref={rootRef} onKeyDown={onWorkspaceKeyDown} className="flex min-h-0 flex-1 flex-col">
-      {/* Slim header: one line — breadcrumb (…→ plan name) + status pill, then compact pen status. */}
-      <header className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-2">
-        <h1 className="sr-only">{plan.name}</h1>
-        <div className="flex min-w-0 items-center gap-2">
-          <Breadcrumbs items={crumbs} />
-          <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-          {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
-              the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
-          {model.canWrite ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => model.setEditing(true)}
-              title="Edit plan…"
-              aria-label="Edit plan"
-              className="text-muted-foreground shrink-0"
-            >
-              <SquarePen aria-hidden="true" className="size-4" />
-            </Button>
-          ) : null}
-        </div>
-        <CompactPenStatus
-          pen={model.pen}
-          {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-        />
-      </header>
+      {/*
+        The plan's accessible name for the `<main>` landmark, and it **stays here** while the visible
+        identity line moves into the chrome band with the commands (ADR-0090 M4-T2).
+        `document.querySelector('h1')` is not the point: a screen-reader user navigating by landmark
+        lands in `main`, and a `main` with no heading is a region that does not say what it is. The
+        band is outside `main`, so an `<h1>` moved there would name the banner instead.
+      */}
+      <h1 className="sr-only">{plan.name}</h1>
 
       {/* The two-row command surface (ADR-0031 two-row amendment). Row 1 · Look is always live; Row 2 ·
           Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
@@ -748,6 +778,66 @@ export function ToolbarPlanWorkspace({
           untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
       <ChromePortal>
         <div className="border-border flex flex-col border-b">
+          {/*
+            **The plan identity line** — breadcrumb, status, project finish, Edit plan, pen status —
+            folded into the band **above** the commands it governs (ADR-0090 M4-T2). Measured gain:
+            the 53 px row plus the 8 px that separated it from the workspace pane, against a 533 px
+            canvas at 1080 — **~61 px, +11 %**. That is deliberately not the figure `design.md` §2.1
+            implies (it puts 199 px above the canvas against a measured 257, and 717 px of canvas
+            against a measured 533); see `docs/specs/workspace-layout/m4-vertical-stack.md`.
+
+            **A `<div>`, not the `<header>` it used to be.** Inside `<main>` a `<header>` carries no
+            landmark role; in the band it is outside `main`, where it would become a **second
+            `banner`** beside the app header row's. Two banners is a worse outcome than the element
+            name is worth, and nothing depended on the tag — the accessible name of this screen is
+            the `sr-only <h1>` above, which is why that stayed behind.
+
+            **No new focus-return code, which is the point rather than an omission.** The
+            pre-approval review flagged that this file has shipped a `rootRef`-scoped
+            `querySelector` twice (`:164-169`, `:330-338`), each time silently finding nothing
+            because `ChromePortal` moves the node out of the workspace root's subtree, and required
+            any new restore to be `document`-scoped. There is none to write: the only focusable
+            control here is Edit plan, and the dialog it opens restores focus through its own
+            `restoreFocusRef`, which holds an element reference and never queries the DOM at all.
+          */}
+          {/* `py-1`, not the `py-2` this row carried as a standalone header. Inside the band it sits
+              directly above two rows that are `py-1` around a `min-h-9` control, and a third rhythm
+              in one surface reads as three surfaces. Measured: 53 → 45 px, the same height as Row 1.
+              `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
+              equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
+              everything below it. */}
+          <div className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <Breadcrumbs items={crumbs} />
+              <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+              {/* The Project-finish read-out (ADR-0090 M2-T3), moved off Row 1 where it was a
+                  non-operable stop inside a `role="toolbar"` costing 150 px of pinned width. It self-
+                  hides until the plan has been calculated, so the header shows nothing rather than an
+                  em dash on a fresh plan. */}
+              <span className="ml-1 hidden shrink-0 items-center text-sm sm:inline-flex">
+                <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
+              </span>
+              {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
+                  the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
+              {model.canWrite ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => model.setEditing(true)}
+                  title="Edit plan…"
+                  aria-label="Edit plan"
+                  className="text-muted-foreground shrink-0"
+                >
+                  <SquarePen aria-hidden="true" className="size-4" />
+                </Button>
+              ) : null}
+            </div>
+            <CompactPenStatus
+              pen={model.pen}
+              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+            />
+          </div>
+
           {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise
               lived only in each row's `aria-label`, invisible to sighted users. Plain words rather than
               those internal ADR-0031 codenames — "Look"/"Do" read as jargon to a first-time user — and
@@ -755,26 +845,21 @@ export function ToolbarPlanWorkspace({
               caption. `aria-hidden` avoids a redundant/out-of-context announcement — the toolbar's own
               `aria-label` already names the row for AT. */}
           <div className="border-border flex items-center gap-2 border-b px-2 py-1">
-            <div className={ROW_LABEL_GUTTER_CLASSNAME}>
-              <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
-                Navigate
-              </span>
-            </div>
             <Toolbar
               items={rows.look}
               context={ctx}
               label="View and navigate"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               alignEndGroup="object"
+              // Row 1's `object` group is a single **read-out** — `Summary ▾` — so the shared default
+              // "Plan actions" is wrong twice: it is not an action, and Row 2's `object` group
+              // (Analysis, Schedule settings, Report progress, Comments) genuinely is, leaving two
+              // on-screen regions with one name. M2-T6 step 2, landed at M5.
+              groupLabels={ROW_LOOK_GROUP_LABELS}
               className="flex-1"
             />
           </div>
           <div className="flex items-center gap-2 px-2 py-1">
-            <div className={ROW_LABEL_GUTTER_CLASSNAME}>
-              <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
-                Build
-              </span>
-            </div>
             <Toolbar
               items={rows.do}
               context={ctx}

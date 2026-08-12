@@ -258,6 +258,68 @@ corrected in the same PR rather than stepped over (the ADR-0071 lesson).
 - **Adding an eighth taxonomy group for deliverables.** Rejected: the closure of
   `TOOLBAR_GROUPS` is the property ADR-0031 §2 exists to defend. D4 renames instead.
 
+## Milestone 2 as built (2026-08-11/12) — five decisions the plan did not contain
+
+M2 shipped the consolidation. Five of its decisions were taken during the work rather than in this
+document, and each is recorded here because each would otherwise read as an unexplained departure.
+
+**1 · `float-paths` does not move to the selection bar.** The plan lists it beside
+`zoom-to-selection` and `isolate-logic` on the grounds that its `isEnabled` requires a selection.
+That conflates _needs a selection_ with _is a canvas command_. It is a view-agnostic analysis that
+runs in the **Gantt** as well as the diagram — its ladder reads `activityCount`, deliberately not
+`canvasActive` — so moving it to a bar only the canvas renders would have deleted it from the Gantt.
+`float-paths-view-agnostic.structural.test.ts` exists to fail on exactly that.
+
+**2 · The `View ▾` trigger annotates a non-default colour mode.** Folding `colour-by` into the
+popover as a radio group leaves no trigger to name the active mode, and colour is the diagram's
+dominant encoding — a planner who has coloured by WBS group and forgotten reads every criticality
+judgement wrong. The trigger reads `View · WBS group` off-default and plain `View` at the default:
+width spent on the surprising state, none on the ordinary one. A canvas-corner read-out was rejected
+(a fifth persistent overlay), as was relying on the Legend (itself a toggle, moving into the same
+popover).
+
+**3 · The deliverables and analysis triggers are menu-buttons, and one is not called `Plan`.** The
+plan specifies a split-button for `Share & export`; a split button's primary region performs the
+primary action, and Export itself opens a menu, so it would have had a primary that opens a menu and
+a caret that opens the same one. The requirements that mattered — one roving stop, focus restored to
+the trigger — are met by a plain menu-button. `Plan ▾` became **`Analysis`** because it would have
+sat inside a group whose `aria-label` is already "Plan actions" and next to Row 1's `Summary ▾`;
+heard back to back, "Plan" and "Summary" do not say which holds what. `Schedule settings…` stayed
+inline rather than joining it — it is the one that _changes_ how dates are computed rather than
+reporting on them, and `docs/TECH_DEBT.md` #60 renamed it so the float measure could be found.
+
+**4 · M2-T7's specification was wrong for this surface, and the test pins the opposite.** It calls
+for a group whose every row would be shaded to render **no trigger**. That is ADR-0082's clause about
+the Project Explorer's row menu, where a menu of nothing but refusals is a dead end and its absence
+costs nothing. A toolbar is the opposite case: ADR-0031 §4 makes the read-only↔editing flip legible
+by keeping the row's shape fixed and shading its members as a set, so removing a trigger by
+permission would reflow the row for a Viewer — two people looking at the same plan would see
+different bars. The rule here is **shade the trigger and say why**.
+
+**5 · Labels at 1920 were bought with four tier-3 demotions, on the product owner's decision.**
+Measured: Row 1 was ~360 px short, Row 2 ~128. `Next conflict`, `Float paths` and `Keyboard
+shortcuts` on Row 1 and `Clear visual placement` on Row 2 moved to tier 3 — always in the `⋯`,
+nothing deleted. The trade was put with the numbers rather than taken: **labelled commands at 1920,
+or three fewer commands on the row.** Result, measured: Row 1 **14 inline / 13 labelled** (from 15 /
+0), Row 2 **14 / 12** (from 19 / 0). §1.4 criterion 1 is met at 1920 for the first time.
+
+Tier 3 rather than a low `priority` is load-bearing: `autoLabelsFit` sums the **whole bar**, so a
+width-demoted item still pays for its label. Making the label sum read only the inline set is the
+feedback loop `measureLabelWidth` exists to prevent. `showLabel: 'never'` was measured and rejected —
+it sheds the label but keeps the 32 px and the gap, saving 308 px against a 360 px gap.
+
+**Two defects the move exposed, both in code that predated it.** `Float paths` is a **toggle**, and
+the `⋯` had only ever held plain actions: in the menu it announced no state at all. `MenuItem` gained
+`checked` (`role="menuitemcheckbox"`), kept distinct from `selected` (`menuitemradio`) because a
+toggle is not one of several. And closing its panel restored focus by querying the command's
+`data-toolbar-item`, which now unmounts with the menu — focus was landing on `<body>` (WCAG 2.4.3);
+it falls back to the `⋯`. Both were found by things that run the real product, not by review.
+
+**The cost carried into M3.** `zoom-to-selection` and `isolate-logic` used to sit shaded on Row 1
+saying "Select an activity first". They are now **absent** until a bar is selected — correct by
+ADR-0082 (with no selection there is no object), and the one place M2 removes something from view
+rather than relocating it. M3 must check that discoverability is not what got optimised away.
+
 ## Consequences
 
 **The first consequence, and the one this ADR exists to record: it was wrong three times, and the
@@ -318,6 +380,143 @@ correction block instead of the withdrawn text alone.
 corrected to seven harnesses; **CLAUDE.md §16 needs this ADR's register entry** — the authoring
 session was not authorised to edit that file, and an unentered ADR is exactly how ADR-0071 came
 to be cited by shipped code while absent from the register.
+
+## Milestone 3 as built (2026-08-12) — one prerequisite discharged, one task withdrawn
+
+M3 was approved with a **blocking prerequisite**: the split-button caret's real box had to be
+captured before the milestone decided anything about it, because the plan could only frame the
+question as _"arithmetic against arithmetic"_ (≈22 px against a claimed 24). Four things worth
+recording came out of doing that properly.
+
+**M3-a — the gate could not see the control the milestone was about, and the reason generalises.**
+`e2e-toolbar-fit` iterated `[data-toolbar-item]`, an attribute that sits on an item's **focusable**
+control. A split-button caret is deliberately held out of the roving sequence (`tabIndex={-1}`), so
+it carries none — while WCAG 2.2 §2.5.8 is about **pointer** targets and does not care whether a
+control is a tab stop. The gate gained a second sweep (S7) over every clickable control, measuring
+both axes rather than visible width alone, and the first red run answered the dispute: **23 × 36** on
+the two shared carets, and **22 × 36** on a _third_, bespoke copy in the selection bar that the plan
+had identified but the gate structurally cannot reach (`docs/TECH_DEBT.md` #124). None of §2.5.8's
+exceptions rescue them — _Spacing_ fails because a 24 px circle centred on the caret intersects the
+primary it sits flush against, and _Equivalent_ fails because the only other route to the menu is
+`ArrowDown`/`ArrowUp`, a keyboard affordance. One shared constant now floors all three.
+
+**M3-b — the fold's boundary was decided by measurement, against the plan.** M3-T2 was drafted as
+"condensed and below" (< 1280). At a 1352 px container — a 1440 px window, this milestone's own
+headline target — the four viewport commands were **already** in the anonymous `⋯`, because Row 1's
+pinned controls are 1113 px there and the four cost 430 more. The choice at that width was never
+"inline or folded" but _which menu_, and only `Zoom ▾` names the subject. So the predicate is
+`layout !== 'comfortable'`.
+
+**M3-c — a task was withdrawn rather than approximated.** M3-T2's title asks that _"segments become
+icon pairs"_, and the four items it names carry **no `icon` at all** — the registry says so twelve
+lines above them (_"a tier-2 label-less segment paints blank — ux review"_). Built, it rendered four
+blank **16 px** buttons and the fit gate failed it as a 2.5.8 violation the same hour. Choosing a
+glyph for `Early` versus `Visual` scheduling mode is a statement about what those modes _are_, and
+this milestone is about width, so it was not guessed: `docs/TECH_DEBT.md` #126. **The primitive
+widening written to support it was reverted with it** — a band-aware `showLabel` with no consumer is
+an untested branch, which ADR-0088 spent a decision arguing is a second product.
+
+**M3-d — a flaky assertion was attributed by running it, not by reasoning about it.** The
+`e2e-multi-select` post-delete focus assertion failed once in four runs during M3, and M3 adds an
+extra render pass to `<Toolbar>` on mount — exactly the sort of thing that shifts a timing race. The
+milestone commit was reverted with `git revert --no-commit` and the journey run four more times
+against the pre-M3 tree: **3 passed, 1 failed**, the same rate. Pre-existing, neither caused nor
+worsened, and recorded with that evidence as `docs/TECH_DEBT.md` #128 rather than absorbed as noise
+or blamed on the milestone in hand.
+
+The measured before/after is `docs/specs/workspace-layout/m3-narrow-widths.md`. **Every row now lays
+out inside its container at every width in the gate's list**, so `PINNED_FLOOR_WIDTH` retires from
+1440 to 768 and S4 applies everywhere — M3's stated outcome, met with numbers rather than asserted.
+
+## Milestone 5 as built (2026-08-12) — what four specialists found, and one thing nobody had
+
+The gate pass ran `ux-reviewer`, `accessibility-reviewer`, `component-reviewer` and
+`performance-reviewer` over the combined M1–M4 diff. Performance passed outright, having re-derived
+the new layout band's convergence argument from the code rather than accepting the milestone's word
+for it. The other three produced three blocking findings, all folded with regression tests **verified
+red first**. Five things are worth carrying forward.
+
+**M5-a — a committed fix silently did not ship, and that is a new shape of drift for this register.**
+M2-T6 specified deleting the row-caption gutters and passing a per-row `groupLabels` override, in
+concrete steps, discharging two rows of an earlier ux review's disposition table. M2 shipped without
+either. Neither this ADR's "Milestone 2 as built" section — which exists to list what the plan did not
+contain — nor `docs/TECH_DEBT.md` recorded the omission. Every previous instance in this register is
+a document that **describes the code wrongly**; this is a document that describes work **correctly**
+and the work not happening, with the record silent. ADR-0058's rule (_verify the claim_) does not
+catch it, because there was no false claim to verify — the plan was right and unexecuted. Both steps
+landed here: the captions and their 64 px gutters are gone (each row gained 72 px of container,
+re-measured, everything still fits), "Navigate" no longer collides with the `frame` group's own
+`aria-label`, and Row 1's `object` group is **Plan info** rather than a second "Plan actions" — it
+holds one read-out, not commands.
+
+**M5-b — the gate caught this ADR's own reasoning being wrong.** M3-b argues the four viewport
+commands are better inside `Zoom ▾` than in the anonymous `⋯` because _"only `Zoom ▾` names the
+subject"_. **The trigger does not say "Zoom".** It renders the current preset, so on Surface Pro
+landscape — the device this epic names as its target, and a `compact` container where the fold is
+active — a planner hunting for **Fit to plan** met a button labelled "Week" beside a calendar icon,
+with no on-screen text saying Zoom anywhere. Asserted and never looked at: ADR-0076 Class 3, inside
+the milestone whose own gate found it. The label is now `Zoom · Week` exactly when the fold is
+active. The icon is left alone and filed (`docs/TECH_DEBT.md` #130) — choosing a glyph meaning "the
+viewport" is a design decision, and this epic is about width.
+
+**M5-c — the M2-T1 discoverability obligation is discharged rather than deferred a second time.** The
+plan wrote it down: the two relocated commands are _"absent until a bar is selected, and nothing
+announces that they exist… M3 must check that discoverability is not what got optimised away."_ M3
+did not check. **Omitting them is correct** by ADR-0082's discriminator — the action does not apply
+with nothing selected — so what was lost is not the control but the **teaching**, which the shaded
+state used to do. The teaching moves to the keyboard-shortcuts sheet, the surface a planner opens to
+learn the canvas, rather than being bought back with pinned width on every plan.
+
+**M5-d — two more instances of one correct pattern applied to a control and not its neighbour.**
+`ToolbarPopover` surfaced its disabled reason through a native `title` alone — the exact approach
+`ToolbarButton`'s own docblock records as insufficient, because no mainstream browser shows a `title`
+on keyboard focus. Reachable, not theoretical: `Filter` is `isEnabled: hasDiagram`. And
+`ToolbarOverflow` gave **every** `isActive` item a `menuitemcheckbox`, including the two
+mutually-exclusive segment pairs, so two checkboxes announced that a planner may hold both Early and
+Visual at once; `demotionGroup` is what makes them one unit, so it is the discriminator, and
+`defineToolbar` now also rejects a pair whose tiers disagree — which would split a segment silently.
+
+**M5-e — a test that passed green against the broken code, for a reason this repository had already
+written down.** The first `ToolbarPopover` regression test asserted only `toHaveAccessibleDescription`
+and passed against the pre-fix component, because a `title` **also** contributes to the accessible
+description under the accname spec. `ToolbarOverflow.test.tsx` records that precise caveat about its
+own suite, one file over, and it was walked into anyway. The assertion is now on the mechanism —
+`aria-describedby` resolving to an element carrying the reason — and it goes red as it should.
+
+## Milestone 6 — deferred on a measurement, and the trigger re-recorded
+
+M6 was to retire `VITE_CANVAS_WORKSPACE`, the estate's last Class A flag, whose
+`scripts/flag-retirement.json` deferral trigger is _"epic-touch: plan workspace"_ — fired by this
+epic whether or not it acts.
+
+It acts by taking the milestone's **own stated off-ramp**, on a number that did not exist when the
+milestone was scheduled. All seven flag-off harnesses were probed with a bare pin-flip: **all seven
+fail, 27 specs in total** (base 8 of 17, `activity-editor` 11, `edit` 3, `sub-day` 2, and one each
+for `notes`, `programme`, `assignment-lag`). Not one is a configuration edit. Three of them — base,
+`programme`, `notes` — additionally pin the pen off **deliberately** to stay pen-free, so converting
+those must first establish that each journey works pen-free against the surviving workspace, or the
+conversion silently changes what it tests.
+
+So the trigger is **re-recorded with that measurement** in `scripts/flag-retirement.json` and
+`docs/TECH_DEBT.md` #122, per M6's own rule that _deferring is a decision; ignoring is a defect_. The
+survey and all seven probe results are in
+[`docs/specs/workspace-layout/m6-harness-conversion.md`](../specs/workspace-layout/m6-harness-conversion.md),
+so the next attempt starts from evidence rather than a file list.
+
+**The product owner then made a stronger decision than the off-ramp** (2026-08-12), on being shown
+the number: **every flag stays on, and the estate is cleaned up in one dedicated pass** rather than a
+flag at a time. That supersedes this epic's own deferral reasoning, and it is the better argument.
+The milestone deferred because 27 conversions would have held M1–M5 behind them — a claim about
+_this_ pull request. The owner's is a claim about _how the estate is retired at all_, and the 27
+specs are cheaper to convert once, alongside their neighbours, than in isolation. The trigger is now
+`flag-cleanup pass`, a term added to the register's **closed** `deferralTriggers` vocabulary in the
+same commit — exactly the form ADR-0088 D3a requires, a decision made in a diff rather than a
+free-text escape hatch. It is also a **wider** trigger than the `epic-touch` ones, so a second flag
+deferred under it should be a deliberate choice and not a habit.
+
+Nothing about the running product
+turns on this: the flag is already default-on and, per ADR-0088 D1, cannot be switched off on any
+deployed container.
 
 ## References
 

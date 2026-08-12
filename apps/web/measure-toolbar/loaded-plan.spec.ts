@@ -129,10 +129,9 @@ test('M0c — measure a plan that has a computed diagram', async ({ page }) => {
   }
 
   // The Finish read-out is the signal that `hasDiagram` flipped — it is `isVisible`-gated on it.
-  const finish = page
-    .getByRole('toolbar', { name: 'View and navigate' })
-    .locator('[data-toolbar-item="finish-chip"]');
-  await expect(finish).toHaveCount(1, { timeout: 30_000 });
+  // ADR-0090 M2-T3 moved the read-out to the plan header; it still only renders once
+  // `projectFinish` is non-null, so it remains the signal that the schedule computed.
+  await expect(page.getByText('Finish', { exact: true })).toBeVisible({ timeout: 30_000 });
 
   const report: Record<string, unknown> = {};
   for (const { label, width, height } of WIDTHS) {

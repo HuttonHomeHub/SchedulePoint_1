@@ -631,6 +631,88 @@ relocation walk that presses each moved command at its new entry point.
 - **Note:** two of the three are `render` items and therefore part of the measured **1177 px pinned
   floor** — this is the single largest reduction available to Row 1.
 
+> #### Correction, recorded in place (2026-08-11) — the destination context cannot evaluate them
+>
+> **"Keep their `isEnabled`/`disabledReason` verbatim" presumes the selection bar's context can run
+> those predicates. It cannot**, and the step as written is not implementable.
+> `selectionActionItems` is `ToolbarItem<SelectionActionContext>` — a deliberately narrow
+> object-actions context (`selection-actions.tsx:29-83`: six facts about the selected activity plus
+> eight `on*` callbacks). It carries **none** of the canvas/lens state these three predicates read.
+>
+> Established by extracting each registration by brace-matching and collecting its `ctx.` references
+> — **not** by a fixed-width window, whose first attempt reported `isolate-logic` as using
+> `plannedStart` and nothing else, because it had bled into the neighbouring items:
+>
+> | command             | fields required                                                                                                                                      |
+> | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | `zoom-to-selection` | `canvasActive`, `hasDiagram`, `selectedActivity`, `zoomToSelection`                                                                                  |
+> | `isolate-logic`     | `canvasActive`, `hasDiagram`, `selectedActivity`, `isolateActive` — **plus** `IsolateControl`'s own `isolateMode`, `setIsolateMode`, `toggleIsolate` |
+> | `float-paths`       | `activityCount`, `floatPathsOpen`, `selectedActivity`, `toggleFloatPaths`                                                                            |
+>
+> Eleven distinct fields against a destination that holds fourteen — so the naive move roughly
+> **doubles** `SelectionActionContext` and imports canvas-viewport and lens concepts into a context
+> whose docblock says it is the commands that act on the selected activity.
+>
+> ##### Correction to the correction — it is **seven** fields, and the reason is the point of the move
+>
+> Four of the eleven are **true by construction at the destination**, so they are not fields at all.
+> The selection bar renders only from the canvas, and only when something is selected
+> (`SelectionActionsBar` takes `context: SelectionActionContext | null` and renders nothing for
+> `null`; `TsldPanel.tsx:1319-1322` returns `null` unless a selected activity resolves). So
+> `canvasActive` holds, `selectedActivity != null` holds, and `hasDiagram` / `activityCount > 0`
+> follow from there being an activity to select. The real set is **seven** — `isolateActive`,
+> `isolateMode`, `toggleIsolate`, `setIsolateMode`, `floatPathsOpen`, `toggleFloatPaths`,
+> `zoomToSelection` — state and callbacks only, no predicates.
+>
+> **Which collapses every shade reason these three commands carry.** `CANVAS_ONLY_REASON`,
+> `'Add an activity first'` and `'Select an activity first'` all become unreachable, and all three
+> commands are simply **enabled** wherever they appear. That is not a side effect; it is ADR-0082's
+> discriminating rule landing correctly — _omit when the action does not apply to the object_ —
+> because with no selection there is no object.
+>
+> **It is still a change a planner will notice, and it belongs in the record rather than in a
+> support conversation.** Today someone with nothing selected sees `Float paths` and `Isolate logic
+path` on Row 1, shaded, saying _"Select an activity first"_ — which teaches the precondition.
+> Afterwards they are absent until a bar is selected, and nothing announces that they exist. The
+> trade is deliberate (they stop holding 1,177 px of pinned Row-1 floor in order to teach a
+> precondition that selecting anything also teaches), but **M3 must check that discoverability is
+> not what got optimised away** — this is the one place M2 removes something from the planner's view
+> rather than relocating it.
+>
+> ##### And the host cannot supply them either — the state lives one level up
+>
+> The seven fields are **not available where the bar is hosted**. `SelectionActionsBar` is rendered
+> by `TsldPanel` (`TsldPanel.tsx:2732`), and `TsldPanel` holds `navState` but not `toggleIsolate` /
+> `setIsolateMode` (it destructures only what it reads, `:608`), receives float paths as the
+> **result** `floatPathIds` rather than the toggle (`:455`), and has no `zoomToSelection` at all —
+> that is built by `useViewportCommands` inside `use-tsld-toolbar-context.tsx:363`, at the
+> **workspace** level.
+>
+> So the move is not "retype the items"; it needs a route from the workspace to the bar. **Threading
+> seven props through `TsldPanel` is the wrong one** — `TsldPanel` would gain isolate and float-path
+> vocabulary it otherwise has no reason to know, and each prop is a separate chance for a host to
+> wire six of seven. **One optional `selectionCanvas?: SelectionCanvasContext` prop**, assembled by
+> the workspace (which already builds every field for the toolbar context) and merged into
+> `selectionCtx`, adds one prop instead of seven and keeps `TsldPanel` unaware of what the commands
+> mean. Absent ⇒ the three items do not register ⇒ today's bar, byte-for-byte, which is also the
+> rollback contract.
+>
+> **Recommended shape (decide before writing code):** introduce a separate
+> `SelectionCanvasContext` holding exactly those fields, and type the bar's items as
+> `ToolbarItem<SelectionActionContext & SelectionCanvasContext>`. The intersection costs the host
+> nothing — it already owns both halves — and it keeps the two concerns distinguishable **in the
+> type**, which is the ADR-0062 lesson stated as a rule: a fused gate object cannot say which half
+> is missing, and the fusion is invisible at every call site afterwards.
+>
+> **Rejected:** a second `<Toolbar>` inside the selection bar over the TSLD context. It duplicates
+> the bar's chrome and, more seriously, splits the single roving tabindex the floating bar depends
+> on — two toolbars means two tab stops where a planner expects one.
+>
+> `isolate-logic` also needs a second look that the step does not mention: it is registered from a
+> **shared `isolateShape` spread into both the flag-on and flag-off branches**
+> (`tsld-toolbar-items.tsx:1597`, `:2012`, `:2030`), so moving it moves the placeholder too — which is
+> the same flag-off destination question `m2-suite-impact.md` raises for Feature 2.2.
+
 #### Feature 2.2: Display lenses move into `View ▾`
 
 > **Complexity:** M · **Dependencies:** M2-T0 · **Entry point:** `View ▾` on Row 1 → new **Panels**
@@ -808,17 +890,51 @@ collision. `scrollWidth ≤ clientWidth + 1` extends to 960 and 768.
 > the mode is derived state with no new effect, and the existing suites are the before/after oracle.
 > **Testing requirements:** unit at all six boundary edges; the gate at 1440/1280/1024/960/768.
 
-##### Task M3-T1 — Add the layout mode and its hysteresis
+##### Task M3-T1 — Add the layout mode and its hysteresis — **done**
 
-##### Task M3-T2 — Condensed: fold −/+/Fit/Today into `Zoom ▾`; segments become icon pairs
+Landed as `resolveLayoutMode` in `toolbar-registry.ts`, off the row's `clientWidth` via the existing
+`ResizeObserver`. Six boundary-edge tests as required, **verified red against a bare `width >= min`
+ladder**: five fail and the three _narrowing_ cases pass, so a suite that only walked the width
+downwards would have been green with no hysteresis at all. One correction to the plan's design —
+widening walks **rung by rung**, because testing only the band the raw width falls in strands the row
+two rungs below its width when growing from `collapsed` to 1550 px.
 
-##### Task M3-T3 — Collapsed: one row
+##### Task M3-T2 — ~~Condensed:~~ **Below `comfortable`:** fold −/+/Fit/Today into `Zoom ▾`;
+
+~~segments become icon pairs~~ — **done, with one part withdrawn**
+
+Two corrections, both from measurement (`m3-narrow-widths.md`):
+
+- **The band is `!== 'comfortable'`, not "condensed and below".** At a 1352 px container — a 1440 px
+  window, this milestone's own headline target — all four commands were **already** in the anonymous
+  `⋯`. The choice there was never "inline or folded"; it was which menu, and only `Zoom ▾` names the
+  subject.
+- **"Segments become icon pairs" is withdrawn.** The four segment items carry **no `icon`**, so
+  dropping their labels renders four blank 16 px buttons — built, and failed by `e2e-toolbar-fit` S5
+  as a WCAG 2.5.8 violation within the hour. Reverted, with the primitive widening written to support
+  it. Choosing a glyph for `Early` versus `Visual` is a domain-design decision, not a layout one:
+  `docs/TECH_DEBT.md` **#126**.
+
+##### Task M3-T3 — ~~Collapsed: one row~~ **Collapsed: a row that fits** — **done**
 
 - **Risks:** _derived from the measured anchors, not observed_ — at 960 the container is 872 px and
   `search` alone is `w-[min(15rem,32vw)] min-w-36` (`tsld-toolbar-items.tsx:680`,`:777`), i.e. **240 px**
   at any viewport ≥ 750 px with a 144 px floor. Collapsed will not fit unless the search field
   collapses to an icon-triggered field or is allowed to reach its `min-w-36`. **Measure before
   choosing**; M2-T0's per-item widths are the input.
+
+  > **Measured, and the note was right about the cause and wrong about the size.** `search` was
+  > indeed 31 % of Row 1 — the one figure here that survived. But the drafted "305 px floor
+  > collision" was stale: after M2's cuts the real overshoot was **11 px at 960 and 203 px at 768**,
+  > with Row 2 fitting at every width throughout. So the remedy is sized to that: the search field
+  > takes its own floor (−96 px) and Row 1's four `ToolbarPopover` triggers go icon-only in this band
+  > (−204 px). The icon-**triggered** field was rejected — it costs a click on the control a planner
+  > most often arrives wanting, and the floor is enough.
+  >
+  > **"One row" is not what shipped and is not what the numbers support.** Merging the two rows at
+  > < 1024 would ask a 872 px container to hold what measured 784 + 659 px; the outcome the milestone
+  > actually states — `scrollWidth ≤ clientWidth + 1` at 960 and 768 — is met, at every width in the
+  > gate's list, so `PINNED_FLOOR_WIDTH` drops 1440 → 768 and S4 applies everywhere.
 
 #### Feature 3.2: Touch
 
@@ -835,7 +951,21 @@ collision. `scrollWidth ≤ clientWidth + 1` extends to 960 and 768.
 > **Testing:** a computed assertion on the coarse-pointer control geometry; the residual 36 px minor
 > axis is recorded as debt, **not claimed closed**.
 
-##### Task M3-T4 — Coarse-pointer padding, the split-button caret, and the debt row
+##### Task M3-T4 — Coarse-pointer padding, the split-button caret, and the debt row — **done**
+
+**The blocking prerequisite is discharged: the caret was failing, and by more than the review
+feared.** `e2e-toolbar-fit` gained a seventh assertion (S7) sweeping every _clickable control_ rather
+than every `[data-toolbar-item]` — the attribute sits on an item's **focusable** control, and a caret
+is deliberately `tabIndex={-1}`, so this gate had never been able to see one. The red run measured
+the two shared carets at **23 × 36** and `IsolateControl`'s bespoke third at **22 × 36**. None of
+§2.5.8's exceptions apply (_Spacing_ fails against the flush primary; _Equivalent_ fails because the
+only other route is a keyboard arrow), so all three now take one shared 24 px floor.
+
+Touch landed as `pointer-coarse:px-3` on the shared control — 32 × 36 → **40 × 36** — with the
+variant confirmed to compile by reading the built CSS and the geometry asserted in a browser that
+**reports** a coarse pointer (probed, and the test asserts that first, or it would measure the fine
+layout against a fine expectation and pass for having tested nothing). The 36 px minor axis is
+`docs/TECH_DEBT.md` **#127**, explicitly _not_ claimed closed.
 
 - ~~**Note:** the split caret is `toolbarControlVariants(...) + 'rounded-l-none px-1'` around a
   `size-3.5` chevron ⇒ **24 × 36**, exactly on the WCAG 2.5.8 limit. It is re-examined here, not

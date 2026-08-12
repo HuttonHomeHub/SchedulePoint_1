@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 /**
  * The fixed command-group taxonomy, in canonical left→right order (ADR-0031). Encoded as a `const`
  * tuple so {@link ToolbarGroupId} is a closed union the compiler enforces — a new command must pick
- * an existing group, it can't invent one. Reserved groups (find/history) may hold only stubs today.
+ * an existing group, it can't invent one.
  */
 export const TOOLBAR_GROUPS = [
   'frame', // 1 · frame/navigate — scale, zoom, fit (today-recenter reserved)
@@ -22,7 +22,12 @@ export const TOOLBAR_GROUPS = [
   'find', // 3 · find/focus — filter, critical-only (reserved)
   'tools', // 4 · tools/author — add activity, link (pen-gated)
   'object', // 5 · object/plan actions — recalculate, baselines, calendar…
-  'history', // 6 · history/status — undo/redo (reserved), pen status
+  // 6 · output — the deliverables a plan LEAVES the product as: export, print, share. Renamed from
+  // `history` in ADR-0090 M2-T4, which was reserved for undo/redo and never used: undo and redo
+  // shipped in `tools`, beside the authoring commands they undo, and they are staying there. The
+  // rename is safe precisely because the group was empty — verified as one repository hit, this
+  // declaration — and the closed tuple means the compiler finds any consumer that disagrees.
+  'output',
   'help', // 7 · help — shortcuts, legend
 ] as const;
 
@@ -39,6 +44,77 @@ export function groupRank(group: ToolbarGroupId): number {
  * both render inline until width forces a demotion into overflow (tier-2 demote before tier-1).
  */
 export type ToolbarTier = 1 | 2 | 3;
+
+/**
+ * How much room the row has, as **four named bands** rather than a raw number (ADR-0090 M3-T1).
+ *
+ * A band, not a media query, and the difference is load-bearing: this is derived from the row's own
+ * `clientWidth` via the `ResizeObserver` the primitive already runs, so it stays correct if a future
+ * dock, rail or split pane narrows the band without narrowing the window. Two sources for one
+ * question is how they drift — the same argument `deriveChromeWidth` makes about reading the DOM.
+ *
+ * - `comfortable` (≥ 1536) — the row as designed; every command inline, labels where affordable.
+ * - `compact` (1280–1536) — labels retract first; nothing is folded away.
+ * - `condensed` (1024–1280) — related commands fold behind a single trigger (M3-T2).
+ * - `collapsed` (< 1024) — the narrowest designed layout (M3-T3), Surface Pro portrait.
+ */
+export type ToolbarLayoutMode = 'comfortable' | 'compact' | 'condensed' | 'collapsed';
+
+/**
+ * The bands, **widest first** — the order {@link resolveLayoutMode} walks. Their index is the
+ * ladder's rung number, which is what makes "narrower" and "wider" comparable without a second
+ * lookup table that could disagree with this one.
+ */
+const TOOLBAR_LAYOUT_BANDS: readonly { mode: ToolbarLayoutMode; min: number }[] = [
+  { mode: 'comfortable', min: 1536 },
+  { mode: 'compact', min: 1280 },
+  { mode: 'condensed', min: 1024 },
+  { mode: 'collapsed', min: 0 },
+];
+
+/**
+ * Extra width required to move **back up** a rung, in px. Nothing here re-enters the measurement —
+ * a mode changes what the row renders, and the row's width is imposed by its container — so this is
+ * not damping a feedback loop. It exists for the one case that genuinely jitters: a user dragging a
+ * window edge across a boundary, where a bare threshold re-lays the whole row out on every pixel of
+ * hand tremor.
+ *
+ * Same size and same reason as {@link LABEL_PROMOTION_MARGIN_PX}'s second job, one rung up: 48 px is
+ * wider than any plausible tremor and narrower than any deliberate resize.
+ */
+export const TOOLBAR_LAYOUT_HYSTERESIS_PX = 48;
+
+/**
+ * Which band a row of `width` px is in, given the band it is in **now**.
+ *
+ * **Deliberately asymmetric.** Narrowing takes effect immediately; widening requires clearing the
+ * target band's floor by {@link TOOLBAR_LAYOUT_HYSTERESIS_PX}. That direction is the safe one: a row
+ * that is denser than it strictly needs to be still fits, whereas one that is roomier than it can
+ * afford is the defect this whole epic exists to remove.
+ *
+ * Widening walks **rung by rung** rather than testing the raw band alone. Jumping straight to the
+ * band the width falls in and refusing it when the hysteresis is unmet would strand the row at its
+ * old mode: growing from `collapsed` to 1550 px clears `compact` (1280 + 48) comfortably but not
+ * `comfortable` (1536 + 48), and a single test would have answered "stay collapsed" — a row two
+ * rungs denser than its width, which is worse than the jitter the margin is for.
+ *
+ * Pure; no DOM. `width` of 0 (no layout engine, an unpainted row) resolves to `collapsed` by the
+ * bands alone, so callers must not ask before something has been measured — {@link Toolbar} holds
+ * the previous mode in that case, for the same reason it holds the previous overflow set.
+ */
+export function resolveLayoutMode(width: number, current: ToolbarLayoutMode): ToolbarLayoutMode {
+  const rawRung = TOOLBAR_LAYOUT_BANDS.findIndex((b) => width >= b.min);
+  const currentRung = TOOLBAR_LAYOUT_BANDS.findIndex((b) => b.mode === current);
+  if (rawRung === currentRung || rawRung < 0 || currentRung < 0) return current;
+  // Narrower rung (higher index): act at once.
+  if (rawRung > currentRung) return TOOLBAR_LAYOUT_BANDS[rawRung]!.mode;
+  // Wider: the widest rung whose floor the width clears by the hysteresis.
+  for (let rung = rawRung; rung < currentRung; rung++) {
+    const band = TOOLBAR_LAYOUT_BANDS[rung]!;
+    if (width >= band.min + TOOLBAR_LAYOUT_HYSTERESIS_PX) return band.mode;
+  }
+  return current;
+}
 
 /**
  * Whether a plain-button item shows its text label beside the icon — a **presentation** choice,
@@ -65,8 +141,23 @@ export type ToolbarLabelPolicy = 'always' | 'auto' | 'never';
  */
 export type ToolbarRow = 'look' | 'do';
 
+/**
+ * What the row's current width means, handed to the two places a consumer can act on it: an item's
+ * {@link ToolbarItem.isVisible} predicate (fold a command away) and its {@link ToolbarItem.render}
+ * escape hatch (render the same command more tightly).
+ *
+ * **Only those two, deliberately.** `isEnabled`, `isActive` and `disabledReason` answer questions
+ * about the *plan*, not about the window — a command that is shut because the pen is elsewhere is
+ * shut at every width, and letting narrowness disable something would be a dead end with no
+ * explanation a reader could act on (ADR-0082's discriminator: shade for a state the reader can
+ * change, omit when it does not apply).
+ */
+export interface ToolbarLayoutEnv {
+  layout: ToolbarLayoutMode;
+}
+
 /** What the primitive passes an item's `render` escape-hatch so it can reflect gating + roving focus. */
-export interface ToolbarItemRenderApi {
+export interface ToolbarItemRenderApi extends ToolbarLayoutEnv {
   /** Resolved enabled state (respects `isEnabled` + pen-gating) — mirror it on custom controls. */
   disabled: boolean;
   /**
@@ -110,6 +201,13 @@ export interface ToolbarItem<Ctx> {
    * where the row has measured room. Set `'always'` for a control whose name is the affordance, or
    * `'never'` to pin it icon-only. See {@link ToolbarLabelPolicy}; ignored by `render` items, which
    * own their own chrome.
+   *
+   * **Not a function of the row's band, and that was tried** (ADR-0090 M3-T2). The plan's *"segments
+   * become icon pairs"* needs one — but the four segment items it names carry **no `icon`**, so
+   * dropping their labels renders four blank 16 px buttons, which `e2e-toolbar-fit` S5 caught as a
+   * WCAG 2.5.8 failure the same hour. Giving them icons is a design decision about what `Early` and
+   * `Visual` scheduling look like, not a layout one; recorded as `docs/TECH_DEBT.md` #126 rather
+   * than guessed, and the primitive widening reverted with it so no untested branch ships.
    */
   showLabel?: ToolbarLabelPolicy;
   /**
@@ -177,8 +275,14 @@ export interface ToolbarItem<Ctx> {
    * when authoring is not enabled (ADR-0028), so read-only ↔ editing flips as one coherent state.
    */
   penGated?: boolean;
-  /** Whether the item is present at all in this context. Absent ⇒ always visible. */
-  isVisible?: (ctx: Ctx) => boolean;
+  /**
+   * Whether the item is present at all in this context. Absent ⇒ always visible.
+   *
+   * The second argument carries the row's {@link ToolbarLayoutMode}, so a command can fold away
+   * where a narrower band offers it behind another trigger (M3-T2/T3). Ignore it and the item's
+   * visibility is width-independent, which is what every pre-M3 registry entry means.
+   */
+  isVisible?: (ctx: Ctx, env: ToolbarLayoutEnv) => boolean;
   /** Whether the item is actionable. Absent ⇒ always enabled. Combined with pen-gating. */
   isEnabled?: (ctx: Ctx) => boolean;
   /** Toggle/segment pressed state → `aria-pressed`. Absent ⇒ not a toggle. */
@@ -196,10 +300,27 @@ export interface ToolbarItem<Ctx> {
   /** Plain-button activation. Mutually exclusive with {@link render}. */
   onActivate?: (ctx: Ctx) => void;
   /**
-   * A non-interactive **read-out** (e.g. the pinned Project-finish figure): rendered inline in its
-   * group but **excluded from the roving-tabindex order** — not a Tab/Arrow stop, since there's
-   * nothing to operate. Its `render` still receives `itemProps` (to spread `data-toolbar-item`) but
-   * without the focusable marker / `onFocus`, and with `tabIndex: -1`. Must be a `render` item.
+   * A non-interactive **read-out**: rendered inline in its group but **excluded from the
+   * roving-tabindex order** — not a Tab/Arrow stop, since there's nothing to operate. Its `render`
+   * still receives `itemProps` (to spread `data-toolbar-item`) but without the focusable marker /
+   * `onFocus`, and with `tabIndex: -1`. Must be a `render` item.
+   *
+   * **Who still uses it, recorded 2026-08-12 (ADR-0090 M2-T3).** The example this docblock used to
+   * lead with — the pinned Project-finish figure — is gone: it moved to the plan header, because a
+   * number costing 150 px of pinned width had no business in a `role="toolbar"` whose every other
+   * member is a command. `search-status` went the same way, into the search field's own box. Two
+   * consumers remain on the TSLD surface, and both are deliberate:
+   *
+   * - **`next-conflict-status`** — the "Conflict 2 of 7 · reason" chip. The plan folded this into
+   *   the button's label too; measurement refused it. A label paints only when `autoLabelsFit` is
+   *   true, and at 1920 it is false, so the fold would hide the count at the width the epic exists
+   *   to fix. The chip is `isVisible`-gated on a conflict being cycled, so it costs no width at rest.
+   * - **the flag-off search stub** — an inert `<input>` awaiting wiring, which is not a read-out at
+   *   all but is correctly excluded from the roving order for the same reason.
+   *
+   * **Do not delete this capability** on a reading that the surface has outgrown it. It has not, the
+   * floating selection bar may want it, and a read-out that is *not* excluded from the roving order
+   * is a focusable stop with nothing to operate — the exact APG defect this field prevents.
    */
   presentational?: boolean;
   /** Escape hatch for non-button controls (segmented scale, Project-finish chip, Tier-2 popovers). */
@@ -247,6 +368,25 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       }
     }
   }
+  // **A `demotionGroup`'s companions must share a `tier`** (ADR-0090 M5, component gate). D3's "a
+  // segment is one demotion unit" guarantee only holds while both halves are on the bar: a `tier: 3`
+  // companion is in `partitionByTier`'s static overflow and never enters `computeOverflow`'s pair
+  // map at all, so the pairing would degrade silently to "one always overflows, the other sometimes
+  // does" — a split segment, which is the exact state `demotionGroup` exists to prevent. Both
+  // current pairs happen to agree, so this has shipped no defect; it is a guard for the next author.
+  const tierByGroup = new Map<string, ToolbarTier>();
+  for (const item of items) {
+    if (!item.demotionGroup) continue;
+    const seen = tierByGroup.get(item.demotionGroup);
+    if (seen === undefined) tierByGroup.set(item.demotionGroup, item.tier);
+    else if (seen !== item.tier) {
+      throw new Error(
+        `defineToolbar: demotionGroup "${item.demotionGroup}" mixes tier ${seen} and tier ${item.tier} — ` +
+          'companions must share a tier, or they cannot demote as one unit.',
+      );
+    }
+  }
+
   return items;
 }
 
@@ -273,10 +413,17 @@ export function resolveItems<Ctx>(
   items: ToolbarItem<Ctx>[],
   ctx: Ctx,
   authoringEnabled: boolean,
+  /**
+   * The row's measured band. Defaults to `comfortable` — the band in which nothing folds — so every
+   * caller that predates M3 (and every test that renders a registry directly) resolves exactly the
+   * item set it always did.
+   */
+  layout: ToolbarLayoutMode = 'comfortable',
 ): ResolvedToolbarItem<Ctx>[] {
+  const env: ToolbarLayoutEnv = { layout };
   return items
     .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.isVisible?.(ctx) ?? true)
+    .filter(({ item }) => item.isVisible?.(ctx, env) ?? true)
     .sort((a, b) => {
       const byGroup = groupRank(a.item.group) - groupRank(b.item.group);
       if (byGroup !== 0) return byGroup;

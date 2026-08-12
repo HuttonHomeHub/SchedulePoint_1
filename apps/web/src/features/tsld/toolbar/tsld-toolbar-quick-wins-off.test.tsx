@@ -1,5 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -30,7 +30,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     schedulingMode: 'VISUAL',
     summaryContent: null,
-    projectFinishContent: null,
     selectedActivityId: 'a1',
     selectedActivity: SELECTED,
     ...over,
@@ -53,19 +52,41 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
+/**
+ * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
+ *
+ * `clear-visual-placement` moved to tier 3 so Row 2 could label itself at 1920 — the trade the
+ * product owner took with the measured numbers. It is the narrowest-purpose command on the row: it
+ * does nothing outside Visual scheduling mode and is pen-gated on top of that. Nothing these
+ * assertions prove changes; they open the menu and read a menu item, whose reason travels by
+ * `aria-describedby` rather than a `title`.
+ */
+function overflowItem(name: string | RegExp): HTMLElement {
+  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
+  for (const trigger of more) {
+    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
+      const hit = screen.queryByRole(role, { name });
+      if (hit) return hit;
+    }
+    fireEvent.click(trigger);
+  }
+  throw new Error(`No overflow item named ${String(name)}`);
+}
+
 describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', () => {
   it('keeps all five ids as "Coming soon" placeholders, byte-for-byte', () => {
     renderRows(ctx());
-    for (const name of [
-      'Go to today',
-      'Comments',
-      'Report progress…',
-      'Add note',
-      'Clear visual placement',
-    ]) {
+    for (const name of ['Go to today', 'Comments', 'Report progress…', 'Add note']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
+    // The fifth is in the `⋯` since ADR-0090 M2 moved it to tier 3 — RELOCATED here rather than
+    // dropped from the list, which is what would have quietly turned a five-id census into a
+    // four-id one. Its reason travels by `aria-describedby` in a menu, not a `title`.
+    const cleared = overflowItem('Clear visual placement');
+    expect(cleared).toHaveAttribute('aria-disabled', 'true');
+    expect(cleared).toHaveAccessibleDescription('Coming soon');
   });
 });

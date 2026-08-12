@@ -146,10 +146,15 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
   });
 
-  it('pins the Project-finish chip inline on Row 1 (product-owner decision #1)', () => {
+  it('keeps the Project-finish read-out OUT of the toolbar (ADR-0090 M2-T3)', () => {
+    // It was pinned inline here on the product owner's own decision #1, and it is not a reversal of
+    // that decision — the read-out is more prominent in the plan header than it was at the far end
+    // of a 25-item row. What changed is where a *number* belongs: 150 px of pinned width inside a
+    // `role="toolbar"` whose every other member is a command, kept legal only by a `presentational`
+    // escape hatch that exists to describe it.
     renderRows(ctx());
     const lookRow = screen.getByRole('toolbar', { name: 'View and navigate' });
-    expect(within(lookRow).getByText('Finish: 01 Aug 2026')).toBeInTheDocument();
+    expect(within(lookRow).queryByText(/^Finish/)).not.toBeInTheDocument();
   });
 
   it('renders the Summary popover body from the context', () => {
@@ -158,16 +163,23 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByTestId('summary-body')).toBeInTheDocument();
   });
 
-  it('toggles the on-canvas Legend panel (a show/hide button, not a popover)', () => {
-    // The legend lives on the canvas now (ADR-0031 amendment): the toolbar item is a pressed-state
-    // toggle that drives the workspace's floating panel — it renders no key of its own.
+  it('toggles the on-canvas Legend panel from the View popover (Panels section)', () => {
+    // The legend lives on the canvas (ADR-0031 amendment) and its control moved into `View ▾`'s new
+    // Panels section in ADR-0090 M2-T2 — it still renders no key of its own, it still just drives
+    // the workspace's floating panel. `aria-pressed` on a button becomes `checked` on a checkbox;
+    // both halves of the original assertion survive that translation, which is the point of making
+    // it rather than deleting it.
     const { rerender } = renderRows(ctx({ legendOpen: false }));
-    const legend = screen.getByRole('button', { name: /Legend/ });
-    expect(legend).toHaveAttribute('aria-pressed', 'false');
+    const openView = (): HTMLElement => {
+      const trigger = screen.getByRole('button', { name: /^View/ });
+      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+      return screen.getByRole('checkbox', { name: 'Legend' });
+    };
+    const legend = openView();
+    expect(legend).not.toBeChecked();
     fireEvent.click(legend);
     expect(spies.toggleLegend).toHaveBeenCalledOnce();
 
-    // Reflecting the open state marks the toggle pressed.
     const rows = splitByRow(buildTsldToolbarItems());
     const opened = ctx({ legendOpen: true });
     rerender(
@@ -182,7 +194,7 @@ describe('TSLD toolbar registry (two-row)', () => {
         <Toolbar items={rows.do} context={opened} label="Build and manage" authoringEnabled />
       </div>,
     );
-    expect(screen.getByRole('button', { name: /Legend/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(openView()).toBeChecked();
   });
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {
@@ -217,13 +229,13 @@ describe('TSLD toolbar registry (two-row)', () => {
     );
   });
 
-  it('shows the plan actions inline on Row 2 and drives their seams (Baselines)', () => {
+  it('drives the plan-analysis seams from the Analysis trigger (Baselines)', () => {
     renderRows(ctx());
-    // Plan & deliverable actions now sit inline (tier-2 icon buttons), not in a `⋯` overflow.
-    // A live icon-only button carries a hover tooltip naming it (not just an aria-label).
-    const baselines = screen.getByRole('button', { name: 'Baselines…' });
-    expect(baselines).toHaveAttribute('title', 'Baselines…');
-    fireEvent.click(baselines);
+    // Three Row-2 stops became one `Analysis` trigger in ADR-0090 M2-T5. The tooltip assertion went
+    // with the icon-only button it was about; what survives is what the test is for — the seam is
+    // still wired, and reachable.
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Baselines…' }));
     expect(spies.openBaselines).toHaveBeenCalledOnce();
   });
 
@@ -289,21 +301,31 @@ describe('TSLD toolbar registry (two-row)', () => {
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
     // The rest are inline "Coming soon" icon buttons whose tooltip names them.
-    for (const name of ['Export…', 'Print…', 'Share…', 'Colour by…']) {
+    // `Colour by…` left this list in ADR-0090 M2-T2 along with the live control. Its flag-off
+    // placeholder was NOT left behind on Row 1: a placeholder occupying the width the live control
+    // just vacated defeats the move exactly. Flag-off, `View ▾`'s Insight section has no colour
+    // group at all.
+    // Print and Share folded into the Share & export menu in ADR-0090 M2-T4, and Export became that
+    // menu's trigger — so only one top-level placeholder remains where three stood.
+    for (const name of ['Share & export']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);
     }
   });
 
-  it('shows the resource-view lens + over-allocation highlight as "Coming soon" placeholders when VITE_CANVAS_RESOURCE_VIEW is off', () => {
-    // CANVAS_RESOURCE_VIEW_ENABLED is pinned off (top of file) — both ids must resolve to their
-    // byte-for-byte placeholder stubs (the flag-off parity gate).
+  it('offers no resource-view lens at all inside View when VITE_CANVAS_RESOURCE_VIEW is off', () => {
+    // CANVAS_RESOURCE_VIEW_ENABLED is pinned off (top of file). Both lenses moved into `View ▾` in
+    // ADR-0090 M2-T2, and their Row-1 "Coming soon" placeholders went with them rather than staying
+    // behind — a placeholder occupying the width the live control just vacated defeats the move
+    // exactly. So flag-off the Insight section simply has no such row, which is what this now pins:
+    // absence, not a stub. The assertion opens the popover, because "not on Row 1" would pass even
+    // if the row were wrongly rendered inside it.
     renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
     for (const name of ['Resource view', 'Flag over-allocated']) {
-      const btn = screen.getByRole('button', { name });
-      expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
+      expect(screen.queryByRole('checkbox', { name })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
   });
 
@@ -311,7 +333,13 @@ describe('TSLD toolbar registry (two-row)', () => {
     // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the three
     // ids must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
     renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
-    for (const name of ['Isolate logic path', 'Next conflict', 'Snap to grid']) {
+    // `Isolate logic path` left this list in ADR-0090 M2-T1: it moved to the selection bar, and its
+    // Row-1 "Coming soon" placeholder went with it rather than being reproduced there — a
+    // placeholder earns its place on a persistent row a planner scans, not on a transient bar.
+    // `Next conflict` also left this list, in ADR-0090 M2: it moved to tier 3 so Row 1 could label
+    // itself at 1920, so flag-off its placeholder lives in the `⋯` rather than inline. Snap to grid
+    // is the one of the three still on the bar, and it is what this now pins.
+    for (const name of ['Snap to grid']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       expect(btn).toHaveAttribute('title', `${name} — Coming soon`);

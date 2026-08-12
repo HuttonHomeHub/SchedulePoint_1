@@ -44,28 +44,28 @@ beforeEach(() => vi.clearAllMocks());
 describe('TSLD toolbar — schedule interchange export (flag + permission on)', () => {
   it('offers the P6 (.xer) and MS Project (.xml) items in the Export menu when both gates pass', () => {
     renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Share & export/ }));
     expect(screen.getByRole('menuitem', { name: 'Primavera P6 (XER)' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Microsoft Project (MSPDI)' })).toBeInTheDocument();
   });
 
   it('exports the plan as XER from the P6 item', () => {
     renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Share & export/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Primavera P6 (XER)' }));
     expect(exportInterchange).toHaveBeenCalledWith('xer');
   });
 
   it('exports the plan as MSPDI from the MS Project item', () => {
     renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Share & export/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Microsoft Project (MSPDI)' }));
     expect(exportInterchange).toHaveBeenCalledWith('mspdi');
   });
 
   it('keeps the Stage-C1 CSV/PNG/PDF items alongside the interchange group', () => {
     renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Share & export/ }));
     // Sanity: the interchange group is ADDED to the existing menu, not a replacement.
     expect(screen.getByRole('menuitem', { name: 'Schedule (CSV)' })).toBeInTheDocument();
     expect(
@@ -75,7 +75,7 @@ describe('TSLD toolbar — schedule interchange export (flag + permission on)', 
 
   it('hides both interchange items when the caller lacks interchange:export', () => {
     renderRows(ctx({ canInterchangeExport: false }));
-    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Share & export/ }));
     // The CSV item still renders (the Export menu itself is unaffected)…
     expect(screen.getByRole('menuitem', { name: 'Schedule (CSV)' })).toBeInTheDocument();
     // …but the interchange group is gone.
