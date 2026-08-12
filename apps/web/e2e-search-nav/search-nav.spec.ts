@@ -23,7 +23,6 @@ import {
   selectedActivityId,
   showDiagram,
   showGantt,
-  zoomPresetControl,
 } from './support';
 
 /**
@@ -193,7 +192,9 @@ test('search that navigates: cycle, count, announce, frame — in both views', a
   const scaleAfter = await reportedZoomLevel(page);
   expect(scaleAfter).toBeTruthy();
   expect(scaleAfter).not.toBe(scaleBefore);
-  await expect(zoomPresetControl(page)).toHaveAttribute('aria-label', `Zoom level: ${scaleAfter}`);
+  // The trailing re-read of the trigger's `aria-label` is gone with the trigger (ADR-0091 D3): the
+  // presets are radios in `View ▾`, so `reportedZoomLevel` already IS the control's own answer —
+  // it reads which radio is checked. Re-asserting it here would have restated the line above.
 
   // ---------------------------------------------------------------- the Gantt half
   await showGantt(page);

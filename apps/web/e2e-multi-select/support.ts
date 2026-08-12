@@ -241,27 +241,57 @@ export async function jumpPrevious(page: Page): Promise<string> {
   return announced(page, /^Match \d+ of \d+: /);
 }
 
-/** The zoom-preset trigger, whose accessible name carries the level it currently reports. */
-export function zoomPresetControl(page: Page): Locator {
-  return lookToolbar(page).getByRole('button', { name: /^Zoom level: / });
+/**
+ * The zoom-preset **radio group**, inside the `View ▾` panel.
+ *
+ * ADR-0091 D3 moved the presets off the toolbar: the old `Zoom ▾` trigger labelled itself with the
+ * CURRENT preset, so a planner hunting for `Fit to plan` met a button reading `Week`. There is no
+ * trigger to read a level off any more, so {@link openZoomPresets} opens the panel and the level is
+ * read from which radio is checked.
+ */
+export async function openZoomPresets(page: Page): Promise<Locator> {
+  const view = lookToolbar(page).getByRole('button', { name: /^View/ });
+  if ((await view.getAttribute('aria-expanded')) !== 'true') await view.click();
+  return page.getByRole('dialog', { name: 'View' }).getByRole('radiogroup', { name: 'Zoom level' });
 }
 
-/** Pick a zoom preset from the control's menu, and wait for it to report the new level. */
+/**
+ * Close the `View ▾` panel if it is open.
+ *
+ * Both helpers below must do this, and forgetting it is not a tidy-up: the panel is an overlay, so
+ * leaving it open makes every toolbar control underneath unclickable and the NEXT assertion fails
+ * with a timeout that says nothing about the panel. That is exactly how the first version of this
+ * rewrite failed.
+ */
+async function closeViewPanel(page: Page): Promise<void> {
+  const panel = page.getByRole('dialog', { name: 'View' });
+  if (await panel.isVisible().catch(() => false)) {
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+  }
+}
+
+/** Pick a zoom preset from the `View ▾` panel, and wait for it to report the new level. */
 export async function pickZoomPreset(page: Page, level: string): Promise<void> {
-  await zoomPresetControl(page).click();
-  // `menuitemradio`, not `menuitem`: the zoom menu marks the current level as selected, and `Menu`
-  // switches role on exactly that (`components/ui/menu.tsx`). A wrong role here is precisely the kind
-  // of assumption a unit test cannot catch and this suite exists for.
-  // Matched by PREFIX: the menu labels carry the range each preset frames ("Year — 3 years"), which
-  // is also why the assertion below reads the trigger's `aria-label` rather than the item's name.
-  await page.getByRole('menuitemradio', { name: new RegExp(`^${level}\\b`) }).click();
-  await expect(zoomPresetControl(page)).toHaveAttribute('aria-label', `Zoom level: ${level}`);
+  const group = await openZoomPresets(page);
+  // Matched by PREFIX: each row carries the range it frames ("Year — 3 years"). Native radios now,
+  // not `menuitemradio` — the exclusivity that role expressed is expressed by the input itself.
+  const row = group.getByRole('radio', { name: new RegExp(`^${level}\\b`) });
+  await row.check();
+  await expect(row).toBeChecked();
+  await closeViewPanel(page);
 }
 
-/** The level the preset control currently reports — the control's own answer, not the canvas's. */
+/** The level the panel currently reports — the control's own answer, not the canvas's. */
 export async function reportedZoomLevel(page: Page): Promise<string> {
-  const label = (await zoomPresetControl(page).getAttribute('aria-label')) ?? '';
-  return label.replace(/^Zoom level:\s*/, '');
+  const group = await openZoomPresets(page);
+  const name = await group.getByRole('radio', { checked: true }).evaluate((el) => {
+    const label = (el as HTMLElement).closest('label');
+    return label?.textContent?.trim() ?? '';
+  });
+  await closeViewPanel(page);
+  // Strip the range suffix — callers compare LEVELS, and "Year — 3 years" is a row label.
+  return name.split('—')[0]!.trim();
 }
 
 /**

@@ -103,7 +103,15 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // ── 6 · The same analysis, the same emphasis, in the Gantt ────────────────────────────────
   // It is an analysis, not a canvas viewport command, so it is live in both views (the ADR-0059 M6
   // lesson inverted). The panel is workspace-hosted and must survive the switch.
-  await lookRow.getByRole('button', { name: 'Gantt', exact: true }).click();
+  // Scoped to the MODE row, not `lookRow`: ADR-0091 D1 moved the view switch (and the scheduling
+  // mode) off Row 1 and onto the identity line beside the pen, because neither is a command — they
+  // set how everything below behaves. The old row-scoped locator matched nothing and timed out,
+  // which no unit suite could have caught: the items still exist, still carry the same names, and
+  // only their host toolbar changed.
+  await page
+    .getByRole('toolbar', { name: 'Plan mode' })
+    .getByRole('button', { name: 'Gantt', exact: true })
+    .click();
   await expect(page.getByRole('treegrid', { name: 'Schedule as a bar chart' })).toBeVisible();
   await expect(panel).toBeVisible();
   await expect(panel.getByRole('button', { name: /\+1d/ })).toBeVisible();

@@ -108,7 +108,26 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     renderRows(ctx({ hasDiagram: false }));
     const btn = screen.getByRole('button', { name: 'Go to today' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Go to today — Add an activity to go to today');
+    // The tooltip is the REASON alone, because the control is labelled here and its name is already
+    // on screen — `ToolbarButton` only prefixes the name for an icon-only control, where the
+    // tooltip is the sole hover affordance.
+    //
+    // This assertion used to expect the prefixed form, and it changed for a reason worth stating
+    // rather than editing over. ADR-0091 D3a gave this item `showLabel: { atLeast: 'comfortable' }`,
+    // and jsdom has no layout, so `Toolbar` never re-measures and keeps its initial `comfortable`
+    // band — under which this item is labelled. Under the previous `'auto'` policy the same absence
+    // of layout made `autoLabelsFit` false and rendered it icon-only. So the change here reflects a
+    // different DEFAULT in a layout-less environment, not a change to what a planner sees: at a real
+    // 1920 the control is labelled either way, and `item-widths` measures it at 120 px labelled and
+    // 32 px icon-only at 1440.
+    expect(btn).toHaveAttribute('title', 'Add an activity to go to today');
+    // The reason is also `aria-describedby`-associated, which is the part that must never regress —
+    // a title alone is a hover affordance, unreachable by keyboard and by touch (ADR-0082).
+    const describedBy = btn.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)).toHaveTextContent(
+      'Add an activity to go to today',
+    );
   });
 
   it('Go to today: works for a read-only viewer (not pen-gated)', () => {

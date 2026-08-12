@@ -1788,12 +1788,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'frame',
       row: 'look',
       tier: 1,
-      // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
-      // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'` — `autoLabelsFit` is all-or-nothing for the whole row, so
-      // these would follow their neighbours' collective fate and label at a narrow band that
-      // happened to have slack, which is exactly what the 1440 measurement forbids.
-      showLabel: { atLeast: 'comfortable' },
       order: -2,
       label: 'Go to date',
       isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
@@ -1884,6 +1878,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
+          // D3a (ADR-0091): labelled at `comfortable`, icon-only below — the policy its three
+          // viewport siblings take. On the LIVE item, not on `todayShape`, because that shape also
+          // feeds the flag-off "Coming soon" placeholder below, whose parity suite is the rollback
+          // contract and asserts it byte-for-byte. A stub has no viewport to reframe, so it has
+          // nothing to compact for; putting the policy on the shape broke that suite and bought
+          // nothing.
+          showLabel: { atLeast: 'comfortable' } as const,
           isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
           disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to go to today'),
           onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
