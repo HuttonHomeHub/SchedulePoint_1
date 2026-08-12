@@ -1,5 +1,36 @@
 # @repo/web
 
+## 0.85.0
+
+### Minor Changes
+
+- [#293](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/293) [`9c05ae1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9c05ae16bfd35e4d8b0bcd828dc5e5a5c17496bd) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's command surface is consolidated (ADR-0090 M2). 44 toolbar
+  stops become 28, and **both rows now show their commands with labels at
+  1920×1080** — the first time that has been true on a typical 24" monitor.
+
+  Nothing is deleted. Selection-gated canvas commands (Zoom to selection, Isolate
+  logic path) move to the floating selection bar; the display lenses and the
+  Legend move into `View ▾`, which now names a non-default colour mode on its own
+  trigger; the Project-finish read-out moves to the plan header; Export, Print and
+  Share become one `Share & export` menu; Baselines, Earned value and Resource
+  histogram become one `Analysis` menu. Four commands sit in the `⋯` at every
+  width, one click away, which is what buys the rest their labels.
+
+- [#293](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/293) [`9c05ae1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9c05ae16bfd35e4d8b0bcd828dc5e5a5c17496bd) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan toolbar now responds to the width it actually has. Four named layout bands are derived from
+  the row's own container (not a viewport media query, so a future dock or split pane cannot desync
+  them), with hysteresis so dragging a window edge does not re-lay the row out on every pixel.
+
+  Below the widest band, Zoom out/in, Fit to plan and Go to today move **into** the `Zoom ▾` menu under
+  a Viewport heading, each keeping its own shaded reason rather than being dropped. In the narrowest
+  band the `Go to date`, `Zoom`, `View`, `Filter` and `Summary` triggers become icon-only and the search
+  field takes its floor width, so both rows fit inside their container at every supported width down to
+  768 px — measured, not asserted.
+
+  Touch: under a coarse pointer every toolbar control widens from 32 px to 40 px without losing height.
+
+  Fixes a WCAG 2.2 Target Size failure that predates this work: all three split-button carets (Add
+  activity, Link, Isolate) rendered 22–23 px wide against a 24 px minimum.
+
 ## 0.84.0
 
 ### Minor Changes
