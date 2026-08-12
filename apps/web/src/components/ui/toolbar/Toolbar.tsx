@@ -178,7 +178,14 @@ const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
   find: 'Find',
   tools: 'Author',
   object: 'Plan actions',
-  output: 'Share & export',
+  // "Deliver", not "Share & export": that string is the `ExportMenuControl` **trigger's** own name,
+  // and `Toolbar` wraps every group — including a single-item one — in `role="group"` with its label,
+  // so a screen-reader user tabbing into Row 2's trailing edge heard "Share & export, group" then
+  // "Share & export, button". This surface already engineers around exactly that redundancy twice:
+  // the `lens` group is "Display" so a `View ▾` trigger cannot sit inside a group named View, and
+  // ADR-0090 M2-T5 renamed `Plan ▾` to `Analysis` for the same reason. This is the one new trigger
+  // where the rule was not applied (ux gate, M5).
+  output: 'Deliver',
   help: 'Help',
 };
 

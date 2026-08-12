@@ -58,9 +58,17 @@ function viewLens(name: string): HTMLElement {
 }
 
 /** The reason text linked to a shut lens checkbox, or null when it is open. */
+/**
+ * The description a lens row exposes — **all** of it. `aria-describedby` takes an id *list*, and
+ * since ADR-0090 M5 this row can carry two: why it is shut, and what it does when you tick it
+ * (`docs/TECH_DEBT.md` #125). The single-id version of this helper returned `null` the moment the
+ * second id appeared, which reads as "no reason at all" rather than as a helper that stopped
+ * keeping up.
+ */
 function lensReason(el: HTMLElement): string | null {
-  const id = el.getAttribute('aria-describedby');
-  return id ? (document.getElementById(id)?.textContent ?? null) : null;
+  const ids = (el.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
+  if (ids.length === 0) return null;
+  return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -140,5 +148,39 @@ describe('TSLD toolbar — over-allocation highlight (flag on, Stage E M2)', () 
     expect(item).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(item);
     expect(spies.toggleOverAllocation).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * **The row says what it is about to do** (ADR-0090 M5, closing `docs/TECH_DEBT.md` #125).
+ *
+ * `Resource view` is the only member of `View ▾` that opens a panel rather than marking the canvas.
+ * The panel takes focus (ADR-0049 — a revealed panel should receive it) and the popover closes
+ * behind the departing focus, so from inside a list that invites toggling several things it read as
+ * being thrown out. The focus behaviour is right and an `e2e-resource-view` assertion depends on it;
+ * what was missing was any warning, so the note is the fix and the surprise is what goes.
+ */
+describe('the Resource view row explains that it opens a panel', () => {
+  it('carries a standing note, linked as a description rather than folded into the name', () => {
+    renderRows(ctx({ resourceViewOpen: false, hasDiagram: true }));
+    const item = viewLens('Resource view');
+    expect(item).toHaveAccessibleName('Resource view');
+    expect(lensReason(item)).toContain('Opens the resource panel and moves focus to it');
+  });
+
+  it('keeps both the note and the shut reason when the canvas is empty', () => {
+    // Two ids on one `aria-describedby`. Naming only one silently drops the other, and "why it is
+    // shut" and "what it does" are both wanted — the case that broke the single-id helper above.
+    renderRows(ctx({ resourceViewOpen: false, hasDiagram: false }));
+    const text = lensReason(viewLens('Resource view'));
+    expect(text).toContain('Add an activity first');
+    expect(text).toContain('Opens the resource panel');
+  });
+
+  it('gives a plain lens no note at all', () => {
+    // The note exists for exactly one row. A neighbour acquiring one would mean the distinction it
+    // draws has been lost.
+    renderRows(ctx({ hasDiagram: true }));
+    expect(lensReason(viewLens('Flag over-allocated')) ?? '').not.toContain('Opens the');
   });
 });

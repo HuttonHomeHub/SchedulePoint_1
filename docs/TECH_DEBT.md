@@ -2221,7 +2221,27 @@ subject anyway, and assert the thing that can actually go wrong — that the bar
 viewport at 960 and 768 with its widest plausible item set. Raised by `component-reviewer` during the
 ADR-0090 pre-approval pass as a suggestion, and recorded rather than silently left out of scope.
 
-## 125. `View ▾` holds one toggle that ejects you from it
+## 125. `View ▾` holds one toggle that ejects you from it — **CLOSED 2026-08-12 (ADR-0090 M5)**
+
+**Resolved by making the row legible, not by changing where focus goes.** The two candidate fixes
+were "keep the popover open and lose the panel's focus move" and "keep the focus move and accept the
+eject". Both were rejected in favour of a third: the behaviour is **right** — ADR-0049 says a
+revealed panel should receive focus, the panel is `tabIndex={-1}` precisely so it can, and an
+`e2e-resource-view` assertion depends on it, so a revealed panel a keyboard user cannot reach would
+be the worse defect. What was missing was any warning before it happened.
+
+The row now carries a standing note — _"Opens the resource panel and moves focus to it"_ —
+`aria-describedby`-linked alongside its shut reason rather than folded into its name, and visible
+beside the control because this surface has no tooltip to fall back on. It is the only row in
+`View ▾` with one, and a test asserts that a neighbour acquiring one would be a regression: the note
+exists to mark this row as different, so it is worthless if everything has it.
+
+**One thing it broke immediately, which is the useful part.** `aria-describedby` takes an id _list_,
+and the row now carries two. `tsld-toolbar-resource-view.test.tsx`'s helper read a single id and
+returned `null` the moment the second appeared — reading as "no reason at all" rather than as a
+helper that had stopped keeping up. Caught by the existing suite on the first run.
+
+_Original entry follows._
 
 **Raised:** 2026-08-11 (ADR-0090 M2-T2) · **Size:** S · **Owner:** the M5 gate pass
 

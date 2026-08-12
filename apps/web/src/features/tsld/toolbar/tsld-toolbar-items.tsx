@@ -164,6 +164,22 @@ interface LensToggle {
   toggle: (ctx: TsldToolbarContext) => void;
   /** Why it cannot be changed right now, or `undefined` when it can. */
   reason: (ctx: TsldToolbarContext) => string | undefined;
+  /**
+   * A standing note about what this row **does**, as distinct from {@link reason}, which says why it
+   * cannot. Rendered always, and `aria-describedby`-linked like the reason.
+   *
+   * Exists for exactly one row, and that is the point (`docs/TECH_DEBT.md` #125). Every other member
+   * of `View ▾` toggles a mark on the canvas and leaves the popover open, so a planner can set
+   * several in one visit. `Resource view` reveals a **panel**, which takes focus (ADR-0049 —
+   * a revealed panel should receive it), and the popover closes behind the departing focus. From
+   * inside a list that invites toggling several things, that reads as being thrown out.
+   *
+   * **The fix is legibility, not different focus.** ADR-0049's rule is right and an `e2e-resource-view`
+   * assertion depends on it; a revealed panel a keyboard user cannot reach is the worse defect, and
+   * this section is `tabIndex={-1}` precisely so the reveal can hand focus over. So the row says what
+   * it is about to do, and the surprise goes rather than the behaviour.
+   */
+  note?: string;
 }
 
 const LENS_TOGGLES: readonly LensToggle[] = [
@@ -193,6 +209,8 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.resourceViewOpen,
     toggle: (ctx) => ctx.toggleResourceView(),
     reason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+    // The one row here that opens something rather than marking the canvas — see `note` above.
+    note: 'Opens the resource panel and moves focus to it',
   },
   {
     id: 'over-allocation',
@@ -1580,6 +1598,10 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
               const reason = lens.reason(ctx);
               const shut = reason !== undefined;
               const reasonId = shut ? `tsld-view-${lens.id}-reason` : undefined;
+              const noteId = lens.note ? `tsld-view-${lens.id}-note` : undefined;
+              // Both, space-separated, when both apply — an `aria-describedby` that names only one
+              // silently drops the other, and "why it is shut" and "what it does" are both wanted.
+              const describedBy = [reasonId, noteId].filter(Boolean).join(' ') || undefined;
               return (
                 <div key={lens.id} className="flex flex-col gap-0.5">
                   <label
@@ -1593,7 +1615,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                       data-view-lens={lens.id}
                       checked={lens.checked(ctx)}
                       aria-disabled={shut || undefined}
-                      {...(reasonId ? { 'aria-describedby': reasonId } : {})}
+                      {...(describedBy ? { 'aria-describedby': describedBy } : {})}
                       onChange={() => {
                         if (!shut) lens.toggle(ctx);
                       }}
@@ -1604,6 +1626,11 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                   {shut ? (
                     <span id={reasonId} className="text-muted-foreground pl-6 text-xs">
                       {reason}
+                    </span>
+                  ) : null}
+                  {lens.note ? (
+                    <span id={noteId} className="text-muted-foreground pl-6 text-xs">
+                      {lens.note}
                     </span>
                   ) : null}
                 </div>
