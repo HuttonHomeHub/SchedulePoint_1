@@ -2306,3 +2306,28 @@ not about how long it takes. Establish whether the `<ul>` remounts after the rAF
 conditional-render change would do it); if it does, the restore belongs on the listbox's own mount
 rather than on a frame counted from the dialog. Until then the journey should be treated as a known
 intermittent, and a red run on this assertion alone re-run before being investigated as new.
+
+## 129. The 56 px app header row is the last recoverable band above the canvas
+
+**Raised:** 2026-08-12 (ADR-0090 M4-T2) · **Size:** L · **Owner:** a shell/ADR-0055 pass, not a toolbar one
+
+The reported defect that opened ADR-0090 was a command surface eating canvas on a 24" monitor.
+Measured (`docs/specs/workspace-layout/m4-vertical-stack.md`), **257 px sat above the canvas** and the
+epic has taken it to 249. Of what remains, the largest single band is the **app header row at 56 px** —
+bigger than either command row.
+
+**M4-T2 could not take it, and the reason is structural rather than a matter of effort.** Recovering
+it means merging the plan's identity line into that row, and that row is a three-column grid whose
+organisation nav **already `overflow-x-auto`s at 1440 px** with a drawer owed against it. It is also
+shared by every screen in the product, and both ADR-0029 and ADR-0055 S2 say directly that the shell
+must stay plan-unaware — a plan breadcrumb rendered by the shell is exactly what they forbid.
+
+So M4-T2 delivered the reading order (identity above the commands it governs, one surface) and **8 px**
+of height from matching the rows' vertical rhythm, and this row records where the rest is.
+
+**What to do, if vertical space is worth another pass:** it is a shell redesign — a second chrome slot
+_inside_ the app header row, which keeps the shell plan-unaware by providing a slot rather than
+knowing about plans, plus an answer for the organisation nav that already does not fit. Measure first:
+`measure-toolbar/vertical-stack.spec.ts` reports the row's horizontal budget (`appHeaderRoom`) for
+exactly this question, and at 1920 it reported **one child using 1888 of 1920 px** — there is no gap to
+slot into today.

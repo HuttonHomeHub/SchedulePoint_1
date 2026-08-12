@@ -257,21 +257,42 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     }
   });
 
-  it('shows the Project-finish read-out in the PLAN HEADER (ADR-0090 M2-T3)', () => {
-    // This assertion kept passing across the move without being touched, because it was scoped to
-    // the document — which is exactly why it is being rewritten rather than left alone. A test that
+  it('shows the Project-finish read-out on the identity line, above the commands (M2-T3/M4-T2)', () => {
+    // This assertion kept passing across the M2-T3 move without being touched, because it was scoped
+    // to the document — which is exactly why it was rewritten rather than left alone. A test that
     // passes for a new reason is worse than one that fails: it reads as coverage of a thing it has
     // stopped covering. `m2-suite-impact.md` names this file as one of two in that category.
+    //
+    // **Re-scoped again for M4-T2**, which folded the identity line into the chrome band above the
+    // two command rows. Two things changed with it and both are deliberate: the line is a `<div>`
+    // rather than a `<header>` (in the band it sits outside `<main>`, where a `<header>` would be a
+    // **second `banner` landmark** beside the app header row's), and the `sr-only <h1>` stayed
+    // behind so `<main>` keeps a heading. So the old anchor — the `<h1>`'s nearest `<header>` — no
+    // longer identifies this row, and reaching for it would find the app header instead.
     renderScreen();
-    // Scoped via the plan's own `<h1>`, not `getByRole('banner')`: this `<header>` is nested inside
-    // the workspace, and a `<header>` that is not a direct child of `<body>` is not a banner
-    // landmark. Asserting on the element rather than the role is the honest scope here.
-    const header = screen.getByRole('heading', { level: 1 }).closest('header');
-    expect(header).not.toBeNull();
-    expect(within(header as HTMLElement).getByText('Finish')).toBeInTheDocument();
+    // Anchored on the row's own content rather than on a class or a tag: the pen status is the
+    // right-hand end of the identity line and the breadcrumb the left, so their common ancestor
+    // *is* the line. A `.closest('div')` from the chip would match its own wrapper.
+    const finish = screen.getByText('Finish');
+    const line = finish.closest('div.flex.flex-wrap');
+    expect(line).not.toBeNull();
     expect(
-      within(header as HTMLElement).getByText(formatCalendarDate('2026-08-01')),
+      within(line as HTMLElement).getByText(formatCalendarDate('2026-08-01')),
     ).toBeInTheDocument();
+    // The ordering M4-T2 exists to produce: identity before commands, in the DOM, so a screen
+    // reader and a sighted user meet the plan's name and status before its verbs.
+    const row1 = screen.getByRole('toolbar', { name: 'View and navigate' });
+    expect(line!.compareDocumentPosition(row1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the plan name as the heading inside main, not in the band (M4-T2)', () => {
+    renderScreen();
+    // The `<h1>` is what names the `main` landmark. It deliberately did NOT travel with the visible
+    // identity line: the band is outside `main`, and an `<h1>` moved there names the banner while
+    // leaving `main` a region that does not say what it is.
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('Tower');
+    expect(heading.closest('[data-chrome-slot]')).toBeNull();
   });
 
   it('collapses the activities panel by default (canvas-maximal)', () => {

@@ -116,8 +116,14 @@ async function stackHeights(page: Page): Promise<unknown> {
       // apart from a row. The ancestor chain has no such ambiguity — every element in it genuinely
       // contains the canvas, so what it contributes above the canvas is genuinely spent.
       canvasAncestry: (() => {
-        const out: { tag: string; role: string; height: number; top: number; padTop: number }[] =
-          [];
+        const out: {
+          tag: string;
+          role: string;
+          height: number;
+          top: number;
+          padTop: number;
+          marginTop: number;
+        }[] = [];
         for (let el: Element | null = canvas; el && el !== document.body; el = el.parentElement) {
           const b = el.getBoundingClientRect();
           const style = getComputedStyle(el);
@@ -131,6 +137,28 @@ async function stackHeights(page: Page): Promise<unknown> {
           });
         }
         return out;
+      })(),
+      // **The app header row's horizontal budget** — what a plan-identity slot inside it would have
+      // to fit into. Reported because M4-T2's first attempt moved the identity line into the band
+      // and measured a **zero** canvas gain: relocating a row within the same column changes
+      // nothing, and only merging it into an existing row can.
+      appHeaderRoom: (() => {
+        if (!appHeaderRow) return null;
+        const row = appHeaderRow.getBoundingClientRect();
+        const kids = [...appHeaderRow.children].map((c) => c.getBoundingClientRect());
+        const used = kids.reduce((sum, b) => sum + b.width, 0);
+        // The widest horizontal gap between adjacent children — where a slot would actually land.
+        const sorted = [...kids].sort((a, z) => a.left - z.left);
+        let widestGap = 0;
+        for (let i = 1; i < sorted.length; i++) {
+          widestGap = Math.max(widestGap, sorted[i]!.left - sorted[i - 1]!.right);
+        }
+        return {
+          rowWidth: Math.round(row.width),
+          childCount: kids.length,
+          used: Math.round(used),
+          widestGap: Math.round(widestGap),
+        };
       })(),
       // Every canvas on the page, because ADR-0026's surface is layered and `querySelector` returns
       // whichever comes first in document order — not necessarily the scene.

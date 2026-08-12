@@ -745,39 +745,14 @@ export function ToolbarPlanWorkspace({
     // the accessible answer here is the disable, not the "fix".
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div ref={rootRef} onKeyDown={onWorkspaceKeyDown} className="flex min-h-0 flex-1 flex-col">
-      {/* Slim header: one line — breadcrumb (…→ plan name) + status pill, then compact pen status. */}
-      <header className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-2">
-        <h1 className="sr-only">{plan.name}</h1>
-        <div className="flex min-w-0 items-center gap-2">
-          <Breadcrumbs items={crumbs} />
-          <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-          {/* The Project-finish read-out (ADR-0090 M2-T3), moved off Row 1 where it was a
-              non-operable stop inside a `role="toolbar"` costing 150 px of pinned width. It self-
-              hides until the plan has been calculated, so the header shows nothing rather than an
-              em dash on a fresh plan. */}
-          <span className="ml-1 hidden shrink-0 items-center text-sm sm:inline-flex">
-            <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
-          </span>
-          {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
-              the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
-          {model.canWrite ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => model.setEditing(true)}
-              title="Edit plan…"
-              aria-label="Edit plan"
-              className="text-muted-foreground shrink-0"
-            >
-              <SquarePen aria-hidden="true" className="size-4" />
-            </Button>
-          ) : null}
-        </div>
-        <CompactPenStatus
-          pen={model.pen}
-          {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-        />
-      </header>
+      {/*
+        The plan's accessible name for the `<main>` landmark, and it **stays here** while the visible
+        identity line moves into the chrome band with the commands (ADR-0090 M4-T2).
+        `document.querySelector('h1')` is not the point: a screen-reader user navigating by landmark
+        lands in `main`, and a `main` with no heading is a region that does not say what it is. The
+        band is outside `main`, so an `<h1>` moved there would name the banner instead.
+      */}
+      <h1 className="sr-only">{plan.name}</h1>
 
       {/* The two-row command surface (ADR-0031 two-row amendment). Row 1 · Look is always live; Row 2 ·
           Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
@@ -789,6 +764,66 @@ export function ToolbarPlanWorkspace({
           untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
       <ChromePortal>
         <div className="border-border flex flex-col border-b">
+          {/*
+            **The plan identity line** — breadcrumb, status, project finish, Edit plan, pen status —
+            folded into the band **above** the commands it governs (ADR-0090 M4-T2). Measured gain:
+            the 53 px row plus the 8 px that separated it from the workspace pane, against a 533 px
+            canvas at 1080 — **~61 px, +11 %**. That is deliberately not the figure `design.md` §2.1
+            implies (it puts 199 px above the canvas against a measured 257, and 717 px of canvas
+            against a measured 533); see `docs/specs/workspace-layout/m4-vertical-stack.md`.
+
+            **A `<div>`, not the `<header>` it used to be.** Inside `<main>` a `<header>` carries no
+            landmark role; in the band it is outside `main`, where it would become a **second
+            `banner`** beside the app header row's. Two banners is a worse outcome than the element
+            name is worth, and nothing depended on the tag — the accessible name of this screen is
+            the `sr-only <h1>` above, which is why that stayed behind.
+
+            **No new focus-return code, which is the point rather than an omission.** The
+            pre-approval review flagged that this file has shipped a `rootRef`-scoped
+            `querySelector` twice (`:164-169`, `:330-338`), each time silently finding nothing
+            because `ChromePortal` moves the node out of the workspace root's subtree, and required
+            any new restore to be `document`-scoped. There is none to write: the only focusable
+            control here is Edit plan, and the dialog it opens restores focus through its own
+            `restoreFocusRef`, which holds an element reference and never queries the DOM at all.
+          */}
+          {/* `py-1`, not the `py-2` this row carried as a standalone header. Inside the band it sits
+              directly above two rows that are `py-1` around a `min-h-9` control, and a third rhythm
+              in one surface reads as three surfaces. Measured: 53 → 45 px, the same height as Row 1.
+              `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
+              equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
+              everything below it. */}
+          <div className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <Breadcrumbs items={crumbs} />
+              <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+              {/* The Project-finish read-out (ADR-0090 M2-T3), moved off Row 1 where it was a
+                  non-operable stop inside a `role="toolbar"` costing 150 px of pinned width. It self-
+                  hides until the plan has been calculated, so the header shows nothing rather than an
+                  em dash on a fresh plan. */}
+              <span className="ml-1 hidden shrink-0 items-center text-sm sm:inline-flex">
+                <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
+              </span>
+              {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
+                  the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
+              {model.canWrite ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => model.setEditing(true)}
+                  title="Edit plan…"
+                  aria-label="Edit plan"
+                  className="text-muted-foreground shrink-0"
+                >
+                  <SquarePen aria-hidden="true" className="size-4" />
+                </Button>
+              ) : null}
+            </div>
+            <CompactPenStatus
+              pen={model.pen}
+              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+            />
+          </div>
+
           {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise
               lived only in each row's `aria-label`, invisible to sighted users. Plain words rather than
               those internal ADR-0031 codenames — "Look"/"Do" read as jargon to a first-time user — and
