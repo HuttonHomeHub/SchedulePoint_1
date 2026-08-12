@@ -50,7 +50,7 @@ function renderDoRow(context: TsldToolbarContext, authoringEnabled: boolean) {
   );
 }
 
-const marquee = () => screen.getByRole('button', { name: /marquee select/i });
+const marquee = () => screen.getByRole('button', { name: /^select$/i });
 
 describe('the Marquee select tool', () => {
   it('arms the tool when pressed', () => {

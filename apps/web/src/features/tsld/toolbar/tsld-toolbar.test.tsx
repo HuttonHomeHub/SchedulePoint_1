@@ -269,7 +269,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     // Regression: Auto-arrange used to disappear in view mode and reappear when editing. It now
     // stays on the bar and greys with the rest of the authoring cluster, like Add/Recalculate.
     renderRows(ctx({ canAutoArrange: true }), false);
-    expect(screen.getByRole('button', { name: 'Auto-arrange lanes' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Arrange' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -278,7 +278,7 @@ describe('TSLD toolbar registry (two-row)', () => {
   it('enables Auto-arrange with the pen when arrangement is available', () => {
     const requestAutoArrange = vi.fn();
     renderRows(ctx({ canAutoArrange: true, requestAutoArrange }), true);
-    const arrange = screen.getByRole('button', { name: 'Auto-arrange lanes' });
+    const arrange = screen.getByRole('button', { name: 'Arrange' });
     expect(arrange).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(arrange);
     expect(requestAutoArrange).toHaveBeenCalledOnce();

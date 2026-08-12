@@ -56,7 +56,9 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 const ROWS = ['View and navigate', 'Build and manage', 'Plan mode'] as const;
-const WIDTHS = [2133, 1920, 1600, 1440, 1280, 1024, 960, 768];
+// 1646 is the product owner's Surface Pro (2880 x 1920 at 175%). Added with the band fix, because
+// that defect was only ever visible at a width this gate had never been run at.
+const WIDTHS = [2133, 1920, 1646, 1600, 1440, 1280, 1024, 960, 768];
 
 /**
  * At or above this the row must fit outright; below it the row scrolls by design (M1-T5), where

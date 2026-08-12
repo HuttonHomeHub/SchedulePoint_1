@@ -2452,3 +2452,35 @@ about isolation, not about waiting, and does not cover this.
 
 **Impact:** a red CI run on an unrelated PR, roughly one run in several. **Fix:** wait on the
 expected count in test 1, and give test 2 a wait that is specific to its own row.
+
+## 133. Every toolbar measurement ever taken assumed a mouse
+
+`toolbarControlVariants` carries `pointer-coarse:px-3` (`toolbar-styles.ts`), which takes every
+toolbar control from 32 px to 40 px. A Surface Pro — the device this toolbar is judged on — reports
+`pointer: coarse` **in tablet mode** and `fine` with its keyboard attached.
+
+**Every measurement in this repository was taken with a fine pointer**, because that is Playwright's
+default: the whole of ADR-0090, the whole of ADR-0091, and every figure in
+`m2-item-widths.md`. So the label budget both epics were designed against describes only half of the
+target device's usage, and nobody had noticed because the harness never asked.
+
+Measured 2026-08-12 at 1646 px (`item-widths` → `m2-item-widths-coarse.json`), after the ADR-0091
+label fix:
+
+| pointer | Row 2 unlabelled                        |
+| ------- | --------------------------------------- |
+| fine    | none (`undo`/`redo` are `render` items) |
+| coarse  | **all nine `auto` items**               |
+
+Row 1 is fine on both — the band fix covers it. Row 2 is ~167 px over on the coarse branch, because
++8 px × 14 controls outruns what the three shortened labels bought.
+
+**This is not a regression**; it is a gap that predates both epics and was invisible until the
+harness was pointed at it. It matters only if the product owner uses the device detached, which is
+an open question at the time of writing.
+
+**The levers, in the order the ui-architect pass ranked them:** shorten more labels (`Share &
+export`, `Report progress…`, `Snap to grid` are the next three, ≈161 px together); `gap-1.5` →
+`gap-1`; reduce the coarse padding itself (`pointer-coarse:px-3` → `px-2.5`, 40 → 36 px, still well
+clear of WCAG 2.5.8's 24 px floor). Note that reducing `px-2` does **not** help here — the coarse
+variant overrides it.

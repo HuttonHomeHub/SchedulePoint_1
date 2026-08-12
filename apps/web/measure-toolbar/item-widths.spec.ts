@@ -30,7 +30,11 @@ import { writeMeasurement } from './output';
  * Asserts nothing; it is a harness (ADR-0081 §3).
  */
 
-const WIDTHS = [2304, 1920, 1440, 1280, 1024, 960, 768];
+// 1646 is the product owner's Surface Pro: 2880 x 1920 at 175% scale. It is the width this
+// toolbar is actually judged at, and until 2026-08-12 it had never been measured — every figure in
+// ADR-0090 and ADR-0091 came from 1920, 1440, 1024 or 768. The first run at it found both rows
+// roughly half empty and withholding labels anyway, which no other width had shown.
+const WIDTHS = [2304, 1920, 1646, 1536, 1440, 1280, 1024, 960, 768];
 
 async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
   return page.getByRole('toolbar', { name: ariaLabel }).evaluate((el) => {
@@ -166,4 +170,61 @@ test('M2-T0 — per-item widths on a populated plan', async ({ page }) => {
   }
 
   writeMeasurement('m2-item-widths', report);
+});
+
+/**
+ * **The same width, with a coarse pointer** (2026-08-12).
+ *
+ * `toolbarControlVariants` carries `pointer-coarse:px-3`, which takes every control from 32 px to
+ * 40 px. A Surface Pro reports `pointer: coarse` **in tablet mode** and `fine` with its keyboard
+ * attached — and **every measurement in this repository, including the whole of ADR-0090 and
+ * ADR-0091, was taken with a fine pointer**, because that is Playwright's default. So the label
+ * budget these epics were designed against describes only half of the target device's usage.
+ *
+ * `hasTouch: true` is what makes Chromium report a coarse pointer; `isMobile` was deliberately not
+ * used, because it also reflows dialogs and would measure a different product.
+ */
+test.describe('coarse pointer', () => {
+  test.use({ hasTouch: true });
+
+  test('M2-T0b — per-item widths at 1646 with a coarse pointer', async ({ page }) => {
+    const stamp = Date.now();
+
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    await page.goto('/sign-up');
+    await page.getByLabel('Full name').fill('Coarse Tester');
+    await page.getByLabel('Email').fill(`coarse-${stamp}@example.com`);
+    await page.getByLabel('Password').fill('correct-horse-battery');
+    await page.getByRole('button', { name: /create an account/i }).click();
+    await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+    await page.getByLabel('Organisation name').fill(`Coarse Co ${stamp}`);
+    await page.getByRole('button', { name: /create organisation/i }).click();
+
+    await page.getByRole('link', { name: 'Clients', exact: true }).click();
+    await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
+    await page.getByRole('dialog').getByLabel('Name').fill('Northgate');
+    await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
+    await page.getByRole('link', { name: 'Northgate' }).click();
+    await page.getByRole('button', { name: 'New project' }).click();
+    await page.getByRole('dialog').getByLabel('Name').fill('Riverside');
+    await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
+    await page.getByRole('link', { name: 'Riverside' }).click();
+    await page.getByRole('button', { name: 'New plan' }).click();
+    await page.getByRole('dialog').getByLabel('Name').fill('Logic');
+    await page
+      .getByRole('dialog')
+      .getByLabel(/Planned start/)
+      .fill('2026-01-05');
+    await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
+    await page.getByRole('link', { name: 'Logic' }).click();
+    await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+    await page.waitForTimeout(800);
+
+    writeMeasurement('m2-item-widths-coarse', {
+      '1646': {
+        'View and navigate': await itemWidths(page, 'View and navigate'),
+        'Build and manage': await itemWidths(page, 'Build and manage'),
+      },
+    });
+  });
 });

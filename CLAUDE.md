@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 925 web
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 926 web
 > source files with 30 flag-scoped Playwright suites beside the base journey, and
 > 91 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -1987,6 +1987,29 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   not imported and no migration runs**, so the ADR-0034 parity gate is untouched by construction;
   `database-architect` is not engaged because there is no schema change to design, not because one was
   judged too small.
+  **The epic shipped and the product owner said it looked awful, and the reason is the most useful
+  thing in this entry: nobody had ever measured the screen it is judged on.** Their Surface Pro is
+  2880×1920 at 175% = **1646 CSS px**; every figure in ADR-0090 and ADR-0091 came from 1920, 1440,
+  1024 or 768. Measured at 1646 for the first time, **both rows were roughly half empty and
+  withholding labels anyway** — Row 1 with 684 px of slack, Row 2 with 811 — so the whole remaining
+  programme, all of which frees width, could not have fixed it. Two causes. Row 1's was
+  `resolveLayoutMode` reading the toolbar's **own leftover width** as the room it has, so the
+  finish chip beside it took 136 px (1630 → 1494), below the 1536 floor, and the viewport commands
+  lost their labels: **the same conflation that withdrew D4 above, now shipped**, and quietly
+  telling the `shrink-0` mode row that a 3840 px display is `collapsed`. One `ToolbarBandProvider`
+  fixes all three, and the invariant is written where it will be read — _the band width may never
+  be an input to a fit decision_. Row 2's was real: the full label set is 1591 px of items plus
+  ~134 of chrome against a 1630 container, **established by forcing the labels on and watching two
+  commands demote** rather than by arithmetic, which is what settled a shortfall three prior
+  estimates had put at 25, 60 and 199 px. Three labels shortened, long form moved to `description`
+  so WCAG 2.5.3 survives. 1646 is now permanent in both the harness and the fit gate.
+  Two further things are recorded rather than absorbed. A **coarse-pointer** run — the first ever
+  taken in this repository, because Playwright defaults to a fine one — shows Row 2 losing all nine
+  labels again in tablet mode (`docs/TECH_DEBT.md` #133); the product owner uses the keyboard, so it
+  is debt rather than a defect. And **three journeys broke across this work and each was found by
+  CI rather than by me**, because I fixed the suite CI named instead of sweeping all 31; the rule
+  that replaces that judgement is in #133's neighbours — after any label or layout change, run every
+  journey, and locate a toolbar control by `[data-toolbar-item]` rather than by its copy.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
