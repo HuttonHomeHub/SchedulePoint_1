@@ -56,7 +56,32 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
-const floatPathsButton = () => screen.getByRole('button', { name: /float paths/i });
+const floatPathsButton = () => overflowItem(/float paths/i);
+
+/**
+ * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
+ *
+ * Four commands moved to tier 3 so the two rows could label themselves at 1920 — the trade the
+ * product owner took with the measured numbers. Nothing about what these assertions prove changes;
+ * they open the menu first and read a `menuitem` instead of a top-level button. A `MenuItem` also
+ * links its reason by `aria-describedby` rather than a `title`, which is why the shade cases assert
+ * the accessible description.
+ */
+function overflowItem(name: string | RegExp): HTMLElement {
+  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
+  for (const trigger of more) {
+    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+    // Any of the three menu-item roles: a toggle in the overflow is a `menuitemcheckbox` since
+    // ADR-0090 M2 (it was a plain `menuitem` announcing no state), and `getByRole('menuitem')`
+    // does not match it — which is how that fix announced itself here.
+    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
+      const hit = screen.queryByRole(role, { name });
+      if (hit) return hit;
+    }
+    fireEvent.click(trigger);
+  }
+  throw new Error(`No overflow item named ${String(name)}`);
+}
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -70,7 +95,7 @@ describe('TSLD toolbar — Float paths (flag on)', () => {
   it('carries the panel open state as aria-pressed, and closes when pressed again', () => {
     renderRows(ctx({ floatPathsOpen: true }));
     const button = floatPathsButton();
-    expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(button).toBeChecked();
     fireEvent.click(button);
     expect(toggleFloatPaths).toHaveBeenCalledOnce();
   });
@@ -79,12 +104,12 @@ describe('TSLD toolbar — Float paths (flag on)', () => {
     renderRows(ctx({ selectedActivity: undefined }));
     const button = floatPathsButton();
     expect(button).toHaveAttribute('aria-disabled', 'true');
-    expect(button.getAttribute('title')).toMatch(/select an activity first/i);
+    expect(button).toHaveAccessibleDescription(/select an activity first/i);
   });
 
   it('shades with "Add an activity first" on a genuinely empty plan', () => {
     renderRows(ctx({ activityCount: 0, selectedActivity: undefined }));
-    expect(floatPathsButton().getAttribute('title')).toMatch(/add an activity first/i);
+    expect(floatPathsButton()).toHaveAccessibleDescription(/add an activity first/i);
   });
 
   it('stays ENABLED on a plan that has never been recalculated', () => {

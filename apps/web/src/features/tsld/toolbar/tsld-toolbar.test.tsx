@@ -336,7 +336,10 @@ describe('TSLD toolbar registry (two-row)', () => {
     // `Isolate logic path` left this list in ADR-0090 M2-T1: it moved to the selection bar, and its
     // Row-1 "Coming soon" placeholder went with it rather than being reproduced there — a
     // placeholder earns its place on a persistent row a planner scans, not on a transient bar.
-    for (const name of ['Next conflict', 'Snap to grid']) {
+    // `Next conflict` also left this list, in ADR-0090 M2: it moved to tier 3 so Row 1 could label
+    // itself at 1920, so flag-off its placeholder lives in the `⋯` rather than inline. Snap to grid
+    // is the one of the three still on the bar, and it is what this now pins.
+    for (const name of ['Snap to grid']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       expect(btn).toHaveAttribute('title', `${name} — Coming soon`);

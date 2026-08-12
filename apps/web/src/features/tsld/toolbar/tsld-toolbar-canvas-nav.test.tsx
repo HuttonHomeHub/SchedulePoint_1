@@ -49,6 +49,31 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
+/**
+ * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
+ *
+ * Four commands moved to tier 3 so the two rows could label themselves at 1920 — the trade the
+ * product owner took with the measured numbers. Nothing about what these assertions prove changes;
+ * they open the menu first and read a `menuitem` instead of a top-level button. A `MenuItem` also
+ * links its reason by `aria-describedby` rather than a `title`, which is why the shade cases assert
+ * the accessible description.
+ */
+function overflowItem(name: string | RegExp): HTMLElement {
+  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
+  for (const trigger of more) {
+    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+    // Any of the three menu-item roles: a toggle in the overflow is a `menuitemcheckbox` since
+    // ADR-0090 M2 (it was a plain `menuitem` announcing no state), and `getByRole('menuitem')`
+    // does not match it — which is how that fix announced itself here.
+    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
+      const hit = screen.queryByRole(role, { name });
+      if (hit) return hit;
+    }
+    fireEvent.click(trigger);
+  }
+  throw new Error(`No overflow item named ${String(name)}`);
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar — canvas nav (flag on)', () => {
@@ -97,7 +122,7 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
   // ── Next conflict ───────────────────────────────────────────────────────────────────────
   it('advances Next conflict when the plan has conflicts', () => {
     renderRows(ctx({ hasConflicts: true, conflictCount: 3 }));
-    const btn = screen.getByRole('button', { name: 'Next conflict' });
+    const btn = overflowItem('Next conflict');
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.goToNextConflict).toHaveBeenCalledOnce();
@@ -105,19 +130,16 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
 
   it('shades Next conflict with "No conflicts to review" when there are none', () => {
     renderRows(ctx({ hasConflicts: false }));
-    const btn = screen.getByRole('button', { name: 'Next conflict' });
+    const btn = overflowItem('Next conflict');
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Next conflict — No conflicts to review');
+    expect(btn).toHaveAccessibleDescription('No conflicts to review');
     fireEvent.click(btn);
     expect(spies.goToNextConflict).not.toHaveBeenCalled();
   });
 
   it('shades Next conflict with "Add an activity first" on an empty canvas', () => {
     renderRows(ctx({ hasConflicts: false, hasDiagram: false }));
-    expect(screen.getByRole('button', { name: 'Next conflict' })).toHaveAttribute(
-      'title',
-      'Next conflict — Add an activity first',
-    );
+    expect(overflowItem('Next conflict')).toHaveAccessibleDescription('Add an activity first');
   });
 
   // ── Snap to grid ────────────────────────────────────────────────────────────────────────

@@ -48,7 +48,14 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
   // The RESOLVED icon — `item.icon` may be a ctx function (see `resolveItems`).
   if (r.item.onActivate && r.enabled) {
     return (
-      <MenuItem onSelect={() => r.item.onActivate!(context)}>
+      <MenuItem
+        // A toggle keeps its state in the menu (ADR-0090 M2). An item that declares `isActive` is a
+        // toggle, and on the bar its `ToolbarButton` carries `aria-pressed`; without this it became a
+        // plain `menuitem` here and announced nothing, so a screen-reader user could not tell whether
+        // Float paths was open. Items with no `isActive` stay plain `menuitem`s.
+        {...(r.item.isActive ? { checked: r.active } : {})}
+        onSelect={() => r.item.onActivate!(context)}
+      >
         {icon}
         {r.item.label}
       </MenuItem>
@@ -66,6 +73,7 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
   return (
     <MenuItem
       disabled
+      {...(r.item.isActive ? { checked: r.active } : {})}
       {...(r.busy ? { busy: true } : {})}
       {...(r.disabledReason ? { disabledReason: r.disabledReason } : {})}
       onSelect={NOOP}

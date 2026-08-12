@@ -70,6 +70,28 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
   );
 }
 
+/**
+ * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
+ *
+ * `clear-visual-placement` moved to tier 3 so Row 2 could label itself at 1920 — the trade the
+ * product owner took with the measured numbers. It is the narrowest-purpose command on the row: it
+ * does nothing outside Visual scheduling mode and is pen-gated on top of that. Nothing these
+ * assertions prove changes; they open the menu and read a menu item, whose reason travels by
+ * `aria-describedby` rather than a `title`.
+ */
+function overflowItem(name: string | RegExp): HTMLElement {
+  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
+  for (const trigger of more) {
+    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
+      const hit = screen.queryByRole(role, { name });
+      if (hit) return hit;
+    }
+    fireEvent.click(trigger);
+  }
+  throw new Error(`No overflow item named ${String(name)}`);
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar quick-wins (flag on)', () => {
@@ -206,9 +228,9 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     renderRows(
       ctx({ schedulingMode: 'EARLY', selectedActivityId: 'a1', selectedActivity: SELECTED }),
     );
-    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    const btn = overflowItem('Clear visual placement');
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Clear visual placement — Only available in Visual mode');
+    expect(btn).toHaveAccessibleDescription('Only available in Visual mode');
   });
 
   it('Clear visual placement: Late-start overlay gives a reason, not a bare disable (A1)', () => {
@@ -224,11 +246,10 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
       }),
       false,
     );
-    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    const btn = overflowItem('Clear visual placement');
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute(
-      'title',
-      'Clear visual placement — Turn off the Late-start overlay to clear the placement',
+    expect(btn).toHaveAccessibleDescription(
+      'Turn off the Late-start overlay to clear the placement',
     );
   });
 
@@ -237,9 +258,9 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
       ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: undefined }),
       true,
     );
-    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    const btn = overflowItem('Clear visual placement');
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Clear visual placement — Select an activity first');
+    expect(btn).toHaveAccessibleDescription('Select an activity first');
   });
 
   it('Clear visual placement: in Visual mode + pen + selection, clears via clearVisualPlacement(id, version)', () => {
@@ -247,7 +268,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
       ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: SELECTED }),
       true,
     );
-    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    const btn = overflowItem('Clear visual placement');
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.clearVisualPlacement).toHaveBeenCalledWith('a1', 7);
@@ -258,7 +279,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
       ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: SELECTED }),
       false,
     );
-    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    const btn = overflowItem('Clear visual placement');
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.clearVisualPlacement).not.toHaveBeenCalled();
@@ -266,9 +287,9 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
 
   it('Clear visual placement: disabled with "Select an activity first" when nothing is selected', () => {
     renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivityId: null }), true);
-    const btn = screen.getByRole('button', { name: 'Clear visual placement' });
+    const btn = overflowItem('Clear visual placement');
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Clear visual placement — Select an activity first');
+    expect(btn).toHaveAccessibleDescription('Select an activity first');
   });
 
   it('has no axe violations with the quick-wins live', async () => {

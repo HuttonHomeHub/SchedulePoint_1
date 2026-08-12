@@ -104,6 +104,27 @@ const ZOOM_LABELS: Record<string, string> = {
  * member here). */
 type ViewToggleGroupId = 'structure' | 'markers' | 'insight' | 'panels';
 
+/**
+ * **Why four commands sit at tier 3 — always in the `⋯` — since 2026-08-12 (ADR-0090 M2).**
+ *
+ * `next-conflict`, `float-paths` and `shortcuts` on Row 1, and `clear-visual-placement` on Row 2.
+ * Row 1 was ~360 px short of labelling itself at 1920 and Row 2 ~128 px; these four are what buys
+ * both. The trade was put to the product owner with the measured numbers rather than taken here,
+ * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
+ *
+ * **Tier 3 rather than a low `priority`, and the distinction is load-bearing.** `autoLabelsFit`
+ * sums the WHOLE bar (`Toolbar.tsx`), so a merely width-demoted item still pays for its label and
+ * demoting it would buy nothing at all. `partitionByTier` takes tier 3 out of `bar` entirely.
+ *
+ * The other route — making the label sum read only the inline set — is exactly the feedback loop
+ * {@link measureLabelWidth}'s docblock exists to prevent: labelling widens the row, the widened row
+ * overflows, overflowing narrows it, and the narrower row can afford labels again.
+ *
+ * `showLabel: 'never'` was measured and rejected: it drops an item's label cost while keeping its
+ * 32 px and its gap, so the three Row-1 candidates save 308 px against a 360 px gap — not enough,
+ * and it would have pinned three of the seven promotable buttons permanently icon-only to let the
+ * other four gain text.
+ */
 const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: string }> = [
   { id: 'structure', label: 'Structure' },
   { id: 'markers', label: 'Markers' },
@@ -1567,7 +1588,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'clear-visual-placement',
     group: 'tools' as const,
     row: 'do' as const,
-    tier: 2 as const,
+    tier: 3 as const,
     order: 6,
     label: 'Clear visual placement',
     icon: <Eraser className="size-4" />,
@@ -1624,7 +1645,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'next-conflict',
     group: 'find' as const,
     row: 'look' as const,
-    tier: 2 as const,
+    tier: 3 as const,
     order: 2,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
@@ -1934,7 +1955,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             id: 'float-paths',
             group: 'find',
             row: 'look',
-            tier: 2,
+            tier: 3,
             order: 4,
             label: 'Float paths',
             icon: <Split className="size-4" />,
@@ -2345,7 +2366,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'shortcuts',
       group: 'help',
       row: 'look',
-      tier: 2,
+      tier: 3,
       order: 1,
       priority: -110,
       label: 'Keyboard shortcuts',

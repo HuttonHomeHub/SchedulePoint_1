@@ -67,7 +67,9 @@ function clampAnchor({ x, y }: MenuAnchor): { left: number; top: number } {
 function itemsOf(container: HTMLElement | null): HTMLButtonElement[] {
   if (!container) return [];
   return Array.from(
-    container.querySelectorAll<HTMLButtonElement>('[role="menuitem"],[role="menuitemradio"]'),
+    container.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"]',
+    ),
   );
 }
 
@@ -306,6 +308,7 @@ export function MenuSection({
  * whatever the children say, and nothing else.
  */
 export function MenuItem({
+  checked,
   onSelect,
   destructive = false,
   selected,
@@ -316,6 +319,20 @@ export function MenuItem({
 }: {
   onSelect: () => void;
   destructive?: boolean;
+  /**
+   * A **toggle**'s on/off state — renders `role="menuitemcheckbox"` + `aria-checked`.
+   *
+   * Added by ADR-0090 M2 (2026-08-12), when four commands moved to tier 3 to buy the two rows their
+   * labels at 1920 and one of them — `Float paths` — turned out to be a toggle. On the bar it
+   * carried `aria-pressed`; in the menu it became a plain `menuitem` announcing **no state at all**,
+   * so a screen-reader user could not tell whether the panel was open. The overflow had only ever
+   * held plain actions before, so nothing had needed this.
+   *
+   * Distinct from {@link selected}, which is `menuitemradio` — one of several. A toggle is not one
+   * of several, and collapsing the two would announce an independent switch as a mutually exclusive
+   * choice.
+   */
+  checked?: boolean;
   selected?: boolean;
   disabled?: boolean;
   /** Why this item is shut, for a reader who can do something about it. Announced as a description. */
@@ -332,8 +349,18 @@ export function MenuItem({
   const button = (
     <button
       type="button"
-      role={selected === undefined ? 'menuitem' : 'menuitemradio'}
-      {...(selected === undefined ? {} : { 'aria-checked': selected })}
+      role={
+        checked !== undefined
+          ? 'menuitemcheckbox'
+          : selected === undefined
+            ? 'menuitem'
+            : 'menuitemradio'
+      }
+      {...(checked !== undefined
+        ? { 'aria-checked': checked }
+        : selected === undefined
+          ? {}
+          : { 'aria-checked': selected })}
       {...(disabled ? { 'aria-disabled': true } : {})}
       {...(busy ? { 'aria-busy': true } : {})}
       {...(describedBy ? { 'aria-describedby': describedBy } : {})}
