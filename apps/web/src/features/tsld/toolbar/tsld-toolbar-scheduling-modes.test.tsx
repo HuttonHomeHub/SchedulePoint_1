@@ -27,7 +27,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   });
 }
 
-/** Render the Row 1 · Look toolbar (Go-to-date, the mode selector, the View popover live here). */
+/** Render the Row 1 · Look toolbar (Go-to-date and the View popover live here). */
 function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
@@ -37,6 +37,24 @@ function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
       label="View and navigate"
       authoringEnabled={authoringEnabled}
       alignEndGroup="object"
+    />,
+  );
+}
+
+/**
+ * Render the **mode row**, where the `Early | Visual` selector moved at ADR-0091 D1 — it sets how
+ * the plan schedules rather than doing anything, so it now sits beside the pen on the identity line
+ * instead of inside Row 1's `Display` group.
+ */
+function renderModeRow(context: TsldToolbarContext, authoringEnabled = true) {
+  const rows = splitByRow(buildTsldToolbarItems());
+  return render(
+    <Toolbar
+      items={rows.mode}
+      context={context}
+      label="Plan mode"
+      authoringEnabled={authoringEnabled}
+      groupLabels={{ lens: 'Scheduling and view' }}
     />,
   );
 }
@@ -87,7 +105,7 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
 
   it('offers an Early | Visual mode selector (labelled), marks the active mode, and switches', () => {
     const setSchedulingMode = vi.fn();
-    renderToolbar(ctx({ schedulingMode: 'EARLY', setSchedulingMode }));
+    renderModeRow(ctx({ schedulingMode: 'EARLY', setSchedulingMode }));
     const early = screen.getByRole('button', { name: 'Early mode' });
     const visual = screen.getByRole('button', { name: 'Visual mode' });
     // The buttons carry visible text (tier-1), not just an aria-label (ux/a11y: no blank buttons).
@@ -101,7 +119,7 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
 
   it('keeps the mode selector visible but shaded for a read-only viewer (shade-don’t-hide)', () => {
     const setSchedulingMode = vi.fn();
-    renderToolbar(ctx({ setSchedulingMode: null, schedulingMode: 'VISUAL' }));
+    renderModeRow(ctx({ setSchedulingMode: null, schedulingMode: 'VISUAL' }));
     const early = screen.getByRole('button', { name: 'Early mode' });
     const visual = screen.getByRole('button', { name: 'Visual mode' });
     // The selector stays on the bar — the mode changes how the diagram reads, so a viewer must see it…

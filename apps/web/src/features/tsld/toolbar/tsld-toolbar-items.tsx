@@ -4,7 +4,9 @@
 import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
+  ArrowLeftToLine,
   ChartArea,
+  ChartGantt,
   CalendarDays,
   CalendarRange,
   CalendarSearch,
@@ -12,6 +14,7 @@ import {
   ChevronDown,
   DollarSign,
   Eraser,
+  Hand,
   Crop,
   FileCode,
   FileDown,
@@ -2057,13 +2060,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'mode-early',
       group: 'lens',
-      row: 'look',
+      row: 'mode',
       tier: 1,
       // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
       showLabel: 'always',
       order: 1,
       demotionGroup: 'scheduling-mode',
       label: 'Early mode',
+      icon: <ArrowLeftToLine className="size-4" aria-hidden="true" />,
       isVisible: () => SCHEDULING_MODES_ENABLED,
       isEnabled: (ctx) => ctx.setSchedulingMode !== null,
       disabledReason: (ctx) =>
@@ -2076,13 +2080,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'mode-visual',
       group: 'lens',
-      row: 'look',
+      row: 'mode',
       tier: 1,
       // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
       showLabel: 'always',
       order: 2,
       demotionGroup: 'scheduling-mode',
       label: 'Visual mode',
+      icon: <Hand className="size-4" aria-hidden="true" />,
       isVisible: () => SCHEDULING_MODES_ENABLED,
       isEnabled: (ctx) => ctx.setSchedulingMode !== null,
       disabledReason: (ctx) =>
@@ -2106,13 +2111,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'view-tsld',
       group: 'lens',
-      row: 'look',
+      row: 'mode',
       tier: 1,
       // Its name is the affordance — a nameless view switch is a coin toss (TECH_DEBT #61).
       showLabel: 'always',
       order: 10,
       demotionGroup: 'view-mode',
       label: 'Diagram',
+      icon: <Waypoints className="size-4" aria-hidden="true" />,
       isVisible: () => GANTT_VIEW_ENABLED,
       isActive: (ctx) => ctx.planView === 'tsld',
       onActivate: (ctx) => ctx.setPlanView('tsld'),
@@ -2120,12 +2126,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'view-gantt',
       group: 'lens',
-      row: 'look',
+      row: 'mode',
       tier: 1,
       showLabel: 'always',
       order: 11,
       demotionGroup: 'view-mode',
       label: 'Gantt',
+      icon: <ChartGantt className="size-4" aria-hidden="true" />,
       isVisible: () => GANTT_VIEW_ENABLED,
       isActive: (ctx) => ctx.planView === 'gantt',
       onActivate: (ctx) => ctx.setPlanView('gantt'),

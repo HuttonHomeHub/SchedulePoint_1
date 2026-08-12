@@ -83,6 +83,13 @@ const MD_QUERY = '(min-width: 48rem)';
 const ROW_LOOK_GROUP_LABELS = { object: 'Plan info' } as const;
 
 /**
+ * The mode row's `lens` group name (ADR-0091 D1). Overridden because the shared default is
+ * "Display", which is simultaneously Row 1's `lens` group name — leaving two on-screen regions with
+ * one name, and announcing "Plan mode, toolbar" then "Display, group" for a cluster that is neither.
+ */
+const ROW_MODE_GROUP_LABELS = { lens: 'Scheduling and view' } as const;
+
+/**
  * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5 — see below).
  *
  * A ux review once asked for them, and the plan committed to removing them again with the
@@ -832,10 +839,41 @@ export function ToolbarPlanWorkspace({
                 </Button>
               ) : null}
             </div>
-            <CompactPenStatus
-              pen={model.pen}
-              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-            />
+            {/* The **mode row** (ADR-0091 D1), beside the pen because that is what it is: `Early |
+                Visual` and `Diagram | Gantt` do not *do* anything, they set how everything below
+                behaves — which is exactly `Start editing`'s relationship to the toolbar. It renders
+                as a third `<Toolbar>` rather than four hand-rolled segmented buttons, so it keeps
+                roving tabindex, group labelling, ADR-0082 reason wiring, `demotionGroup` pairing
+                and the fit gate's reach; this register has recorded each of those shipping wrong
+                once.
+
+                Wrapped WITH the pen so the identity line keeps exactly two children — it is
+                `justify-between`, and a third child would spread it into thirds.
+
+                NOT a nested `ChromePortal`: we are already inside one, and a second would read the
+                same context node and render this as a sibling of the band's children, i.e. below
+                Row 2. `shrink-0` (never `flex-1`) because `Toolbar`'s container carries `min-w-0`,
+                so a default-shrinking mode row squeezes below its content width on a narrow band
+                and starts demoting — putting an armed mode behind a `⋯`, which is the ADR-0064
+                dead-end. The breadcrumb cluster wraps instead; it already truncates. */}
+            <div className="flex shrink-0 items-center gap-3">
+              <Toolbar
+                items={rows.mode}
+                context={ctx}
+                label="Plan mode"
+                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                // All four are `group: 'lens'`, whose default label is "Display" — which is also
+                // Row 1's `lens` group name, so unoverridden this announces a second, unrelated
+                // name for the cluster AND collides with a region one row below. Same class as
+                // ADR-0090 M5's `output` → "Deliver" rename.
+                groupLabels={ROW_MODE_GROUP_LABELS}
+                className="shrink-0"
+              />
+              <CompactPenStatus
+                pen={model.pen}
+                {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+              />
+            </div>
           </div>
 
           {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise

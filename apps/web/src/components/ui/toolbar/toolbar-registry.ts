@@ -139,7 +139,7 @@ export type ToolbarLabelPolicy = 'always' | 'auto' | 'never';
  * shades as a set). Absent ⇒ `look`. The workspace renders one {@link Toolbar} per row, so this only
  * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
  */
-export type ToolbarRow = 'look' | 'do';
+export type ToolbarRow = 'mode' | 'look' | 'do';
 
 /**
  * What the row's current width means, handed to the two places a consumer can act on it: an item's
@@ -387,21 +387,45 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
     }
   }
 
+  // The same guard one axis over, and for the same reason (ADR-0091 M1, B2). `companionsOf` resolves
+  // a pair from **one row's** `bar`, so a `demotionGroup` split across rows loses its companion
+  // entirely: each half then demotes on its own row's arithmetic, which is the split segment the
+  // block above exists to prevent — arrived at through a door that did not exist until now. Two rows
+  // made this impossible to express; a third makes it a one-character typo in `row`.
+  const rowByGroup = new Map<string, ToolbarRow>();
+  for (const item of items) {
+    if (!item.demotionGroup) continue;
+    const row = item.row ?? 'look';
+    const seen = rowByGroup.get(item.demotionGroup);
+    if (seen === undefined) rowByGroup.set(item.demotionGroup, row);
+    else if (seen !== row) {
+      throw new Error(
+        `defineToolbar: demotionGroup "${item.demotionGroup}" spans rows "${seen}" and "${row}" — ` +
+          'companions must share a row, or they cannot demote as one unit.',
+      );
+    }
+  }
+
   return items;
 }
 
 /**
- * Partition a registry into the two toolbar rows (ADR-0031 two-row amendment). Items with no `row`
- * default to `look`. Pure — the workspace renders one {@link Toolbar} per returned array.
+ * Partition a registry into the toolbar rows (ADR-0031 two-row amendment; `mode` added by ADR-0091
+ * D1). Items with no `row` default to `look`. Pure — the workspace renders one {@link Toolbar} per
+ * returned array.
+ *
+ * **Keyed by a `Record<ToolbarRow, …>` rather than by a ternary, deliberately.** This was
+ * `((item.row ?? 'look') === 'do' ? build : look)`, which is total for two rows and silently
+ * mis-partitions for three: adding `'mode'` to the union compiles clean against that body and drops
+ * every mode item into `look`, i.e. leaves them exactly where they were while the registry says
+ * they moved. Indexing a record seeded with all three keys makes a fourth row a **typecheck
+ * failure** at the seed instead. The mis-partition would have been invisible to the type system,
+ * which is what makes it worth the extra three lines (ADR-0091 M1, B1).
  */
-export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): {
-  look: ToolbarItem<Ctx>[];
-  do: ToolbarItem<Ctx>[];
-} {
-  const look: ToolbarItem<Ctx>[] = [];
-  const build: ToolbarItem<Ctx>[] = [];
-  for (const item of items) ((item.row ?? 'look') === 'do' ? build : look).push(item);
-  return { look, do: build };
+export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, ToolbarItem<Ctx>[]> {
+  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { mode: [], look: [], do: [] };
+  for (const item of items) rows[item.row ?? 'look'].push(item);
+  return rows;
 }
 
 /**
