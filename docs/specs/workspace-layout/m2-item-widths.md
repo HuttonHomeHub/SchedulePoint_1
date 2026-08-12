@@ -320,6 +320,31 @@ is pen-gated on top of that.
 two of which — `next-conflict` and `float-paths` — are logic-tracing commands rather than
 conveniences.
 
+## The decision landed — both rows label themselves at 1920
+
+Measured 2026-08-12, after the four commands moved to tier 3 on the product owner's decision.
+
+| @1920 | before M2                       | after                      |
+| ----- | ------------------------------- | -------------------------- |
+| Row 1 | 15 of 25 inline, **0 labelled** | **14 inline, 13 labelled** |
+| Row 2 | 19 inline, **0 labelled**       | **14 inline, 12 labelled** |
+
+`zoom-out` reads 106 px where it was 32; `auto-arrange` 172 where it was 32; `Schedule settings…` 177. This is `design.md` §1.4 **success criterion 1** met at 1920 — the criterion the epic opened by
+showing had never been met at any width the product owner owns, on the monitor they reported it on.
+
+Row 1 sits at 1543 px against 1832 and Row 2 at 1591 — both comfortably inside, so the result is not
+balanced on a pixel.
+
+**At 1440 the rows correctly diverge**, and it is worth stating because it looks like an
+inconsistency and is not: Row 1 labels (9 of 10) because its remaining items are mostly `render`
+controls that always carry text, while Row 2 goes icon-only (5 of 13) because its `'auto'` labels
+are far wider. Nothing is unreachable at either width — that was M1's guarantee and the `⋯` still
+holds whatever does not fit.
+
+**What the four cost**: `Next conflict`, `Float paths` and `Keyboard shortcuts` on Row 1, and
+`Clear visual placement` on Row 2, are now always in the `⋯` — one click, at every width, rather
+than a direct press. That is the trade as it was put, and it is what was chosen.
+
 ## Follow-ups this task opens
 
 - ~~**Fix the `labelled` flag**~~ — done in this task; `visibleText` / `labelWidth` / `nameWidth`
