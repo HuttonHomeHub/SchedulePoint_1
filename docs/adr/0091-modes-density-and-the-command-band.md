@@ -90,20 +90,46 @@ No command disappears into a menu at any width — which is the part of decision
 their names remain in the accessible name and the `⋯`. _This was put to the product owner and taken
 as the recommended default when the epic was told to continue; it is a one-line change to reverse._
 
-### D4 — Three bands above the canvas, and #129 is **not** approved
+### D4 — ~~Three bands above the canvas~~ **WITHDRAWN 2026-08-12.** Four bands stand; #129 is **not** approved
 
-`app header` + `identity + commands` + `commands`. The identity line folds into the command band.
-
-**D4a (default, reversible).** Finding 1's 386 px comes from: `You're editing this plan.` (165 px)
-and the `Editing` badge (58 px) — **223 px of pure redundancy**, beside a button that reads
-`Stop editing` — plus shortening the breadcrumb trail to `… / Riverside / Logic` (~180 px). Total
-~403 px. The leading path segments are the only real loss, and the Project Explorer rail shows them
-already. _Same provenance and reversibility as D3a._
+> **This decision is reversed, by measurement, before any of it was built.** The reversal is kept in
+> place rather than edited away, because the reason is the useful part.
+>
+> `Toolbar` resolves its density from **its own `clientWidth`** (`Toolbar.tsx:266`). Today Row 1 is
+> the full-width row, so that is ~1904 px and the reading is honest. **After a merge it is leftover
+> width**: with breadcrumbs, the finish chip, the mode cluster and the pen beside it, Row 1's
+> toolbar gets ~**891 px** — below every band floor — so at 1920 it resolves `collapsed` and
+> **withdraws every plain-button label on Row 1**. That silently reverses ADR-0090 M2's headline
+> win (which bought both rows their labels at 1920 for the first time) on the very monitor this
+> epic was opened about.
+>
+> It is not tunable. For Row 1 to stay `comfortable` post-merge it needs 1536 of 1904, leaving 368
+> for identity + finish + mode + pen, which measure **1013**. The "modest breadcrumb trim" D4a
+> budgeted for would have to close **645 px**.
+>
+> And **no existing gate could have caught it.** `readRow` measures each toolbar inside its own box
+> (`fit.spec.ts:115-116`), and a `flex-1` child always fits — so the fit gate would have gone green
+> while the row went wordless.
+>
+> Put to the product owner with those numbers. Their answer: **keep the labels.** It is the same
+> call they made earlier in the epic ("Labels win — demote the three"), and 45 px of canvas is a
+> poor trade for making a dozen commands wordless. So the identity line keeps its own row.
+>
+> **What this costs:** the original complaint — "the 4 rows are unnecessary" — is _declined_, not
+> solved. What still addresses it is the rest of the epic: M3 and M4c shorten Row 1 by ~306 px, and
+> D2 lets the `⋯` empty. Vertical space is not recovered.
+>
+> **D4a is withdrawn with it.** Its arithmetic was also wrong on its own terms — see the correction
+> in `m0-modes-measurement.md` §3.3: the pen cluster offers **165 px** of free saving, not 223. The
+> message is the content of a `role="status" aria-live="polite"` region, so deleting it silences
+> the pen-state announcement (WCAG 4.1.3); and the `Editing` badge carries **tone** (`warning` when
+> someone _else_ holds the pen), which is exactly the case a planner most needs to see.
 
 **Stated negatively, because scope creep here is cheap:** this ADR does **not** approve
 `docs/TECH_DEBT.md` #129 (a plan-identity slot in the 56 px app header row). ADR-0029 and ADR-0055 S2
 forbid it — the shell is plan-unaware — and M0 now also measures it **impossible**: that row holds one
-child using 1888 of 1920 px, widest gap 0.
+child using 1888 of 1920 px, widest gap 0. The withdrawal of the merge does **not** reopen it: #129
+was never the cheaper way to three bands, it was a worse way, and it is now measured shut as well.
 
 ### D5 — The glyph vocabulary
 

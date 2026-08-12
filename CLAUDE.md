@@ -1964,8 +1964,18 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   only one candidate, which is a real loss. And keeping the four viewport commands inline at **every**
   width overflows Row 1 at **1440** on its own — the spec rated that risk high at 768. The two
   decisions therefore **compete for the same slack**, which is written into the ADR so a milestone
-  under pressure cannot quietly resolve it the other way. Both resolutions are **defaults taken
-  without an explicit answer and flagged as reversible in place**.
+  under pressure cannot quietly resolve it the other way.
+  **Then D4 — the three-band merge, the epic's headline — was withdrawn by measurement before a line
+  of it was built, and that is the entry's most useful part.** `Toolbar` resolves its density from
+  **its own `clientWidth`**, which is honest while Row 1 is the full-width row and becomes _leftover
+  width_ the moment anything sits beside it: merged, Row 1's toolbar gets ~891 px, falls below every
+  band floor, and **withdraws every plain-button label at 1920** — silently reversing ADR-0090 M2's
+  headline win on the monitor this epic was opened about. It is not tunable (staying `comfortable`
+  post-merge leaves 368 px for content measuring 1013), and **no gate could have caught it**:
+  `readRow` measures each toolbar inside its own box, and a `flex-1` child always fits, so the fit
+  gate would have gone green while the row went wordless. Put to the product owner with the numbers;
+  they kept the labels, which is the call they had already made once. The original complaint — "the
+  4 rows are unnecessary" — is therefore **declined rather than solved**, and the entry says so.
   **The instrument was wrong too, and that is the ADR-0058 finding.** The vertical-stack harness asked
   for six bands and reported **five** for the whole of ADR-0090 M5: the plan-header lookup was
   `h1.closest('header')`, M4-T2 turned that element into a `<div>`, and the missing band was
