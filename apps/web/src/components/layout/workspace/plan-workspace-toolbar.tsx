@@ -817,13 +817,6 @@ export function ToolbarPlanWorkspace({
             <div className="flex min-w-0 items-center gap-2">
               <Breadcrumbs items={crumbs} />
               <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-              {/* The Project-finish read-out (ADR-0090 M2-T3), moved off Row 1 where it was a
-                  non-operable stop inside a `role="toolbar"` costing 150 px of pinned width. It self-
-                  hides until the plan has been calculated, so the header shows nothing rather than an
-                  em dash on a fresh plan. */}
-              <span className="ml-1 hidden shrink-0 items-center text-sm sm:inline-flex">
-                <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
-              </span>
               {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
                   the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
               {model.canWrite ? (
@@ -896,6 +889,24 @@ export function ToolbarPlanWorkspace({
               groupLabels={ROW_LOOK_GROUP_LABELS}
               className="flex-1"
             />
+            {/* The Project-finish read-out, back beside `Summary ▾` — a direct product-owner request
+                ("i did like the finish date next to the summary before"), and the last thing the
+                cancelled three-band merge was going to carry.
+
+                Rendered as the toolbar's SIBLING, not as a registry item, which is what lets it sit
+                there without undoing ADR-0090 M2-T3: on Row 1 it was a non-operable stop inside a
+                `role="toolbar"`, costing 150 px of pinned width and putting a read-out in the
+                arrow-key sequence. `alignEndGroup="object"` already parks `Summary ▾` at the
+                toolbar's trailing edge, so the next sibling lands visually beside it while staying
+                outside the widget.
+
+                Affordable now, and that is measured rather than assumed: after M3, Row 1 carries
+                792 px of slack at 1920 and 272 px at 768 (`item-widths`, 2026-08-12). It still
+                self-hides until the plan has been calculated, so a fresh plan shows nothing rather
+                than an em dash. */}
+            <span className="hidden shrink-0 items-center text-sm sm:inline-flex">
+              <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
+            </span>
           </div>
           <div className="flex items-center gap-2 px-2 py-1">
             <Toolbar
