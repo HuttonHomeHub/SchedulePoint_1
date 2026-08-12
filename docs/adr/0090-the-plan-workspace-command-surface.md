@@ -258,6 +258,68 @@ corrected in the same PR rather than stepped over (the ADR-0071 lesson).
 - **Adding an eighth taxonomy group for deliverables.** Rejected: the closure of
   `TOOLBAR_GROUPS` is the property ADR-0031 §2 exists to defend. D4 renames instead.
 
+## Milestone 2 as built (2026-08-11/12) — five decisions the plan did not contain
+
+M2 shipped the consolidation. Five of its decisions were taken during the work rather than in this
+document, and each is recorded here because each would otherwise read as an unexplained departure.
+
+**1 · `float-paths` does not move to the selection bar.** The plan lists it beside
+`zoom-to-selection` and `isolate-logic` on the grounds that its `isEnabled` requires a selection.
+That conflates _needs a selection_ with _is a canvas command_. It is a view-agnostic analysis that
+runs in the **Gantt** as well as the diagram — its ladder reads `activityCount`, deliberately not
+`canvasActive` — so moving it to a bar only the canvas renders would have deleted it from the Gantt.
+`float-paths-view-agnostic.structural.test.ts` exists to fail on exactly that.
+
+**2 · The `View ▾` trigger annotates a non-default colour mode.** Folding `colour-by` into the
+popover as a radio group leaves no trigger to name the active mode, and colour is the diagram's
+dominant encoding — a planner who has coloured by WBS group and forgotten reads every criticality
+judgement wrong. The trigger reads `View · WBS group` off-default and plain `View` at the default:
+width spent on the surprising state, none on the ordinary one. A canvas-corner read-out was rejected
+(a fifth persistent overlay), as was relying on the Legend (itself a toggle, moving into the same
+popover).
+
+**3 · The deliverables and analysis triggers are menu-buttons, and one is not called `Plan`.** The
+plan specifies a split-button for `Share & export`; a split button's primary region performs the
+primary action, and Export itself opens a menu, so it would have had a primary that opens a menu and
+a caret that opens the same one. The requirements that mattered — one roving stop, focus restored to
+the trigger — are met by a plain menu-button. `Plan ▾` became **`Analysis`** because it would have
+sat inside a group whose `aria-label` is already "Plan actions" and next to Row 1's `Summary ▾`;
+heard back to back, "Plan" and "Summary" do not say which holds what. `Schedule settings…` stayed
+inline rather than joining it — it is the one that _changes_ how dates are computed rather than
+reporting on them, and `docs/TECH_DEBT.md` #60 renamed it so the float measure could be found.
+
+**4 · M2-T7's specification was wrong for this surface, and the test pins the opposite.** It calls
+for a group whose every row would be shaded to render **no trigger**. That is ADR-0082's clause about
+the Project Explorer's row menu, where a menu of nothing but refusals is a dead end and its absence
+costs nothing. A toolbar is the opposite case: ADR-0031 §4 makes the read-only↔editing flip legible
+by keeping the row's shape fixed and shading its members as a set, so removing a trigger by
+permission would reflow the row for a Viewer — two people looking at the same plan would see
+different bars. The rule here is **shade the trigger and say why**.
+
+**5 · Labels at 1920 were bought with four tier-3 demotions, on the product owner's decision.**
+Measured: Row 1 was ~360 px short, Row 2 ~128. `Next conflict`, `Float paths` and `Keyboard
+shortcuts` on Row 1 and `Clear visual placement` on Row 2 moved to tier 3 — always in the `⋯`,
+nothing deleted. The trade was put with the numbers rather than taken: **labelled commands at 1920,
+or three fewer commands on the row.** Result, measured: Row 1 **14 inline / 13 labelled** (from 15 /
+0), Row 2 **14 / 12** (from 19 / 0). §1.4 criterion 1 is met at 1920 for the first time.
+
+Tier 3 rather than a low `priority` is load-bearing: `autoLabelsFit` sums the **whole bar**, so a
+width-demoted item still pays for its label. Making the label sum read only the inline set is the
+feedback loop `measureLabelWidth` exists to prevent. `showLabel: 'never'` was measured and rejected —
+it sheds the label but keeps the 32 px and the gap, saving 308 px against a 360 px gap.
+
+**Two defects the move exposed, both in code that predated it.** `Float paths` is a **toggle**, and
+the `⋯` had only ever held plain actions: in the menu it announced no state at all. `MenuItem` gained
+`checked` (`role="menuitemcheckbox"`), kept distinct from `selected` (`menuitemradio`) because a
+toggle is not one of several. And closing its panel restored focus by querying the command's
+`data-toolbar-item`, which now unmounts with the menu — focus was landing on `<body>` (WCAG 2.4.3);
+it falls back to the `⋯`. Both were found by things that run the real product, not by review.
+
+**The cost carried into M3.** `zoom-to-selection` and `isolate-logic` used to sit shaded on Row 1
+saying "Select an activity first". They are now **absent** until a bar is selected — correct by
+ADR-0082 (with no selection there is no object), and the one place M2 removes something from view
+rather than relocating it. M3 must check that discoverability is not what got optimised away.
+
 ## Consequences
 
 **The first consequence, and the one this ADR exists to record: it was wrong three times, and the
