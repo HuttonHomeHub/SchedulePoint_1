@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 /**
  * The fixed command-group taxonomy, in canonical left→right order (ADR-0031). Encoded as a `const`
  * tuple so {@link ToolbarGroupId} is a closed union the compiler enforces — a new command must pick
- * an existing group, it can't invent one. Reserved groups (find/history) may hold only stubs today.
+ * an existing group, it can't invent one.
  */
 export const TOOLBAR_GROUPS = [
   'frame', // 1 · frame/navigate — scale, zoom, fit (today-recenter reserved)
@@ -22,7 +22,12 @@ export const TOOLBAR_GROUPS = [
   'find', // 3 · find/focus — filter, critical-only (reserved)
   'tools', // 4 · tools/author — add activity, link (pen-gated)
   'object', // 5 · object/plan actions — recalculate, baselines, calendar…
-  'history', // 6 · history/status — undo/redo (reserved), pen status
+  // 6 · output — the deliverables a plan LEAVES the product as: export, print, share. Renamed from
+  // `history` in ADR-0090 M2-T4, which was reserved for undo/redo and never used: undo and redo
+  // shipped in `tools`, beside the authoring commands they undo, and they are staying there. The
+  // rename is safe precisely because the group was empty — verified as one repository hit, this
+  // declaration — and the closed tuple means the compiler finds any consumer that disagrees.
+  'output',
   'help', // 7 · help — shortcuts, legend
 ] as const;
 

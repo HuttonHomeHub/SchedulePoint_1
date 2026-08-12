@@ -973,6 +973,10 @@ const COLOUR_MODE_LABELS: Record<ColourMode, string> = {
   wbs: 'WBS group',
 };
 
+/** The one name for the deliverables trigger, its menu and its tooltip (ADR-0090 M2-T4). */
+const SHARE_EXPORT_LABEL = 'Share & export';
+const SHARE_NO_PERMISSION_REASON = 'You don’t have permission to share this plan';
+
 const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
 
 /**
@@ -1004,17 +1008,23 @@ function ExportMenuControl({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
-        title={disabled ? (api.disabledReason ?? 'Export…') : 'Export…'}
+        title={disabled ? (api.disabledReason ?? SHARE_EXPORT_LABEL) : SHARE_EXPORT_LABEL}
         onClick={() => {
           if (!disabled) toggle();
         }}
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
-        <span className="truncate">Export</span>
+        <span className="truncate">{SHARE_EXPORT_LABEL}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
-      <Menu open={open} onClose={close} anchor={anchor} label="Export" restoreFocusRef={triggerRef}>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label={SHARE_EXPORT_LABEL}
+        restoreFocusRef={triggerRef}
+      >
         {/* Grouped into Schedule / Diagram sections (ux S2), mirroring the Add split-button's sections. */}
         <MenuSection label="Schedule" />
         <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>
@@ -1105,6 +1115,36 @@ function ExportMenuControl({
               Microsoft Project (MSPDI)
             </MenuItem>
           </>
+        ) : null}
+        {/* Print and Share join the export formats here (ADR-0090 M2-T4). They are the same act from
+          the planner's side — the plan LEAVING the product as something someone else reads — and
+          they were three separate Row-2 stops saying so three times.
+
+          Each keeps its own gate rather than inheriting the trigger's: Print rides the diagram gate
+          the exports ride, Share rides `canShare`, which is a permission and not a state. Shaded
+          with the reason rather than hidden, so a Viewer learns that sharing exists and why they
+          cannot (ADR-0082). */}
+        <MenuSection divider label="Deliver" />
+        <MenuItem
+          disabled={!ctx.hasDiagram}
+          {...(ctx.hasDiagram ? {} : { disabledReason: EXPORT_NO_DIAGRAM_REASON })}
+          onSelect={() => ctx.printDiagram()}
+        >
+          <Printer aria-hidden="true" className="size-4" />
+          Print…
+        </MenuItem>
+        {/* Behind `VITE_GUEST_SHARE_LINKS`, exactly as its Row-2 registration was — flag-off the row
+          is absent rather than a "Coming soon" stub, following the M2-T2 precedent. The unused-flag
+          error from the compiler is what caught this being dropped in the first version. */}
+        {GUEST_SHARE_LINKS_ENABLED ? (
+          <MenuItem
+            disabled={!ctx.canShare}
+            {...(ctx.canShare ? {} : { disabledReason: SHARE_NO_PERMISSION_REASON })}
+            onSelect={() => ctx.openShare()}
+          >
+            <Share2 aria-hidden="true" className="size-4" />
+            Share…
+          </MenuItem>
         ) : null}
       </Menu>
     </>
@@ -1523,37 +1563,17 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
   // canvas-nav shared-shape pattern). Both ride the Row 2 · Do deliverables cluster (no pen — they read,
   // never author).
+  // The deliverables trigger (ADR-0090 M2-T4): one stop where there were three. It sits in the new
+  // `output` group at Row 2's trailing edge — the group renamed from the never-used `history`, so
+  // the taxonomy gained a home for "what the plan leaves as" without growing.
   const exportShape = {
     id: 'export',
-    group: 'object' as const,
+    group: 'output' as const,
     row: 'do' as const,
     tier: 2 as const,
-    order: 7,
-    label: 'Export…',
+    order: 0,
+    label: SHARE_EXPORT_LABEL,
     icon: <FileDown className="size-4" />,
-  };
-  const printShape = {
-    id: 'print',
-    group: 'object' as const,
-    row: 'do' as const,
-    tier: 2 as const,
-    order: 8,
-    label: 'Print…',
-    icon: <Printer className="size-4" />,
-  };
-  // Share (External-Guest per-plan link, VITE_GUEST_SHARE_LINKS; ADR-0051 F-M4) shared item shape — the
-  // id/group/row/tier/order/label/icon carried in BOTH its real (flag-on) item and its
-  // `placeholderItem()` (flag-off) stub, declared once and spread into both branches so they can't drift
-  // (mirrors the export/print/quick-wins shared-shape pattern). Rides the Row 2 · Do deliverables cluster
-  // (no pen — sharing grants read access, it doesn't author the plan).
-  const shareShape = {
-    id: 'share',
-    group: 'object' as const,
-    row: 'do' as const,
-    tier: 2 as const,
-    order: 9,
-    label: 'Share…',
-    icon: <Share2 className="size-4" />,
   };
   return defineToolbar<TsldToolbarContext>([
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -2230,41 +2250,25 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     EXPORT_PRINT_ENABLED
       ? {
           ...exportShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
+          // **Enabled when ANY row inside is actionable, not when the exports are** (ADR-0082, and
+          // the rule M2-T7 exists to pin). Gating the trigger on `hasDiagram` alone — which is what
+          // the first version did, inheriting the old Export button's gate — shut the whole menu on
+          // a plan with no computed diagram and took **Share** with it. Sharing needs a permission,
+          // not a schedule, so a Planner on a freshly created plan could share before this change
+          // and could not after: a capability lost to a relocation, which is the exact failure this
+          // milestone's suite-impact pass exists to catch.
+          //
+          // Each row keeps its own gate and its own reason; the trigger only asks whether there is
+          // anything at all behind it.
+          isEnabled: (ctx) => ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare),
+          disabledReason: (ctx) =>
+            ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare)
+              ? undefined
+              : EXPORT_NO_DIAGRAM_REASON,
           render: (ctx, api) => <ExportMenuControl ctx={ctx} api={api} />,
         }
       : placeholderItem(exportShape),
-    // Print… (export & print, `docs/specs/export-print/` §Milestone 4, CQ-4 — the image path) — the real
-    // browser-print action. Flag-on it prints the WHOLE diagram: `ctx.printDiagram()` reuses the M2
-    // off-screen PNG, mounts it into the print-only `PrintSurface` (a print stylesheet hides the app-shell
-    // `#root`), and opens the browser print dialog. A plain action button (no menu); gated on a computed
-    // diagram (disabled-with-reason "Add an activity first", shade-don't-hide), matching Export. Flag-off
-    // it's the byte-for-byte `placeholderItem()` "Coming soon" stub. `printShape` is spread into both so
-    // the two branches can't drift, exactly like `exportShape`.
-    EXPORT_PRINT_ENABLED
-      ? {
-          ...printShape,
-          isEnabled: (ctx) => ctx.hasDiagram,
-          disabledReason: (ctx) => (ctx.hasDiagram ? undefined : EXPORT_NO_DIAGRAM_REASON),
-          onActivate: (ctx) => ctx.printDiagram(),
-        }
-      : placeholderItem(printShape),
-    // Share… (External-Guest per-plan link, `docs/specs/external-guest-share-link/`; ADR-0051 F-M4) —
-    // flag-on it opens the member `ShareLinksDialog` (create / list / revoke), additionally gated on the
-    // caller holding `plan:share` (`ctx.canShare`, Planner + Org Admin) — a Viewer/Contributor sees it
-    // shaded with a reason (shade-don't-hide). Flag-off it is the byte-for-byte `placeholderItem()`
-    // "Coming soon" stub. `shareShape` is spread into both branches so the two can't drift (mirrors
-    // export/print). Not pen-gated — sharing grants read access, it doesn't author the plan.
-    GUEST_SHARE_LINKS_ENABLED
-      ? {
-          ...shareShape,
-          isEnabled: (ctx) => ctx.canShare,
-          disabledReason: (ctx) =>
-            ctx.canShare ? undefined : 'You don’t have permission to share this plan',
-          onActivate: (ctx) => ctx.openShare(),
-        }
-      : placeholderItem(shareShape),
+    // `share` folded INTO the Share & export menu in ADR-0090 M2-T4 — see `ExportMenuControl`.
     // Comments — reveals + focuses the plan-level notes thread (toolbar quick-wins F2). Read action for
     // every role; absent when `VITE_NOTES` is off (there is nothing to reveal). Flag-off it is the
     // "Coming soon" placeholder, byte-for-byte.

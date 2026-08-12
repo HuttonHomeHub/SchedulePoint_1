@@ -176,7 +176,7 @@ const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
   find: 'Find',
   tools: 'Author',
   object: 'Plan actions',
-  history: 'History',
+  output: 'Share & export',
   help: 'Help',
 };
 

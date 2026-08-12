@@ -56,7 +56,7 @@ const GROUP_LABELS = {
   find: 'Find',
   tools: 'Author',
   object: 'Plan actions',
-  history: 'History',
+  output: 'Share & export',
   help: 'Help',
 };
 

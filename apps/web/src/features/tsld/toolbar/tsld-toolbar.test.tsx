@@ -305,7 +305,9 @@ describe('TSLD toolbar registry (two-row)', () => {
     // placeholder was NOT left behind on Row 1: a placeholder occupying the width the live control
     // just vacated defeats the move exactly. Flag-off, `View ▾`'s Insight section has no colour
     // group at all.
-    for (const name of ['Export…', 'Print…', 'Share…']) {
+    // Print and Share folded into the Share & export menu in ADR-0090 M2-T4, and Export became that
+    // menu's trigger — so only one top-level placeholder remains where three stood.
+    for (const name of ['Share & export']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveAttribute('title', `${name} — Coming soon`);

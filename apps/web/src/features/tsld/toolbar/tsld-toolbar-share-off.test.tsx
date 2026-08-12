@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -33,14 +33,27 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
+/**
+ * Open the **Share & export** trigger (ADR-0090 M2-T4) and return to the caller.
+ *
+ * Share was its own Row-2 button; it is a row in this menu now. What the assertions below prove is
+ * unchanged — that is the point of re-homing them rather than rewriting them.
+ */
+function openDeliver(): void {
+  const trigger = screen.getByRole('button', { name: /Share & export/ });
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+}
+
 describe('TSLD toolbar Share (VITE_GUEST_SHARE_LINKS off — rollback)', () => {
-  it('keeps the share id as a "Coming soon" placeholder, byte-for-byte', () => {
+  it('offers no Share row at all inside Share & export', () => {
+    // Share moved into the Share & export menu in ADR-0090 M2-T4 and took its flag with it. Its
+    // Row-2 "Coming soon" placeholder is NOT reproduced as a menu row — the M2-T2 precedent: a
+    // placeholder earns its place on a persistent row a planner scans, not inside a menu they have
+    // to open to find it. So flag-off there is simply no such row, which is what this pins.
     const openShare = vi.fn();
     renderRows(ctx({ openShare, canShare: true }));
-    const btn = screen.getByRole('button', { name: 'Share…' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Share… — Coming soon');
-    // The placeholder is never wired to the opener even for a permitted caller.
+    openDeliver();
+    expect(screen.queryByRole('menuitem', { name: 'Share…' })).not.toBeInTheDocument();
     expect(openShare).not.toHaveBeenCalled();
   });
 });
