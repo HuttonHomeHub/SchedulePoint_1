@@ -1,5 +1,18 @@
 # @repo/web
 
+## 0.86.1
+
+### Patch Changes
+
+- [#299](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/299) [`3719166`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3719166a27f562ab57028d207e8a2f10dd70d5a3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Toolbar commands keep their text labels on a Surface Pro. Both rows were withholding every label
+  while sitting roughly half empty — the first row because the project-finish date beside it made the
+  row _measure_ itself as narrow, and the second because the full set of labels was about 95 px too
+  wide and labelling is all-or-nothing per row.
+
+  Three of the longest labels are shorter: **Auto-arrange lanes → Arrange**, **Schedule settings… →
+  Settings…**, **Marquee select → Select**. The full wording is still the hover tooltip and is still
+  what a screen reader announces.
+
 ## 0.86.0
 
 ### Minor Changes
