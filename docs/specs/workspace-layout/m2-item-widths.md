@@ -280,6 +280,46 @@ That is the trade to put, and it should be put as a trade rather than as a recom
 commands at 1920, or three fewer commands on the row. `design.md` §1.4 criterion 1 assumed the first
 was free.
 
+## M2 complete — both rows, measured
+
+|                           | M2 start |     now |
+| ------------------------- | -------: | ------: |
+| Row 1 items               |       25 |  **17** |
+| Row 1 pinned floor        |     1198 | **784** |
+| Row 2 items               |       19 |  **15** |
+| Toolbar stops (both rows) |       44 |  **32** |
+
+Row 1 at 1920 holds 16 of 17 inline; Row 2 holds all 15 with 851 px against an 1832 px container.
+
+### The label question, both rows, at 1920
+
+**Row 1 — short by ≈360 px.** Seven `'auto'` items; removing one saves its label, its icon width and
+a gap: `shortcuts` 171, `next-conflict` 126, `float-paths` 119. Any two save 245–297 and do not
+clear it; **all three** save 416 and do.
+
+**Row 2 — short by ≈128 px**, which is a different order of problem. Eight `'auto'` items, and their
+labels are much wider than Row 1's:
+
+| label                           | icon-only | labelled | label cost |
+| ------------------------------- | --------: | -------: | ---------: |
+| `clear-visual-placement`        |        32 |      199 |    **167** |
+| `auto-arrange`                  |        32 |      172 |        140 |
+| `calendar` (Schedule settings…) |        32 |      177 |        145 |
+| `update-progress`               |        32 |      163 |        131 |
+| `snap-to-grid`                  |        32 |      124 |         92 |
+| `comments`                      |        32 |      114 |         82 |
+| `marquee-select`                |        32 |      145 |        113 |
+| `add-note`                      |        32 |      101 |         69 |
+
+`clear-visual-placement` alone (167 + 32 + 4 = 203) clears Row 2's gap with room to spare — and it
+is the narrowest-purpose command on the row: it only does anything in Visual scheduling mode, and it
+is pen-gated on top of that.
+
+**So the two rows have different answers**, which is worth saying plainly because a single
+"labels at 1920" verdict would be wrong for one of them. Row 2 is one cut away. Row 1 needs three,
+two of which — `next-conflict` and `float-paths` — are logic-tracing commands rather than
+conveniences.
+
 ## Follow-ups this task opens
 
 - ~~**Fix the `labelled` flag**~~ — done in this task; `visibleText` / `labelWidth` / `nameWidth`
