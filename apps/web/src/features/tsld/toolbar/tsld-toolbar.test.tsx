@@ -106,9 +106,11 @@ beforeEach(() => vi.clearAllMocks());
 describe('TSLD toolbar registry (two-row)', () => {
   it('renders the frame controls and drives the canvas seam', () => {
     renderRows(ctx());
-    // Zoom level is a single dropdown now (not five buttons): open it and pick a level.
-    fireEvent.click(screen.getByRole('button', { name: 'Zoom level: Week' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Month' }));
+    // The presets left the bar for the `View ▾` panel (ADR-0091 D3); −/+ and Fit stayed inline.
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'View' })).getByRole('radio', { name: /Month/ }),
+    );
     expect(spies.setZoomPreset).toHaveBeenCalledWith('month');
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(spies.stepZoom).toHaveBeenCalledWith(2);
@@ -116,19 +118,16 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(spies.fit).toHaveBeenCalledOnce();
   });
 
-  it('reflects the active scale preset on the zoom trigger and menu', () => {
+  it('reflects the active scale preset in the View panel', () => {
     renderRows(ctx({ zoomPreset: 'month' }));
-    const trigger = screen.getByRole('button', { name: 'Zoom level: Month' });
-    expect(trigger).toBeInTheDocument();
-    fireEvent.click(trigger);
-    expect(screen.getByRole('menuitemradio', { name: 'Month' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    expect(screen.getByRole('menuitemradio', { name: 'Week' })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    );
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const group = within(screen.getByRole('dialog', { name: 'View' })).getByRole('radiogroup', {
+      name: 'Zoom level',
+    });
+    // Native radios, so `toBeChecked` rather than an `aria-checked` string — the move from
+    // `menuitemradio` to `<input type="radio">` is the whole reason this assertion changed shape.
+    expect(within(group).getByRole('radio', { name: /Month/ })).toBeChecked();
+    expect(within(group).getByRole('radio', { name: /Week/ })).not.toBeChecked();
   });
 
   it('opens the View popover and toggles a display layer', () => {
@@ -255,10 +254,9 @@ describe('TSLD toolbar registry (two-row)', () => {
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('button', { name: 'Zoom level: Week' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    // The zoom PRESETS are no longer a bar control to shade (ADR-0091 D3) — they live in `View ▾`,
+    // which stays available on an empty plan for the same reason the other display toggles do.
+    // What the silhouette argument still covers is the −/+ and Fit cluster, asserted above.
     // View stays available (display toggles apply to the empty canvas too). The presentational
     // finish read-out is still gated on a computed finish — it's a value, not a control.
     expect(screen.getByRole('button', { name: /View/ })).toBeInTheDocument();

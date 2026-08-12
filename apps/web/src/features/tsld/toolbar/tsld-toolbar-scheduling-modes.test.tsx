@@ -27,7 +27,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   });
 }
 
-/** Render the Row 1 · Look toolbar (Go-to-date, the mode selector, the View popover live here). */
+/** Render the Row 1 · Look toolbar (Go-to-date and the View popover live here). */
 function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
@@ -37,6 +37,24 @@ function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
       label="View and navigate"
       authoringEnabled={authoringEnabled}
       alignEndGroup="object"
+    />,
+  );
+}
+
+/**
+ * Render the **mode row**, where the `Early | Visual` selector moved at ADR-0091 D1 — it sets how
+ * the plan schedules rather than doing anything, so it now sits beside the pen on the identity line
+ * instead of inside Row 1's `Display` group.
+ */
+function renderModeRow(context: TsldToolbarContext, authoringEnabled = true) {
+  const rows = splitByRow(buildTsldToolbarItems());
+  return render(
+    <Toolbar
+      items={rows.mode}
+      context={context}
+      label="Plan mode"
+      authoringEnabled={authoringEnabled}
+      groupLabels={{ lens: 'Scheduling and view' }}
     />,
   );
 }
@@ -87,7 +105,7 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
 
   it('offers an Early | Visual mode selector (labelled), marks the active mode, and switches', () => {
     const setSchedulingMode = vi.fn();
-    renderToolbar(ctx({ schedulingMode: 'EARLY', setSchedulingMode }));
+    renderModeRow(ctx({ schedulingMode: 'EARLY', setSchedulingMode }));
     const early = screen.getByRole('button', { name: 'Early mode' });
     const visual = screen.getByRole('button', { name: 'Visual mode' });
     // The buttons carry visible text (tier-1), not just an aria-label (ux/a11y: no blank buttons).
@@ -101,7 +119,7 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
 
   it('keeps the mode selector visible but shaded for a read-only viewer (shade-don’t-hide)', () => {
     const setSchedulingMode = vi.fn();
-    renderToolbar(ctx({ setSchedulingMode: null, schedulingMode: 'VISUAL' }));
+    renderModeRow(ctx({ setSchedulingMode: null, schedulingMode: 'VISUAL' }));
     const early = screen.getByRole('button', { name: 'Early mode' });
     const visual = screen.getByRole('button', { name: 'Visual mode' });
     // The selector stays on the bar — the mode changes how the diagram reads, so a viewer must see it…
@@ -120,6 +138,28 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
     const panel = screen.getByRole('dialog', { name: 'View' });
     fireEvent.click(within(panel).getByLabelText('Late-start overlay'));
     expect(toggleView).toHaveBeenCalledWith('lateOverlay');
+  });
+
+  /**
+   * ADR-0091 D3 relocates the zoom presets into `View ▾`. This asserts the section RENDERS and
+   * OPERATES, not merely that it is registered — the `zoom` group carries no toggle keys and no
+   * lenses, so the panel's emptiness guard dropped it on the first attempt and the section was
+   * registered, ordered, typed and unreachable. That is the ADR-0081 shape, and no typecheck sees
+   * it.
+   */
+  it('offers the zoom presets as a radio group in View ▾ and sets the preset', () => {
+    const setZoomPreset = vi.fn();
+    // `zoomPreset` is pinned to a level we are NOT clicking: a radio that is already checked fires
+    // no change event, so clicking the default would assert nothing and pass for the wrong reason.
+    renderToolbar(ctx({ setZoomPreset, hasDiagram: true, zoomPreset: 'day' }));
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    const group = within(panel).getByRole('radiogroup', { name: 'Zoom level' });
+    // Exclusive by construction — the levels are alternatives, so a checkbox set would let a
+    // planner ask for two framings at once.
+    expect(within(group).getByRole('radio', { name: /Day/ })).toBeChecked();
+    fireEvent.click(within(group).getByRole('radio', { name: /Month/ }));
+    expect(setZoomPreset).toHaveBeenCalledWith('month');
   });
 
   it('groups the View popover into Structure / Markers / Insight overlays, Late-start overlay as an ordinary insight member', () => {

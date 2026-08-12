@@ -2420,3 +2420,35 @@ ruled out (`docs/specs/workspace-layout/m3-narrow-widths.md`).
 
 **What to do:** build the tooltip primitive, then adopt it on `ToolbarButton` and `ToolbarPopover`
 together, rather than on whichever control someone is holding at the time.
+
+## 132. `mail-alerting.e2e-spec.ts` sees its own writes late, and the two cases then swap answers
+
+**Observed in CI, 2026-08-12**, on a branch that changes **zero files under `apps/api`** (verified:
+`git diff --name-only origin/main...HEAD | grep -c '^apps/api'` → 0). So it is a pre-existing flake
+surfacing, not a regression from the change under review — worth recording precisely because the
+next reader will meet it on an unrelated PR and start looking in the wrong place.
+
+Both cases in the file failed together, and the pair is the diagnosis:
+
+```
+expected [ { …(7) } ] to have a length of 5 but got 1   (test 1, :147)
+expected 5 to be 1                                       (test 2, :182)
+```
+
+Test 1 sends five messages and asserts five `mail_events` rows; it saw **one**. Test 2 asserts
+exactly one row; it saw **five**. The other four arrived between the two assertions — so `settle()`
+is not waiting for all five **fire-and-forget** writes, and the rows land during the next test.
+
+Two things follow. The obvious fix is to make `settle()` wait on the row count rather than on a
+fixed delay — test 2 already does exactly that (`for (let i = 0; i < 50 && count === 0; i++)`), so
+the pattern is in the file, applied to one case and not its neighbour. The less obvious one is that
+test 2's own poll waits for `count === 0` to become false, which the leaked rows satisfy
+**immediately** — its wait cannot distinguish its own write from test 1's, which is why it reports a
+confident 5 rather than timing out.
+
+The file's docblock records that a `reset()` for tests was considered and rejected, for a good
+reason (a production-caller-less method existing only to make an assertion true). That argument is
+about isolation, not about waiting, and does not cover this.
+
+**Impact:** a red CI run on an unrelated PR, roughly one run in several. **Fix:** wait on the
+expected count in test 1, and give test 2 a wait that is specific to its own row.

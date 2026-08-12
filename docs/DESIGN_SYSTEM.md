@@ -146,6 +146,35 @@ Prefer `border` + low elevation on light surfaces; avoid stacking heavy shadows.
 Mobile-first Tailwind defaults: `sm 40rem` · `md 48rem` · `lg 64rem` ·
 `xl 80rem` · `2xl 96rem`. Primary layout shift (sidebar ⇄ drawer) at `lg`.
 
+#### The toolbar layout-mode ladder (ADR-0090)
+
+A dense command row does **not** use the breakpoints above, and the difference is deliberate rather
+than an oversight: those are **viewport** widths, and a toolbar's problem is the width of **its own
+container** — a row inside a panel beside an open activity editor has a fraction of the viewport to
+work with, and a viewport media query cannot see that. So the ladder is resolved from the measured
+container via `resolveLayoutMode(width, current)`
+(`apps/web/src/components/ui/toolbar/toolbar-registry.ts`):
+
+| mode          | container ≥ | what changes                                  |
+| ------------- | ----------- | --------------------------------------------- |
+| `comfortable` | 1536 px     | labels where `showLabel: 'auto'` affords them |
+| `compact`     | 1280 px     | tighter control padding, fewer labels         |
+| `condensed`   | 1024 px     | icon-only for most groups                     |
+| `collapsed`   | 0           | the minimum that still reaches every command  |
+
+Two properties are load-bearing and easy to lose in a refactor:
+
+- **Hysteresis is asymmetric.** A row narrows immediately but only widens after clearing the target
+  rung's floor by `TOOLBAR_LAYOUT_HYSTERESIS_PX` (48 px), walking **one rung at a time**. Narrowing
+  late clips controls; widening early makes a window-edge drag re-lay the row out on every pixel of
+  hand tremor.
+- **A preset is a command, not a derivation.** Resizing preserves the scale a user chose; it never
+  re-derives it (ADR-0056).
+
+Authoring rule: a control's `showLabel` is **presentation** and its `tier` is **priority**. Do not
+conflate them — they were one property once, which meant a static per-item flag decided a question
+that is really about the width available at render time (ADR-0031, TECH_DEBT #61).
+
 ### Dark & light mode
 
 Both are first-class. Preference is light / dark / **system**; the `.dark` class
@@ -677,6 +706,21 @@ field hint says so in a sentence.
   or date formats — i18n is on the [roadmap](ROADMAP.md).
 - Microcopy: plain, concise, sentence case; consistent terminology; actionable
   error and empty-state text.
+
+### The `…` convention on control labels (ADR-0091)
+
+An ellipsis means **activating this opens something that needs more input before anything happens** —
+`Schedule settings…`, `Report progress…`. It is a promise that nothing is about to change yet.
+
+A control that already renders a **disclosure caret** does not take one. The caret has said it, and
+saying it twice is noise on a dense row. So `Go to date` is correct without an ellipsis: it is a
+`ToolbarPopover`, and that primitive always renders a `ChevronDown`.
+
+This was raised as an inconsistency and audited before anything was edited; under the rule that
+actually applies, **the set was already consistent**, so the audit's outcome was to write the rule
+down rather than change a label. `ellipsis-convention.structural.test.ts` gates the half a machine
+can see — a disclosure item must never carry the character — and says in its own docblock that the
+converse is a review question, not something the gate covers.
 
 ## Governance
 

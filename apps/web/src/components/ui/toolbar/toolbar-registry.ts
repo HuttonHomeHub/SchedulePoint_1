@@ -131,7 +131,30 @@ export function resolveLayoutMode(width: number, current: ToolbarLayoutMode): To
  * - `'auto'` (default) — labelled **only when the row measurably has room**, decided per render
  *   from the container's width. Never at the cost of demoting a command into the overflow.
  */
-export type ToolbarLabelPolicy = 'always' | 'auto' | 'never';
+export type ToolbarLabelPolicy =
+  | 'always'
+  | 'auto'
+  | 'never'
+  /**
+   * Labelled at this band and wider, icon-only below it (ADR-0091 D3a). Distinct from `'auto'`,
+   * which is a *projected-width* decision taken **all-or-nothing for the whole row**
+   * (`autoLabelsFit`) — so an `'auto'` item follows the collective fate of its neighbours and will
+   * label at a narrow band that happens to have slack. A band rule is the opposite: it is per-item
+   * and it is about the shape of the window, which is what D3a's 1440 finding was measured against.
+   */
+  | { atLeast: ToolbarLayoutMode };
+
+/**
+ * Is `layout` at least as wide as `atLeast`? Rung index is the ladder's own ordering — **lower index
+ * is wider** ({@link TOOLBAR_LAYOUT_BANDS} is widest-first) — so "at least as wide" is `<=`. Derived
+ * from the same array `resolveLayoutMode` walks rather than from a second table, which is the
+ * property that stops the two disagreeing about where a band begins.
+ */
+export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutMode): boolean {
+  const at = TOOLBAR_LAYOUT_BANDS.findIndex((b) => b.mode === layout);
+  const floor = TOOLBAR_LAYOUT_BANDS.findIndex((b) => b.mode === atLeast);
+  return at >= 0 && floor >= 0 && at <= floor;
+}
 
 /**
  * Which of the two toolbar rows an item belongs to (ADR-0031 two-row amendment). `look` = the
@@ -139,7 +162,7 @@ export type ToolbarLabelPolicy = 'always' | 'auto' | 'never';
  * shades as a set). Absent ⇒ `look`. The workspace renders one {@link Toolbar} per row, so this only
  * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
  */
-export type ToolbarRow = 'look' | 'do';
+export type ToolbarRow = 'mode' | 'look' | 'do';
 
 /**
  * What the row's current width means, handed to the two places a consumer can act on it: an item's
@@ -202,12 +225,17 @@ export interface ToolbarItem<Ctx> {
    * `'never'` to pin it icon-only. See {@link ToolbarLabelPolicy}; ignored by `render` items, which
    * own their own chrome.
    *
-   * **Not a function of the row's band, and that was tried** (ADR-0090 M3-T2). The plan's *"segments
-   * become icon pairs"* needs one — but the four segment items it names carry **no `icon`**, so
-   * dropping their labels renders four blank 16 px buttons, which `e2e-toolbar-fit` S5 caught as a
-   * WCAG 2.5.8 failure the same hour. Giving them icons is a design decision about what `Early` and
-   * `Visual` scheduling look like, not a layout one; recorded as `docs/TECH_DEBT.md` #126 rather
-   * than guessed, and the primitive widening reverted with it so no untested branch ships.
+   * **A band form exists as of ADR-0091 D3a** — `{ atLeast: 'comfortable' }` labels at that band and
+   * wider, icon-only below.
+   *
+   * It was tried once before and reverted (ADR-0090 M3-T2): the plan's *"segments become icon
+   * pairs"* needed it, but the four segment items it named carried **no `icon`**, so dropping their
+   * labels rendered four blank 16 px buttons and `e2e-toolbar-fit` S5 caught the WCAG 2.5.8 failure
+   * the same hour. The widening was reverted with the task so no untested branch shipped, and the
+   * blocker was recorded as `docs/TECH_DEBT.md` #126 rather than guessed at. **That reason is now
+   * spent**: ADR-0091 D5 gave those four items icons, chosen by the product owner and registered in
+   * `scripts/dependency-claims.json`, so the revert's premise no longer holds and the form returns
+   * with its first honest consumer.
    */
   showLabel?: ToolbarLabelPolicy;
   /**
@@ -387,21 +415,45 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
     }
   }
 
+  // The same guard one axis over, and for the same reason (ADR-0091 M1, B2). `companionsOf` resolves
+  // a pair from **one row's** `bar`, so a `demotionGroup` split across rows loses its companion
+  // entirely: each half then demotes on its own row's arithmetic, which is the split segment the
+  // block above exists to prevent — arrived at through a door that did not exist until now. Two rows
+  // made this impossible to express; a third makes it a one-character typo in `row`.
+  const rowByGroup = new Map<string, ToolbarRow>();
+  for (const item of items) {
+    if (!item.demotionGroup) continue;
+    const row = item.row ?? 'look';
+    const seen = rowByGroup.get(item.demotionGroup);
+    if (seen === undefined) rowByGroup.set(item.demotionGroup, row);
+    else if (seen !== row) {
+      throw new Error(
+        `defineToolbar: demotionGroup "${item.demotionGroup}" spans rows "${seen}" and "${row}" — ` +
+          'companions must share a row, or they cannot demote as one unit.',
+      );
+    }
+  }
+
   return items;
 }
 
 /**
- * Partition a registry into the two toolbar rows (ADR-0031 two-row amendment). Items with no `row`
- * default to `look`. Pure — the workspace renders one {@link Toolbar} per returned array.
+ * Partition a registry into the toolbar rows (ADR-0031 two-row amendment; `mode` added by ADR-0091
+ * D1). Items with no `row` default to `look`. Pure — the workspace renders one {@link Toolbar} per
+ * returned array.
+ *
+ * **Keyed by a `Record<ToolbarRow, …>` rather than by a ternary, deliberately.** This was
+ * `((item.row ?? 'look') === 'do' ? build : look)`, which is total for two rows and silently
+ * mis-partitions for three: adding `'mode'` to the union compiles clean against that body and drops
+ * every mode item into `look`, i.e. leaves them exactly where they were while the registry says
+ * they moved. Indexing a record seeded with all three keys makes a fourth row a **typecheck
+ * failure** at the seed instead. The mis-partition would have been invisible to the type system,
+ * which is what makes it worth the extra three lines (ADR-0091 M1, B1).
  */
-export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): {
-  look: ToolbarItem<Ctx>[];
-  do: ToolbarItem<Ctx>[];
-} {
-  const look: ToolbarItem<Ctx>[] = [];
-  const build: ToolbarItem<Ctx>[] = [];
-  for (const item of items) ((item.row ?? 'look') === 'do' ? build : look).push(item);
-  return { look, do: build };
+export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, ToolbarItem<Ctx>[]> {
+  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { mode: [], look: [], do: [] };
+  for (const item of items) rows[item.row ?? 'look'].push(item);
+  return rows;
 }
 
 /**

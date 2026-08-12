@@ -83,6 +83,13 @@ const MD_QUERY = '(min-width: 48rem)';
 const ROW_LOOK_GROUP_LABELS = { object: 'Plan info' } as const;
 
 /**
+ * The mode row's `lens` group name (ADR-0091 D1). Overridden because the shared default is
+ * "Display", which is simultaneously Row 1's `lens` group name — leaving two on-screen regions with
+ * one name, and announcing "Plan mode, toolbar" then "Display, group" for a cluster that is neither.
+ */
+const ROW_MODE_GROUP_LABELS = { lens: 'Scheduling and view' } as const;
+
+/**
  * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5 — see below).
  *
  * A ux review once asked for them, and the plan committed to removing them again with the
@@ -810,13 +817,6 @@ export function ToolbarPlanWorkspace({
             <div className="flex min-w-0 items-center gap-2">
               <Breadcrumbs items={crumbs} />
               <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-              {/* The Project-finish read-out (ADR-0090 M2-T3), moved off Row 1 where it was a
-                  non-operable stop inside a `role="toolbar"` costing 150 px of pinned width. It self-
-                  hides until the plan has been calculated, so the header shows nothing rather than an
-                  em dash on a fresh plan. */}
-              <span className="ml-1 hidden shrink-0 items-center text-sm sm:inline-flex">
-                <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
-              </span>
               {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
                   the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
               {model.canWrite ? (
@@ -832,10 +832,41 @@ export function ToolbarPlanWorkspace({
                 </Button>
               ) : null}
             </div>
-            <CompactPenStatus
-              pen={model.pen}
-              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-            />
+            {/* The **mode row** (ADR-0091 D1), beside the pen because that is what it is: `Early |
+                Visual` and `Diagram | Gantt` do not *do* anything, they set how everything below
+                behaves — which is exactly `Start editing`'s relationship to the toolbar. It renders
+                as a third `<Toolbar>` rather than four hand-rolled segmented buttons, so it keeps
+                roving tabindex, group labelling, ADR-0082 reason wiring, `demotionGroup` pairing
+                and the fit gate's reach; this register has recorded each of those shipping wrong
+                once.
+
+                Wrapped WITH the pen so the identity line keeps exactly two children — it is
+                `justify-between`, and a third child would spread it into thirds.
+
+                NOT a nested `ChromePortal`: we are already inside one, and a second would read the
+                same context node and render this as a sibling of the band's children, i.e. below
+                Row 2. `shrink-0` (never `flex-1`) because `Toolbar`'s container carries `min-w-0`,
+                so a default-shrinking mode row squeezes below its content width on a narrow band
+                and starts demoting — putting an armed mode behind a `⋯`, which is the ADR-0064
+                dead-end. The breadcrumb cluster wraps instead; it already truncates. */}
+            <div className="flex shrink-0 items-center gap-3">
+              <Toolbar
+                items={rows.mode}
+                context={ctx}
+                label="Plan mode"
+                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                // All four are `group: 'lens'`, whose default label is "Display" — which is also
+                // Row 1's `lens` group name, so unoverridden this announces a second, unrelated
+                // name for the cluster AND collides with a region one row below. Same class as
+                // ADR-0090 M5's `output` → "Deliver" rename.
+                groupLabels={ROW_MODE_GROUP_LABELS}
+                className="shrink-0"
+              />
+              <CompactPenStatus
+                pen={model.pen}
+                {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+              />
+            </div>
           </div>
 
           {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise
@@ -858,6 +889,24 @@ export function ToolbarPlanWorkspace({
               groupLabels={ROW_LOOK_GROUP_LABELS}
               className="flex-1"
             />
+            {/* The Project-finish read-out, back beside `Summary ▾` — a direct product-owner request
+                ("i did like the finish date next to the summary before"), and the last thing the
+                cancelled three-band merge was going to carry.
+
+                Rendered as the toolbar's SIBLING, not as a registry item, which is what lets it sit
+                there without undoing ADR-0090 M2-T3: on Row 1 it was a non-operable stop inside a
+                `role="toolbar"`, costing 150 px of pinned width and putting a read-out in the
+                arrow-key sequence. `alignEndGroup="object"` already parks `Summary ▾` at the
+                toolbar's trailing edge, so the next sibling lands visually beside it while staying
+                outside the widget.
+
+                Affordable now, and that is measured rather than assumed: after M3, Row 1 carries
+                792 px of slack at 1920 and 272 px at 768 (`item-widths`, 2026-08-12). It still
+                self-hides until the plan has been calculated, so a fresh plan shows nothing rather
+                than an em dash. */}
+            <span className="hidden shrink-0 items-center text-sm sm:inline-flex">
+              <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
+            </span>
           </div>
           <div className="flex items-center gap-2 px-2 py-1">
             <Toolbar

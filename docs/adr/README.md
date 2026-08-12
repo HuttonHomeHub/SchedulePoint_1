@@ -114,3 +114,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0088](0088-flag-classification.md)                                       | Feature flags are classified, not scheduled        | Proposed           |
 | [0089](0089-activity-field-vocabulary.md)                                 | One activity field vocabulary                      | Accepted           |
 | [0090](0090-the-plan-workspace-command-surface.md)                        | The plan-workspace command surface                 | Accepted           |
+| [0091](0091-modes-density-and-the-command-band.md)                        | A mode is not a command                            | Proposed           |

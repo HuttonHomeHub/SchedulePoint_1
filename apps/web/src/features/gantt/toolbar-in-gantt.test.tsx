@@ -47,10 +47,15 @@ describe('canvas viewport commands in the Gantt', () => {
 });
 
 describe('the zoom preset', () => {
-  // The preset is what the Gantt derives its scale from (ADR-0059 §2). Shading it would leave the
-  // Gantt stuck at whatever scale the canvas last set.
-  it('stays enabled in the Gantt', () => {
-    expect(item('zoom-preset').isEnabled?.(inGantt)).toBe(true);
+  // The preset is what the Gantt derives its scale from (ADR-0059 §2), so it must stay REACHABLE in
+  // the Gantt — otherwise the Gantt is stuck at whatever scale the canvas last set.
+  //
+  // ADR-0091 D3 moved the presets off the toolbar into the `View ▾` panel, so the thing to assert is
+  // that their new host is enabled here. The old assertion named `zoom-preset`, an id that no longer
+  // exists; left alone it would have thrown on a missing item rather than failing on the property,
+  // which is why the id is not simply swapped for the panel's.
+  it('keeps its host (View ▾) enabled in the Gantt, so the scale is still reachable', () => {
+    expect(item('view').isEnabled?.(inGantt)).not.toBe(false);
   });
 });
 

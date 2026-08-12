@@ -59,10 +59,19 @@ canvas UI state. Commands are _data_; `<Toolbar>` is generic. Built behind a new
 A `ToolbarItem` is a plain object:
 
 ```
-ToolbarItem = { id, group, tier, showLabel, order, icon, label, penGated,
+ToolbarItem = { id, group, tier, priority?, showLabel, order, icon, label, penGated,
                 isVisible(ctx), isEnabled(ctx), isActive(ctx),
                 onActivate(ctx) | render(ctx) }
 ```
+
+> **`priority` added to this recipe 2026-08-12 (ADR-0091 M0).** It is a real field
+> (`toolbar-registry.ts:237`, consumed at `:517`), added by ADR-0090 M1-T6/T7, and this shape had
+> omitted it ever since — while the paragraph immediately below still says, flatly, that `tier`
+> **is** priority. That was true when written and became misleading the day the field landed:
+> `tier` decides which items are candidates for the row, `priority` orders demotion **within** it,
+> and `order` answers "where does this sit in its group". "What demotes first" therefore has two
+> inputs, and the recipe named neither. ADR-0090's own Follow-ups called for this edit; it never
+> landed, which is the drift shape that ADR records naming.
 
 `tier` and `showLabel` are separate on purpose (added 2026-07-27, TECH_DEBT #61): `tier` is
 **priority** — what demotes into `⋯` first — and `showLabel` (`'always' | 'auto' | 'never'`,

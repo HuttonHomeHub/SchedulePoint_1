@@ -7,6 +7,7 @@ import {
   partitionByTier,
   resolveItems,
   resolveLayoutMode,
+  splitByRow,
   TOOLBAR_LAYOUT_HYSTERESIS_PX,
   type ResolvedToolbarItem,
   type ToolbarItem,
@@ -491,5 +492,59 @@ describe('defineToolbar — demotionGroup companions share a tier', () => {
     // the segment would split: one half always in the `⋯`, the other only sometimes. That is the
     // exact state `demotionGroup` exists to prevent, and it would look correct in the registry.
     expect(() => defineToolbar([seg('left', 1), seg('right', 3)])).toThrow(/view-mode/);
+  });
+});
+
+/**
+ * **The `demotionGroup` row invariant** (ADR-0091 M1, B2). The same guard one axis over, added with
+ * the `mode` row because a third row is the first thing that makes splitting a pair across rows
+ * expressible at all — before it, `row` had two values and both companions were always on one of
+ * them. `companionsOf` resolves a pair from ONE row's `bar`, so a split pair loses its companion
+ * entirely and each half demotes on its own row's arithmetic.
+ *
+ * Verified red by removing the row check from `defineToolbar`.
+ */
+describe('defineToolbar — demotionGroup companions share a row', () => {
+  const seg = (id: string, row: 'mode' | 'look' | 'do'): ToolbarItem<Ctx> =>
+    base({ id, tier: 1, row, demotionGroup: 'view-mode', isActive: () => false });
+
+  it('accepts a pair on the same row', () => {
+    expect(() => defineToolbar([seg('left', 'mode'), seg('right', 'mode')])).not.toThrow();
+  });
+
+  it('treats an absent row as `look`, so a bare pair still agrees', () => {
+    const bare = (id: string): ToolbarItem<Ctx> =>
+      base({ id, tier: 1, demotionGroup: 'view-mode', isActive: () => false });
+    expect(() => defineToolbar([bare('left'), seg('right', 'look')])).not.toThrow();
+  });
+
+  it('rejects a pair whose rows disagree, naming both rows', () => {
+    expect(() => defineToolbar([seg('left', 'mode'), seg('right', 'look')])).toThrow(
+      /spans rows "mode" and "look"/,
+    );
+  });
+});
+
+/**
+ * `splitByRow` is total by construction (ADR-0091 M1, B1) — it was a ternary, which is total for two
+ * rows and silently routes a third into `look`.
+ */
+describe('splitByRow — every row is a key, and the default is `look`', () => {
+  it('partitions all three rows and defaults a row-less item to look', () => {
+    const rows = splitByRow([
+      base({ id: 'm', tier: 1, row: 'mode' }),
+      base({ id: 'l', tier: 1, row: 'look' }),
+      base({ id: 'd', tier: 1, row: 'do' }),
+      base({ id: 'bare', tier: 1 }),
+    ]);
+    expect(rows.mode.map((i) => i.id)).toEqual(['m']);
+    expect(rows.look.map((i) => i.id)).toEqual(['l', 'bare']);
+    expect(rows.do.map((i) => i.id)).toEqual(['d']);
+  });
+
+  it('returns an entry for every row even when the registry is empty', () => {
+    // The mode row must exist as an empty array rather than `undefined`: the workspace renders
+    // `rows.mode` unconditionally, and a missing key is a crash rather than an empty toolbar.
+    expect(splitByRow([])).toEqual({ mode: [], look: [], do: [] });
   });
 });

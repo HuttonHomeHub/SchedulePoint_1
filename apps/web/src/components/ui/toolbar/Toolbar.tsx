@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   TOOLBAR_GROUPS,
+  bandIsAtLeast,
   computeOverflow,
   groupRank,
   partitionByTier,
@@ -10,7 +11,6 @@ import {
   type ResolvedToolbarItem,
   type ToolbarGroupId,
   type ToolbarItem,
-  type ToolbarLabelPolicy,
   type ToolbarLayoutMode,
 } from './toolbar-registry';
 import { ToolbarButton } from './ToolbarButton';
@@ -308,7 +308,7 @@ export function Toolbar<Ctx>({
     // for why that distinction is what keeps this from oscillating. An item already labelled is
     // costed at its live width; one still icon-only is costed at its live width plus the estimate.
     const autoItems = bar.filter(
-      (r) => typeof r.item.onActivate === 'function' && labelPolicy(r.item) === 'auto',
+      (r) => typeof r.item.onActivate === 'function' && labelPolicy(r.item, layout) === 'auto',
     );
     if (autoItems.length === 0) {
       setAutoLabelsFit(false);
@@ -519,8 +519,8 @@ export function Toolbar<Ctx>({
                 // Presentation reads the item's own label policy — never its `tier`, which is
                 // priority and answers a different question (TECH_DEBT #61).
                 showLabel={
-                  labelPolicy(r.item) === 'always' ||
-                  (labelPolicy(r.item) === 'auto' && autoLabelsFit)
+                  labelPolicy(r.item, layout) === 'always' ||
+                  (labelPolicy(r.item, layout) === 'auto' && autoLabelsFit)
                 }
                 {...(r.item.isActive ? { pressed: r.active } : {})}
                 disabled={!r.enabled}
@@ -561,8 +561,16 @@ export function Toolbar<Ctx>({
  * to decide presentation, which is the whole point of the split (TECH_DEBT #61): `tier` answers
  * "what demotes into `⋯` first", and nothing else.
  */
-function labelPolicy<Ctx>(item: ToolbarItem<Ctx>): ToolbarLabelPolicy {
-  return item.showLabel ?? 'auto';
+function labelPolicy<Ctx>(
+  item: ToolbarItem<Ctx>,
+  layout: ToolbarLayoutMode,
+): 'always' | 'auto' | 'never' {
+  const policy = item.showLabel ?? 'auto';
+  // The band form collapses to the two static answers here, so every call site downstream keeps
+  // seeing the three-value union it always did — the widening is contained to this function
+  // (ADR-0091 D3a).
+  if (typeof policy === 'object') return bandIsAtLeast(layout, policy.atLeast) ? 'always' : 'never';
+  return policy;
 }
 
 /** The shorthand `font` of a rendered control, for text measurement. Falls back to a sane default. */

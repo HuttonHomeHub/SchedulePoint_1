@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -288,19 +288,25 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     // behind so `<main>` keeps a heading. So the old anchor — the `<h1>`'s nearest `<header>` — no
     // longer identifies this row, and reaching for it would find the app header instead.
     renderScreen();
-    // Anchored on the row's own content rather than on a class or a tag: the pen status is the
-    // right-hand end of the identity line and the breadcrumb the left, so their common ancestor
-    // *is* the line. A `.closest('div')` from the chip would match its own wrapper.
+    // **Re-scoped a third time, for ADR-0091.** The read-out moved off the identity line and back
+    // beside `Summary ▾`, which is a direct product-owner request ("i did like the finish date next
+    // to the summary before") and was the last thing the cancelled three-band merge was going to
+    // carry. It is Row 1's SIBLING, not a registry item — which is what lets it sit there without
+    // undoing ADR-0090 M2-T3, whose point was that a non-operable read-out must not be a stop
+    // inside `role="toolbar"`.
+    //
+    // So the two things worth asserting are: it renders, and it is NOT inside the toolbar. The
+    // old identity-line anchor is gone with the move; keeping it re-scoped to "some div" would be
+    // the pass-for-a-new-reason failure this docblock was already written about once.
     const finish = screen.getByText('Finish');
-    const line = finish.closest('div.flex.flex-wrap');
-    expect(line).not.toBeNull();
-    expect(
-      within(line as HTMLElement).getByText(formatCalendarDate('2026-08-01')),
-    ).toBeInTheDocument();
-    // The ordering M4-T2 exists to produce: identity before commands, in the DOM, so a screen
-    // reader and a sighted user meet the plan's name and status before its verbs.
+    expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
+
     const row1 = screen.getByRole('toolbar', { name: 'View and navigate' });
-    expect(line!.compareDocumentPosition(row1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(row1.contains(finish)).toBe(false);
+    // …and it sits immediately after that toolbar, which is what puts it beside `Summary ▾` — the
+    // `object` group is aligned to the toolbar's trailing edge (`alignEndGroup`).
+    expect(row1.compareDocumentPosition(finish) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(row1.parentElement?.contains(finish)).toBe(true);
   });
 
   it('keeps the plan name as the heading inside main, not in the band (M4-T2)', () => {

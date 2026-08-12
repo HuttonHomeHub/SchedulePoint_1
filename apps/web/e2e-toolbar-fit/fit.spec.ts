@@ -55,7 +55,7 @@ import { expect, test, type Page } from '@playwright/test';
  * than no coverage, because it looks like coverage. Recorded as `docs/TECH_DEBT.md` #124 instead.
  */
 
-const ROWS = ['View and navigate', 'Build and manage'] as const;
+const ROWS = ['View and navigate', 'Build and manage', 'Plan mode'] as const;
 const WIDTHS = [2133, 1920, 1600, 1440, 1280, 1024, 960, 768];
 
 /**
@@ -138,8 +138,15 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
         node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         const rowBox = container.getBoundingClientRect();
         const b = node.getBoundingClientRect();
-        const left = Math.max(b.left, rowBox.left);
-        const right = Math.min(b.right, rowBox.right);
+        // Clamped against the **viewport as well as the row** (ADR-0091 M1, B4). Intersecting with
+        // the row's own box alone is sound only while a row is full-width inside the band, which
+        // both original rows are. The mode row is shrink-to-fit, so its container box and its
+        // content coincide by definition and a clip can never be reported — the row would pass S1
+        // and `belowTargetFloor` while a control sat off-screen, pushed out by the identity line or
+        // the band. Clamping to the viewport catches that and cannot regress the other two rows,
+        // whose boxes already sit inside it.
+        const left = Math.max(b.left, rowBox.left, 0);
+        const right = Math.min(b.right, rowBox.right, window.innerWidth);
         const visible = Math.round(Math.max(0, right - left));
         if (id === '__overflow__') overflowVisibleWidth = visible;
 
@@ -255,6 +262,10 @@ async function openPlan(page: Page, stamp: number): Promise<void> {
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Logic' }).click();
   await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+  // The mode row must be asserted at mount too (ADR-0091 M1). Without this, a row that fails to
+  // render leaves `readRow` returning an empty item list, which passes every assertion in this file
+  // — coverage that looks like coverage, which is the `docs/TECH_DEBT.md` #124 lesson one row over.
+  await expect(page.getByRole('toolbar', { name: 'Plan mode' })).toBeVisible();
 
   // A populated plan, or three Row-1 items self-hide (`hasDiagram`) and the row measured is not the
   // row a planner looks at — the blind spot the first measurement pass shipped with.
@@ -356,6 +367,53 @@ test('the layout settles rather than oscillating', async ({ page }) => {
       first.scrollWidth,
     );
   }
+});
+
+/**
+ * **S8 — the search field's leading icon is actually painted** (ADR-0091 M4).
+ *
+ * It had been in the DOM, correctly sized and correctly positioned, and **invisible**: a `-mr-6`
+ * negative margin on a non-positioned flex item leaves the icon in flow, and the input — later in
+ * document order, carrying an opaque `bg-field` — painted over it. Reported as a missing icon;
+ * measured (M0-T2) as a covered one.
+ *
+ * **This is why the assertion is `elementFromPoint` rather than a visibility or geometry check.**
+ * Every cheaper test passes against the broken code: the icon has a non-zero box, `opacity: 1`,
+ * `visibility: visible`, and Playwright calls it visible. Only asking *what would a click at this
+ * pixel actually hit* separates "painted" from "painted underneath something else" — the same
+ * reasoning as S5, one layer down. No unit test can see it at all: jsdom has no layout and no
+ * paint order.
+ */
+test('the search field paints its leading icon rather than hiding it under the input', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openPlan(page, stamp);
+  await page.waitForTimeout(400);
+
+  const verdict = await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('input[type="search"]');
+    if (!input) return 'no search input on the page';
+    const icon = input.parentElement?.querySelector('svg') ?? null;
+    if (!icon) return 'the search field has no leading icon';
+    const b = icon.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) return 'the icon has a zero-area box';
+    // `pointer-events` must be neutralised for the duration of the read. A decorative icon is
+    // `pointer-events-none` — correctly — and `elementFromPoint` skips such elements entirely,
+    // returning whatever is beneath. Without this the assertion asks "is the icon clickable?",
+    // whose answer is always no by design, and it could never pass in either state. The first
+    // version of this test made exactly that conflation.
+    const el = icon as SVGElement & { style: CSSStyleDeclaration };
+    const prior = el.style.pointerEvents;
+    el.style.pointerEvents = 'auto';
+    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    el.style.pointerEvents = prior;
+    if (hit === icon) return 'painted';
+    return `covered by <${hit?.tagName.toLowerCase() ?? 'nothing'}>`;
+  });
+
+  expect(verdict, 'S8: a click at the icon’s own centre must land on the icon').toBe('painted');
 });
 
 test('the toolbar passes a WCAG 2.2 scan with target-size opted in', async ({ page }) => {
