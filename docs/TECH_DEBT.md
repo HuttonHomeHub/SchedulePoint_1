@@ -2011,6 +2011,15 @@ double-submit apart from a slow one. Left open rather than guessed at.
 **Half closed 2026-08-11**: `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE`
 remains open with five harnesses left rather than seven.
 
+**Parked by the product owner 2026-08-12**, after the measurement below was put to them: **every
+flag stays ON for now, and the estate is cleaned up in one dedicated pass** rather than a flag at a
+time. So `VITE_CANVAS_WORKSPACE`'s deferral trigger is no longer `epic-touch: plan workspace` — which
+ADR-0090 fired and discharged — but a new `flag-cleanup pass` term, added to
+`scripts/flag-retirement.json`'s **closed** `deferralTriggers` vocabulary in the same commit, which is
+the form ADR-0088 D3a asks for: a decision somebody makes in a diff, not a sentence in one flag's
+reason field. Worth noting it is a **wider** trigger than the epic-touch ones, so a second flag
+deferred under it should be a deliberate choice rather than a habit.
+
 **Measured and re-deferred 2026-08-12 (ADR-0090 M6).** This epic fired the `epic-touch: plan
 workspace` trigger and took the milestone's own stated off-ramp, on evidence rather than instinct:
 all **seven** flag-off harnesses were probed with a bare pin-flip and **all seven fail — 27 specs**
