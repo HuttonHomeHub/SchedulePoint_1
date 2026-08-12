@@ -456,3 +456,48 @@ describe('Toolbar (APG primitive)', () => {
     });
   });
 });
+
+/**
+ * **The measure pass's cost, asserted in call-count shape** (ADR-0090 M5, performance gate).
+ *
+ * ADR-0026 §16 and `docs/TECH_DEBT.md` #75 set the doctrine for this surface: it shares a frame with
+ * a canvas painter already measured at 4–6× its budget, so a claim about cost here should be a gate
+ * rather than a paragraph. M3 added `setLayout(...)` inside `measure()`, which changes `resolved` →
+ * `bar` → `measure`'s identity → the layout effect, i.e. an **extra synchronous pass**. The
+ * performance review traced that by hand as bounded and self-terminating and then said the honest
+ * next step is to assert it, because "verified by reading the code" goes stale.
+ *
+ * **Counting, not timing** — the ADR-0054 rule. A CI runner's milliseconds are noise; the number of
+ * layout reads per settle is the thing that changes when someone adds a `getBoundingClientRect` to
+ * the wrong place.
+ *
+ * jsdom reports zero for every box, so `measure()` takes its early-out and the absolute counts are
+ * not the browser's. What the assertion pins is the **shape**: that a mount settles in a bounded
+ * number of passes rather than a chain, and that a context change that alters no width does not
+ * multiply them. Both are properties the code has independently of layout.
+ */
+describe('Toolbar — the measure pass is bounded (ADR-0090 M5)', () => {
+  const items = makeItems();
+
+  it('settles on mount rather than chaining passes', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+    render(<Toolbar items={items} context={{ count: 0 }} label="Counted" />);
+    // The bound: a mount reads each item a small, fixed number of times. A regression that made the
+    // pass re-enter itself would show here as a multiple, not as a slower test.
+    expect(spy.mock.calls.length).toBeLessThan(items.length * 8);
+    spy.mockRestore();
+  });
+
+  it('does not multiply passes when the context changes without changing any width', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+    const { rerender } = render(<Toolbar items={items} context={{ count: 0 }} label="Counted" />);
+    const onMount = spy.mock.calls.length;
+    spy.mockClear();
+    // A selection / zoom-preset / search change re-resolves the registry and so re-runs `measure`.
+    // That is by design — the resolved set really can change. What must NOT happen is that one
+    // context change costs more than the original mount did.
+    rerender(<Toolbar items={items} context={{ count: 1 }} label="Counted" />);
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(onMount);
+    spy.mockRestore();
+  });
+});
