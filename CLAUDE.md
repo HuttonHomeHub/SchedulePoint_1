@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 22 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 924 web
 > source files with 30 flag-scoped Playwright suites beside the base journey, and
-> 90 ADRs.
+> 91 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -1943,6 +1943,40 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   harnesses were probed and **all seven fail — 27 specs**, none of them a configuration edit. The
   trigger is re-recorded with that measurement rather than left to rot, per the milestone's own rule
   that deferring is a decision and ignoring is a defect.
+
+- **ADR-0091** _(Proposed; M0 landed 2026-08-12)_ — A mode is not a command. ADR-0090 fixed the row's
+  **fit**; using the result on a 24" monitor showed the deeper thing, which is that the command
+  surface **has no vocabulary for anything that is not a command** — a mode, a fact and a subject all
+  render as a button in a row, because a button in a row is the only thing the registry can make.
+  `Early | Visual` and `Diagram | Gantt` do not _do_ anything; they set how everything else behaves,
+  which is `Start editing`'s relationship to the toolbar, and that control sits on the identity line.
+  So the cluster moves beside the pen — **without leaving the registry**, because rendering four
+  segmented controls by hand rebuilds roving `tabindex`, group labelling, ADR-0082 reason wiring,
+  `demotionGroup` pairing and the fit gate's reach, each of which this register has recorded shipping
+  wrong once. `tier: 3` becomes **admitted-last rather than exiled** (which is why the `⋯` never
+  empties at 3840 px), zoom presets move into `View ▾` — **relocating ADR-0056 §1, not withdrawing
+  it** — and the identity line folds into the command band for three bands above the canvas.
+  **M0 measured before anything was decided, because ADR-0090's first recorded consequence is that it
+  was wrong three times for having been drafted without a shell** — and it falsified two working
+  assumptions. The identity content is **849 px, not the ~450–500 estimated**, so a merged row at 1920
+  needs 2290 against a 1904 container: **386 px over**, of which 223 is pure redundancy (`You're
+editing this plan.` and an `Editing` badge, beside a button reading `Stop editing`) and the rest has
+  only one candidate, which is a real loss. And keeping the four viewport commands inline at **every**
+  width overflows Row 1 at **1440** on its own — the spec rated that risk high at 768. The two
+  decisions therefore **compete for the same slack**, which is written into the ADR so a milestone
+  under pressure cannot quietly resolve it the other way. Both resolutions are **defaults taken
+  without an explicit answer and flagged as reversible in place**.
+  **The instrument was wrong too, and that is the ADR-0058 finding.** The vertical-stack harness asked
+  for six bands and reported **five** for the whole of ADR-0090 M5: the plan-header lookup was
+  `h1.closest('header')`, M4-T2 turned that element into a `<div>`, and the missing band was
+  `.filter()`ed out rather than failing. Every surviving number stayed correct — `aboveCanvas` read a
+  plausible 249 — so there was nothing for a reader to catch; it was findable only by arithmetic
+  (135 − 45 − 44 = 46 px unaccounted for). A band that cannot be located now **throws**. The search
+  icon was likewise established by probe rather than by reading CSS — **COVERED**, not absent or
+  zero-box, with its geometry already correct, so the fix is paint order alone. **The CPM engine is
+  not imported and no migration runs**, so the ADR-0034 parity gate is untouched by construction;
+  `database-architect` is not engaged because there is no schema change to design, not because one was
+  judged too small.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down

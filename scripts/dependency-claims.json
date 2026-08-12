@@ -6,7 +6,8 @@
     "nodemailer": "9.0.3",
     "zod": "4.4.3",
     "@nestjs/throttler": "6.5.0",
-    "react-hook-form": "7.84.0"
+    "react-hook-form": "7.84.0",
+    "lucide-react": "1.28.0"
   },
   "claims": [
     {
@@ -471,6 +472,50 @@
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
         "apps/web/src/features/activities/components/ActivityFormDialog.test.tsx"
+      ]
+    },
+    {
+      "ref": "arrow-left-to-line.mjs:15",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/arrow-left-to-line.mjs",
+      "lines": "15",
+      "anchor": "const ArrowLeftToLine = createLucideIcon(\"arrow-left-to-line\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "hand.mjs:22",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/hand.mjs",
+      "lines": "22",
+      "anchor": "const Hand = createLucideIcon(\"hand\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "waypoints.mjs:19",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/waypoints.mjs",
+      "lines": "19",
+      "anchor": "const Waypoints = createLucideIcon(\"waypoints\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "chart-gantt.mjs:16",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/chart-gantt.mjs",
+      "lines": "16",
+      "anchor": "const ChartGantt = createLucideIcon(\"chart-gantt\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
       ]
     }
   ]
