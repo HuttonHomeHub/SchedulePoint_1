@@ -51,11 +51,6 @@ async function stackHeights(page: Page): Promise<unknown> {
       };
     };
 
-    // The plan header is the `<header>` holding the visually-hidden <h1> — located by that
-    // relationship rather than by its classes, so a restyle cannot silently redirect the reading.
-    const heading = document.querySelector('h1');
-    const header = heading?.closest('header') ?? null;
-
     // Each row is the element wrapping a `role="toolbar"` and its visible row-purpose caption; the
     // band is their common parent.
     const rowOf = (label: string): Element | null =>
@@ -63,6 +58,22 @@ async function stackHeights(page: Page): Promise<unknown> {
     const rowLook = rowOf('View and navigate');
     const rowDo = rowOf('Build and manage');
     const commandBand = rowLook?.parentElement ?? null;
+
+    // The **identity row** — breadcrumbs + pen status. ADR-0090 M4-T2 folded it INTO the command
+    // band as a `<div>` (a second `<header>` would have made a second `banner` landmark) and left
+    // the `sr-only <h1>` inside `<main>`. This lookup used to be `h1.closest('header')`, which
+    // returned `null` from that day on; `read()` returned `null`, `.filter()` dropped it, and the
+    // report silently listed five bands where six were asked for — with `aboveCanvas` still
+    // reading a plausible 249, so nothing looked wrong. Measured 2026-08-12 (M0-T1): five bands
+    // reported, and 135 − 45 − 44 = 46 px of command band unaccounted for. That 46 px IS this row.
+    //
+    // It is now located structurally, as the command band's first child — the row above the two
+    // toolbars — and verified to be the element carrying the breadcrumb `nav`.
+    const identityRow = (() => {
+      const first = commandBand?.firstElementChild ?? null;
+      if (!first) return null;
+      return first.querySelector('nav') ? first : null;
+    })();
 
     // **The shell's own chrome band** (ADR-0055 S2), which sits above everything the plan owns and
     // which `design.md` §2.1 does not account for at all. Located as the command band's nearest
@@ -80,14 +91,23 @@ async function stackHeights(page: Page): Promise<unknown> {
     // The canvas itself — what all of the above costs.
     const canvas = document.querySelector('canvas');
 
+    // A band that cannot be located **throws**. It used to be dropped by a `.filter()`, which is how
+    // the identity row went missing for the whole of ADR-0090 M5 without anyone noticing: a silently
+    // shorter list still reads as a complete measurement, and every surviving number is still right,
+    // so there is nothing for a reader to catch. A harness that under-reports is worse than one that
+    // fails, because its output gets quoted into a design document (ADR-0058: verify the claim).
     const bands = [
-      read('shell chrome band (total)', chromeBand),
-      read('app header row', appHeaderRow),
-      read('plan header', header),
-      read('command band (both rows)', commandBand),
-      read('row 1 · View and navigate', rowLook),
-      read('row 2 · Build and manage', rowDo),
-    ].filter((b): b is BandHeight => b !== null);
+      ['shell chrome band (total)', chromeBand],
+      ['app header row', appHeaderRow],
+      ['identity row (breadcrumbs + pen)', identityRow],
+      ['command band (identity + both rows)', commandBand],
+      ['row 1 · View and navigate', rowLook],
+      ['row 2 · Build and manage', rowDo],
+    ].map(([name, el]) => {
+      const band = read(name as string, el as Element | null);
+      if (!band) throw new Error(`vertical-stack: band "${name as string}" could not be located`);
+      return band;
+    });
 
     const canvasBox = canvas?.getBoundingClientRect();
     // What sits between the top of the viewport and the top of the canvas — the honest "above the
@@ -103,7 +123,7 @@ async function stackHeights(page: Page): Promise<unknown> {
       // adding both double-counts. This is the attribution `aboveCanvas` must reconcile against.
       attribution: {
         chromeBand: read('x', chromeBand)?.height ?? null,
-        planHeader: read('x', header)?.height ?? null,
+        identityRow: read('x', identityRow)?.height ?? null,
       },
       // **The canvas's own ancestor chain**, walked from the canvas up to the document.
       //
