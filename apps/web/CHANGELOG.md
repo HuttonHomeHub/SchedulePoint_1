@@ -1,5 +1,14 @@
 # @repo/web
 
+## 0.85.1
+
+### Patch Changes
+
+- [#295](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/295) [`5686fca`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5686fcac56d9f8cd106169b23d267b6827252cf4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Start-to-Finish links can now be drawn on the diagram. The canvas Link tool offered three of the four
+  dependency types; SF was scheduled correctly by the engine, accepted by the API, editable in the
+  activity editor's Logic tab and painted correctly on the canvas — it simply could not be created with
+  the tool the product is built around.
+
 ## 0.85.0
 
 ### Minor Changes
