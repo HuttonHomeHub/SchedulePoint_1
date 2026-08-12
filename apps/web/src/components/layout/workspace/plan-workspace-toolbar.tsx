@@ -166,7 +166,17 @@ export function ToolbarPlanWorkspace({
   // the chrome band and is no longer a DOM descendant of the workspace root.
   const closeFloatPathsAndFocus = useCallback(() => {
     closeFloatPaths();
-    document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]')?.focus();
+    // **Falls back to the `⋯` trigger, and that is not defensive coding.** ADR-0090 M2 moved this
+    // command to tier 3, so it is a menu item that UNMOUNTS with the menu the moment it is chosen —
+    // by the time the panel closes there is no `[data-toolbar-item="float-paths"]` to return to, and
+    // focus was landing on `<body>` (WCAG 2.4.3). The `⋯` is the stable ancestor of wherever the
+    // command actually lives, so it is the honest destination: the planner is returned to the
+    // control they opened this from. Found by `e2e-float-paths`, which asserts the restore — no unit
+    // test could, because the element only goes missing once a real menu closes.
+    const target =
+      document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]') ??
+      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
+    target?.focus();
   }, [closeFloatPaths]);
 
   const toggleFloatPaths = useCallback(() => {

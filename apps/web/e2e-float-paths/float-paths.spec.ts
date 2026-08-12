@@ -49,15 +49,27 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // Fourteen chains, ten asked for.
   expect(analysis.hasMorePaths).toBe(true);
 
-  // ── 2 · The toolbar item: shaded without a selection, live with one ───────────────────────
-  // Scoped to the toolbar: the item is what is under test, not any button whose name contains it.
+  // ── 2 · The command: shaded without a selection, live with one ────────────────────────────
+  // It moved into the Row-1 `⋯` in ADR-0090 M2 (tier 3), one of four commands that bought the two
+  // rows their labels at 1920. Still one click, and still shaded-with-a-reason rather than hidden —
+  // which is what this section is actually about. In a menu the reason travels by
+  // `aria-describedby`, not a `title`, so the assertion follows the channel.
   const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
-  const floatPaths = lookRow.getByRole('button', { name: 'Float paths', exact: true });
+  const openOverflow = async (): Promise<void> => {
+    const more = lookRow.getByRole('button', { name: 'More toolbar actions' });
+    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  };
+  const floatPaths = page.getByRole('menuitemcheckbox', { name: 'Float paths' });
+
+  await openOverflow();
   await expect(floatPaths).toBeVisible();
   await expect(floatPaths).toHaveAttribute('aria-disabled', 'true');
-  await expect(floatPaths).toHaveAttribute('title', /select an activity first/i);
+  const reasonId = await floatPaths.getAttribute('aria-describedby');
+  await expect(page.locator(`#${reasonId}`)).toHaveText(/select an activity first/i);
+  await page.keyboard.press('Escape');
 
   await selectOnCanvas(page, 'Target');
+  await openOverflow();
   await expect(floatPaths).not.toHaveAttribute('aria-disabled', 'true');
 
   // ── 3 · The panel: Driving named, the branch measured on the target's calendar ────────────
@@ -108,5 +120,8 @@ test('a planner reads the float paths into an activity, in both views', async ({
   await panel.getByRole('button', { name: 'Close float paths' }).click();
   await expect(panel).toHaveCount(0);
   await expect(drivingRow).not.toContainText('(off the float path)');
-  await expect(floatPaths).toBeFocused();
+  // The command is a menu item now and unmounts with its menu, so the honest restore target is the
+  // `⋯` it lives behind — the control the planner opened this from. Returning to a detached node
+  // dropped focus to `<body>`; this journey is what found that.
+  await expect(lookRow.getByRole('button', { name: 'More toolbar actions' })).toBeFocused();
 });

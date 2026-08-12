@@ -74,8 +74,10 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(viewPanel).toBeHidden();
   await expect(diagram.getByRole('option')).toHaveCount(2);
 
-  // Baselines is an inline Row 2 action (no capability lost when the chrome band went away).
-  await page.getByRole('button', { name: 'Baselines…' }).click();
+  // Baselines sits behind the Row-2 `Analysis` trigger since ADR-0090 M2-T5 — three ways of
+  // measuring a plan against something, behind one stop. No capability lost, one click deeper.
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('menuitem', { name: 'Baselines…' }).click();
   const baselines = page.getByRole('dialog', { name: 'Baselines' });
   await expect(baselines).toBeVisible();
   await baselines.getByRole('button', { name: 'Close dialog' }).click();
