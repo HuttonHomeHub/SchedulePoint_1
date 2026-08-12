@@ -23,7 +23,32 @@ export interface ToolbarSplitButtonProps {
   pressed: boolean;
   /** Whether the type menu is open. Widens the control's active wash and sets `aria-expanded`. */
   open: boolean;
-  disabled: boolean;
+  /**
+   * Gates **both halves**. Correct while a split button's two halves are two faces of one command
+   * (`Add ▾`, `Link ▾`), which was every consumer until ADR-0091 C4.
+   *
+   * When the halves are **different commands** with different gates, pass `primaryDisabled` /
+   * `caretDisabled` instead. Merging `Go to today` (gated on a computed diagram in the canvas view)
+   * with `Go to date` (gated only on the plan being anchored) under this one prop would have made
+   * Go-to-date unreachable on an empty or Gantt-viewed plan — a capability a planner has today,
+   * removed by a layout change, which is the ADR-0081 dead-end shape.
+   */
+  disabled?: boolean;
+  /** Overrides {@link disabled} for the primary half alone. */
+  primaryDisabled?: boolean;
+  /** Overrides {@link disabled} for the caret half alone. */
+  caretDisabled?: boolean;
+  /**
+   * What the caret opens, for `aria-haspopup`. `'menu'` (default) for a type menu; `'dialog'` for a
+   * popover panel — announcing a dialog as a menu tells a screen-reader user to expect arrow-key
+   * item navigation that a panel of fields does not provide.
+   */
+  haspopup?: 'menu' | 'dialog';
+  /**
+   * Withhold the visible label, keeping it as the accessible name. Mirrors `ToolbarPopover`'s prop
+   * of the same name so the two triggers compact the same way at the same band.
+   */
+  compact?: boolean;
   /** The primary's tooltip; states the reason when `disabled`. */
   title: string;
   icon: React.ReactNode;
@@ -57,7 +82,11 @@ export function ToolbarSplitButton({
   caretRef,
   pressed,
   open,
-  disabled,
+  disabled = false,
+  primaryDisabled,
+  caretDisabled,
+  haspopup = 'menu',
+  compact = false,
   title,
   icon,
   label,
@@ -65,23 +94,33 @@ export function ToolbarSplitButton({
   onPrimary,
   onOpenMenu,
 }: ToolbarSplitButtonProps): React.ReactElement {
+  const primaryOff = primaryDisabled ?? disabled;
+  const caretOff = caretDisabled ?? disabled;
   return (
     <span
-      className={cn(toolbarControlVariants({ active: pressed || open, disabled }), 'gap-0 p-0')}
+      className={cn(
+        // The wrapper's wash reads "this control is unavailable", so it may only dim when BOTH
+        // halves are — otherwise a live caret sits inside a shaded control and looks inert.
+        toolbarControlVariants({ active: pressed || open, disabled: primaryOff && caretOff }),
+        'gap-0 p-0',
+      )}
     >
       <button
         {...itemProps}
         ref={primaryRef}
         type="button"
         aria-pressed={pressed}
-        aria-disabled={disabled || undefined}
+        aria-disabled={primaryOff || undefined}
+        {...(compact ? { 'aria-label': label } : {})}
         title={title}
         onClick={() => {
-          if (!disabled) onPrimary();
+          if (!primaryOff) onPrimary();
         }}
         onKeyDown={(e) => {
           // Either arrow opens the menu and moves into it, so the caret needs no tab stop of its own.
-          if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !disabled) {
+          // Gated on the CARET's state, not the primary's: the arrows are the keyboard route to the
+          // menu, and a shaded primary beside a live caret must not take that route away.
+          if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !caretOff) {
             e.preventDefault();
             onOpenMenu();
           }
@@ -89,18 +128,18 @@ export function ToolbarSplitButton({
         className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
       >
         {icon}
-        <span className="truncate">{label}</span>
+        {compact ? null : <span className="truncate">{label}</span>}
       </button>
       <button
         ref={caretRef}
         type="button"
         tabIndex={-1}
-        aria-haspopup="menu"
+        aria-haspopup={haspopup}
         aria-expanded={open}
-        aria-disabled={disabled || undefined}
+        aria-disabled={caretOff || undefined}
         aria-label={caretLabel}
         onClick={() => {
-          if (!disabled) onOpenMenu();
+          if (!caretOff) onOpenMenu();
         }}
         className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
       >
