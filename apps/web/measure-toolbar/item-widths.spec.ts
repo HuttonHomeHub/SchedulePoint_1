@@ -30,7 +30,11 @@ import { writeMeasurement } from './output';
  * Asserts nothing; it is a harness (ADR-0081 §3).
  */
 
-const WIDTHS = [2304, 1920, 1440, 1280, 1024, 960, 768];
+// 1646 is the product owner's Surface Pro: 2880 x 1920 at 175% scale. It is the width this
+// toolbar is actually judged at, and until 2026-08-12 it had never been measured — every figure in
+// ADR-0090 and ADR-0091 came from 1920, 1440, 1024 or 768. The first run at it found both rows
+// roughly half empty and withholding labels anyway, which no other width had shown.
+const WIDTHS = [2304, 1920, 1646, 1536, 1440, 1280, 1024, 960, 768];
 
 async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
   return page.getByRole('toolbar', { name: ariaLabel }).evaluate((el) => {
