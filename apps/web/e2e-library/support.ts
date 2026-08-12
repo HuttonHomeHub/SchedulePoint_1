@@ -81,7 +81,7 @@ export async function drawActivity(
 }
 
 /**
- * Open the plan's **Schedule settings…** toolbar dialog (which holds the working-day calendar as
+ * Open the plan's **Settings…** toolbar dialog (which holds the working-day calendar as
  * one of its sections — TECH_DEBT #60), open the tier-grouped calendar `Combobox`, and return the
  * OPTION NAMES it offers. This is the picker the tier must actually govern: a project calendar has
  * to be offered inside its own project and nowhere else.
@@ -91,7 +91,12 @@ export async function drawActivity(
  */
 export async function calendarPickerOptions(page: Page): Promise<string[]> {
   const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
-  await toolbar.getByRole('button', { name: 'Schedule settings…' }).click();
+  // Located by its REGISTRY ID, not its label. That label was `Schedule settings…` until ADR-0091
+  // shortened it to `Settings…` to fit every Row 2 label at 1646 px, and this locator broke — the
+  // only journey in the repository that named it. A name-based locator has to be re-edited on every
+  // copy change, which is churn that says nothing about whether the control still works; the id is
+  // what the registry actually guarantees.
+  await toolbar.locator('[data-toolbar-item="calendar"]').click();
   const dialog = page.getByRole('dialog', { name: 'Schedule settings' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('combobox', { name: 'Calendar' }).press('ArrowDown');
