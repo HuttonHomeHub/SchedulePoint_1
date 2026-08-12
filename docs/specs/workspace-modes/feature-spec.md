@@ -98,13 +98,13 @@ in a row, because a button in a row is the only thing the registry knows how to 
 
 ### Users
 
-| Role               | What changes                                                                                                                                   |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Planner**        | The primary user. Gains canvas height, a mode cluster that reads as one, one viewport subject, and — at wide widths — an empty `⋯`.            |
-| **Contributor**    | Same surface. The scheduling-mode segment stays **shaded with its reason** (`ctx.setSchedulingMode === null` → `scheduleRefusal`) — unchanged. |
-| **Viewer**         | Row 2 is shaded as a set (ADR-0031 §4) and stays so. The view switch (`Diagram                                                                 | Gantt`) is offered to every role — reading is not an edit — and moving it changes nothing about that **[READ — `tsld-toolbar-items.tsx:2104-2106`]**. |
-| **Org Admin**      | No difference from Planner on this surface.                                                                                                    |
-| **External Guest** | **Out of scope entirely.** The guest view is a separate session-less surface (ADR-0051 F-M4) and renders none of these controls.               |
+| Role               | What changes                                                                                                                                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Planner**        | The primary user. Gains canvas height, a mode cluster that reads as one, one viewport subject, and — at wide widths — an empty `⋯`.                                                                                                      |
+| **Contributor**    | Same surface. The scheduling-mode segment stays **shaded with its reason** (`ctx.setSchedulingMode === null` → `scheduleRefusal`) — unchanged.                                                                                           |
+| **Viewer**         | Row 2 is shaded as a set (ADR-0031 §4) and stays so. The view switch (`Diagram` / `Gantt`) is offered to every role — reading is not an edit — and moving it changes nothing about that **[READ — `tsld-toolbar-items.tsx:2104-2106`]**. |
+| **Org Admin**      | No difference from Planner on this surface.                                                                                                                                                                                              |
+| **External Guest** | **Out of scope entirely.** The guest view is a separate session-less surface (ADR-0051 F-M4) and renders none of these controls.                                                                                                         |
 
 No permission changes. No role gains or loses a capability anywhere in this epic.
 
@@ -152,18 +152,19 @@ the same plan see the same bar (ADR-0090 M2-as-built §4).
 
 ### Success criteria
 
-Each is a number a test can take, and each names the instrument.
+Each is a number a test can take, and each names the instrument. Numbered **SC**, deliberately — the
+fit gate's own assertions are already called S1–S7 and a second S-series would be read as those.
 
-| #   | Criterion                                                                                                                                                                   | Instrument                                           |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| S1  | **Three bands above the canvas at ≥ 1536 px.** `aboveCanvas` falls by the full height of the identity row — 249 → **≈204 px** `[TO BE MEASURED]` — and the canvas gains it. | `measure-toolbar/vertical-stack.spec.ts`             |
-| S2  | **Every row lays out inside its container at all eight widths**, now for **three** rows rather than two.                                                                    | `e2e-toolbar-fit` S4, `PINNED_FLOOR_WIDTH` stays 768 |
-| S3  | **No regression in labelled counts at 1920**: Row 1 ≥ 13 labelled of ≥ 14 inline, Row 2 ≥ 12 of ≥ 14 **[MEASURED baseline — `m3-narrow-widths.md` §3]**.                    | `measure-toolbar/item-widths.spec.ts`                |
-| S4  | **At a container ≥ 2600 px, neither command row renders a `⋯`.**                                                                                                            | a new `e2e-toolbar-fit` assertion (S8)               |
-| S5  | **Every command remains reachable at every width** — inline or in the `⋯`.                                                                                                  | `e2e-toolbar-fit` S3, unchanged                      |
-| S6  | **Every clickable control is a ≥ 24 px pointer target** on all three rows.                                                                                                  | `e2e-toolbar-fit` S5/S7, unchanged                   |
-| S7  | **The mode cluster is one contiguous cluster adjacent to the pen control at every band**, and each segment announces exactly one pressed state.                             | unit + journey                                       |
-| S8  | **The search field's leading icon is visible** (non-zero painted box, not covered).                                                                                         | a browser assertion, verified red first              |
+| #    | Criterion                                                                                                                                                                   | Instrument                                                   |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| SC-1 | **Three bands above the canvas at ≥ 1536 px.** `aboveCanvas` falls by the full height of the identity row — 249 → **≈204 px** `[TO BE MEASURED]` — and the canvas gains it. | `measure-toolbar/vertical-stack.spec.ts`                     |
+| SC-2 | **Every row lays out inside its container at all eight widths**, now for **three** rows rather than two.                                                                    | `e2e-toolbar-fit` **S4**, `PINNED_FLOOR_WIDTH` stays 768     |
+| SC-3 | **No regression in labelled counts at 1920**: Row 1 ≥ 13 labelled of ≥ 14 inline, Row 2 ≥ 12 of ≥ 14 **[MEASURED baseline — `m3-narrow-widths.md` §3]**.                    | `measure-toolbar/item-widths.spec.ts`                        |
+| SC-4 | **At a container ≥ 2600 px, neither command row renders a `⋯`.**                                                                                                            | a **new** `e2e-toolbar-fit` assertion, numbered **S8** there |
+| SC-5 | **Every command remains reachable at every width** — inline or in the `⋯`.                                                                                                  | `e2e-toolbar-fit` **S3**, unchanged                          |
+| SC-6 | **Every clickable control is a ≥ 24 px pointer target** on all three rows.                                                                                                  | `e2e-toolbar-fit` **S5/S7**, unchanged                       |
+| SC-7 | **The mode cluster is one contiguous cluster adjacent to the pen control at every band**, and each segment announces exactly one pressed state.                             | unit + journey                                               |
+| SC-8 | **The search field's leading icon is visible** (non-zero painted box, not merely present in the DOM).                                                                       | a browser assertion, verified red first                      |
 
 ### Open questions
 
@@ -277,7 +278,7 @@ Each is a number a test can take, and each names the instrument.
 > - **Given** the Gantt view, **when** a preset is picked, **then** it applies exactly as it does today
 >   — ADR-0056's behaviour is relocated, not withdrawn (§4.4).
 > - **Given** a width at which the four viewport commands do not fit, **when** the row demotes them,
->   **then** they are reachable in the `⋯` with their reasons (S5).
+>   **then** they are reachable in the `⋯` with their reasons (SC-5).
 
 > **US-4** — As a **Planner**, I want one control for "go somewhere in time", so that Today and a date
 > are not two buttons.
@@ -323,8 +324,8 @@ Each is a number a test can take, and each names the instrument.
 > - **Given** the toolbar, **when** it renders, **then** `shortcuts` is gone from the registry and
 >   `?` still opens the sheet.
 > - **This buys zero width and the changeset must say so.** `shortcuts` is `tier: 3`, so it is outside
->   `bar` and pays nothing today **[READ — `toolbar-registry.ts:452-460`, `Toolbar.tsx:277-294`]`.
-Claiming a width saving here would be the exact false claim `design.md` §Q2 warned about for the
+>   `bar` and pays nothing today **[READ — `toolbar-registry.ts:452-460`, `Toolbar.tsx:277-294`]**.
+>   Claiming a width saving here would be the exact false claim `design.md` §Q2 warned about for the
 >   Legend.
 
 > **US-7** — As a **Planner** on a very wide window, I want the `⋯` to be empty when there is room.
@@ -334,7 +335,7 @@ Claiming a width saving here would be the exact false claim `design.md` §Q2 war
 > - **Given** a container ≥ 2600 px, **when** either row renders, **then** no `⋯` renders and every
 >   command is inline.
 > - **Given** a 1920 px viewport, **when** either row renders, **then** the labelled counts do not
->   regress below the S3 baseline — i.e. admitting tier-3 items must never cost the row its labels.
+>   regress below the SC-3 baseline — i.e. admitting tier-3 items must never cost the row its labels.
 > - **Given** a container width dragged across the admission boundary, **when** it crosses, **then**
 >   the row does not oscillate (`e2e-toolbar-fit` S6, extended to the boundary widths).
 > - **Given** any width, **when** an item is admitted or demoted, **then** the decision is a pure
@@ -369,14 +370,14 @@ Claiming a width saving here would be the exact false claim `design.md` §Q2 war
 **No change.** Nothing in this epic touches an API, a DTO, a guard or a permission. Mapping to
 ADR-0012, for completeness:
 
-| Control                          | Gate today                   | Gate after                                                              |
-| -------------------------------- | ---------------------------- | ----------------------------------------------------------------------- |
-| `Early                           | Visual`                      | `ctx.setSchedulingMode !== null` (writer), shaded with reason otherwise | identical |
-| `Diagram                         | Gantt`                       | none — every role                                                       | identical |
-| Zoom presets / viewport commands | `hasDiagram && canvasActive` | identical                                                               |
-| Search                           | `hasDiagram`                 | identical                                                               |
-| Keyboard shortcuts               | none                         | identical                                                               |
-| Row 2 authoring set              | `penGated` (ADR-0028)        | identical                                                               |
+| Control                          | Gate today                                                              | Gate after |
+| -------------------------------- | ----------------------------------------------------------------------- | ---------- |
+| `Early` / `Visual` segment       | `ctx.setSchedulingMode !== null` (writer), shaded with reason otherwise | identical  |
+| `Diagram` / `Gantt` segment      | none — every role                                                       | identical  |
+| Zoom presets / viewport commands | `hasDiagram && canvasActive`                                            | identical  |
+| Search                           | `hasDiagram`                                                            | identical  |
+| Keyboard shortcuts               | none                                                                    | identical  |
+| Row 2 authoring set              | `penGated` (ADR-0028)                                                   | identical  |
 
 The toolbar **reflects** deny-by-default gating and never adds authorisation (ADR-0031 §6). That
 sentence stays true after this epic, and a structural test should keep it that way (§4.7).
@@ -427,8 +428,8 @@ checkable rather than asserted: no file in the change set imports from `apps/api
 
 ### 3.1 The width budget — where the slack comes from and where it goes
 
-All inputs `[MEASURED — `m2-item-widths.md`, `m3-narrow-widths.md`]`; every derived figure is
-`[TO BE MEASURED]` and is M0's first job.
+All inputs are **[MEASURED]** from `m2-item-widths.md` and `m3-narrow-widths.md`; every derived
+figure is **[TO BE MEASURED]** and is M0's first job.
 
 | Movement                                                                                                   | Row 1 effect at 1920                                                                                                |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -438,7 +439,7 @@ All inputs `[MEASURED — `m2-item-widths.md`, `m3-narrow-widths.md`]`; every de
 | M4 · `go-to-date` (132) folds into `today` (32 icon-only / ~120 labelled) as one split button              | **≈ −110 px** `[TO BE MEASURED]`, and it removes an `'auto'` item from the label sum, which helps twice             |
 | M4 · search field 240 → its placeholder floor                                                              | **≈ −80 px** `[TO BE MEASURED]`                                                                                     |
 | M2 · identity content arrives                                                                              | **+450…500 px** `[TO BE MEASURED]` — the brief's estimate, and the single number the epic most needs from a browser |
-| M6 · tier-3 items admitted, labelled (`shortcuts` 171 + `next-conflict` 126 + `float-paths` 119)           | **+416 px** `[MEASURED — `m2-item-widths.md`, "After M2-T3"]** — spent only where it fits                           |
+| M6 · tier-3 items admitted, labelled (`shortcuts` 171 + `next-conflict` 126 + `float-paths` 119)           | **+416 px [MEASURED — `m2-item-widths.md`, "After M2-T3"]** — spent only where it fits                              |
 
 Two things follow, and both are decisions rather than observations, so they are stated now:
 
@@ -473,7 +474,7 @@ regression test verified red first.
 **Why no gate saw it.** `e2e-toolbar-fit` exempts the whole `search` item from S7 under 2.5.8's
 _Inline_ exception **[READ — `fit.spec.ts:85-94`]**, and S1/S5 measure `[data-toolbar-item]`, which is
 the `<Input>` itself. A decorative `aria-hidden` glyph is invisible to axe. Nothing in the repository
-could have reported this, which is the argument for the assertion S8 adds.
+could have reported this, which is the argument for the assertion SC-8 adds.
 
 ### 3.3 The `⋯` that never empties — read, and why the obvious fix regresses
 
@@ -522,7 +523,7 @@ placeholder convention and not this one — worth a sentence in the doc so the n
 
 Decision 3 deletes `viewportCommandsAreFolded`. That predicate is what keeps Row 1 inside its
 container at 1024, 960 and 768: at those bands the four viewport commands are **not on the row at
-all** `[READ — `tsld-toolbar-items.tsx:1979, 1993, 2007, 2023`]`, and Row 1 lays out at exactly its
+all** **[READ — `tsld-toolbar-items.tsx:1979, 1993, 2007, 2023`]**, and Row 1 lays out at exactly its
 container **[MEASURED — `m3-narrow-widths.md` §3: 936/936, 872/872, 680/680]**. There is **no slack**
 at 768. Restoring four commands there costs ~144 px against a saving of ~52 px (the compact
 `zoom-preset` trigger) `[TO BE MEASURED]`.
