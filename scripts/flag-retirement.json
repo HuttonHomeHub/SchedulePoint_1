@@ -317,7 +317,7 @@
       "deferredUntil": {
         "trigger": "epic-touch: plan workspace",
         "debt": "#122",
-        "reason": "Seven flag-off Playwright configs pin this OFF and their specs are written against the legacy stacked plan-detail page — activity-editor, assignment-lag, base, edit, notes, programme, sub-day. That is the largest conversion cost in the estate and D5 forbids retiring before the coverage is replaced. Note sub-day and assignment-lag harness BOTH deferred survivors, so converting them is shared work whenever either is taken up."
+        "reason": "MEASURED 2026-08-12 (ADR-0090 M6, docs/specs/workspace-layout/m6-harness-conversion.md). Seven flag-off Playwright configs pin this OFF; all seven were probed with a bare pin-flip and ALL SEVEN FAIL — 27 specs in total: base 8 of 17, activity-editor 11, edit 3, sub-day 2, notes 1, programme 1, assignment-lag 1. Not one is a configuration edit; every one needs new selectors against the surviving surface. Three of them (base, programme, notes) additionally pin VITE_TSLD_EDITING and VITE_PLAN_EDIT_LOCK off DELIBERATELY to stay pen-free, so converting those must first establish that the journey works pen-free against the surviving workspace or it silently changes what the journey tests. ADR-0090 fired the epic-touch trigger and took the milestone-s own stated off-ramp on this number rather than holding M1-M5 behind it; the trigger is re-recorded here rather than left to rot. D5 still forbids retiring before the coverage is replaced. Note sub-day and assignment-lag harness BOTH deferred survivors, so converting them is shared work whenever either is taken up."
       },
       "class": "A"
     },

@@ -60,6 +60,23 @@ unprobed and must be run the same way; **do not infer their result from these fi
    `scripts/flag-retirement.json`'s `retired` list with a batch, ratchet `classACap` 1 → 0, and close
    `docs/TECH_DEBT.md` #122.
 
-**The off-ramp stays open** (M6's own "stated up front"): if this threatens M1–M4, it is deferred and
-the trigger is **re-recorded with a reason** in `scripts/flag-retirement.json` and `#122` — not
-silently left to rot. Deferring is a decision; ignoring is a defect.
+## 4. The off-ramp is taken, with the number that justifies it
+
+M6's own plan states the off-ramp up front: _"This is the largest conversion cost in the estate. If it
+threatens M1–M4, it is deferred — and the trigger is **re-recorded with a reason**… Deferring is a
+decision; ignoring is a defect."_
+
+**27 spec conversions across seven harnesses, three of which must first be shown to work pen-free**,
+is that threat made concrete. M1–M5 are complete, gated and in review; bolting a 27-spec conversion
+onto that pull request would hold a finished, independently valuable change behind a mechanical job
+whose size was unknown when the milestone was scheduled and is now measured.
+
+So M6 is **deferred, not dropped**, and the trigger is re-recorded in `scripts/flag-retirement.json`
+and `docs/TECH_DEBT.md` #122 with this measurement attached — whoever picks it up starts from a
+survey and seven probe results rather than from a file list.
+
+**What the deferral does not cost.** `VITE_CANVAS_WORKSPACE` is already default-on and, per ADR-0088
+D1, **cannot be switched off on any deployed container** — `docker-publish.yml` passes no `VITE_`
+build arg, so every published image carries it on. Nothing about the running product depends on this
+decision. What survives is the second product in the source tree, and the seven harnesses that still
+exercise it.

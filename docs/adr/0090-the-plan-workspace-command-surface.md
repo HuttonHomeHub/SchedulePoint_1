@@ -428,6 +428,83 @@ The measured before/after is `docs/specs/workspace-layout/m3-narrow-widths.md`. 
 out inside its container at every width in the gate's list**, so `PINNED_FLOOR_WIDTH` retires from
 1440 to 768 and S4 applies everywhere — M3's stated outcome, met with numbers rather than asserted.
 
+## Milestone 5 as built (2026-08-12) — what four specialists found, and one thing nobody had
+
+The gate pass ran `ux-reviewer`, `accessibility-reviewer`, `component-reviewer` and
+`performance-reviewer` over the combined M1–M4 diff. Performance passed outright, having re-derived
+the new layout band's convergence argument from the code rather than accepting the milestone's word
+for it. The other three produced three blocking findings, all folded with regression tests **verified
+red first**. Five things are worth carrying forward.
+
+**M5-a — a committed fix silently did not ship, and that is a new shape of drift for this register.**
+M2-T6 specified deleting the row-caption gutters and passing a per-row `groupLabels` override, in
+concrete steps, discharging two rows of an earlier ux review's disposition table. M2 shipped without
+either. Neither this ADR's "Milestone 2 as built" section — which exists to list what the plan did not
+contain — nor `docs/TECH_DEBT.md` recorded the omission. Every previous instance in this register is
+a document that **describes the code wrongly**; this is a document that describes work **correctly**
+and the work not happening, with the record silent. ADR-0058's rule (_verify the claim_) does not
+catch it, because there was no false claim to verify — the plan was right and unexecuted. Both steps
+landed here: the captions and their 64 px gutters are gone (each row gained 72 px of container,
+re-measured, everything still fits), "Navigate" no longer collides with the `frame` group's own
+`aria-label`, and Row 1's `object` group is **Plan info** rather than a second "Plan actions" — it
+holds one read-out, not commands.
+
+**M5-b — the gate caught this ADR's own reasoning being wrong.** M3-b argues the four viewport
+commands are better inside `Zoom ▾` than in the anonymous `⋯` because _"only `Zoom ▾` names the
+subject"_. **The trigger does not say "Zoom".** It renders the current preset, so on Surface Pro
+landscape — the device this epic names as its target, and a `compact` container where the fold is
+active — a planner hunting for **Fit to plan** met a button labelled "Week" beside a calendar icon,
+with no on-screen text saying Zoom anywhere. Asserted and never looked at: ADR-0076 Class 3, inside
+the milestone whose own gate found it. The label is now `Zoom · Week` exactly when the fold is
+active. The icon is left alone and filed (`docs/TECH_DEBT.md` #130) — choosing a glyph meaning "the
+viewport" is a design decision, and this epic is about width.
+
+**M5-c — the M2-T1 discoverability obligation is discharged rather than deferred a second time.** The
+plan wrote it down: the two relocated commands are _"absent until a bar is selected, and nothing
+announces that they exist… M3 must check that discoverability is not what got optimised away."_ M3
+did not check. **Omitting them is correct** by ADR-0082's discriminator — the action does not apply
+with nothing selected — so what was lost is not the control but the **teaching**, which the shaded
+state used to do. The teaching moves to the keyboard-shortcuts sheet, the surface a planner opens to
+learn the canvas, rather than being bought back with pinned width on every plan.
+
+**M5-d — two more instances of one correct pattern applied to a control and not its neighbour.**
+`ToolbarPopover` surfaced its disabled reason through a native `title` alone — the exact approach
+`ToolbarButton`'s own docblock records as insufficient, because no mainstream browser shows a `title`
+on keyboard focus. Reachable, not theoretical: `Filter` is `isEnabled: hasDiagram`. And
+`ToolbarOverflow` gave **every** `isActive` item a `menuitemcheckbox`, including the two
+mutually-exclusive segment pairs, so two checkboxes announced that a planner may hold both Early and
+Visual at once; `demotionGroup` is what makes them one unit, so it is the discriminator, and
+`defineToolbar` now also rejects a pair whose tiers disagree — which would split a segment silently.
+
+**M5-e — a test that passed green against the broken code, for a reason this repository had already
+written down.** The first `ToolbarPopover` regression test asserted only `toHaveAccessibleDescription`
+and passed against the pre-fix component, because a `title` **also** contributes to the accessible
+description under the accname spec. `ToolbarOverflow.test.tsx` records that precise caveat about its
+own suite, one file over, and it was walked into anyway. The assertion is now on the mechanism —
+`aria-describedby` resolving to an element carrying the reason — and it goes red as it should.
+
+## Milestone 6 — deferred on a measurement, and the trigger re-recorded
+
+M6 was to retire `VITE_CANVAS_WORKSPACE`, the estate's last Class A flag, whose
+`scripts/flag-retirement.json` deferral trigger is _"epic-touch: plan workspace"_ — fired by this
+epic whether or not it acts.
+
+It acts by taking the milestone's **own stated off-ramp**, on a number that did not exist when the
+milestone was scheduled. All seven flag-off harnesses were probed with a bare pin-flip: **all seven
+fail, 27 specs in total** (base 8 of 17, `activity-editor` 11, `edit` 3, `sub-day` 2, and one each
+for `notes`, `programme`, `assignment-lag`). Not one is a configuration edit. Three of them — base,
+`programme`, `notes` — additionally pin the pen off **deliberately** to stay pen-free, so converting
+those must first establish that each journey works pen-free against the surviving workspace, or the
+conversion silently changes what it tests.
+
+So the trigger is **re-recorded with that measurement** in `scripts/flag-retirement.json` and
+`docs/TECH_DEBT.md` #122, per M6's own rule that _deferring is a decision; ignoring is a defect_. The
+survey and all seven probe results are in
+[`docs/specs/workspace-layout/m6-harness-conversion.md`](../specs/workspace-layout/m6-harness-conversion.md),
+so the next attempt starts from evidence rather than a file list. Nothing about the running product
+turns on this: the flag is already default-on and, per ADR-0088 D1, cannot be switched off on any
+deployed container.
+
 ## References
 
 - Design: [`docs/specs/workspace-layout/design.md`](../specs/workspace-layout/design.md)

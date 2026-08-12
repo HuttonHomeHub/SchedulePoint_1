@@ -2011,6 +2011,20 @@ double-submit apart from a slow one. Left open rather than guessed at.
 **Half closed 2026-08-11**: `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE`
 remains open with five harnesses left rather than seven.
 
+**Measured and re-deferred 2026-08-12 (ADR-0090 M6).** This epic fired the `epic-touch: plan
+workspace` trigger and took the milestone's own stated off-ramp, on evidence rather than instinct:
+all **seven** flag-off harnesses were probed with a bare pin-flip and **all seven fail — 27 specs**
+(base 8 of 17, `activity-editor` 11, `edit` 3, `sub-day` 2, and one each for `notes`, `programme`,
+`assignment-lag`). **Not one is a configuration edit**; every one needs new selectors against the
+surviving surface. Three — base, `programme`, `notes` — also pin `VITE_TSLD_EDITING` /
+`VITE_PLAN_EDIT_LOCK` off **deliberately** to stay pen-free, so converting those must first establish
+that the journey works pen-free against the surviving workspace or it silently changes what the
+journey tests. The count above ("five harnesses left rather than seven") is superseded: seven remain.
+Survey and per-suite probe results:
+[`docs/specs/workspace-layout/m6-harness-conversion.md`](specs/workspace-layout/m6-harness-conversion.md).
+The `deferredUntil.reason` in `scripts/flag-retirement.json` carries the same measurement, so the
+next attempt starts from evidence rather than a file list.
+
 `VITE_ACTIVITY_EDITOR_TABS` and `VITE_CANVAS_WORKSPACE` are the two alternative surfaces the batch-2
 retirement did **not** take. Both carried `deferredUntil` in `scripts/flag-retirement.json` (ADR-0088
 D3a), which suspends their batch dates against a **named event** rather than a date — so this row is

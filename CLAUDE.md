@@ -1878,7 +1878,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   **The CPM engine is not imported and no migration runs**, so the ADR-0034 parity gate is
   untouched by construction.
 
-- **ADR-0090** _(Accepted 2026-08-11; M1 in progress)_ — The plan-workspace command surface: a row
+- **ADR-0090** _(Accepted; M1–M5 landed 2026-08-12, M6 deferred on a measurement)_ — The plan-workspace command surface: a row
   is a budget, and `order` is not a priority. Opened as a layout complaint — the two-row TSLD
   toolbar "doesn't work well" on a 24" 1920×1080 monitor, and its behaviour on a Surface Pro was
   unknown — and it turned out to sit on a **live defect in shipped software**. The command surface
@@ -1917,6 +1917,32 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   probably withdraw today's labels until M2 restores them: a correct icon-only row beats an
   unclickable labelled one. **Frontend-only — the CPM engine is not imported and no migration runs**,
   so the ADR-0034 recalculation parity gate is untouched by construction.
+  **M2–M4 landed as measured, and every milestone's headline number was re-derived rather than
+  carried.** M2 took 44 toolbar stops to 28 and bought both rows their labels at 1920 for the first
+  time; M3 added four responsive bands off the row's own container with 48 px hysteresis, folded the
+  four viewport commands into `Zoom ▾`, and made both rows fit inside their container at **every**
+  width from 2133 down to 768, retiring the fit gate's floor from 1440. Along the way the gate found
+  the split-button caret failing WCAG 2.5.8 at **23 × 36** — a dispute the plan could only frame as
+  "arithmetic against arithmetic" — because the gate swept `[data-toolbar-item]`, which sits on an
+  item's _focusable_ control, and a caret is deliberately `tabIndex={-1}`. **M4 is where measuring
+  first paid for itself**: `design.md` §2.1's three vertical figures were all wrong (45/199/717
+  against a measured 53/257/533, the last overstating canvas by 35 %), and folding the identity line
+  into the band **gained exactly nothing** — relocating a row inside one column removes nothing. The
+  8 px it did gain came from matching the rows' rhythm, and `m4-vertical-stack.md` says so rather
+  than quoting 8 px as a success.
+  **M5's gate pass found the register's newest shape of drift.** M2-T6 specified deleting the
+  row-caption gutters and a per-row `groupLabels` override; M2 shipped without either and **nothing
+  recorded it** — every prior instance here is a document describing the code wrongly, and this is a
+  document describing work correctly and the work not happening, which ADR-0058's rule cannot catch
+  because there was no false claim to verify. It also caught this ADR's own M3-b reasoning: _"only
+  `Zoom ▾` names the subject"_ — and the trigger renders the current preset, so on the epic's own
+  target device a planner hunting for **Fit to plan** met a button labelled "Week". Both fixed, with
+  two more instances of one correct pattern applied to a control and not its neighbour, and a
+  regression test that **passed green against the broken code** for a reason recorded one file over.
+  **M6 is deferred on a number that did not exist when it was scheduled**: all seven flag-off
+  harnesses were probed and **all seven fail — 27 specs**, none of them a configuration edit. The
+  trigger is re-recorded with that measurement rather than left to rot, per the milestone's own rule
+  that deferring is a decision and ignoring is a defect.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
