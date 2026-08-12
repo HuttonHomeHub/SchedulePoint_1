@@ -34,8 +34,28 @@ import { cva } from 'class-variance-authority';
  * composite is now duplicated across two controls; a third should extract it rather than copy it
  * (`docs/TECH_DEBT.md` #76).
  */
+/**
+ * The **24 px pointer-target floor** for a split button's caret (WCAG 2.2 §2.5.8 Target Size
+ * (Minimum), AA). One constant rather than a literal at each caret, because there are **three** of
+ * them and the third is how this was found.
+ *
+ * **Measured, not reasoned** (ADR-0090 M3): the two shared carets rendered **23 × 36** and
+ * `IsolateControl`'s bespoke one **22 × 36** — a `size-3.5` chevron (14 px) inside `px-1` (8 px),
+ * plus this variant's 1 px divider. The M3 plan disputed ≈22 vs 24 px and called for the real box to
+ * be captured before deciding; `e2e-toolbar-fit`'s S7 sweep captured it, and both were failing.
+ *
+ * **None of §2.5.8's exceptions apply, which is why this is a fix rather than a waiver.** *Spacing*
+ * fails because a 24 px circle centred on the caret intersects the primary it sits flush against.
+ * *Equivalent* fails because the only other route to the menu is `ArrowDown`/`ArrowUp` on the
+ * primary — a keyboard affordance, and 2.5.8 is about pointer targets. *Inline* and *Essential* are
+ * not in play.
+ *
+ * `justify-center` goes with it: the floor adds width the icon would otherwise sit left of.
+ */
+export const TOOLBAR_CARET_TARGET = 'min-w-6 justify-center';
+
 export const toolbarSplitCaretVariants = cva(
-  'border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70',
+  `border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70 ${TOOLBAR_CARET_TARGET}`,
 );
 
 export const toolbarControlVariants = cva(

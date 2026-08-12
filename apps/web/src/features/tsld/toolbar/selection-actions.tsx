@@ -23,7 +23,10 @@ import {
   type ToolbarItem,
   type ToolbarItemRenderApi,
 } from '@/components/ui/toolbar/toolbar-registry';
-import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
+import {
+  TOOLBAR_CARET_TARGET,
+  toolbarControlVariants,
+} from '@/components/ui/toolbar/toolbar-styles';
 import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -251,7 +254,16 @@ function IsolateControl({
           onClick={() => {
             if (!disabled) toggle();
           }}
-          className={cn(toolbarControlVariants({ active: open, disabled }), 'rounded-l-none px-1')}
+          // `TOOLBAR_CARET_TARGET` — the 24 px floor §2.5.8 requires. This caret is the **third**
+          // copy of the split-button affordance (`docs/TECH_DEBT.md` #76 asked for an extraction and
+          // got two consumers, not three), and at `px-1` around a `size-3.5` chevron it measured
+          // 22 px. The fit gate cannot see it: the selection bar is out of that gate's scope by
+          // decision (#124), so this one is held by the shared constant alone.
+          className={cn(
+            toolbarControlVariants({ active: open, disabled }),
+            'rounded-l-none px-1',
+            TOOLBAR_CARET_TARGET,
+          )}
         >
           <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
         </button>
