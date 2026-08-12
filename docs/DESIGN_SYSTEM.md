@@ -707,6 +707,21 @@ field hint says so in a sentence.
 - Microcopy: plain, concise, sentence case; consistent terminology; actionable
   error and empty-state text.
 
+### The `…` convention on control labels (ADR-0091)
+
+An ellipsis means **activating this opens something that needs more input before anything happens** —
+`Schedule settings…`, `Report progress…`. It is a promise that nothing is about to change yet.
+
+A control that already renders a **disclosure caret** does not take one. The caret has said it, and
+saying it twice is noise on a dense row. So `Go to date` is correct without an ellipsis: it is a
+`ToolbarPopover`, and that primitive always renders a `ChevronDown`.
+
+This was raised as an inconsistency and audited before anything was edited; under the rule that
+actually applies, **the set was already consistent**, so the audit's outcome was to write the rule
+down rather than change a label. `ellipsis-convention.structural.test.ts` gates the half a machine
+can see — a disclosure item must never carry the character — and says in its own docblock that the
+converse is a review question, not something the gate covers.
+
 ## Governance
 
 - Changing a token changes the whole app — token edits require review and a note
