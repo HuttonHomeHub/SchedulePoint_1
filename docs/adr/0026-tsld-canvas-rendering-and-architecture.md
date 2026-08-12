@@ -208,8 +208,19 @@ flowchart TD
   intent. **Modifier keys pick the type** (PROJECT_BRIEF §11): default **FS**,
   **Shift = SS**, **Alt = FF**. **SF** (rare) is not on a modifier — it is set via the
   existing `AddDependencyDialog`/`DependencyEditor`, which the drop can open pre-
-  filled. Live legality feedback (would this create a cycle? — the DAG invariant is
-  ADR-0021) is shown during the rubber-band and enforced authoritatively by the API.
+  filled.
+
+  > **The SF clause is spent, 2026-08-12.** It was scoped to _this_ gesture: an edge-drag
+  > types a link by modifier key, and there are exactly three (none / Shift / Alt), so SF
+  > lost the ballot for a slot. **ADR-0052 replaced the edge-drag with the two-click Link
+  > tool and its explicit type menu**, which has no three-way limit — but the exclusion
+  > outlived the constraint, carried in `tsld-toolbar-items.tsx` by a citation of this
+  > bullet. `Start → Finish` therefore scheduled and painted correctly and could not be
+  > drawn, for a year. The canvas now offers all four, derived from `@repo/types`. Nothing
+  > above is withdrawn — it was right about the gesture it describes, and that gesture is
+  > gone. See `docs/DECISIONS.md`. Live legality feedback (would this create a cycle? — the DAG invariant is
+  > ADR-0021) is shown during the rubber-band and enforced authoritatively by the API.
+
 - **Critical path & driving arrows.** Criticality is read from
   `isCritical`/`isNearCritical` (engine-owned) and drawn as emphasis on the base
   layer. **Driving vs non-driving** arrows require an `isDriving` flag that
