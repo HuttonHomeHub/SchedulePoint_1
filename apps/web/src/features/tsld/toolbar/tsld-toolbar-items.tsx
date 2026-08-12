@@ -44,7 +44,7 @@ import {
   Waypoints,
   X,
 } from 'lucide-react';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 
 import { FILTER_ATTRS, type ColourMode } from '../render/lenses';
 import type { TsldViewToggles } from '../render/paint';
@@ -766,12 +766,26 @@ function ZoomPresetControl({
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <CalendarRange aria-hidden="true" className="size-4" />
-        {/* The current level is real information, so withholding it in the collapsed band is a cost,
-            not a tidy-up — but it is already in this button's `aria-label` and `title`, and the
-            alternative was Row 1 laying out wider than the tablet holding it. The trigger is also
-            the one control that must survive collapse intact: below 1280 it holds the four viewport
-            commands as well (see `viewportCommandsAreFolded`). */}
-        {triggersAreCompact(api.layout) ? null : <span className="truncate">{activeLabel}</span>}
+        {/* **The trigger names its subject once it owns more than presets** (ADR-0090 M5, ux gate).
+            M3-b's reasoning was that the four viewport commands were better in `Zoom ▾` than in the
+            anonymous `⋯` because "only `Zoom ▾` names the subject" — and the trigger does not say
+            "Zoom". It renders the current preset, so a planner on Surface Pro landscape hunting for
+            **Fit to plan** sees a button labelled "Week" beside a calendar icon, with no on-screen
+            text saying Zoom anywhere. That was asserted and never looked at: ADR-0076 Class 3, in
+            the milestone whose own gate caught it.
+
+            The prefix appears **exactly when the fold does**, so the label grows only where the menu
+            gained contents that need naming. The icon is left alone deliberately: `CalendarRange` is
+            right for a control whose presets are time ranges, and choosing a glyph for "the
+            viewport" is a design decision rather than a layout one (`docs/TECH_DEBT.md` #130).
+
+            In the collapsed band there is no visible label at all, which is the trade the whole band
+            makes; the name is in `aria-label` and `title`. */}
+        {triggersAreCompact(api.layout) ? null : (
+          <span className="truncate">
+            {viewportCommandsAreFolded(api.layout) ? `Zoom · ${activeLabel}` : activeLabel}
+          </span>
+        )}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
       </button>
       <Menu
@@ -1137,6 +1151,7 @@ function PlanAnalysisControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
+  const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
   return (
@@ -1149,6 +1164,8 @@ function PlanAnalysisControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? ANALYSIS_LABEL) : ANALYSIS_LABEL}
+        {...(disabled && api.disabledReason ? { 'aria-label': ANALYSIS_LABEL } : {})}
+        {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
         }}
@@ -1157,6 +1174,11 @@ function PlanAnalysisControl({
         <ChartArea aria-hidden="true" className="size-4" />
         <span className="truncate">{ANALYSIS_LABEL}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        {disabled && api.disabledReason ? (
+          <span id={reasonId} className="sr-only">
+            {api.disabledReason}
+          </span>
+        ) : null}
       </button>
       <Menu
         open={open}
@@ -1210,7 +1232,11 @@ function FilterMenuControl({
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
       {...(api.disabled ? { disabled: true } : {})}
-      {...(api.disabled && api.disabledReason ? { title: api.disabledReason } : {})}
+      // `disabledReason`, not `title` (ADR-0090 M5 accessibility gate). `Filter` is
+      // `isEnabled: ctx.hasDiagram`, so every empty or uncomputed plan reaches this state, and a
+      // native tooltip is not shown on keyboard focus by any mainstream browser — the finding
+      // `ToolbarButton`'s docblock records fixing for the plain button and not for its neighbour.
+      {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
     >
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Show only</legend>
@@ -1272,6 +1298,7 @@ function ExportMenuControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
+  const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
   return (
@@ -1284,6 +1311,8 @@ function ExportMenuControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? SHARE_EXPORT_LABEL) : SHARE_EXPORT_LABEL}
+        {...(disabled && api.disabledReason ? { 'aria-label': SHARE_EXPORT_LABEL } : {})}
+        {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
         }}
@@ -1292,6 +1321,11 @@ function ExportMenuControl({
         <FileDown aria-hidden="true" className="size-4" />
         <span className="truncate">{SHARE_EXPORT_LABEL}</span>
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        {disabled && api.disabledReason ? (
+          <span id={reasonId} className="sr-only">
+            {api.disabledReason}
+          </span>
+        ) : null}
       </button>
       <Menu
         open={open}

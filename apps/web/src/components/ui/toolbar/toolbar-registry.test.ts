@@ -62,7 +62,7 @@ describe('defineToolbar invariants', () => {
 });
 
 describe('groupRank — canonical left→right order', () => {
-  it('orders the taxonomy frame < lens < find < tools < object < history < help', () => {
+  it('orders the taxonomy frame < lens < find < tools < object < output < help', () => {
     expect(groupRank('frame')).toBeLessThan(groupRank('lens'));
     expect(groupRank('tools')).toBeLessThan(groupRank('object'));
     expect(groupRank('object')).toBeLessThan(groupRank('help'));
@@ -471,5 +471,25 @@ describe('resolveLayoutMode', () => {
     const up = sweep(800, 1800, 1);
     expect(down).toEqual([1535, 1279, 1023]);
     expect(up).toEqual([1024 + H, 1280 + H, 1536 + H]);
+  });
+});
+
+/**
+ * **The `demotionGroup` tier invariant** (ADR-0090 M5, component gate). Verified red by removing the
+ * check from `defineToolbar`.
+ */
+describe('defineToolbar — demotionGroup companions share a tier', () => {
+  const seg = (id: string, tier: 1 | 2 | 3): ToolbarItem<Ctx> =>
+    base({ id, tier, demotionGroup: 'view-mode', isActive: () => false });
+
+  it('accepts a pair on the same tier', () => {
+    expect(() => defineToolbar([seg('left', 1), seg('right', 1)])).not.toThrow();
+  });
+
+  it('rejects a pair whose tiers disagree, naming the group', () => {
+    // A tier-3 companion is in the STATIC overflow and never enters `computeOverflow`'s pair map, so
+    // the segment would split: one half always in the `⋯`, the other only sometimes. That is the
+    // exact state `demotionGroup` exists to prevent, and it would look correct in the registry.
+    expect(() => defineToolbar([seg('left', 1), seg('right', 3)])).toThrow(/view-mode/);
   });
 });

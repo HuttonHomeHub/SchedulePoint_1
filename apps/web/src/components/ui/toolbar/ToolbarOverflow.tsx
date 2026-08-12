@@ -53,7 +53,24 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
         // toggle, and on the bar its `ToolbarButton` carries `aria-pressed`; without this it became a
         // plain `menuitem` here and announced nothing, so a screen-reader user could not tell whether
         // Float paths was open. Items with no `isActive` stay plain `menuitem`s.
-        {...(r.item.isActive ? { checked: r.active } : {})}
+        //
+        // **`checked` or `selected`, discriminated by `demotionGroup`** (ADR-0090 M5, component
+        // gate). `checked` was applied uniformly, which is right for an independent toggle and wrong
+        // for a **segment**: `mode-early`/`mode-visual` and `view-tsld`/`view-gantt` are
+        // mutually-exclusive pairs, guaranteed by D3 to demote together, and two independent
+        // `menuitemcheckbox`es say a planner can have both Early and Visual at once. `demotionGroup`
+        // is exactly the marker for "these are one choice" — it is what makes them demote as a unit
+        // — so it is the honest discriminator rather than a second field meaning the same thing.
+        //
+        // Latent rather than observed: no segment has been seen in the `⋯` (they are tier 1 and
+        // pinned-adjacent), which is also why nothing caught it. `MenuItem` already knows how to say
+        // this correctly — `selected` → `menuitemradio` — and `IsolateControl`'s own Full/Driving
+        // picker uses it. One correct pattern applied to a control and not its neighbour, again.
+        {...(r.item.isActive
+          ? r.item.demotionGroup
+            ? { selected: r.active }
+            : { checked: r.active }
+          : {})}
         onSelect={() => r.item.onActivate!(context)}
       >
         {icon}

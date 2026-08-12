@@ -368,6 +368,25 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       }
     }
   }
+  // **A `demotionGroup`'s companions must share a `tier`** (ADR-0090 M5, component gate). D3's "a
+  // segment is one demotion unit" guarantee only holds while both halves are on the bar: a `tier: 3`
+  // companion is in `partitionByTier`'s static overflow and never enters `computeOverflow`'s pair
+  // map at all, so the pairing would degrade silently to "one always overflows, the other sometimes
+  // does" — a split segment, which is the exact state `demotionGroup` exists to prevent. Both
+  // current pairs happen to agree, so this has shipped no defect; it is a guard for the next author.
+  const tierByGroup = new Map<string, ToolbarTier>();
+  for (const item of items) {
+    if (!item.demotionGroup) continue;
+    const seen = tierByGroup.get(item.demotionGroup);
+    if (seen === undefined) tierByGroup.set(item.demotionGroup, item.tier);
+    else if (seen !== item.tier) {
+      throw new Error(
+        `defineToolbar: demotionGroup "${item.demotionGroup}" mixes tier ${seen} and tier ${item.tier} — ` +
+          'companions must share a tier, or they cannot demote as one unit.',
+      );
+    }
+  }
+
   return items;
 }
 

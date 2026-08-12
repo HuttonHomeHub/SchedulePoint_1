@@ -128,6 +128,30 @@ export function TsldShortcutsHelp({
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">Select</h3>
             <ShortcutList items={MULTI_SELECT_SHORTCUTS} />
+            {/*
+              **What a selection unlocks** (ADR-0090 M5, discharging the M2-T1 obligation).
+
+              M2-T1 moved `Zoom to selection` and `Isolate logic path` from Row 1 to the selection
+              bar, and the plan recorded the cost in its own words: *"Afterwards they are absent
+              until a bar is selected, and nothing announces that they exist… M3 must check that
+              discoverability is not what got optimised away."* M3 did not check it; the M5 ux gate
+              found the obligation still open.
+
+              **Omitting them is right** — ADR-0082's discriminator says omit when the action does
+              not apply to the object, and "zoom to the selection" does not apply with nothing
+              selected. What was lost is not the control but the **teaching**: the shaded state used
+              to state the precondition. So the teaching moves here, to the sheet a planner opens to
+              learn the canvas, instead of buying it back with pinned width on every plan.
+
+              A sentence rather than `ShortcutList` rows, because these have no keystroke and a
+              key column with nothing in it reads as a binding nobody can remember.
+            */}
+            <p className="text-muted-foreground text-sm">
+              Selecting an activity reveals its own action bar on the canvas — including{' '}
+              <strong className="text-foreground font-medium">Zoom to selection</strong> and{' '}
+              <strong className="text-foreground font-medium">Isolate logic path</strong>, which act
+              on what you have selected.
+            </p>
           </section>
         ) : null}
         {editingEnabled ? (

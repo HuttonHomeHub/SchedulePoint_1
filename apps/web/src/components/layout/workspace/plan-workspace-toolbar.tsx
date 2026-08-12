@@ -75,17 +75,31 @@ import { cn } from '@/lib/utils';
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
 const MD_QUERY = '(min-width: 48rem)';
 
-/** The visible row-purpose eyebrow's type treatment — kept as one constant so the two rows can't
- * drift apart on a future edit. `text-xs` is the design system's smallest type-scale step
- * (`docs/DESIGN_SYSTEM.md` "Captions, meta"), not an arbitrary size. */
-const ROW_LABEL_CLASSNAME = 'text-muted-foreground text-xs font-semibold tracking-wide uppercase';
+/**
+ * Row 1's group-name override. Only `object` differs from the primitive's defaults, and only because
+ * that group holds a read-out on this row and commands on the other; a name shared by two visible
+ * regions is the collision M2-T6 exists to remove, not a tidy-up.
+ */
+const ROW_LOOK_GROUP_LABELS = { object: 'Plan info' } as const;
 
-/** The eyebrow's **gutter**, not just its type (feature-spec.md §4.1): a fixed-width, right-ruled
- * column so the label reads as the row's gutter rather than a control sitting in the row's own
- * button rhythm — the defect a first pass left was rhythm, not weight. Both rows share one fixed
- * width so their toolbars begin at the same x; the rule is the row's leftmost rule, so `<Toolbar>`'s
- * own between-group hairlines (`i > 0`) never double up against it. */
-const ROW_LABEL_GUTTER_CLASSNAME = 'border-border flex w-16 shrink-0 items-center border-r pr-2';
+/**
+ * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5 — see below).
+ *
+ * A ux review once asked for them, and the plan committed to removing them again with the
+ * replacement stated: each `role="group"` keeps its own visible hairline and its own accessible
+ * name, and after M2's consolidation the rows are short enough to read without a gutter telling you
+ * what they are. That is the trade, said out loud rather than quietly reversed.
+ *
+ * **One edit fixed three things.** 64 px of gutter per row; the collision where "Navigate" was both
+ * the visible Row-1 caption and the `frame` group's `aria-label`, so AT announced it twice; and the
+ * ux finding that neither caption described more than a fraction of its row — Row 1's "Navigate"
+ * captioned five taxonomy groups, most of which do not navigate.
+ *
+ * **It is recorded here because it did not ship when it was supposed to.** M2-T6 specified this as
+ * concrete steps, M2 shipped without them, and neither ADR-0090's "as built" section nor
+ * `docs/TECH_DEBT.md` recorded the omission — a committed-to fix that silently did not happen,
+ * which is the mirror image of the drift ADR-0058 was written about. The M5 ux gate found it.
+ */
 
 /**
  * The **canvas-maximal, toolbar-hosted** plan workspace (ADR-0031) — and, since ADR-0088 D3 retired
@@ -831,26 +845,21 @@ export function ToolbarPlanWorkspace({
               caption. `aria-hidden` avoids a redundant/out-of-context announcement — the toolbar's own
               `aria-label` already names the row for AT. */}
           <div className="border-border flex items-center gap-2 border-b px-2 py-1">
-            <div className={ROW_LABEL_GUTTER_CLASSNAME}>
-              <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
-                Navigate
-              </span>
-            </div>
             <Toolbar
               items={rows.look}
               context={ctx}
               label="View and navigate"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               alignEndGroup="object"
+              // Row 1's `object` group is a single **read-out** — `Summary ▾` — so the shared default
+              // "Plan actions" is wrong twice: it is not an action, and Row 2's `object` group
+              // (Analysis, Schedule settings, Report progress, Comments) genuinely is, leaving two
+              // on-screen regions with one name. M2-T6 step 2, landed at M5.
+              groupLabels={ROW_LOOK_GROUP_LABELS}
               className="flex-1"
             />
           </div>
           <div className="flex items-center gap-2 px-2 py-1">
-            <div className={ROW_LABEL_GUTTER_CLASSNAME}>
-              <span aria-hidden="true" className={ROW_LABEL_CLASSNAME}>
-                Build
-              </span>
-            </div>
             <Toolbar
               items={rows.do}
               context={ctx}

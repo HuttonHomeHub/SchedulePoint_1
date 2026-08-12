@@ -2331,3 +2331,49 @@ knowing about plans, plus an answer for the organisation nav that already does n
 `measure-toolbar/vertical-stack.spec.ts` reports the row's horizontal budget (`appHeaderRoom`) for
 exactly this question, and at 1920 it reported **one child using 1888 of 1920 px** — there is no gap to
 slot into today.
+
+## 130. The zoom trigger's icon says "date range", and it now owns the viewport
+
+**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass
+
+`ZoomPresetControl`'s icon is `CalendarRange`, which was right while the control did one thing: its
+presets **are** time ranges (Day / Week / Month / Quarter / Year). Below the `comfortable` band it now
+also holds Zoom out, Zoom in, Fit to plan and Go to today (ADR-0090 M3-T2), so the subject it names is
+the **viewport**, and a calendar glyph is no longer the honest cue.
+
+M5 fixed the half that could be fixed without a design decision: the visible label becomes
+`Zoom · Week` exactly when the fold is active, so there is on-screen text saying "Zoom". The icon is
+left alone deliberately — picking a glyph that means "the viewport" rather than "a date range" is a
+statement about the control, and this milestone is about width.
+
+**It matters most in the collapsed band**, where there is no visible label at all and the icon is the
+only cue a sighted pointer user gets.
+
+**What to do:** choose an icon with the design pass that also settles `docs/TECH_DEBT.md` #126's four
+segment icons — they are the same kind of question, and answering them together stops the toolbar
+acquiring two glyph vocabularies.
+
+## 131. An icon-only toolbar control names itself only on hover, and the target device has none
+
+**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** M · **Owner:** a design-system pass
+
+Every icon-only toolbar control carries its name in `aria-label` and `title`. A screen-reader user
+gets it; a **sighted, touch-only** user does not, because `title` tooltips never fire on tap. That is
+long-standing convention here and was acceptable while icon-only controls were the exception.
+
+ADR-0090 M3-T3 made it the rule in the **collapsed** band (< 1024 px container): `Go to date`, `Zoom`,
+`View`, `Filter` and `Summary` all become icon-only there. Collapsed is Surface Pro **portrait** —
+the device this epic names as its target — so the case where the names are least reachable is exactly
+the case the milestone was built for.
+
+**Not a WCAG failure**: the accessible name is present and correct, and 2.5.8 target size is met and
+gated. It is a usability gap against a real user on a named device.
+
+**Why it was not fixed here:** the answer is a tooltip primitive that opens on long-press/tap as well
+as hover, which is a design-system component with focus, dismissal (WCAG 1.4.13 Content on Hover or
+Focus) and portal concerns of its own. Inventing one inside a layout milestone is how a primitive
+ships without those. The alternative — keeping labels in the collapsed band — is what the measurement
+ruled out (`docs/specs/workspace-layout/m3-narrow-widths.md`).
+
+**What to do:** build the tooltip primitive, then adopt it on `ToolbarButton` and `ToolbarPopover`
+together, rather than on whichever control someone is holding at the time.

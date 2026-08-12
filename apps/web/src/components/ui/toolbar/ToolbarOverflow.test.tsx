@@ -208,3 +208,75 @@ describe('ToolbarOverflow — group sections (ADR-0090 M2-T6)', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Add activity' })).toHaveFocus();
   });
 });
+
+/**
+ * **Toggle state in the menu, and the difference between a toggle and a segment** (ADR-0090 M2/M5).
+ *
+ * An item that declares `isActive` is a toggle, and on the bar its `ToolbarButton` carries
+ * `aria-pressed`. Demoted into the `⋯` it used to become a plain `menuitem` and announce nothing, so
+ * a screen-reader user could not tell whether Float paths was open.
+ *
+ * The M5 component gate then found the fix applied one step too broadly: `checked` went on **every**
+ * `isActive` item, including the two mutually-exclusive segment pairs (`Early | Visual`,
+ * `Diagram | Gantt`), which D3 guarantees demote together. Two `menuitemcheckbox`es say a planner can
+ * hold both Early and Visual at once. `demotionGroup` is what makes them one unit, so it is the
+ * discriminator.
+ *
+ * **Verified red**: with the discriminator removed, the segment assertions fail on the role.
+ */
+describe('ToolbarOverflow — toggles vs segments (ADR-0090 M5)', () => {
+  const toggle = resolved({
+    active: true,
+    item: {
+      id: 'float-paths',
+      group: 'lens',
+      tier: 3,
+      order: 0,
+      label: 'Float paths',
+      isActive: () => true,
+      onActivate: () => {},
+    },
+  });
+  const segment = (id: string, label: string, active: boolean): ResolvedToolbarItem<Ctx> =>
+    resolved({
+      active,
+      item: {
+        id,
+        group: 'lens',
+        tier: 1,
+        order: 0,
+        label,
+        demotionGroup: 'scheduling-mode',
+        isActive: () => active,
+        onActivate: () => {},
+      },
+    });
+
+  it('announces an independent toggle as a checkbox, with its state', () => {
+    const menu = openOverflow([toggle]);
+    const item = within(menu).getByRole('menuitemcheckbox', { name: 'Float paths' });
+    expect(item).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('announces a segment pair as radios — one choice, not two switches', () => {
+    const menu = openOverflow([
+      segment('mode-early', 'Early mode', true),
+      segment('mode-visual', 'Visual mode', false),
+    ]);
+    expect(within(menu).getByRole('menuitemradio', { name: 'Early mode' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(menu).getByRole('menuitemradio', { name: 'Visual mode' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    // The failure this prevents: two checkboxes read as "you may have both".
+    expect(within(menu).queryAllByRole('menuitemcheckbox')).toHaveLength(0);
+  });
+
+  it('leaves an item with no isActive a plain menuitem', () => {
+    const menu = openOverflow([LIVE]);
+    expect(within(menu).getByRole('menuitem', { name: 'Fit to window' })).toBeInTheDocument();
+  });
+});

@@ -241,20 +241,32 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
   });
 
-  it('gives each row a visible purpose cue (ux review: the split otherwise lived only in aria-label)', () => {
+  /**
+   * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5). These two assertions used
+   * to pin them in place; they are replaced rather than deleted, because "the gutter is absent" is
+   * a weaker claim than "the thing it existed for is still true".
+   *
+   * A ux review asked for the captions because the Look/Do split lived only in each row's
+   * `aria-label`, invisible to sighted users. The plan's replacement is that each `role="group"`
+   * keeps its own visible hairline and its own accessible name, and that after M2's consolidation
+   * the rows are short enough to read — so what is asserted now is the replacement, not the removal.
+   */
+  it('no longer prints a row-purpose caption, and no group name is announced twice', () => {
     renderScreen();
-    expect(screen.getByText('Navigate')).toBeInTheDocument();
-    expect(screen.getByText('Build')).toBeInTheDocument();
-  });
-
-  it('reads the row cue as a true label — a fixed-width gutter with a divider, not free-floating eyebrow text', () => {
-    renderScreen();
-    // F1 (tsld-toolbar-canvas-refinements): the row word sits inside a bordered gutter that shares
-    // the toolbar's own divider treatment, rather than sitting loose above the controls.
-    for (const word of ['Navigate', 'Build']) {
-      const gutter = screen.getByText(word).parentElement;
-      expect(gutter).toHaveClass('border-r', 'w-16', 'shrink-0');
-    }
+    // The captions themselves are gone — 64 px of gutter per row, and the collision where
+    // "Navigate" was both the visible caption and the `frame` group's `aria-label`.
+    expect(screen.queryByText('Navigate')).toBeNull();
+    expect(screen.queryByText('Build')).toBeNull();
+    // The replacement: every on-screen group region still names itself, and no two share a name.
+    // A shared name is the defect, not the absence of a caption — Row 1's `object` group holds one
+    // read-out (`Summary`) while Row 2's holds real commands, so both being "Plan actions" left two
+    // regions indistinguishable to a screen reader.
+    const names = screen
+      .getAllByRole('group')
+      .map((g) => g.getAttribute('aria-label') ?? '')
+      .filter(Boolean);
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it('shows the Project-finish read-out on the identity line, above the commands (M2-T3/M4-T2)', () => {
