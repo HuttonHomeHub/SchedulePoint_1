@@ -1,5 +1,42 @@
 # @repo/web
 
+## 0.86.0
+
+### Minor Changes
+
+- [#297](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/297) [`ab8c220`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ab8c2201d938878b9c2c6ee7bd9e684e33876b77) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The scheduling mode (`Early | Visual`) and the view switch (`Diagram | Gantt`) move out of the
+  toolbar's first row and onto the plan's identity line, beside **Start editing** — because that is
+  what they are. Neither _does_ anything: they set how everything below them behaves, which is exactly
+  the relationship the pen control already has to the toolbar. All four gain an icon.
+
+  They render as a third toolbar rather than as four hand-built buttons, so they keep roving arrow-key
+  focus, group labelling, the shaded-with-a-reason treatment and the pointer-target gate — each of
+  which this project has recorded shipping wrong once when rebuilt by hand.
+
+  The four buttons look and behave exactly as before; only where they sit has changed. The overflow
+  menu's radio/checkbox handling for these items is now unreachable on this surface (the mode row
+  shrink-wraps to its content and can never overflow) and is deliberately kept, because a future
+  width-constrained row would need it.
+
+- [#297](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/297) [`ab8c220`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ab8c2201d938878b9c2c6ee7bd9e684e33876b77) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Zoom presets move from their own toolbar dropdown into the **View** panel, as a radio group. The
+  old dropdown labelled itself with the _current_ preset, so a planner hunting for **Fit to plan** met
+  a button reading "Week"; the presets now sit with the other things that change how the diagram
+  reads.
+
+  **Zoom out, Zoom in, Fit to plan and Today are now on the bar at every window width.** They used to
+  fold away into that dropdown on anything narrower than a wide desktop, which is exactly where a
+  planner has the most need to reframe. They keep their labels on a wide screen and become icon-only
+  below it, so no command ever disappears into a menu.
+
+### Patch Changes
+
+- [#297](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/297) [`ab8c220`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ab8c2201d938878b9c2c6ee7bd9e684e33876b77) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The project finish date sits beside **Summary** on the toolbar again, instead of up on the
+  breadcrumb line.
+
+- [#297](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/297) [`ab8c220`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ab8c2201d938878b9c2c6ee7bd9e684e33876b77) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The magnifier icon on the plan toolbar's search field is now visible. It had always been in the
+  markup, correctly sized and correctly placed — and painted underneath the field itself, so the
+  field looked as though it had no icon at all.
+
 ## 0.85.1
 
 ### Patch Changes
