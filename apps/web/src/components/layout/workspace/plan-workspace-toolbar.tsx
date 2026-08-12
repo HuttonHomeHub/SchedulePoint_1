@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   CANVAS_AUTHORING_ENABLED,
@@ -784,7 +785,11 @@ export function ToolbarPlanWorkspace({
           here, which is why `ctx`, the registry predicates and the workspace key scope are all
           untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
       <ChromePortal>
-        <div className="border-border flex flex-col border-b">
+        {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
+            row's density reflects the surface rather than whatever width is left after its
+            siblings. Without it, the project-finish chip beside Row 1 silently costs the four
+            viewport commands their labels — measured on a 1646 px screen, shipped in web-v0.86.0. */}
+        <ToolbarBandProvider className="border-border flex flex-col border-b">
           {/*
             **The plan identity line** — breadcrumb, status, project finish, Edit plan, pen status —
             folded into the band **above** the commands it governs (ADR-0090 M4-T2). Measured gain:
@@ -917,7 +922,7 @@ export function ToolbarPlanWorkspace({
               className="flex-1"
             />
           </div>
-        </div>
+        </ToolbarBandProvider>
       </ChromePortal>
 
       {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the

@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { useToolbarBandWidth } from './toolbar-band';
 import {
   TOOLBAR_GROUPS,
   bandIsAtLeast,
@@ -240,6 +241,13 @@ export function Toolbar<Ctx>({
    */
   const [layout, setLayout] = useState<ToolbarLayoutMode>('comfortable');
 
+  // Read straight into `measure`'s closure and declared as a dependency. A ref assigned during
+  // render was the first shape and it is a `react-hooks` violation for a good reason: React may
+  // render without committing, so the ref could hold a width from a render that never happened.
+  // The dependency is cheap — this value changes only when the band actually resizes, which
+  // already re-runs the measurement.
+  const bandWidth = useToolbarBandWidth();
+
   const resolved = useMemo(
     () => resolveItems(items, context, authoringEnabled, layout),
     [items, context, authoringEnabled, layout],
@@ -263,7 +271,13 @@ export function Toolbar<Ctx>({
     if (available <= 0) return;
     // Functional update, so `measure` need not depend on `layout` — which would rebuild the callback
     // on every band change and re-run the layout effect for no reason.
-    setLayout((prev) => resolveLayoutMode(available, prev));
+    // **The band's width, not this row's** (ADR-0091 M-fix). `available` answers "does my content
+    // fit my box"; the density band answers "how much room does this surface have", and those stop
+    // being the same number the moment anything sits beside the toolbar. Shipped consequence: the
+    // project-finish chip beside Row 1 took 136 px out of its container and cost the four viewport
+    // commands their labels on a 1646 px screen. See `toolbar-band.tsx` for the other two
+    // occurrences. Falls back to `available` for a toolbar that genuinely is its own surface.
+    setLayout((prev) => resolveLayoutMode(bandWidth ?? available, prev));
     // Read the live width when the item is inline (caching it), else fall back to its last-known width
     // so overflowed items don't collapse to 0 and cause an overflow flip-flop (see widthCacheRef).
     const widthOf = (id: string): number => {
@@ -332,7 +346,7 @@ export function Toolbar<Ctx>({
     const projected =
       inlineTotal + chromeWidth + labelCost + (overflow.length > 0 ? overflowWidth : 0);
     setAutoLabelsFit(projected + LABEL_PROMOTION_MARGIN_PX <= available);
-  }, [bar, demotable, autoLabelsFit]);
+  }, [bar, demotable, autoLabelsFit, bandWidth]);
 
   // Re-measure synchronously after layout whenever the resolved items change, keeping the ref current.
   const measureRef = useRef(measure);
