@@ -113,7 +113,7 @@ const ZOOM_LABELS: Record<string, string> = {
  * indicators), and insight overlays (the flag-gated ADR-0054 lenses + the Late-start overlay,
  * which stops being a special case set apart by an incidental border and becomes an ordinary
  * member here). */
-type ViewToggleGroupId = 'structure' | 'markers' | 'insight' | 'panels';
+type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels';
 
 /**
  * **Why four commands sit at tier 3 — always in the `⋯` — since 2026-08-12 (ADR-0090 M2).**
@@ -137,6 +137,10 @@ type ViewToggleGroupId = 'structure' | 'markers' | 'insight' | 'panels';
  * other four gain text.
  */
 const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: string }> = [
+  // Zoom leads the panel (ADR-0091 D3). It is the only control here that changes what the diagram
+  // FRAMES rather than what it draws on top, so it reads before anything that annotates that frame
+  // — the same argument that puts colour-by first inside Insight overlays.
+  { id: 'zoom', label: 'Zoom' },
   { id: 'structure', label: 'Structure' },
   { id: 'markers', label: 'Markers' },
   { id: 'insight', label: 'Insight overlays' },
@@ -1581,7 +1585,12 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
       {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
         const keys = visibleViewToggleKeysIn(id);
         const lenses = lensTogglesIn(id);
-        if (keys.length === 0 && lenses.length === 0) return null;
+        // `zoom` and `insight` render content that is not a toggle or a lens (the two radio
+        // groups), so an emptiness test that only counts those would drop them. Without this the
+        // zoom group is registered, ordered, typed — and never rendered: a milestone with no entry
+        // point, which is the ADR-0081 defect exactly, and one no typecheck can see.
+        const hasOwnContent = id === 'zoom' || (id === 'insight' && CANVAS_LENSES_ENABLED);
+        if (keys.length === 0 && lenses.length === 0 && !hasOwnContent) return null;
         return (
           <fieldset key={id} className="flex flex-col gap-2">
             <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
@@ -1591,6 +1600,30 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                 changes what every bar MEANS rather than adding a mark on top, so it reads first.
                 A radio group, not checkboxes — the three modes are exclusive, which the old
                 menu-button expressed with `menuitemradio` and this expresses natively. */}
+            {/* The relocated zoom presets (ADR-0091 D3). This RELOCATES ADR-0056 §1, it does not
+                withdraw it: `pxPerDayForPreset`, `presetOf`/`isAtPreset` and the required-width
+                parameter are untouched — only the surface that calls them moves. A radio group for
+                the same reason colour-by is one: the levels are exclusive, which the menu expressed
+                with `menuitemradio` and this expresses natively. Each row carries its target visible
+                range, so the names stop being ambiguous about what they frame. */}
+            {id === 'zoom' ? (
+              <div role="radiogroup" aria-label="Zoom level" className="flex flex-col gap-2">
+                {ZOOM_LEVELS.map((level) => (
+                  <label key={level} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="tsld-zoom-preset"
+                      checked={ctx.zoomPreset === level}
+                      onChange={() => ctx.setZoomPreset(level)}
+                      className="accent-primary size-4"
+                    />
+                    {CANVAS_TIME_AXIS_ENABLED
+                      ? `${ZOOM_LABELS[level] ?? level} — ${ZOOM_RANGE_LABELS[level]}`
+                      : (ZOOM_LABELS[level] ?? level)}
+                  </label>
+                ))}
+              </div>
+            ) : null}
             {id === 'insight' && CANVAS_LENSES_ENABLED ? (
               <div
                 role="radiogroup"
