@@ -197,6 +197,51 @@ three journeys broke on a label change in ADR-0091 M7.
 
 ---
 
+## M6 — the gate pass, which earned its place for the sixth epic running
+
+Four specialists over the combined diff. **Performance passed outright** and re-derived the epic's
+own claims from the final code: the diff _removes_ the only per-frame `getBoundingClientRect` in the
+canvas loop, the new context adds no re-render reach into the diagram, and the toolbar registry
+memoisation ADR-0031 warns about is intact. The other three blocked on **four defects that had
+passed a human read, three of them contradicting docblocks written in this same epic**.
+
+**The focus handoff never fired, and took three attempts.** Deselecting does not unmount the
+selection bar — the host renders it whenever `showDiagram && selectionActionsWired`, passes
+`context: null`, and `if (!context) return null` removes the div on an ordinary re-render. The
+cleanup was keyed on the referentially stable `restoreFocus` alone, so it ran only on a true unmount
+ordinary interaction never causes; focus fell to `<body>`, which also silently disables the workspace
+accelerators. That is ADR-0080's bulk-delete failure again, under a docblock claiming to have fixed
+it. Adding `context` to the deps is necessary and **not sufficient**, which the regression test
+proved twice: by the time either a passive or a layout cleanup runs React has detached the ref, so
+the DOM question "did this bar hold focus?" has no answer left. Focus-held is now tracked as it
+happens.
+
+**Below `md`, every docked strip was invisible.** That layout mounts both panes and hides the
+inactive one with `display: none`; the default pane is the diagram, so the outlet registered while
+invisible and the strips portalled into a node in no accessibility tree at all — WCAG 4.1.3, silent,
+and untested anywhere, because jsdom has no layout to make `display: none` mean anything and every
+journey runs at 1646.
+
+**The singular and plural selection bars were never mutually exclusive** — `BulkSelectionBar`'s
+docblock has claimed since ADR-0080 that it replaces the per-object bar, and `selectionCtx` was
+derived from the primary id alone. Floating, the two sat in separate places and each looked right;
+docked, they collide in one row, where `overflow-hidden` clips the second with its controls still in
+the tab order (WCAG 2.4.7). **The dock's own design was wrong here, not just the gating**: the outlet
+now wraps, because an armed tool does not clear the selection and a conflict banner can join either.
+
+**And the 32-suite sweep caught the last one**: `e2e-resource-view` still reached for a `View ▾`
+checkbox that D5 had turned into a Row 1 button. Every other suite passes; `base`'s failures are
+firefox/webkit-only and cannot launch in this environment (TECH_DEBT #25a), with zero chromium
+failures.
+
+**Two things are recorded rather than done.** The singular-bar gate ships with the rule stated at the
+code and **no unit test of its own** — driving a two-activity selection through `TsldPanel` needs the
+multi-select harness, and inventing a thin test that does not actually reach the state would be worse
+than the honest gap. And the UX review's observation that the **empty-plan call to action** moved
+from a strong position (under the toolbar, atop a blank canvas, where a first-time reader's eye
+already is) to the foot strip is a **product question**, not a defect: it is the one strip whose old
+placement was doing work the product owner did not ask to change.
+
 ## What is deferred, and why it is a decision rather than an omission
 
 **Merging the plan-identity line into the app header row is a hard requirement of this epic** (the
