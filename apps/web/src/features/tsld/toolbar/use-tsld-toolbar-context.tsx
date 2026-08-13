@@ -45,6 +45,7 @@ import {
 } from '@/features/interchange';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
+import { ProjectFinishChip } from '@/features/schedule/components/ProjectFinishChip';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */
@@ -197,6 +198,13 @@ export function useTsldToolbarContext({
       />
     ),
     [orgSlug, planId, plan.status, plan.plannedStart, plan.schedulingMode, editPlan],
+  );
+
+  // The Project-finish read-out, back inside the registry (ADR-0091 M7-S4). Memoised so the item's
+  // identity is stable across the many context rebuilds a plan workspace does per interaction.
+  const projectFinishContent = useMemo(
+    () => <ProjectFinishChip orgSlug={orgSlug} planId={planId} />,
+    [orgSlug, planId],
   );
   const { open: legendOpen, toggle: toggleLegend } = legend;
 
@@ -493,6 +501,7 @@ export function useTsldToolbarContext({
 
       // Summary popover + pinned finish chip
       summaryContent,
+      projectFinishContent,
 
       hasDiagram,
 
@@ -824,6 +833,7 @@ export function useTsldToolbarContext({
     model.toggleOverAllocation,
     hasOverAllocation,
     summaryContent,
+    projectFinishContent,
     hasDiagram,
     // Toolbar quick-wins — re-identify the context only when the selection / resolved row / a
     // capability actually changes (the callbacks are stable). `todayIso` is value-stable (a fresh

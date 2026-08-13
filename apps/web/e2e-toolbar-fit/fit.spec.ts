@@ -81,6 +81,13 @@ const WIDTHS = [2133, 1920, 1646, 1600, 1440, 1280, 1024, 960, 768];
  */
 const PINNED_FLOOR_WIDTH = 768;
 
+/**
+ * How far the trailing group may sit from the row's end (S10). Generous on purpose: the real value
+ * is the `⋯` wrapper's ~9 px of chrome, and the defect this guards against was **191 px**, so
+ * anything in between is noise rather than a judgement call.
+ */
+const TRAILING_GAP_TOLERANCE_PX = 24;
+
 /** WCAG 2.2 §2.5.8 Target Size (Minimum). A pointer target is sized by the part that is there. */
 const MIN_TARGET_PX = 24;
 
@@ -105,6 +112,15 @@ interface RowState {
   containerWidth: number;
   scrollWidth: number;
   inline: string[];
+  /**
+   * The inline ids that are **read-outs, not commands** — nothing inside them is focusable.
+   *
+   * S3's claim is "no command has been lost", and a read-out that withdraws when the row stops
+   * being roomy has not been lost, it has been *withheld* — a designed omission whose value is one
+   * press away in `Summary ▾`. Without this distinction the finish chip's correct disappearance at
+   * 960 reads as a command with no route.
+   */
+  presentational: string[];
   overflowPresent: boolean;
   overflowVisibleWidth: number;
   pastRightEdge: string[];
@@ -112,6 +128,33 @@ interface RowState {
   unclickable: string[];
   /** S7 — every clickable control, including the ones carrying no `data-toolbar-item`. */
   secondaryBelowFloor: Target[];
+  /**
+   * S9 — the id of the row's rightmost `[data-toolbar-item]`, or `null` on an empty row.
+   *
+   * The `⋯` is the row's escape hatch, so wherever it renders it must be the **last** thing: a
+   * button that opens "everything else" sitting mid-row reads as a control that was left behind
+   * rather than as the end of the list. The finish chip used to be the toolbar's sibling, painted to
+   * its right, which made that impossible — and no assertion here saw it, because every command was
+   * still clickable.
+   *
+   * **It does not catch the other defect that put the `⋯` mid-row**, and that was checked rather
+   * than assumed: with the second `ml-auto` restored this still passes, because the button remained
+   * the row's last element — what moved was the trailing *group*, which had ~191 px of slack dumped
+   * in front of it. That is `trailingGapPx` below.
+   */
+  rightmostItemId: string | null;
+  /** Does this row park a group at its trailing edge (`alignEndGroup` → `ml-auto`)? */
+  hasTrailingGroup: boolean;
+  /**
+   * S10 — px between the last non-`⋯` item and whatever ends the row.
+   *
+   * On a row with a trailing group this should be the `⋯` wrapper's own chrome and nothing else.
+   * It was ~191 px, because the row carried **two** auto margins — `alignEndGroup`'s and the `⋯`
+   * wrapper's — and a flex line splits its free space equally between every auto margin on it
+   * rather than giving it to the last. Both controls then sat at a midpoint, each looking
+   * individually plausible, and the product owner reported the `⋯` as stranded mid-row.
+   */
+  trailingGapPx: number | null;
 }
 
 async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
@@ -120,17 +163,44 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
       const { minTarget, inlineExempt } = arg;
       const container = el as HTMLElement;
       const inline: string[] = [];
+      const presentational: string[] = [];
       const pastRightEdge: string[] = [];
       const belowTargetFloor: string[] = [];
       const unclickable: string[] = [];
       let overflowPresent = false;
       let overflowVisibleWidth = 0;
 
+      let rightmostItemId: string | null = null;
+      let rightmostEdge = Number.NEGATIVE_INFINITY;
+      let rightmostNonOverflowEdge = Number.NEGATIVE_INFINITY;
+      let overflowLeft: number | null = null;
+
       const startScroll = container.scrollLeft;
       for (const node of container.querySelectorAll<HTMLElement>('[data-toolbar-item]')) {
         const id = node.getAttribute('data-toolbar-item') ?? '';
         if (id === '__overflow__') overflowPresent = true;
         else inline.push(id);
+        // A read-out rather than a command: nothing inside it is focusable.
+        if (
+          id !== '__overflow__' &&
+          !node.matches('[data-toolbar-focusable]') &&
+          node.querySelector('[data-toolbar-focusable]') === null
+        ) {
+          presentational.push(id);
+        }
+
+        const ownBox = node.getBoundingClientRect();
+        // A zero-width box is not "rightmost" in any sense a reader would recognise.
+        if (ownBox.width > 0 && ownBox.right > rightmostEdge) {
+          rightmostEdge = ownBox.right;
+          rightmostItemId = id;
+        }
+        if (id === '__overflow__') {
+          // The wrapper, not the button: its `border-l pl-1` is part of what sits between the two.
+          overflowLeft = (node.parentElement ?? node).getBoundingClientRect().left;
+        } else if (ownBox.width > 0 && ownBox.right > rightmostNonOverflowEdge) {
+          rightmostNonOverflowEdge = ownBox.right;
+        }
 
         // **Scroll to it first.** Since M1-T5 the row is `overflow-x-auto`, so "past the right edge"
         // no longer means "unreachable" — it means the reader scrolls. The user-level question is
@@ -199,12 +269,22 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
         containerWidth: container.clientWidth,
         scrollWidth: container.scrollWidth,
         inline,
+        presentational,
         overflowPresent,
         overflowVisibleWidth,
         pastRightEdge,
         belowTargetFloor,
         unclickable,
         secondaryBelowFloor,
+        rightmostItemId,
+        hasTrailingGroup: container.querySelector('[role="group"].ml-auto') !== null,
+        trailingGapPx:
+          rightmostNonOverflowEdge === Number.NEGATIVE_INFINITY
+            ? null
+            : Math.round(
+                (overflowLeft ?? container.getBoundingClientRect().right) -
+                  rightmostNonOverflowEdge,
+              ),
       };
     },
     { minTarget: MIN_TARGET_PX, inlineExempt: [...INLINE_EXEMPT_ITEMS] },
@@ -221,9 +301,19 @@ async function reachableSet(page: Page, ariaLabel: string, state: RowState): Pro
     await expect(menu).toBeVisible();
     ids.push(
       ...(await menu.evaluate((el) =>
-        [...el.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(
-          (n) => `menu:${(n.innerText ?? '').trim()}`,
-        ),
+        // **Every menuitem *role*, not just the bare one.** `[role="menuitem"]` alone missed every
+        // toggle in the `⋯` — `ToolbarOverflow` renders an item with `isActive` as
+        // `role="menuitemcheckbox"` (and a radio as `menuitemradio`), which is correct APG and
+        // invisible to that selector. The hole was harmless only while tier-3 items were
+        // *permanently* in the menu: they never appeared in the reference set, so nothing ever
+        // asked whether the menu offered them. Tier-3 admission put `float-paths` inline at the
+        // widest width, it entered the reference, and the gate then reported it as having no route
+        // at all — a true statement about the instrument and a false one about the product.
+        [
+          ...el.querySelectorAll<HTMLElement>(
+            '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]',
+          ),
+        ].map((n) => `menu:${(n.innerText ?? '').trim()}`),
       )),
     );
     await page.keyboard.press('Escape');
@@ -281,12 +371,32 @@ async function openPlan(page: Page, stamp: number): Promise<void> {
     await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
     await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
   }
-  // Wait for the schedule to compute before measuring, or the row is narrower than the one a
-  // planner sees. The signal is the plan header's Project-finish read-out, which renders nothing
-  // until `projectFinish` is non-null — it was the Row-1 `finish-chip` until ADR-0090 M2-T3 moved
-  // it off the toolbar. A readiness gate has to be something that appears when the work is done,
-  // and this fixture's whole point is that the toolbar's own contents are what changes.
-  await expect(page.getByText('Finish', { exact: true })).toBeVisible({ timeout: 30_000 });
+  // Wait for the schedule to compute before measuring, or the row is narrower than the one a planner
+  // sees.
+  //
+  // **Asked of the API, not of the screen** (ADR-0091 M7-S4). This used to watch the Project-finish
+  // read-out, on the reasoning that a readiness gate must be something that appears when the work is
+  // done. That was right, and the element chosen stopped satisfying it: the chip moved back into the
+  // registry and became band-conditional, so under a coarse pointer at a narrow band it correctly
+  // never appears and the gate waited 30 s for it. Any on-screen signal is a hostage to the layout —
+  // which is the very thing this file exists to vary — so the honest gate is the state itself.
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async () => {
+          const match = /\/orgs\/([^/]+)\/plans\/([^/?#]+)/.exec(window.location.pathname);
+          if (!match) return null;
+          const response = await fetch(
+            `/api/v1/organizations/${match[1]}/plans/${match[2]}/schedule/summary`,
+            { credentials: 'include' },
+          );
+          if (!response.ok) return null;
+          const body = (await response.json()) as { data?: { projectFinish?: string | null } };
+          return body.data?.projectFinish ?? null;
+        }),
+      { timeout: 30_000, message: 'the schedule never computed a project finish' },
+    )
+    .not.toBeNull();
 }
 
 test('every toolbar command is reachable at every targeted width', async ({ page }) => {
@@ -298,7 +408,8 @@ test('every toolbar command is reachable at every targeted width', async ({ page
   // The reference set: what this build offers when it has room. Never a list typed into this file.
   const reference: Record<string, string[]> = {};
   for (const row of ROWS) {
-    reference[row] = (await readRow(page, row)).inline.sort();
+    const widest = await readRow(page, row);
+    reference[row] = widest.inline.filter((id) => !widest.presentational.includes(id)).sort();
   }
 
   for (const width of WIDTHS) {
@@ -336,6 +447,22 @@ test('every toolbar command is reachable at every targeted width', async ({ page
           state.scrollWidth,
           `S4 ${where}: the row lays out wider than its container`,
         ).toBeLessThanOrEqual(state.containerWidth + 1);
+      }
+
+      // S9 — wherever the `⋯` renders, it is the row's last thing.
+      if (state.overflowPresent) {
+        expect(
+          state.rightmostItemId,
+          `S9 ${where}: the ⋯ is the escape hatch and must be the row's rightmost control`,
+        ).toBe('__overflow__');
+      }
+
+      // S10 — a row that parks a group at its trailing edge really does put it there.
+      if (state.hasTrailingGroup && state.trailingGapPx !== null) {
+        expect(
+          state.trailingGapPx,
+          `S10 ${where}: the trailing group is adrift of the row's end — more than one auto margin on the line?`,
+        ).toBeLessThanOrEqual(TRAILING_GAP_TOLERANCE_PX);
       }
 
       // S3 — no command has been lost; it is inline or the ⋯ offers it.

@@ -8,7 +8,6 @@ import {
   ChartArea,
   ChartGantt,
   CalendarDays,
-  CalendarSearch,
   Check,
   ChevronDown,
   DollarSign,
@@ -25,7 +24,6 @@ import {
   Grid3x3,
   ImageDown,
   Info,
-  Keyboard,
   Layers,
   Loader2,
   LocateFixed,
@@ -66,10 +64,15 @@ import type {
   ToolbarLayoutMode,
   ToolbarRow,
 } from '@/components/ui/toolbar/toolbar-registry';
-import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
+import {
+  bandIsAtLeast,
+  defineToolbar,
+  type ToolbarItem,
+} from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
+import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
@@ -115,9 +118,12 @@ const ZOOM_LABELS: Record<string, string> = {
 type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels';
 
 /**
- * **Why four commands sit at tier 3 — always in the `⋯` — since 2026-08-12 (ADR-0090 M2).**
+ * **Why a handful of commands sit at tier 3 — last into the `⋯`, first out of it (ADR-0090 M2,
+ * amended by ADR-0091 M7's admission rung, which puts them back on the row when there is room).**
  *
- * `next-conflict`, `float-paths` and `shortcuts` on Row 1, and `clear-visual-placement` on Row 2.
+ * `next-conflict` and `float-paths` on Row 1, and `clear-visual-placement` on Row 2. (`shortcuts` was
+ * a fourth until ADR-0091 M7-S5 moved it into the account menu — an inventory in prose goes stale
+ * every time the set changes, which is why the count is not restated here.)
  * Row 1 was ~360 px short of labelling itself at 1920 and Row 2 ~128 px; these four are what buys
  * both. The trade was put to the product owner with the measured numbers rather than taken here,
  * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
@@ -318,69 +324,102 @@ export const TSLD_VIEW_TOGGLE_KEYS: ReadonlyArray<keyof TsldViewToggles> =
 const GOTO_FIELD_ID = 'tsld-goto-date-field';
 const GOTO_HINT_ID = 'tsld-goto-date-hint';
 
-function GoToDateControl({
+/**
+ * **Go to today, with Go to date on its caret** (ADR-0091 M7-S6) — one control where there were two.
+ *
+ * They were adjacent members of the Frame group doing the same job on the same axis: `Go to today`
+ * pans the viewport to a date it already knows, `Go to date` pans it to one you type. Merging them
+ * is worth ~94 px on Row 1 and, more usefully, stops a planner having to notice that the two
+ * date-shaped buttons beside each other are not alternatives.
+ *
+ * **The two halves keep separate gates, and that is the load-bearing part.** Going to *today* needs
+ * a computed diagram in the canvas view; going to *a date* needs only an anchored plan. Under one
+ * `disabled` the caret would inherit the primary's gate and **Go to date would become unreachable
+ * on an empty or Gantt-viewed plan** — a capability a planner has today, removed by a layout change.
+ * That is the ADR-0081 dead-end shape, and `ToolbarSplitButton`'s per-half props exist for it; its
+ * own docblock names this merge.
+ *
+ * The panel is `usePopoverPanel`, the same one `View ▾` and `Summary ▾` open, and focus restores to
+ * the **primary** — the caret is `tabIndex={-1}`, so restoring there strands a keyboard user.
+ *
+ * The panel's own `Today` button is gone with the merge: the primary half now does exactly that,
+ * one click shallower.
+ */
+function GoToTodayControl({
   ctx,
-  itemProps,
-  compact,
+  api,
 }: {
   ctx: TsldToolbarContext;
-  itemProps: ToolbarItemRenderApi['itemProps'];
-  /** The row's `collapsed` band — see {@link triggersAreCompact}. */
-  compact: boolean;
+  api: ToolbarItemRenderApi;
 }): React.ReactElement {
   // First-use-only disclosure (feature-spec.md §4.2): marked seen on the first successful PICK
   // (not the first open) — opening and closing without reading proves nothing. The sentence never
   // leaves the accessibility tree: seen ⇒ `sr-only`, `aria-describedby` stays wired throughout.
   const hint = useFirstUseHint('go-to-date');
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const caretRef = useRef<HTMLButtonElement>(null);
+  const { open, openPanel, close, panel } = usePopoverPanel({ triggerRef: primaryRef });
+
+  const primaryDisabled = !(ctx.hasDiagram && ctx.canvasActive);
+  // **Only a state the reader can change.** `SCHEDULING_MODES_ENABLED` is deliberately NOT folded in
+  // here: a flag being off is not something a planner can act on, and shading the caret for it would
+  // print "Set the plan's start date first" to somebody whose plan already has a start date — a
+  // sentence that is simply false. The flag decides whether this control has a caret at all, one
+  // level up (see the registry entry); ADR-0082's discriminator, applied where it belongs.
+  const caretDisabled = ctx.plannedStart === null;
+  const primaryReason = canvasViewportReason(ctx, 'Add an activity to go to today');
+
   return (
-    <ToolbarPopover
-      label="Go to date"
-      icon={<CalendarSearch className="size-4" />}
-      itemProps={itemProps}
-      compact={compact}
-    >
-      <div className="flex flex-col gap-1.5 text-sm">
-        {/* Inner field is "Date" (not another "Go to date") so AT doesn't echo the dialog name; the
-            hint is wired via `aria-describedby` so keyboard/SR users landing on the field hear it. */}
-        <label htmlFor={GOTO_FIELD_ID} className="text-muted-foreground font-medium">
-          Date
-        </label>
-        <Input
-          id={GOTO_FIELD_ID}
-          type="date"
-          aria-describedby={GOTO_HINT_ID}
-          onChange={(event) => {
-            if (event.target.value) {
-              ctx.goToDate(event.target.value);
-              hint.markSeen();
-            }
-          }}
-          className="h-9"
-        />
-        <span
-          id={GOTO_HINT_ID}
-          className={cn('text-muted-foreground text-xs', hint.unseen ? '' : 'sr-only')}
-        >
-          Pans the timeline only — nothing is saved.
-        </span>
-        {/* Today shortcut (feature-spec.md §4.4) — the same `goToDate` command the standalone
-            toolbar button drives, pre-filled with today's date. Not `hasDiagram`-gated (unlike its
-            sibling toolbar button): panning an empty canvas is harmless, and this field is gated
-            only on `plannedStart !== null`, same as the date input above. Does not close the
-            popover, consistent with picking a date. */}
-        <button
-          type="button"
-          onClick={() => {
-            ctx.goToDate(ctx.todayIso);
-            hint.markSeen();
-          }}
-          className="hover:bg-accent/60 -mx-1 flex items-center gap-1.5 rounded-md px-1 py-1 text-left"
-        >
-          <LocateFixed aria-hidden="true" className="size-4" />
-          Today
-        </button>
-      </div>
-    </ToolbarPopover>
+    <>
+      <ToolbarSplitButton
+        itemProps={api.itemProps}
+        primaryRef={primaryRef}
+        caretRef={caretRef}
+        pressed={false}
+        open={open}
+        primaryDisabled={primaryDisabled}
+        caretDisabled={caretDisabled}
+        {...(primaryReason ? { primaryDisabledReason: primaryReason } : {})}
+        caretDisabledReason="Set the plan's start date first"
+
+        haspopup="dialog"
+        compact={triggersAreCompact(api.layout)}
+        title="Go to today"
+        icon={<LocateFixed aria-hidden="true" className="size-4" />}
+        label="Go to today"
+        caretLabel="Go to date"
+        onPrimary={() => ctx.goToDate(ctx.todayIso)}
+        onOpenMenu={() => (open ? close(false) : openPanel())}
+      />
+      {panel(
+        'Go to date',
+        <div className="flex flex-col gap-1.5 text-sm">
+          {/* Inner field is "Date" (not another "Go to date") so AT doesn't echo the dialog name; the
+              hint is wired via `aria-describedby` so keyboard/SR users landing on the field hear it. */}
+          <label htmlFor={GOTO_FIELD_ID} className="text-muted-foreground font-medium">
+            Date
+          </label>
+          <Input
+            id={GOTO_FIELD_ID}
+            type="date"
+            aria-describedby={GOTO_HINT_ID}
+            onChange={(event) => {
+              if (event.target.value) {
+                ctx.goToDate(event.target.value);
+                hint.markSeen();
+              }
+            }}
+            className="h-9"
+          />
+          <span
+            id={GOTO_HINT_ID}
+            className={cn('text-muted-foreground text-xs', hint.unseen ? '' : 'sr-only')}
+          >
+            Pans the timeline only — nothing is saved.
+          </span>
+        </div>,
+      )}
+    </>
   );
 }
 
@@ -1783,22 +1822,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // The persisted **data date** no longer lives on the bar (ADR-0031 two-row amendment): it is set at
     // plan creation and changed via *Edit plan* (and will become the status date under *Update
     // progress*), so navigation and the data anchor can no longer be confused as adjacent date fields.
-    {
-      id: 'go-to-date',
-      group: 'frame',
-      row: 'look',
-      tier: 1,
-      order: -2,
-      label: 'Go to date',
-      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
-      render: (ctx, api) => (
-        <GoToDateControl
-          ctx={ctx}
-          itemProps={api.itemProps}
-          compact={triggersAreCompact(api.layout)}
-        />
-      ),
-    },
+
     // Zoom — −/+ and Fit, a compact cluster in the Frame group (ADR-0031). Shaded (not hidden) until
     // a diagram exists, so the bar keeps a stable shape from the empty canvas onward.
     //
@@ -1878,16 +1902,31 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
-          // D3a (ADR-0091): labelled at `comfortable`, icon-only below — the policy its three
-          // viewport siblings take. On the LIVE item, not on `todayShape`, because that shape also
-          // feeds the flag-off "Coming soon" placeholder below, whose parity suite is the rollback
-          // contract and asserts it byte-for-byte. A stub has no viewport to reframe, so it has
-          // nothing to compact for; putting the policy on the shape broke that suite and bought
-          // nothing.
-          showLabel: { atLeast: 'comfortable' } as const,
-          isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-          disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to go to today'),
-          onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
+          // **The merged control takes `go-to-date`'s slot** (ADR-0091 M7-S6): tier 1, ordered ahead
+          // of the zoom cluster, where the date control has always sat. It is a `render` item and
+          // therefore pinned — a split button is not something you stuff into a menu — which is why
+          // it takes the tier that never demotes rather than `today`'s old tier 2.
+          //
+          // `showLabel` is gone with the merge: a `render` item owns its own chrome, and this one
+          // compacts from `api.layout` exactly as its `View ▾` and `Summary ▾` neighbours do.
+          ...(SCHEDULING_MODES_ENABLED
+            ? {
+                tier: 1 as const,
+                order: -2,
+                render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
+                  <GoToTodayControl ctx={ctx} api={api} />
+                ),
+              }
+            : {
+                // **No date capability in this build ⇒ no caret**, rather than a caret shaded with a
+                // reason that would be untrue. This is byte-for-byte the plain command `today` was
+                // before the merge, which is also what keeps the flag-off surface unchanged.
+                showLabel: { atLeast: 'comfortable' } as const,
+                isEnabled: (ctx: TsldToolbarContext) => ctx.hasDiagram && ctx.canvasActive,
+                disabledReason: (ctx: TsldToolbarContext) =>
+                  canvasViewportReason(ctx, 'Add an activity to go to today'),
+                onActivate: (ctx: TsldToolbarContext) => ctx.goToDate(ctx.todayIso),
+              }),
         }
       : placeholderItem(todayShape),
 
@@ -2363,10 +2402,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
     ...undoRedoToolbarItems(),
 
-    // The Project-finish read-out moved to the PLAN HEADER in ADR-0090 M2-T3
-    // (`features/schedule/components/ProjectFinishChip.tsx`). It cost 150 px of pinned Row-1 width
-    // — a `render` item can never demote — to show a number that is not a command, in a
-    // `role="toolbar"` whose other members all are.
     {
       id: 'summary',
       group: 'object',
@@ -2384,6 +2419,61 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         >
           {ctx.summaryContent}
         </ToolbarPopover>
+      ),
+    },
+    /**
+     * The **Project-finish read-out**, back inside the registry — a knowing reversal of ADR-0090
+     * M2-T3, recorded here rather than done quietly (ADR-0091 M7-S4).
+     *
+     * That task moved it out for two reasons. The first — **150 px of pinned Row-1 width**, paid at
+     * every viewport because a `render` item can never demote — no longer holds: Row 1 carries
+     * 382 px of slack at the product owner's 1646 px (`m7-ladder-measurement.md`), and the chip was
+     * put back beside `Summary ▾` at their request in M4 anyway, as the toolbar's **sibling**. The
+     * second — a read-out has no business in a `role="toolbar"` — is answered by `presentational`,
+     * which pins `tabIndex: -1` and withholds the focusable marker, so the chip is painted by the
+     * row and is not a stop in it. That field exists for exactly this and its own docblock says not
+     * to delete the capability.
+     *
+     * **What being a sibling could not do is let the `⋯` be last.** The overflow button lives inside
+     * the toolbar and must stay there — it is a roving stop, the arrow keys are a handler on the
+     * toolbar container, and the fit gate scopes its sweep to that element, so moving it out would
+     * take it out of the gate's reach silently. With the chip outside and to the right, the `⋯` was
+     * necessarily *not* the rightmost thing on the row, which is what the product owner saw and
+     * described as stranded. One of the two had to move inward, and it is the one that is not a
+     * command.
+     */
+    {
+      id: 'finish-chip',
+      group: 'object',
+      row: 'look',
+      tier: 2,
+      order: 2,
+      label: 'Project finish',
+      presentational: true,
+      /**
+       * **Withheld once the row stops being roomy** — the read-out's answer to being pinned.
+       *
+       * A `render` item can never demote, so every pixel it takes is paid at every width. Measured:
+       * with the chip unconditional, Row 1 laid out **11 px past its container at 1024** and broke
+       * the fit gate's S4, which is a *measured* claim that both rows fit at every supported width
+       * down to 768. Nothing was left to demote by then, so the row had no answer.
+       *
+       * Keyed to the density band rather than to a `sm:`/`xl:` breakpoint, because the band already
+       * means "how much room does this surface have" and the media query means "how wide is the
+       * window" — and those diverge exactly when the rail is open, which is most of the time. The
+       * number is one press away in `Summary ▾` at any width, so this costs a glance rather than a
+       * capability.
+       */
+      isVisible: (_ctx, env) => bandIsAtLeast(env.layout, 'compact'),
+      // `api.itemProps` is not optional even for a `presentational` item: it carries the
+      // `data-toolbar-item` marker and the `tabIndex: -1` that keeps the chip out of the roving
+      // sequence. Omitting it made the chip invisible to `e2e-toolbar-fit`, which found it — S10
+      // reported the trailing group 136 px adrift, which is exactly the chip's own width sitting
+      // between `Summary ▾` and the `⋯` while carrying no marker for the sweep to see.
+      render: (ctx, api) => (
+        <span {...api.itemProps} className="flex shrink-0 items-center text-sm">
+          {ctx.projectFinishContent}
+        </span>
       ),
     },
     // Baselines, Earned value and Resource histogram are behind the **Analysis** trigger since
@@ -2487,19 +2577,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // `legend` moved INTO `View ▾` in ADR-0090 M2-T2, under a new **Panels** section — the direct
     // answer to the product owner's Q2. A panel is a surface you read beside the diagram, not a
     // mark drawn on it, which is why it is not filed with the Insight overlays.
-    {
-      // Keyboard shortcuts belong with the reference controls, not the authoring row: shown at the
-      // far right of Row 1 (help group, beside Legend) and also bound to the `?` key by the workspace
-      // (ADR-0031 amendment) — the standard "press ? for shortcuts" affordance.
-      id: 'shortcuts',
-      group: 'help',
-      row: 'look',
-      tier: 3,
-      order: 1,
-      priority: -110,
-      label: 'Keyboard shortcuts',
-      icon: <Keyboard className="size-4" />,
-      onActivate: (ctx) => ctx.openShortcuts(),
-    },
+    // **Keyboard shortcuts left this registry in ADR-0091 M7-S5** for the account menu
+    // (`components/layout/account-chip.tsx`), reached through `chrome/help-action.tsx`. It was a
+    // tier-3 command in a row rationing width between twenty-eight of them, so in practice it was
+    // reachable only through the `⋯` — and it is not a command about the plan at all but a reference
+    // about the application, which is what that menu already holds. `ctx.openShortcuts` stays: the
+    // sheet, its state and the `?` binding did not move, only the entry point. Deleted rather than
+    // hidden behind `isVisible: () => false`, which would still be resolved, still be partitioned,
+    // and still have to be reasoned about by the next reader.
   ]);
 }

@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react';
+import { useId } from 'react';
 
 import { toolbarControlVariants, toolbarSplitCaretVariants } from './toolbar-styles';
 
@@ -36,6 +37,19 @@ export interface ToolbarSplitButtonProps {
   disabled?: boolean;
   /** Overrides {@link disabled} for the primary half alone. */
   primaryDisabled?: boolean;
+  /**
+   * Why a shaded half is shut, **programmatically associated** — an `sr-only` sibling wired by
+   * `aria-describedby`, exactly as {@link ToolbarButton} and {@link ToolbarPopover} do it (ADR-0082).
+   *
+   * The composite shipped with `title` alone, which is the failure this repository has now recorded
+   * four times: a `title` is a hover tooltip that no mainstream browser shows on keyboard focus, so
+   * a sighted keyboard-only planner tabbing to a shaded control got a dimmed button and nothing
+   * else. It became reachable on a live path when `Go to today ▾` merged two commands with genuinely
+   * different gates (ADR-0091 M7-S6): before that, every consumer used one `disabled` for both
+   * halves and the primary's `title` happened to cover it.
+   */
+  primaryDisabledReason?: string;
+  caretDisabledReason?: string;
   /** Overrides {@link disabled} for the caret half alone. */
   caretDisabled?: boolean;
   /**
@@ -85,6 +99,8 @@ export function ToolbarSplitButton({
   disabled = false,
   primaryDisabled,
   caretDisabled,
+  primaryDisabledReason,
+  caretDisabledReason,
   haspopup = 'menu',
   compact = false,
   title,
@@ -96,6 +112,11 @@ export function ToolbarSplitButton({
 }: ToolbarSplitButtonProps): React.ReactElement {
   const primaryOff = primaryDisabled ?? disabled;
   const caretOff = caretDisabled ?? disabled;
+  const reasonIds = useId();
+  // Only when there IS a reason: an `aria-describedby` pointing at nothing is a dangling reference,
+  // which some AT reads as an empty description rather than as absence.
+  const primaryReasonId = primaryOff && primaryDisabledReason ? `${reasonIds}-p` : undefined;
+  const caretReasonId = caretOff && caretDisabledReason ? `${reasonIds}-c` : undefined;
   return (
     <span
       className={cn(
@@ -111,8 +132,12 @@ export function ToolbarSplitButton({
         type="button"
         aria-pressed={pressed}
         aria-disabled={primaryOff || undefined}
-        {...(compact ? { 'aria-label': label } : {})}
-        title={title}
+        // The name is pinned whenever a reason span is rendered, for the same reason
+        // `ToolbarButton` pins it: the span lives inside the button, and a button's name comes from
+        // its content, so without this the reason would join the name as well as the description.
+        {...(compact || primaryReasonId ? { 'aria-label': label } : {})}
+        {...(primaryReasonId ? { 'aria-describedby': primaryReasonId } : {})}
+        title={primaryOff ? (primaryDisabledReason ?? title) : title}
         onClick={() => {
           if (!primaryOff) onPrimary();
         }}
@@ -120,15 +145,32 @@ export function ToolbarSplitButton({
           // Either arrow opens the menu and moves into it, so the caret needs no tab stop of its own.
           // Gated on the CARET's state, not the primary's: the arrows are the keyboard route to the
           // menu, and a shaded primary beside a live caret must not take that route away.
-          if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !caretOff) {
-            e.preventDefault();
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+          e.preventDefault();
+          if (!caretOff) {
             onOpenMenu();
+            return;
           }
+          // **A shaded caret still has to be reachable, or its reason is unreadable by keyboard.**
+          // The caret is `tabIndex={-1}` by design — the pair is one roving stop — so the arrows are
+          // its *only* keyboard route, and gating them on `!caretOff` switched that route off in
+          // exactly the state where there is something to explain. A sighted keyboard-only planner
+          // got no focus stop, no announcement, and (the caret has no disabled treatment of its own)
+          // no visual difference either. Every sibling in this family — `ToolbarButton`,
+          // `ToolbarPopover`, `MenuItem` — deliberately keeps a shaded control focusable for this
+          // reason; this one did not, which is the "fixed on one control and not its neighbour"
+          // shape its own docblock is about.
+          caretRef.current?.focus();
         }}
         className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
       >
         {icon}
         {compact ? null : <span className="truncate">{label}</span>}
+        {primaryReasonId ? (
+          <span id={primaryReasonId} className="sr-only">
+            {primaryDisabledReason}
+          </span>
+        ) : null}
       </button>
       <button
         ref={caretRef}
@@ -138,12 +180,25 @@ export function ToolbarSplitButton({
         aria-expanded={open}
         aria-disabled={caretOff || undefined}
         aria-label={caretLabel}
+        {...(caretReasonId ? { 'aria-describedby': caretReasonId } : {})}
+        {...(caretOff && caretDisabledReason ? { title: caretDisabledReason } : {})}
         onClick={() => {
           if (!caretOff) onOpenMenu();
         }}
-        className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
+        className={cn(
+          toolbarSplitCaretVariants(),
+          'rounded-r-md px-1 outline-none',
+          // Its own dimming: the wrapper's wash only fires when BOTH halves are shut, so a caret
+          // shaded beside a live primary looked identical to a live one.
+          caretOff && 'cursor-default opacity-50',
+        )}
       >
         <ChevronDown aria-hidden="true" className="size-3.5" />
+        {caretReasonId ? (
+          <span id={caretReasonId} className="sr-only">
+            {caretDisabledReason}
+          </span>
+        ) : null}
       </button>
     </span>
   );

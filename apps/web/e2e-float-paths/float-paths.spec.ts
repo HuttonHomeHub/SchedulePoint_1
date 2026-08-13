@@ -54,14 +54,30 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // rows their labels at 1920. Still one click, and still shaded-with-a-reason rather than hidden —
   // which is what this section is actually about. In a menu the reason travels by
   // `aria-describedby`, not a `title`, so the assertion follows the channel.
+  // **Where this command lives is now a function of width, so the journey stops assuming.**
+  // ADR-0090 M2 made it tier 3, i.e. permanently inside the `⋯`; ADR-0091 M7 added the admission
+  // rung, so a row with room takes it back out and the `⋯` may not render at all. Both are correct
+  // states, and neither is this journey's subject — what it is about is that the command is
+  // *shaded with a reason* rather than hidden, and that the reason travels by `aria-describedby`.
+  //
+  // So it is located by `[data-toolbar-item]` and never by role or copy: inline it is a
+  // `button[aria-pressed]`, in the menu a `menuitemcheckbox`, and a locator that names either one
+  // is a locator that breaks the next time the row's width changes.
   const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
-  const openOverflow = async (): Promise<void> => {
-    const more = lookRow.getByRole('button', { name: 'More toolbar actions' });
+  const more = lookRow.getByRole('button', { name: 'More toolbar actions' });
+  const inlineFloatPaths = lookRow.locator('[data-toolbar-item="float-paths"]');
+  /** The control, wherever it is — opening the `⋯` only when it is not on the row. */
+  const revealFloatPaths = async () => {
+    if ((await inlineFloatPaths.count()) > 0) return inlineFloatPaths;
     if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+    return page.getByRole('menuitemcheckbox', { name: 'Float paths' });
   };
-  const floatPaths = page.getByRole('menuitemcheckbox', { name: 'Float paths' });
+  /** What focus must return to after the panel closes: the control if it is still mounted, else
+   *  the `⋯` it was reached through — a menu item unmounts with its menu. */
+  const restoreTarget = async () =>
+    (await inlineFloatPaths.count()) > 0 ? inlineFloatPaths : more;
 
-  await openOverflow();
+  let floatPaths = await revealFloatPaths();
   await expect(floatPaths).toBeVisible();
   await expect(floatPaths).toHaveAttribute('aria-disabled', 'true');
   const reasonId = await floatPaths.getAttribute('aria-describedby');
@@ -69,7 +85,7 @@ test('a planner reads the float paths into an activity, in both views', async ({
   await page.keyboard.press('Escape');
 
   await selectOnCanvas(page, 'Target');
-  await openOverflow();
+  floatPaths = await revealFloatPaths();
   await expect(floatPaths).not.toHaveAttribute('aria-disabled', 'true');
 
   // ── 3 · The panel: Driving named, the branch measured on the target's calendar ────────────
@@ -128,8 +144,8 @@ test('a planner reads the float paths into an activity, in both views', async ({
   await panel.getByRole('button', { name: 'Close float paths' }).click();
   await expect(panel).toHaveCount(0);
   await expect(drivingRow).not.toContainText('(off the float path)');
-  // The command is a menu item now and unmounts with its menu, so the honest restore target is the
-  // `⋯` it lives behind — the control the planner opened this from. Returning to a detached node
-  // dropped focus to `<body>`; this journey is what found that.
-  await expect(lookRow.getByRole('button', { name: 'More toolbar actions' })).toBeFocused();
+  // Focus returns to the control the planner opened this from — the inline button when the row has
+  // room for it, and otherwise the `⋯` it lives behind, because a menu item unmounts with its menu.
+  // Returning to a detached node dropped focus to `<body>`; this journey is what found that.
+  await expect(await restoreTarget()).toBeFocused();
 });

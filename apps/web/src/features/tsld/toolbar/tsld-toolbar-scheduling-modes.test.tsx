@@ -66,6 +66,24 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
     expect(screen.queryByLabelText(/Timeline start/)).not.toBeInTheDocument();
   });
 
+  it('keeps Go to date reachable on a plan with no diagram — the merge must not swallow it', () => {
+    // The gate the merge is most likely to get wrong (ADR-0081's dead-end shape, named in
+    // `ToolbarSplitButton`'s own docblock): under a single `disabled` the caret would inherit the
+    // primary's "needs a computed diagram" gate, and a capability planners have today would vanish
+    // on exactly the plans that need it — the empty ones. This suite's default IS that plan.
+    const goToDate = vi.fn();
+    renderToolbar(ctx({ goToDate }));
+    expect(screen.getByRole('button', { name: 'Go to today' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    const caret = screen.getByRole('button', { name: 'Go to date' });
+    expect(caret).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(caret);
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-06-15' } });
+    expect(goToDate).toHaveBeenCalledWith('2026-06-15');
+  });
+
   it('offers "Go to date" as a pure view jump — no write, available even without the pen', () => {
     const goToDate = vi.fn();
     // A read-only viewer (authoring off) can still navigate.
@@ -76,19 +94,44 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
     expect(goToDate).toHaveBeenCalledWith('2026-06-15');
   });
 
-  it('hides "Go to date" until the plan is anchored (no plannedStart)', () => {
-    renderToolbar(ctx({ plannedStart: null }));
-    expect(screen.queryByRole('button', { name: 'Go to date' })).not.toBeInTheDocument();
+  it('shades "Go to date" with a reason until the plan is anchored (no plannedStart)', () => {
+    // **This inverted with ADR-0091 M7-S6 and the inversion is the point.** `Go to date` used to be
+    // its own item and could be hidden outright by `isVisible`. It is now the caret of `Go to
+    // today ▾`, and hiding it would have to hide the whole control — taking away a command with a
+    // different gate. So it shades, and shading obliges it to say why (ADR-0082's discriminator: an
+    // unanchored plan is a state the reader can change, via Edit plan).
+    // `hasDiagram: true` so the two gates are visibly independent: this suite's default is a plan
+    // with no diagram, which would shade the primary for its own unrelated reason.
+    renderToolbar(ctx({ plannedStart: null, hasDiagram: true }));
+    const caret = screen.getByRole('button', { name: 'Go to date' });
+    expect(caret).toHaveAttribute('aria-disabled', 'true');
+    // The reason is ASSOCIATED, not merely nearby — a `title` alone is a hover affordance, which a
+    // keyboard-only planner never sees.
+    const describedBy = caret.getAttribute('aria-describedby');
+    expect(describedBy).not.toBeNull();
+    expect(document.getElementById(describedBy!)).toHaveTextContent(
+      "Set the plan's start date first",
+    );
+    // Its neighbour keeps its own gate: going to today needs a diagram, not an anchor.
+    expect(screen.getByRole('button', { name: 'Go to today' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
-  it('offers a Today shortcut inside the Go-to-date popover that jumps without closing it', () => {
+  it('makes Today the primary half rather than a shortcut buried in the panel', () => {
+    // The panel used to carry its own `Today` button, two clicks deep, duplicating a toolbar command
+    // that sat immediately beside it. ADR-0091 M7-S6 merged the two controls, so the primary half
+    // IS that command — one click, and no second copy to keep in step.
     const goToDate = vi.fn();
-    renderToolbar(ctx({ goToDate, todayIso: '2026-07-27' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Go to date' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    renderToolbar(ctx({ goToDate, todayIso: '2026-07-27', hasDiagram: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Go to today' }));
     expect(goToDate).toHaveBeenCalledWith('2026-07-27');
-    // Still open — picking Today behaves like picking a date, it doesn't dismiss the popover.
+
+    // And the panel no longer duplicates it.
+    fireEvent.click(screen.getByRole('button', { name: 'Go to date' }));
     expect(screen.getByLabelText('Date')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Today' })).toBeNull();
   });
 
   it('shows the "nothing is saved" hint on first use, then hides it (visually) once seen', () => {

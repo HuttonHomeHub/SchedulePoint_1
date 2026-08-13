@@ -24,6 +24,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
+import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
@@ -56,7 +57,6 @@ import { PlanNotesSection } from '@/features/notes';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
-import { ProjectFinishChip } from '@/features/schedule/components/ProjectFinishChip';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
@@ -248,6 +248,10 @@ export function ToolbarPlanWorkspace({
   // events follow the React tree), mirroring the listbox-scoped `?` in TsldPanel. Ignore it while
   // typing in a field, and don't stack the sheet on an already-open plan dialog / edit form.
   const showShortcuts = useCallback(() => canvasUi.setShowHelp(true), [canvasUi]);
+  // Offer the sheet to the shell's account menu for as long as a plan is open (ADR-0091 M7-S5).
+  // The `?` binding below and the toolbar's former `shortcuts` item both opened this same callback;
+  // only the entry point moved, so the dialog and its state stay exactly where they were.
+  useRegisterShortcutsAction(showShortcuts);
   const rootRef = useRef<HTMLDivElement>(null);
   // "A modal is open" — the plan dialogs + the edit-plan form + the activity edit/delete dialogs.
   // Gates both the `?` shortcut (don't stack the sheet on an open modal) and the undo/redo keybindings
@@ -894,24 +898,6 @@ export function ToolbarPlanWorkspace({
               groupLabels={ROW_LOOK_GROUP_LABELS}
               className="flex-1"
             />
-            {/* The Project-finish read-out, back beside `Summary ▾` — a direct product-owner request
-                ("i did like the finish date next to the summary before"), and the last thing the
-                cancelled three-band merge was going to carry.
-
-                Rendered as the toolbar's SIBLING, not as a registry item, which is what lets it sit
-                there without undoing ADR-0090 M2-T3: on Row 1 it was a non-operable stop inside a
-                `role="toolbar"`, costing 150 px of pinned width and putting a read-out in the
-                arrow-key sequence. `alignEndGroup="object"` already parks `Summary ▾` at the
-                toolbar's trailing edge, so the next sibling lands visually beside it while staying
-                outside the widget.
-
-                Affordable now, and that is measured rather than assumed: after M3, Row 1 carries
-                792 px of slack at 1920 and 272 px at 768 (`item-widths`, 2026-08-12). It still
-                self-hides until the plan has been calculated, so a fresh plan shows nothing rather
-                than an em dash. */}
-            <span className="hidden shrink-0 items-center text-sm sm:inline-flex">
-              <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
-            </span>
           </div>
           <div className="flex items-center gap-2 px-2 py-1">
             <Toolbar

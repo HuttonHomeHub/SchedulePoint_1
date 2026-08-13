@@ -1,5 +1,5 @@
 import { MoreHorizontal } from 'lucide-react';
-import { Fragment, forwardRef, useRef, useState, type Ref } from 'react';
+import { Fragment, forwardRef, useEffect, useRef, useState, type Ref } from 'react';
 
 import type { ResolvedToolbarItem, ToolbarGroupId } from './toolbar-registry';
 import { toolbarControlVariants } from './toolbar-styles';
@@ -32,6 +32,15 @@ export interface ToolbarOverflowProps<Ctx> {
   tabIndex: number;
   onKeyDown?: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
   onFocus?: (event: React.FocusEvent<HTMLButtonElement>) => void;
+  /**
+   * Called when the menu opens or closes, so the row can hold its layout still for the duration.
+   *
+   * Without it, a `ResizeObserver` pass that admits a Tier-3 item while this menu is open removes
+   * that item's `MenuItem` from under the reader's focus — and a `Menu` has no effect watching its
+   * own item set shrink, so focus lands on `<body>` (WCAG 2.4.3). Before tier-3 admission an item
+   * could only ever move INTO this menu, never out of it, so the shape was unreachable here.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** A disabled item never activates; `MenuItem` requires the prop regardless. */
@@ -102,11 +111,25 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
 }
 
 function ToolbarOverflowInner<Ctx>(
-  { items, context, groupLabels, tabIndex, onKeyDown, onFocus }: ToolbarOverflowProps<Ctx>,
+  {
+    items,
+    context,
+    groupLabels,
+    tabIndex,
+    onKeyDown,
+    onFocus,
+    onOpenChange,
+  }: ToolbarOverflowProps<Ctx>,
   forwardedRef: Ref<HTMLButtonElement>,
 ) {
   const localRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  // Tell the row when the menu is open. `Toolbar` freezes the ladder for the duration — see its
+  // `menuOpen` guard — because an item that leaves this menu while somebody is arrow-keyed onto it
+  // unmounts under their focus.
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
   const [anchor, setAnchor] = useState({ x: 0, y: 0 });
 
   const setRefs = (node: HTMLButtonElement | null): void => {

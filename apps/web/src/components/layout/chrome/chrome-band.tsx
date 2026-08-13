@@ -1,4 +1,5 @@
 import { ChromeSlot, ChromeSlotProvider, useChromeSlot } from './chrome-slot';
+import { HelpActionProvider } from './help-action';
 
 import { AppHeader, AppHeaderRow } from '@/components/layout/app-header';
 import { Surface } from '@/components/ui/surface';
@@ -22,23 +23,25 @@ export function ChromeBand({ children }: { children: React.ReactNode }): React.R
     // Flag off: today's shell exactly — a header, then everything else. `ChromePortal` is an
     // identity wrapper in this state, so the toolbar renders in place inside the workspace.
     return (
-      <>
+      <HelpActionProvider>
         <AppHeader />
         {children}
-      </>
+      </HelpActionProvider>
     );
   }
 
   return (
-    <ChromeSlotProvider node={node}>
-      {/* `z-20` clears the canvas ruler's `z-10` (TsldCanvas) and the resizer, so a scrolled
+    <HelpActionProvider>
+      <ChromeSlotProvider node={node}>
+        {/* `z-20` clears the canvas ruler's `z-10` (TsldCanvas) and the resizer, so a scrolled
           workspace never rides over the band. The `Sheet` drawer is a native `<dialog>` in the
           top layer, which is above every z-index — the drawer still covers the band, correctly. */}
-      <Surface tone="chrome" className="border-border sticky top-0 z-20 border-b">
-        <AppHeaderRow />
-        <ChromeSlot slotRef={slotRef} />
-      </Surface>
-      {children}
-    </ChromeSlotProvider>
+        <Surface tone="chrome" className="border-border sticky top-0 z-20 border-b">
+          <AppHeaderRow />
+          <ChromeSlot slotRef={slotRef} />
+        </Surface>
+        {children}
+      </ChromeSlotProvider>
+    </HelpActionProvider>
   );
 }

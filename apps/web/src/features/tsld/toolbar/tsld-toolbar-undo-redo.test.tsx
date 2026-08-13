@@ -115,7 +115,7 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
     cleanup();
 
     // Now give every item a real width and the container almost none: the pinned controls alone
-    // exceed it, so `computeOverflow` gets zero budget and demotes all it is allowed to demote.
+    // exceed it, so the ladder gets zero budget and demotes all it is allowed to demote.
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: 100,
       height: 32,
@@ -128,6 +128,25 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
       toJSON: () => ({}),
     });
     const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(120);
+    // **The row has to say its width was IMPOSED on it.** Demotion is only safe where `clientWidth`
+    // is a container's decision; on a shrink-to-fit row it is an output, and demoting from one is a
+    // one-way door (`toolbar-ladder.ts`, `allowDemotion`). jsdom reports `flex-grow: 0` — the CSS
+    // initial value — for everything, so a test whose premise is "the container is almost none" has
+    // to make that premise explicit rather than inherit it.
+    const realStyle = window.getComputedStyle.bind(window);
+    const computed = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((el: Element, pseudo?: string | null) => {
+        const style = realStyle(el, pseudo ?? undefined);
+        return new Proxy(style, {
+          get: (target, key) =>
+            key === 'flexGrow'
+              ? '1'
+              : typeof Reflect.get(target, key) === 'function'
+                ? Reflect.get(target, key).bind(target)
+                : Reflect.get(target, key),
+        });
+      });
 
     try {
       const bar = doRow(ctx());
@@ -141,6 +160,7 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
     } finally {
       rect.mockRestore();
       width.mockRestore();
+      computed.mockRestore();
     }
   });
 

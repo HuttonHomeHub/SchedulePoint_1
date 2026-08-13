@@ -43,6 +43,8 @@ async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
       id: string;
       group: string;
       width: number;
+      left: number;
+      right: number;
       visibleText: string;
       labelled: boolean;
       labelWidth: number | null;
@@ -92,19 +94,35 @@ async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
       // accessible name, which is what `ToolbarButton` renders when `showLabel` is true.
       const nameWidth = measure(node.getAttribute('aria-label') ?? visibleText);
 
+      const box = node.getBoundingClientRect();
       items.push({
         id,
         group,
-        width: Math.round(node.getBoundingClientRect().width),
+        width: Math.round(box.width),
+        // **Edges, so the row's own chrome can be measured rather than inferred** (M7-S0). Every
+        // figure in this file until now was a width, and `Toolbar.tsx`'s `CHROME_RESIDUAL_PX` is
+        // the width the group-rule + gap walk CANNOT attribute — which is a property of the space
+        // *between* items and is therefore invisible to a list of widths.
+        //
+        // `scrollWidth` is not that number and cannot be. The row is a flex line whose content is
+        // laid out to fit, so `scrollWidth === clientWidth` at every width this harness sweeps —
+        // deriving a residual from it yields the row's SLACK (969 px on Row 1 at 2304), which
+        // looks like a chrome figure and is not one. That mistake was made and caught here.
+        left: Math.round(box.left),
+        right: Math.round(box.right),
         visibleText,
         labelled: visibleText.length > 0,
         labelWidth,
         nameWidth,
       });
     }
+    const containerBox = container.getBoundingClientRect();
     return {
       containerWidth: container.clientWidth,
       scrollWidth: container.scrollWidth,
+      // The row's own left content edge, so the leading item's offset from it is attributable.
+      containerLeft: Math.round(containerBox.left + container.clientLeft),
+      containerRight: Math.round(containerBox.left + container.clientLeft + container.clientWidth),
       total: items.reduce((sum, i) => sum + i.width, 0),
       items,
     };
@@ -166,6 +184,10 @@ test('M2-T0 — per-item widths on a populated plan', async ({ page }) => {
     report[String(width)] = {
       'View and navigate': await itemWidths(page, 'View and navigate'),
       'Build and manage': await itemWidths(page, 'Build and manage'),
+      // The mode row joined the band in ADR-0091 and was never reported. It is `shrink-0`, so its
+      // container width IS its content — the one row on which a derived item width can overshoot
+      // the real box and invent a deficit, which is worth being able to see.
+      'Plan mode': await itemWidths(page, 'Plan mode'),
     };
   }
 

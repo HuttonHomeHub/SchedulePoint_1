@@ -54,13 +54,28 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await page.getByRole('button', { name: 'Recalculate' }).click();
 
   // With activities computed, the `hasDiagram`-gated controls light up on Row 1 · Look — the `View▾`
-  // lens popover — and the Project-finish read-out appears in the PLAN HEADER, where ADR-0090 M2-T3
-  // moved it. A change of location, not of capability: the number is more prominent beside the
-  // status pill than it was at the far end of a 25-item row.
+  // lens popover — and the Project-finish read-out appears beside `Summary ▾`.
+  //
+  // **This assertion inverted twice and the second inversion is the interesting one.** ADR-0090
+  // M2-T3 moved the read-out OUT of the toolbar, so this used to assert it was absent from the row.
+  // ADR-0091 M7-S4 moved it back IN, as a `presentational` item, because the `⋯` cannot leave
+  // `role="toolbar"` and could therefore never be the row's last thing while the chip sat to its
+  // right. What M2-T3 was protecting is asserted directly below rather than through placement: the
+  // read-out is not a stop in the arrow-key sequence.
   const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
   await expect(lookRow.getByRole('button', { name: /^View/ })).toBeVisible();
-  await expect(lookRow.getByText('Finish')).toHaveCount(0);
-  await expect(page.getByText('Finish', { exact: true })).toBeVisible();
+
+  // **Widened deliberately for this one assertion.** The read-out is band-conditional since M7-S4 —
+  // withheld below `compact`, where the row needs its width for commands and the number is one press
+  // away in `Summary ▾` — and this journey runs at Playwright's default 1280, which lands under that
+  // floor once the rail is open. Asserting it at the default width would be asserting the wrong
+  // thing; asserting it conditionally would assert nothing.
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const finish = lookRow.getByText('Finish', { exact: true });
+  await expect(finish).toBeVisible();
+  await expect(
+    lookRow.locator('[data-toolbar-item="finish-chip"] [data-toolbar-focusable]'),
+  ).toHaveCount(0);
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();
   await expect(diagram.getByRole('option')).toHaveCount(2);
