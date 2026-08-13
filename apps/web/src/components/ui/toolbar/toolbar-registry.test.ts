@@ -317,6 +317,40 @@ describe('computeOverflow', () => {
     });
   });
 
+  describe('the `⋯` a Tier-3 item already put on the row (ADR-0091 M-final, D2)', () => {
+    /**
+     * `partitionByTier` sends Tier 3 to the overflow **unconditionally**, and those items never
+     * reach `bar` here. So on every row that registers one — which, on this product, is both of
+     * them — the `⋯` renders whether or not anything demotes, and this function was reserving its
+     * width only *after* the first demotion, i.e. one demotion too late.
+     *
+     * Verified red: without `overflowAlreadyShown` the first case returns no overflow.
+     */
+
+    it('demotes when the standing `⋯` is what pushes the row over', () => {
+      // 400 px of items against a 420 px container fits on widths alone — but 40 px of that
+      // container is already spent on a `⋯` this function was never told about.
+      expect(computeOverflow(bar, widths, 420, 40, 0, 0, true).overflow).not.toEqual([]);
+      expect(computeOverflow(bar, widths, 420, 40, 0, 0, false).overflow).toEqual([]);
+    });
+
+    it('does not charge the button twice once something has demoted', () => {
+      // Past the early return the loop reserves the button itself, so the two flags must agree
+      // about every row that was going to overflow anyway. A second charge would demote one item
+      // too many — the mirror of the defect above, and the reason this is a flag rather than an
+      // unconditional term.
+      expect(computeOverflow(bar, widths, 150, 40, 0, 0, true)).toEqual(
+        computeOverflow(bar, widths, 150, 40, 0, 0, false),
+      );
+    });
+
+    it('defaults to the old behaviour, keeping every existing call site a before/after oracle', () => {
+      expect(computeOverflow(bar, widths, 420, 40, 0, 0)).toEqual(
+        computeOverflow(bar, widths, 420, 40, 0, 0, false),
+      );
+    });
+  });
+
   describe('priority is not order, and a segment is one unit (M1-T6/T7)', () => {
     /**
      * `order` answers "where does this sit in its group"; `priority` answers "what can this row

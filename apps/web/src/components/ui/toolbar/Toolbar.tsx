@@ -24,17 +24,38 @@ const OVERFLOW_ID = '__overflow__';
 const OVERFLOW_WIDTH_FALLBACK = 44;
 
 /**
- * Extra px an `'auto'` item costs once labelled, on top of its rendered text: the icon→label gap
- * plus the wider horizontal padding a labelled control carries. Deliberately generous — over-
- * estimating loses a label the row could just afford, which is invisible; under-estimating pushes a
- * command into the overflow, which costs the user a click.
+ * Extra px an `'auto'` item costs once labelled, on top of its rendered text: **the icon→label gap,
+ * and nothing else**. `gap-1.5` = 6 px (`toolbar-styles.ts:80`).
+ *
+ * **This is a model of a difference, not a safety margin, and the distinction is the whole reason
+ * the number changed.** It was 14, with a docblock calling that "deliberately generous — over-
+ * estimating loses a label the row could just afford, which is invisible". Both halves were wrong.
+ * It named "the wider horizontal padding a labelled control carries", and there is none:
+ * `toolbarControlVariants` is `px-2` whether or not a label renders, so the only width a label adds
+ * beyond its own text is the gap.
+ *
+ * And over-estimating is **not** invisible, because this constant is used in exactly one of the two
+ * states the projection has to agree about. Labels off: `inlineTotal` is icon-only and each item is
+ * charged `text + LABEL_CHROME_PX`. Labels on: `inlineTotal` already contains the real labelled
+ * boxes and `labelCost` is zero. So the projected width of *the same row at the same viewport*
+ * differs between the two states by `(LABEL_CHROME_PX − 6) × N` — at 14 that is **8 px per item**,
+ * and Row 2 carries nine `'auto'` items, so a 72 px band of widths existed in which the row was
+ * stable both labelled and unlabelled, and which of the two a planner got depended on the order the
+ * window happened to be resized in. Correcting the constant *is* the fix for that bistability; they
+ * are one change, not two.
+ *
+ * Safety belongs in {@link LABEL_PROMOTION_MARGIN_PX}, which is charged identically in both states
+ * and therefore cannot pull them apart.
  */
-const LABEL_CHROME_PX = 14;
+const LABEL_CHROME_PX = 6;
 
 /**
  * Headroom (px) the row must have left over **after** labelling every `'auto'` item before any of
  * them is labelled. Two jobs: it absorbs the text-measurement estimate's error, and it stops the
  * bar flipping labels on and off around a single-pixel boundary as a user drags a window edge.
+ *
+ * It is charged **in both label states**, which is what makes it a margin rather than a bias — see
+ * {@link LABEL_CHROME_PX} for the constant that was doing the opposite.
  */
 const LABEL_PROMOTION_MARGIN_PX = 32;
 
@@ -57,9 +78,10 @@ const LABEL_PROMOTION_MARGIN_PX = 32;
  * entanglement rather than damping it, and costs no layout reads at all. Same argument as
  * {@link measureLabelWidth}'s, one level down.
  *
- * **Erring high is the safe direction here**, and it is the opposite of {@link LABEL_CHROME_PX}'s:
- * over-estimating demotes a command that would just have fitted, which costs a click;
- * under-estimating paints it outside the box, which costs the command.
+ * **Erring high is the safe direction here.** Over-estimating demotes a command that would just
+ * have fitted, which costs a click; under-estimating paints it outside the box, which costs the
+ * command. That holds because this term is charged identically whatever the row currently renders —
+ * unlike {@link LABEL_CHROME_PX}, where the same instinct produced a bistable projection.
  */
 const ITEM_GAP_PX = 4; // `gap-1` — between the container's children, and within each group
 const GROUP_RULE_PX = 13; // `ml-1` (4) + `border-l` (1) + `pl-2` (8), on every group after the first
@@ -306,6 +328,9 @@ export function Toolbar<Ctx>({
     const anythingMeasured = bar.some((r) => widthOf(r.item.id) > 0);
     const chromeWidth =
       anythingMeasured && isWidthConstrained(container) ? deriveChromeWidth(bar) : 0;
+    // Tier-3 items never enter `demotable`, so `computeOverflow` cannot see that they have already
+    // put the `⋯` on the row and is charging its width to nobody. See its `overflowAlreadyShown`.
+    const overflowAlreadyShown = staticOverflow.length > 0;
     const { overflow } = computeOverflow(
       demotable,
       widths,
@@ -313,6 +338,7 @@ export function Toolbar<Ctx>({
       overflowWidth,
       chromeWidth,
       ITEM_GAP_PX,
+      overflowAlreadyShown,
     );
     const next = new Set(overflow);
     setOverflowedIds((prev) => (sameSet(prev, next) ? prev : next));
@@ -343,10 +369,18 @@ export function Toolbar<Ctx>({
     // Costed against the same honest total the overflow decision uses. Without `chromeWidth` here
     // the two halves of one pass disagree about how wide the row is — which is how a row could
     // promote labels it had already been told it could not afford, then overflow its container.
+    //
+    // `overflow.length > 0` alone was the same blind spot as `computeOverflow`'s: the `⋯` also
+    // renders when Tier-3 items populate it, and on this product every row that has one has it for
+    // that reason and no other. The row was told it had ~44 px it did not have, on the exact
+    // configuration that ships.
     const projected =
-      inlineTotal + chromeWidth + labelCost + (overflow.length > 0 ? overflowWidth : 0);
+      inlineTotal +
+      chromeWidth +
+      labelCost +
+      (overflowAlreadyShown || overflow.length > 0 ? overflowWidth : 0);
     setAutoLabelsFit(projected + LABEL_PROMOTION_MARGIN_PX <= available);
-  }, [bar, demotable, autoLabelsFit, bandWidth]);
+  }, [bar, demotable, staticOverflow, autoLabelsFit, bandWidth]);
 
   // Re-measure synchronously after layout whenever the resolved items change, keeping the ref current.
   const measureRef = useRef(measure);

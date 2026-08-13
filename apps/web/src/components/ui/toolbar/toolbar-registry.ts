@@ -555,13 +555,29 @@ export function computeOverflow<Ctx>(
   chromeWidth = 0,
   /** The gap between two adjacent inline children, reclaimed with each demotion. */
   gapWidth = 0,
+  /**
+   * Is the `⋯` **already on the row** for reasons this calculation cannot influence — i.e. does the
+   * row carry statically-overflowed items (Tier 3), which never enter `bar` at all?
+   *
+   * Without this the budget is over-stated by the button's own width in exactly the configuration
+   * the product ships. `partitionByTier` sends Tier 3 to the overflow unconditionally, so on a row
+   * holding any Tier-3 command the `⋯` renders whether or not anything demotes — and the early
+   * return below then declared "everything fits" against a container that was already paying ~44 px
+   * for a control this function had not been told about. Reserving it only *after* the first
+   * demotion is reserving it one demotion too late.
+   */
+  overflowAlreadyShown = false,
 ): { inline: string[]; overflow: string[] } {
   const ids = bar.map((r) => r.item.id);
   const widthOf = (id: string): number => measured.get(id) ?? 0;
   const totalWidth = ids.reduce((sum, id) => sum + widthOf(id), 0);
+  // Charged up front only when the button is on the row irrespective of this decision. When it is
+  // not, charging it here would be circular — the button exists *because* something demoted.
+  const shownOverflowWidth = overflowAlreadyShown ? overflowButtonWidth : 0;
 
-  // Everything fits (no overflow button needed) → all inline.
-  if (totalWidth + chromeWidth <= availableWidth) return { inline: ids, overflow: [] };
+  // Everything fits (no additional overflow button needed) → all inline.
+  if (totalWidth + chromeWidth + shownOverflowWidth <= availableWidth)
+    return { inline: ids, overflow: [] };
 
   // Demotion order: highest tier number first, then LOWEST `priority` (which defaults to `-order`,
   // reproducing the old "highest order goes first"), then latest registry position.
