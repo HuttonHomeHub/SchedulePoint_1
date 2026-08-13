@@ -89,6 +89,7 @@ import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
 
+import { CanvasDock } from '@/components/layout/workspace/canvas-dock';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -2431,152 +2432,165 @@ export function TsldPanel({
         />
       ) : null}
 
-      {conflict ? (
-        <EditConflictBanner
-          message={conflict.message}
-          onDismiss={() => clearConflict()}
-          {...(conflict.refreshable && onRefresh
-            ? {
-                onRefresh: () => {
-                  onRefresh();
-                  clearConflict();
-                },
-              }
-            : {})}
-        />
-      ) : null}
-
       {!chromeless && showDiagram ? <TsldLegend /> : null}
 
-      {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
-          overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
-          it costs no canvas height in the state the canvas is in most of the time. */}
-      <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
-
       {/*
-        The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
-        reserved chrome as the plural bar below it, never floating over the scene. It floated until
-        2026-08-13; see `SelectionActionsBar`'s docblock for why it stopped. Rendered inline so it
-        stays DOM-adjacent to the listbox for Tab order; renders nothing until an activity is
-        selected, and only when the host wired the object actions.
-      */}
-      {showDiagram && selectionActionsWired ? (
-        <SelectionActionsBar context={selectionCtx} restoreFocus={restoreSelectionFocus} />
-      ) : null}
+        **The dock** (workspace-chrome M3). Every transient strip the diagram shows — the
+        conflict banner, the armed-tool statement, the singular and plural selection bars and
+        the empty-plan notice — renders at the FOOT of the workspace rather than above the
+        scene. ADR-0064's rule is intact (nothing overlays the diagram) and it now costs no
+        canvas height, because the row it lands in already exists. See `canvas-dock.tsx`.
 
-      {/*
-        The bulk selection bar (`docs/specs/canvas-multi-select/` M4-T7) — beside the mode band in
-        the SAME reserved chrome, never floating over the scene. Renders nothing below two selected,
-        and nothing at all when the host wired no operations, so a partially-wired host cannot ship
-        a button that does nothing.
+        With no outlet registered — the legacy stacked layout, and every unit test that mounts
+        this panel alone — `CanvasDock` renders in place, exactly where these strips have
+        always been. That is the parity contract, not a convenience.
       */}
-      {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
-        <BulkSelectionBar
-          count={selection.ids.length}
-          primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
-          link={{
-            // Gated on the WRITE RIGHT only, deliberately — never on the chain's own refusal.
-            //
-            // It used to be gated on both, with the reason "open the preview to see why". The
-            // preview is opened by this button, so for the two refusals that actually happen — a
-            // chain over the 50-link cap, and one that would close a cycle — the sentence told a
-            // planner to do the thing the shading prevented, and the dialog built to explain the
-            // refusal was unreachable in exactly the state it exists for. Found by the UX review
-            // over this epic's diff. `LinkChainDialog` owns the refusal: it keeps the ordered
-            // preview on screen and names the reason beside it.
-            enabled: bulk.gate.writable,
-            reason: bulk.gate.writable ? null : bulk.gate.reason,
-          }}
-          remove={{
-            enabled: bulk.gate.writable,
-            reason: bulk.gate.writable ? null : bulk.gate.reason,
-          }}
-          onLink={() => {
-            setBulkError(null);
-            // Reverse is a choice about THIS preview, so it does not survive it. A sticky reverse
-            // would open the next chain already flipped, with nothing on screen saying it had been
-            // — which is the ADR-0064 report (a link recorded the wrong way round) reappearing as a
-            // state nobody set. Found by the flag-on journey, which cancelled one preview after
-            // pressing Reverse and opened the next.
-            setChainReversed(false);
-            setChainOpen(true);
-          }}
-          onDelete={() => {
-            setBulkError(null);
-            setConfirmBulkDelete(true);
-          }}
-          onClear={() => {
-            setSelection(EMPTY_SELECTION);
-            setActiveIdRaw(null);
-            announce('Selection cleared.');
-            listboxRef.current?.focus();
-          }}
-          busy={bulkBusy}
-        />
-      ) : null}
+      <CanvasDock>
+        {conflict ? (
+          <EditConflictBanner
+            message={conflict.message}
+            onDismiss={() => clearConflict()}
+            {...(conflict.refreshable && onRefresh
+              ? {
+                  onRefresh: () => {
+                    onRefresh();
+                    clearConflict();
+                  },
+                }
+              : {})}
+          />
+        ) : null}
 
-      {/*
-        **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
-        completely blank canvas, and nothing on it says what the first gesture is — the surface is
-        at its least self-explanatory exactly when the planner knows least.
+        {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
+            overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
+            it costs no canvas height in the state the canvas is in most of the time. */}
+        <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
 
-        Shaded with a reason rather than hidden without the pen (ADR-0062 M6's finding, twice): a
-        Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
-        right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
-      */}
-      {/*
-        …and only while nothing is armed. Arming a tool replaces this notice with the mode band's
-        instruction: two strips stacked above the same empty canvas told the planner to press a
-        button they had already pressed and to draw, at the same time, in different words. One
-        instruction at a time, and the armed tool's is the one that describes what the next click
-        does.
-      */}
-      {CANVAS_AUTHORING_FLOW_ENABLED &&
-      showDiagram &&
-      activities.length === 0 &&
-      mode === 'select' ? (
-        <NoticeStrip
-          data-testid="canvas-empty-state"
-          emphasis="dashed"
-          message="This plan has no activities yet."
-        >
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            aria-disabled={!editingEnabled}
-            {...(editingEnabled ? {} : { 'aria-describedby': emptyStateReasonId })}
-            onClick={(event) => {
-              if (!editingEnabled) {
-                event.preventDefault();
-                return;
-              }
-              // Arming REPLACES this notice with the mode band's instruction (above), which
-              // unmounts the button being pressed — and the band deliberately carries no focusable
-              // element for the `adding` statement. Without a destination, focus reverts to
-              // <body> and the next Tab restarts at the top of the document (WCAG 2.4.3), on the
-              // one screen this notice exists to make self-explanatory. So the transition carries
-              // focus to the diagram's parallel listbox, which is both where drawing is operated
-              // from next and the existing pattern for a programmatic move here (the
-              // Next-conflict cycle above). Done HERE, in the button's own click handler, rather
-              // than in an effect keyed on `mode`: a mode change arriving from the toolbar or a
-              // shortcut is not this planner asking to be moved, and a focus move with no gesture
-              // behind it is its own defect. The disarm direction needs nothing — focus is on the
-              // listbox by then, so restoring the notice strands no one.
-              listboxRef.current?.focus();
-              setMode('add-activity');
+        {/*
+          The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
+          reserved chrome as the plural bar below it, never floating over the scene. It floated until
+          2026-08-13; see `SelectionActionsBar`'s docblock for why it stopped. Rendered inline so it
+          stays DOM-adjacent to the listbox for Tab order; renders nothing until an activity is
+          selected, and only when the host wired the object actions.
+        */}
+        {showDiagram && selectionActionsWired ? (
+          <SelectionActionsBar context={selectionCtx} restoreFocus={restoreSelectionFocus} />
+        ) : null}
+
+        {/*
+          The bulk selection bar (`docs/specs/canvas-multi-select/` M4-T7) — beside the mode band in
+          the SAME reserved chrome, never floating over the scene. Renders nothing below two selected,
+          and nothing at all when the host wired no operations, so a partially-wired host cannot ship
+          a button that does nothing.
+        */}
+        {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
+          <BulkSelectionBar
+            count={selection.ids.length}
+            primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
+            link={{
+              // Gated on the WRITE RIGHT only, deliberately — never on the chain's own refusal.
+              //
+              // It used to be gated on both, with the reason "open the preview to see why". The
+              // preview is opened by this button, so for the two refusals that actually happen — a
+              // chain over the 50-link cap, and one that would close a cycle — the sentence told a
+              // planner to do the thing the shading prevented, and the dialog built to explain the
+              // refusal was unreachable in exactly the state it exists for. Found by the UX review
+              // over this epic's diff. `LinkChainDialog` owns the refusal: it keeps the ordered
+              // preview on screen and names the reason beside it.
+              enabled: bulk.gate.writable,
+              reason: bulk.gate.writable ? null : bulk.gate.reason,
             }}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            remove={{
+              enabled: bulk.gate.writable,
+              reason: bulk.gate.writable ? null : bulk.gate.reason,
+            }}
+            onLink={() => {
+              setBulkError(null);
+              // Reverse is a choice about THIS preview, so it does not survive it. A sticky reverse
+              // would open the next chain already flipped, with nothing on screen saying it had been
+              // — which is the ADR-0064 report (a link recorded the wrong way round) reappearing as a
+              // state nobody set. Found by the flag-on journey, which cancelled one preview after
+              // pressing Reverse and opened the next.
+              setChainReversed(false);
+              setChainOpen(true);
+            }}
+            onDelete={() => {
+              setBulkError(null);
+              setConfirmBulkDelete(true);
+            }}
+            onClear={() => {
+              setSelection(EMPTY_SELECTION);
+              setActiveIdRaw(null);
+              announce('Selection cleared.');
+              listboxRef.current?.focus();
+            }}
+            busy={bulkBusy}
+          />
+        ) : null}
+
+        {/*
+          **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
+          completely blank canvas, and nothing on it says what the first gesture is — the surface is
+          at its least self-explanatory exactly when the planner knows least.
+
+          Shaded with a reason rather than hidden without the pen (ADR-0062 M6's finding, twice): a
+          Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
+          right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
+        */}
+        {/*
+          …and only while nothing is armed. Arming a tool replaces this notice with the mode band's
+          instruction: two strips stacked above the same empty canvas told the planner to press a
+          button they had already pressed and to draw, at the same time, in different words. One
+          instruction at a time, and the armed tool's is the one that describes what the next click
+          does.
+        */}
+        {CANVAS_AUTHORING_FLOW_ENABLED &&
+        showDiagram &&
+        activities.length === 0 &&
+        mode === 'select' ? (
+          <NoticeStrip
+            data-testid="canvas-empty-state"
+            emphasis="dashed"
+            message="This plan has no activities yet."
           >
-            Draw the first activity
-          </Button>
-          {editingEnabled ? null : (
-            <span id={emptyStateReasonId} className="sr-only">
-              Start editing this plan to draw activities.
-            </span>
-          )}
-        </NoticeStrip>
-      ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              aria-disabled={!editingEnabled}
+              {...(editingEnabled ? {} : { 'aria-describedby': emptyStateReasonId })}
+              onClick={(event) => {
+                if (!editingEnabled) {
+                  event.preventDefault();
+                  return;
+                }
+                // Arming REPLACES this notice with the mode band's instruction (above), which
+                // unmounts the button being pressed — and the band deliberately carries no focusable
+                // element for the `adding` statement. Without a destination, focus reverts to
+                // <body> and the next Tab restarts at the top of the document (WCAG 2.4.3), on the
+                // one screen this notice exists to make self-explanatory. So the transition carries
+                // focus to the diagram's parallel listbox, which is both where drawing is operated
+                // from next and the existing pattern for a programmatic move here (the
+                // Next-conflict cycle above). Done HERE, in the button's own click handler, rather
+                // than in an effect keyed on `mode`: a mode change arriving from the toolbar or a
+                // shortcut is not this planner asking to be moved, and a focus move with no gesture
+                // behind it is its own defect. The disarm direction needs nothing — focus is on the
+                // listbox by then, so restoring the notice strands no one.
+                listboxRef.current?.focus();
+                setMode('add-activity');
+              }}
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            >
+              Draw the first activity
+            </Button>
+            {editingEnabled ? null : (
+              <span id={emptyStateReasonId} className="sr-only">
+                Start editing this plan to draw activities.
+              </span>
+            )}
+          </NoticeStrip>
+        ) : null}
+      </CanvasDock>
 
       <div
         className={

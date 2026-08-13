@@ -637,7 +637,11 @@ export function SelectionActionsBar({
   return (
     <div
       ref={barRef}
-      className="border-border bg-card mx-4 flex shrink-0 items-center rounded-md border p-1"
+      // No border, padding or radius: docked, the ROW is the container, and a bar that brings its
+      // own box makes the row 6 px taller than the 36 px it already occupied — measured, and the
+      // reason the journey's "costs the canvas no height" assertion is an equality rather than a
+      // bound. Floating, all three were load-bearing (a card over the diagram needs an edge).
+      className="flex shrink-0 items-center"
     >
       <Toolbar
         items={selectionActionItems}
