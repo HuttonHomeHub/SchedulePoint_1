@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 931 web
-> source files with 30 flag-scoped Playwright suites beside the base journey, and
-> 91 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 932 web
+> source files with 31 flag-scoped Playwright suites beside the base journey, and
+> 92 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2051,6 +2051,54 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   `[role="menuitem"]`, so every toggle in the `⋯` was uncountable — harmless only while tier-3 items
   were _permanently_ in the menu and therefore never in the reference set — and S3 counted read-outs
   as commands, so the finish chip's correct withdrawal at 960 read as a command with no route.
+
+- **ADR-0092** _(Accepted; M1–M4 landed 2026-08-13, M5 deferred on a product-owner decision)_ — The
+  canvas dock, and the diagram's vertical budget. The product owner used the ADR-0091 M7 release and
+  reported four things that were not about the command surface two epics had spent themselves
+  fitting: the helper band "taking up canvas space", the canvas sitting "in its own box with rounded
+  edges", and the selection bar that "gets in the way and obscures some other activities". Measured
+  at **1646** — their Surface Pro, and the width ADR-0091's own retrospective established two epics
+  had never used — the workspace carried **249 px of chrome above 558 px of canvas, 31 %**, before
+  any transient strip appears.
+  Two earlier decisions explain why nobody had noticed. **ADR-0064's rule is right and was priced
+  only against the alternative it rejected**: a statement lives in reserved chrome, never as an
+  overlay — but chrome above the scene pushes the scene _down_, and that was never costed. And
+  ADR-0031 Fork-2 left the singular selection bar **floating**, with `docs/TECH_DEBT.md` #31
+  recording the obstruction from the day it shipped. So the workspace shipped **both answers to one
+  question** and gave the worse one to the commoner case.
+  **The dock is the answer, and it keeps ADR-0064 intact at no height.** Every transient strip — the
+  armed-tool statement, the link confirmation, both selection bars, the conflict banner, the
+  empty-plan notice — portals into the **Activities handle row, which already existed**: 36 px with a
+  word at one end, a button at the other, and the whole width between them empty. Measured: arming a
+  tool and selecting an activity each cost the canvas **0 px**, asserted as an equality. The
+  in-place fallback when no outlet is registered is the **parity contract**, which is why 4,750
+  existing tests passed through untouched. Clearing the outlet **by node identity** is load-bearing:
+  two weaker rules were written and each broke the case the other fixed — a bare `null` empties the
+  dock on half the transitions, and an `isConnected` guard inverts that (React runs a ref cleanup
+  _before_ detaching), portalling the strips into a node leaving the document, present in no
+  accessibility tree, with nothing on screen looking wrong. The second was found by the fourth unit
+  case, not by reading.
+  **`Snap to grid` is deleted, and the product owner's report was exactly right.** The toggle had no
+  effect — `compute.ts:335-338` rolls every `visualStart` forward unconditionally — and what it _did_
+  change was the tie-break **direction**, for the worse: it rounded to the NEAREST working day,
+  writing a Saturday drop back as **Friday**, earlier than the planner placed it, and then the engine
+  rolled from the client's answer. The PATCH now carries the raw dropped day and the ghost previews
+  the engine's roll. Its journey (`apps/web/e2e-workspace-chrome/`) is **the first in this repository
+  to run in Visual mode at all** — the other fourteen canvas configs pin `VITE_SCHEDULING_MODES` off,
+  each for a good local reason, and the unrecorded consequence was that the one placement rule a
+  planner exercises by dragging a bar had no end-to-end cover. That is precisely where the defect was.
+  **The finding it did not go looking for**: deleting the button turned `e2e-toolbar-fit` S4 red at 960. The button was not the cause, it was the **cover** — `Analysis` and `Share & export` painted
+  their labels at every width while every other trigger goes icon-only below 1024 (145 px between
+  them), and Row 2 fitted at 960 only because `snap-to-grid` was the last **demotable** item the
+  ladder could sacrifice. The ADR-0064 §7 shape for the fifth epic running. S11 pins it in **both**
+  states, because asserting only the narrow half passes equally against a control with no label
+  anywhere (TECH_DEBT #126's four blank buttons, one costume along).
+  **M5 — merging the identity line into the app header — is deferred as a decision, not an
+  omission**: tidying yields 456 px, which fits at 1920, is 134 px short at 1646 and 340 px short at
+  1440, and closing 1646 costs the organisation nav (~517 px), the brand wordmark (~120 px, 14 px
+  short and therefore not a fit) or icon-only mode switches (~200 px, reversing ADR-0091 M7 from the
+  same week). Which to spend is a product decision. Closes `docs/TECH_DEBT.md` #31's fast-follow and
+  #125. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
