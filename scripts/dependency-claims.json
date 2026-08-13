@@ -7,7 +7,7 @@
     "zod": "4.4.3",
     "@nestjs/throttler": "6.5.0",
     "react-hook-form": "7.84.0",
-    "lucide-react": "1.28.0"
+    "lucide-react": "1.29.0"
   },
   "claims": [
     {
