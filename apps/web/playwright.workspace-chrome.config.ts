@@ -5,7 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  * (`docs/specs/workspace-chrome/`) — the plan workspace's vertical budget, its command surface, and
  * the placement rule the canvas previews.
  *
- * **`VITE_SCHEDULING_MODES` is left at its default (on), and that is why this config exists.** Every
+ * **`VITE_SCHEDULING_MODES` is left at its default (on), and that is why this config exists.**
+ * (So is every other flag — see the `webServer` block.) Every
  * other flag-scoped config in this repository pins it OFF — fourteen of them, each for a good local
  * reason (a Visual placement changes what a bar's position means, which is a variable those suites
  * are controlling for). The consequence nobody had recorded is that **Visual mode has never been
@@ -68,17 +69,14 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // Deliberately NOT pinning VITE_SCHEDULING_MODES — see the docblock above.
-              VITE_CANVAS_WORKSPACE: 'true',
-              VITE_CANVAS_TOOLBAR: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              VITE_CANVAS_AUTHORING_FLOW: 'true',
-              VITE_CANVAS_DIRECT_MANIPULATION: 'true',
-              VITE_CANVAS_NAV: 'true',
-            },
+            // **No `VITE_` pins at all**, which is the same choice `playwright.toolbar-fit.config.ts`
+            // makes and for the same reason. A published image carries every flag at its default
+            // (ADR-0088 D1: Vite inlines the constants at build time, the Dockerfile declares one
+            // build arg and the publish workflow passes none), so the shipped surface IS the default
+            // surface — and every flag this suite needs is default-on, `flagDefaultOff` having zero
+            // call sites in `env.ts`. Pinning them 'true' therefore restated the defaults and tested
+            // nothing extra, while quietly asserting that a retired flag still existed:
+            // `check:flags` caught exactly that on the first CI run, for `VITE_CANVAS_TOOLBAR`.
           },
         ],
       }),
