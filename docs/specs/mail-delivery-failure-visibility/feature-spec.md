@@ -656,7 +656,7 @@ But three things break:
 - ⚠️ **The status code is probably wrong.** `dispatchAuthEndpoint` passes the _handler's_
   status into `toResponse(result.response, { status: result.status })`
   (`dispatch.mjs:255-257`), and `toResponse` resolves an `APIError` with
-  `init?.status ?? data.statusCode` (`better-call/dist/to-response.mjs:127-131`) — so
+  `init?.status ?? data.statusCode` (`better-call/dist/to-response.mjs:125-129`) — so
   `init.status`, i.e. the handler's **200**, wins. The reader would get an error body under
   a 200. _This is read from source, not measured_; the plan makes measuring it the first
   task if this option is revived.

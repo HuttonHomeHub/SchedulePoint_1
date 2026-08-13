@@ -35,13 +35,13 @@
     "@repo/interchange": "workspace:*",
     "@repo/layout": "workspace:*",
     "@repo/types": "workspace:*",
-    "better-auth": "^1.6.25",
+    "better-auth": "^1.6.26",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "express": "5.2.1",
     "helmet": "^8.3.0",
     "nestjs-pino": "^4.3.0",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^9.0.4",
     "pino-http": "^11.0.0",
     "prisma": "^6.2.1",
     "reflect-metadata": "^0.2.2",
@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",
-    "@nestjs/testing": "^11.0.1",
+    "@nestjs/testing": "^11.1.29",
     "@repo/config": "workspace:*",
     "@repo/engine-conformance": "workspace:*",
     "@repo/seed": "workspace:*",
@@ -66,7 +66,7 @@
     "rimraf": "^6.0.1",
     "supertest": "catalog:",
     "typescript": "catalog:",
-    "unplugin-swc": "^1.5.1",
+    "unplugin-swc": "^1.5.10",
     "vitest": "catalog:"
   }
 }
