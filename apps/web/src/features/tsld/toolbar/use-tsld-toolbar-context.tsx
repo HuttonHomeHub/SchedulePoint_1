@@ -160,10 +160,8 @@ export function useTsldToolbarContext({
     todayIso,
     selectedActivityId,
     selectedActivity,
-    canProgress,
     canWriteNotes,
     revealActivityNotes,
-    onProgressActivity,
     clearVisualPlacement,
   } = model;
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing; the workspace derives it the
@@ -831,9 +829,7 @@ export function useTsldToolbarContext({
     selectedActivity,
     revealComments,
     model.notesOpen,
-    canProgress,
     canWriteNotes,
-    onProgressActivity,
     revealActivityNotes,
     lateOverlayActive,
     clearVisualPlacement,

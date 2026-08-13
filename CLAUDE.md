@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 932 web
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 933 web
 > source files with 31 flag-scoped Playwright suites beside the base journey, and
-> 92 ADRs.
+> 93 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2105,6 +2105,49 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   prompt **stays in the dock** (D6a) — one place for every strip beats a rule with one hole in it,
   and the cost is stated. Closes `docs/TECH_DEBT.md` #31's fast-follow and #125. **The CPM engine is
   not imported and no migration runs.**
+
+- **ADR-0093** _(Accepted; landed 2026-08-13)_ — An object action belongs on the object. The product
+  owner asked whether the toolbar's `Report progress` was warranted, having noticed it was clickable
+  only with an activity selected while a second button doing the same thing sat at the foot of the
+  canvas under the same condition — and that this looked like the only button landing in two places.
+  It was, and the **enumeration** is the finding rather than the impression: four command-surface
+  items consult the selection and only that one had a dock twin; none of the dock's eleven items has
+  a command-surface twin except `progress`. The two were indistinguishable in permission, in
+  precondition and in effect. The duplication was added **knowingly** — the dock item's docblock says
+  it mirrors the toolbar command's gate — so nothing was wrong in either file and a human read of
+  either kept finding a correct item with a correct comment. **The wrongness existed only in the
+  relationship**, which is why the rule ships as a derived structural gate rather than a convention:
+  `selection-duplication.structural.test.ts` builds both rosters from the two registries (a
+  hard-coded list is the ADR-0073 C4 defect in miniature) and carries a **second** assertion that the
+  dock still offers the action, because the general one would pass equally if BOTH copies vanished
+  and a green suite could not then distinguish "the duplicate is gone" from "the capability is gone"
+  — the ADR-0081 shape. Both verified red first. The discriminator is the deliverable: **an action
+  whose subject is the selected object belongs on the object's surface; the command surface carries
+  actions whose subject is the plan or the view.** That is the mirror of ADR-0091, whose subject was
+  a command surface with no vocabulary for a mode, a fact or a subject; this is an **object action
+  wearing a command's clothes**. Amends ADR-0031's taxonomy and supersedes
+  `workspace-layout/design.md` §42 — whose reason ("a Contributor's primary action must not be
+  buried") was **right and is better served by the dock**, which puts it on the object under exactly
+  the same condition.
+  **The Gantt asymmetry inverted on reading, and the measurements corrected the author twice.** It
+  was first offered as a reason to KEEP the item — the only selection-driven route in that view —
+  until ADR-0059 §4 ("the first ship is read-only") made it a hole in that story rather than a
+  feature of it; a Gantt row menu was rejected for the same reason (editing by the side door).
+  **The width argument is withdrawn**: removing a 163 px labelled item bought Row 2 **no label**
+  (13 inline / 11 labelled either side at 1646), its width going straight back into the ladder — the
+  third consecutive epic whose width expectation its own measurement contradicted (ADR-0091 D4,
+  ADR-0092 M4), which now looks like a property of the ladder rather than three coincidences. What it
+  bought instead was unreachable by reasoning: `clear-visual-placement` returns inline and the **`⋯`
+  disappears from Row 2 entirely**, so every command there is directly reachable — with the honest
+  consequence that the promoted item is one of the two write affordances still reachable from a Gantt
+  selection, i.e. this makes it _more_ prominent. And the plural-selection finding was **confirmed
+  and overstated**: the guard does suppress the dock bar while the command item stayed enabled, but
+  the plural bar prints "N activities selected — X is the subject of single-activity actions", so the
+  product names the rule on screen; it is a two-surface inconsistency, not a silent action, corrected
+  in place. That correction's own first measurement read the **Project Explorer's** row menus and
+  would have reported a false pass — this epic's subject in miniature. The Gantt cost is **accepted,
+  not mitigated**, and inherited by the Gantt-editing epic through `docs/BACKLOG.md` rather than
+  promised here. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
