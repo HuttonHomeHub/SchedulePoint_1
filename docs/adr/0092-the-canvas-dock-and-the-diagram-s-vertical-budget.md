@@ -1,6 +1,6 @@
 # ADR-0092 — The canvas dock, and the diagram's vertical budget
 
-- **Status:** Accepted (M1–M4 landed 2026-08-13; M5 deferred on a product-owner decision)
+- **Status:** Accepted (M1–M4 + M6 landed 2026-08-13; **M5 withdrawn by the product owner on the measurement**)
 - **Date:** 2026-08-13
 - **Supersedes:** nothing
 - **Amends:** ADR-0064 (§4 — where a transient statement lives), ADR-0031 (Fork-2 — the selection
@@ -242,10 +242,10 @@ from a strong position (under the toolbar, atop a blank canvas, where a first-ti
 already is) to the foot strip is a **product question**, not a defect: it is the one strip whose old
 placement was doing work the product owner did not ask to change.
 
-## What is deferred, and why it is a decision rather than an omission
+## D6 — the band merge is withdrawn, on its own numbers
 
-**Merging the plan-identity line into the app header row is a hard requirement of this epic** (the
-product owner's own words), and M0-T4 measured it rather than assuming it:
+**Merging the plan-identity line into the app header row was a hard requirement of this epic**, in
+the product owner's words, and M0-T4 measured it rather than assuming it:
 
 | viewport | header free | identity content | over one row |
 | -------- | ----------: | ---------------: | -----------: |
@@ -254,16 +254,36 @@ product owner's own words), and M0-T4 measured it rather than assuming it:
 | 1440     |      391 px |          1187 px |   **796 px** |
 
 Tidying the identity line yields **456 px** (pen redundancy 257 = a status badge 70 + a live-region
-sentence 187, both saying what the button beside them says; breadcrumb path 199). So the merge
-**fits at 1920 on tidying alone**, is **134 px short at 1646**, and 340 px short at 1440. Closing
-1646 costs something else — collapsing the organisation nav (~517 px, which also closes 1440), the
-brand wordmark (~120 px, 14 px short and therefore not a fit), or icon-only mode switches (~200 px,
-which reverses ADR-0091 M7's `showLabel: 'always'` from the same week).
+sentence 187, both saying what the button beside them says; breadcrumb path 199). So the merge fits
+at 1920 on tidying alone, is **134 px short at 1646** and 340 px short at 1440. Closing 1646 costs
+the organisation nav (~517 px, which also closes 1440), the brand wordmark (~120 px — 14 px short,
+and therefore not a fit) or icon-only mode switches (~200 px, reversing ADR-0091 M7 from the same
+week).
 
-Which to spend is a **product decision, not an arithmetic one**, and it is recorded here unresolved
-rather than settled quietly by whoever picked up the milestone.
+Put to the product owner with those numbers **and with what the merge is worth**: the identity row
+is **45 px of the 240 px** above the canvas, so the whole exercise buys about **8 % more canvas** and
+leaves 195 px of chrome standing. They withdrew the requirement.
 
----
+That is the right call and it is recorded here as a **withdrawal rather than a deferral**, because
+the two read differently to the next person: a deferral is work still owed and quietly accrues a
+justification, while this is a requirement that its own measurement disqualified. ADR-0091 D4 —
+the three-band merge — was withdrawn the same way, before a line of it was built, and for the same
+reason: the arithmetic was done first. The remaining 195 px is a better target than the 45 px, and
+whatever goes after it should start from a fresh measurement rather than from this epic's leftovers.
+
+### D6a — the empty-plan prompt stays in the dock
+
+The UX gate observed that the first-run prompt ("This plan has no activities yet", with the button
+that arms the Add tool) moved from a strong position — under the toolbar, atop a blank canvas, where
+a first-time reader's eye already is — to the foot strip, along with the four transient strips the
+product owner actually asked to move. It is the one strip whose old placement was doing work nobody
+asked to change, so it was put to them as a product question rather than absorbed.
+
+**Decision: it stays in the dock.** Every strip the diagram raises is now in one place, and a
+first-run prompt that is the sole exception would be a rule with one hole in it — which is how a
+future reader ends up putting the next strip back above the scene "because the empty state is there".
+The accepted cost is stated plainly: the first thing a planner sees on a brand-new plan is at the
+bottom of the screen.
 
 ## Consequences
 

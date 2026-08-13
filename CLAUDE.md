@@ -2093,12 +2093,18 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   ladder could sacrifice. The ADR-0064 §7 shape for the fifth epic running. S11 pins it in **both**
   states, because asserting only the narrow half passes equally against a control with no label
   anywhere (TECH_DEBT #126's four blank buttons, one costume along).
-  **M5 — merging the identity line into the app header — is deferred as a decision, not an
-  omission**: tidying yields 456 px, which fits at 1920, is 134 px short at 1646 and 340 px short at
-  1440, and closing 1646 costs the organisation nav (~517 px), the brand wordmark (~120 px, 14 px
-  short and therefore not a fit) or icon-only mode switches (~200 px, reversing ADR-0091 M7 from the
-  same week). Which to spend is a product decision. Closes `docs/TECH_DEBT.md` #31's fast-follow and
-  #125. **The CPM engine is not imported and no migration runs.**
+  **M5 — merging the identity line into the app header — was a hard requirement and is WITHDRAWN on
+  its own numbers**, which is the entry's other useful part. Tidying yields 456 px: the merge fits at
+  1920, is 134 px short at 1646 and 340 px short at 1440, and closing 1646 costs the organisation nav
+  (~517 px), the brand wordmark (~120 px, 14 px short and therefore not a fit) or icon-only mode
+  switches (~200 px, reversing ADR-0091 M7 from the same week). Put to the product owner with those
+  figures **and with what the merge is worth** — the identity row is 45 px of 240 px, so about 8 %
+  more canvas — they withdrew it. Recorded as a withdrawal rather than a deferral, because a deferral
+  is work still owed: this is a requirement its own measurement disqualified, the same way ADR-0091
+  D4 went. The remaining 195 px is the better target and wants a fresh measurement. The empty-plan
+  prompt **stays in the dock** (D6a) — one place for every strip beats a rule with one hole in it,
+  and the cost is stated. Closes `docs/TECH_DEBT.md` #31's fast-follow and #125. **The CPM engine is
+  not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
