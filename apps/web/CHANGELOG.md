@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.89.0
+
+### Minor Changes
+
+- [#310](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/310) [`333c815`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/333c815a0af5bfac441eeb3980c023850f7a9112) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Report progress is offered by the canvas selection bar, not the toolbar. It was the only action in
+  the plan workspace that existed in two places — the command surface and the canvas dock — with the
+  same permission, the same precondition and the same dialog. It now lives on the object it acts on.
+  The other routes are unchanged: the activities-table row menu and the activity editor's Progress
+  tab.
+
 ## 0.88.0
 
 ### Minor Changes
