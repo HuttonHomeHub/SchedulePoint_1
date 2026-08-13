@@ -118,9 +118,12 @@ const ZOOM_LABELS: Record<string, string> = {
 type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels';
 
 /**
- * **Why four commands sit at tier 3 — always in the `⋯` — since 2026-08-12 (ADR-0090 M2).**
+ * **Why a handful of commands sit at tier 3 — last into the `⋯`, first out of it (ADR-0090 M2,
+ * amended by ADR-0091 M7's admission rung, which puts them back on the row when there is room).**
  *
- * `next-conflict`, `float-paths` and `shortcuts` on Row 1, and `clear-visual-placement` on Row 2.
+ * `next-conflict` and `float-paths` on Row 1, and `clear-visual-placement` on Row 2. (`shortcuts` was
+ * a fourth until ADR-0091 M7-S5 moved it into the account menu — an inventory in prose goes stale
+ * every time the set changes, which is why the count is not restated here.)
  * Row 1 was ~360 px short of labelling itself at 1920 and Row 2 ~128 px; these four are what buys
  * both. The trade was put to the product owner with the measured numbers rather than taken here,
  * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
@@ -358,7 +361,12 @@ function GoToTodayControl({
   const { open, openPanel, close, panel } = usePopoverPanel({ triggerRef: primaryRef });
 
   const primaryDisabled = !(ctx.hasDiagram && ctx.canvasActive);
-  const caretDisabled = !SCHEDULING_MODES_ENABLED || ctx.plannedStart === null;
+  // **Only a state the reader can change.** `SCHEDULING_MODES_ENABLED` is deliberately NOT folded in
+  // here: a flag being off is not something a planner can act on, and shading the caret for it would
+  // print "Set the plan's start date first" to somebody whose plan already has a start date — a
+  // sentence that is simply false. The flag decides whether this control has a caret at all, one
+  // level up (see the registry entry); ADR-0082's discriminator, applied where it belongs.
+  const caretDisabled = ctx.plannedStart === null;
   const primaryReason = canvasViewportReason(ctx, 'Add an activity to go to today');
 
   return (
@@ -1901,9 +1909,24 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           //
           // `showLabel` is gone with the merge: a `render` item owns its own chrome, and this one
           // compacts from `api.layout` exactly as its `View ▾` and `Summary ▾` neighbours do.
-          tier: 1 as const,
-          order: -2,
-          render: (ctx, api) => <GoToTodayControl ctx={ctx} api={api} />,
+          ...(SCHEDULING_MODES_ENABLED
+            ? {
+                tier: 1 as const,
+                order: -2,
+                render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
+                  <GoToTodayControl ctx={ctx} api={api} />
+                ),
+              }
+            : {
+                // **No date capability in this build ⇒ no caret**, rather than a caret shaded with a
+                // reason that would be untrue. This is byte-for-byte the plain command `today` was
+                // before the merge, which is also what keeps the flag-off surface unchanged.
+                showLabel: { atLeast: 'comfortable' } as const,
+                isEnabled: (ctx: TsldToolbarContext) => ctx.hasDiagram && ctx.canvasActive,
+                disabledReason: (ctx: TsldToolbarContext) =>
+                  canvasViewportReason(ctx, 'Add an activity to go to today'),
+                onActivate: (ctx: TsldToolbarContext) => ctx.goToDate(ctx.todayIso),
+              }),
         }
       : placeholderItem(todayShape),
 

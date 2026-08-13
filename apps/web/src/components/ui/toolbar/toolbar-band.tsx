@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
  * | question                                  | honest input      | consumer                      |
  * | ----------------------------------------- | ----------------- | ----------------------------- |
  * | *how much room does this surface have?*   | the **band**      | `resolveLayoutMode`           |
- * | *does my content fit my box?*             | the **container** | `computeOverflow`, label fit  |
+ * | *does my content fit my box?*             | the **container** | `computeLadder`               |
  *
  * The first is a property of the window; the second is a property of the row. Conflating them is
  * honest only while a toolbar IS the full-width row — and this register has now recorded that

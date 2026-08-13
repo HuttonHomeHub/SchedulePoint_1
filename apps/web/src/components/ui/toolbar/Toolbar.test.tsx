@@ -526,6 +526,45 @@ describe('Toolbar — the measure pass is bounded (ADR-0090 M5)', () => {
     expect(spy.mock.calls.length).toBeLessThanOrEqual(onMount);
     spy.mockRestore();
   });
+
+  /**
+   * **The two cases above never reach the code they claim to bound, and that was measured rather
+   * than suspected.** They render with no `clientWidth` mock, so `container.clientWidth` is 0 under
+   * jsdom, `measure()` early-returns at `available <= 0`, and `getBoundingClientRect` is called
+   * **zero** times — `0 < 32` and `0 <= 0` are true whatever the ladder does. A performance review
+   * ran that experiment and reported it; the assertions have been vacuous since they were written,
+   * and M7 is exactly the change that most needed them not to be.
+   *
+   * This case gives the row a width so the pass runs all the way through `computeLadder`, and asserts
+   * the shape M7 is supposed to have changed: **only `render` items are measured**. A plain button's
+   * width is derived from the CVA, so a regression that went back to measuring them shows up here as
+   * a count in the item-count range rather than in the render-item range.
+   */
+  it('reaches the ladder when the row has a width, and measures only the render items', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1600);
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+    render(<Toolbar items={items} context={{ count: 0 }} label="Counted" />);
+    const renderItems = items.filter((i) => typeof i.render === 'function').length;
+    expect(renderItems).toBeGreaterThan(0);
+    expect(spy.mock.calls.length).toBeGreaterThan(0); // it really did run
+    // One read per render item, plus the `⋯` — with generous headroom for the layout effect running
+    // twice on mount. The point is the SHAPE: bounded by the render items, not by every item.
+    expect(spy.mock.calls.length).toBeLessThanOrEqual((renderItems + 1) * 4);
+    spy.mockRestore();
+    width.mockRestore();
+  });
+
+  it('settles: a second pass at the same width changes nothing', () => {
+    // The termination claim, asserted rather than argued. `computeLadder` is idempotent, so a
+    // re-measure at an unchanged width must produce the same three sets — which `sameSet` then
+    // turns into no re-render at all.
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1600);
+    const { rerender } = render(<Toolbar items={items} context={{ count: 0 }} label="Counted" />);
+    const before = screen.getByRole('toolbar', { name: 'Counted' }).innerHTML;
+    rerender(<Toolbar items={items} context={{ count: 0 }} label="Counted" />);
+    expect(screen.getByRole('toolbar', { name: 'Counted' }).innerHTML).toBe(before);
+    width.mockRestore();
+  });
 });
 
 describe('Toolbar — one auto margin per row (ADR-0091 M-final, B1)', () => {
@@ -575,5 +614,49 @@ describe('Toolbar — one auto margin per row (ADR-0091 M-final, B1)', () => {
     expect(
       screen.getByRole('button', { name: 'More toolbar actions' }).closest('.ml-auto'),
     ).not.toBeNull();
+  });
+});
+
+describe('Toolbar — the ladder holds still while the `⋯` is open (ADR-0091 M7)', () => {
+  /**
+   * **Tier-3 admission gave an item a way OUT of the overflow menu, and that is new.** Before it, a
+   * tier-3 command could only ever move in, so a `MenuItem` could never vanish from under a reader
+   * who had arrow-keyed onto it. Now a resize that finds room removes it — and `Menu` manages focus
+   * on open and on close, not on its item list shrinking, so focus lands on `<body>` (WCAG 2.4.3).
+   *
+   * Freezing the ladder is the honest fix rather than teaching `Menu` to recover: the reader asked
+   * to see this list, and rearranging it underneath them is wrong whether or not focus survives.
+   *
+   * **The re-measure is triggered by a context change, not by `fireEvent.resize`.** jsdom has no
+   * real `ResizeObserver`, so a synthetic resize event fires nothing and the first version of this
+   * case passed with the guard removed — a gate that could not fail. Changing `context` changes
+   * `resolved` → `bar` → `measure`'s identity → the layout effect, which is a genuine re-measure
+   * path and one the product takes constantly.
+   */
+  const withCandidate = defineToolbar<Ctx>([
+    { id: 'a', group: 'frame', tier: 1, order: 0, label: 'a', onActivate: () => {} },
+    { id: 'late', group: 'help', tier: 3, order: 0, label: 'Late command', onActivate: () => {} },
+  ]);
+
+  it('does not admit an item out of the menu somebody is reading', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(0);
+    const { rerender } = render(<Toolbar items={withCandidate} context={{ count: 1 }} label="T" />);
+    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Late command' })).toBeInTheDocument();
+
+    // Room appears while the menu is open. Without the guard this admits `late` onto the row and
+    // unmounts the item under the reader's focus.
+    width.mockReturnValue(4000);
+    rerender(<Toolbar items={withCandidate} context={{ count: 2 }} label="T" />);
+    expect(screen.getByRole('menuitem', { name: 'Late command' })).toBeInTheDocument();
+    width.mockRestore();
+  });
+
+  it('admits it as soon as the menu is closed', () => {
+    // The freeze is a hold, not a refusal — otherwise a menu opened once would pin the row forever.
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(4000);
+    render(<Toolbar items={withCandidate} context={{ count: 1 }} label="T" />);
+    expect(screen.getByRole('button', { name: 'Late command' })).toBeInTheDocument();
+    width.mockRestore();
   });
 });

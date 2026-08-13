@@ -86,7 +86,7 @@ function isWidthConstrained(container: HTMLElement): boolean {
 /**
  * The row's own chrome, **derived from the registry — never read from the DOM**.
  *
- * `computeOverflow` was handed only item widths, so it answered "do these boxes sum to less than
+ * The overflow decision was once handed only item widths, so it answered "do these boxes sum to less than
  * this number" while the row needed "does this fit as laid out". Measured at 1920, Row 1's items
  * summed to 1782 against an 1832 px container while the row laid out at 1941: the function said it
  * fitted, no `⋯` rendered, and two controls were painted outside the row — which was then
@@ -215,13 +215,12 @@ export function Toolbar<Ctx>({
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef(new Map<string, HTMLElement>());
-  // Last-known measured width per item. A demotable item that is currently in the `⋯` overflow has no
-  // inline node, so its live `getBoundingClientRect().width` reads 0 — feeding that 0 back into
-  // `computeOverflow` would drop the total below the threshold, promote the item inline, re-measure a
-  // non-zero width, overflow it again… a per-frame flip-flop (ResizeObserver overflow loop) that makes
-  // the bar jitter. Caching each item's real width (updated only while it's inline, > 0) keeps the
-  // overflow decision deterministic and stable. Item widths are content-driven, so a cached value stays
-  // valid across container resizes (pinned render items are always inline, so they re-measure fresh).
+  // Last-known measured width per item. An item currently in the `⋯` has no inline node, so its live
+  // `getBoundingClientRect().width` reads 0 — feeding that 0 into the ladder would drop the total
+  // below the threshold, promote the item inline, re-measure a non-zero width, overflow it again… a
+  // per-frame flip-flop that makes the bar jitter. Caching each real width (updated only while the
+  // item is inline, > 0) keeps the decision deterministic. Since M7 this matters only for `render`
+  // items, which are the only ones still measured — a plain button's width is derived and never 0.
   const widthCacheRef = useRef(new Map<string, number>());
   const [overflowedIds, setOverflowedIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -255,6 +254,20 @@ export function Toolbar<Ctx>({
    * container imposes (see `isWidthConstrained`). A mode never moves its own boundary.
    */
   const [layout, setLayout] = useState<ToolbarLayoutMode>('comfortable');
+  /**
+   * Is the `⋯` menu open? While it is, the ladder **holds its previous answer**.
+   *
+   * Tier-3 admission gave an item a way OUT of the overflow menu, and that is new: before it, a
+   * tier-3 command could only ever move in, so a `MenuItem` could never vanish from under a reader
+   * who had arrow-keyed onto it. Now a resize that finds room removes it, and `Menu` manages focus
+   * on open and on close but not on its item list shrinking — so focus lands on `<body>`
+   * (WCAG 2.4.3). Freezing is the honest fix rather than teaching `Menu` to recover: the reader
+   * asked to see this list, and rearranging it underneath them is wrong whether or not focus
+   * survives. The next pass runs the moment they close it.
+   *
+   * A ref rather than state, because nothing renders differently — `measure` only reads it.
+   */
+  const menuOpenRef = useRef(false);
 
   // Read straight into `measure`'s closure and declared as a dependency. A ref assigned during
   // render was the first shape and it is a `react-hooks` violation for a good reason: React may
@@ -287,6 +300,8 @@ export function Toolbar<Ctx>({
   const measure = useCallback(() => {
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
+    // See `menuOpenRef`: never rearrange a list somebody is reading.
+    if (menuOpenRef.current) return;
     const available = container.clientWidth;
     // A row with no width has not been laid out — it is inside a `hidden` pane, or in an environment
     // with no layout engine at all. Deciding anything from that is deciding from nothing, and now
@@ -322,7 +337,12 @@ export function Toolbar<Ctx>({
     // OUTPUT of the demotion decision, which makes demotion a one-way door. See
     // `LadderInput.allowDemotion` for the 37 px row this was measured on.
     const widthConstrained = isWidthConstrained(container);
-    const font = fontOf(itemRefs.current.get(bar[0]?.item.id ?? ''));
+    // Only when something on the row could take a label: `getComputedStyle` is a style recalc, and a
+    // row whose every item is `showLabel: 'always'` has nothing to measure text for (perf gate).
+    const needsFont = bar.some(
+      (r) => typeof r.item.onActivate === 'function' && labelPolicy(r.item, layout) !== 'never',
+    );
+    const font = needsFont ? fontOf(itemRefs.current.get(bar[0]?.item.id ?? '')) : '';
     const coarsePointer =
       typeof window !== 'undefined' && typeof window.matchMedia === 'function'
         ? window.matchMedia('(pointer: coarse)').matches
@@ -338,7 +358,8 @@ export function Toolbar<Ctx>({
       const baseWidth = demotable
         ? iconOnlyWidth(r.icon != null, coarsePointer)
         : widthOf(r.item.id);
-      const text = demotable && policy !== 'never' ? measureLabelWidth(r.item.label, font) : null;
+      const text =
+        demotable && policy !== 'never' && needsFont ? measureLabelWidth(r.item.label, font) : null;
       return {
         id: r.item.id,
         group: r.item.group,
@@ -392,13 +413,49 @@ export function Toolbar<Ctx>({
 
   // Attach the ResizeObserver **once** on mount, reading the latest `measure` via the ref, so an
   // unrelated parent re-render never tears down and rebuilds the observer (perf review, ADR-0031).
+  const observerRef = useRef<ResizeObserver | null>(null);
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => measureRef.current());
     ro.observe(container);
-    return () => ro.disconnect();
+    observerRef.current = ro;
+    return () => {
+      observerRef.current = null;
+      ro.disconnect();
+    };
   }, []);
+
+  /**
+   * Also watch every **`render` item's** own box.
+   *
+   * A `render` item is the one kind the ladder measures rather than derives, and its width can change
+   * with no container resize at all — so nothing wakes the row. The Project-finish chip is exactly
+   * that: it renders "Finish …" while its query is in flight and a real date when it resolves, which
+   * is wider.
+   *
+   * **This landed once, was reverted twice by accident, and that is worth recording.** Both times a
+   * `git checkout --` used to verify an unrelated test red took the uncommitted work with it, and
+   * both times a green gate and a commit message claiming the effect existed were the only evidence
+   * anyone had. Two specialist reviews found it missing independently, by reading the code rather
+   * than the message.
+   *
+   * **It does not close a loop.** A render item's width is a function of `ctx` and of the density
+   * band, and the band is driven by the *band's* width (`toolbar-band.tsx`), never by this row's
+   * content — so a width change here can never move the boundary that caused it.
+   *
+   * Runs on every commit with no dependency array: the set of mounted nodes is what it tracks, and
+   * that is a commit-time fact. `observe` on an already-observed element replaces the existing
+   * observation rather than adding a second, so re-running is idempotent; the `disconnect` above
+   * drops all of them at unmount.
+   */
+  useLayoutEffect(() => {
+    const ro = observerRef.current;
+    if (!ro) return;
+    for (const [id, node] of itemRefs.current) {
+      if (id !== OVERFLOW_ID) ro.observe(node);
+    }
+  });
 
   // The inline bar: the core minus anything demoted, **plus any admitted tier-3 candidate**, in
   // canonical order — an admitted candidate takes its registry position, not a place at the end.
@@ -635,6 +692,11 @@ export function Toolbar<Ctx>({
             context={context}
             tabIndex={tabIndexFor(OVERFLOW_ID)}
             onFocus={() => setActiveId(OVERFLOW_ID)}
+            onOpenChange={(open) => {
+              menuOpenRef.current = open;
+              // Re-measure on close, so a resize that happened while the menu was open is not lost.
+              if (!open) measureRef.current();
+            }}
           />
         </div>
       )}

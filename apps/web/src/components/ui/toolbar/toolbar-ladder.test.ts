@@ -8,6 +8,7 @@ import {
   type LadderInput,
   type LadderItem,
 } from './toolbar-ladder';
+import { toolbarControlVariants } from './toolbar-styles';
 
 /**
  * **The first tests this arithmetic has ever had.**
@@ -327,5 +328,30 @@ describe('computeLadder — the ladder runs in the order it claims to', () => {
     expect(iconOnlyWidth(WITH_ICON, FINE)).toBe(32);
     // A coarse pointer widens `px-2` to `px-3` on every control (`toolbar-styles.ts`).
     expect(iconOnlyWidth(WITH_ICON, true)).toBe(40);
+  });
+});
+
+describe('the derived widths are tied to the styles they are derived from', () => {
+  /**
+   * **The one coupling in this module that nothing else can see.** Every constant above is read off
+   * `toolbarControlVariants`'s class string by hand — `px-2` → 16, `pointer-coarse:px-3` → 24,
+   * `size-4` → 16, `gap-1.5` → 6 — and the CVA has no idea. Change the padding and the ladder keeps
+   * budgeting for the old box, on a surface whose whole history is arithmetic that was quietly wrong.
+   *
+   * It cannot catch a *value* change inside a class that stays (`px-2` → `px-2.5` is invisible to a
+   * string check), and saying so is the point: this gate catches the removal or rename, which is the
+   * likelier accident, and the residual risk is named rather than implied.
+   */
+  it('the control CVA still carries the classes the constants were read from', () => {
+    const control = toolbarControlVariants();
+    expect(control).toContain('px-2');
+    expect(control).toContain('gap-1.5');
+    expect(control).toContain('pointer-coarse:px-3');
+    expect(control).toContain('min-h-9');
+  });
+
+  it('an icon-only button is the padding plus a `size-4` icon, in both pointer modes', () => {
+    expect(iconOnlyWidth(WITH_ICON, FINE)).toBe(16 + 16);
+    expect(iconOnlyWidth(WITH_ICON, true)).toBe(24 + 16);
   });
 });
