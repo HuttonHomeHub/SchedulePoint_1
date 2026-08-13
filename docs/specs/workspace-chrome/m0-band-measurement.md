@@ -64,26 +64,57 @@ Broken down:
 | breadcrumb + `Draft` badge                      |     361px |
 | modes + view switch + pen cluster               |     790px |
 
-## 4. The conclusion, and it is not the expected one
+## 4. M0-T4 — the two estimates, now measured
 
-**The merge needs 554px and the only single item large enough is the organisation nav.**
+The first pass decomposed the identity line by eye into ~220 px of breadcrumb saving and ~165 px of
+pen redundancy. **Both were wrong, in opposite directions, and they nearly cancelled** — which is
+why they were gated rather than built on.
 
-| candidate reduction                                          |      saves |
-| ------------------------------------------------------------ | ---------: |
-| breadcrumb → plan name + badge only (it duplicates the rail) |     ~220px |
-| pen redundancy (live-region sentence + `Editing` badge)      |     ~165px |
-| **both together**                                            | **~385px** |
-| collapsing the seven-link nav behind one trigger             |     ~517px |
+**The pen cluster**, three separate things at level three where level two showed one `div`:
 
-Breadcrumb and pen savings together are **169px short**. So the hard requirement cannot be met by
-tidying the identity line alone: **it requires collapsing the organisation nav**, which is a
-product decision about every screen in the application, not a plan-workspace decision.
+| element                          | pen held | pen available |
+| -------------------------------- | -------: | ------------: |
+| status badge                     |    58 px |         70 px |
+| live-region sentence             |   165 px |        187 px |
+| the button (`Stop`/`Start`)      |   111 px |        111 px |
+| **cluster total**                |   349 px |        385 px |
+| **redundant** (badge + sentence) |   223 px |    **257 px** |
 
-The two ~220px and ~165px figures are **estimates from the measured composites**, not direct
-measurements — the probe reports the identity line as two children (361px and 790px) and does not
-yet break the pen cluster out. The 637px nav, the 597px free space and the 554px deficit **are**
-direct measurements. Before anything is built on the estimates, the probe should report the pen
-cluster and the breadcrumb's name-only width separately.
+The badge and the sentence say what the button says. Estimated 165 px; **measured 257 px** in the
+state a reader arrives in — 92 px better than assumed.
+
+**The breadcrumb**, per crumb: `Clients` 48 · `/` 5 · `Northgate` 71 · `/` 5 · `Riverside` 65 · `/` 5
+· `Logic` 37. Keeping the plan name and dropping the path it duplicates saves **199 px**. Estimated
+~220–235 px; **measured 199 px** — 36 px worse than assumed. (Fixture names are short; a real
+hierarchy's path is longer and the saving larger, but so is the surviving plan name.)
+
+**The deficit, pen available — the wider state, and the one a reader arrives in:**
+
+| viewport | header content | header free | identity content | **over one row** |
+| -------- | -------------: | ----------: | ---------------: | ---------------: |
+| 1920     |        1049 px |      871 px |          1187 px |       **316 px** |
+| **1646** |    **1049 px** |  **597 px** |      **1187 px** |       **590 px** |
+| 1440     |        1049 px |      391 px |          1187 px |       **796 px** |
+
+**Tidying the identity line yields 456 px** (257 pen + 199 breadcrumb). So:
+
+- **1920 — the merge fits on tidying alone**, with 140 px to spare.
+- **1646 — 134 px short.** Something else must give.
+- **1440 — 340 px short.** Only the nav closes it.
+
+## 4a. What closes the last 134 px at 1646
+
+| candidate                                    |   saves | verdict                                                                       |
+| -------------------------------------------- | ------: | ----------------------------------------------------------------------------- |
+| brand wordmark → mark only (block is 160 px) | ~120 px | **14 px short. Too tight to call a fit.**                                     |
+| mode switches → icon-only                    | ~200 px | Closes it, but reverses ADR-0091 M7's `showLabel: 'always'` from the same day |
+| organisation nav → one trigger (637 px)      | ~517 px | Closes 1646 **and** 1440, with room                                           |
+
+**So the nav collapse is not required at 1920, is one of three ways to close 1646, and is the only
+way to close 1440.** The earlier conclusion — "the only single item large enough is the nav" — was
+true of the unreduced deficit and is **withdrawn** for the reduced one: after tidying, 134 px is
+small enough that cheaper candidates exist. Which to spend is a product decision, not an arithmetic
+one.
 
 ## 5. What this does not measure
 

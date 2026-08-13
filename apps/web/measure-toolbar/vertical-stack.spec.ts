@@ -172,16 +172,24 @@ async function stackHeights(page: Page): Promise<unknown> {
         // Reported one level deeper than the other budgets, deliberately: the top-level split is
         // only "breadcrumbs" and "pen", and the question decision 2 asks is *which parts of those
         // could go* — which a two-number answer cannot inform.
-        const kids = [...identityRow.children].map((c) => ({
-          tag: c.tagName.toLowerCase(),
-          width: Math.round(c.getBoundingClientRect().width),
-          text: (c.textContent ?? '').trim().slice(0, 40),
-          parts: [...c.children].map((g) => ({
-            tag: g.tagName.toLowerCase(),
-            width: Math.round(g.getBoundingClientRect().width),
-            text: (g.textContent ?? '').trim().slice(0, 48),
-          })),
-        }));
+        // **Three levels, not two** (M0-T4). Two stopped at "breadcrumbs 361 / modes+pen 790", and
+        // the epic's blocking question is what a REDUCTION of each is worth — which was then
+        // decomposed by eye into ~220 px and ~165 px and written into a plan. Those two estimates
+        // gate M5, so they get measured. The pen cluster in particular is one `div` at level two and
+        // three separate things at level three: a badge, a live-region sentence and the button that
+        // already says both.
+        const describe = (el: Element, depth: number): unknown => ({
+          tag: el.tagName.toLowerCase(),
+          role: el.getAttribute('role') ?? el.getAttribute('aria-live') ?? '',
+          width: Math.round(el.getBoundingClientRect().width),
+          text: (el.textContent ?? '').trim().slice(0, 48),
+          ...(depth > 0 && el.children.length > 0
+            ? { parts: [...el.children].map((g) => describe(g, depth - 1)) }
+            : {}),
+        });
+        const kids = [...identityRow.children].map(
+          (c) => describe(c, 3) as { width: number; text: string },
+        );
         return {
           rowWidth: Math.round(identityRow.getBoundingClientRect().width),
           contentWidth: kids.reduce((sum, k) => sum + k.width, 0),
@@ -303,6 +311,21 @@ test('M4-T1 — the vertical stack on a populated plan, pen held', async ({ page
     await page.waitForTimeout(600);
     report[`${viewport.width}x${viewport.height}`] = await stackHeights(page);
   }
+
+  // **The pen-AVAILABLE state, which had never been measured** (M0-T4). Every figure above is taken
+  // with the pen held, and the pen cluster is not the same width in the two states: held it reads
+  // `Editing` + "You're editing this plan." + `Stop editing`; available it reads `Available` +
+  // "No one is editing this plan." + `Start editing`. A merge sized against one of them is sized
+  // against half the product, and the available state is the one a reader arrives in.
+  await page.getByRole('button', { name: 'Stop editing' }).click();
+  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
+  const available: Record<string, unknown> = {};
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(600);
+    available[`${viewport.width}x${viewport.height}`] = await stackHeights(page);
+  }
+  report['penAvailable'] = available;
 
   writeMeasurement('m4-vertical-stack', report);
 });
