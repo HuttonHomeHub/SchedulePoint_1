@@ -1,7 +1,7 @@
 # ADR-0091: A mode is not a command — surface scopes for the plan workspace's command band
 
-- **Status:** Proposed
-- **Date:** 2026-08-12
+- **Status:** Proposed (D1–D5); **D6 Accepted** with M7
+- **Date:** 2026-08-12 (D6: 2026-08-13)
 - **Deciders:** Product owner, Claude Code
 
 ## Context
@@ -148,6 +148,99 @@ citations are registered in `scripts/dependency-claims.json`, so a Dependabot bu
 fails CI and the set is re-checked at exactly the moment it could have changed (ADR-0076 Class 2).
 That matters more here than it looks: ADR-0090 M3 shipped four **blank** buttons, and an icon name
 that silently stops resolving produces the same picture.
+
+### D6 — The degradation ladder: labels fall one at a time, and the `⋯` empties (M7)
+
+**Accepted 2026-08-13, on four decisions the product owner took after using `web-v0.86.1`:** labels
+drop **one at a time, least important first**; the `⋯` sits at the **far right, after the finish
+read-out**, and does not render when it is empty; commands demote to icon-only **before** anything
+goes into the menu; the shortcuts item moves into the account menu. One release when it all works.
+
+**This supersedes D3's row-level label decision**, and the reasoning it replaces was explicit —
+`Toolbar.tsx` argued that "labelling an arbitrary subset of one group reads as inconsistency rather
+than as a response to width", and the ADR-0090 M0 measurement found the rows decisively on one side
+or the other anyway. Both were true. The product owner has overruled the first and the second stopped
+holding once the arithmetic was corrected: two adjacent controls in one group can now differ, and
+that is what "one at a time" necessarily looks like. Recorded here rather than deleted with the
+comment.
+
+**The load-bearing change is not the ladder, it is that the pass stopped measuring its own output.**
+`Toolbar.measure` read each plain button's live width, and a plain button's live width is _wider when
+labelled_ — so labelling widened the row, the widened row could not afford labels, and the narrower
+row could. A constant (`LABEL_CHROME_PX`, over-stated by 8 px per item) damped that loop rather than
+removing it, and the damping was itself the defect: it made the projection differ between the two
+label states by `8 × N` px, so a **72 px band of widths existed on Row 2 in which the row was stable
+both labelled and unlabelled**, and which a planner got depended on the order they had resized in.
+A plain button's box is fixed by the CVA, so it is now derived; only `render` items — whose width is a
+function of `ctx` and the density band and of nothing this decision touches — are measured. The pass
+is then `f(available, layout, ctx, static widths)` with no output on its input side, which is the
+termination argument and the reason D1 and D3 had to be one commit.
+
+**Three findings changed a decision rather than confirming one**, all in
+[`m7-ladder-measurement.md`](../specs/workspace-modes/m7-ladder-measurement.md):
+
+1. **Costing the `⋯` correctly is a net narrowing on the day it lands**, and it narrows past the one
+   width this epic exists to serve: Row 2 went 12/14 labelled to **5/14 at 1646**. It could not ship
+   without tier-3 admission, which hands the width back. Predicted by the design review; measured
+   before and after rather than reasoned about.
+2. **`CHROME_RESIDUAL_PX` was calibrated against a measurement artefact.** Its Row 2 figure of
+   50–55 px was two split-button carets: `data-toolbar-item` sits on a split button's primary half,
+   so the harness dropped each caret into the following gap, while `Toolbar` measures the wrapping
+   `<span>` and had always counted them. The honest residual is 21 px on Row 1 and 9 px on Row 2, and
+   the 44 px that recovers is within a couple of pixels of the width in finding 1. Two views of the
+   same number.
+3. **A shrink-to-fit row must never demote**, because on such a row `clientWidth` is an _output_.
+   Measured in the browser: the `shrink-0` mode row lost `Diagram` and `Gantt` to a transient narrow
+   first pass, collapsed to **37 px holding nothing but the `⋯`**, and could never recover. Three
+   journeys failed looking for a view switch that no longer existed. This is the feedback loop above,
+   arriving through the container rather than through item widths, and it became reachable only
+   because derived widths are non-zero on the first unlaid-out pass.
+
+**D6a — the Project-finish read-out returns to the registry, reversing ADR-0090 M2-T3's placement.**
+The `⋯` cannot leave `role="toolbar"`: it is a roving stop, the arrow keys are a handler on the
+toolbar container, and the fit gate scopes its sweep to that element, so moving it out would take it
+out of the gate's reach **silently** — the "instrument reports a shorter list rather than failing"
+failure this epic's M0 already recorded once. With the chip outside and to its right, the `⋯` could
+never be the row's last thing. So the read-out moves inward as a `presentational` item, which keeps
+M2-T3's actual principle (`tabIndex: -1`, no focusable marker — the row paints it, the arrow keys
+never land on it) while dropping its placement. Its other objection, 150 px of pinned width, is
+answered by measurement and by making the chip **band-conditional**: withheld below `compact`, where
+the row needs its width for commands and the number is one press away in `Summary ▾`.
+
+**D6b — keyboard shortcuts leave the command surface.** It was tier 3 in a row rationing width
+between twenty-eight commands, so in practice it was reachable only through the `⋯` — and it is not a
+command about the plan at all but a reference about the application, which is what the account menu
+already holds. Only the entry point moves: the sheet, its state and the `?` binding are untouched,
+and the workspace registers a **callback** through a seam (`chrome/help-action.tsx`) so the header
+stays plan-unaware (ADR-0029). Absent, not shaded, when nothing is registered — outside a plan there
+is no diagram to describe shortcuts for.
+
+**D6c — `Go to date` folds into `Go to today`, with separate gates per half.** Two adjacent Frame
+members doing the same job on the same axis. The gates are genuinely different — today needs a
+computed diagram in the canvas view, a date needs only an anchored plan — so a single `disabled`
+would make **Go to date unreachable on an empty or Gantt-viewed plan**, which is the ADR-0081
+dead-end shape. `usePopoverPanel` is extracted from `ToolbarPopover` so the caret opens the same
+panel rather than a second implementation of anchoring, Escape, outside-pointer, focus-left and the
+portal; `ToolbarPopover`'s props are unchanged and **its suite passes untouched**, which was the
+acceptance condition. `ToolbarSplitButton` gains per-half disabled reasons, `aria-describedby`-wired:
+it had only a `title`, harmless while every consumer gated both halves together, and this is the
+first control where a shaded half has something of its own to say.
+
+**Two gate assertions were added and both were verified red.** S9 — wherever the `⋯` renders it is
+the row's rightmost control. S10 — a row parking a group at its trailing edge really puts it there
+(281 px adrift with a second `ml-auto` on the line; a flex line splits free space **equally** between
+every auto margin rather than giving it to the last). S9 is documented as _not_ catching S10's case,
+which was checked rather than assumed.
+
+**The gate had two holes of its own, both pre-existing and both invisible until admission.**
+`reachableSet` looked only for `[role="menuitem"]`, so every toggle in the `⋯` — rendered as
+`menuitemcheckbox`, correct APG — was uncountable; it was harmless only while tier-3 items were
+_permanently_ in the menu, because they never entered the reference set for anything to ask about.
+And S3 counted read-outs as commands, so the finish chip's correct withdrawal at 960 read as a
+command with no route.
+
+**Measured result at the product owner's 1646:** Row 2 back to 12/14 labelled and Row 1 gains an
+admitted command; 1536 goes 5/14 → 11/14 and 1440 goes 5/14 → 10/14 and 4/9 → 6/11.
 
 ## Alternatives considered
 

@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 926 web
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 932 web
 > source files with 30 flag-scoped Playwright suites beside the base journey, and
 > 91 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2010,6 +2010,47 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   CI rather than by me**, because I fixed the suite CI named instead of sweeping all 31; the rule
   that replaces that judgement is in #133's neighbours — after any label or layout change, run every
   journey, and locate a toolbar control by `[data-toolbar-item]` rather than by its copy.
+  **M7 is the degradation ladder, and it is the first time this surface's arithmetic has been
+  testable at a desk.** The product owner used `web-v0.86.1` and called it half-baked: the `⋯` should
+  be hidden unless in use and always at the right-hand end, labels should fall one at a time rather
+  than all at once, commands should go icon-only before anything enters the menu, the date picker
+  should fold into Go-to-today, and the shortcuts item should move. All of it landed, and the epic's
+  own rule — measure, do not reason — changed a decision three times. **Costing the `⋯` correctly is
+  a net narrowing on the day it lands**, and it narrows past the one width this epic exists to serve:
+  Row 2 went 12/14 labelled to **5/14 at 1646**, so it could not ship without tier-3 admission to
+  hand the width back. **`CHROME_RESIDUAL_PX` was calibrated against a measurement artefact** — its
+  Row 2 figure was two split-button carets, which fall outside `data-toolbar-item` for the harness
+  and inside the measured wrapper for `Toolbar`, so the primitive had always counted them; the honest
+  residual is 21 px and 9 px, not 27 and 51, and the 44 px that recovers is the same width seen
+  twice. And **a shrink-to-fit row must never demote**, because on such a row `clientWidth` is an
+  _output_: the `shrink-0` mode row lost `Diagram` and `Gantt` to a transient narrow first pass,
+  collapsed to **37 px holding nothing but the `⋯`**, and could never recover — three journeys failed
+  looking for a view switch that no longer existed, and all three had passed on the released commit,
+  established by running them there rather than assuming.
+  The load-bearing change is that **the pass stopped measuring its own output**: a plain button is
+  wider when labelled, so labelling widened the row and the widened row could not afford labels; a
+  constant was damping that loop rather than removing it, and the damping was itself the defect — an
+  8 px-per-item bias that left a **72 px band of widths in which Row 2 was stable both labelled and
+  unlabelled**, and which a planner got depended on the order they had resized in. Plain-button widths
+  are now derived from the CVA and only `render` items are measured, so the pass has no output on its
+  input side. It also moved out of `Toolbar.measure` into a pure `computeLadder`, which is why an
+  oscillation sweep and a prefix property can be asserted at all: `measure` early-returns at
+  `available <= 0`, so under jsdom this arithmetic had never once run.
+  Two placements are **knowing reversals recorded rather than done quietly**. The Project-finish
+  read-out returns to the registry as a `presentational` item, reversing ADR-0090 M2-T3's placement
+  while keeping its principle, because the `⋯` cannot leave `role="toolbar"` — it is a roving stop,
+  the arrow keys are a handler on the container, and the fit gate scopes its sweep to that element,
+  so moving it out would take it out of the gate's reach **silently**. And keyboard shortcuts leave
+  the command surface for the account menu, entry point only: the sheet, its state and the `?` binding
+  are untouched, reached through a registration seam so the header stays plan-unaware.
+  **The gate gained two assertions and was found to have two holes of its own.** S9 (the `⋯` is the
+  row's rightmost control) and S10 (a trailing group really is trailing — 281 px adrift with a second
+  `ml-auto`, because a flex line splits free space **equally** between every auto margin rather than
+  giving it to the last) were both verified red first, and S9 is documented as _not_ catching S10's
+  case, which was checked rather than assumed. The pre-existing holes: `reachableSet` looked only for
+  `[role="menuitem"]`, so every toggle in the `⋯` was uncountable — harmless only while tier-3 items
+  were _permanently_ in the menu and therefore never in the reference set — and S3 counted read-outs
+  as commands, so the finish chip's correct withdrawal at 960 read as a command with no route.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
