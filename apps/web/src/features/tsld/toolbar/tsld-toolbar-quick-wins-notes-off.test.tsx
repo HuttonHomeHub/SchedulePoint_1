@@ -83,7 +83,6 @@ describe('TSLD toolbar quick-wins (VITE_NOTES off)', () => {
   it('still offers the notes-independent quick-wins', () => {
     renderRows(ctx());
     expect(screen.getByRole('button', { name: 'Go to today' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Report progress…' })).toBeInTheDocument();
     expect(overflowItem('Clear visual placement')).toBeInTheDocument();
   });
 });

@@ -92,8 +92,6 @@ export function makeTsldToolbarContext(
     selectedActivity: undefined,
     revealComments: vi.fn(),
     notesOpen: false,
-    canProgress: true,
-    openProgress: vi.fn(),
     canWriteNotes: true,
     openActivityNotes: vi.fn(),
     canEditSchedule: true,

@@ -77,7 +77,7 @@ function overflowItem(name: string | RegExp): HTMLElement {
 describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', () => {
   it('keeps all five ids as "Coming soon" placeholders, byte-for-byte', () => {
     renderRows(ctx());
-    for (const name of ['Go to today', 'Comments', 'Report progress…', 'Add note']) {
+    for (const name of ['Go to today', 'Comments', 'Add note']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       expect(btn).toHaveAttribute('title', `${name} — Coming soon`);

@@ -62,6 +62,10 @@ describe('toolbar labels — the `…` convention', () => {
 
     // `calendar` is the id behind the label "Schedule settings…" — read from the registry, not
     // guessed from the label, which is how the first version of this assertion was wrong.
-    expect(withEllipsis).toEqual(['calendar', 'update-progress']);
+    //
+    // `update-progress` stood beside it until ADR-0093 removed that item from the command surface.
+    // The set is down to one and stays pinned as a set: a lone member is exactly when a count would
+    // start looking like a good enough assertion.
+    expect(withEllipsis).toEqual(['calendar']);
   });
 });

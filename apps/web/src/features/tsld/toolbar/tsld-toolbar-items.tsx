@@ -20,7 +20,6 @@ import {
   FileText,
   FileType,
   Filter,
-  Gauge,
   Hand,
   ImageDown,
   Info,
@@ -1810,18 +1809,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Clear visual placement',
     icon: <Eraser className="size-4" />,
   };
-  const updateProgressShape = {
-    id: 'update-progress',
-    group: 'object' as const,
-    row: 'do' as const,
-    tier: 2 as const,
-    order: 6,
-    // "Report progress…" — the verb matches the activities-table row action ("Report progress") and the
-    // dialog title (label convergence, entry-route gap #2). The id stays `update-progress` (a stable
-    // test/telemetry handle).
-    label: 'Report progress…',
-    icon: <Gauge className="size-4" />,
-  };
   const commentsShape = {
     id: 'comments',
     group: 'object' as const,
@@ -2562,26 +2549,15 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // docs/TOOLBAR_ROADMAP.md). Update progress (apply actuals + advance the data date); Export the
     // diagram (PDF/PNG) or schedule (XER/MSP/CSV); Print; Share (the ADR-0012 per-plan guest link);
     // Comments (activity threads).
-    // Update progress — opens the shared `ActivityProgressDialog` for the selected activity (toolbar
-    // quick-wins F3). Role-gated (`canProgress`, Contributor+) + a selection; NOT pen-gated (progress
-    // is the notes/progress precedent). Flag-off it is the "Coming soon" placeholder, byte-for-byte.
-    TOOLBAR_QUICK_WINS_ENABLED
-      ? {
-          ...updateProgressShape,
-          // Gate on the RESOLVED row (U3): a deleted-elsewhere id resolves to undefined, so an enabled
-          // button always has a real target for `openProgress`.
-          isEnabled: (ctx) => ctx.canProgress && ctx.selectedActivity != null,
-          // Permanent role gate BEFORE the transient selection (U2/A5): a Viewer is told they can't
-          // report progress, not (misleadingly) to select an activity first.
-          disabledReason: (ctx) =>
-            !ctx.canProgress
-              ? 'You don’t have permission to report progress'
-              : ctx.selectedActivity == null
-                ? 'Select an activity first'
-                : undefined,
-          onActivate: (ctx) => ctx.openProgress(),
-        }
-      : placeholderItem(updateProgressShape),
+    // **Report progress is deliberately NOT here** (ADR-0093). It was the only action in the plan
+    // workspace that existed twice: this item and the canvas dock's `progress`, with the same
+    // permission, the same precondition and the same dialog. An action whose subject is the
+    // SELECTED OBJECT belongs on the object's own surface; the command surface carries actions
+    // whose subject is the plan or the view. The remaining routes are the dock, the activities
+    // table's row menu and the activity editor's Progress tab.
+    //
+    // `selection-duplication.structural.test.ts` fails if a selection-gated item reappears here
+    // with a dock twin, so this comment is a signpost rather than the enforcement.
     // Export ▾ (export & print, `docs/specs/export-print/`) — a menu-button of client-side deliverables
     // (Schedule CSV now; Diagram PNG/PDF at M2/M3). Flag-on it's the real `ExportMenuControl`, gated on a
     // computed diagram (disabled-with-reason otherwise, shade-don't-hide); flag-off it's the byte-for-byte

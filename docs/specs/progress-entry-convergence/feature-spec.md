@@ -1,6 +1,7 @@
 # Feature Spec: Progress-entry convergence — an object action belongs on the object
 
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved 2026-08-13 (Q1 answered; build approved). M0 measured — see
+  [`m0-measurements.md`](./m0-measurements.md).
 - **Author(s):** Claude Code (from a product-owner observation, 2026-08-13)
 - **Date:** 2026-08-13
 - **Tracking issue / epic:** _(none yet)_
@@ -53,7 +54,9 @@ Three things converged this month and none of them existed when the toolbar item
    bad screen — and the dock item now serves it **better**, being on the object and appearing under
    exactly the same condition.
 3. **Row 2 has been fighting for width across two epics** (ADR-0090 M2, ADR-0091 M7) and is still
-   the constrained row at 1646.
+   the constrained row at 1646. (This was drafted expecting the removal to buy a label. It does
+   not — see `m0-measurements.md` T2. It buys the `⋯` going away instead, which is better, and
+   neither was predictable without measuring.)
 
 ### Users
 
@@ -71,7 +74,8 @@ Three things converged this month and none of them existed when the toolbar item
 ### Expected outcomes
 
 - One activity action, one place, with the same reasoning applied to whatever is added next.
-- One rung removed from Row 2's degradation ladder.
+- One rung removed from Row 2's degradation ladder — which, measured, converts into the `⋯`
+  disappearing at 1646 rather than into a new label.
 - A plural-selection inconsistency (§2 "Edge cases") removed structurally rather than patched.
 
 ### Success criteria
@@ -79,8 +83,10 @@ Three things converged this month and none of them existed when the toolbar item
 - Exactly one command-surface route and one object route to `ActivityProgressDialog` per surface,
   asserted structurally, not by reading.
 - No persona loses the ability to report progress on any surface (§3 route census).
-- Row 2's label count at 1646 is **measured** before and after — see the Open question below, and
-  note that this spec does **not** claim a gain.
+- Row 2's label count at 1646 is **measured** before and after. **Measured: no label is gained** —
+  13 inline / 11 labelled either side (`m0-measurements.md` T2). The width argument is withdrawn.
+  What the removal buys instead is that the `⋯` disappears from Row 2 at 1646 and
+  `clear-visual-placement` returns inline, so every Row 2 command is directly reachable.
 
 ### Open questions
 
@@ -157,19 +163,25 @@ The command surface is absent from this diagram after the change, and that is th
 
 ### Edge cases
 
-**E-1 — Plural selection (a defect this removes for free).** ADR-0092 added a guard so a plural
-selection gets the plural bar and only the plural bar (`TsldPanel.tsx:1337`). The command-surface
-item has no such guard, and the host's selection state is the **primary id**:
+**E-1 — Plural selection: an inconsistency between two surfaces.** ADR-0092 added a guard so a
+plural selection gets the plural bar and only the plural bar (`TsldPanel.tsx:1337`). The
+command-surface item has no such guard, and the host's selection state is the **primary id**:
 `selectedId = selection.primaryId` (`TsldPanel.tsx:563`) → `onSelectionChange?.(selectedId)`
 (`:1538`) → `setSelectedActivityId(id)` (`use-plan-workspace-model.ts:312`) → the item's
-`isEnabled: ctx.canProgress && ctx.selectedActivity != null` (`tsld-toolbar-items.tsx:2573`) is
-therefore **true**. With three bars selected the dock shows the bulk bar and Row 2 offers an
-enabled `Report progress` that acts on the primary, with nothing on screen naming which.
+`isEnabled` (`tsld-toolbar-items.tsx:2573`) is therefore true. **Confirmed in a browser**
+(`m0-measurements.md` T1): at three selected, the dock bar is gone and Row 2's `Report progress` is
+still enabled.
 
-> **Evidence status (ADR-0076 §19.10): this is a code-path derivation across four files, not an
-> observation.** It has not been driven in a browser. M0-T1 exists to confirm or refute it, and
-> the decision does not depend on it — the duplication argument stands either way. If it is
-> refuted, the finding is withdrawn in place rather than deleted.
+> **This entry originally called it a defect acting on an unnamed subject, and that was an
+> overstatement.** The plural bar prints "3 activities selected — “Cladding” is the subject of
+> single-activity actions", so the product names the rule on screen at the moment it applies. It is
+> an inconsistency between two surfaces, which the removal resolves; it is not a silent action.
+> Corrected here rather than quietly dropped, per §19.10 — the claim decided nothing on its own,
+> but it was written before it was checked, which is the habit the rule is about.
+
+Checked, because the removal could have made that sentence false: it does not. `add-note`,
+`clear-visual-placement` and `float-paths` are also selection-gated and remain, so "single-activity
+actions" still has referents.
 
 **E-2 — A deleted-elsewhere selection.** The toolbar item gates on the _resolved_ row so a stale
 id cannot open an empty dialog (`:2570`, "U3"). The dock item resolves the activity the same way

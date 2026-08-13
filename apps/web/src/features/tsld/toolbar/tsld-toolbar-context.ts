@@ -240,12 +240,6 @@ export interface TsldToolbarContext {
   /** Whether the docked notes panel is open — drives the Comments toggle's pressed state (entry-route
    * win 1). Always `false` flag-off (Comments is a scroll action there, not a toggle). */
   notesOpen: boolean;
-  /** Whether the viewer may report progress (`canProgress`, Contributor+; NOT pen-gated). Gates the
-   * **Update progress…** item (F3). */
-  canProgress: boolean;
-  /** Open the progress editor for the selected activity (F3) — sets the workspace-hosted dialog's
-   * target. A no-op when nothing is selected. */
-  openProgress: () => void;
   /** Whether the viewer may write notes (`canWriteNotes`, Contributor+; NOT pen-gated). Gates the
    * **Add note** item (F4). */
   canWriteNotes: boolean;
