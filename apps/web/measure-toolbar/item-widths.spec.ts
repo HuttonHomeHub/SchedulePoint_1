@@ -43,6 +43,8 @@ async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
       id: string;
       group: string;
       width: number;
+      left: number;
+      right: number;
       visibleText: string;
       labelled: boolean;
       labelWidth: number | null;

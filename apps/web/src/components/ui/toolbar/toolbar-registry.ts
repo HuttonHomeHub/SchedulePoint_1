@@ -511,6 +511,22 @@ export function partitionByTier<Ctx>(resolved: ResolvedToolbarItem<Ctx>[]): {
   return { bar, overflow };
 }
 
+/**
+ * **How much the row wants to keep an item** — higher survives longer.
+ *
+ * Exported because two decisions have to agree about it and previously did not have to: the
+ * demotion queue below, and the order in which {@link computeLadder} withdraws labels, which is
+ * this comparator reversed. Two copies of "least wanted" would eventually let a row demote a
+ * command into the `⋯` while keeping a label on one it values less — visibly incoherent, and
+ * invisible to any test that does not exercise both at once.
+ *
+ * The `-order` default is exact rather than approximate, which is what keeps every item that does
+ * not declare a priority behaving as it always has (see {@link ToolbarItem.priority}).
+ */
+export function priorityOf<Ctx>(item: ToolbarItem<Ctx>): number {
+  return item.priority ?? -item.order;
+}
+
 /** A bar item paired with its measured pixel width, for the overflow computation. */
 export interface MeasuredItem {
   id: string;
@@ -582,7 +598,6 @@ export function computeOverflow<Ctx>(
   // Demotion order: highest tier number first, then LOWEST `priority` (which defaults to `-order`,
   // reproducing the old "highest order goes first"), then latest registry position.
   const byIndex = new Map(bar.map((r, i) => [r.item.id, i]));
-  const priorityOf = (item: ToolbarItem<Ctx>): number => item.priority ?? -item.order;
   const demotionQueue = [...bar]
     .sort((a, b) => {
       const byTier = b.item.tier - a.item.tier; // tier 2 demotes before tier 1

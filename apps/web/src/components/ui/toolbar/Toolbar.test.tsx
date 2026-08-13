@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
 import { Toolbar } from './Toolbar';
@@ -112,11 +112,22 @@ describe('Toolbar (APG primitive)', () => {
   });
 
   describe('label policy — `showLabel` is presentation, `tier` is priority (TECH_DEBT #61)', () => {
-    /** Render with a stubbed container width; jsdom lays nothing out, so this is the only input. */
+    /**
+     * Render with a stubbed container width; jsdom lays nothing out, so this is the only input.
+     *
+     * **The spy is restored in `afterEach`, not by the caller.** It used to be the caller's job, and
+     * when the case below started failing its `restore()` never ran — so a 20 px width leaked into
+     * the next six tests, which demoted every command and failed with "unable to find button 'fit'".
+     * One real defect arrived as eight, none of them pointing at it.
+     */
+    let widthSpy: { mockRestore: () => void } | null = null;
+    afterEach(() => {
+      widthSpy?.mockRestore();
+      widthSpy = null;
+    });
     function renderAtWidth(width: number, items: ToolbarItem<Ctx>[]) {
-      const spy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
-      const utils = render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
-      return { ...utils, restore: () => spy.mockRestore() };
+      widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
+      return render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
     }
 
     const autoItems = defineToolbar<Ctx>([
@@ -125,19 +136,24 @@ describe('Toolbar (APG primitive)', () => {
     ]);
 
     it('labels `auto` items when the row measurably has room', () => {
-      const { restore } = renderAtWidth(1200, autoItems);
+      renderAtWidth(1200, autoItems);
       // A labelled button carries its name as text, so it needs no `aria-label` to be reachable.
       expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-label');
       expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-label');
-      restore();
     });
 
     it('keeps `auto` items icon-only when the row does not', () => {
-      const { restore } = renderAtWidth(40, autoItems);
+      // 60 px, not 40. Since M7 a plain button's width is DERIVED rather than read from the DOM
+      // (`toolbar-ladder.ts`), so jsdom now runs real arithmetic: two 16 px icon-only buttons, a
+      // 4 px gap and 16 px of chrome need 52 px, and at 40 the honest answer is to demote them into
+      // the `⋯` rather than to paint them outside the row. That is a better answer than the one this
+      // case asserted, and it makes the case untestable — a demoted item has no button to inspect.
+      // 60 px is the width where the two fit icon-only and cannot afford a label, which is what the
+      // test is actually about.
+      renderAtWidth(60, autoItems);
       // Icon-only: the name reaches AT through `aria-label` + the hover `title` instead.
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-label', 'Alpha');
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('title', 'Alpha');
-      restore();
     });
 
     it('honours `always` / `never` regardless of width — tier never decides', () => {
@@ -163,13 +179,16 @@ describe('Toolbar (APG primitive)', () => {
           onActivate: () => {},
         },
       ]);
-      const { restore } = renderAtWidth(20, pinned);
+      // 110 px, not 20. Since M7 a plain button's width is derived, so at 20 px the row cannot hold
+      // these two at all and demotes both — which says nothing about how they would have been
+      // labelled. 110 px is narrow enough that an `'auto'` item would stay icon-only (the point of
+      // the case) and wide enough that policy is what is being read rather than the overflow.
+      renderAtWidth(110, pinned);
       expect(screen.getByRole('button', { name: 'Shown' })).not.toHaveAttribute('aria-label');
       expect(screen.getByRole('button', { name: 'Hidden' })).toHaveAttribute(
         'aria-label',
         'Hidden',
       );
-      restore();
     });
   });
 
@@ -395,11 +414,18 @@ describe('Toolbar (APG primitive)', () => {
     ]);
 
     /**
-     * 3 × 100 px of items in a 320 px row: they fit on widths alone, and do not once the derived
-     * chrome (two gaps + the residual) is added. That is the exact window the bug lived in.
+     * Three icon-less buttons in a 60 px row: 3 × 16 px derived + 2 × 4 px gaps + 16 px of residual
+     * is 72, so the row is over by 12 and something must move — unless its width came from its own
+     * content, which is the whole point of the test.
+     *
+     * **The numbers moved for M7 and the mocked `getBoundingClientRect` no longer sets them.** A
+     * plain button's width is now derived from the CVA rather than read from the DOM
+     * (`toolbar-ladder.ts`), so the original "3 × 100 px in a 320 px row" fitted comfortably and the
+     * case stopped exercising anything. The rect mock still matters — it is what the `⋯` button
+     * measures at — so it stays.
      */
     function renderWith(flexGrow: string) {
-      const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(320);
+      const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(60);
       const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
         width: 100,
         height: 36,

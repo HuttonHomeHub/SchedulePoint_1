@@ -2,11 +2,19 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { useToolbarBandWidth } from './toolbar-band';
 import {
+  GROUP_RULE_PX,
+  ICON_LABEL_GAP_PX,
+  computeLadder,
+  iconOnlyWidth,
+  type LadderItem,
+  type LadderResult,
+} from './toolbar-ladder';
+import {
   TOOLBAR_GROUPS,
   bandIsAtLeast,
-  computeOverflow,
   groupRank,
   partitionByTier,
+  priorityOf,
   resolveItems,
   resolveLayoutMode,
   type ResolvedToolbarItem,
@@ -24,77 +32,31 @@ const OVERFLOW_ID = '__overflow__';
 const OVERFLOW_WIDTH_FALLBACK = 44;
 
 /**
- * Extra px an `'auto'` item costs once labelled, on top of its rendered text: **the icon→label gap,
- * and nothing else**. `gap-1.5` = 6 px (`toolbar-styles.ts:80`).
+ * Per-item margins no group-level accounting can attribute, plus sub-pixel box rounding.
  *
- * **This is a model of a difference, not a safety margin, and the distinction is the whole reason
- * the number changed.** It was 14, with a docblock calling that "deliberately generous — over-
- * estimating loses a label the row could just afford, which is invisible". Both halves were wrong.
- * It named "the wider horizontal padding a labelled control carries", and there is none:
- * `toolbarControlVariants` is `px-2` whether or not a label renders, so the only width a label adds
- * beyond its own text is the gap.
+ * **Re-measured for M7** (`docs/specs/workspace-modes/m7-ladder-measurement.md`), and the figure
+ * fell by more than half. It was 56, taken from a 26–31 px (Row 1) / 50–55 px (Row 2) remainder — but
+ * that measurement was made with the harness's item-width convention, and `data-toolbar-item` sits on
+ * a split button's **primary half**, so each of Row 2's two split buttons dropped a ~26 px caret into
+ * the following gap and it was counted as unattributed chrome. `Toolbar` never made that mistake: a
+ * `render` item's ref is the wrapping `<span>`, which holds both halves.
  *
- * And over-estimating is **not** invisible, because this constant is used in exactly one of the two
- * states the projection has to agree about. Labels off: `inlineTotal` is icon-only and each item is
- * charged `text + LABEL_CHROME_PX`. Labels on: `inlineTotal` already contains the real labelled
- * boxes and `labelCost` is zero. So the projected width of *the same row at the same viewport*
- * differs between the two states by `(LABEL_CHROME_PX − 6) × N` — at 14 that is **8 px per item**,
- * and Row 2 carries nine `'auto'` items, so a 72 px band of widths existed in which the row was
- * stable both labelled and unlabelled, and which of the two a planner got depended on the order the
- * window happened to be resized in. Correcting the constant *is* the fix for that bistability; they
- * are one change, not two.
+ * With every gap on both rows attributed by name, what is genuinely left over is the search field's
+ * `ml-3` — **12 px, on Row 1 only** — and rounding. 16 covers it with room to spare.
  *
- * Safety belongs in {@link LABEL_PROMOTION_MARGIN_PX}, which is charged identically in both states
- * and therefore cannot pull them apart.
+ * The 44 px this recovers is not a tidy-up: it is within a couple of pixels of the width that costs
+ * Row 2 its labels at the product owner's 1646 (§2 of that document). An addend you can name is one
+ * a later composition change invalidates loudly; a generous constant absorbs the change silently and
+ * charges every row for it.
  */
-const LABEL_CHROME_PX = 6;
+const CHROME_RESIDUAL_PX = 16;
 
 /**
- * Headroom (px) the row must have left over **after** labelling every `'auto'` item before any of
- * them is labelled. Two jobs: it absorbs the text-measurement estimate's error, and it stops the
- * bar flipping labels on and off around a single-pixel boundary as a user drags a window edge.
- *
- * It is charged **in both label states**, which is what makes it a margin rather than a bias — see
- * {@link LABEL_CHROME_PX} for the constant that was doing the opposite.
+ * The `⋯`'s wrapper: its `gap-1` from the previous child, its `border-l`, and its `pl-1`. The
+ * measured node is the button, so this was uncounted — a small charge, but one that only ever
+ * applied when the row was already short.
  */
-const LABEL_PROMOTION_MARGIN_PX = 32;
-
-/**
- * The row's own chrome, **derived from the registry — never read from the DOM**.
- *
- * `computeOverflow` was handed only item widths, so it answered "do these boxes sum to less than
- * this number" while the row needed "does this fit as laid out". Measured at 1920, Row 1's items
- * summed to 1782 against an 1832 px container while the row laid out at 1941: the function said it
- * fitted, no `⋯` rendered, and two controls were painted outside the row — which was then
- * `overflow-hidden` — at zero visible width (`docs/specs/workspace-layout/m0-measurement.md`).
- *
- * **Why derived and not measured.** The obvious implementation puts a ref on each `role="group"`
- * wrapper and reads its box. Those wrappers are rendered from `groups` → `inlineBar` → *the very
- * `overflowedIds` this calculation is about to set*, so a measured chrome is downstream of the
- * previous decision: when a group's last inline member demotes the wrapper unmounts, its rule leaves
- * the DOM, the next pass sees more budget and can promote the item back, which recreates the rule.
- * The group that happens to is `help` — `legend` and `shortcuts` — i.e. exactly the two controls
- * this repair exists to make clickable. Deriving from static group membership removes the
- * entanglement rather than damping it, and costs no layout reads at all. Same argument as
- * {@link measureLabelWidth}'s, one level down.
- *
- * **Erring high is the safe direction here.** Over-estimating demotes a command that would just
- * have fitted, which costs a click; under-estimating paints it outside the box, which costs the
- * command. That holds because this term is charged identically whatever the row currently renders —
- * unlike {@link LABEL_CHROME_PX}, where the same instinct produced a bistable projection.
- */
-const ITEM_GAP_PX = 4; // `gap-1` — between the container's children, and within each group
-const GROUP_RULE_PX = 13; // `ml-1` (4) + `border-l` (1) + `pl-2` (8), on every group after the first
-
-/**
- * What no group-level accounting can attribute: per-item margins (the search field's `ml-3`), the
- * overflow wrapper's own `border-l pl-1`, and sub-pixel box rounding.
- *
- * **Measured, not guessed** (M1-T1, `m0-measurement.md`): after naming every gap and group rule, the
- * unattributed remainder is a *constant* 26–31 px on Row 1 at all eight widths and 50–55 px on Row 2.
- * This takes the worst measured case and rounds up — deliberately generous, for the reason above.
- */
-const CHROME_RESIDUAL_PX = 56;
+const OVERFLOW_WRAPPER_PX = 9;
 
 /**
  * Is this row's width **imposed by its container**, or does it size to its own content?
@@ -122,18 +84,36 @@ function isWidthConstrained(container: HTMLElement): boolean {
 }
 
 /**
- * Derive the fixed chrome a row carries, from the resolved bar alone. Independent of
- * `overflowedIds` by construction — which is the property that matters (see above), and the reason
- * this takes `bar` rather than `inlineBar`.
+ * The row's own chrome, **derived from the registry — never read from the DOM**.
+ *
+ * `computeOverflow` was handed only item widths, so it answered "do these boxes sum to less than
+ * this number" while the row needed "does this fit as laid out". Measured at 1920, Row 1's items
+ * summed to 1782 against an 1832 px container while the row laid out at 1941: the function said it
+ * fitted, no `⋯` rendered, and two controls were painted outside the row — which was then
+ * `overflow-hidden` — at zero visible width (`docs/specs/workspace-layout/m0-measurement.md`).
+ *
+ * **Why derived and not measured.** The obvious implementation puts a ref on each `role="group"`
+ * wrapper and reads its box. Those wrappers are rendered from `groups` → `inlineBar` → *the very
+ * `overflowedIds` this calculation is about to set*, so a measured chrome is downstream of the
+ * previous decision: when a group's last inline member demotes the wrapper unmounts, its rule leaves
+ * the DOM, the next pass sees more budget and can promote the item back, which recreates the rule.
+ * The group that happens to is `help` — `legend` and `shortcuts` — i.e. exactly the two controls
+ * this repair exists to make clickable. Deriving from static group membership removes the
+ * entanglement rather than damping it, and costs no layout reads at all. Same argument as
+ * {@link measureLabelWidth}'s, one level down.
+ *
+ * **Erring high is the safe direction here.** Over-estimating demotes a command that would just
+ * have fitted, which costs a click; under-estimating paints it outside the box, which costs the
+ * command. The term is charged identically whatever the row currently renders, which is what makes
+ * that trade a safe one — the constant it replaced was charged in only one of two label states and
+ * therefore biased the comparison rather than padding it.
  */
 function deriveChromeWidth<Ctx>(bar: ResolvedToolbarItem<Ctx>[]): number {
   if (bar.length === 0) return 0;
   const groupCount = new Set(bar.map((r) => r.item.group)).size;
-  const rules = Math.max(0, groupCount - 1) * GROUP_RULE_PX;
-  // One gap between each pair of adjacent children, whether the boundary is inside a group or
-  // between two groups — which totals `items − 1` either way.
-  const gaps = Math.max(0, bar.length - 1) * ITEM_GAP_PX;
-  return rules + gaps + CHROME_RESIDUAL_PX;
+  // Rules and the residual only. The **item gaps are `computeLadder`'s**, because a demotion has to
+  // credit one back and a demotion is its decision to make.
+  return Math.max(0, groupCount - 1) * GROUP_RULE_PX + CHROME_RESIDUAL_PX;
 }
 
 /**
@@ -245,11 +225,24 @@ export function Toolbar<Ctx>({
   const widthCacheRef = useRef(new Map<string, number>());
   const [overflowedIds, setOverflowedIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
-  // Whether this row currently has room to label its `'auto'` items. All-or-nothing per row on
-  // purpose: labelling an arbitrary subset of one group reads as inconsistency rather than as a
-  // response to width, and the M0 measurement found the rows are decisively on one side or the
-  // other anyway (~0.1px of slack at 1280px, 760–1000px at 1680–1920px).
-  const [autoLabelsFit, setAutoLabelsFit] = useState(false);
+  /**
+   * Which `'auto'` items currently show their label, and which tier-3 candidates the row has taken
+   * out of the `⋯`. Both are decided together by {@link computeLadder}.
+   *
+   * **This replaces a single row-level `autoLabelsFit` boolean, and the reasoning it replaces was
+   * explicit**: labelling an arbitrary subset of one group "reads as inconsistency rather than as a
+   * response to width". That is a real cost and the product owner has accepted it, asking for labels
+   * that fall *one at a time, least important first* rather than a row that goes from fully labelled
+   * to fully bare in one step. Two adjacent controls in one group differing is what that necessarily
+   * looks like. Recorded rather than quietly deleted (ADR-0091).
+   *
+   * Mirrored into refs because the ladder reads the previous answer to give promotion its hysteresis,
+   * and `measure` must not take a dependency on its own output.
+   */
+  const [labelledIds, setLabelledIds] = useState<Set<string>>(new Set());
+  const [admittedIds, setAdmittedIds] = useState<Set<string>>(new Set());
+  const labelledIdsRef = useRef(labelledIds);
+  const admittedIdsRef = useRef(admittedIds);
   /**
    * The row's measured band (M3-T1). Starts `comfortable` and stays there until something has
    * actually been laid out — the same rule `anythingMeasured` applies to the chrome charge, and for
@@ -274,13 +267,22 @@ export function Toolbar<Ctx>({
     () => resolveItems(items, context, authoringEnabled, layout),
     [items, context, authoringEnabled, layout],
   );
+  // `bar` is the **core** (tiers 1–2, held unconditionally); `staticOverflow` is the tier-3
+  // **candidates**, which the ladder may admit back onto the row when there is room.
   const { bar, overflow: staticOverflow } = useMemo(() => partitionByTier(resolved), [resolved]);
 
-  // Only plain buttons demote; render items (popovers/segmented/chips) stay pinned inline.
-  const demotable = useMemo(
-    () => bar.filter((r) => typeof r.item.onActivate === 'function'),
-    [bar],
-  );
+  /**
+   * Commit one ladder answer. Every set goes through `sameSet` first, because this runs from a
+   * `ResizeObserver` and a fresh `Set` with identical contents would re-render the whole row on
+   * every observed frame.
+   */
+  const applyLadder = useCallback((next: LadderResult) => {
+    labelledIdsRef.current = next.labelled;
+    admittedIdsRef.current = next.admitted;
+    setLabelledIds((prev) => (sameSet(prev, next.labelled) ? prev : next.labelled));
+    setAdmittedIds((prev) => (sameSet(prev, next.admitted) ? prev : next.admitted));
+    setOverflowedIds((prev) => (sameSet(prev, next.overflowed) ? prev : next.overflowed));
+  }, []);
 
   const measure = useCallback(() => {
     const container = containerRef.current;
@@ -310,77 +312,69 @@ export function Toolbar<Ctx>({
       }
       return widthCacheRef.current.get(id) ?? 0;
     };
-    const pinnedWidth = bar
-      .filter((r) => typeof r.item.onActivate !== 'function')
-      .reduce((sum, r) => sum + widthOf(r.item.id), 0);
-    const widths = new Map(demotable.map((r) => [r.item.id, widthOf(r.item.id)]));
     const overflowWidth =
-      itemRefs.current.get(OVERFLOW_ID)?.getBoundingClientRect().width ?? OVERFLOW_WIDTH_FALLBACK;
-    // Derived from the WHOLE bar, not the inline set — see `deriveChromeWidth`. Charged to the
-    // demotable budget, because the pinned items cannot pay it.
-    //
-    // **Only once something has actually measured.** A row whose every item reports zero width has
-    // not been laid out — no layout engine, or not yet painted — and charging it a chrome it cannot
-    // yet be carrying would demote every command on the strength of nothing. This also keeps the
-    // ~25 existing suites a genuine before/after oracle: under jsdom every box is zero, so the
-    // budget stays byte-identical to the pre-M1 arithmetic and those tests keep testing what they
-    // were written to test.
-    const anythingMeasured = bar.some((r) => widthOf(r.item.id) > 0);
-    const chromeWidth =
-      anythingMeasured && isWidthConstrained(container) ? deriveChromeWidth(bar) : 0;
-    // Tier-3 items never enter `demotable`, so `computeOverflow` cannot see that they have already
-    // put the `⋯` on the row and is charging its width to nobody. See its `overflowAlreadyShown`.
-    const overflowAlreadyShown = staticOverflow.length > 0;
-    const { overflow } = computeOverflow(
-      demotable,
-      widths,
-      Math.max(0, available - pinnedWidth),
-      overflowWidth,
-      chromeWidth,
-      ITEM_GAP_PX,
-      overflowAlreadyShown,
-    );
-    const next = new Set(overflow);
-    setOverflowedIds((prev) => (sameSet(prev, next) ? prev : next));
+      (itemRefs.current.get(OVERFLOW_ID)?.getBoundingClientRect().width ??
+        OVERFLOW_WIDTH_FALLBACK) + OVERFLOW_WRAPPER_PX;
 
-    // Could this row afford to label its `'auto'` items at the width it actually has? Costed
-    // against `available` (the container), never against leftover slack — see `measureLabelWidth`
-    // for why that distinction is what keeps this from oscillating. An item already labelled is
-    // costed at its live width; one still icon-only is costed at its live width plus the estimate.
-    const autoItems = bar.filter(
-      (r) => typeof r.item.onActivate === 'function' && labelPolicy(r.item, layout) === 'auto',
+    const font = fontOf(itemRefs.current.get(bar[0]?.item.id ?? ''));
+    const coarsePointer =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(pointer: coarse)').matches
+        : false;
+
+    const toLadderItem = (r: ResolvedToolbarItem<Ctx>, index: number): LadderItem => {
+      const demotable = typeof r.item.onActivate === 'function';
+      const policy = labelPolicy(r.item, layout);
+      // **Derived for a plain button, measured for a `render` item** — the distinction the whole
+      // pass rests on. A plain button's box is fixed by the CVA and changes only with the label
+      // this function is deciding, so measuring it puts an output on the input side. A `render`
+      // item's box is a function of `layout` and `ctx` and of nothing decided here.
+      const baseWidth = demotable
+        ? iconOnlyWidth(r.icon != null, coarsePointer)
+        : widthOf(r.item.id);
+      const text = demotable && policy !== 'never' ? measureLabelWidth(r.item.label, font) : null;
+      return {
+        id: r.item.id,
+        group: r.item.group,
+        index,
+        order: r.item.order,
+        priority: priorityOf(r.item),
+        demotionGroup: r.item.demotionGroup,
+        demotable,
+        baseWidth,
+        // No measuring context ⇒ no honest estimate ⇒ the item never takes a label, which is the
+        // pre-existing icon-only fallback rather than a guess.
+        labelDelta: text === null ? null : text + ICON_LABEL_GAP_PX,
+        labelPolicy: policy,
+      };
+    };
+
+    applyLadder(
+      computeLadder({
+        available,
+        // Group rules and named margins only — `computeLadder` charges the item gaps itself, so a
+        // demotion can credit one back.
+        //
+        // **Zero for a row that sizes to its own content**, which is the whole of the
+        // `isWidthConstrained` fix and is preserved here unchanged: such a row's `clientWidth` *is*
+        // its content, so charging it a chrome makes the answer falsely negative by exactly the
+        // chrome and demotes commands from a bar with no width problem — which is how `e2e-library`
+        // once timed out clicking **Resources** on the floating selection bar.
+        //
+        // It is deliberately expressed as a zero chrome rather than as "do not demote", which was
+        // the first attempt and is wrong: jsdom reports `flex-grow: 0` — the CSS *initial* value —
+        // for every element, so a demotion switch keyed on it would have turned demotion off in
+        // every unit test in the repository. A zero chrome leaves the arithmetic intact and simply
+        // stops it inventing a deficit.
+        chrome: isWidthConstrained(container) ? deriveChromeWidth(bar) : 0,
+        core: bar.map(toLadderItem),
+        candidates: staticOverflow.map((r, i) => toLadderItem(r, bar.length + i)),
+        overflowWidth,
+        previouslyLabelled: labelledIdsRef.current,
+        previouslyAdmitted: admittedIdsRef.current,
+      }),
     );
-    if (autoItems.length === 0) {
-      setAutoLabelsFit(false);
-      return;
-    }
-    const font = fontOf(itemRefs.current.get(autoItems[0]!.item.id));
-    const inlineTotal = bar.reduce((sum, r) => sum + widthOf(r.item.id), 0);
-    let labelCost = 0;
-    for (const r of autoItems) {
-      const text = measureLabelWidth(r.item.label, font);
-      // No measuring context ⇒ no honest estimate ⇒ stay icon-only rather than guess.
-      if (text === null) {
-        setAutoLabelsFit(false);
-        return;
-      }
-      labelCost += autoLabelsFit ? 0 : text + LABEL_CHROME_PX;
-    }
-    // Costed against the same honest total the overflow decision uses. Without `chromeWidth` here
-    // the two halves of one pass disagree about how wide the row is — which is how a row could
-    // promote labels it had already been told it could not afford, then overflow its container.
-    //
-    // `overflow.length > 0` alone was the same blind spot as `computeOverflow`'s: the `⋯` also
-    // renders when Tier-3 items populate it, and on this product every row that has one has it for
-    // that reason and no other. The row was told it had ~44 px it did not have, on the exact
-    // configuration that ships.
-    const projected =
-      inlineTotal +
-      chromeWidth +
-      labelCost +
-      (overflowAlreadyShown || overflow.length > 0 ? overflowWidth : 0);
-    setAutoLabelsFit(projected + LABEL_PROMOTION_MARGIN_PX <= available);
-  }, [bar, demotable, staticOverflow, autoLabelsFit, bandWidth]);
+  }, [bar, staticOverflow, applyLadder, bandWidth, layout]);
 
   // Re-measure synchronously after layout whenever the resolved items change, keeping the ref current.
   const measureRef = useRef(measure);
@@ -399,17 +393,32 @@ export function Toolbar<Ctx>({
     return () => ro.disconnect();
   }, []);
 
-  // The inline bar items (pinned render items + non-overflowed buttons), in canonical order.
+  // The inline bar: the core minus anything demoted, **plus any admitted tier-3 candidate**, in
+  // canonical order — an admitted candidate takes its registry position, not a place at the end.
   const inlineBar = useMemo(
-    () => bar.filter((r) => !overflowedIds.has(r.item.id)),
-    [bar, overflowedIds],
+    () =>
+      [
+        ...bar.filter((r) => !overflowedIds.has(r.item.id)),
+        ...staticOverflow.filter((r) => admittedIds.has(r.item.id)),
+      ].sort(byCanonical),
+    [bar, staticOverflow, overflowedIds, admittedIds],
   );
+  // Whatever is left: unadmitted candidates and demoted core items. When this is empty the `⋯` does
+  // not render at all — which is the whole of "hidden unless in use", and falls out of admission
+  // rather than needing a rule of its own.
+  //
+  // The two halves are asked **different questions**, and that asymmetry is what keeps the
+  // unmeasured default right (design review, B5). A core item is inline unless it demoted; a
+  // candidate is in the menu unless it was admitted. Asking `overflowedIds.has(…)` of a candidate
+  // would put every tier-3 command on the row the moment `measure` returns early — which is exactly
+  // what it does under jsdom, where ~35 suites are written against tier 3 being in the `⋯`.
   const overflowItems = useMemo(
     () =>
-      [...staticOverflow, ...demotable.filter((r) => overflowedIds.has(r.item.id))].sort(
-        byCanonical,
-      ),
-    [staticOverflow, demotable, overflowedIds],
+      [
+        ...bar.filter((r) => overflowedIds.has(r.item.id)),
+        ...staticOverflow.filter((r) => !admittedIds.has(r.item.id)),
+      ].sort(byCanonical),
+    [bar, staticOverflow, overflowedIds, admittedIds],
   );
 
   // The ordered list of focusable ids (interactive inline items, then ⋯) that roving tabindex walks.
@@ -584,10 +593,7 @@ export function Toolbar<Ctx>({
                 {...(r.busy ? { busy: true } : {})}
                 // Presentation reads the item's own label policy — never its `tier`, which is
                 // priority and answers a different question (TECH_DEBT #61).
-                showLabel={
-                  labelPolicy(r.item, layout) === 'always' ||
-                  (labelPolicy(r.item, layout) === 'auto' && autoLabelsFit)
-                }
+                showLabel={labelPolicy(r.item, layout) === 'always' || labelledIds.has(r.item.id)}
                 {...(r.item.isActive ? { pressed: r.active } : {})}
                 disabled={!r.enabled}
                 disabledReason={r.disabledReason}
