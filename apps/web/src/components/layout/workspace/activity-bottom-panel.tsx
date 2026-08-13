@@ -1,6 +1,7 @@
 import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { CanvasDockOutlet } from './canvas-dock';
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Button } from '@/components/ui/button';
@@ -22,8 +23,24 @@ export function ActivityBottomPanel({
   model,
   onCollapse,
   focusCollapseOnMount = false,
+  hostsDock = true,
 }: {
   model: PlanWorkspaceModel;
+  /**
+   * Whether this panel provides the canvas dock's outlet (workspace-chrome M3).
+   *
+   * **`false` on the narrow single-pane layout, and that is a correctness fix rather than a
+   * preference.** Below `md` the workspace mounts BOTH panes and hides the inactive one with
+   * `display: none`; the default pane is the diagram, so an outlet rendered here would register
+   * while invisible, and `CanvasDock` would portal the armed-tool statement, both selection bars
+   * and the edit-conflict banner into a node that is in no accessibility tree at all — a WCAG 4.1.3
+   * failure that looks like nothing on screen, because the strips are simply absent. Withholding
+   * the outlet lets `CanvasDock` fall back to rendering in place, which is exactly where those
+   * strips were before this epic and is the right answer on a screen with no spare row to dock into.
+   * Found by the accessibility gate; no test in the repository exercised the narrow path, and jsdom
+   * could not have seen it (it has no layout to make `display: none` mean anything).
+   */
+  hostsDock?: boolean;
   /** Collapse the panel to its handle. Omitted on the mobile single-pane view (the view toggle
    * switches away from Activities instead), where no collapse control is shown. */
   onCollapse?: () => void;
@@ -44,14 +61,19 @@ export function ActivityBottomPanel({
       aria-label="Activities panel"
       className="border-border flex h-full min-h-0 flex-col border-t"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
           <h2 className="text-sm font-medium">Activities</h2>
           {model.variance.data ? (
             <BaselineVarianceSummary summary={model.variance.data.summary} />
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        {/* The dock again (workspace-chrome M3) — expanded, this header row is where the strips
+            land, so they do not move to the other end of the screen when the planner opens the
+            activities list. Exactly one outlet is mounted at a time; `CanvasDockProvider` handles
+            the hand-over. */}
+        {hostsDock ? <CanvasDockOutlet /> : null}
+        <div className="flex shrink-0 items-center gap-2">
           {model.canEditSchedule ? (
             <CreateActivityButton
               orgSlug={model.orgSlug}
@@ -113,6 +135,13 @@ export function ActivityBottomPanel({
  * reopen it — so the activity list is never more than one click away (mirrors the collapsed
  * rail's affordance). On a user *collapse* it takes focus so the keyboard user lands on the
  * expand control rather than `<body>`.
+ *
+ * It is also **the canvas dock** (workspace-chrome M3). This row already existed, 36 px tall, with
+ * the word "Activities" at one end and an expand button at the other and the entire width between
+ * them empty — so the diagram's transient strips (the armed-tool statement, the selection bars, the
+ * conflict banner, the empty-plan notice) fill a gap the workspace was paying for either way,
+ * rather than pushing the scene down from above. `min-h-9` rather than `h-9`: a strip taller than
+ * the row grows it instead of being clipped, which is what a fixed height would do silently.
  */
 export function ActivityPanelCollapsedBar({
   onExpand,
@@ -127,8 +156,9 @@ export function ActivityPanelCollapsedBar({
   }, [focusExpandOnMount]);
 
   return (
-    <div className="border-border flex h-9 shrink-0 items-center justify-between gap-2 border-t px-4">
-      <span className="text-sm font-medium">Activities</span>
+    <div className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4">
+      <span className="shrink-0 text-sm font-medium">Activities</span>
+      <CanvasDockOutlet />
       <Button
         ref={expandRef}
         variant="ghost"

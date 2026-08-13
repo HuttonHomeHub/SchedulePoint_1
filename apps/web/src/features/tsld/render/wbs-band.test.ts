@@ -6,7 +6,6 @@ import {
   WBS_BAND_PAD_Y,
   WBS_BAND_ROW_GAP,
   WBS_BAND_ROW_HEIGHT,
-  wbsBandBarAnchor,
   wbsBandBars,
   wbsBandDepths,
   wbsBandHeight,
@@ -203,32 +202,3 @@ describe('wbsBandHitTest', () => {
  * band's height BELOW it, so a band bar sits ABOVE the scene box's own top — a minus, not a plus.
  * Get it wrong and the bar lands a band's height out of place, which reads as a styling wobble.
  */
-describe('wbsBandBarAnchor', () => {
-  const BOX = { top: 200, left: 50 };
-  const BAR = { x: 40, w: 100, y: 4 };
-
-  it('places a band bar ABOVE the scene box, by the band’s height', () => {
-    expect(wbsBandBarAnchor(BAR, 24, BOX, 800)).toEqual({
-      top: 200 - 24 + 4,
-      centerX: 50 + 40 + 50,
-    });
-  });
-
-  it('centres horizontally on the bar, in viewport coordinates', () => {
-    expect(wbsBandBarAnchor({ x: 0, w: 200, y: 4 }, 24, BOX, 800)?.centerX).toBe(150);
-  });
-
-  // Culled exactly as the scene path culls: a bar scrolled off the surface has no anchor to offer,
-  // so the bar hides rather than pointing at an edge.
-  it('refuses a bar scrolled off the right edge', () => {
-    expect(wbsBandBarAnchor({ x: 900, w: 100, y: 4 }, 24, BOX, 800)).toBeNull();
-  });
-
-  it('refuses a bar scrolled off the left edge', () => {
-    expect(wbsBandBarAnchor({ x: -150, w: 100, y: 4 }, 24, BOX, 800)).toBeNull();
-  });
-
-  it('keeps a bar straddling the left edge', () => {
-    expect(wbsBandBarAnchor({ x: -50, w: 100, y: 4 }, 24, BOX, 800)).not.toBeNull();
-  });
-});

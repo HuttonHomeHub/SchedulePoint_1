@@ -5,15 +5,15 @@ import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   ArrowLeftToLine,
+  BookOpen,
+  CalendarDays,
   ChartArea,
   ChartGantt,
-  CalendarDays,
   Check,
   ChevronDown,
+  Crop,
   DollarSign,
   Eraser,
-  Hand,
-  Crop,
   FileCode,
   FileDown,
   FileSpreadsheet,
@@ -21,7 +21,7 @@ import {
   FileType,
   Filter,
   Gauge,
-  Grid3x3,
+  Hand,
   ImageDown,
   Info,
   Layers,
@@ -32,18 +32,19 @@ import {
   Minus,
   Plus,
   Printer,
-  RefreshCw,
   Redo2,
-  Split,
+  RefreshCw,
   Rows3,
   Search,
   Share2,
   SlidersHorizontal,
   Spline,
+  Split,
   SquareDashedMousePointer,
   StickyNote,
   TriangleAlert,
   Undo2,
+  Users,
   Waypoints,
   X,
 } from 'lucide-react';
@@ -196,6 +197,18 @@ interface LensToggle {
    * it is about to do, and the surprise goes rather than the behaviour.
    */
   note?: string;
+  /**
+   * **Promoted to Row 1** (workspace-chrome M4), instead of living inside `View ▾`.
+   *
+   * The product owner asked for the Legend and the Resource view back on the row now that ADR-0090
+   * M2 and ADR-0091 M7 have bought it the width. They are still defined HERE, once — the promotion
+   * derives a registry item from this record rather than restating it — because two definitions of
+   * `checked`/`toggle`/`reason` would drift, and the drift would be invisible: each surface looks
+   * right alone, and only a planner who reaches the same control two ways would ever see one is a
+   * version behind (the ADR-0065 `routeOrthogonal` argument). `lensTogglesIn` excludes anything
+   * promoted, so a control is on the row **or** in the popover and never in both.
+   */
+  promotion?: { icon: React.ReactNode; order: number };
 }
 
 const LENS_TOGGLES: readonly LensToggle[] = [
@@ -225,8 +238,13 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.resourceViewOpen,
     toggle: (ctx) => ctx.toggleResourceView(),
     reason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
-    // The one row here that opens something rather than marking the canvas — see `note` above.
-    note: 'Opens the resource panel and moves focus to it',
+    // **The `note` went with the promotion, and that closes `docs/TECH_DEBT.md` #125 rather than
+    // porting it.** It existed because this row lives(d) inside a popover that invites toggling
+    // several things in one visit, and revealing the resource panel takes focus (ADR-0049), which
+    // closes the popover behind the departing focus — from inside a list, that reads as being
+    // thrown out. On a toolbar button, pressing a control and landing in the panel it opened is
+    // ordinary. The surprise the sentence existed to remove is not there to remove.
+    promotion: { icon: <Users className="size-4" />, order: 21 },
   },
   {
     id: 'over-allocation',
@@ -257,11 +275,44 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.legendOpen,
     toggle: (ctx) => ctx.toggleLegend(),
     reason: () => undefined,
+    promotion: { icon: <BookOpen className="size-4" />, order: 22 },
   },
 ];
 
 function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
-  return LENS_TOGGLES.filter((t) => t.group === group && t.enabled);
+  // `!t.promotion` is the on-the-row-or-in-the-popover invariant, held in one place: a promoted
+  // control leaves `View ▾` by construction rather than by someone remembering to delete its row.
+  return LENS_TOGGLES.filter((t) => t.group === group && t.enabled && !t.promotion);
+}
+
+/**
+ * The Row-1 registry items for the promoted lens toggles (workspace-chrome M4) — **derived** from
+ * the same `LensToggle` records `View ▾` reads, never restated.
+ *
+ * `showLabel: { atLeast: 'comfortable' }` rather than `'auto'`: `autoLabelsFit` is all-or-nothing
+ * for a whole row, so an `'auto'` item follows its neighbours' collective fate and can label itself
+ * at a narrow band that happens to have slack — the trap ADR-0091 D3a records for the zoom cluster.
+ * These two carry a name a planner searches for, so a band rule is what they need.
+ */
+function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
+  return LENS_TOGGLES.filter((t) => t.enabled && t.promotion !== undefined).map((t) => {
+    const promotion = t.promotion as NonNullable<LensToggle['promotion']>;
+    return {
+      id: t.id,
+      group: 'lens',
+      row: 'look',
+      tier: 2,
+      showLabel: { atLeast: 'comfortable' },
+      order: promotion.order,
+      priority: 60,
+      label: t.label,
+      icon: promotion.icon,
+      isActive: (ctx: TsldToolbarContext) => t.checked(ctx),
+      isEnabled: (ctx: TsldToolbarContext) => t.reason(ctx) === undefined,
+      disabledReason: (ctx: TsldToolbarContext) => t.reason(ctx),
+      onActivate: (ctx: TsldToolbarContext) => t.toggle(ctx),
+    } satisfies ToolbarItem<TsldToolbarContext>;
+  });
 }
 
 /**
@@ -1045,9 +1096,21 @@ function PlanAnalysisControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
+  // **This trigger honours the collapsed band like every other one on the row** — it did not until
+  // 2026-08-13, and that is what made Row 2 nine pixels too wide at 960 once `snap-to-grid` was
+  // deleted (`e2e-toolbar-fit` S4). Both this control and its `Share & export` neighbour painted
+  // their text at every width while `Go to today`, `View ▾`, `Summary ▾` and the rest went icon-only
+  // below 1024 — 145 px of text between them, which the deleted button's 36 px had been masking.
+  // The ADR-0064 §7 shape again: one correct pattern applied to a control and not its neighbour,
+  // invisible to every gate until an unrelated change moved the arithmetic past a boundary.
+  //
+  // Icon-only means the text is gone, so the name has to come from somewhere: `aria-label` is set
+  // unconditionally in that state rather than only when shaded, or the button would be announced as
+  // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
+  const compact = triggersAreCompact(api.layout);
   return (
     <>
       <button
@@ -1058,7 +1121,7 @@ function PlanAnalysisControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? ANALYSIS_LABEL) : ANALYSIS_LABEL}
-        {...(disabled && api.disabledReason ? { 'aria-label': ANALYSIS_LABEL } : {})}
+        {...(compact || (disabled && api.disabledReason) ? { 'aria-label': ANALYSIS_LABEL } : {})}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
@@ -1066,7 +1129,7 @@ function PlanAnalysisControl({
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <ChartArea aria-hidden="true" className="size-4" />
-        <span className="truncate">{ANALYSIS_LABEL}</span>
+        {compact ? null : <span className="truncate">{ANALYSIS_LABEL}</span>}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
@@ -1192,9 +1255,21 @@ function ExportMenuControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
+  // **This trigger honours the collapsed band like every other one on the row** — it did not until
+  // 2026-08-13, and that is what made Row 2 nine pixels too wide at 960 once `snap-to-grid` was
+  // deleted (`e2e-toolbar-fit` S4). Both this control and its `Share & export` neighbour painted
+  // their text at every width while `Go to today`, `View ▾`, `Summary ▾` and the rest went icon-only
+  // below 1024 — 145 px of text between them, which the deleted button's 36 px had been masking.
+  // The ADR-0064 §7 shape again: one correct pattern applied to a control and not its neighbour,
+  // invisible to every gate until an unrelated change moved the arithmetic past a boundary.
+  //
+  // Icon-only means the text is gone, so the name has to come from somewhere: `aria-label` is set
+  // unconditionally in that state rather than only when shaded, or the button would be announced as
+  // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
+  const compact = triggersAreCompact(api.layout);
   return (
     <>
       <button
@@ -1205,7 +1280,9 @@ function ExportMenuControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? SHARE_EXPORT_LABEL) : SHARE_EXPORT_LABEL}
-        {...(disabled && api.disabledReason ? { 'aria-label': SHARE_EXPORT_LABEL } : {})}
+        {...(compact || (disabled && api.disabledReason)
+          ? { 'aria-label': SHARE_EXPORT_LABEL }
+          : {})}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
@@ -1213,7 +1290,7 @@ function ExportMenuControl({
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
-        <span className="truncate">{SHARE_EXPORT_LABEL}</span>
+        {compact ? null : <span className="truncate">{SHARE_EXPORT_LABEL}</span>}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
@@ -1790,15 +1867,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
   };
-  const snapToGridShape = {
-    id: 'snap-to-grid',
-    group: 'tools' as const,
-    row: 'do' as const,
-    tier: 2 as const,
-    order: 5,
-    label: 'Snap to grid',
-    icon: <Grid3x3 className="size-4" />,
-  };
   // Export & print (VITE_EXPORT_PRINT) shared item shapes — the id/group/row/tier/order/label/icon each
   // of the two ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
@@ -2294,34 +2362,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.openActivityNotes(),
         }
       : placeholderItem(addNoteShape),
-    // Snap-to-grid — a Visual-planning authoring aid (snaps hand-placed bars to the nearest working day
-    // on drop, spec `docs/specs/canvas-nav/`). Flag-on a pressed-state, pen-gated, Visual-mode toggle
-    // (mirrors Clear-visual-placement's gates: visible in both modes, disabled-with-reason outside
-    // Visual / without the pen / under the Late overlay); flag-off the "Coming soon" placeholder,
-    // byte-for-byte. The toggle only rounds the dropped day before the existing PATCH — the CPM engine +
-    // parity gate are untouched.
-    CANVAS_NAV_ENABLED
-      ? {
-          ...snapToGridShape,
-          penGated: true,
-          isVisible: () => SCHEDULING_MODES_ENABLED,
-          isActive: (ctx) => ctx.snapToGrid,
-          // Enabled only when it's actionable: Visual mode AND the pen/role AND not the read-only Late
-          // overlay. (Snap applies at the next drop; no selection is required.)
-          isEnabled: (ctx) =>
-            ctx.schedulingMode === 'VISUAL' && ctx.canEditSchedule && !ctx.lateOverlayActive,
-          // Precedence ladder mirrors Clear-visual-placement: mode → pen/role → Late overlay.
-          disabledReason: (ctx) =>
-            ctx.schedulingMode !== 'VISUAL'
-              ? 'Only available in Visual mode'
-              : !ctx.canEditSchedule
-                ? (ctx.scheduleRefusal('snap placements') ?? undefined)
-                : ctx.lateOverlayActive
-                  ? 'Turn off the Late-start overlay to snap placements'
-                  : undefined,
-          onActivate: (ctx) => ctx.toggleSnapToGrid(),
-        }
-      : placeholderItem(snapToGridShape),
+    // **`snap-to-grid` was deleted (workspace-chrome M2).** Its toggle never decided whether a
+    // placement snapped — the engine rolls every `visualStart` forward to a working instant
+    // unconditionally (`compute.ts:335-338` → `instants.ts:18-22`) — only which way a tie broke
+    // on a drop onto a non-working column: Saturday landed Friday with it on, Monday with it
+    // off. The product owner reported seeing no difference and was right. A control whose
+    // entire capability is already delivered unconditionally elsewhere is the ADR-0081 shape.
     // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
     // falls back to the computed date, toolbar quick-wins F5). Only *meaningful* in Visual mode, but per
     // the registry's shade-don't-hide rule (ADR-0031 + docs/TOOLBAR_ROADMAP.md) it stays VISIBLE in both
@@ -2401,6 +2447,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // ADR-0031 "Coming soon" placeholders (byte-for-byte the current bar); flag-on they are the real
     // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
     ...undoRedoToolbarItems(),
+
+    // Legend + Resource view, back on Row 1 (workspace-chrome M4) — see `promotedLensItems`.
+    ...promotedLensItems(),
 
     {
       id: 'summary',

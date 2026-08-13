@@ -168,22 +168,21 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByTestId('summary-body')).toBeInTheDocument();
   });
 
-  it('toggles the on-canvas Legend panel from the View popover (Panels section)', () => {
-    // The legend lives on the canvas (ADR-0031 amendment) and its control moved into `View ▾`'s new
-    // Panels section in ADR-0090 M2-T2 — it still renders no key of its own, it still just drives
-    // the workspace's floating panel. `aria-pressed` on a button becomes `checked` on a checkbox;
-    // both halves of the original assertion survive that translation, which is the point of making
-    // it rather than deleting it.
+  it('toggles the on-canvas Legend panel from Row 1, and offers it nowhere else', () => {
+    // The legend lives on the canvas (ADR-0031 amendment). Its control moved into `View ▾`'s Panels
+    // section in ADR-0090 M2-T2 when the row had no width for it, and came BACK to Row 1 in
+    // workspace-chrome M4 at the product owner's request, once M2 and ADR-0091 M7 had bought that
+    // width. So it is a button with `aria-pressed` again — and, because `lensTogglesIn` excludes
+    // anything promoted, it is not also a popover row. The second half is the assertion worth
+    // having: two copies of one control drift invisibly, since each looks right alone.
     const { rerender } = renderRows(ctx({ legendOpen: false }));
-    const openView = (): HTMLElement => {
-      const trigger = screen.getByRole('button', { name: /^View/ });
-      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-      return screen.getByRole('checkbox', { name: 'Legend' });
-    };
-    const legend = openView();
-    expect(legend).not.toBeChecked();
+    const legend = screen.getByRole('button', { name: 'Legend' });
+    expect(legend).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(legend);
     expect(spies.toggleLegend).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    expect(screen.queryByRole('checkbox', { name: 'Legend' })).not.toBeInTheDocument();
 
     const rows = splitByRow(buildTsldToolbarItems());
     const opened = ctx({ legendOpen: true });
@@ -199,7 +198,7 @@ describe('TSLD toolbar registry (two-row)', () => {
         <Toolbar items={rows.do} context={opened} label="Build and manage" authoringEnabled />
       </div>,
     );
-    expect(openView()).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Legend' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {
@@ -333,21 +332,24 @@ describe('TSLD toolbar registry (two-row)', () => {
     }
   });
 
-  it('shows the canvas-nav features (isolate / next-conflict / snap) as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
-    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the three
-    // ids must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
+  it('shows the canvas-nav features as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
+    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the ids
+    // must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
+    //
+    // The subject has narrowed twice. `Isolate logic path` left in ADR-0090 M2-T1 (it moved to the
+    // selection bar, and its Row-1 placeholder went with it rather than being reproduced there — a
+    // placeholder earns its place on a persistent row a planner scans, not on a transient bar).
+    // `Snap to grid` left on 2026-08-13, deleted with the control: the engine rolls every
+    // `visualStart` forward to a working day unconditionally, so the toggle had nothing to toggle.
+    // `Next conflict` is what remains, and since ADR-0090 M2 it is a tier-3 item — so flag-off its
+    // placeholder lives in the `⋯` rather than inline, which is what this now pins.
     renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
-    // `Isolate logic path` left this list in ADR-0090 M2-T1: it moved to the selection bar, and its
-    // Row-1 "Coming soon" placeholder went with it rather than being reproduced there — a
-    // placeholder earns its place on a persistent row a planner scans, not on a transient bar.
-    // `Next conflict` also left this list, in ADR-0090 M2: it moved to tier 3 so Row 1 could label
-    // itself at 1920, so flag-off its placeholder lives in the `⋯` rather than inline. Snap to grid
-    // is the one of the three still on the bar, and it is what this now pins.
-    for (const name of ['Snap to grid']) {
-      const btn = screen.getByRole('button', { name });
-      expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
+    for (const trigger of screen.queryAllByRole('button', { name: 'More toolbar actions' })) {
+      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
     }
+    const btn = screen.getByRole('menuitem', { name: 'Next conflict' });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAccessibleDescription('Coming soon');
   });
 
   it('has no axe violations across both rows', async () => {

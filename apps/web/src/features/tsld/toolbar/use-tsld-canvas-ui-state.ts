@@ -73,11 +73,11 @@ export interface TsldCanvasUiState {
   toggleBaselineOverlay: () => void;
   /**
    * The **canvas navigation & authoring** view state (spec `docs/specs/canvas-nav/`, behind
-   * `VITE_CANVAS_NAV`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor, the
-   * *Snap to grid* toggle, and a one-shot **select signal** the toolbar uses to drive the canvas
-   * selection (for Next-conflict). Pure CLIENT VIEW STATE, exactly like {@link lensState}: never server
-   * state, never persisted. Defaults (isolate off, no cursor, snap off, no signal) produce no dim, no
-   * snap and no selection command ⇒ byte-for-byte parity.
+   * `VITE_CANVAS_NAV`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor,
+   * and a one-shot **select signal** the toolbar uses to drive the canvas selection (for
+   * Next-conflict). Pure CLIENT VIEW STATE, exactly like {@link lensState}: never server state, never
+   * persisted. Defaults (isolate off, no cursor, no signal) produce no dim and no selection command ⇒
+   * byte-for-byte parity.
    */
   navState: NavState;
   /** Toggle the Isolate-logic-path emphasis on/off (session-local). */
@@ -87,8 +87,6 @@ export interface TsldCanvasUiState {
   setIsolateMode: (mode: LogicPathMode) => void;
   /** Remember the last-visited conflict id (the *Next conflict* cursor). */
   setConflictCursorId: (id: string | null) => void;
-  /** Toggle *Snap to grid* on/off (session-local, CQ-3). */
-  toggleSnapToGrid: () => void;
   /** Ask the canvas (via `TsldPanel`) to select an activity — the *Next conflict* selection lift. A
    * monotonic `nonce` makes each request distinct so repeated jumps to the same id still fire. */
   /**
@@ -118,7 +116,6 @@ export interface NavState {
   isolateActive: boolean;
   isolateMode: LogicPathMode;
   conflictCursorId: string | null;
-  snapToGrid: boolean;
   /** The pending selection command from the toolbar (Next-conflict), or null. `TsldPanel` applies it and
    * de-dupes by `nonce`. */
   /** `id: null` is the FOCUS-ONLY form (`requestFocusDiagram`) — no selection change, just move
@@ -156,7 +153,6 @@ const DEFAULT_NAV_STATE: NavState = {
   isolateActive: false,
   isolateMode: 'full',
   conflictCursorId: null,
-  snapToGrid: false,
   selectSignal: null,
 };
 
@@ -225,10 +221,6 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
     (conflictCursorId: string | null): void => setNavState((s) => ({ ...s, conflictCursorId })),
     [],
   );
-  const toggleSnapToGrid = useCallback(
-    (): void => setNavState((s) => ({ ...s, snapToGrid: !s.snapToGrid })),
-    [],
-  );
   const requestSelectActivity = useCallback(
     (id: string, opts?: { focusListbox?: boolean }): void =>
       setNavState((s) => ({
@@ -287,7 +279,6 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       toggleIsolate,
       setIsolateMode,
       setConflictCursorId,
-      toggleSnapToGrid,
       requestSelectActivity,
       requestFocusDiagram,
     }),
@@ -314,7 +305,6 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       toggleIsolate,
       setIsolateMode,
       setConflictCursorId,
-      toggleSnapToGrid,
       requestSelectActivity,
       requestFocusDiagram,
     ],

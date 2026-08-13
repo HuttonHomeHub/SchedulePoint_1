@@ -73,34 +73,56 @@ function lensReason(el: HTMLElement): string | null {
 
 beforeEach(() => vi.clearAllMocks());
 
+/**
+ * **Resource view went back to Row 1** (workspace-chrome M4), at the product owner's request, now
+ * that ADR-0090 M2 and ADR-0091 M7 have bought the row the width it lacked when M2-T2 relocated it.
+ * So it is a `button` with `aria-pressed` again rather than a popover `checkbox` — the same four
+ * assertions in the vocabulary of the control they are now about. Its shade reason travels with it
+ * because the registry item is DERIVED from the same `LensToggle` record `View ▾` reads, so a
+ * relocation cannot lose one (which is exactly what a second definition would eventually do).
+ */
+function rowLens(name: string): HTMLElement {
+  return screen.getByRole('button', { name });
+}
+
 describe('TSLD toolbar — resource-view lens (flag on)', () => {
   it('is a real toggle button (not a "Coming soon" placeholder) with a pressed state', () => {
     renderRows(ctx({ resourceViewOpen: false }));
-    const item = viewLens('Resource view');
-    // A real, live toggle — not shut, and unchecked rather than merely present.
+    const item = rowLens('Resource view');
+    // A real, live toggle — not shut, and unpressed rather than merely present.
     expect(item).not.toHaveAttribute('aria-disabled', 'true');
-    expect(item).not.toBeChecked();
+    expect(item).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('reflects the open state as pressed', () => {
     renderRows(ctx({ resourceViewOpen: true }));
-    expect(viewLens('Resource view')).toBeChecked();
+    expect(rowLens('Resource view')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('toggles the resource strip on activation', () => {
     renderRows(ctx({ resourceViewOpen: false }));
-    fireEvent.click(viewLens('Resource view'));
+    fireEvent.click(rowLens('Resource view'));
     expect(spies.toggleResourceView).toHaveBeenCalledOnce();
   });
 
   it('shades — not hides — on an empty/uncomputed canvas, disabled with the shared lens reason', () => {
     renderRows(ctx({ hasDiagram: false }));
-    const item = viewLens('Resource view');
+    const item = rowLens('Resource view');
     expect(item).toHaveAttribute('aria-disabled', 'true');
-    // The shared "Add an activity first" lens reason, now READABLE rather than in a `title`.
-    expect(lensReason(item)).toContain('Add an activity first');
+    expect(item).toHaveAccessibleDescription(/Add an activity first/);
     fireEvent.click(item);
     expect(spies.toggleResourceView).not.toHaveBeenCalled();
+  });
+
+  it('is no longer offered inside View — on the row OR in the popover, never both', () => {
+    // The invariant lives in `lensTogglesIn`, which excludes anything promoted, so it holds by
+    // construction rather than by someone remembering to delete the popover row. This pins it,
+    // because two copies of one control drift invisibly: each looks right alone, and only a planner
+    // who reaches it both ways ever sees one is a version behind.
+    renderRows(ctx({ resourceViewOpen: false }));
+    const trigger = screen.getByRole('button', { name: /^View/ });
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('checkbox', { name: 'Resource view' })).not.toBeInTheDocument();
   });
 });
 
@@ -152,31 +174,17 @@ describe('TSLD toolbar — over-allocation highlight (flag on, Stage E M2)', () 
 });
 
 /**
- * **The row says what it is about to do** (ADR-0090 M5, closing `docs/TECH_DEBT.md` #125).
+ * **The standing note is gone, and `docs/TECH_DEBT.md` #125 closes rather than moving** — recorded
+ * here because deleting an accessibility affordance needs a reason, not a shrug.
  *
- * `Resource view` is the only member of `View ▾` that opens a panel rather than marking the canvas.
- * The panel takes focus (ADR-0049 — a revealed panel should receive it) and the popover closes
- * behind the departing focus, so from inside a list that invites toggling several things it read as
- * being thrown out. The focus behaviour is right and an `e2e-resource-view` assertion depends on it;
- * what was missing was any warning, so the note is the fix and the surprise is what goes.
+ * The note existed because `Resource view` was the only member of `View ▾` that opened a panel
+ * rather than marking the canvas: the panel takes focus (ADR-0049) and the popover closes behind
+ * the departing focus, so from inside a list that invites toggling several things it read as being
+ * thrown out. M4 puts the control back on Row 1, where pressing a button and landing in the panel
+ * it opened is the ordinary thing a button does. The surprise the sentence existed to remove is not
+ * there to remove. The focus behaviour is untouched, and `e2e-resource-view` still depends on it.
  */
 describe('the Resource view row explains that it opens a panel', () => {
-  it('carries a standing note, linked as a description rather than folded into the name', () => {
-    renderRows(ctx({ resourceViewOpen: false, hasDiagram: true }));
-    const item = viewLens('Resource view');
-    expect(item).toHaveAccessibleName('Resource view');
-    expect(lensReason(item)).toContain('Opens the resource panel and moves focus to it');
-  });
-
-  it('keeps both the note and the shut reason when the canvas is empty', () => {
-    // Two ids on one `aria-describedby`. Naming only one silently drops the other, and "why it is
-    // shut" and "what it does" are both wanted — the case that broke the single-id helper above.
-    renderRows(ctx({ resourceViewOpen: false, hasDiagram: false }));
-    const text = lensReason(viewLens('Resource view'));
-    expect(text).toContain('Add an activity first');
-    expect(text).toContain('Opens the resource panel');
-  });
-
   it('gives a plain lens no note at all', () => {
     // The note exists for exactly one row. A neighbour acquiring one would mean the distinction it
     // draws has been lost.

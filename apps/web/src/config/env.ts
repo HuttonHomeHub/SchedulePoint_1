@@ -572,8 +572,12 @@ export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_L
  *   reusing the Stage A `dimmedIds` dim seam (unioned with any active filter dim) + the a11y listbox mark.
  * - **Next conflict** — cycles the plan's flagged activities (constraintViolated / visualConflict /
  *   externalDriven / levelingWindowExceeded / negative total float), each centred + selected + announced.
- * - **Snap to grid** — a Visual-mode, pen-gated session toggle that rounds a dropped `visualStart` to the
- *   nearest working day (via the existing `isWorkingDay`) before the existing `setVisualStart` PATCH.
+ * A third aid, **Snap to grid**, shipped here and was **deleted on 2026-08-13**. It rounded a dropped
+ * `visualStart` to the nearest working day before the PATCH — but `compute.ts:335-338` wraps every
+ * `visualStart` in `rollForwardToWorking` unconditionally, so the toggle had no observable effect in
+ * either position, and the client's "nearest" could move a Saturday drop EARLIER than the engine
+ * would. The optimistic ghost now previews the engine's forward roll instead
+ * (`render/snap.ts:rollForwardToWorkingDay`) and the raw day is what is persisted.
  *
  * **ON by default** (2026-07-20, product sign-off) now that the three aids are wired to shipped engine
  * output and the accessibility / ux / component / performance / security / test reviews are green (every

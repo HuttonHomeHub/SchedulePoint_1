@@ -34,7 +34,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
  * narrow row and overflow it.
  *
  * A toolbar with no provider above it falls back to its own `clientWidth`, which is correct for a
- * toolbar that genuinely is its own surface (the floating selection bar is one, and it is
+ * toolbar that genuinely is its own surface (the docked selection bar is one, and it is
  * deliberately not in a band).
  */
 const ToolbarBandContext = createContext<number | null>(null);

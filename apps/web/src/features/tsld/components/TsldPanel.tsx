@@ -66,7 +66,7 @@ import {
   type Point,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
-import { drawnSpanPlacement, snapToWorkingDay } from '../render/snap';
+import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
@@ -74,7 +74,6 @@ import {
   SelectionActionsBar,
   type SelectionBarContext,
   type SelectionCanvasContext,
-  type SelectionAnchor,
 } from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
@@ -90,6 +89,7 @@ import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
 
+import { CanvasDock } from '@/components/layout/workspace/canvas-dock';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -322,13 +322,13 @@ export interface TsldPanelProps {
   ) => Promise<TsldEditOutcome>;
   /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
    * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). Also the read action
-   * on the floating {@link SelectionActionsBar}. */
+   * on the docked {@link SelectionActionsBar}. */
   onOpenLogic?: (activity: ActivitySummary) => void;
   /** Open the edit dialog for an activity — the **floating selection bar**'s Edit action (ADR-0031).
    * The host owns the dialog so this feature imports no other feature (ADR-0026 D8); its presence
    * (with {@link onDeleteActivity}) mounts the bar over the selected bar. */
   onEditActivity?: (activity: ActivitySummary) => void;
-  /** Delete an activity (host-owned confirm) — the floating selection bar's Delete action (ADR-0031). */
+  /** Delete an activity (host-owned confirm) — the docked selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
   /**
    * Dissolve the selected WBS summary — remove the grouping and keep the work
@@ -346,7 +346,7 @@ export interface TsldPanelProps {
   onDuplicateActivity?: (activity: ActivitySummary) => void;
   /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
   onDuplicateBand?: (activity: ActivitySummary) => void;
-  /** Open the per-activity resource-assignment editor — the floating selection bar's **Resources**
+  /** Open the per-activity resource-assignment editor — the docked selection bar's **Resources**
    * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
    * that surfaces it is itself flag-gated in {@link selectionActionItems}, so flag-off is byte-for-byte. */
@@ -455,7 +455,7 @@ export interface TsldPanelProps {
    */
   floatPathIds?: ReadonlySet<string> | undefined;
   /**
-   * The canvas commands the floating selection bar offers (ADR-0090 M2-T1) — Zoom to, and Isolate
+   * The canvas commands the docked selection bar offers (ADR-0090 M2-T1) — Zoom to, and Isolate
    * logic path. Assembled by the workspace, which already builds every field for the toolbar
    * context; **absent ⇒ the bar is byte-for-byte its pre-M2 self**, which is the rollback contract.
    */
@@ -590,7 +590,6 @@ export function TsldPanel({
   const [bulkError, setBulkError] = useState<string | null>(null);
   // The selected activity's live viewport geometry, written by the canvas each frame and read by the
   // floating selection bar to follow pan/zoom without per-frame React state (ADR-0026 D3 / ADR-0031).
-  const selectionAnchorRef = useRef<SelectionAnchor | null>(null);
   // Canvas UI state (mode/toggles/zoom/fit/help): externally-owned when the workspace toolbar
   // drives the canvas (ADR-0031), else owned here (flag-off / legacy — unchanged). The hook is
   // always called (rules of hooks); its result is ignored when `canvasUi` is supplied.
@@ -634,7 +633,7 @@ export function TsldPanel({
   // <body> (they're placed back on the tool to draw again).
   const addActivityRef = useRef<HTMLButtonElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
-  // Where the floating selection bar hands focus back when it hides/unmounts while focused (so a
+  // Where the docked selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
   /**
@@ -1318,7 +1317,7 @@ export function TsldPanel({
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
-  // The floating selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
+  // The docked selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
   // (open-logic + edit + delete). Its mutating actions are pen-gated as a set via `canEditSchedule`,
   // mirroring the main toolbar's `authoringEnabled` (role + pen). Read actions stay available. The
   // context is null when nothing's selected or the host didn't opt in — the bar then renders nothing.
@@ -1326,6 +1325,16 @@ export function TsldPanel({
     onOpenLogic !== undefined && onEditActivity !== undefined && onDeleteActivity !== undefined;
   const selectionCtx = useMemo<SelectionBarContext | null>(() => {
     if (!onOpenLogic || !onEditActivity || !onDeleteActivity) return null;
+    // **A plural selection gets the plural bar and only the plural bar.** `BulkSelectionBar`'s own
+    // docblock has said since ADR-0080 that it "replaces the floating per-object bar rather than
+    // joining it", and the code never did that: this context is derived from the primary id alone,
+    // so two selected activities rendered BOTH bars. Floating, that was a latent inconsistency —
+    // the two sat in physically separate places and each looked right. Docked, they are forced into
+    // one 36 px row that does not wrap, so the collision becomes visible clipping and a control
+    // that is in the tab order and not on the screen. The ADR-0064 §7 shape once more: a correct
+    // decision elsewhere, invisible until an unrelated change moved the arithmetic across a
+    // boundary. Found by the UX gate over this epic's diff.
+    if (selection.ids.length > 1) return null;
     const activity = selectedId ? activities.find((a) => a.id === selectedId) : undefined;
     if (!activity) return null;
     return {
@@ -1362,6 +1371,7 @@ export function TsldPanel({
   }, [
     selectionCanvas,
     selectedId,
+    selection.ids.length,
     activities,
     canEdit,
     scheduleRefusal,
@@ -2108,19 +2118,21 @@ export function TsldPanel({
           });
         return;
       }
-      // Snap to grid (canvas nav, `docs/specs/canvas-nav/`, Visual mode): round the dropped day to the
-      // nearest working day BEFORE the PATCH — only in Visual mode (`barDateSource === 'visual'`), only
-      // when the toggle is on, and only when a day actually changed. Off / flag-off ⇒ the raw dropped
-      // day, byte-for-byte (the PATCH contract, undo record and auto-recalc are all unchanged; this only
-      // adjusts the day value fed into the existing `startDay`). The snapped value drives BOTH the
-      // optimistic ghost and the write so the preview matches what saves.
-      const snappedStartDay =
+      // **The ghost applies the rule the SERVER will apply** (workspace-chrome M2). The engine rolls
+      // every `visualStart` FORWARD to a working instant unconditionally (`compute.ts:335-338`), so
+      // a bar dropped on a Saturday always returns on Monday — painting Saturday until the
+      // recalculation lands is a preview that is knowingly wrong. This replaced a `Snap to grid`
+      // toggle whose only effect was the tie-break DIRECTION (nearest, earlier-first) and which the
+      // product owner correctly reported as making no difference: the snapping was never its doing.
+      //
+      // Preview only. `previewStartDay` is NOT what gets written — see `rollForwardToWorkingDay`
+      // for why a client-computed day must not be persisted.
+      const previewStartDay =
         CANVAS_NAV_ENABLED &&
-        navState.snapToGrid &&
         barDateSource === 'visual' &&
         intent.startDay !== undefined &&
         workingDayPredicate
-          ? snapToWorkingDay(intent.startDay, workingDayPredicate)
+          ? rollForwardToWorkingDay(intent.startDay, workingDayPredicate)
           : intent.startDay;
       // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
       // activity's current geometry so the optimistic ghost sits at the resulting day+lane.
@@ -2130,7 +2142,7 @@ export function TsldPanel({
           : 0;
       const currentStartDay =
         activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
-      const startDay = snappedStartDay ?? currentStartDay;
+      const startDay = previewStartDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
       // The settle note is taken at the shared write seam (`notedReposition`), not here: this
@@ -2140,7 +2152,9 @@ export function TsldPanel({
       pointerRepositionBusyRef.current = true;
       void notedReposition({
         activityId: intent.activityId,
-        ...(snappedStartDay !== undefined ? { startDay: snappedStartDay } : {}),
+        // The RAW dropped day: the server owns the roll, on the activity's own calendar at
+        // minute granularity, which the client's plan-calendar day predicate cannot reproduce.
+        ...(intent.startDay !== undefined ? { startDay: intent.startDay } : {}),
         ...(intent.laneIndex !== undefined ? { laneIndex: intent.laneIndex } : {}),
       })
         .then((outcome) => {
@@ -2153,15 +2167,16 @@ export function TsldPanel({
           if (outcome.applied) {
             const timeChanged = intent.startDay !== undefined;
             const laneChanged = intent.laneIndex !== undefined;
-            // When Snap actually ROUNDED the dropped day to a working day (`snappedStartDay` differs
-            // from the raw drop), name the resulting working day so the snap is legible to AT (a11y-rec-2)
-            // — otherwise the generic "dates will update" wording. The snapped day is a working-day
-            // offset from the data date; the existing `addCalendarDays` + formatter turn it into a date.
+            // When the drop landed on a non-working day and will therefore move, name the day it
+            // will move TO, so the roll is legible to AT rather than a silent correction
+            // (a11y-rec-2). Announced from the PREVIEW, which is the client's best statement of the
+            // server's rule — if the activity's own calendar disagrees, the recalculation corrects
+            // the bar and this sentence was a good-faith approximation, not a claim of record.
             const snappedDay =
               intent.startDay !== undefined &&
-              snappedStartDay !== undefined &&
-              snappedStartDay !== intent.startDay
-                ? snappedStartDay
+              previewStartDay !== undefined &&
+              previewStartDay !== intent.startDay
+                ? previewStartDay
                 : null;
             const snappedDate =
               snappedDay !== null && dataDate
@@ -2169,7 +2184,7 @@ export function TsldPanel({
                 : null;
             announce(
               snappedDate
-                ? `Moved and snapped “${activity.name}” to ${snappedDate}${laneChanged ? ` in lane ${laneIndex + 1}` : ''}.`
+                ? `Moved “${activity.name}” to ${snappedDate}, the next working day${laneChanged ? ` in lane ${laneIndex + 1}` : ''}.`
                 : laneChanged
                   ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
                   : `Moved “${activity.name}”; dates will update.`,
@@ -2428,146 +2443,175 @@ export function TsldPanel({
         />
       ) : null}
 
-      {conflict ? (
-        <EditConflictBanner
-          message={conflict.message}
-          onDismiss={() => clearConflict()}
-          {...(conflict.refreshable && onRefresh
-            ? {
-                onRefresh: () => {
-                  onRefresh();
-                  clearConflict();
-                },
-              }
-            : {})}
-        />
-      ) : null}
-
       {!chromeless && showDiagram ? <TsldLegend /> : null}
 
-      {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
-          overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
-          it costs no canvas height in the state the canvas is in most of the time. */}
-      <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
-
       {/*
-        The bulk selection bar (`docs/specs/canvas-multi-select/` M4-T7) — beside the mode band in
-        the SAME reserved chrome, never floating over the scene. Renders nothing below two selected,
-        and nothing at all when the host wired no operations, so a partially-wired host cannot ship
-        a button that does nothing.
-      */}
-      {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
-        <BulkSelectionBar
-          count={selection.ids.length}
-          primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
-          link={{
-            // Gated on the WRITE RIGHT only, deliberately — never on the chain's own refusal.
-            //
-            // It used to be gated on both, with the reason "open the preview to see why". The
-            // preview is opened by this button, so for the two refusals that actually happen — a
-            // chain over the 50-link cap, and one that would close a cycle — the sentence told a
-            // planner to do the thing the shading prevented, and the dialog built to explain the
-            // refusal was unreachable in exactly the state it exists for. Found by the UX review
-            // over this epic's diff. `LinkChainDialog` owns the refusal: it keeps the ordered
-            // preview on screen and names the reason beside it.
-            enabled: bulk.gate.writable,
-            reason: bulk.gate.writable ? null : bulk.gate.reason,
-          }}
-          remove={{
-            enabled: bulk.gate.writable,
-            reason: bulk.gate.writable ? null : bulk.gate.reason,
-          }}
-          onLink={() => {
-            setBulkError(null);
-            // Reverse is a choice about THIS preview, so it does not survive it. A sticky reverse
-            // would open the next chain already flipped, with nothing on screen saying it had been
-            // — which is the ADR-0064 report (a link recorded the wrong way round) reappearing as a
-            // state nobody set. Found by the flag-on journey, which cancelled one preview after
-            // pressing Reverse and opened the next.
-            setChainReversed(false);
-            setChainOpen(true);
-          }}
-          onDelete={() => {
-            setBulkError(null);
-            setConfirmBulkDelete(true);
-          }}
-          onClear={() => {
-            setSelection(EMPTY_SELECTION);
-            setActiveIdRaw(null);
-            announce('Selection cleared.');
-            listboxRef.current?.focus();
-          }}
-          busy={bulkBusy}
-        />
-      ) : null}
+        **The dock** (workspace-chrome M3). Every transient strip the diagram shows — the
+        conflict banner, the armed-tool statement, the singular and plural selection bars and
+        the empty-plan notice — renders at the FOOT of the workspace rather than above the
+        scene. ADR-0064's rule is intact (nothing overlays the diagram) and it now costs no
+        canvas height, because the row it lands in already exists. See `canvas-dock.tsx`.
 
-      {/*
-        **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
-        completely blank canvas, and nothing on it says what the first gesture is — the surface is
-        at its least self-explanatory exactly when the planner knows least.
+        With no outlet registered — the legacy stacked layout, and every unit test that mounts
+        this panel alone — `CanvasDock` renders in place, exactly where these strips have
+        always been. That is the parity contract, not a convenience.
+      */}
+      <CanvasDock>
+        {conflict ? (
+          <EditConflictBanner
+            message={conflict.message}
+            onDismiss={() => clearConflict()}
+            {...(conflict.refreshable && onRefresh
+              ? {
+                  onRefresh: () => {
+                    onRefresh();
+                    clearConflict();
+                  },
+                }
+              : {})}
+          />
+        ) : null}
 
-        Shaded with a reason rather than hidden without the pen (ADR-0062 M6's finding, twice): a
-        Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
-        right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
-      */}
-      {/*
-        …and only while nothing is armed. Arming a tool replaces this notice with the mode band's
-        instruction: two strips stacked above the same empty canvas told the planner to press a
-        button they had already pressed and to draw, at the same time, in different words. One
-        instruction at a time, and the armed tool's is the one that describes what the next click
-        does.
-      */}
-      {CANVAS_AUTHORING_FLOW_ENABLED &&
-      showDiagram &&
-      activities.length === 0 &&
-      mode === 'select' ? (
-        <NoticeStrip
-          data-testid="canvas-empty-state"
-          emphasis="dashed"
-          message="This plan has no activities yet."
-        >
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            aria-disabled={!editingEnabled}
-            {...(editingEnabled ? {} : { 'aria-describedby': emptyStateReasonId })}
-            onClick={(event) => {
-              if (!editingEnabled) {
-                event.preventDefault();
-                return;
-              }
-              // Arming REPLACES this notice with the mode band's instruction (above), which
-              // unmounts the button being pressed — and the band deliberately carries no focusable
-              // element for the `adding` statement. Without a destination, focus reverts to
-              // <body> and the next Tab restarts at the top of the document (WCAG 2.4.3), on the
-              // one screen this notice exists to make self-explanatory. So the transition carries
-              // focus to the diagram's parallel listbox, which is both where drawing is operated
-              // from next and the existing pattern for a programmatic move here (the
-              // Next-conflict cycle above). Done HERE, in the button's own click handler, rather
-              // than in an effect keyed on `mode`: a mode change arriving from the toolbar or a
-              // shortcut is not this planner asking to be moved, and a focus move with no gesture
-              // behind it is its own defect. The disarm direction needs nothing — focus is on the
-              // listbox by then, so restoring the notice strands no one.
-              listboxRef.current?.focus();
-              setMode('add-activity');
+        {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
+            overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
+            it costs no canvas height in the state the canvas is in most of the time. */}
+        <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
+
+        {/*
+          The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
+          reserved chrome as the plural bar below it, never floating over the scene. It floated until
+          2026-08-13; see `SelectionActionsBar`'s docblock for why it stopped. Rendered inline so it
+          stays DOM-adjacent to the listbox for Tab order; renders nothing until an activity is
+          selected, and only when the host wired the object actions.
+        */}
+        {showDiagram && selectionActionsWired ? (
+          <SelectionActionsBar context={selectionCtx} restoreFocus={restoreSelectionFocus} />
+        ) : null}
+
+        {/*
+          The bulk selection bar (`docs/specs/canvas-multi-select/` M4-T7) — beside the mode band in
+          the SAME reserved chrome, never floating over the scene. Renders nothing below two selected,
+          and nothing at all when the host wired no operations, so a partially-wired host cannot ship
+          a button that does nothing.
+        */}
+        {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
+          <BulkSelectionBar
+            count={selection.ids.length}
+            primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
+            link={{
+              // Gated on the WRITE RIGHT only, deliberately — never on the chain's own refusal.
+              //
+              // It used to be gated on both, with the reason "open the preview to see why". The
+              // preview is opened by this button, so for the two refusals that actually happen — a
+              // chain over the 50-link cap, and one that would close a cycle — the sentence told a
+              // planner to do the thing the shading prevented, and the dialog built to explain the
+              // refusal was unreachable in exactly the state it exists for. Found by the UX review
+              // over this epic's diff. `LinkChainDialog` owns the refusal: it keeps the ordered
+              // preview on screen and names the reason beside it.
+              enabled: bulk.gate.writable,
+              reason: bulk.gate.writable ? null : bulk.gate.reason,
             }}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            remove={{
+              enabled: bulk.gate.writable,
+              reason: bulk.gate.writable ? null : bulk.gate.reason,
+            }}
+            onLink={() => {
+              setBulkError(null);
+              // Reverse is a choice about THIS preview, so it does not survive it. A sticky reverse
+              // would open the next chain already flipped, with nothing on screen saying it had been
+              // — which is the ADR-0064 report (a link recorded the wrong way round) reappearing as a
+              // state nobody set. Found by the flag-on journey, which cancelled one preview after
+              // pressing Reverse and opened the next.
+              setChainReversed(false);
+              setChainOpen(true);
+            }}
+            onDelete={() => {
+              setBulkError(null);
+              setConfirmBulkDelete(true);
+            }}
+            onClear={() => {
+              setSelection(EMPTY_SELECTION);
+              setActiveIdRaw(null);
+              announce('Selection cleared.');
+              listboxRef.current?.focus();
+            }}
+            busy={bulkBusy}
+          />
+        ) : null}
+
+        {/*
+          **The empty-plan state** (ADR-0064 T9). A brand-new plan opens on a correct, draw-ready but
+          completely blank canvas, and nothing on it says what the first gesture is — the surface is
+          at its least self-explanatory exactly when the planner knows least.
+
+          Shaded with a reason rather than hidden without the pen (ADR-0062 M6's finding, twice): a
+          Viewer who cannot see the affordance cannot tell whether the plan is empty or they lack the
+          right. Any activity at all ⇒ nothing renders and the paint is byte-for-byte today's.
+        */}
+        {/*
+          …and only while nothing is armed. Arming a tool replaces this notice with the mode band's
+          instruction: two strips stacked above the same empty canvas told the planner to press a
+          button they had already pressed and to draw, at the same time, in different words. One
+          instruction at a time, and the armed tool's is the one that describes what the next click
+          does.
+        */}
+        {CANVAS_AUTHORING_FLOW_ENABLED &&
+        showDiagram &&
+        activities.length === 0 &&
+        mode === 'select' ? (
+          <NoticeStrip
+            data-testid="canvas-empty-state"
+            emphasis="dashed"
+            message="This plan has no activities yet."
           >
-            Draw the first activity
-          </Button>
-          {editingEnabled ? null : (
-            <span id={emptyStateReasonId} className="sr-only">
-              Start editing this plan to draw activities.
-            </span>
-          )}
-        </NoticeStrip>
-      ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              aria-disabled={!editingEnabled}
+              {...(editingEnabled ? {} : { 'aria-describedby': emptyStateReasonId })}
+              onClick={(event) => {
+                if (!editingEnabled) {
+                  event.preventDefault();
+                  return;
+                }
+                // Arming REPLACES this notice with the mode band's instruction (above), which
+                // unmounts the button being pressed — and the band deliberately carries no focusable
+                // element for the `adding` statement. Without a destination, focus reverts to
+                // <body> and the next Tab restarts at the top of the document (WCAG 2.4.3), on the
+                // one screen this notice exists to make self-explanatory. So the transition carries
+                // focus to the diagram's parallel listbox, which is both where drawing is operated
+                // from next and the existing pattern for a programmatic move here (the
+                // Next-conflict cycle above). Done HERE, in the button's own click handler, rather
+                // than in an effect keyed on `mode`: a mode change arriving from the toolbar or a
+                // shortcut is not this planner asking to be moved, and a focus move with no gesture
+                // behind it is its own defect. The disarm direction needs nothing — focus is on the
+                // listbox by then, so restoring the notice strands no one.
+                listboxRef.current?.focus();
+                setMode('add-activity');
+              }}
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            >
+              Draw the first activity
+            </Button>
+            {editingEnabled ? null : (
+              <span id={emptyStateReasonId} className="sr-only">
+                Start editing this plan to draw activities.
+              </span>
+            )}
+          </NoticeStrip>
+        ) : null}
+      </CanvasDock>
 
       <div
         className={
+          // `fill` is the canvas-first workspace, where the diagram IS the screen: no border and no
+          // radius, so it meets the chrome band and the dock rather than floating inside them
+          // (workspace-chrome M1). `overflow-hidden` stays — it clips the canvas layers, which is
+          // load-bearing, not decoration. The non-fill variant is the legacy long-scrolling page,
+          // where the panel really is one card among several, and keeps its box.
           fill
-            ? 'border-border relative min-h-[240px] flex-1 overflow-hidden rounded-lg border'
+            ? 'relative min-h-[240px] flex-1 overflow-hidden'
             : 'border-border relative h-[480px] overflow-hidden rounded-lg border'
         }
       >
@@ -2617,7 +2661,6 @@ export function TsldPanel({
               wbsBandGroups={wbsBandGroupRows}
               wbsBandHeightPx={wbsBandHeightPx}
               {...(onSelectionChange ? { onSelectBandSummary: onSelectionChange } : {})}
-              {...(selectionActionsWired ? { selectionAnchorRef } : {})}
               // The substantive M2 change (canvas status & feedback): `pending` NARROWS to the
               // create-popover ghost only — a reposition/resize write no longer freezes the whole
               // surface. Its optimistic ghost still paints (writeGhost) and new edit grabs are
@@ -2738,17 +2781,6 @@ export function TsldPanel({
           </div>
         )}
       </div>
-
-      {/* The floating object-actions bar over the selected bar (ADR-0031, Fork-2). Rendered inline
-          (DOM-adjacent to the listbox for Tab order); renders nothing until an activity is selected,
-          and only when the host wired the object actions. */}
-      {showDiagram && selectionActionsWired ? (
-        <SelectionActionsBar
-          anchorRef={selectionAnchorRef}
-          context={selectionCtx}
-          restoreFocus={restoreSelectionFocus}
-        />
-      ) : null}
 
       {/*
         Bulk delete's confirmation. The copy names BOTH what goes: the activities and the links

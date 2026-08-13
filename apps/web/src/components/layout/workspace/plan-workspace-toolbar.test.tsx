@@ -230,10 +230,16 @@ beforeEach(() => {
  * they assert the **effect** — that the strip mounts and the canvas learns about it — not that a
  * control exists. Only the route to the control changed, so only the route changes here.
  */
-function viewLens(name: string): HTMLElement {
-  const trigger = screen.getByRole('button', { name: /^View/ });
-  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-  return screen.getByRole('checkbox', { name });
+/**
+ * A lens that lives on **Row 1** rather than inside `View ▾`.
+ *
+ * Legend and Resource view went back to the row in workspace-chrome M4, at the product owner's
+ * request, once ADR-0090 M2 and ADR-0091 M7 had bought it the width that was missing when M2-T2
+ * relocated them. These cases are about what the control DOES — reveal the panel, flag the canvas —
+ * which the move leaves alone; only where the test reaches for it changes.
+ */
+function rowLens(name: string): HTMLElement {
+  return screen.getByRole('button', { name });
 }
 
 describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
@@ -362,11 +368,11 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
   it('toggles the floating Legend panel on the canvas from the View popover', () => {
     renderScreen();
     // The legend lives on the canvas now (ADR-0031 amendment); the control that shows/hides it moved
-    // into `View ▾`'s new Panels section in ADR-0090 M2-T2 — a panel is read BESIDE the diagram, not
-    // drawn on it, which is why it is not filed with the Insight overlays. The control shows/hides
-    // a floating, draggable key overlaid on the diagram, rather than opening a toolbar popover.
+    // into `View ▾`'s Panels section in ADR-0090 M2-T2 and back onto Row 1 in workspace-chrome M4.
+    // The control shows/hides a floating, draggable key overlaid on the diagram, rather than opening
+    // a toolbar popover — which is what these assertions are actually about, and is unchanged.
     expect(screen.queryByRole('group', { name: 'Diagram legend' })).not.toBeInTheDocument();
-    fireEvent.click(viewLens('Legend'));
+    fireEvent.click(rowLens('Legend'));
     const panel = screen.getByRole('group', { name: 'Diagram legend' });
     expect(panel).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Hide legend' }));
@@ -380,14 +386,14 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(h.tsldProps.current?.resourceStripActive).toBe(false);
 
     // Toggling the Resource view lens reveals the strip chrome AND flags the canvas active.
-    fireEvent.click(viewLens('Resource view'));
+    fireEvent.click(rowLens('Resource view'));
     expect(screen.getByTestId('resource-strip-panel')).toBeInTheDocument();
     expect(h.tsldProps.current?.resourceStripActive).toBe(true);
     // The strip chrome publishes a snapshot that the workspace forwards into the canvas.
     await waitFor(() => expect(h.tsldProps.current?.resourceStrip).not.toBeNull());
 
     // Toggling off unmounts the chrome and clears the canvas flag (byte-for-byte the plain canvas).
-    fireEvent.click(viewLens('Resource view'));
+    fireEvent.click(rowLens('Resource view'));
     expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();
     expect(h.tsldProps.current?.resourceStripActive).toBe(false);
   });
@@ -397,7 +403,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     renderScreen();
     // With no timeline origin the resource-view control is shaded (no diagram), so the strip can never
     // mount — the `resourceViewActive` guard requires a non-null `plannedStart` (ADR-0049).
-    const control = viewLens('Resource view');
+    const control = rowLens('Resource view');
     expect(control).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(control);
     expect(screen.queryByTestId('resource-strip-panel')).not.toBeInTheDocument();

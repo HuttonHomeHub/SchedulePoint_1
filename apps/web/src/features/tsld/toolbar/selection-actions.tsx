@@ -12,7 +12,7 @@ import {
   Users,
   Waypoints,
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 import type { LogicPathMode } from '../render/logic-path';
 
@@ -584,128 +584,95 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       : []),
   ]);
 
-/** Where to float the bar — the selection's viewport geometry (top edge + horizontal centre). */
-export interface SelectionAnchor {
-  /** The selected bar's top edge (viewport px) — the bar floats just above it. */
-  top: number;
-  /** The selected bar's horizontal centre (viewport px). */
-  centerX: number;
-}
-
-/** Bar height reserve used to place it above the selection (falls below if there's no room above). */
-const BAR_OFFSET = 44;
-/** Below this much viewport headroom above the selection, the bar flips to sit below it instead. */
-const TOP_CLEARANCE_PX = 8;
-/** Keep the bar this far inside the left/right viewport edges. */
-const EDGE_MARGIN_PX = 8;
-
 /**
- * The **floating selection-actions toolbar** (ADR-0031, Fork-2 default). When an activity is
- * selected it appears just above the selected bar with its object actions, so they're where the
- * user's attention already is and the main toolbar stays stable. It is a normal `role="toolbar"`
- * (roving tabindex, pen-gated set); it does **not** auto-focus, so the canvas's parallel listbox
- * keeps its `aria-activedescendant` — the user Tabs to it when they want it. It is rendered inline
- * (not portaled) so it stays **DOM-adjacent to the listbox** for a sane Tab order; `position: fixed`
- * still lifts it out of the canvas's `overflow-hidden` (no transformed ancestor to trap it).
+ * The **selection-actions toolbar** (ADR-0031, Fork-2) — the object actions for the selected
+ * activity, in the reserved chrome **below** the scene beside the plural bar, never over it.
  *
- * Position tracks the canvas imperatively: the canvas writes the selection's live viewport geometry
- * to `anchorRef` every frame (ADR-0026 D3 — no per-frame React state), and this bar reads it on its
- * own rAF to move + clamp itself, so it follows pan/zoom without re-rendering the toolbar. Its own
- * loop may trail the canvas write by up to one frame — an accepted trade-off for keeping the toolbar
- * content stable (don't "fix" it into a shared loop). When the anchor is `null` (nothing drawn there,
- * or the canvas is off-screen) the bar hides itself; if it held focus at that moment (or when it
- * unmounts on deselect), it hands focus back via `restoreFocusRef` so keyboard focus is never
- * stranded on `<body>`. Pass `context = null` (nothing selected) to render nothing at all.
+ * It used to float, positioned each frame just above the selected bar so the actions were where
+ * the planner's attention already was. The product owner reported the consequence directly: "when i
+ * select an activity the bar that appears above it on the canvas gets in the way and obscures some
+ * other activities and view." That was never a surprise — `docs/TECH_DEBT.md` #31 recorded it as a
+ * known trade-off from the day it shipped, with "a lane-aware / side placement" as the fast-follow.
+ * The fast-follow that was actually chosen is simpler than either: **stop overlaying the scene.**
+ * ADR-0064 had already settled the same question for the mode statement ("reserved chrome, never an
+ * overlay") and ADR-0080 for the plural bar; this is the singular case joining them, so the
+ * workspace stops shipping two answers and giving the worse one to the commoner case.
  *
- * **Known trade-off:** floating just above the selection overlays the region directly above it — on a
- * dense diagram that can cover the activity in the lane above for as long as the selection is active.
- * Accepted for now as a contextual, transient overlay (TECH_DEBT #31; a future lane-aware / side
- * placement is the fast-follow).
+ * Removing the float removes an entire mechanism, not just a style: the per-frame `requestAnimation
+ * Frame` placement loop, its clamping arithmetic, the `visibility: hidden` first-paint guard, and
+ * the canvas's per-frame `selectionAnchorRef` write all go with it. The bar now re-renders only
+ * when the selection changes, which it always did — the loop existed solely to move the node.
+ *
+ * It stays a normal `role="toolbar"` (roving tabindex, pen-gated set) rendered inline, DOM-adjacent
+ * to the listbox for a sane Tab order, and it still does **not** auto-focus, so the canvas's
+ * parallel listbox keeps its `aria-activedescendant` — the planner Tabs to it when they want it.
+ * `restoreFocus` still fires on unmount (deselect, or the last activity deleted) so focus is never
+ * stranded on `<body>`; it no longer has a "hidden while still mounted" state to guard, because
+ * there is no longer anything that can hide it. Pass `context = null` to render nothing at all.
  */
 export function SelectionActionsBar({
-  anchorRef,
   context,
   restoreFocus,
 }: {
-  anchorRef: React.RefObject<SelectionAnchor | null>;
   context: SelectionBarContext | null;
-  /** Called when the bar hides / unmounts **while it holds focus**, to hand focus back (e.g. to the
-   * canvas listbox) so keyboard focus is never stranded on `<body>`. Should be referentially stable. */
+  /** Called when the bar unmounts **while it holds focus**, to hand focus back (e.g. to the canvas
+   * listbox) so keyboard focus is never stranded on `<body>`. Should be referentially stable. */
   restoreFocus?: () => void;
 }): React.ReactElement | null {
-  const barRef = useRef<HTMLDivElement>(null);
-
-  // Follow the canvas by reading the anchor ref each frame and moving + clamping the node — never
-  // re-rendering the toolbar (its content only changes when the selection does). Runs only while
-  // something is selected (keyed on `context`), and stops on deselect/unmount. On the hide/unmount
-  // transition, if the bar holds focus, hand it back so keyboard focus isn't dropped to <body>.
-  useEffect(() => {
-    if (!context) return;
-    let raf = 0;
-    // Last applied state, so identical frames write no DOM (the anchor only moves on pan/zoom/resize
-    // /selection-change — most frames of a held selection are idle). Positioning uses `transform`
-    // (compositor-only), never `top`/`left`, so a move never triggers layout.
-    let lastX = NaN;
-    let lastY = NaN;
-    let hidden = true;
-    const restoreIfFocused = (): void => {
-      const el = barRef.current;
-      if (el && el.contains(document.activeElement)) restoreFocus?.();
-    };
-    const place = (): void => {
-      raf = requestAnimationFrame(place);
-      const el = barRef.current;
-      if (!el) return;
-      const anchor = anchorRef.current;
-      if (!anchor) {
-        if (!hidden) {
-          hidden = true;
-          restoreIfFocused(); // hide would blur us onto <body> — redirect first
-          el.style.visibility = 'hidden';
-        }
-        return;
-      }
-      // Vertical: prefer above the selection; if it would clip the top, drop below the bar.
-      const above = anchor.top - BAR_OFFSET;
-      const top = above < TOP_CLEARANCE_PX ? anchor.top + 28 : above;
-      // Horizontal: centre on the selection, but keep the whole bar on-screen.
-      const half = el.offsetWidth / 2;
-      const min = EDGE_MARGIN_PX + half;
-      const max = globalThis.innerWidth - EDGE_MARGIN_PX - half;
-      const centerX =
-        max >= min ? Math.min(Math.max(anchor.centerX, min), max) : globalThis.innerWidth / 2;
-      if (hidden) {
-        el.style.visibility = 'visible';
-        hidden = false;
-      }
-      if (centerX !== lastX || top !== lastY) {
-        lastX = centerX;
-        lastY = top;
-        // `-50%` centres the bar on centerX; the px pair does the actual placement — all compositor.
-        el.style.transform = `translate(${centerX}px, ${top}px) translateX(-50%)`;
-      }
-    };
-    place();
-    return () => {
-      cancelAnimationFrame(raf);
-      restoreIfFocused(); // unmounting (deselect / last activity deleted) — don't strand focus
-    };
-  }, [context, anchorRef, restoreFocus]);
+  // Losing the bar — on deselect, or when the last activity is deleted — would blur whatever inside
+  // it held focus onto `<body>`, which silently disables the workspace accelerators: the exact WCAG
+  // 2.4.3 failure ADR-0080's journey found for the bulk delete. So hand focus back first.
+  //
+  // **Three things about this are the regression test's doing rather than the author's.**
+  //
+  // First, `context` must be in the dependency array. Deselecting does not unmount this component —
+  // the host renders it whenever `showDiagram && selectionActionsWired`, which does not change — it
+  // passes `context: null`, and the `if (!context) return null` below removes the div on an ordinary
+  // re-render. A cleanup keyed only on the referentially-stable `restoreFocus` runs solely on a true
+  // unmount that ordinary interaction never causes. The rAF loop this replaced had `context` in its
+  // deps and was therefore correct by accident; the dependency went out with the loop.
+  //
+  // Second, that is necessary and NOT sufficient, which is what the test proved: by the time either
+  // a passive or a layout cleanup runs, React has already detached the ref, so the element handle is
+  // `null` and the DOM question "did this bar hold focus?" has no answer left. Both attempts stayed
+  // red against a fix that reads correct.
+  //
+  // So the answer is not a DOM read at all: focus-held is **tracked as it happens**, and the
+  // cleanup consults a boolean. `onBlur` clears it only for a real move to another element — when
+  // the bar is being removed the browser blurs it with no related target, which is exactly the case
+  // the cleanup must still see as "we had focus". The `activeElement` guard then makes the handoff
+  // conditional on focus having actually been dropped, so a planner who moved on themselves is
+  // never yanked back.
+  const heldFocusRef = useRef(false);
+  useLayoutEffect(
+    () => () => {
+      if (!heldFocusRef.current) return;
+      heldFocusRef.current = false;
+      const active = document.activeElement;
+      if (active === null || active === document.body) restoreFocus?.();
+    },
+    [context, restoreFocus],
+  );
 
   if (!context) return null;
 
   return (
     <div
-      ref={barRef}
-      // Start hidden so it never flashes at (0,0) before the first `place()` positions it.
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        transform: 'translateX(-50%)',
-        visibility: 'hidden',
+      onFocus={() => {
+        heldFocusRef.current = true;
       }}
-      className="border-border bg-popover z-40 rounded-md border p-1 shadow-md"
+      onBlur={(event) => {
+        // Only a real move to another element clears it. When the bar is being REMOVED the browser
+        // blurs it with no related target, and that is exactly the case the cleanup must still see
+        // as "we had focus".
+        const next = event.relatedTarget as Node | null;
+        if (next !== null && !event.currentTarget.contains(next)) heldFocusRef.current = false;
+      }}
+      // No border, padding or radius: docked, the ROW is the container, and a bar that brings its
+      // own box makes the row 6 px taller than the 36 px it already occupied — measured, and the
+      // reason the journey's "costs the canvas no height" assertion is an equality rather than a
+      // bound. Floating, all three were load-bearing (a card over the diagram needs an edge).
+      className="flex shrink-0 items-center"
     >
       <Toolbar
         items={selectionActionItems}

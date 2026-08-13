@@ -49,22 +49,17 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
   };
 }
 
-/** A stable anchor ref (the canvas writes this per frame in production). */
-const anchorRef = { current: { top: 300, centerX: 500 } };
-
 beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar (floating selection actions)', () => {
   it('renders nothing when nothing is selected', () => {
-    const { container } = render(
-      <SelectionActionsBar anchorRef={{ current: null }} context={null} />,
-    );
+    const { container } = render(<SelectionActionsBar context={null} />);
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument();
   });
 
   it('shows the object actions for the selected activity, named after it (table vocabulary)', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     // Wording converged with the activities table: Logic / Edit / Delete (not the old verbose labels).
     expect(within(bar).getByRole('button', { name: 'Logic' })).toBeInTheDocument();
@@ -80,7 +75,7 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     // is NOT one of those — it rides `VITE_ACTIVITY_COPY_PASTE`, default-on since W5 M5 — so the
     // base set is Logic → Edit → Duplicate → Delete. Asserting a bare count of 3 here would have
     // gone red on the flip and said nothing about why; naming the members says which item arrived.
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     for (const name of ['Report progress', 'Resources', 'Steps']) {
       expect(within(bar).queryByRole('button', { name })).not.toBeInTheDocument();
@@ -93,13 +88,13 @@ describe('SelectionActionsBar (floating selection actions)', () => {
   });
 
   it('runs the read action (logic) even in read-only', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Logic' }));
     expect(spies.onOpenLogic).toHaveBeenCalledOnce();
   });
 
   it('pen-gates the mutating actions as a set when editing is not allowed', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     for (const name of ['Edit', 'Delete']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
@@ -110,7 +105,7 @@ describe('SelectionActionsBar (floating selection actions)', () => {
   });
 
   it('runs the mutating actions when editing is allowed', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: true })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: true })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(spies.onEdit).toHaveBeenCalledOnce();
@@ -118,7 +113,48 @@ describe('SelectionActionsBar (floating selection actions)', () => {
   });
 
   it('has no axe violations', async () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     expect((await axe(screen.getByRole('toolbar'))).violations).toEqual([]);
+  });
+});
+
+/**
+ * **Deselecting is not an unmount, and that distinction is the whole of this case.**
+ *
+ * The host renders `SelectionActionsBar` whenever `showDiagram && selectionActionsWired` — neither
+ * of which changes when a planner deselects — and passes `context: null`. The component's own
+ * `if (!context) return null` then removes the bar on an ordinary re-render, with no unmount and
+ * therefore no effect cleanup unless the effect is keyed on `context`.
+ *
+ * It was not, for one commit: the cleanup that hands focus back was keyed on the referentially
+ * stable `restoreFocus` alone, so it ran only on a true unmount that ordinary interaction never
+ * causes. Focus fell to `<body>`, which also silently disables the workspace accelerators (Ctrl+Z
+ * among them) — the WCAG 2.4.3 failure ADR-0080's journey found for the bulk delete, reappearing
+ * against a docblock that claimed to have fixed it. Found by the accessibility gate over this
+ * epic's diff.
+ *
+ * Verified red first: with `[restoreFocus]` as the dependency array, `restore` is never called.
+ */
+describe('the bar hands focus back when the selection goes', () => {
+  it('calls restoreFocus on DESELECT, not only on unmount, when it holds focus', () => {
+    const restore = vi.fn();
+    const { rerender } = render(<SelectionActionsBar context={ctx()} restoreFocus={restore} />);
+    // Put focus inside the bar, the way a keyboard planner Tabbing into it would.
+    const button = screen.getByRole('button', { name: /Edit/ });
+    button.focus();
+    expect(button).toHaveFocus();
+
+    // Deselect: same component, `context: null`. No unmount.
+    rerender(<SelectionActionsBar context={null} restoreFocus={restore} />);
+    expect(restore).toHaveBeenCalledOnce();
+  });
+
+  it('does not call restoreFocus when focus was elsewhere', () => {
+    // The handoff is a repair for a focus that is about to be dropped. Firing it unconditionally
+    // would yank a planner out of whatever they were actually using.
+    const restore = vi.fn();
+    const { rerender } = render(<SelectionActionsBar context={ctx()} restoreFocus={restore} />);
+    rerender(<SelectionActionsBar context={null} restoreFocus={restore} />);
+    expect(restore).not.toHaveBeenCalled();
   });
 });

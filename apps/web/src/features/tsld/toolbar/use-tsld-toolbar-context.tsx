@@ -233,7 +233,6 @@ export function useTsldToolbarContext({
     toggleIsolate,
     setIsolateMode,
     setConflictCursorId,
-    toggleSnapToGrid,
     requestSelectActivity,
   } = canvasUi;
 
@@ -570,8 +569,6 @@ export function useTsldToolbarContext({
       zoomToSelection,
       matchedIds,
       currentMatchId: canvasUi.lensState.searchCursorId,
-      snapToGrid: navState.snapToGrid,
-      toggleSnapToGrid,
 
       // Export & print (VITE_EXPORT_PRINT) — client deliverables over already-fetched data. Inert while
       // the flag is off (the `export`/`print` ids resolve to their placeholder stubs, so none of these
@@ -867,10 +864,8 @@ export function useTsldToolbarContext({
     // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
     navState.isolateActive,
     navState.isolateMode,
-    navState.snapToGrid,
     toggleIsolate,
     setIsolateMode,
-    toggleSnapToGrid,
     // Float paths — re-identify when the dock's pressed state or the plan's activity count changes.
     model.floatPaths?.open,
     toggleFloatPaths,

@@ -66,8 +66,6 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
   };
 }
 
-const anchorRef = { current: { top: 300, centerX: 500 } };
-
 function bar(): HTMLElement {
   return screen.getByRole('toolbar', { name: 'Actions for Excavate' });
 }
@@ -84,24 +82,24 @@ beforeEach(() => {
 
 describe('SelectionActionsBar — Duplicate (VITE_ACTIVITY_COPY_PASTE on)', () => {
   it('offers Duplicate on an ordinary selection and calls back', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(within(bar()).getByRole('button', { name: 'Duplicate' }));
     expect(spies.onDuplicate).toHaveBeenCalledTimes(1);
   });
 
   it('sits immediately after Edit — the same order as the table row menu', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     const names = labels();
     expect(names.indexOf('Duplicate')).toBe(names.indexOf('Edit') + 1);
   });
 
   it('is absent on a summary — a copy of one leaf of a band is not useful', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ isSummary: true })} />);
+    render(<SelectionActionsBar context={ctx({ isSummary: true })} />);
     expect(within(bar()).queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
   });
 
   it('is present but shaded without the pen, and says why', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     const button = within(bar()).getByRole('button', { name: 'Duplicate' });
     // `aria-disabled`, never the native attribute: a natively-disabled control drops focus to
     // `<body>`, which this repo has now learnt three times (ADR-0060 M6, ADR-0063 M6, ADR-0064 §7).

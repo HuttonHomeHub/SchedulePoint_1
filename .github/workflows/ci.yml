@@ -444,6 +444,20 @@ jobs:
       - name: Web end-to-end tests (canvas authoring flow)
         run: pnpm --filter @repo/web test:e2e:authoring-flow
 
+      # Visual placement (playwright.workspace-chrome.config.ts, workspace-chrome M2) with the pen
+      # enforced at the API. **The first journey in this repository to run in Visual mode at all** —
+      # the other fourteen canvas configs pin VITE_SCHEDULING_MODES off, each for a good local
+      # reason, and the unrecorded consequence was that the one placement rule a planner exercises
+      # by dragging a bar had no end-to-end coverage. That is exactly where a defect had been
+      # sitting: a `Snap to grid` toggle that appeared to do the snapping while the engine did it
+      # unconditionally, and whose own contribution was to write a Saturday drop back as Friday —
+      # earlier than the planner placed it. The claim that replaces it ("the RAW dropped day is
+      # persisted and the SERVER rolls it forward") is a statement about a request body, which a
+      # mocked `fetch` structurally cannot check. Runs at 1646 CSS px, the width this epic's
+      # measurements were taken at. Runs after the prior suites tear down their servers.
+      - name: Web end-to-end tests (workspace chrome — Visual placement)
+        run: pnpm --filter @repo/web test:e2e:workspace-chrome
+
       # Flag-ON audit log journey (playwright.audit.config.ts) with VITE_AUDIT_LOG on (ADR-0072).
       # The audit log is a claim about writes that happened somewhere else, so a mocked fetch cannot
       # be wrong about a row it invented. Against a real API and database this proves the producers

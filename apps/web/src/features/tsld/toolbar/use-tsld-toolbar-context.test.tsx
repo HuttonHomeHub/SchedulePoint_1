@@ -105,13 +105,11 @@ function makeCanvasUi(lateOverlay = false): TsldCanvasUiState {
       isolateActive: false,
       isolateMode: 'full',
       conflictCursorId: null,
-      snapToGrid: false,
       selectSignal: null,
     },
     toggleIsolate: vi.fn(),
     setIsolateMode: vi.fn(),
     setConflictCursorId: vi.fn(),
-    toggleSnapToGrid: vi.fn(),
     requestSelectActivity: vi.fn(),
   } as unknown as TsldCanvasUiState;
 }
@@ -171,7 +169,6 @@ describe('useTsldToolbarContext — quick-wins glue', () => {
       isolateActive: false,
       isolateMode: 'full',
       conflictCursorId: 'a1',
-      snapToGrid: false,
       selectSignal: null,
     };
     const { result } = renderHook(() =>
