@@ -501,3 +501,53 @@ describe('Toolbar — the measure pass is bounded (ADR-0090 M5)', () => {
     spy.mockRestore();
   });
 });
+
+describe('Toolbar — one auto margin per row (ADR-0091 M-final, B1)', () => {
+  /**
+   * **A flex line splits its free space equally between every auto margin on it.** `alignEndGroup`
+   * puts one on the trailing group and the `⋯` wrapper carried a second unconditionally, so on a row
+   * with slack the trailing group landed at the *midpoint* of the gap and the `⋯` at the midpoint of
+   * the remainder — neither at the edge, each individually plausible, and together the "the `⋯` is
+   * stranded in the middle of the row" the product owner reported.
+   *
+   * jsdom has no layout, so the geometry belongs to `e2e-toolbar-fit`; what is assertable here is the
+   * rule that produces it, which is the part a future edit would undo.
+   *
+   * Verified red: with the unconditional `ml-auto` the first case finds two.
+   */
+  function autoMarginCount(toolbar: HTMLElement): number {
+    return toolbar.querySelectorAll('.ml-auto').length;
+  }
+
+  const overflowing = defineToolbar<Ctx>([
+    { id: 'a', group: 'frame', tier: 1, order: 0, label: 'a', onActivate: () => {} },
+    // Tier 3 is statically overflowed, so the `⋯` renders without any width pressure.
+    { id: 'help', group: 'help', tier: 3, order: 0, label: 'help', onActivate: () => {} },
+    {
+      id: 'chip',
+      group: 'object',
+      tier: 1,
+      order: 0,
+      label: 'chip',
+      presentational: true,
+      render: (_c, api) => <span {...api.itemProps}>chip</span>,
+    },
+  ]);
+
+  it('leaves the auto margin with the trailing group when one is inline', () => {
+    render(<Toolbar items={overflowing} context={{ count: 1 }} label="T" alignEndGroup="object" />);
+    const tb = screen.getByRole('toolbar', { name: 'T' });
+    expect(screen.getByRole('button', { name: 'More toolbar actions' })).toBeInTheDocument();
+    expect(autoMarginCount(tb)).toBe(1);
+  });
+
+  it('gives it to the `⋯` when there is no trailing group to ride behind', () => {
+    render(<Toolbar items={overflowing} context={{ count: 1 }} label="T" />);
+    const tb = screen.getByRole('toolbar', { name: 'T' });
+    // Still exactly one — and now it is the one that keeps the button at the edge.
+    expect(autoMarginCount(tb)).toBe(1);
+    expect(
+      screen.getByRole('button', { name: 'More toolbar actions' }).closest('.ml-auto'),
+    ).not.toBeNull();
+  });
+});

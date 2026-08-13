@@ -483,6 +483,24 @@ export function Toolbar<Ctx>({
 
   const labels = { ...DEFAULT_GROUP_LABELS, ...groupLabels };
 
+  /**
+   * Is an `alignEndGroup` group currently on the row?
+   *
+   * **This decides whether the `⋯` may claim an auto margin, and getting it wrong is a shipped
+   * defect rather than a tidiness question.** Free space in a flex line is distributed **equally
+   * among every auto margin on that line**, not given to the last one. So with `ml-auto` on both the
+   * trailing group and the `⋯` wrapper — which is what shipped — a row with 382 px of slack put
+   * *191 px* in front of each: `Summary ▾` sat at the midpoint of the gap and the `⋯` sat at the
+   * midpoint of what was left, which is exactly the "stranded in the middle of the row" the product
+   * owner reported. Neither control was at the trailing edge, and each looked individually plausible.
+   *
+   * At most one auto margin per row, therefore. The trailing group keeps it when it is inline (it is
+   * further left, so it pushes the `⋯` along with everything else after it); the `⋯` takes it only
+   * when there is no such group to ride behind.
+   */
+  const alignEndGroupInline =
+    alignEndGroup !== undefined && groups.some((g) => g.group === alignEndGroup);
+
   return (
     <div
       ref={containerRef}
@@ -589,7 +607,14 @@ export function Toolbar<Ctx>({
         existence by the flex line it shares with the groups it exists to rescue.
       */}
       {overflowItems.length > 0 && (
-        <div className="border-border ml-auto flex shrink-0 items-center border-l pl-1">
+        <div
+          className={cn(
+            'border-border flex shrink-0 items-center border-l pl-1',
+            // See `alignEndGroupInline`: a second auto margin on the line halves the slack in front
+            // of the trailing group instead of pushing this button to the edge.
+            !alignEndGroupInline && 'ml-auto',
+          )}
+        >
           <ToolbarOverflow
             ref={(node) => setItemRef(OVERFLOW_ID, node)}
             items={overflowItems}
