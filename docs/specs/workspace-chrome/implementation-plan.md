@@ -13,7 +13,7 @@ flowchart LR
   M1 --> M2["M2 · Snap: delete the control and the rule"]
   M2 --> M3["M3 · The dock"]
   M3 --> M4["M4 · Legend + Resource view"]
-  M4 --> M5["M5 · Identity leaves its band<br/>T1 pen redundancy → T2 NAV COLLAPSE → T3 merge"]
+  M4 --> M5["M5 · Identity leaves its band<br/>WITHDRAWN 2026-08-13 — ADR-0092 D6"]
   M5 --> M6["M6 · The rules, the gates, the enablement pass"]
 ```
 
@@ -527,6 +527,22 @@ than being taken here.
 > **Testing:** unit — the shell renders identically with no plan open; a11y — exactly one `banner`
 > and the `sr-only <h1>` still inside `main` (`plan-workspace-toolbar.tsx:774-781`); the fit gate
 > extended to the app band; every journey that reads the breadcrumb or a nav link.
+
+> ---
+>
+> ## ⚠ M5 IS WITHDRAWN — do not build any of the four tasks below (2026-08-13)
+>
+> The merge was a hard requirement of this epic and **its own measurement disqualified it**. M0-T4
+> found that tidying yields 456 px, so the merge fits at 1920, is **134 px short at 1646** and 340 px
+> short at 1440 — and that the identity row is **45 px of the 240 px** above the canvas, i.e. the
+> whole exercise buys about **8 % more canvas** and leaves 195 px of chrome standing. Put to the
+> product owner with both halves of that arithmetic, they withdrew it.
+>
+> A **withdrawal, not a deferral**: a deferral is work still owed and quietly accrues a
+> justification. The tasks below are kept rather than deleted because they carry the measurements and
+> the reasoning that produced the answer — and because M5-T2's nav collapse is the largest single
+> candidate if a future epic ever needs 517 px of header. Anyone reaching for them should start from
+> a fresh measurement, not from these numbers. See ADR-0092 D6.
 
 ##### Task M5-T1 — remove the pen redundancy
 
