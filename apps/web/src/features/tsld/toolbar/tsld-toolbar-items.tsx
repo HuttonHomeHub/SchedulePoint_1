@@ -25,7 +25,6 @@ import {
   Grid3x3,
   ImageDown,
   Info,
-  Keyboard,
   Layers,
   Loader2,
   LocateFixed,
@@ -2542,19 +2541,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // `legend` moved INTO `View ▾` in ADR-0090 M2-T2, under a new **Panels** section — the direct
     // answer to the product owner's Q2. A panel is a surface you read beside the diagram, not a
     // mark drawn on it, which is why it is not filed with the Insight overlays.
-    {
-      // Keyboard shortcuts belong with the reference controls, not the authoring row: shown at the
-      // far right of Row 1 (help group, beside Legend) and also bound to the `?` key by the workspace
-      // (ADR-0031 amendment) — the standard "press ? for shortcuts" affordance.
-      id: 'shortcuts',
-      group: 'help',
-      row: 'look',
-      tier: 3,
-      order: 1,
-      priority: -110,
-      label: 'Keyboard shortcuts',
-      icon: <Keyboard className="size-4" />,
-      onActivate: (ctx) => ctx.openShortcuts(),
-    },
+    // **Keyboard shortcuts left this registry in ADR-0091 M7-S5** for the account menu
+    // (`components/layout/account-chip.tsx`), reached through `chrome/help-action.tsx`. It was a
+    // tier-3 command in a row rationing width between twenty-eight of them, so in practice it was
+    // reachable only through the `⋯` — and it is not a command about the plan at all but a reference
+    // about the application, which is what that menu already holds. `ctx.openShortcuts` stays: the
+    // sheet, its state and the `?` binding did not move, only the entry point. Deleted rather than
+    // hidden behind `isVisible: () => false`, which would still be resolved, still be partitioned,
+    // and still have to be reasoned about by the next reader.
   ]);
 }

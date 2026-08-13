@@ -24,6 +24,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
+import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
@@ -247,6 +248,10 @@ export function ToolbarPlanWorkspace({
   // events follow the React tree), mirroring the listbox-scoped `?` in TsldPanel. Ignore it while
   // typing in a field, and don't stack the sheet on an already-open plan dialog / edit form.
   const showShortcuts = useCallback(() => canvasUi.setShowHelp(true), [canvasUi]);
+  // Offer the sheet to the shell's account menu for as long as a plan is open (ADR-0091 M7-S5).
+  // The `?` binding below and the toolbar's former `shortcuts` item both opened this same callback;
+  // only the entry point moved, so the dialog and its state stay exactly where they were.
+  useRegisterShortcutsAction(showShortcuts);
   const rootRef = useRef<HTMLDivElement>(null);
   // "A modal is open" — the plan dialogs + the edit-plan form + the activity edit/delete dialogs.
   // Gates both the `?` shortcut (don't stack the sheet on an open modal) and the undo/redo keybindings

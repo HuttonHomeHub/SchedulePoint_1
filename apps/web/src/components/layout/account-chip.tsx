@@ -3,6 +3,7 @@ import {
   Building2,
   Check,
   ChevronDown,
+  Keyboard,
   Monitor,
   Moon,
   ScrollText,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useId } from 'react';
 
+import { useShortcutsAction } from '@/components/layout/chrome/help-action';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import { ACCOUNT_SETTINGS_ENABLED, AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
@@ -60,6 +62,7 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
   // Asked only while the menu is open — see the hook for why the deferral is not an optimisation.
   const staff = useStaffIdentity({ enabled: open });
   const themeLabelId = useId();
+  const openShortcuts = useShortcutsAction();
 
   const email = session?.user?.email;
   const name = session?.user?.name;
@@ -158,6 +161,25 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
           >
             <Wrench aria-hidden="true" className="size-4" />
             Staff console
+          </MenuItem>
+        ) : null}
+        {/* **The diagram's keyboard-shortcuts sheet** (ADR-0091 M7-S5), moved off the TSLD toolbar.
+            It was a tier-3 command reachable only through the `⋯`, in a row rationing width between
+            twenty-eight commands — and it is not a command about the plan at all, it is a reference
+            about the application, which is what this menu already holds.
+
+            Rendered from a **registered callback**, never from plan state: the header is
+            plan-unaware (ADR-0029) and stays that way, exactly as it does for the toolbar itself,
+            which reaches the band through a portal rather than by the shell learning about plans.
+
+            Absent — not shaded — when nothing has registered one. Outside a plan there is no diagram
+            to describe shortcuts for, so the action does not apply to the object (ADR-0082's
+            discriminator); a shaded item here would be a refusal with no state the reader could act
+            on. */}
+        {openShortcuts ? (
+          <MenuItem onSelect={openShortcuts}>
+            <Keyboard aria-hidden="true" className="size-4" />
+            Keyboard shortcuts
           </MenuItem>
         ) : null}
         <p className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium" id={themeLabelId}>

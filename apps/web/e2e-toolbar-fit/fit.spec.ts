@@ -112,6 +112,15 @@ interface RowState {
   containerWidth: number;
   scrollWidth: number;
   inline: string[];
+  /**
+   * The inline ids that are **read-outs, not commands** — nothing inside them is focusable.
+   *
+   * S3's claim is "no command has been lost", and a read-out that withdraws when the row stops
+   * being roomy has not been lost, it has been *withheld* — a designed omission whose value is one
+   * press away in `Summary ▾`. Without this distinction the finish chip's correct disappearance at
+   * 960 reads as a command with no route.
+   */
+  presentational: string[];
   overflowPresent: boolean;
   overflowVisibleWidth: number;
   pastRightEdge: string[];
@@ -154,6 +163,7 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
       const { minTarget, inlineExempt } = arg;
       const container = el as HTMLElement;
       const inline: string[] = [];
+      const presentational: string[] = [];
       const pastRightEdge: string[] = [];
       const belowTargetFloor: string[] = [];
       const unclickable: string[] = [];
@@ -170,6 +180,14 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
         const id = node.getAttribute('data-toolbar-item') ?? '';
         if (id === '__overflow__') overflowPresent = true;
         else inline.push(id);
+        // A read-out rather than a command: nothing inside it is focusable.
+        if (
+          id !== '__overflow__' &&
+          !node.matches('[data-toolbar-focusable]') &&
+          node.querySelector('[data-toolbar-focusable]') === null
+        ) {
+          presentational.push(id);
+        }
 
         const ownBox = node.getBoundingClientRect();
         // A zero-width box is not "rightmost" in any sense a reader would recognise.
@@ -251,6 +269,7 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
         containerWidth: container.clientWidth,
         scrollWidth: container.scrollWidth,
         inline,
+        presentational,
         overflowPresent,
         overflowVisibleWidth,
         pastRightEdge,
@@ -282,9 +301,19 @@ async function reachableSet(page: Page, ariaLabel: string, state: RowState): Pro
     await expect(menu).toBeVisible();
     ids.push(
       ...(await menu.evaluate((el) =>
-        [...el.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(
-          (n) => `menu:${(n.innerText ?? '').trim()}`,
-        ),
+        // **Every menuitem *role*, not just the bare one.** `[role="menuitem"]` alone missed every
+        // toggle in the `⋯` — `ToolbarOverflow` renders an item with `isActive` as
+        // `role="menuitemcheckbox"` (and a radio as `menuitemradio`), which is correct APG and
+        // invisible to that selector. The hole was harmless only while tier-3 items were
+        // *permanently* in the menu: they never appeared in the reference set, so nothing ever
+        // asked whether the menu offered them. Tier-3 admission put `float-paths` inline at the
+        // widest width, it entered the reference, and the gate then reported it as having no route
+        // at all — a true statement about the instrument and a false one about the product.
+        [
+          ...el.querySelectorAll<HTMLElement>(
+            '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]',
+          ),
+        ].map((n) => `menu:${(n.innerText ?? '').trim()}`),
       )),
     );
     await page.keyboard.press('Escape');
@@ -379,7 +408,8 @@ test('every toolbar command is reachable at every targeted width', async ({ page
   // The reference set: what this build offers when it has room. Never a list typed into this file.
   const reference: Record<string, string[]> = {};
   for (const row of ROWS) {
-    reference[row] = (await readRow(page, row)).inline.sort();
+    const widest = await readRow(page, row);
+    reference[row] = widest.inline.filter((id) => !widest.presentational.includes(id)).sort();
   }
 
   for (const width of WIDTHS) {

@@ -3,6 +3,10 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AccountChip } from '@/components/layout/account-chip';
+import {
+  HelpActionProvider,
+  useRegisterShortcutsAction,
+} from '@/components/layout/chrome/help-action';
 import { ThemeProvider } from '@/hooks/use-theme';
 
 /**
@@ -38,12 +42,20 @@ vi.mock('@/features/auth', () => ({
   useSignOut: () => ({ mutate: h.signOutMutate, isPending: h.isPending }),
 }));
 
-function renderChip(): void {
+function renderChip(shortcuts?: () => void): void {
   render(
     <ThemeProvider>
-      <AccountChip />
+      <HelpActionProvider>
+        {shortcuts ? <ShortcutsRegistrar open={shortcuts} /> : null}
+        <AccountChip />
+      </HelpActionProvider>
     </ThemeProvider>,
   );
+}
+
+function ShortcutsRegistrar({ open }: { open: () => void }): null {
+  useRegisterShortcutsAction(open);
+  return null;
 }
 
 beforeEach(() => {
@@ -155,5 +167,24 @@ describe('AccountChip', () => {
 
     await screen.findByRole('menu');
     expect(screen.queryByText(/staff/i)).not.toBeInTheDocument();
+  });
+
+  describe('the keyboard-shortcuts item (ADR-0091 M7-S5)', () => {
+    it('is absent when no surface offers a shortcuts sheet', () => {
+      // Outside a plan there is no diagram to describe shortcuts for, so the action does not apply
+      // to the object and is omitted rather than shaded (ADR-0082's discriminator). A shaded item
+      // here would be a refusal with no state the reader could act on.
+      renderChip();
+      fireEvent.click(screen.getByRole('button', { name: /Account/ }));
+      expect(screen.queryByRole('menuitem', { name: 'Keyboard shortcuts' })).toBeNull();
+    });
+
+    it('appears and opens the registered sheet when a plan offers one', () => {
+      const open = vi.fn();
+      renderChip(open);
+      fireEvent.click(screen.getByRole('button', { name: /Account/ }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Keyboard shortcuts' }));
+      expect(open).toHaveBeenCalledOnce();
+    });
   });
 });
