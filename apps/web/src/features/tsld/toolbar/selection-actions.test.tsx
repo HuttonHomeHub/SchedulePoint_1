@@ -50,21 +50,18 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
 }
 
 /** A stable anchor ref (the canvas writes this per frame in production). */
-const anchorRef = { current: { top: 300, centerX: 500 } };
 
 beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar (floating selection actions)', () => {
   it('renders nothing when nothing is selected', () => {
-    const { container } = render(
-      <SelectionActionsBar anchorRef={{ current: null }} context={null} />,
-    );
+    const { container } = render(<SelectionActionsBar context={null} />);
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument();
   });
 
   it('shows the object actions for the selected activity, named after it (table vocabulary)', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     // Wording converged with the activities table: Logic / Edit / Delete (not the old verbose labels).
     expect(within(bar).getByRole('button', { name: 'Logic' })).toBeInTheDocument();
@@ -80,7 +77,7 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     // is NOT one of those — it rides `VITE_ACTIVITY_COPY_PASTE`, default-on since W5 M5 — so the
     // base set is Logic → Edit → Duplicate → Delete. Asserting a bare count of 3 here would have
     // gone red on the flip and said nothing about why; naming the members says which item arrived.
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     for (const name of ['Report progress', 'Resources', 'Steps']) {
       expect(within(bar).queryByRole('button', { name })).not.toBeInTheDocument();
@@ -93,13 +90,13 @@ describe('SelectionActionsBar (floating selection actions)', () => {
   });
 
   it('runs the read action (logic) even in read-only', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Logic' }));
     expect(spies.onOpenLogic).toHaveBeenCalledOnce();
   });
 
   it('pen-gates the mutating actions as a set when editing is not allowed', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     for (const name of ['Edit', 'Delete']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
@@ -110,7 +107,7 @@ describe('SelectionActionsBar (floating selection actions)', () => {
   });
 
   it('runs the mutating actions when editing is allowed', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: true })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: true })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(spies.onEdit).toHaveBeenCalledOnce();
@@ -118,7 +115,7 @@ describe('SelectionActionsBar (floating selection actions)', () => {
   });
 
   it('has no axe violations', async () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     expect((await axe(screen.getByRole('toolbar'))).violations).toEqual([]);
   });
 });

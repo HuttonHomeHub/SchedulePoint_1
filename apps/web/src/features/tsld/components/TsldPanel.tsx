@@ -74,7 +74,6 @@ import {
   SelectionActionsBar,
   type SelectionBarContext,
   type SelectionCanvasContext,
-  type SelectionAnchor,
 } from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
@@ -590,7 +589,6 @@ export function TsldPanel({
   const [bulkError, setBulkError] = useState<string | null>(null);
   // The selected activity's live viewport geometry, written by the canvas each frame and read by the
   // floating selection bar to follow pan/zoom without per-frame React state (ADR-0026 D3 / ADR-0031).
-  const selectionAnchorRef = useRef<SelectionAnchor | null>(null);
   // Canvas UI state (mode/toggles/zoom/fit/help): externally-owned when the workspace toolbar
   // drives the canvas (ADR-0031), else owned here (flag-off / legacy — unchanged). The hook is
   // always called (rules of hooks); its result is ignored when `canvasUi` is supplied.
@@ -2456,6 +2454,17 @@ export function TsldPanel({
       <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
 
       {/*
+        The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
+        reserved chrome as the plural bar below it, never floating over the scene. It floated until
+        2026-08-13; see `SelectionActionsBar`'s docblock for why it stopped. Rendered inline so it
+        stays DOM-adjacent to the listbox for Tab order; renders nothing until an activity is
+        selected, and only when the host wired the object actions.
+      */}
+      {showDiagram && selectionActionsWired ? (
+        <SelectionActionsBar context={selectionCtx} restoreFocus={restoreSelectionFocus} />
+      ) : null}
+
+      {/*
         The bulk selection bar (`docs/specs/canvas-multi-select/` M4-T7) — beside the mode band in
         the SAME reserved chrome, never floating over the scene. Renders nothing below two selected,
         and nothing at all when the host wired no operations, so a partially-wired host cannot ship
@@ -2627,7 +2636,6 @@ export function TsldPanel({
               wbsBandGroups={wbsBandGroupRows}
               wbsBandHeightPx={wbsBandHeightPx}
               {...(onSelectionChange ? { onSelectBandSummary: onSelectionChange } : {})}
-              {...(selectionActionsWired ? { selectionAnchorRef } : {})}
               // The substantive M2 change (canvas status & feedback): `pending` NARROWS to the
               // create-popover ghost only — a reposition/resize write no longer freezes the whole
               // surface. Its optimistic ghost still paints (writeGhost) and new edit grabs are
@@ -2748,17 +2756,6 @@ export function TsldPanel({
           </div>
         )}
       </div>
-
-      {/* The floating object-actions bar over the selected bar (ADR-0031, Fork-2). Rendered inline
-          (DOM-adjacent to the listbox for Tab order); renders nothing until an activity is selected,
-          and only when the host wired the object actions. */}
-      {showDiagram && selectionActionsWired ? (
-        <SelectionActionsBar
-          anchorRef={selectionAnchorRef}
-          context={selectionCtx}
-          restoreFocus={restoreSelectionFocus}
-        />
-      ) : null}
 
       {/*
         Bulk delete's confirmation. The copy names BOTH what goes: the activities and the links

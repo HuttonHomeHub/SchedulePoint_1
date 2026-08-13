@@ -55,8 +55,6 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
   };
 }
 
-const anchorRef = { current: { top: 300, centerX: 500 } };
-
 function buttonNames(): (string | null)[] {
   const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
   return within(bar)
@@ -68,7 +66,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar — entry-route actions (flag on)', () => {
   it('orders the bar Logic → Report progress → Resources → Steps → Edit → Duplicate → Delete', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     expect(buttonNames()).toEqual([
       'Logic',
       'Report progress',
@@ -84,7 +82,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
   });
 
   it('calls the entry-route handlers when their actions are clicked', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Report progress' }));
     fireEvent.click(screen.getByRole('button', { name: 'Resources' }));
     fireEvent.click(screen.getByRole('button', { name: 'Steps' }));
@@ -94,7 +92,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
   });
 
   it('Resources is NOT pen-gated — it runs even in read-only', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     const resources = screen.getByRole('button', { name: 'Resources' });
     expect(resources).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(resources);
@@ -104,10 +102,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
   it('Report progress is role-gated (not pen-gated): disabled without permission, enabled with it', () => {
     // Read-only (no pen) but with progress permission → still enabled (progress is never pen-gated).
     render(
-      <SelectionActionsBar
-        anchorRef={anchorRef}
-        context={ctx({ canEditSchedule: false, canReportProgress: true })}
-      />,
+      <SelectionActionsBar context={ctx({ canEditSchedule: false, canReportProgress: true })} />,
     );
     const progress = screen.getByRole('button', { name: 'Report progress' });
     expect(progress).not.toHaveAttribute('aria-disabled', 'true');
@@ -116,9 +111,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
   });
 
   it('Report progress is disabled with a reason when the viewer lacks progress permission', () => {
-    render(
-      <SelectionActionsBar anchorRef={anchorRef} context={ctx({ canReportProgress: false })} />,
-    );
+    render(<SelectionActionsBar context={ctx({ canReportProgress: false })} />);
     const progress = screen.getByRole('button', { name: 'Report progress' });
     expect(progress).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(progress);
@@ -126,12 +119,12 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
   });
 
   it('hides Steps for a duration-derived (milestone/LOE/WBS) selection', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ stepsEligible: false })} />);
+    render(<SelectionActionsBar context={ctx({ stepsEligible: false })} />);
     expect(screen.queryByRole('button', { name: 'Steps' })).not.toBeInTheDocument();
   });
 
   it('hides Steps for a non-writer (writer authoring surface, like the table)', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     expect(screen.queryByRole('button', { name: 'Steps' })).not.toBeInTheDocument();
   });
 });

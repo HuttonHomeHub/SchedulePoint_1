@@ -83,13 +83,11 @@ import {
 } from '../render/time-scale';
 import { useThemeVersion } from '../render/use-theme-version';
 import {
-  wbsBandBarAnchor,
   wbsBandBars,
   wbsBandHitTest,
   type WbsBandBar,
   type WbsBandGroup,
 } from '../render/wbs-band';
-import type { SelectionAnchor } from '../toolbar/selection-actions';
 
 import {
   CANVAS_AUTHORING_ENABLED,
@@ -346,7 +344,6 @@ export interface TsldCanvasProps {
   /** When set, the loop writes the selected activity's live viewport geometry here every frame (or
    * `null` when it has no drawn position / is off-screen / the surface is hidden), so the floating
    * {@link SelectionActionsBar} can follow the canvas without per-frame React state (ADR-0026 D3). */
-  selectionAnchorRef?: React.RefObject<SelectionAnchor | null>;
   /**
    * The pinned WBS band (ADR-0063): the groups to draw, or `null` when the band is off. The host
    * derives them (`features/wbs`) because the tsld feature imports no other feature (ADR-0026 D8).
@@ -662,7 +659,6 @@ export function TsldCanvas({
   resourceStrip = null,
   controlRef,
   onZoomStopChange,
-  selectionAnchorRef,
   wbsBandGroups = null,
   wbsBandHeightPx = 0,
   onSelectBandSummary,
@@ -1291,12 +1287,7 @@ export function TsldCanvas({
       // is showing, so the diagram pane is `display:none`, or the canvas is scrolled off-screen):
       // otherwise the loop keeps painting an unseen canvas every frame (TECH_DEBT #30d). Visibility
       // comes from the IntersectionObserver below; where that API is absent (jsdom) it stays visible.
-      if (!visibleRef.current) {
-        // The floating selection bar is portaled to <body>, so it must hide when the surface is
-        // hidden (e.g. the below-`md` Activities pane is showing) — clear its anchor.
-        if (selectionAnchorRef) selectionAnchorRef.current = null;
-        return;
-      }
+      if (!visibleRef.current) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       const size = sizeRef.current;
@@ -1435,56 +1426,6 @@ export function TsldCanvas({
           wbsBandDirtyRef.current = false;
         }
       }
-      // Publish the selected activity's live viewport anchor for the floating selection bar (ADR-0031):
-      // the selected bar's top edge + horizontal centre in viewport px, or null when it has no drawn
-      // position or is scrolled off the surface. Off the per-frame React path (ADR-0026 D3); the one
-      // `getBoundingClientRect` runs only on a moved frame (the anchor is otherwise unchanged), so it
-      // never interleaves a layout read with an idle-frame ruler write, and only while wired.
-      if (selectionAnchorRef && movedThisFrame) {
-        const scene = sceneRef.current;
-        const selected = scene.selectedId
-          ? scene.activities.find((a) => a.id === scene.selectedId)
-          : undefined;
-        const rect =
-          selected && selected.earlyStart !== null
-            ? activityRect(selected, viewRef.current, scene.dataDate)
-            : null;
-        const onSurface =
-          rect !== null &&
-          rect.x + rect.w > 0 &&
-          rect.x < size.width &&
-          rect.y + rect.h > 0 &&
-          rect.y < size.height;
-        if (rect && onSurface) {
-          const box = canvas.getBoundingClientRect();
-          selectionAnchorRef.current = {
-            top: box.top + rect.y,
-            centerX: box.left + rect.x + rect.w / 2,
-          };
-        } else {
-          /*
-           * **The selection may be a summary, which is not IN the scene** when the band is on
-           * (ADR-0063 §4) — so a lookup that only consults `scene.activities` finds nothing, the
-           * anchor goes null, and `SelectionActionsBar` hides itself with `visibility: hidden`,
-           * taking Dissolve/Edit/Delete out of the tab order as well as out of sight. Turning the
-           * band on would silently disable the canvas's own actions for the very objects the band
-           * exists to show: the "lit but inert" failure, inverted into "gone with no explanation".
-           *
-           * The band's placed bars are already on this frame in `wbsBandBarsRef`, in band-local
-           * coordinates. The band canvas is pinned at `RULER_HEIGHT` and the scene starts a band's
-           * height lower, so a band bar's viewport top is the scene canvas's own top minus that
-           * height plus the bar's `y`. Derived from the one box we already measured — no second
-           * `getBoundingClientRect`, no second geometry.
-           */
-          const bandBar =
-            scene.selectedId !== null && wbsBandHeightPx > 0
-              ? (wbsBandBarsRef.current.find((b) => b.id === scene.selectedId) ?? null)
-              : null;
-          selectionAnchorRef.current = bandBar
-            ? wbsBandBarAnchor(bandBar, wbsBandHeightPx, canvas.getBoundingClientRect(), size.width)
-            : null;
-        }
-      }
     };
 
     measure();
@@ -1609,7 +1550,7 @@ export function TsldCanvas({
     // marquee made the layer mount without the pen, and this effect's Escape handler still reads
     // `editing` to decide whether an authoring tool may be disarmed. Dropping it would have closed
     // over the value from the render that first mounted the layer.
-  }, [interactionLayerMounted, editing, selectionAnchorRef, resourceStripActive, wbsBandHeightPx]);
+  }, [interactionLayerMounted, editing, resourceStripActive, wbsBandHeightPx]);
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).

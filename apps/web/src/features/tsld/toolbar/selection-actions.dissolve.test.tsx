@@ -61,8 +61,6 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
   };
 }
 
-const anchorRef = { current: { top: 300, centerX: 500 } };
-
 function bar(): HTMLElement {
   return screen.getByRole('toolbar', { name: 'Actions for Substructure' });
 }
@@ -71,13 +69,13 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar — Dissolve (VITE_WBS_IMPROVEMENTS on)', () => {
   it('offers Dissolve on a summary and calls back', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(within(bar()).getByRole('button', { name: 'Dissolve' }));
     expect(spies.onDissolve).toHaveBeenCalledTimes(1);
   });
 
   it('sits immediately before Delete', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     const names = within(bar())
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label') ?? b.textContent);
@@ -85,14 +83,14 @@ describe('SelectionActionsBar — Dissolve (VITE_WBS_IMPROVEMENTS on)', () => {
   });
 
   it('is absent on a non-summary selection — there is nothing to dissolve', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ isSummary: false })} />);
+    render(<SelectionActionsBar context={ctx({ isSummary: false })} />);
     expect(within(bar()).queryByRole('button', { name: 'Dissolve' })).not.toBeInTheDocument();
   });
 
   // Shade-with-a-reason, never hide: the action applies to this object, the user just hasn't the
   // pen. Hiding it would make the canvas and the row menu disagree about what exists.
   it('shades — not hides — Dissolve without the pen, and says why', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx({ canEditSchedule: false })} />);
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     // `aria-disabled`, not `disabled`: the item stays focusable so the reason is reachable by
     // keyboard — the toolbar's established convention (see the base suite's pen-gating test).
     const button = within(bar()).getByRole('button', { name: 'Dissolve' });

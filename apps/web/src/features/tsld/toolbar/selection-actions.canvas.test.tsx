@@ -70,10 +70,8 @@ function ctx(over: Partial<SelectionCanvasContext> | null = {}): SelectionBarCon
   };
 }
 
-const anchorRef = { current: { top: 300, centerX: 500 } };
-
 function renderBar(context: SelectionBarContext): void {
-  render(<SelectionActionsBar anchorRef={anchorRef} context={context} />);
+  render(<SelectionActionsBar context={context} />);
 }
 
 beforeEach(() => vi.clearAllMocks());

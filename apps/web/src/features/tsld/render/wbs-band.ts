@@ -171,32 +171,12 @@ export function wbsBandHitTest(
   return null;
 }
 
-/**
- * Where a band bar sits in **viewport** coordinates, given the SCENE canvas's own box.
- *
- * This exists because of the defect the M6 review found: the floating selection bar anchors to the
- * selected activity's rect, and a summary is not in the scene when the band is on — so the anchor
- * went `null`, the bar hid itself with `visibility: hidden`, and Dissolve/Edit/Delete left both the
- * screen and the tab order for exactly the objects the band exists to show.
- *
- * The arithmetic is the load-bearing part and the reason this is a function rather than three lines
- * inlined in the render loop: the band canvas is pinned at the ruler and the scene starts a band's
- * height BELOW it, so a band bar's viewport top is the scene box's top **minus** the band height,
- * plus the bar's own `y`. Getting that sign wrong puts the actions bar a band's height out of
- * place, which looks like nothing at all until someone notices it overlapping the ruler.
- *
- * Returns `null` when the bar is culled off the surface horizontally, matching the scene path's
- * own on-surface test — a bar scrolled out of view has no anchor to offer.
+/*
+ * `wbsBandBarAnchor` lived here until 2026-08-13. It existed for one reason: the selection-actions
+ * bar floated, anchored to the selected activity's rect, and a summary is not in the scene when the
+ * band is on (ADR-0063 §4) — so the anchor went null and the bar hid itself, taking Dissolve/Edit/
+ * Delete out of the tab order for exactly the objects the band exists to show. The bar no longer
+ * floats (workspace-chrome M3), so there is no anchor, no per-frame geometry, and nothing for this
+ * to compute. Deleted with its caller rather than left behind: a function whose only remaining
+ * caller is its own test is the shape ADR-0081 records W5 shipping.
  */
-export function wbsBandBarAnchor(
-  bar: Pick<WbsBandBar, 'x' | 'w' | 'y'>,
-  wbsBandHeightPx: number,
-  box: { top: number; left: number },
-  surfaceWidth: number,
-): { top: number; centerX: number } | null {
-  if (bar.x + bar.w <= 0 || bar.x >= surfaceWidth) return null;
-  return {
-    top: box.top - wbsBandHeightPx + bar.y,
-    centerX: box.left + bar.x + bar.w / 2,
-  };
-}

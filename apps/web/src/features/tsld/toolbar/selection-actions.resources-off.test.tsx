@@ -18,8 +18,6 @@ import type { SelectionBarContext } from './selection-actions';
 
 const { SelectionActionsBar } = await import('./selection-actions');
 
-const anchorRef = { current: { top: 300, centerX: 500 } };
-
 function ctx(): SelectionBarContext {
   return {
     // No canvas half by default (ADR-0090 M2-T1) — these suites are about the OBJECT actions, and
@@ -46,7 +44,7 @@ function ctx(): SelectionBarContext {
 
 describe('SelectionActionsBar — Resources gated on VITE_RESOURCES', () => {
   it('omits Resources when RESOURCES_ENABLED=false, keeping Progress and Steps', () => {
-    render(<SelectionActionsBar anchorRef={anchorRef} context={ctx()} />);
+    render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     expect(within(bar).queryByRole('button', { name: 'Resources' })).not.toBeInTheDocument();
     expect(within(bar).getByRole('button', { name: 'Report progress' })).toBeInTheDocument();
