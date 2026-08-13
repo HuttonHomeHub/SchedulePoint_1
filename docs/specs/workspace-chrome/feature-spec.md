@@ -313,17 +313,17 @@ withholds selection commands — there is nothing to select).
 
 ### 1.8 Success criteria
 
-| #   | Criterion                                                                                                                                 | Instrument                                                                     |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| S1  | At 1646 × 1097, `aboveCanvas` falls by ≥ 16 px and the canvas's own height rises by the same, with no command lost                        | `vertical-stack.spec.ts` (extended, M0-T1)                                     |
-| S2  | No operable control's box intersects the `<canvas>` box, in any selection state, at every width in the fit gate's list                    | new assertion, `e2e-toolbar-fit` (M6)                                          |
-| S3  | Arming a tool costs **0 px** of canvas height                                                                                             | `vertical-stack.spec.ts`, armed vs idle                                        |
-| S4  | Every command on a persistent row has an `isEnabled` that does not read the selection                                                     | new structural test (M6)                                                       |
-| S5  | A Saturday drop previews at Monday and persists at Monday                                                                                 | new journey `e2e-workspace-dock` (M2)                                          |
-| S6  | `Legend` and `Resource view` are one press from Row 1 at 1646, **labelled at `comfortable`+ and icon-only below — observed, not assumed** | `item-widths.spec.ts` at 1646 **and** at a sub-1536 width, fine **and** coarse |
-| S7  | Every existing flag-on journey still passes                                                                                               | all 31 suites (M6; see the ADR-0091 lesson)                                    |
-| S8  | **The band count above the canvas falls from four to three**, as an Org Admin, at 1646 and at every width in the fit gate's list          | `vertical-stack.spec.ts` band list (M5)                                        |
-| S9  | The organisation nav is still reachable, and no app-header control is clipped or below 24 px, in the merged row                           | `e2e-toolbar-fit` S1/S5/S7 extended to the app band                            |
+| #   | Criterion                                                                                                                                                      | Instrument                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| S1  | At 1646 × 1097, `aboveCanvas` falls by ≥ 16 px and the canvas's own height rises by the same, with no command lost                                             | `vertical-stack.spec.ts` (extended, M0-T1)                                     |
+| S2  | No operable control's box intersects the `<canvas>` box, in any selection state, at every width in the fit gate's list                                         | new assertion, `e2e-toolbar-fit` (M6)                                          |
+| S3  | Arming a tool costs **0 px** of canvas height                                                                                                                  | `vertical-stack.spec.ts`, armed vs idle                                        |
+| S4  | Every command on a persistent row has an `isEnabled` that does not read the selection                                                                          | new structural test (M6)                                                       |
+| S5  | A Saturday drop previews at Monday and persists at Monday                                                                                                      | new journey `e2e-workspace-dock` (M2)                                          |
+| S6  | `Legend` and `Resource view` are one press from Row 1 at 1646, **labelled at `comfortable`+ and icon-only below — observed, not assumed**                      | `item-widths.spec.ts` at 1646 **and** at a sub-1536 width, fine **and** coarse |
+| S7  | Every existing flag-on journey still passes                                                                                                                    | all 31 suites (M6; see the ADR-0091 lesson)                                    |
+| S8  | **The band count above the canvas falls from four to three** and `aboveCanvas` falls from the measured **249 px** toward **~204 px**, as an Org Admin, at 1646 | `vertical-stack.spec.ts` band list (M5)                                        |
+| S9  | Every organisation destination is still reachable — inline or behind one trigger — and no app-header control is clipped or below 24 px in the merged row       | `e2e-toolbar-fit` S1/S3/S5/S7 extended to the app band                         |
 
 ### 1.9 The three critical questions — **answered 2026-08-13**
 
@@ -379,13 +379,20 @@ withholds selection commands — there is nothing to select).
 > settles D4 is not evidence about this target, and **§4.3 has been corrected so it can no longer
 > be read as though it were**.
 >
-> **(b) Q3's feasibility is genuinely unknown, and this document says so rather than guessing.**
-> The only evidence anyone has ever cited against it is `TECH_DEBT` #129's _"one child using 1888
-> of 1920 px — there is no gap to slot into today"_, and that figure is an artefact of an
-> instrument that cannot produce any other answer (F-10: `AppHeaderRow` has exactly one child, so
-> `childCount` is 1 and `widestGap` is 0 at every viewport, by construction). Nothing has measured
-> the three grid cells. Until M0's repaired probe reports, **the honest state is: not known**, and
-> no milestone may be sized against a substitute for it.
+> **(b) Q3's feasibility was genuinely unknown. It has now been measured, and the answer is
+> "not without a cut".** The only evidence anyone had ever cited against it was `TECH_DEBT` #129's
+> _"one child using 1888 of 1920 px — there is no gap to slot into today"_, which is an artefact of
+> an instrument that could not produce any other answer (F-10). M0 repaired the probe and measured:
+> app header content **1049 px**, identity line **1151 px**, **combined 2200 px on a 1646 px row —
+> 554 px over** ([`m0-band-measurement.md`](./m0-band-measurement.md) §3).
+>
+> **554 px is more than the identity line can pay by tidying itself.** Trimming the breadcrumb to
+> plan-name-only (~220 px, an estimate) plus removing the pen redundancy (~165 px, an estimate)
+> comes to ~385 px — **169 px short**. The only single item large enough is the **organisation nav
+> at 637 px**. So collapsing that nav behind one trigger is a **prerequisite of the hard
+> requirement, not a fallback from it**, and it is a decision about **every screen in the
+> application** rather than about this workspace. §4.11 is that finding; the trade has been put to
+> the product owner.
 >
 > **(c) If it does not fit, something else in the app header row pays — and the product owner picks
 > what, not the implementer.** The candidate cuts, their costs and their ranking are §4.11. That
@@ -688,24 +695,31 @@ enabled set, visible set and reason strings are identical. Verified red against 
 **Today: four bands and a floating bar. Required: three bands and a dock.** The fourth band goes
 because Q3 says it must, not because a measurement offered it.
 
-| #   | Band              | What it is FOR                                                  | Owner                                       | Height today                                                |
-| --- | ----------------- | --------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------- |
-| 1   | **App band**      | where you are in the product — **and, after M5, which plan**    | shell (plan-unaware; a slot, not knowledge) | 56 px (`app-header.tsx:152`, `h-14`)                        |
-| 2   | ~~**Plan band**~~ | which plan, its state, and the modes that govern the workspace  | workspace                                   | 45 px today (`m4-vertical-stack.md` §3) → **removed by M5** |
-| 3   | **Command band**  | what you can do to the plan (Row 1 · look, Row 2 · do)          | workspace                                   | 45 + 44 px                                                  |
-| —   | **The canvas**    | the programme                                                   | —                                           | the remainder                                               |
-| 4   | **The dock**      | what is selected, what you can do to it, and what just happened | workspace                                   | **new — replaces the 37 px activities handle**              |
+| #                                                                                                | Band | What it is FOR | Owner | Height today |
+| ------------------------------------------------------------------------------------------------ | ---- | -------------- | ----- | ------------ |
+| **Every height below is measured at 1646 × 1097, pen held**                                      |
+| ([`m0-band-measurement.md`](./m0-band-measurement.md) §2). Above the canvas: **249 px**. Canvas: |
+| **558 px**. **Chrome is 31 % of the plan's vertical space** — before the armed-tool banner takes |
+| another row, and before the activities handle at the foot.                                       |
+
+| #   | Band              | What it is FOR                                                  | Owner                                       | Height today (measured)                            |
+| --- | ----------------- | --------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------- |
+| 1   | **App band**      | where you are in the product — **and, after M5, which plan**    | shell (plan-unaware; a slot, not knowledge) | **56 px** (`app-header.tsx:152`, `h-14`)           |
+| 2   | ~~**Plan band**~~ | which plan, its state, and the modes that govern the workspace  | workspace                                   | **45 px** → **removed by M5**                      |
+| 3   | **Command band**  | what you can do to the plan (Row 1 · look, Row 2 · do)          | workspace                                   | **45 + 44 px** (135 px including the identity row) |
+| —   | **The canvas**    | the programme                                                   | —                                           | **558 px**                                         |
+| 4   | **The dock**      | what is selected, what you can do to it, and what just happened | workspace                                   | **new — replaces the 37 px activities handle**     |
 
 Recoveries, each with its source:
 
-| Change                                                  | Vertical gain                     | Evidence                                                               |
-| ------------------------------------------------------- | --------------------------------- | ---------------------------------------------------------------------- |
-| Canvas fills its section (M1)                           | **16 px + 1 px**                  | `m4-vertical-stack.md` §2 rows 3–4                                     |
-| Armed-tool instruction into the dock (M3)               | **a full row, while armed**       | `CanvasModeBand` is a `NoticeStrip` row                                |
-| Export error / notice / late-overlay note into the dock | **a row each, when shown**        | `plan-workspace-toolbar.tsx:917-975` — each `px-4 pt-2`                |
-| Dock replaces the activities handle (M3)                | **0 px net**                      | `activity-bottom-panel.tsx:130` — `h-9` + `border-t`                   |
-| Identity-line redundancy removed (M5)                   | 0 px vertical, ~165 px horizontal | ADR-0091 M0                                                            |
-| **Plan band merged into the app band (M5 — required)**  | **45 px**                         | feasibility `[TO MEASURE]` — M0; cost ladder if it does not fit: §4.11 |
+| Change                                                  | Vertical gain                                       | Evidence                                                           |
+| ------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
+| Canvas fills its section (M1)                           | **16 px + 1 px**                                    | `m4-vertical-stack.md` §2 rows 3–4                                 |
+| Armed-tool instruction into the dock (M3)               | **a full row, while armed**                         | `CanvasModeBand` is a `NoticeStrip` row                            |
+| Export error / notice / late-overlay note into the dock | **a row each, when shown**                          | `plan-workspace-toolbar.tsx:917-975` — each `px-4 pt-2`            |
+| Dock replaces the activities handle (M3)                | **0 px net**                                        | `activity-bottom-panel.tsx:130` — `h-9` + `border-t`               |
+| Identity-line redundancy removed (M5)                   | 0 px vertical, **~165 px horizontal — an estimate** | decomposed by eye from the measured 790 px cluster; M0-T4 takes it |
+| **Plan band merged into the app band (M5 — required)**  | **45 px**                                           | measured: **554 px over** without a cut — §4.11                    |
 
 #### Two different merges, and why the arithmetic of one says nothing about the other
 
@@ -713,20 +727,22 @@ This distinction is called out on its own because the two are one word apart and
 memorable, so conflating them is the likeliest way for this epic to reach a wrong conclusion
 quickly and confidently.
 
-|                              | **ADR-0091 D4 — withdrawn**                                                                | **Q3 — required**                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| Target                       | the **command band** (Row 1)                                                               | the **app header row**                                                              |
-| Occupants it must fit beside | toolbar registry items                                                                     | brand mark, drawer trigger, org switcher, up to **7** nav links, account chip       |
-| Layout                       | a flex line of items with a `ml-auto` trailing group                                       | a `1fr auto 1fr` **grid** with `gap-4` (`app-header.tsx:52`)                        |
-| Owner                        | the workspace                                                                              | the **shell** — so it needs a second chrome slot (ADR-0029)                         |
-| Why withdrawn / status       | **fit**: identity 849 px, merged Row 1 needing 2290 against 1904 = **386 px over** at 1920 | **not known** — never measured, and the one figure ever cited is an artefact (F-10) |
-| Density objection            | also withdrawn — `ToolbarBandProvider` fixed it                                            | does not arise; the app row has no density ladder                                   |
+|                              | **ADR-0091 D4 — withdrawn**                                                                | **Q3 — required**                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Target                       | the **command band** (Row 1)                                                               | the **app header row**                                                               |
+| Occupants it must fit beside | toolbar registry items                                                                     | brand mark, drawer trigger, org switcher, up to **7** nav links, account chip        |
+| Layout                       | a flex line of items with a `ml-auto` trailing group                                       | a `1fr auto 1fr` **grid** with `gap-4` (`app-header.tsx:52`)                         |
+| Owner                        | the workspace                                                                              | the **shell** — so it needs a second chrome slot (ADR-0029)                          |
+| Why withdrawn / status       | **fit**: identity 849 px, merged Row 1 needing 2290 against 1904 = **386 px over** at 1920 | **measured: 2200 px on a 1646 row = 554 px over** — feasible only with a cut (§4.11) |
+| Density objection            | also withdrawn — `ToolbarBandProvider` fixed it                                            | does not arise; the app row has no density ladder                                    |
 
-**So the 849-vs-277 arithmetic settles D4 and is irrelevant to Q3**, and the earlier revision of
+**So the 849-vs-277 arithmetic settles D4 and says nothing about Q3**, and the earlier revision of
 this document, which reasoned from it to "the band count cannot be reduced at 1646", was
-overreaching on exactly the axis it warns others about. That sentence is withdrawn. The honest
-statement is: **the command band cannot absorb the identity line; whether the app band can is
-unmeasured**, and §4.11 exists for the case where it cannot.
+overreaching on exactly the axis it warns others about. That sentence is withdrawn. Both merges are
+now measured against their own targets, and **they fail for different reasons and by different
+amounts**: the command band is 386 px short of absorbing a 849 px line at 1920; the app band is
+554 px short of absorbing an 1151 px line at 1646. Neither figure substitutes for the other, and
+this table exists so nobody quotes one at the other later.
 
 ```mermaid
 flowchart TB
@@ -994,63 +1010,115 @@ filing, because ADR-0071 and ADR-0079 both record numbers being taken between pl
 - **D7** Legend and Resource view return to Row 1 — **superseding ADR-0090 M2-T2** — labelling at
   `comfortable`+ and icon-only below, with nothing else on Row 1 paying.
 - **D8** The plan identity line moves into the app header row through a **second chrome slot**;
-  the shell stays plan-unaware. **Supersedes `TECH_DEBT` #129's conclusion** and records the cut
-  that paid for it (§4.11), if one was needed.
-- **D9** No feature flag (ADR-0088 D1); commit-boundary revertibility.
+  the shell stays plan-unaware. **Supersedes `TECH_DEBT` #129's conclusion**, and records that the
+  conclusion rested on an instrument artefact rather than a measurement.
+- **D9** **The organisation nav collapses behind one trigger** — recorded as a decision in its own
+  right, because it is a **prerequisite** of D8 (554 px needed, 637 px nav, ~385 px available from
+  the identity line) and because it changes every screen in the application, not this one. Its cost
+  is one extra press to reach seven destinations, everywhere.
+- **D10** No feature flag (ADR-0088 D1); commit-boundary revertibility.
 - **Consequences:** closes `TECH_DEBT` #31, #124, #125, #129; leaves #126, #130, #133 open with
-  named owners; whichever §4.11 cut lands leaves its own debt row.
+  named owners; D9 leaves its own debt row for the coarse-pointer and sub-1440 cases M0 did not
+  measure.
 
-### 4.11 If the merge does not fit — the costed ladder
+### 4.11 What the merge costs — measured, and it is not a ladder
 
-**Q3 is binding and its feasibility is unknown**, so this section exists to make the failure case a
-**product decision taken in advance** rather than an implementer's improvisation at the point of
-pain. It is a set of costed options with a recommendation. **The product owner picks; the
-implementer does not.**
+**This section was drafted as a ranked list of fallbacks for a merge whose feasibility was unknown.
+M0 measured it, and the finding collapses the list: the merge is 554 px over, and only one item in
+the row is big enough to pay for that.** So the organisation-nav collapse is a **prerequisite**, not
+a fallback — and it is a decision about **every screen in the application**, which is why it has its
+own risk entry in the plan and why the trade has gone to the product owner rather than being taken
+here.
 
-**What the app header row holds today** (`app-header.tsx:36-128`), and the structural facts that
-bound any answer:
+**The measurement** ([`m0-band-measurement.md`](./m0-band-measurement.md) §3, 1646, pen held, Org
+Admin):
+
+| row                          |     content |        free |
+| ---------------------------- | ----------: | ----------: |
+| app header                   |     1049 px |      597 px |
+| identity line                |     1151 px |      495 px |
+| **combined on one 1646 row** | **2200 px** | **−554 px** |
+
+| element                                         |      width | measured? |
+| ----------------------------------------------- | ---------: | --------- |
+| brand mark                                      |     160 px | **yes**   |
+| **organisation nav** (org picker + seven links) | **637 px** | **yes**   |
+| account chip                                    |      52 px | **yes**   |
+| breadcrumb + `Draft` badge                      |     361 px | **yes**   |
+| modes + view switch + pen cluster               |     790 px | **yes**   |
+| widest contiguous gap in the header row         |     337 px | **yes**   |
+
+**The arithmetic that decides M5's shape:**
+
+| candidate reduction                                          |       saves | measured?                        |
+| ------------------------------------------------------------ | ----------: | -------------------------------- |
+| breadcrumb → plan name + badge only (it duplicates the rail) |     ~220 px | **no — estimate**                |
+| pen redundancy (live-region sentence + `Editing` badge)      |     ~165 px | **no — estimate**                |
+| **both together**                                            | **~385 px** | **no**                           |
+| **required**                                                 |  **554 px** | **yes**                          |
+| **shortfall**                                                | **~169 px** | —                                |
+| collapsing the seven-link nav behind one trigger             |     ~517 px | derived from the measured 637 px |
+
+**The two ~figures are estimates decomposed by eye from measured composites**, because the probe
+reports the identity line as two children (361 px and 790 px) and does not break out the pen cluster
+or a name-only breadcrumb. They are marked here, in §4.3 and in the plan, and **M0-T4 takes them
+properly before anything is built on them** — a decomposed-by-eye figure is precisely where this
+epic's predecessors got their wrong numbers.
+
+**The structural facts that bound any answer** (`app-header.tsx:36-128`):
 
 - The row is `<header class="h-14 px-4">` (`:152`) containing **one** grid:
   `grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,1fr)] items-center gap-4` (`:52`).
 - **Leading cell** (`1fr`): the drawer trigger (`lg:hidden`) + `BrandMark`.
-- **Centre cell** (`auto`): `OrgSwitcher` (`max-w-[12rem] truncate`) + the `nav`, which is
-  `flex min-w-0 items-center gap-1 overflow-x-auto text-sm` (`:73-76`).
+- **Centre cell** (`auto`): `OrgSwitcher` (`max-w-[12rem] truncate`) + the `nav`
+  (`flex min-w-0 items-center gap-1 overflow-x-auto text-sm`, `:73-76`).
 - **Trailing cell** (`1fr`): `AccountChip`.
-- Up to **seven** nav links, each `px-2 py-1` with `gap-1` between (`:14-15`) — so **their padding
-  and gaps alone are 7 × 16 + 6 × 4 = 136 px before a single character of text**. That is
-  arithmetic over class names, offered as a **lower bound on chrome** and explicitly not as a width
-  claim; the real figure is M0's.
-- Three of the seven are conditional (`Resources`, `Audit log`, `Recently deleted` — §1.4), so the
-  row is **widest for an Org Admin**, which is the case every measurement must use.
-- The grid's `1fr auto 1fr` shape is a **stated design decision** (`:27-34`: so the centre sits at
-  the true midpoint rather than absorbing leftover space). Any fourth region either takes a
-  position inside an existing cell or abandons that property — a fork M5 must name and choose
-  deliberately, not discover.
-- The nav **already `overflow-x-auto`s at 1440** (`m4-vertical-stack.md` §3), i.e. it is already
-  past its budget before this epic adds anything.
+- Three of the seven links are conditional (`Resources`, `Audit log`, `Recently deleted` — §1.4), so
+  the row is **widest for an Org Admin**, which is the case M0 measured and the case M5 must use.
+- The grid's `1fr auto 1fr` shape is a **stated design decision** (`:27-34`: the centre sits at the
+  true midpoint rather than absorbing leftover space). A fourth region either takes a position
+  inside an existing cell or abandons that property — **a fork M5 must name and choose
+  deliberately, not discover.** The measured 337 px widest gap is where a slot would physically
+  land, and it is not enough on its own.
+- The nav **already `overflow-x-auto`s at 1440** (`m4-vertical-stack.md` §3) — it is past its budget
+  before this epic adds anything.
 
-**The ladder — ranked, with what each costs and who it costs it to.** Every width is `[TO MEASURE]`
-in M0/M5; the ranking is by _reversibility and blast radius_, which does not need a measurement.
+**The prerequisite, and what it costs whom.** Collapsing the nav behind one `Organisation ▾` trigger
+recovers ~517 px of the 637 px, which with the pen redundancy clears 554 px with room. It uses the
+existing `Menu` primitive, so roving focus and ADR-0082 reasons come free. **What it costs is one
+extra press to reach Overview, Clients, Calendars, Resources, Members, Audit log and Recently
+deleted — on every screen in the application, not just this workspace.** That is the trade, stated
+in those words; it is the product owner's to accept.
 
-| Rank  | Cut                                                                                                                                                              | Recovers                                            | Costs                                                                                                                                                    | Notes                                                                                                                                                                                                         |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | **Remove the ~165 px of pen redundancy** — the live-region sentence _"You're editing this plan."_ and the `Editing` badge beside a button reading `Stop editing` | ~165 px `[TO MEASURE at 1646]`                      | nothing a reader loses: the state is still announced once and still named by the button                                                                  | **Take this regardless of whether the merge needs it** — it is M5-T1 and is not a trade. Only the _self-held_ duplication goes; the peer-held sentence is a different fact and stays                          |
-| **2** | **Collapse the organisation nav behind one trigger** (`Organisation ▾`) at the plan surface's widths                                                             | up to 7 links + 136 px of chrome, minus one trigger | one extra press for links a planner uses ~twice a session                                                                                                | Uses the existing `Menu` primitive, so roving focus and ADR-0082 reasons come free. **Recommended if a cut is needed**: it removes the most width for the least loss, and it is the row's only material slack |
-| **3** | **Show the nav only outside a plan**                                                                                                                             | the same as rank 2, at the plan surface only        | the links vanish rather than move — a planner who wants Calendars must leave the plan first                                                              | Cheapest to build, worst dead end: a control that disappears with no trigger is the "gone with no explanation" shape ADR-0063 M6 records                                                                      |
-| **4** | **Move the nav into the Project Explorer rail** (ADR-0029's navigator)                                                                                           | the same as rank 2                                  | a genuine information-architecture change: the rail is a Client → Project → Plan **hierarchy**, and org-level destinations are a different kind of thing | Defensible and possibly right, but it is a shell redesign with its own spec, not a cut taken under time pressure inside this epic                                                                             |
-| **5** | **Truncate or abbreviate the breadcrumb** (e.g. client → project → plan becomes `… → plan`)                                                                      | `[TO MEASURE]`                                      | the breadcrumb is the answer to "which plan am I in", which is the thing the merge exists to keep                                                        | Last resort: it degrades the content being merged rather than making room for it                                                                                                                              |
-| —     | **Not offered: shrinking `h-14`.**                                                                                                                               | ~8–12 px                                            | every control in the row, on every screen in the product, and the 24 px target floor                                                                     | Out of proportion — it changes the whole product's chrome to solve one screen's arithmetic                                                                                                                    |
+**The alternatives, kept because a prerequisite should be shown to be the best of its class:**
 
-**Two things this section deliberately does not do.** It does not pick, and it does not assume a
-cut is needed: rank 1 may be sufficient on its own, and M0 will say. If the measurement shows the
-merge fits after rank 1, **no ranked cut is taken and this section closes unused** — which is the
-outcome to hope for and not one to design around.
+| Alternative                                                            | Why not                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Show the nav only inside a plan / only outside one**                 | The links vanish rather than move — a control that disappears with no trigger is the "gone with no explanation" shape ADR-0063 M6 records. Cheapest, worst.                                                            |
+| **Move the nav into the Project Explorer rail** (ADR-0029's navigator) | Defensible and possibly right, but the rail is a Client → Project → Plan **hierarchy** and org-level destinations are a different kind of thing. A shell redesign with its own spec, not a cut taken inside this epic. |
+| **Truncate the breadcrumb further than name-only**                     | It degrades the content the merge exists to preserve.                                                                                                                                                                  |
+| **Shrink `h-14`**                                                      | ~8–12 px, against every control in the row on every screen, and the 24 px target floor. Out of proportion.                                                                                                             |
+
+**What M0 did not measure, and M5 must not assume** (`m0-band-measurement.md` §5): a **coarse**
+pointer (`TECH_DEBT` #133 — every control widens 32 → 40 px, which makes the deficit worse); any
+width **below 1440 or above 1920**, so the merge's feasibility at 768 is unknown and a collapsed nav
+may change that answer in either direction; **Chromium only**; and only the **pen-held** state — the
+cluster's width differs when the pen is merely available (`Start editing` plus a different status
+sentence), and that is the state a Viewer and a second planner are always in.
+
+_(The earlier draft of this section ranked five cuts and said "rank 1 may be sufficient on its own,
+and M0 will say". **M0 said no.** The ranking is superseded — the alternatives table above is what
+remains useful of it, and the pen redundancy stays as M5-T1 because it is worth taking on its own
+terms whether or not the merge needs it.)_
 
 ---
 
 ## 5. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
+- **Measurement of record:** [`./m0-band-measurement.md`](./m0-band-measurement.md) — every band
+  height, the app-header composition and the merge's 554 px deficit come from there, and it names
+  what it does not measure
 - Docs this change updates: `docs/adr/` (new ADR), `CLAUDE.md` §16,
   `docs/FRONTEND_ARCHITECTURE.md` (P1/P3), `docs/TESTING.md` (P2), `docs/UX_STANDARDS.md` (the
   overlay rule), `docs/TOOLBAR_ROADMAP.md`, `docs/TECH_DEBT.md` (closes #31, #124, #125, #129),

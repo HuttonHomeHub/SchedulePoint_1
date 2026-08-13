@@ -8,12 +8,12 @@
 
 ```mermaid
 flowchart LR
-  E["Epic: workspace chrome"] --> M0["M0 · Measure at 1646"]
+  E["Epic: workspace chrome"] --> M0["M0 · Measure at 1646 — DONE"]
   M0 --> M1["M1 · The canvas fills its section"]
   M1 --> M2["M2 · Snap: delete the control and the rule"]
   M2 --> M3["M3 · The dock"]
-  M3 --> M4["M4 · Legend + Resource view (gated on M0)"]
-  M4 --> M5["M5 · The plan band"]
+  M3 --> M4["M4 · Legend + Resource view"]
+  M4 --> M5["M5 · Identity leaves its band<br/>T1 pen redundancy → T2 NAV COLLAPSE → T3 merge"]
   M5 --> M6["M6 · The rules, the gates, the enablement pass"]
 ```
 
@@ -35,9 +35,12 @@ not imported and no migration runs.
 5. **The plan identity line no longer occupies a band of its own** (Q3 — a **hard requirement**,
    not measurement-gated; see the M5 header for what that changes).
 
-**M0 is being run by the coordinator**, not by this plan's implementer, because Q3 became binding
-and its feasibility is the epic's most load-bearing unknown. M0's tasks below stand as the **record
-of what is being measured and why**; M4 and M5 are written to **consume** those numbers.
+**M0 has been run by the coordinator** ([`./m0-band-measurement.md`](./m0-band-measurement.md)),
+because Q3 became binding and its feasibility was the epic's most load-bearing unknown. Both
+instrument repairs landed and 1646 is now permanent in `vertical-stack.spec.ts`. Its headline
+changed M5's shape: **the merge is 554 px over and only the 637 px organisation nav is large enough
+to pay for it**, so the nav collapse is a prerequisite rather than a fallback. M0-T4 remains open —
+two figures M5 turns on are still estimates.
 
 **Sequencing rule for the whole epic.** Every milestone is **one commit boundary** and independently
 revertible; there is **no feature flag** (ADR-0088 D1 — a published image carries every flag at its
@@ -47,21 +50,21 @@ and records both numbers; a milestone that cannot show its number does not land.
 
 ---
 
-## Milestone 0 — Measure at 1646 (and fix two instruments) — **being run by the coordinator**
+## Milestone 0 — Measure at 1646 (and fix two instruments) — **T1–T3 done, T4 open**
 
 **Outcome:** the numbers M3–M5 are sized against exist, at the width and height the product owner
 uses, taken from the tree that is about to be changed — **and, decisively, an answer to whether the
-Q3 merge fits at all.**
+Q3 merge fits at all. It does not, without a cut** ([`./m0-band-measurement.md`](./m0-band-measurement.md)).
 **Entry point:** `Ships dark` — a harness only. Nothing a planner can press changes. (ADR-0081 §1.)
 **Journey:** none — a harness asserts nothing (ADR-0081 §3). The first journey lands with M2, the
 first user-facing milestone (ADR-0081 §2).
 
-> **Ownership note.** The coordinator is running M0 now, including the `vertical-stack.spec.ts:191-208`
-> repair, because Q3 is binding and no measurement could be taken in the session that wrote this
-> plan. The tasks stay here as the specification of what must be measured; if the coordinator's run
-> covers a task, it is done, not repeated. **The one thing that must not happen is a milestone
-> proceeding on a substitute for a number M0 was supposed to produce** — that is the failure this
-> whole epic is a response to.
+> **Ownership note.** The coordinator ran M0, including the `vertical-stack.spec.ts:191-208` repair,
+> because Q3 is binding and no measurement could be taken in the session that wrote this plan. The
+> tasks stay here as the specification of what was measured and why. **The one thing that must not
+> happen is a milestone proceeding on a substitute for a number M0 was supposed to produce** — which
+> is why **M0-T4 is still open and blocks M5**: two of the three figures M5's arithmetic turns on are
+> still decomposed by eye.
 >
 > **Every M0 measurement is taken as an Org Admin.** The app header row is role- and
 > flag-conditional (`app-header.tsx:96-119` — `Resources`, `Audit log` and `Recently deleted` are
@@ -78,7 +81,8 @@ first user-facing milestone (ADR-0081 §2).
 > **Risks:** the harness needs a real API and browser → run it locally per the pre-push gate, not in
 > CI; the numbers change under any concurrent toolbar work → M0 lands first and nothing else is in
 > flight.
-> **Testing:** none (harness). Its output is a dated document, `m0-1646-baseline.md`.
+> **Testing:** none (harness). Its output is a dated document,
+> [`m0-band-measurement.md`](./m0-band-measurement.md).
 
 ##### Task M0-T1 — the vertical stack at 1646 × 1097, and a working `appHeaderRoom`
 
@@ -102,7 +106,7 @@ first user-facing milestone (ADR-0081 §2).
      the difference is on the record.
   3. Report the armed-tool state as well as idle: mount the plan, arm `Link`, re-read — S3's number.
   4. Report the dock candidate: the collapsed activities bar's box (`activity-bottom-panel.tsx:130`).
-  5. Write `m0-1646-baseline.md`, stating what it does **not** measure.
+  5. Write [`m0-band-measurement.md`](./m0-band-measurement.md), stating what it does **not** measure.
 
 ##### Task M0-T2 — Row 1's real slack, and what D-B costs
 
@@ -143,6 +147,29 @@ first user-facing milestone (ADR-0081 §2).
      (the pattern already exists in `measure.spec.ts:88-100`).
   2. Re-run at 1646; state which document was wrong and correct it **in place** rather than in a new
      one.
+
+##### Task M0-T4 — decompose the identity line properly, before M5 builds on an estimate
+
+- **Description:** M0's run reports the identity line as **two composites** — breadcrumb + `Draft`
+  badge **361 px**, modes + view switch + pen cluster **790 px**
+  ([`m0-band-measurement.md`](./m0-band-measurement.md) §3) — and the two savings M5 depends on are
+  **decomposed from those by eye**: ~220 px for a name-only breadcrumb and ~165 px for the pen
+  redundancy. Extend the probe to report, separately: the breadcrumb's full width and its
+  **plan-name + badge only** width; the mode cluster; the view switch; the pen control; the pen's
+  live-region sentence; and the `Editing` badge.
+- **Complexity:** S
+- **Dependencies:** M0-T1's repaired probe
+- **Risks:** this is the epic's own warning applied to itself — `m7-ladder-measurement.md` §3
+  records a table of plausible-looking residuals, written into a draft before anything computed
+  them, that measured nothing they were labelled with (ADR-0076 Class 3). **A ~figure that decides a
+  milestone's shape must become a measured figure before that milestone starts.**
+- **Testing:** none (harness). Its output amends `m0-band-measurement.md` §4 in place.
+- **Steps:**
+  1. Report the six sub-widths above, in **both** pen states (held and available) — the cluster
+     differs between them and only held was measured.
+  2. Replace the two ~figures in §4 with measured ones, or state that they held.
+  3. If the measured total is **worse** than ~385 px, say so immediately: the nav collapse then has
+     to recover more than ~517 px and M5's arithmetic changes before it is built, not during.
 
 ---
 
@@ -409,8 +436,18 @@ note is retired.
 **Entry point:** the `Legend` and `Resource view` buttons on Row 1 · View and navigate.
 **Journey:** `e2e-workspace-dock` gains: press `Resource view` → the strip opens and focus lands in
 it → press `Legend` → the panel opens → both read as pressed.
-**Gated on M0-T2 and Q1.** If the measurement says they cannot fit without costing another control
-its label, **the number goes back to the product owner** (brief, D-B) and this milestone waits.
+
+**Q1 is answered — accepted as defaulted** (spec §1.9): both get Row 1 buttons, **labelled at
+`comfortable` and above, icon-only below**, and **nothing else on Row 1 pays**. Two conditions
+survive the answer and are not softened by it:
+
+1. **The cost is measured at 1646** (M0-T2), not argued. If the measurement shows another control
+   losing its label, that is a failure of this milestone's premise and the number goes back to the
+   product owner (brief, D-B) — the answer authorised a design, not an outcome.
+2. **The icon-only fallback is verified to be what actually happens at a sub-1536 width, not
+   assumed.** `TECH_DEBT` #126 records the band-aware `showLabel` being built once and reverted,
+   because the items it was built for carried no `icon` and rendered as blank 16 px buttons that
+   `e2e-toolbar-fit` S5 caught as a WCAG 2.2 §2.5.8 failure the same hour.
 
 > **Feature: two panel commands on the row**
 > **Complexity:** M
@@ -441,7 +478,7 @@ its label, **the number goes back to the product owner** (brief, D-B) and this m
 ##### Task M4-T2 — record what it cost
 
 - **Description:** re-run `item-widths` at 1646 fine and coarse; state which controls, if any, lost a
-  label, and append to `m0-1646-baseline.md`.
+  label, and append to [`m0-band-measurement.md`](./m0-band-measurement.md).
 - **Complexity:** S
 - **Dependencies:** M4-T1
 - **Risks:** a silent regression on the coarse branch (`TECH_DEBT` #133 — Row 2 already withholds
@@ -451,49 +488,118 @@ its label, **the number goes back to the product owner** (brief, D-B) and this m
 
 ---
 
-## Milestone 5 — The plan band
+## Milestone 5 — The plan identity leaves its band (**required**), and what pays for it
 
-**Outcome:** the identity line carries no redundancy, and — **only if M0-T1's measurement allows** —
-merges into the app header row, removing a 45 px band.
-**Entry point:** the plan band itself: the breadcrumb, status, `Edit plan`, the mode switches and the
-pen, with the duplicated pen sentence and `Editing` badge gone.
-**Journey:** the pen journey already covered by the base config's editing specs; extended only if the
-merge lands.
+**Outcome:** the plan's identity, status, modes and pen render inside the app header row; the band
+count above the canvas falls from four to three and `aboveCanvas` falls from the measured **249 px**
+toward ~204 px.
+**Entry point:** the app header row itself — a planner opening a plan sees the breadcrumb, `Draft`
+badge, `Edit plan`, the mode switches and the pen in the top row, and no band beneath it.
+**Journey:** `e2e-workspace-dock` gains an app-band pass: open a plan, assert the identity controls
+are in the header row, assert every organisation destination is still reachable, assert one `banner`.
 
-> **Feature: identity without redundancy**
-> **Complexity:** M (merge: L)
-> **Dependencies:** M0-T1, **Q3**
-> **Risks:** the merge makes the shell plan-aware if done carelessly → it must be a **second chrome
-> slot** published by the shell (`chrome-slot.tsx`'s existing pattern: the shell provides a slot and
-> knows nothing about plans), which is exactly what `TECH_DEBT` #129 proposes; the org nav already
-> scrolls at 1440 (`app-header.tsx:73-76`) and must not be squeezed further.
-> **Testing:** unit — the shell renders identically with no plan open; the a11y landmark rules
-> (`plan-workspace-toolbar.tsx:774-781` — the `sr-only <h1>` stays inside `main`, and a merged line
-> must not create a second `banner`).
+**This milestone is no longer conditional** (spec §1.9 Q3 — a hard requirement, risk put in writing
+and reaffirmed). **And M0 has measured what it costs, which changes its shape entirely:**
 
-##### Task M5-T1 — remove the redundancy
+| fact                                        |       value | measured?         |
+| ------------------------------------------- | ----------: | ----------------- |
+| app header content @ 1646, Org Admin        |     1049 px | **yes**           |
+| identity line content @ 1646, pen held      |     1151 px | **yes**           |
+| **deficit on one row**                      | **−554 px** | **yes**           |
+| organisation nav (org picker + seven links) |      637 px | **yes**           |
+| breadcrumb → plan-name-only saving          |     ~220 px | **no — estimate** |
+| pen-redundancy saving                       |     ~165 px | **no — estimate** |
+| both together                               |     ~385 px | **no**            |
+| **shortfall after both**                    | **~169 px** | —                 |
 
-- **Description:** remove the live-region pen sentence and the `Editing` badge that sits beside a
-  button reading `Stop editing` (ADR-0091 M0: 223 px, ~165 px recoverable). The pen's **state** must
-  still be announced — removing the badge must not remove the announcement.
+**So tidying the identity line cannot meet the requirement.** The only item in the row large enough
+is the 637 px organisation nav. **Collapsing it behind one trigger is therefore a prerequisite of
+this milestone, not a fallback from it** — and it is a decision about **every screen in the
+application**, which is why it is M5-T2, has its own risk row, and went to the product owner rather
+than being taken here.
+
+> **Feature: the plan identity in the app band**
+> **Complexity:** XL
+> **Dependencies:** **M0-T4** (the two estimates must become measurements first), the product
+> owner's acceptance of the nav trade
+> **Risks:** see the four rows added to the rollup — the nav collapse's product cost, the coarse
+> pointer, the sub-1440 widths, and the pen-available state.
+> **Testing:** unit — the shell renders identically with no plan open; a11y — exactly one `banner`
+> and the `sr-only <h1>` still inside `main` (`plan-workspace-toolbar.tsx:774-781`); the fit gate
+> extended to the app band; every journey that reads the breadcrumb or a nav link.
+
+##### Task M5-T1 — remove the pen redundancy
+
+- **Description:** remove the live-region sentence _"You're editing this plan."_ and the `Editing`
+  badge that sits beside a button already reading `Stop editing`. The pen's **state** must still be
+  announced — removing the badge must not remove the announcement.
 - **Complexity:** S
-- **Dependencies:** M0-T1
+- **Dependencies:** M0-T4 (for the real figure; the work does not depend on it, the arithmetic does)
 - **Risks:** deleting the only thing that says who holds the pen when it is **someone else** → the
   peer-held case is a different sentence and is **kept**; only the self-held duplication goes.
 - **Testing:** unit — self-held renders one statement; peer-held renders the full sentence; a11y —
   the state change is still announced once.
-- **Steps:** 1. remove; 2. re-measure identity content at 1646; 3. record.
+- **Steps:** 1. remove; 2. re-measure the identity line at 1646 in **both** pen states; 3. record
+  against M0-T4's figure and say whether the estimate held.
 
-##### Task M5-T2 — decide the merge on the number (Q3)
+##### Task M5-T2 — collapse the organisation nav behind one trigger (**the prerequisite**)
 
-- **Description:** with M0-T1's per-cell app-header reading, decide whether the identity line fits
-  the app band. Ship the second chrome slot if it does; if it does not, **record the number and stop**
-  — and correct `TECH_DEBT` #129, whose current evidence is an instrument artefact (F-10), either way.
-- **Complexity:** L (or S, if the answer is no)
-- **Dependencies:** M5-T1, Q3
-- **Risks:** a merge that fits at 1646 and overflows at 1440 is worse than no merge → decide against
-  **every** width in the fit gate's list, not the target alone.
-- **Testing:** the fit gate; the shell's own suites; every journey that reads the breadcrumb.
+- **Description:** replace the seven inline links with one `Organisation ▾` trigger using the
+  existing APG `Menu` primitive (`components/ui/menu.tsx`), so roving focus, ADR-0082 reason wiring
+  and the portal behaviour come free rather than being rebuilt. Recovers ~517 px of the measured
+  637 px.
+- **Complexity:** L
+- **Dependencies:** M5-T1; **product-owner acceptance of the trade**
+- **Risks:**
+  - **It changes every screen in the application, not this workspace.** Overview, Clients,
+    Calendars, Resources, Members, Audit log and Recently deleted each become one press further away
+    everywhere → this is the risk row, it is the product owner's call, and the milestone does not
+    start without it.
+  - The nav is **role- and flag-conditional** (`app-header.tsx:96-119`) → a menu whose every item is
+    withheld must render **no trigger** (ADR-0082's clause), not an empty menu.
+  - `aria-current` marks the active destination today (`:88-89`) → the trigger must carry the
+    current section's name or a reader loses "where am I" from the top row entirely.
+  - `Clients` stays current across the whole hierarchy tree (`:42` `onHierarchy`) → carry that rule
+    across verbatim; it is exactly the kind of rule a relocation loses.
+- **Testing:** unit — every destination reachable, `aria-current` preserved, no trigger when empty;
+  a11y — the menu is keyboard-operable and names the current section; **every journey that clicks a
+  nav link** (locate by role and name, and expect to fix several).
+- **Steps:** 1. build the trigger; 2. carry `aria-current` and the hierarchy rule; 3. re-measure the
+  app header row; 4. sweep the journeys **before** pushing.
+
+##### Task M5-T3 — the second chrome slot, and the merge
+
+- **Description:** publish a **second slot** from the chrome band inside the app header row, and
+  portal the identity line into it — the exact `chrome-slot.tsx:7-25` pattern that already lets the
+  toolbar's DOM node move while its React tree stays in the workspace. **The shell gains a `<div>`
+  and never learns what a plan is** (ADR-0029).
+- **Complexity:** L
+- **Dependencies:** M5-T1, M5-T2
+- **Risks:**
+  - **The grid fork must be chosen, not discovered.** `HeaderContents` is a deliberate
+    `1fr auto 1fr` so the centre sits at the true midpoint (`app-header.tsx:27-34`). A fourth region
+    either lives inside an existing cell or abandons that property → name the choice in the ADR.
+  - A merged line must not create a **second `banner`** landmark — the ADR-0090 M4-T2 lesson, where
+    a `<header>` became a `<div>` for exactly this reason.
+  - A merge that fits at 1646 and overflows at 1440 is worse than no merge → assert against **every**
+    width in the fit gate's list, not the target alone.
+- **Testing:** the fit gate extended to the app band (S9); the shell's own suites with no plan open;
+  the landmark assertions.
+- **Steps:** 1. slot + portal; 2. delete the plan band; 3. re-run `vertical-stack` at 1646 and record
+  the band count and `aboveCanvas`; 4. run every journey.
+
+##### Task M5-T4 — record what was not measured
+
+- **Description:** append to `m0-band-measurement.md` §5 the states this milestone shipped without
+  measuring, each as a `TECH_DEBT` row rather than a silence: the **coarse** pointer (#133 — every
+  control widens 32 → 40 px, which makes the deficit worse), widths **below 1440 and above 1920**
+  (the merge's feasibility at 768 is unknown and a collapsed nav may change it either way), Chromium
+  only, and the **pen-available** state (only pen-held was measured, and the cluster differs).
+- **Complexity:** S
+- **Dependencies:** M5-T3
+- **Risks:** an unmeasured state that is not written down becomes an assumed-good state → each gets a
+  row with an owner.
+- **Testing:** none.
 
 ---
 
@@ -563,18 +669,24 @@ journeys breaking across one epic because only the named suite was re-run.
 
 ## Sequencing & slices
 
-| Slice | Ships                                     | Independently revertible | Measurable at 1646                        |
-| ----- | ----------------------------------------- | ------------------------ | ----------------------------------------- |
-| M0    | Harness + three documents                 | yes (no product change)  | it **is** the measurement                 |
-| M1    | 17 px of canvas, no box                   | yes (one commit)         | `vertical-stack` before/after             |
-| M2    | One snapping rule; one fewer control      | yes                      | Row 2 slack; the persisted-date journey   |
-| M3    | The dock                                  | yes                      | canvas overlap = 0; armed-tool height = 0 |
-| M4    | Legend + Resource view on Row 1           | yes                      | `item-widths` labelled counts             |
-| M5    | Identity without redundancy (± the merge) | yes                      | identity content width; band count        |
-| M6    | Gates, docs, ADR                          | yes                      | all suites green                          |
+| Slice | Ships                                                        | Independently revertible        | Measurable at 1646                                |
+| ----- | ------------------------------------------------------------ | ------------------------------- | ------------------------------------------------- |
+| M0    | Harness + measurements (**done** — `m0-band-measurement.md`) | yes (no product change)         | it **is** the measurement                         |
+| M1    | 17 px of canvas, no box                                      | yes (one commit)                | `vertical-stack` before/after: 249 → 232          |
+| M2    | One snapping rule; one fewer control                         | yes                             | Row 2 slack; the persisted-date journey           |
+| M3    | The dock                                                     | yes                             | canvas overlap = 0; armed-tool height = 0         |
+| M4    | Legend + Resource view on Row 1                              | yes                             | `item-widths` labelled counts either side of 1536 |
+| M5    | Pen redundancy → **nav collapse** → the merge                | **per task, not per milestone** | identity width; app-header width; band count      |
+| M6    | Gates, docs, ADR                                             | yes                             | all suites green                                  |
 
 `main` stays releasable at every boundary. **No feature flag** (ADR-0088 D1). Each milestone
 re-measures at 1646 **before and after**; a milestone with no number does not land.
+
+**M5 is the exception to "one milestone, one commit boundary", deliberately.** Its three tasks have
+different blast radii — T1 touches one line of the workspace, **T2 changes navigation on every
+screen in the product**, T3 changes the shell's structure — so each is its own boundary and its own
+revert. In particular **T2 must be revertible without reverting T1 or T3**: it is the task carrying
+a product decision rather than a layout one, and it is the one most likely to come back.
 
 ## Definition of Done (per task)
 
@@ -586,15 +698,19 @@ e2e half does not apply — but that is a claim to re-check per PR, not an assum
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                  | Likelihood  | Impact | Mitigation                                                                                                                                                                 |
-| -------------------------------------------------------------------------------------------------- | ----------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Legend + Resource view do not fit Row 1 at 1646                                                    | med         | med    | M0-T2 measures first; Q1's three answers; the number goes back to the product owner (brief D-B)                                                                            |
-| The dock costs height in some state nobody modelled (panel expanded, narrow pane, right dock open) | med         | med    | M3-T1 enumerates all four layouts; `vertical-stack` reports each                                                                                                           |
-| Deleting the selection anchor breaks the WBS-band selection path                                   | low         | high   | The dock reads the plan's activities, not the scene — the ADR-0063 M6 defect becomes impossible; its tests are re-pointed, not deleted                                     |
-| The snap deletion changes a persisted outcome for a planner who had the toggle on                  | **certain** | low    | Stated in the changeset and the ADR; it moves the client toward the server's rule                                                                                          |
-| The preview approximates and is short of the server's answer on a per-activity calendar            | med         | low    | Documented as an approximation that is never on the wrong side (P1); the recalc corrects it                                                                                |
-| A journey breaks on copy or layout and is found by CI rather than locally                          | **high**    | med    | ADR-0091's rule: after any label/layout change run **every** journey and locate controls by `[data-toolbar-item]`                                                          |
-| `m7-ladder-measurement.md`'s Row 2 baseline was taken on a row a planner does not have             | med         | med    | M0-T3 settles it and corrects the document in place                                                                                                                        |
-| Coarse pointer (`TECH_DEBT` #133) makes the dock's labels vanish in tablet mode                    | high        | low    | Measured every milestone; not fixed here; the dock is where a touch user gains most                                                                                        |
-| The ADR number is taken between approval and filing                                                | med         | low    | M6-T5 re-checks at filing (the ADR-0071/0079 lesson)                                                                                                                       |
-| **This plan's own citations go stale** while it waits for approval                                 | med         | med    | Every decision-bearing citation is file+line; re-verify before each milestone rather than trusting it (ADR-0076, and ADR-0080 found two of its own plan's citations stale) |
+| Risk / assumption                                                                                                                  | Likelihood  | Impact   | Mitigation                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The nav collapse makes seven organisation destinations one press further away — on every screen in the product**                 | **certain** | **med**  | It is the **prerequisite** of a hard requirement (554 px needed, ~385 px available from the identity line), not a preference. Put to the product owner with the measured numbers; M5-T2 does not start without acceptance, and is its own revertible commit         |
+| **M5's two decisive savings (~220 px, ~165 px) are estimates decomposed by eye**, and the deficit they must close is a measurement | **certain** | **high** | **M0-T4 measures them before M5 starts.** If they come in under ~385 px the nav must recover more than ~517 px and the arithmetic changes **before** anything is built. This is the ADR-0076 Class 3 failure the epic exists to stop, applied to itself             |
+| The merge fits at 1646 and overflows below 1440 or on a coarse pointer — **neither was measured**                                  | med         | high     | M5-T3 asserts against every width in the fit gate's list; M5-T4 records the coarse and sub-1440 cases as debt rows with owners rather than silences                                                                                                                 |
+| The pen cluster is wider in the **pen-available** state than the pen-held state M0 measured                                        | med         | med      | M0-T4 reports both; the worst case sizes the merge                                                                                                                                                                                                                  |
+| Legend + Resource view cost another Row 1 control its label at 1646                                                                | med         | med      | M0-T2 measures first; Q1 authorised a design, not an outcome — if a control pays, the number goes back to the product owner (brief D-B)                                                                                                                             |
+| The dock costs height in some state nobody modelled (panel expanded, narrow pane, right dock open)                                 | med         | med      | M3-T1 enumerates all four layouts; `vertical-stack` reports each                                                                                                                                                                                                    |
+| Deleting the selection anchor breaks the WBS-band selection path                                                                   | low         | high     | The dock reads the plan's activities, not the scene — the ADR-0063 M6 defect becomes impossible; its tests are re-pointed, not deleted                                                                                                                              |
+| The snap deletion changes a persisted outcome for a planner who had the toggle on                                                  | **certain** | low      | Stated in the changeset and the ADR; it moves the client toward the server's rule                                                                                                                                                                                   |
+| The preview approximates and is short of the server's answer on a per-activity calendar                                            | med         | low      | Documented as an approximation that is never on the wrong side (P1); the recalc corrects it                                                                                                                                                                         |
+| A journey breaks on copy or layout and is found by CI rather than locally                                                          | **high**    | med      | ADR-0091's rule: after any label/layout change run **every** journey and locate controls by `[data-toolbar-item]`. **M5-T2 raises this to near-certain** — every journey that clicks an organisation nav link will break, and that is expected work, not a surprise |
+| `m7-ladder-measurement.md`'s Row 2 baseline was taken on a row a planner does not have                                             | med         | med      | M0-T3 settles it and corrects the document in place                                                                                                                                                                                                                 |
+| Coarse pointer (`TECH_DEBT` #133) makes the dock's labels vanish in tablet mode                                                    | high        | low      | Measured every milestone; not fixed here; the dock is where a touch user gains most                                                                                                                                                                                 |
+| The ADR number is taken between approval and filing                                                                                | med         | low      | M6-T5 re-checks at filing (the ADR-0071/0079 lesson)                                                                                                                                                                                                                |
+| **This plan's own citations go stale** while it waits for approval                                                                 | med         | med      | Every decision-bearing citation is file+line; re-verify before each milestone rather than trusting it (ADR-0076, and ADR-0080 found two of its own plan's citations stale)                                                                                          |
