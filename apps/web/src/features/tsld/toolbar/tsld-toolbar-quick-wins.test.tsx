@@ -31,7 +31,6 @@ const SELECTED = { id: 'a1', version: 7, name: 'Excavate' } as unknown as Activi
 const spies = {
   goToDate: vi.fn(),
   revealComments: vi.fn(),
-  openProgress: vi.fn(),
   openActivityNotes: vi.fn(),
   clearVisualPlacement: vi.fn(),
 };
@@ -41,7 +40,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     goToDate: spies.goToDate,
     summaryContent: null,
     revealComments: spies.revealComments,
-    openProgress: spies.openProgress,
     openActivityNotes: spies.openActivityNotes,
     clearVisualPlacement: spies.clearVisualPlacement,
     ...over,
@@ -147,55 +145,16 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(spies.revealComments).toHaveBeenCalledOnce();
   });
 
-  // --- F3 · Report progress -----------------------------------------------------------------
-  it('Report progress: disabled with "Select an activity first" when nothing is selected', () => {
-    renderRows(ctx({ selectedActivityId: null }));
-    const btn = screen.getByRole('button', { name: 'Report progress…' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Report progress… — Select an activity first');
-  });
-
-  it('Report progress: enabled with a resolved selection + canProgress; opens the dialog (not pen-gated)', () => {
-    // authoringEnabled false (no pen) — progress is Contributor+, NOT pen-gated, so it stays enabled.
-    renderRows(
-      ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canProgress: true }),
-      false,
-    );
-    const btn = screen.getByRole('button', { name: 'Report progress…' });
-    expect(btn).not.toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(btn);
-    expect(spies.openProgress).toHaveBeenCalledOnce();
-  });
-
-  it('Report progress: disabled when the selected row is gone (U3 — resolved selection, not the raw id)', () => {
-    // The id is still held but its row was deleted elsewhere, so `selectedActivity` is undefined — the
-    // button must NOT be enabled (a click would be a silent no-op on a missing target).
-    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: undefined, canProgress: true }));
-    const btn = screen.getByRole('button', { name: 'Report progress…' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Report progress… — Select an activity first');
-  });
-
-  it('Report progress: disabled with the role reason for a viewer who cannot report progress', () => {
-    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canProgress: false }));
-    const btn = screen.getByRole('button', { name: 'Report progress…' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute(
-      'title',
-      'Report progress… — You don’t have permission to report progress',
-    );
-  });
-
-  it('Report progress: role reason wins over selection for a viewer with nothing selected (U2/A5 precedence)', () => {
-    // A permanently-blocked user with no selection is told the role reason, not (misleadingly) to
-    // select an activity first.
-    renderRows(ctx({ selectedActivityId: null, selectedActivity: undefined, canProgress: false }));
-    const btn = screen.getByRole('button', { name: 'Report progress…' });
-    expect(btn).toHaveAttribute(
-      'title',
-      'Report progress… — You don’t have permission to report progress',
-    );
-  });
+  // --- F3 · Report progress — REMOVED (ADR-0093) ----------------------------------------------
+  // Five cases lived here covering this item's selection gate, its U3 resolved-row gate and its
+  // U2/A5 reason precedence. The item is gone: an action on the selected object belongs on the
+  // object's surface, so the equivalent gates are asserted on the canvas dock's `progress` item
+  // (`selection-actions.entry-routes.test.tsx`) and the activities-table row action
+  // (`ActivitiesTable.test.tsx`), both of which pre-date this removal and pass unchanged.
+  //
+  // Deliberately NOT replaced with a "the item is absent" case here: this file's subject is the
+  // quick-wins items' behaviour, and absence is pinned once, structurally, in
+  // `selection-duplication.structural.test.ts`.
 
   // --- F4 · Add note ------------------------------------------------------------------------
   it('Add note: enabled with a resolved selection + canWriteNotes; opens the activity notes (not pen-gated)', () => {

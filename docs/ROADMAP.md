@@ -192,6 +192,14 @@ keep `main` releasable.
   placement forward regardless, and the toggle's only contribution was writing a weekend drop back
   to the _previous_ Friday. The identity-line band merge was a hard requirement and is **withdrawn
   on its own measurement**: it buys ~8 % more canvas.
+- **An object action belongs on the object** (ADR-0093). `Report progress` was the only action in
+  the plan workspace that existed twice — the command surface and the canvas dock, same permission,
+  same precondition, same dialog — and the command-surface copy is gone. The rule it establishes is
+  the one that decides where the next item goes: an action whose subject is the **selected object**
+  lives on the object's surface, and the command surface carries plan- and view-level actions. It is
+  a computed gate rather than a convention. Measured rather than argued, and the obvious claim was
+  **false**: removing a 163 px labelled item bought Row 2 no label at all (13 inline / 11 labelled
+  either side at 1646). What it bought instead was the `⋯` disappearing from that row entirely.
 
 ## Delivered — operations & supportability
 

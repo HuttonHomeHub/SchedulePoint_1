@@ -14,7 +14,7 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
  * The `useTsldToolbarContext` glue (T3): the selection-aware quick-wins openers must call the model
- * seams they claim to — `openProgress` → `onProgressActivity(selectedActivity)`, `openActivityNotes`
+ * seams they claim to — `openActivityNotes`
  * → `revealActivityNotes(selectedActivity)` (the U4 reveal-notes intent) — and the read-only Late overlay
  * must surface on the context so the Clear-visual item can explain an overlay-disabled state (A1). Proven
  * against the REAL builder (mocking only the leaf query hooks), so a renamed seam would fail.
@@ -138,15 +138,6 @@ function build(lateOverlay = false) {
 
 describe('useTsldToolbarContext — quick-wins glue', () => {
   beforeEach(() => vi.clearAllMocks());
-
-  it('openProgress opens the editor on the current selection (F3)', () => {
-    // It set a workspace-hosted dialog's target id until that dialog was deleted with
-    // `VITE_ACTIVITY_EDITOR_TABS` (ADR-0089) — after which the command lit up and opened nothing.
-    // It now passes the ROW, because the editor intent needs the row rather than an id.
-    const ctx = build();
-    ctx.current.openProgress();
-    expect(spies.onProgressActivity).toHaveBeenCalledWith(SELECTED);
-  });
 
   it('openActivityNotes reveals the selected activity notes (F4/U4 intent)', () => {
     const ctx = build();

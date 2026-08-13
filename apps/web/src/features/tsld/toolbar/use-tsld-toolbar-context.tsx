@@ -160,10 +160,8 @@ export function useTsldToolbarContext({
     todayIso,
     selectedActivityId,
     selectedActivity,
-    canProgress,
     canWriteNotes,
     revealActivityNotes,
-    onProgressActivity,
     clearVisualPlacement,
   } = model;
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing; the workspace derives it the
@@ -512,15 +510,6 @@ export function useTsldToolbarContext({
       revealComments,
       // Comments toggle pressed state (entry-route win 1) — the docked notes panel's open flag.
       notesOpen: model.notesOpen,
-      canProgress,
-      // Update progress (F3): open the editor's Progress tab on the current selection. It set a
-      // workspace-hosted dialog's target until `VITE_ACTIVITY_EDITOR_TABS` retired (ADR-0089) and
-      // that dialog was deleted — at which point this command was still setting state nobody read,
-      // i.e. a toolbar item that lit up and opened nothing. A no-op when nothing is selected, like
-      // its neighbours.
-      openProgress: () => {
-        if (selectedActivity) onProgressActivity(selectedActivity);
-      },
       canWriteNotes,
       // Add note (F4/U4): open the selected activity's Logic panel AND reveal + focus its Notes section
       // (parity with Comments for plan notes), so the user lands on notes rather than Predecessors. A
@@ -840,9 +829,7 @@ export function useTsldToolbarContext({
     selectedActivity,
     revealComments,
     model.notesOpen,
-    canProgress,
     canWriteNotes,
-    onProgressActivity,
     revealActivityNotes,
     lateOverlayActive,
     clearVisualPlacement,

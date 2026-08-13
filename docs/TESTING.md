@@ -330,6 +330,35 @@ lives in a collapsible panel under the flags that suite sets, a button labelled
 Every one was visible in the first local run and none was visible without one.
 Two of them were also masked by assertion order — see the rule below.
 
+### Running several suites back to back: kill the API between them
+
+**`pkill -f "nest start"` does not kill the API.** Nest spawns a child
+`node apps/api/dist/main`, which survives, keeps port 3000, and — because
+`reuseExistingServer` is `!process.env.CI`, i.e. **true** locally — is then
+silently **reused** by the next suite. Two things follow, and the second is the
+one that wastes an afternoon:
+
+1. The next suite runs against the previous suite's **API environment**, not the
+   one its own config declares.
+2. `@nestjs/throttler`'s counter is per-process and in-memory, so the previous
+   suite's requests count against the next one's budget (100 / 60 s). The next
+   suite's **seeding** then fails with `429 RATE_LIMITED` — which reads as four
+   unrelated journeys breaking, in a run where you have just changed something.
+
+That is not hypothetical either: a full 32-suite sweep on 2026-08-13 reported
+`gantt`, `wbs`, `search-nav` and `float-paths` failing, all of them
+`seeding rejected … 429`, none of them real. It was diagnosed properly — the same
+suite was run against `origin/main` and failed identically, which is what
+separated "my change broke this" from "this harness is lying" — and the whole set
+passed once the API was actually being torn down between suites.
+
+So when sweeping suites yourself: kill `api/dist/main` **by that name**, wait for
+**both** ports to stop answering before starting the next config, and if you are
+running many in sequence raise `RATE_LIMIT_LIMIT` **for the local run only**. CI
+is unaffected — it starts a fresh API per suite — and the product default
+(100 / 60 s, `RATE_LIMIT_TTL` / `RATE_LIMIT_LIMIT`) must not be changed to make a
+local sweep pass.
+
 ### Flipping a default changes the base suite
 
 A flag flip is not covered by step 4, and the wording used to read as if it were.
