@@ -112,14 +112,12 @@ function makeCanvasUi(navState: Partial<NavState>): TsldCanvasUiState {
       isolateActive: false,
       isolateMode: 'full',
       conflictCursorId: null,
-      snapToGrid: false,
       selectSignal: null,
       ...navState,
     },
     toggleIsolate: vi.fn(),
     setIsolateMode: vi.fn(),
     setConflictCursorId: spies.setConflictCursorId,
-    toggleSnapToGrid: vi.fn(),
     requestSelectActivity: spies.requestSelectActivity,
   } as unknown as TsldCanvasUiState;
 }

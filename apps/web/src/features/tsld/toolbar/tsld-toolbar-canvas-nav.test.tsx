@@ -20,7 +20,6 @@ const spies = {
   toggleIsolate: vi.fn(),
   setIsolateMode: vi.fn(),
   goToNextConflict: vi.fn(),
-  toggleSnapToGrid: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -28,7 +27,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     toggleIsolate: spies.toggleIsolate,
     setIsolateMode: spies.setIsolateMode,
     goToNextConflict: spies.goToNextConflict,
-    toggleSnapToGrid: spies.toggleSnapToGrid,
     ...over,
   });
 }
@@ -143,36 +141,10 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
   });
 
   // ── Snap to grid ────────────────────────────────────────────────────────────────────────
-  it('toggles Snap in Visual mode with the pen, reflecting its pressed state', () => {
-    renderRows(ctx({ schedulingMode: 'VISUAL', canEditSchedule: true, snapToGrid: true }));
-    const btn = screen.getByRole('button', { name: 'Snap to grid' });
-    expect(btn).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(btn);
-    expect(spies.toggleSnapToGrid).toHaveBeenCalledOnce();
-  });
-
-  it('shades Snap outside Visual mode (mode gate leads the ladder)', () => {
-    renderRows(ctx({ schedulingMode: 'EARLY', canEditSchedule: true }));
-    const btn = screen.getByRole('button', { name: 'Snap to grid' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Snap to grid — Only available in Visual mode');
-    fireEvent.click(btn);
-    expect(spies.toggleSnapToGrid).not.toHaveBeenCalled();
-  });
-
-  it('shades Snap in Visual mode without the pen', () => {
-    renderRows(ctx({ schedulingMode: 'VISUAL', canEditSchedule: false }));
-    expect(screen.getByRole('button', { name: 'Snap to grid' })).toHaveAttribute(
-      'title',
-      'Snap to grid — Start editing to snap placements.',
-    );
-  });
-
-  it('shades Snap under the read-only Late-start overlay', () => {
-    renderRows(ctx({ schedulingMode: 'VISUAL', canEditSchedule: true, lateOverlayActive: true }));
-    expect(screen.getByRole('button', { name: 'Snap to grid' })).toHaveAttribute(
-      'title',
-      'Snap to grid — Turn off the Late-start overlay to snap placements',
-    );
-  });
+  // Four cases lived here (pressed state, the Visual-mode gate, the pen gate, the Late-overlay
+  // gate) and were removed with the control on 2026-08-13. The toggle had no observable effect:
+  // `compute.ts:335-338` wraps every `visualStart` in `rollForwardToWorking` unconditionally, so a
+  // placement lands on a working day whether the toggle was on or off. The surviving rule — the
+  // optimistic ghost previews the roll the engine will perform — is unit-tested in
+  // `render/snap.test.ts`, and the product behaviour by the M2 journey.
 });

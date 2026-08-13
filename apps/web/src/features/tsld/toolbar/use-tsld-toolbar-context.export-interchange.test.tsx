@@ -124,13 +124,11 @@ function makeCanvasUi(): TsldCanvasUiState {
       isolateActive: false,
       isolateMode: 'full',
       conflictCursorId: null,
-      snapToGrid: false,
       selectSignal: null,
     },
     toggleIsolate: vi.fn(),
     setIsolateMode: vi.fn(),
     setConflictCursorId: vi.fn(),
-    toggleSnapToGrid: vi.fn(),
     requestSelectActivity: vi.fn(),
   } as unknown as TsldCanvasUiState;
 }

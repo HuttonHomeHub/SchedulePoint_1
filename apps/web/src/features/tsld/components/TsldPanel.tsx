@@ -66,7 +66,7 @@ import {
   type Point,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
-import { drawnSpanPlacement, snapToWorkingDay } from '../render/snap';
+import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
@@ -2108,19 +2108,21 @@ export function TsldPanel({
           });
         return;
       }
-      // Snap to grid (canvas nav, `docs/specs/canvas-nav/`, Visual mode): round the dropped day to the
-      // nearest working day BEFORE the PATCH — only in Visual mode (`barDateSource === 'visual'`), only
-      // when the toggle is on, and only when a day actually changed. Off / flag-off ⇒ the raw dropped
-      // day, byte-for-byte (the PATCH contract, undo record and auto-recalc are all unchanged; this only
-      // adjusts the day value fed into the existing `startDay`). The snapped value drives BOTH the
-      // optimistic ghost and the write so the preview matches what saves.
-      const snappedStartDay =
+      // **The ghost applies the rule the SERVER will apply** (workspace-chrome M2). The engine rolls
+      // every `visualStart` FORWARD to a working instant unconditionally (`compute.ts:335-338`), so
+      // a bar dropped on a Saturday always returns on Monday — painting Saturday until the
+      // recalculation lands is a preview that is knowingly wrong. This replaced a `Snap to grid`
+      // toggle whose only effect was the tie-break DIRECTION (nearest, earlier-first) and which the
+      // product owner correctly reported as making no difference: the snapping was never its doing.
+      //
+      // Preview only. `previewStartDay` is NOT what gets written — see `rollForwardToWorkingDay`
+      // for why a client-computed day must not be persisted.
+      const previewStartDay =
         CANVAS_NAV_ENABLED &&
-        navState.snapToGrid &&
         barDateSource === 'visual' &&
         intent.startDay !== undefined &&
         workingDayPredicate
-          ? snapToWorkingDay(intent.startDay, workingDayPredicate)
+          ? rollForwardToWorkingDay(intent.startDay, workingDayPredicate)
           : intent.startDay;
       // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
       // activity's current geometry so the optimistic ghost sits at the resulting day+lane.
@@ -2130,7 +2132,7 @@ export function TsldPanel({
           : 0;
       const currentStartDay =
         activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
-      const startDay = snappedStartDay ?? currentStartDay;
+      const startDay = previewStartDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
       // The settle note is taken at the shared write seam (`notedReposition`), not here: this
@@ -2140,7 +2142,9 @@ export function TsldPanel({
       pointerRepositionBusyRef.current = true;
       void notedReposition({
         activityId: intent.activityId,
-        ...(snappedStartDay !== undefined ? { startDay: snappedStartDay } : {}),
+        // The RAW dropped day: the server owns the roll, on the activity's own calendar at
+        // minute granularity, which the client's plan-calendar day predicate cannot reproduce.
+        ...(intent.startDay !== undefined ? { startDay: intent.startDay } : {}),
         ...(intent.laneIndex !== undefined ? { laneIndex: intent.laneIndex } : {}),
       })
         .then((outcome) => {
@@ -2153,15 +2157,16 @@ export function TsldPanel({
           if (outcome.applied) {
             const timeChanged = intent.startDay !== undefined;
             const laneChanged = intent.laneIndex !== undefined;
-            // When Snap actually ROUNDED the dropped day to a working day (`snappedStartDay` differs
-            // from the raw drop), name the resulting working day so the snap is legible to AT (a11y-rec-2)
-            // — otherwise the generic "dates will update" wording. The snapped day is a working-day
-            // offset from the data date; the existing `addCalendarDays` + formatter turn it into a date.
+            // When the drop landed on a non-working day and will therefore move, name the day it
+            // will move TO, so the roll is legible to AT rather than a silent correction
+            // (a11y-rec-2). Announced from the PREVIEW, which is the client's best statement of the
+            // server's rule — if the activity's own calendar disagrees, the recalculation corrects
+            // the bar and this sentence was a good-faith approximation, not a claim of record.
             const snappedDay =
               intent.startDay !== undefined &&
-              snappedStartDay !== undefined &&
-              snappedStartDay !== intent.startDay
-                ? snappedStartDay
+              previewStartDay !== undefined &&
+              previewStartDay !== intent.startDay
+                ? previewStartDay
                 : null;
             const snappedDate =
               snappedDay !== null && dataDate
@@ -2169,7 +2174,7 @@ export function TsldPanel({
                 : null;
             announce(
               snappedDate
-                ? `Moved and snapped “${activity.name}” to ${snappedDate}${laneChanged ? ` in lane ${laneIndex + 1}` : ''}.`
+                ? `Moved “${activity.name}” to ${snappedDate}, the next working day${laneChanged ? ` in lane ${laneIndex + 1}` : ''}.`
                 : laneChanged
                   ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
                   : `Moved “${activity.name}”; dates will update.`,
@@ -2566,8 +2571,13 @@ export function TsldPanel({
 
       <div
         className={
+          // `fill` is the canvas-first workspace, where the diagram IS the screen: no border and no
+          // radius, so it meets the chrome band and the dock rather than floating inside them
+          // (workspace-chrome M1). `overflow-hidden` stays — it clips the canvas layers, which is
+          // load-bearing, not decoration. The non-fill variant is the legacy long-scrolling page,
+          // where the panel really is one card among several, and keeps its box.
           fill
-            ? 'border-border relative min-h-[240px] flex-1 overflow-hidden rounded-lg border'
+            ? 'relative min-h-[240px] flex-1 overflow-hidden'
             : 'border-border relative h-[480px] overflow-hidden rounded-lg border'
         }
       >

@@ -333,21 +333,24 @@ describe('TSLD toolbar registry (two-row)', () => {
     }
   });
 
-  it('shows the canvas-nav features (isolate / next-conflict / snap) as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
-    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the three
-    // ids must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
+  it('shows the canvas-nav features as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
+    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the ids
+    // must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
+    //
+    // The subject has narrowed twice. `Isolate logic path` left in ADR-0090 M2-T1 (it moved to the
+    // selection bar, and its Row-1 placeholder went with it rather than being reproduced there — a
+    // placeholder earns its place on a persistent row a planner scans, not on a transient bar).
+    // `Snap to grid` left on 2026-08-13, deleted with the control: the engine rolls every
+    // `visualStart` forward to a working day unconditionally, so the toggle had nothing to toggle.
+    // `Next conflict` is what remains, and since ADR-0090 M2 it is a tier-3 item — so flag-off its
+    // placeholder lives in the `⋯` rather than inline, which is what this now pins.
     renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
-    // `Isolate logic path` left this list in ADR-0090 M2-T1: it moved to the selection bar, and its
-    // Row-1 "Coming soon" placeholder went with it rather than being reproduced there — a
-    // placeholder earns its place on a persistent row a planner scans, not on a transient bar.
-    // `Next conflict` also left this list, in ADR-0090 M2: it moved to tier 3 so Row 1 could label
-    // itself at 1920, so flag-off its placeholder lives in the `⋯` rather than inline. Snap to grid
-    // is the one of the three still on the bar, and it is what this now pins.
-    for (const name of ['Snap to grid']) {
-      const btn = screen.getByRole('button', { name });
-      expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
+    for (const trigger of screen.queryAllByRole('button', { name: 'More toolbar actions' })) {
+      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
     }
+    const btn = screen.getByRole('menuitem', { name: 'Next conflict' });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAccessibleDescription('Coming soon');
   });
 
   it('has no axe violations across both rows', async () => {

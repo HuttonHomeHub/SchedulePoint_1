@@ -295,10 +295,12 @@ export interface TsldToolbarContext {
   varianceError: boolean;
 
   // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
-  // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain), Next
-  // conflict (cycle flagged activities), Snap to grid (round Visual drops to a working day). Populated on
-  // every build from `canvasUi.navState` + the activities; nothing reads them while the flag is off (the
-  // three ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
+  // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain) and
+  // Next conflict (cycle flagged activities). Populated on every build from `canvasUi.navState` + the
+  // activities; nothing reads them while the flag is off (the ids then resolve to their
+  // `placeholderItem()` stubs), so they are inert by default. A third aid, *Snap to grid*, shipped
+  // here and was deleted on 2026-08-13: `compute.ts:335-338` rolls every `visualStart` forward to a
+  // working day unconditionally, so the toggle had no observable effect in either position.
   /** Whether the *Isolate logic path* emphasis is active (drives the toggle's pressed state). */
   isolateActive: boolean;
   /** The isolate chain mode — the full transitive chain, or the driving-only sub-chain (CQ-1). */
@@ -377,11 +379,6 @@ export interface TsldToolbarContext {
    * which the item shades with its own reason rather than leaving the button lit and inert.
    */
   zoomToSelection: () => void;
-  /** Whether *Snap to grid* is on (drives the toggle's pressed state). Session-local (CQ-3). */
-  snapToGrid: boolean;
-  /** Toggle *Snap to grid* on/off (pen-gated + Visual mode; rounds a dropped `visualStart` to the
-   * nearest working day before the existing PATCH). */
-  toggleSnapToGrid: () => void;
 
   // --- Export & print (VITE_EXPORT_PRINT, spec `docs/specs/export-print/`) -------------------
   // Client-side deliverables over already-shipped data + the shipped canvas renderer — no API/schema/

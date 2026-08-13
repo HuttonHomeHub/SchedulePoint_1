@@ -61,7 +61,6 @@ describe('useTsldCanvasUiState', () => {
       isolateActive: false,
       isolateMode: 'full',
       conflictCursorId: null,
-      snapToGrid: false,
       selectSignal: null,
     });
 
@@ -79,10 +78,6 @@ describe('useTsldCanvasUiState', () => {
     // The conflict cursor is remembered verbatim.
     act(() => result.current.setConflictCursorId('a1'));
     expect(result.current.navState.conflictCursorId).toBe('a1');
-
-    // Snap is a session toggle.
-    act(() => result.current.toggleSnapToGrid());
-    expect(result.current.navState.snapToGrid).toBe(true);
 
     // Each select request bumps a monotonic nonce so a repeat jump to the same id still fires.
     // `focusListbox` defaults true — the Next-conflict cycle's behaviour, and every pre-existing

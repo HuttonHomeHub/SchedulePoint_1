@@ -21,7 +21,6 @@ import {
   FileType,
   Filter,
   Gauge,
-  Grid3x3,
   ImageDown,
   Info,
   Layers,
@@ -1790,15 +1789,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
   };
-  const snapToGridShape = {
-    id: 'snap-to-grid',
-    group: 'tools' as const,
-    row: 'do' as const,
-    tier: 2 as const,
-    order: 5,
-    label: 'Snap to grid',
-    icon: <Grid3x3 className="size-4" />,
-  };
   // Export & print (VITE_EXPORT_PRINT) shared item shapes — the id/group/row/tier/order/label/icon each
   // of the two ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
@@ -2294,34 +2284,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.openActivityNotes(),
         }
       : placeholderItem(addNoteShape),
-    // Snap-to-grid — a Visual-planning authoring aid (snaps hand-placed bars to the nearest working day
-    // on drop, spec `docs/specs/canvas-nav/`). Flag-on a pressed-state, pen-gated, Visual-mode toggle
-    // (mirrors Clear-visual-placement's gates: visible in both modes, disabled-with-reason outside
-    // Visual / without the pen / under the Late overlay); flag-off the "Coming soon" placeholder,
-    // byte-for-byte. The toggle only rounds the dropped day before the existing PATCH — the CPM engine +
-    // parity gate are untouched.
-    CANVAS_NAV_ENABLED
-      ? {
-          ...snapToGridShape,
-          penGated: true,
-          isVisible: () => SCHEDULING_MODES_ENABLED,
-          isActive: (ctx) => ctx.snapToGrid,
-          // Enabled only when it's actionable: Visual mode AND the pen/role AND not the read-only Late
-          // overlay. (Snap applies at the next drop; no selection is required.)
-          isEnabled: (ctx) =>
-            ctx.schedulingMode === 'VISUAL' && ctx.canEditSchedule && !ctx.lateOverlayActive,
-          // Precedence ladder mirrors Clear-visual-placement: mode → pen/role → Late overlay.
-          disabledReason: (ctx) =>
-            ctx.schedulingMode !== 'VISUAL'
-              ? 'Only available in Visual mode'
-              : !ctx.canEditSchedule
-                ? (ctx.scheduleRefusal('snap placements') ?? undefined)
-                : ctx.lateOverlayActive
-                  ? 'Turn off the Late-start overlay to snap placements'
-                  : undefined,
-          onActivate: (ctx) => ctx.toggleSnapToGrid(),
-        }
-      : placeholderItem(snapToGridShape),
+    // **`snap-to-grid` was deleted (workspace-chrome M2).** Its toggle never decided whether a
+    // placement snapped — the engine rolls every `visualStart` forward to a working instant
+    // unconditionally (`compute.ts:335-338` → `instants.ts:18-22`) — only which way a tie broke
+    // on a drop onto a non-working column: Saturday landed Friday with it on, Monday with it
+    // off. The product owner reported seeing no difference and was right. A control whose
+    // entire capability is already delivered unconditionally elsewhere is the ADR-0081 shape.
     // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
     // falls back to the computed date, toolbar quick-wins F5). Only *meaningful* in Visual mode, but per
     // the registry's shade-don't-hide rule (ADR-0031 + docs/TOOLBAR_ROADMAP.md) it stays VISIBLE in both

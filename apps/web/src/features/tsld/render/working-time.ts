@@ -50,7 +50,7 @@ export const ELAPSED_DAY_WALK: DayWalk = (dayOffset, n) => dayOffset + n;
  * working days from `dayOffset`, always landing on a working day (so a lag anchor never sits on a
  * weekend). Memoised — an edge-dense frame re-asks the same walks — and bounded: if the scan
  * exhausts the horizon (no working day found) it falls back to the elapsed result, never hanging
- * (the `snapToWorkingDay` contract).
+ * (the same bounded-scan contract as `snap.ts:rollForwardToWorkingDay`).
  */
 export function makeWorkingDayWalk(
   isWorkingDay: (dayOffset: number) => boolean,

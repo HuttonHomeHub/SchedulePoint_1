@@ -13,20 +13,52 @@
 export const SNAP_HORIZON_DAYS = 366;
 
 /**
- * Round `dayOffset` to the nearest working day per `isWorkingDay` (a day-offset predicate). An already-
- * working day is returned unchanged. Otherwise scan outward a day at a time; a **tie** (equal distance
- * each side) rounds to the **earlier** day (the earlier side is tested first). If no working day lies
- * within `horizon`, fall back to the raw `dayOffset` (never hang). Pure.
+ * **`snapToWorkingDay` was deleted (workspace-chrome M2), and so was the control that drove it.**
+ *
+ * It rounded a dropped day to the **nearest** working day, earlier side winning ties, behind a
+ * `Snap to grid` toggle. The product owner reported seeing no difference with it on or off and was
+ * right to: the CPM engine already snaps, **unconditionally and server-side**. The ADR-0033
+ * effective-Visual pass wraps every `visualStart` in `rollForwardToWorking`
+ * (`apps/api/src/modules/schedule/engine/compute.ts:335-338`), which returns the first working
+ * minute at or after the instant on the activity's own calendar
+ * (`.../engine/instants.ts:18-22`).
+ *
+ * So the toggle never decided *whether* a placement snapped — only the **direction of the
+ * tie-break**, and only on a drop onto a non-working column: a Saturday landed **Friday** with it on
+ * and **Monday** with it off. Making it automatic would not have added snapping; it would have made
+ * the client's *nearest* rule permanent, so a Saturday drop moved an activity **earlier than the
+ * planner placed it**, which is worse than the server's forward roll and contrary to what dropping a
+ * bar implies.
+ *
+ * {@link drawnSpanPlacement} — the create/resize path — always rolled **forward** and cites the
+ * engine's reason in its own docblock. One client transform agreed with the server and one did not;
+ * the disagreement was the defect. The remaining rule is: **an optimistic preview applies the rule
+ * the server will apply, or it is a lie with a short half-life.**
  */
-export function snapToWorkingDay(
+
+/**
+ * **The engine's rule, applied client-side to the optimistic preview only.** The first working day
+ * at or **after** `dayOffset` — never earlier.
+ *
+ * This is `rollForwardToWorking` (`apps/api/src/modules/schedule/engine/instants.ts:18-22`) at day
+ * granularity: the ADR-0033 effective-Visual pass rolls every `visualStart` forward before it
+ * schedules, so a bar dropped on a Saturday is *always* going to come back on Monday. Showing the
+ * planner Saturday until the recalculation lands is a preview that is knowingly wrong.
+ *
+ * **The result of this must never be persisted.** The predicate available here is the *plan*
+ * calendar at *day* granularity; the engine rolls on the *activity's own* calendar (ADR-0037) at
+ * *minute* granularity (ADR-0036), so the two can legitimately disagree — a per-activity calendar
+ * with a Saturday shift is a working day the client's predicate says is not. The PATCH sends the raw
+ * dropped day and lets the server decide; this only decides what to paint meanwhile.
+ *
+ * Bounded like {@link drawnSpanPlacement}, so a pathological calendar cannot hang the drag.
+ */
+export function rollForwardToWorkingDay(
   dayOffset: number,
   isWorkingDay: (dayOffset: number) => boolean,
   horizon: number = SNAP_HORIZON_DAYS,
 ): number {
-  if (isWorkingDay(dayOffset)) return dayOffset;
-  for (let delta = 1; delta <= horizon; delta += 1) {
-    // Earlier side first, so an exact tie rounds down (to the earlier working day).
-    if (isWorkingDay(dayOffset - delta)) return dayOffset - delta;
+  for (let delta = 0; delta <= horizon; delta += 1) {
     if (isWorkingDay(dayOffset + delta)) return dayOffset + delta;
   }
   return dayOffset;

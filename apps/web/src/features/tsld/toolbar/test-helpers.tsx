@@ -129,8 +129,6 @@ export function makeTsldToolbarContext(
     zoomToSelection: vi.fn(),
     matchedIds: new Set<string>(),
     currentMatchId: null,
-    snapToGrid: false,
-    toggleSnapToGrid: vi.fn(),
     // Export & print
     exportScheduleCsv: vi.fn(),
     exportDiagramPng: vi.fn(),
