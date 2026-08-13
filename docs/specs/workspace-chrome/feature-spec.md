@@ -34,9 +34,18 @@ this reason and it is the first milestone.
 **Revision 2 (2026-08-13) — the three critical questions are answered** (§1.9). Q1 and Q2 were
 accepted as defaulted. **Q3 was not**: the product owner has made the identity-line merge a **hard
 requirement** of the epic rather than a measurement-gated option, with the risk put to them in
-writing and reaffirmed. §4.11 is new and is the consequence — the merge's feasibility is
-**genuinely unknown**, and if it does not fit, something else in the app header row has to give.
-M0 is being run by the coordinator, including the repair of the probe named in F-10.
+writing and reaffirmed.
+
+**Revision 3 (2026-08-13) — M0 is measured**
+([`./m0-band-measurement.md`](./m0-band-measurement.md)), and it changes M5's shape. Both
+instrument repairs landed; 1646 is now permanent in `vertical-stack.spec.ts`. The headline: **the
+merge is 554 px over, and the only single item large enough to pay for it is the 637 px
+organisation nav.** So the nav collapse is a **prerequisite** of the hard requirement, not a
+fallback — and it is a decision about every screen in the application. §4.11 is rewritten from a
+ranked ladder into that finding. Two of its figures are **estimates decomposed from measured
+composites and are labelled as such** (M0-T4 takes them properly); three are direct measurements.
+The 849 px identity figure this document previously carried from ADR-0091 M0 is **stale and
+superseded by 1151 px**.
 
 ---
 
@@ -134,20 +143,26 @@ installed: `resource-view` carries a standing note _"Opens the resource panel an
 it"_ (`:229`) because inside a popover that focus move ejects the reader — and #125's own text says
 _"from a Row-1 button [it] was unremarkable"_.
 
-**F-9 — the vertical stack has never been measured at 1646.** _Verified:_
-`measure-toolbar/vertical-stack.spec.ts:26-29` sweeps `1920×1080` and `1440×960` only. The width
-this epic is judged at is absent, and so is its height (1920/1.75 = **1097 px**), which is what
-actually determines how much canvas the bands cost.
+**F-9 — the vertical stack had never been measured at 1646. It has now.** _Was:_
+`vertical-stack.spec.ts:26-29` swept `1920×1080` and `1440×960` only — the width this epic is judged
+at was absent, and so was its height (1920 / 1.75 = **1097 px**), which is what actually determines
+how much canvas the bands cost. **Now:** 1646 is permanent in that sweep, and the measurement is
+[`m0-band-measurement.md`](./m0-band-measurement.md) §2 — **249 px above the canvas, 558 px of
+canvas, so chrome is 31 % of the plan's vertical space** before the armed-tool banner and the
+activities handle. Bands: app header **56**, command band **135** (identity 45 + Row 1 45 + Row 2
+44). Every figure in §4.3 now comes from there.
 
-**F-10 — the app-header-room instrument cannot answer the question `TECH_DEBT` #129 asks of it.**
-_Verified:_ `vertical-stack.spec.ts:191-208` computes `used` and `widestGap` from
-`appHeaderRow.children`; `app-header.tsx:150-156` shows `AppHeaderRow` is `<header class="h-14
-px-4">` containing **exactly one child**, the grid in `HeaderContents` (`:52`). So `childCount` is
-always 1, `used` is always ≈ the row width and `widestGap` is always **0**, at every viewport, by
-construction. #129 quotes that output — _"at 1920 it reported one child using 1888 of 1920 px —
-there is no gap to slot into today"_ — as evidence that plan identity cannot merge into the app
-header row. **That conclusion is unsupported by that instrument.** The real question is what the
-grid's three cells leave, and nothing has measured it.
+**F-10 — the app-header-room instrument could not answer the question `TECH_DEBT` #129 asks of it.
+Confirmed and repaired.** _Was:_ `vertical-stack.spec.ts:191-208` computed `used` and `widestGap`
+from `appHeaderRow.children`; `app-header.tsx:150-156` shows `AppHeaderRow` is
+`<header class="h-14 px-4">` containing **exactly one child**, the grid in `HeaderContents` (`:52`),
+so the adjacent-pair loop never executed and `widestGap` was **0** at every viewport, by
+construction. #129 quotes that zero — _"one child using 1888 of 1920 px — there is no gap to slot
+into today"_ — as evidence that the merge is not feasible. **It is an artefact, not a measurement**,
+and M0 confirmed the diagnosis by repairing it: the probe now descends through single-child wrappers
+to the real grid line and reports the organisation nav separately. The repaired reading at 1646 is
+**content 1049 px, free 597 px, widest contiguous gap 337 px** — so there was room, and #129's
+conclusion was drawn from a number that could never have been anything else.
 
 **F-11 — `m7-ladder-measurement.md` §5 contains a claim that contradicts the code.** It says
 _"`clear-visual-placement` … is `isVisible`-false on this plan, which is why Row 2 shows no `⋯`"_.
@@ -159,11 +174,19 @@ placement` in the `⋯` — is consistent with the code and not with the documen
 **Row 2's entire measured baseline at 1646 may have been taken on a row that was one item and one
 `⋯` different from the one a planner has.** Settled by M0-T3, not assumed here.
 
-**F-12 — the pen/mode line carries ~165 px of pure redundancy.** _Established by ADR-0091 M0_
-(quoted in CLAUDE.md's ADR-0091 entry): identity content measures **849 px**, of which 223 px is a
-live-region pen sentence (_"You're editing this plan."_) plus an `Editing` badge sitting beside a
-button that reads `Stop editing`, and ~165 px of that is recoverable. `[TO RE-MEASURE at 1646]` —
-the figure is from a 1920 run.
+**F-12 — the identity line is 1151 px, not 849, and the ~165 px redundancy figure is an estimate.**
+_Superseded:_ this document previously carried **849 px** from ADR-0091 M0, taken at 1920. The
+current measured value at **1646 with the pen held** is **1151 px**
+([`m0-band-measurement.md`](./m0-band-measurement.md) §3), split as breadcrumb + `Draft` badge
+**361 px** and modes + view switch + pen cluster **790 px**. Both of those are direct measurements.
+
+**The ~165 px of pen redundancy is not.** It is decomposed by eye from the measured 790 px
+composite — the probe does not yet break the pen cluster out — as is the ~220 px a name-only
+breadcrumb would save from the 361 px composite. **Both are labelled estimates throughout this
+document and M0-T4 takes them properly before anything is built on them**, because a
+decomposed-by-eye figure is exactly where this epic's predecessors got their wrong numbers
+(`m7-ladder-measurement.md` §3 records a table of plausible-looking residuals that measured nothing
+they were labelled with).
 
 **F-13 — a canvas height change preserves the viewport.** _Verified:_ `TsldCanvas.tsx:1215-1260`
 — `measure()` writes `sizeRef` and the canvases' backing stores and **never touches `viewRef`**, so
