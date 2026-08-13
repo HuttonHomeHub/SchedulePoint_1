@@ -100,9 +100,17 @@ describe('ResourceFormDialog — resource tree (ADR-0053 §3)', () => {
     expect(options).toContain('Diggers');
     // The nested group is indented, so the picker still reads as a tree — now via the combobox's
     // `depth` rather than the non-breaking spaces a native `<option>` needed.
-    expect(screen.getByRole('option', { name: 'Diggers' }).querySelector('span')).toHaveStyle({
-      paddingInlineStart: '0.75rem',
-    });
+    //
+    // Asserted on the style ATTRIBUTE rather than through `toHaveStyle`, which reads
+    // `getComputedStyle`. jsdom 30 resolves `rem` to `px` there — `0.75rem` comes back as `12px` —
+    // where jsdom 29 returned the literal. That is jsdom becoming MORE browser-accurate, not a
+    // change in what the combobox does, so the fix is to stop asking a question whose answer
+    // depends on the root font size. It also makes this symmetric with the assertion below, which
+    // already tests the attribute.
+    expect(screen.getByRole('option', { name: 'Diggers' }).querySelector('span')).toHaveAttribute(
+      'style',
+      'padding-inline-start: 0.75rem;',
+    );
     expect(
       screen.getByRole('option', { name: 'Groundworks' }).querySelector('span'),
     ).not.toHaveAttribute('style');
