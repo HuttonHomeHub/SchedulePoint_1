@@ -171,6 +171,28 @@ keep `main` releasable.
   resources, M3 adds MS Project MSPDI, M4 (optional) export (spec `docs/specs/schedule-interchange/`,
   ADR-0050). Stage C2 M1 of the toolbar-placeholder burn-down; the External-Guest share link is Stage F.
 
+- **One activity field vocabulary** (ADR-0089). ~20 definition fields were rendered by two
+  components sharing no code, and nine features had each added a field to both by hand. The
+  divergence set was re-derived from the code rather than trusted — the spec listed nine, the
+  characterisation suite found **~26**, six of them defects a planner could hit, including an
+  activity that rendered as top level while the save re-sent its real parent.
+- **The plan-workspace command surface** (ADR-0090). 46 registered items on a row whose overflow
+  calculation could not see its own chrome, so the `⋯` never rendered and the surplus was paid by
+  controls falling out of an `overflow-hidden` box — **measured at 1920×1080: Row 1 109 px over, two
+  commands painted at 0 px visible**. WCAG 2.5.8, and the existing axe scan structurally could not
+  see it (`target-size` is `wcag22aa`; the scan requested `wcag2aa`, and shipped disabled).
+- **A mode is not a command** (ADR-0091). The surface had no vocabulary for anything that is not a
+  command, so modes, facts and subjects all rendered as buttons in a row. Its most useful output is
+  a measurement: the product owner's Surface Pro is **1646 CSS px**, and every prior figure came
+  from 1920/1440/1024/768 — both rows were half empty on the one screen the work is judged on.
+- **The canvas dock, and the diagram's vertical budget** (ADR-0092). 249 px of chrome above 558 px
+  of canvas — 31 % of the plan's vertical space. Every transient strip moved into the Activities row
+  the workspace already paid for (**measured: 0 px**), the selection bar stopped floating over the
+  diagram, and `Snap to grid` was deleted because it had no effect — the engine rolls every
+  placement forward regardless, and the toggle's only contribution was writing a weekend drop back
+  to the _previous_ Friday. The identity-line band merge was a hard requirement and is **withdrawn
+  on its own measurement**: it buys ~8 % more canvas.
+
 ## Delivered — operations & supportability
 
 **A theme this roadmap did not have.** Everything below was built between 2026-08-05 and
@@ -196,6 +218,19 @@ built next.
 - **CSP violations are collected instead of discarded** (staff console M4). The policy now reports;
   a public, throttled, deduplicated sink stores what arrives, so the decision to enforce can be made
   from evidence rather than from whatever somebody saw in a console during a six-surface walk.
+
+- **The first scheduled work of any kind, and a retention sweep** (ADR-0087). Two tables documented
+  a period and nothing enforced either; `csp_reports` is written by an **unauthenticated** endpoint
+  at a mintable 1.73 M rows/day per IP. One `setInterval`, `.unref()`'d, no Redis and no queue —
+  ADR-0009 narrowed rather than superseded, with the trigger to reopen it named. `audit_events` is
+  deliberately **not** swept: it refuses `DELETE` in the database, and ADR-0085 D1 refused to trade
+  that guarantee for a period.
+- **Feature flags are classified, not scheduled** (ADR-0088, superseding ADR-0084's calendar). The
+  load-bearing finding is that a `VITE_` flag **cannot be switched off on a deployed container and
+  never could** — Vite inlines the constants at build time and the publish workflow passes none — so
+  for the operator there has never been a rollback contract to expire. Two flags select an
+  alternative JSX root and retire on epic-touch under a ratcheting cap; ~28 one-line guards formally
+  **keep**; the rest wait on their coverage rather than on a date.
 
 **The argument the theme rests on**, and the reason it counts as security work rather than
 convenience: before it, every staff operation on this installation happened over `psql` and left

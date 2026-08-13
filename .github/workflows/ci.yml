@@ -95,13 +95,26 @@ jobs:
       - name: Check the feature-flag retirement schedule
         run: pnpm check:flags
 
-      # Claims about a DEPENDENCY's internals — 34 file-and-line citations into `better-auth` and
-      # `better-call`, several of which whole ADRs rest on. A minor bump moves every one of them
+      # Claims about a DEPENDENCY's internals — file-and-line citations into `better-auth`,
+      # `better-call`, `nodemailer`, `zod` and others, several of which whole ADRs rest on. (This
+      # comment said "34" until 2026-08-13, when the register held 49: a hard number in a comment
+      # nothing gates is the same defect the gate below exists for, one layer out.) A minor bump moves every one of them
       # and nothing here was watching, so the prose would keep reading as authoritative while the
       # decisions it justifies rested on nothing. Pins the verified version, the anchor at each
       # cited line, and that no citation exists outside the register (ADR-0076).
       - name: Check dependency-internal claims
         run: pnpm check:claims
+
+      # Every ADR is reachable from the document a reader navigates product direction by.
+      # Written because THREE consecutive reconciliation passes found `docs/ROADMAP.md` silent on
+      # the newest ADRs — 0067–0073, then 0074–0085, then 0087–0092 — each time found by hand, and
+      # the second of those recorded that it was "a numbered step and not a habit". It was a
+      # numbered step, and it happened again. `docs/RECONCILE.md` §1 says to write a gate instead
+      # of a reminder; this is that gate. Deliberately aimed at ROADMAP rather than CLAUDE.md's
+      # register, which was complete on all three occasions: only the roadmap rots silently,
+      # because nothing downstream breaks when a shipped capability is missing from it.
+      - name: Check ADR coverage
+        run: pnpm check:adr-coverage
 
       # The web container's nginx template, substituted exactly as the container substitutes it.
       # A value that breaks the config parse is a container that never serves a request, and until

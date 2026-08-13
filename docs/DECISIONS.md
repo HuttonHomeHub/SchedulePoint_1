@@ -10,6 +10,69 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-13 — Reconciliation pass at the ADR-0092 epic boundary
+
+**What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
+workspace-chrome epic. Documentation and tooling only; no product behaviour changed.
+
+**Three findings, and the third is why this pass produced a gate rather than a list of edits.**
+
+**1. The runbook disagreed with the gate it defers to.** §1 tells the reader to run
+`find apps/web/src -type f | wc -l`, which answers **937**. `check:counts` derives ts/tsx only and
+answers **932** — on the one figure the runbook explicitly says the gate owns. A reader following the
+step meets a number the gate would reject, and has no way to tell which is wrong. The command now
+matches the derivation.
+
+**2. The sibling nobody looked at.** `apps/api/README.md` carried four stale counts — 20 modules
+against 22, 27 models against 29, 47 migrations against 54, 32 e2e specs against 40 — each stated
+twice, in the banner and again in the structure block. `apps/web/README.md` had the _identical_
+defect and was fixed on 2026-08-09 by deleting its copies and pointing at the gated source. The API
+README was never opened. That is verbatim what §1 warns about in its own words — _when you patch a
+gate, ask whether the same hole is in its siblings_ — and the warning was written by the pass that
+left this one. Three further ungated restatements went the same way: `BACKEND_ARCHITECTURE.md`,
+`TESTING.md`, and `.claude/agents/feature-analyst.md`, which is worse than a document because it
+asserts a module count into **every spec it writes**.
+
+**3. The third repeat, and the gate it finally earned.** `ROADMAP.md` was silent on **ADR-0087
+through ADR-0092**. The 2026-08-04 pass found it silent on 0067–0073. The 2026-08-09 pass found it
+silent on 0074–0085 and recorded the reason in the register: _"the same failure as the two rows
+below, two epics later, which is why that check is a numbered step and not a habit."_ It **was** a
+numbered step. It failed anyway, because a numbered step is still a human remembering.
+
+So it is now `pnpm check:adr-coverage`. Three decisions inside it are worth keeping:
+
+- **It is aimed at `ROADMAP.md`, not at `CLAUDE.md`'s register**, which was complete on all three
+  occasions. The two answer different questions — _what did we decide?_ versus _where is the product
+  going?_ — and only the second rots silently, because nothing downstream breaks when a shipped
+  capability is missing from it. A gate aimed at the healthy copy would have been green all three
+  times.
+- **The exemption register is set at the measured floor of 39**, not at an aspirational number. That
+  is ADR-0058's own lesson about the coverage ratchets (API 74% / web 87%, not 80%): a gate that
+  fails on day one gets deleted rather than fixed. Sixteen of the 39 are explicitly marked **debt,
+  not decision** — shipped capabilities the roadmap never picked up — so the register reads as a
+  queue rather than as an endorsement.
+- **It fails both ways.** An exemption for an ADR that _is_ cited is also an error, because a stale
+  exemption is a licence for the next ADR to claim it by copying its neighbour.
+
+Verified red first, against ADR-0092 itself.
+
+**Also:** the CI comment beside `check:claims` said "34 citations" against a register of 49 — the
+gate's own defect class, one layer out. The number was removed rather than corrected, since nothing
+gates a comment.
+
+**What was clean**, and checked rather than assumed: the four accepted-but-unbuilt ADRs (0009 queues,
+0010 caching, 0011 object storage, 0013 metrics/tracing) are still unbuilt — no `bullmq`, `ioredis`,
+`redis`, `@aws-sdk/client-s3` or `@opentelemetry/api` in any manifest; the three
+`REFERENCE_FEATURE.md` exemplars all exist; both agent files that name absent libraries do so as
+**correct negations** ("there is no queue", "there is no Radix"); and `STAFF_EMAILS` is documented in
+`.env.example` as well as `docker-compose.yml`.
+
+**Step 7** — the specialist agents over recent work — was satisfied by the epic's own M6 gate pass
+earlier the same day: ux, accessibility, component and performance over the whole ADR-0092 diff,
+which found four defects and is recorded in that ADR.
+
+---
+
 ### 2026-08-09 — Reconciliation pass at the ADR-0086 epic boundary
 
 **What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
