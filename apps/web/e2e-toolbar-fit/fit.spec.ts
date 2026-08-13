@@ -465,6 +465,32 @@ test('every toolbar command is reachable at every targeted width', async ({ page
         ).toBeLessThanOrEqual(TRAILING_GAP_TOLERANCE_PX);
       }
 
+      // S11 — a popover trigger goes icon-only in the collapsed band, like its neighbours.
+      //
+      // Added 2026-08-13 after `Analysis` and `Share & export` were found painting their text at
+      // every width while every other trigger on both rows went icon-only below 1024. That is 145 px
+      // between them; Row 2 fitted at 960 only because `snap-to-grid` was there to demote, and
+      // deleting that button (workspace-chrome M2) turned a latent inconsistency into a red S4.
+      //
+      // Asserted as **both states**, not just the narrow one: an assertion that only pins "no label
+      // at 960" passes just as well against a control that has no label anywhere, which is the
+      // TECH_DEBT #126 failure (four blank 16 px buttons) in a different costume. The trigger is
+      // located by its item id, never by its copy — the standing rule after three journeys broke on
+      // a label change.
+      for (const id of ['analysis', 'export']) {
+        if (!state.inline.includes(id)) continue;
+        const text = await page
+          .locator(`[data-toolbar-item="${id}"]`)
+          .first()
+          .innerText()
+          .catch(() => '');
+        const labelled = text.trim().length > 0;
+        expect(
+          labelled,
+          `S11 ${where}: ${id} should be ${width >= 1024 ? 'labelled' : 'icon-only'} in this band`,
+        ).toBe(width >= 1024);
+      }
+
       // S3 — no command has been lost; it is inline or the ⋯ offers it.
       const reachable = await reachableSet(page, row, state);
       const missing = reference[row]!.filter(

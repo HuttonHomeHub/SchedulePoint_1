@@ -1096,9 +1096,21 @@ function PlanAnalysisControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
+  // **This trigger honours the collapsed band like every other one on the row** — it did not until
+  // 2026-08-13, and that is what made Row 2 nine pixels too wide at 960 once `snap-to-grid` was
+  // deleted (`e2e-toolbar-fit` S4). Both this control and its `Share & export` neighbour painted
+  // their text at every width while `Go to today`, `View ▾`, `Summary ▾` and the rest went icon-only
+  // below 1024 — 145 px of text between them, which the deleted button's 36 px had been masking.
+  // The ADR-0064 §7 shape again: one correct pattern applied to a control and not its neighbour,
+  // invisible to every gate until an unrelated change moved the arithmetic past a boundary.
+  //
+  // Icon-only means the text is gone, so the name has to come from somewhere: `aria-label` is set
+  // unconditionally in that state rather than only when shaded, or the button would be announced as
+  // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
+  const compact = triggersAreCompact(api.layout);
   return (
     <>
       <button
@@ -1109,7 +1121,7 @@ function PlanAnalysisControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? ANALYSIS_LABEL) : ANALYSIS_LABEL}
-        {...(disabled && api.disabledReason ? { 'aria-label': ANALYSIS_LABEL } : {})}
+        {...(compact || (disabled && api.disabledReason) ? { 'aria-label': ANALYSIS_LABEL } : {})}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
@@ -1117,7 +1129,7 @@ function PlanAnalysisControl({
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <ChartArea aria-hidden="true" className="size-4" />
-        <span className="truncate">{ANALYSIS_LABEL}</span>
+        {compact ? null : <span className="truncate">{ANALYSIS_LABEL}</span>}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
@@ -1243,9 +1255,21 @@ function ExportMenuControl({
   ctx: TsldToolbarContext;
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
+  // **This trigger honours the collapsed band like every other one on the row** — it did not until
+  // 2026-08-13, and that is what made Row 2 nine pixels too wide at 960 once `snap-to-grid` was
+  // deleted (`e2e-toolbar-fit` S4). Both this control and its `Share & export` neighbour painted
+  // their text at every width while `Go to today`, `View ▾`, `Summary ▾` and the rest went icon-only
+  // below 1024 — 145 px of text between them, which the deleted button's 36 px had been masking.
+  // The ADR-0064 §7 shape again: one correct pattern applied to a control and not its neighbour,
+  // invisible to every gate until an unrelated change moved the arithmetic past a boundary.
+  //
+  // Icon-only means the text is gone, so the name has to come from somewhere: `aria-label` is set
+  // unconditionally in that state rather than only when shaded, or the button would be announced as
+  // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
+  const compact = triggersAreCompact(api.layout);
   return (
     <>
       <button
@@ -1256,7 +1280,9 @@ function ExportMenuControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? SHARE_EXPORT_LABEL) : SHARE_EXPORT_LABEL}
-        {...(disabled && api.disabledReason ? { 'aria-label': SHARE_EXPORT_LABEL } : {})}
+        {...(compact || (disabled && api.disabledReason)
+          ? { 'aria-label': SHARE_EXPORT_LABEL }
+          : {})}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
@@ -1264,7 +1290,7 @@ function ExportMenuControl({
         className={cn(toolbarControlVariants({ active: open, disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
-        <span className="truncate">{SHARE_EXPORT_LABEL}</span>
+        {compact ? null : <span className="truncate">{SHARE_EXPORT_LABEL}</span>}
         <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
