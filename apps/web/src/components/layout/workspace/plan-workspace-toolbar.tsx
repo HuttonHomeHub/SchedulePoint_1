@@ -982,7 +982,8 @@ export function ToolbarPlanWorkspace({
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
-              <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2">
+              {/* No padding — see the single-pane branch below for why. */}
+              <div className="relative flex min-h-0 flex-1 flex-col gap-2">
                 {surface}
                 {legendPanel}
                 {resourceStripPanel}
@@ -1077,7 +1078,11 @@ export function ToolbarPlanWorkspace({
             <WorkspaceViewToggle value={pane} onChange={setPane} />
             <div
               className={cn(
-                'relative min-h-0 flex-1 flex-col gap-2 px-4 pt-2 pb-2',
+                // **No padding: the canvas fills its section** (workspace-chrome M1). The inset read as a
+                // card floating in a pane rather than as the surface the workspace exists to show, and it
+                // cost 8 px of height and 32 px of width for nothing. Separation from the band above is
+                // the band's own `border-b`; from the dock below, the dock's.
+                'relative min-h-0 flex-1 flex-col gap-2',
                 pane === 'diagram' ? 'flex' : 'hidden',
               )}
             >
