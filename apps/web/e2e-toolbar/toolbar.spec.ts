@@ -64,6 +64,13 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   // read-out is not a stop in the arrow-key sequence.
   const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
   await expect(lookRow.getByRole('button', { name: /^View/ })).toBeVisible();
+
+  // **Widened deliberately for this one assertion.** The read-out is band-conditional since M7-S4 —
+  // withheld below `compact`, where the row needs its width for commands and the number is one press
+  // away in `Summary ▾` — and this journey runs at Playwright's default 1280, which lands under that
+  // floor once the rail is open. Asserting it at the default width would be asserting the wrong
+  // thing; asserting it conditionally would assert nothing.
+  await page.setViewportSize({ width: 1600, height: 900 });
   const finish = lookRow.getByText('Finish', { exact: true });
   await expect(finish).toBeVisible();
   await expect(
