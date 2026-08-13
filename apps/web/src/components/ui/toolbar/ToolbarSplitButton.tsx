@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react';
+import { useId } from 'react';
 
 import { toolbarControlVariants, toolbarSplitCaretVariants } from './toolbar-styles';
 
@@ -36,6 +37,19 @@ export interface ToolbarSplitButtonProps {
   disabled?: boolean;
   /** Overrides {@link disabled} for the primary half alone. */
   primaryDisabled?: boolean;
+  /**
+   * Why a shaded half is shut, **programmatically associated** — an `sr-only` sibling wired by
+   * `aria-describedby`, exactly as {@link ToolbarButton} and {@link ToolbarPopover} do it (ADR-0082).
+   *
+   * The composite shipped with `title` alone, which is the failure this repository has now recorded
+   * four times: a `title` is a hover tooltip that no mainstream browser shows on keyboard focus, so
+   * a sighted keyboard-only planner tabbing to a shaded control got a dimmed button and nothing
+   * else. It became reachable on a live path when `Go to today ▾` merged two commands with genuinely
+   * different gates (ADR-0091 M7-S6): before that, every consumer used one `disabled` for both
+   * halves and the primary's `title` happened to cover it.
+   */
+  primaryDisabledReason?: string;
+  caretDisabledReason?: string;
   /** Overrides {@link disabled} for the caret half alone. */
   caretDisabled?: boolean;
   /**
@@ -85,6 +99,8 @@ export function ToolbarSplitButton({
   disabled = false,
   primaryDisabled,
   caretDisabled,
+  primaryDisabledReason,
+  caretDisabledReason,
   haspopup = 'menu',
   compact = false,
   title,
@@ -96,6 +112,11 @@ export function ToolbarSplitButton({
 }: ToolbarSplitButtonProps): React.ReactElement {
   const primaryOff = primaryDisabled ?? disabled;
   const caretOff = caretDisabled ?? disabled;
+  const reasonIds = useId();
+  // Only when there IS a reason: an `aria-describedby` pointing at nothing is a dangling reference,
+  // which some AT reads as an empty description rather than as absence.
+  const primaryReasonId = primaryOff && primaryDisabledReason ? `${reasonIds}-p` : undefined;
+  const caretReasonId = caretOff && caretDisabledReason ? `${reasonIds}-c` : undefined;
   return (
     <span
       className={cn(
@@ -111,8 +132,12 @@ export function ToolbarSplitButton({
         type="button"
         aria-pressed={pressed}
         aria-disabled={primaryOff || undefined}
-        {...(compact ? { 'aria-label': label } : {})}
-        title={title}
+        // The name is pinned whenever a reason span is rendered, for the same reason
+        // `ToolbarButton` pins it: the span lives inside the button, and a button's name comes from
+        // its content, so without this the reason would join the name as well as the description.
+        {...(compact || primaryReasonId ? { 'aria-label': label } : {})}
+        {...(primaryReasonId ? { 'aria-describedby': primaryReasonId } : {})}
+        title={primaryOff ? (primaryDisabledReason ?? title) : title}
         onClick={() => {
           if (!primaryOff) onPrimary();
         }}
@@ -129,6 +154,11 @@ export function ToolbarSplitButton({
       >
         {icon}
         {compact ? null : <span className="truncate">{label}</span>}
+        {primaryReasonId ? (
+          <span id={primaryReasonId} className="sr-only">
+            {primaryDisabledReason}
+          </span>
+        ) : null}
       </button>
       <button
         ref={caretRef}
@@ -138,12 +168,19 @@ export function ToolbarSplitButton({
         aria-expanded={open}
         aria-disabled={caretOff || undefined}
         aria-label={caretLabel}
+        {...(caretReasonId ? { 'aria-describedby': caretReasonId } : {})}
+        {...(caretOff && caretDisabledReason ? { title: caretDisabledReason } : {})}
         onClick={() => {
           if (!caretOff) onOpenMenu();
         }}
         className={cn(toolbarSplitCaretVariants(), 'rounded-r-md px-1 outline-none')}
       >
         <ChevronDown aria-hidden="true" className="size-3.5" />
+        {caretReasonId ? (
+          <span id={caretReasonId} className="sr-only">
+            {caretDisabledReason}
+          </span>
+        ) : null}
       </button>
     </span>
   );

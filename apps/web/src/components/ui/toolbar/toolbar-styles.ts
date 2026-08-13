@@ -30,9 +30,13 @@ import { cva } from 'class-variance-authority';
  *
  * Two rules for the next consumer, both learnt the hard way. `restoreFocusRef` must point at the
  * **primary**, never the caret: the caret is outside the tab order, so restoring focus there strands
- * a keyboard user (WCAG 2.4.3 — shipped, and caught by the ADR-0064 enablement review). And the
- * composite is now duplicated across two controls; a third should extract it rather than copy it
- * (`docs/TECH_DEBT.md` #76).
+ * a keyboard user (WCAG 2.4.3 — shipped, and caught by the ADR-0064 enablement review). And a
+ * consumer composes {@link ToolbarSplitButton} rather than rebuilding the pair.
+ *
+ * **That second sentence used to say the opposite** — "a third should extract it rather than copy
+ * it" — and by the time a design pass read it the extraction had already happened, in the very
+ * component whose docblock names the merge it was written for. A stale instruction is worse than no
+ * instruction: it tells the next author to do work that is done, in a file they will then edit.
  */
 /**
  * The **24 px pointer-target floor** for a split button's caret (WCAG 2.2 §2.5.8 Target Size

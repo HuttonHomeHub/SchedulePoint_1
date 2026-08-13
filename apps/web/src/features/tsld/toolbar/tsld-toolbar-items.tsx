@@ -8,7 +8,6 @@ import {
   ChartArea,
   ChartGantt,
   CalendarDays,
-  CalendarSearch,
   Check,
   ChevronDown,
   DollarSign,
@@ -73,6 +72,7 @@ import {
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
+import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
@@ -321,69 +321,97 @@ export const TSLD_VIEW_TOGGLE_KEYS: ReadonlyArray<keyof TsldViewToggles> =
 const GOTO_FIELD_ID = 'tsld-goto-date-field';
 const GOTO_HINT_ID = 'tsld-goto-date-hint';
 
-function GoToDateControl({
+/**
+ * **Go to today, with Go to date on its caret** (ADR-0091 M7-S6) — one control where there were two.
+ *
+ * They were adjacent members of the Frame group doing the same job on the same axis: `Go to today`
+ * pans the viewport to a date it already knows, `Go to date` pans it to one you type. Merging them
+ * is worth ~94 px on Row 1 and, more usefully, stops a planner having to notice that the two
+ * date-shaped buttons beside each other are not alternatives.
+ *
+ * **The two halves keep separate gates, and that is the load-bearing part.** Going to *today* needs
+ * a computed diagram in the canvas view; going to *a date* needs only an anchored plan. Under one
+ * `disabled` the caret would inherit the primary's gate and **Go to date would become unreachable
+ * on an empty or Gantt-viewed plan** — a capability a planner has today, removed by a layout change.
+ * That is the ADR-0081 dead-end shape, and `ToolbarSplitButton`'s per-half props exist for it; its
+ * own docblock names this merge.
+ *
+ * The panel is `usePopoverPanel`, the same one `View ▾` and `Summary ▾` open, and focus restores to
+ * the **primary** — the caret is `tabIndex={-1}`, so restoring there strands a keyboard user.
+ *
+ * The panel's own `Today` button is gone with the merge: the primary half now does exactly that,
+ * one click shallower.
+ */
+function GoToTodayControl({
   ctx,
-  itemProps,
-  compact,
+  api,
 }: {
   ctx: TsldToolbarContext;
-  itemProps: ToolbarItemRenderApi['itemProps'];
-  /** The row's `collapsed` band — see {@link triggersAreCompact}. */
-  compact: boolean;
+  api: ToolbarItemRenderApi;
 }): React.ReactElement {
   // First-use-only disclosure (feature-spec.md §4.2): marked seen on the first successful PICK
   // (not the first open) — opening and closing without reading proves nothing. The sentence never
   // leaves the accessibility tree: seen ⇒ `sr-only`, `aria-describedby` stays wired throughout.
   const hint = useFirstUseHint('go-to-date');
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const caretRef = useRef<HTMLButtonElement>(null);
+  const { open, openPanel, close, panel } = usePopoverPanel({ triggerRef: primaryRef });
+
+  const primaryDisabled = !(ctx.hasDiagram && ctx.canvasActive);
+  const caretDisabled = !SCHEDULING_MODES_ENABLED || ctx.plannedStart === null;
+  const primaryReason = canvasViewportReason(ctx, 'Add an activity to go to today');
+
   return (
-    <ToolbarPopover
-      label="Go to date"
-      icon={<CalendarSearch className="size-4" />}
-      itemProps={itemProps}
-      compact={compact}
-    >
-      <div className="flex flex-col gap-1.5 text-sm">
-        {/* Inner field is "Date" (not another "Go to date") so AT doesn't echo the dialog name; the
-            hint is wired via `aria-describedby` so keyboard/SR users landing on the field hear it. */}
-        <label htmlFor={GOTO_FIELD_ID} className="text-muted-foreground font-medium">
-          Date
-        </label>
-        <Input
-          id={GOTO_FIELD_ID}
-          type="date"
-          aria-describedby={GOTO_HINT_ID}
-          onChange={(event) => {
-            if (event.target.value) {
-              ctx.goToDate(event.target.value);
-              hint.markSeen();
-            }
-          }}
-          className="h-9"
-        />
-        <span
-          id={GOTO_HINT_ID}
-          className={cn('text-muted-foreground text-xs', hint.unseen ? '' : 'sr-only')}
-        >
-          Pans the timeline only — nothing is saved.
-        </span>
-        {/* Today shortcut (feature-spec.md §4.4) — the same `goToDate` command the standalone
-            toolbar button drives, pre-filled with today's date. Not `hasDiagram`-gated (unlike its
-            sibling toolbar button): panning an empty canvas is harmless, and this field is gated
-            only on `plannedStart !== null`, same as the date input above. Does not close the
-            popover, consistent with picking a date. */}
-        <button
-          type="button"
-          onClick={() => {
-            ctx.goToDate(ctx.todayIso);
-            hint.markSeen();
-          }}
-          className="hover:bg-accent/60 -mx-1 flex items-center gap-1.5 rounded-md px-1 py-1 text-left"
-        >
-          <LocateFixed aria-hidden="true" className="size-4" />
-          Today
-        </button>
-      </div>
-    </ToolbarPopover>
+    <>
+      <ToolbarSplitButton
+        itemProps={api.itemProps}
+        primaryRef={primaryRef}
+        caretRef={caretRef}
+        pressed={false}
+        open={open}
+        primaryDisabled={primaryDisabled}
+        caretDisabled={caretDisabled}
+        {...(primaryReason ? { primaryDisabledReason: primaryReason } : {})}
+        caretDisabledReason="Set the plan's start date first"
+
+        haspopup="dialog"
+        compact={triggersAreCompact(api.layout)}
+        title="Go to today"
+        icon={<LocateFixed aria-hidden="true" className="size-4" />}
+        label="Go to today"
+        caretLabel="Go to date"
+        onPrimary={() => ctx.goToDate(ctx.todayIso)}
+        onOpenMenu={() => (open ? close(false) : openPanel())}
+      />
+      {panel(
+        'Go to date',
+        <div className="flex flex-col gap-1.5 text-sm">
+          {/* Inner field is "Date" (not another "Go to date") so AT doesn't echo the dialog name; the
+              hint is wired via `aria-describedby` so keyboard/SR users landing on the field hear it. */}
+          <label htmlFor={GOTO_FIELD_ID} className="text-muted-foreground font-medium">
+            Date
+          </label>
+          <Input
+            id={GOTO_FIELD_ID}
+            type="date"
+            aria-describedby={GOTO_HINT_ID}
+            onChange={(event) => {
+              if (event.target.value) {
+                ctx.goToDate(event.target.value);
+                hint.markSeen();
+              }
+            }}
+            className="h-9"
+          />
+          <span
+            id={GOTO_HINT_ID}
+            className={cn('text-muted-foreground text-xs', hint.unseen ? '' : 'sr-only')}
+          >
+            Pans the timeline only — nothing is saved.
+          </span>
+        </div>,
+      )}
+    </>
   );
 }
 
@@ -1786,22 +1814,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // The persisted **data date** no longer lives on the bar (ADR-0031 two-row amendment): it is set at
     // plan creation and changed via *Edit plan* (and will become the status date under *Update
     // progress*), so navigation and the data anchor can no longer be confused as adjacent date fields.
-    {
-      id: 'go-to-date',
-      group: 'frame',
-      row: 'look',
-      tier: 1,
-      order: -2,
-      label: 'Go to date',
-      isVisible: (ctx) => SCHEDULING_MODES_ENABLED && ctx.plannedStart !== null,
-      render: (ctx, api) => (
-        <GoToDateControl
-          ctx={ctx}
-          itemProps={api.itemProps}
-          compact={triggersAreCompact(api.layout)}
-        />
-      ),
-    },
+
     // Zoom — −/+ and Fit, a compact cluster in the Frame group (ADR-0031). Shaded (not hidden) until
     // a diagram exists, so the bar keeps a stable shape from the empty canvas onward.
     //
@@ -1881,16 +1894,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
-          // D3a (ADR-0091): labelled at `comfortable`, icon-only below — the policy its three
-          // viewport siblings take. On the LIVE item, not on `todayShape`, because that shape also
-          // feeds the flag-off "Coming soon" placeholder below, whose parity suite is the rollback
-          // contract and asserts it byte-for-byte. A stub has no viewport to reframe, so it has
-          // nothing to compact for; putting the policy on the shape broke that suite and bought
-          // nothing.
-          showLabel: { atLeast: 'comfortable' } as const,
-          isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-          disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to go to today'),
-          onActivate: (ctx) => ctx.goToDate(ctx.todayIso),
+          // **The merged control takes `go-to-date`'s slot** (ADR-0091 M7-S6): tier 1, ordered ahead
+          // of the zoom cluster, where the date control has always sat. It is a `render` item and
+          // therefore pinned — a split button is not something you stuff into a menu — which is why
+          // it takes the tier that never demotes rather than `today`'s old tier 2.
+          //
+          // `showLabel` is gone with the merge: a `render` item owns its own chrome, and this one
+          // compacts from `api.layout` exactly as its `View ▾` and `Summary ▾` neighbours do.
+          tier: 1 as const,
+          order: -2,
+          render: (ctx, api) => <GoToTodayControl ctx={ctx} api={api} />,
         }
       : placeholderItem(todayShape),
 
