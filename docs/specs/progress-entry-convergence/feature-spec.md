@@ -84,17 +84,33 @@ Three things converged this month and none of them existed when the toolbar item
 
 ### Open questions
 
-- **Q1 — Does the Contributor-in-Gantt regression need mitigating?** Removing the toolbar item
-  leaves a Contributor in the Gantt view reaching progress only through the activities table row
-  menu, and that panel is collapsed by default on this surface
-  (`plan-workspace-toolbar.tsx:282`). This is a real cost and it is the product owner's call, not
-  an implementation detail. §4 states the recommendation and the alternative.
-- **Q2 — Should the two remaining selection-gated write affordances follow?** `add-note` and
-  `clear-visual-placement` are also reachable from a Gantt selection, and the Gantt ships
-  **read-only by design** (ADR-0059 §4: _"The first ship is read-only … Editing is a later,
-  separately-gated milestone"_). This spec **does not** fold them in — it names the finding and
-  proposes it as follow-up, because the argument for removing `update-progress` stands on the
-  duplication alone and should not be widened to carry an unrelated one.
+- **Q1 — Does the Contributor-in-Gantt regression need mitigating? — ANSWERED 2026-08-13, product
+  owner: no.** Removing the toolbar item leaves a Contributor in the Gantt view reaching progress
+  only through the activities-table row menu, and that panel is collapsed by default on this
+  surface (`plan-workspace-toolbar.tsx:282`). Two mitigations were offered and **both declined**:
+  expanding the activities panel by default in the Gantt (which spends the vertical budget ADR-0092
+  had just recovered), and giving Gantt bars a row menu (which starts making the Gantt editable —
+  an ADR-0059 §4 conversation, not a tidy-up).
+
+  **The cost is accepted on a stated basis**, and the basis is the load-bearing half: progress
+  reporting from a Gantt selection is picked up by the **Gantt-editing epic**
+  (`docs/BACKLOG.md`), where the surface will be editable and the right answer is a proper Gantt
+  affordance rather than a toolbar button standing in for one. Recorded there as an inherited
+  requirement rather than left as a promise in this spec — a spec nobody re-reads is exactly how
+  ADR-0058's drift starts, and a forward commitment is the most perishable kind of claim there is.
+
+  **Consequence, stated plainly so it is not discovered later:** between M1 shipping and that epic
+  landing, a Contributor working in the Gantt has a slower route to the only action they have.
+  That is a known, dated, accepted regression, not an oversight.
+
+- **Q2 — Should the two remaining selection-gated write affordances follow? — Deferred to the same
+  epic.** `add-note` and `clear-visual-placement` are also reachable from a Gantt selection, and
+  the Gantt ships **read-only by design** (ADR-0059 §4: _"The first ship is read-only … Editing is
+  a later, separately-gated milestone"_), so the read-only claim is currently true of the bars and
+  not of the toolbar above them. This spec **does not** fold them in — the argument for removing
+  `update-progress` stands on the duplication alone and should not be widened to carry an unrelated
+  one — and Q1's answer puts them in the right place: whichever epic decides what a Gantt selection
+  may do should decide it for all three at once, not for one of them now and two of them later.
 
 ---
 

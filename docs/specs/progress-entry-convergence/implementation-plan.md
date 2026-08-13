@@ -1,7 +1,9 @@
 # Implementation Plan: Progress-entry convergence
 
 - **Spec:** [`feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting product-owner approval (Q1 in the spec is blocking for M2 only)
+- **Status:** Draft — awaiting product-owner approval to build. **Q1 answered 2026-08-13** (the
+  Gantt cost is accepted, unmitigated, and inherited by the Gantt-editing epic), so nothing in this
+  plan is blocked on an open question.
 - **Date:** 2026-08-13
 - **Proposes:** ADR-0093
 
@@ -66,9 +68,11 @@ duplication argument stands alone — but each changes what gets written down.
 - **Do:** confirm each of the spec's four routes in both views, including the one the change leans
   on — that the activities-table row menu reaches progress **in the Gantt view**, with the panel
   expanded from collapsed.
-- **Why:** it is the sole mitigation for removing route 1, and it is currently established by
-  reading which JSX branch the panel sits in. If it turns out the panel is view-conditional after
-  all, Q1 stops being a question and becomes a blocker.
+- **Why:** it is the sole remaining route in the Gantt, and it is currently established by reading
+  which JSX branch the panel sits in. **Q1's answer raises the stakes on this task rather than
+  settling it:** the cost was accepted on the stated basis that the table route works there, so if
+  the panel turns out to be view-conditional after all, the acceptance rests on a false premise and
+  has to go back to the product owner. This is the one task that can still stop the epic.
 - **Tests:** one journey assertion in `e2e-gantt/`.
 - **Risk:** low, high value — this is the task that could stop the epic.
 
@@ -120,7 +124,7 @@ menu (route 3) and the activity editor's Progress tab (route 4), each verified i
 
 ---
 
-### Milestone M2 — Gate pass and journey · _blocking on Q1_
+### Milestone M2 — Gate pass and journey
 
 #### Feature: the gates that have earned their place
 
@@ -145,12 +149,19 @@ menu (route 3) and the activity editor's Progress tab (route 4), each verified i
 - **Locate controls by `[data-toolbar-item]`, not by copy** — the standing rule from ADR-0091's
   retrospective, where three journeys broke on label changes.
 
-##### Task M2-T3 — Q1 mitigation, **if the product owner asks for one** (≈ TBD)
+##### Task M2-T3 — ~~Q1 mitigation~~ — **CLOSED, not required** (2026-08-13)
 
-Held open deliberately. Do not pick a mitigation before the answer: the options (expand the
-activities panel by default in Gantt / add a Gantt row menu / accept the cost) differ enough that
-guessing wastes the work. **Everything in M0 and M1 proceeds regardless** — Q1 blocks this task
-only, not the milestone before it.
+The product owner accepted the cost with no mitigation, on the basis that progress reporting from a
+Gantt selection is picked up by the Gantt-editing epic. **Do not build one anyway.** Both declined
+options (expand the activities panel by default in the Gantt; give Gantt bars a row menu) are still
+the wrong answers for the reasons recorded in the spec — the first spends the vertical budget
+ADR-0092 just recovered, the second makes the Gantt editable by the side door — and a mitigation
+added "to be safe" would have to be unpicked by the epic that inherits the requirement.
+
+The one obligation this leaves is a **documentation** one, discharged in M1-T3: the inherited
+requirement is written into `docs/BACKLOG.md` beside the Gantt-editing entry, not left in this spec.
+
+M2 is therefore no longer blocked on anything.
 
 ---
 
@@ -200,13 +211,13 @@ this epic specifically:
 
 ## Risks & assumptions (rollup)
 
-| Risk                                                                | Likelihood  | Impact | Mitigation                                                                                                        |
-| ------------------------------------------------------------------- | ----------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
-| A Contributor working in the Gantt loses their quickest route       | **certain** | medium | Q1 — the product owner's call, with M2-T3 held open for it                                                        |
-| The width argument turns out to buy nothing                         | medium      | none   | M0-T2 measures it; the ADR drops the argument rather than keeping a claim that did not hold                       |
-| The plural finding is a mis-read of the wiring                      | medium      | none   | M0-T1 confirms in a browser; withdrawn in place if refuted                                                        |
-| A quick-wins test file is weakened while its cases are pruned       | medium      | medium | M1-T1 spot-checks each deletion — the ADR-0084 D5 rule, previously broken by claiming coverage that did not exist |
-| Removing the item strands a persona on a surface of shaded controls | low         | high   | M2-T1 points the UX gate at exactly this                                                                          |
+| Risk                                                                | Likelihood  | Impact | Mitigation                                                                                                                                             |
+| ------------------------------------------------------------------- | ----------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A Contributor working in the Gantt loses their quickest route       | **certain** | medium | **Accepted, not mitigated** (Q1, 2026-08-13) — inherited by the Gantt-editing epic via `docs/BACKLOG.md`. Live from M1 shipping until that epic lands. |
+| The width argument turns out to buy nothing                         | medium      | none   | M0-T2 measures it; the ADR drops the argument rather than keeping a claim that did not hold                                                            |
+| The plural finding is a mis-read of the wiring                      | medium      | none   | M0-T1 confirms in a browser; withdrawn in place if refuted                                                                                             |
+| A quick-wins test file is weakened while its cases are pruned       | medium      | medium | M1-T1 spot-checks each deletion — the ADR-0084 D5 rule, previously broken by claiming coverage that did not exist                                      |
+| Removing the item strands a persona on a surface of shaded controls | low         | high   | M2-T1 points the UX gate at exactly this                                                                                                               |
 
 **Assumption to check, not to trust:** that `openProgress` has no consumer besides the removed
 item. M1-T1 checks it.

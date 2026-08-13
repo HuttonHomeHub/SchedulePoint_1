@@ -27,6 +27,16 @@ a product idea that has not yet earned a roadmap line:
   drawing arrows would drag the rejected substrate back in through the side
   door, and the brief says read-primary. Both are worth revisiting **on
   evidence of use**, not before — that gate is the point.
+  **This epic inherits one requirement, decided elsewhere.** The
+  progress-entry convergence removed the command surface's `Report progress`
+  (ADR-0093), which was the only action reachable from a **Gantt** selection —
+  the canvas dock that replaces it is canvas-only. The product owner accepted
+  that cost on 2026-08-13 on the explicit basis that **progress reporting from
+  a Gantt selection is picked up here**, so a Contributor in the Gantt reaches
+  progress only through the activities-table row menu until this lands. Two
+  smaller holes belong to the same conversation: `add-note` and
+  `clear-visual-placement` are still reachable from a Gantt selection, so the
+  read-only claim above is currently true of the bars and not of the toolbar.
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.
