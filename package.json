@@ -48,7 +48,7 @@
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "rimraf": "^6.0.1",
-    "turbo": "^2.10.8",
+    "turbo": "^2.10.9",
     "typescript": "catalog:"
   },
   "config": {
