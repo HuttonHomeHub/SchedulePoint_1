@@ -66,7 +66,11 @@ import type {
   ToolbarLayoutMode,
   ToolbarRow,
 } from '@/components/ui/toolbar/toolbar-registry';
-import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
+import {
+  bandIsAtLeast,
+  defineToolbar,
+  type ToolbarItem,
+} from '@/components/ui/toolbar/toolbar-registry';
 import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
@@ -2363,10 +2367,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
     ...undoRedoToolbarItems(),
 
-    // The Project-finish read-out moved to the PLAN HEADER in ADR-0090 M2-T3
-    // (`features/schedule/components/ProjectFinishChip.tsx`). It cost 150 px of pinned Row-1 width
-    // — a `render` item can never demote — to show a number that is not a command, in a
-    // `role="toolbar"` whose other members all are.
     {
       id: 'summary',
       group: 'object',
@@ -2384,6 +2384,61 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         >
           {ctx.summaryContent}
         </ToolbarPopover>
+      ),
+    },
+    /**
+     * The **Project-finish read-out**, back inside the registry — a knowing reversal of ADR-0090
+     * M2-T3, recorded here rather than done quietly (ADR-0091 M7-S4).
+     *
+     * That task moved it out for two reasons. The first — **150 px of pinned Row-1 width**, paid at
+     * every viewport because a `render` item can never demote — no longer holds: Row 1 carries
+     * 382 px of slack at the product owner's 1646 px (`m7-ladder-measurement.md`), and the chip was
+     * put back beside `Summary ▾` at their request in M4 anyway, as the toolbar's **sibling**. The
+     * second — a read-out has no business in a `role="toolbar"` — is answered by `presentational`,
+     * which pins `tabIndex: -1` and withholds the focusable marker, so the chip is painted by the
+     * row and is not a stop in it. That field exists for exactly this and its own docblock says not
+     * to delete the capability.
+     *
+     * **What being a sibling could not do is let the `⋯` be last.** The overflow button lives inside
+     * the toolbar and must stay there — it is a roving stop, the arrow keys are a handler on the
+     * toolbar container, and the fit gate scopes its sweep to that element, so moving it out would
+     * take it out of the gate's reach silently. With the chip outside and to the right, the `⋯` was
+     * necessarily *not* the rightmost thing on the row, which is what the product owner saw and
+     * described as stranded. One of the two had to move inward, and it is the one that is not a
+     * command.
+     */
+    {
+      id: 'finish-chip',
+      group: 'object',
+      row: 'look',
+      tier: 2,
+      order: 2,
+      label: 'Project finish',
+      presentational: true,
+      /**
+       * **Withheld once the row stops being roomy** — the read-out's answer to being pinned.
+       *
+       * A `render` item can never demote, so every pixel it takes is paid at every width. Measured:
+       * with the chip unconditional, Row 1 laid out **11 px past its container at 1024** and broke
+       * the fit gate's S4, which is a *measured* claim that both rows fit at every supported width
+       * down to 768. Nothing was left to demote by then, so the row had no answer.
+       *
+       * Keyed to the density band rather than to a `sm:`/`xl:` breakpoint, because the band already
+       * means "how much room does this surface have" and the media query means "how wide is the
+       * window" — and those diverge exactly when the rail is open, which is most of the time. The
+       * number is one press away in `Summary ▾` at any width, so this costs a glance rather than a
+       * capability.
+       */
+      isVisible: (_ctx, env) => bandIsAtLeast(env.layout, 'compact'),
+      // `api.itemProps` is not optional even for a `presentational` item: it carries the
+      // `data-toolbar-item` marker and the `tabIndex: -1` that keeps the chip out of the roving
+      // sequence. Omitting it made the chip invisible to `e2e-toolbar-fit`, which found it — S10
+      // reported the trailing group 136 px adrift, which is exactly the chip's own width sitting
+      // between `Summary ▾` and the `⋯` while carrying no marker for the sweep to see.
+      render: (ctx, api) => (
+        <span {...api.itemProps} className="flex shrink-0 items-center text-sm">
+          {ctx.projectFinishContent}
+        </span>
       ),
     },
     // Baselines, Earned value and Resource histogram are behind the **Analysis** trigger since

@@ -145,15 +145,21 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
   });
 
-  it('keeps the Project-finish read-out OUT of the toolbar (ADR-0090 M2-T3)', () => {
-    // It was pinned inline here on the product owner's own decision #1, and it is not a reversal of
-    // that decision — the read-out is more prominent in the plan header than it was at the far end
-    // of a 25-item row. What changed is where a *number* belongs: 150 px of pinned width inside a
-    // `role="toolbar"` whose every other member is a command, kept legal only by a `presentational`
-    // escape hatch that exists to describe it.
+  it('paints the Project-finish read-out in the row without making it a stop (ADR-0091 M7-S4)', () => {
+    // ADR-0090 M2-T3 took this read-out out of the toolbar for two reasons: 150 px of pinned width,
+    // and a number sitting in a `role="toolbar"` whose every other member is a command. M7 puts it
+    // back, knowingly. The width objection no longer holds (Row 1 carries 382 px of slack at the
+    // product owner's 1646 px), and the principled half is kept rather than traded: `presentational`
+    // means the row paints it and the arrow keys never land on it.
+    //
+    // It had to come back because the `⋯` cannot leave — it is a roving stop, the arrow-key handler
+    // is on the toolbar container, and the fit gate sweeps that element — so a chip sitting outside
+    // and to its right made it impossible for the `⋯` to be the row's last thing.
     renderRows(ctx());
     const lookRow = screen.getByRole('toolbar', { name: 'View and navigate' });
-    expect(within(lookRow).queryByText(/^Finish/)).not.toBeInTheDocument();
+    const chip = within(lookRow).getByTestId('finish-chip-body');
+    expect(chip).toBeInTheDocument();
+    expect(chip.closest('[data-toolbar-focusable]')).toBeNull();
   });
 
   it('renders the Summary popover body from the context', () => {

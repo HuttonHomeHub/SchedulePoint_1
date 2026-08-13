@@ -288,25 +288,29 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     // behind so `<main>` keeps a heading. So the old anchor — the `<h1>`'s nearest `<header>` — no
     // longer identifies this row, and reaching for it would find the app header instead.
     renderScreen();
-    // **Re-scoped a third time, for ADR-0091.** The read-out moved off the identity line and back
-    // beside `Summary ▾`, which is a direct product-owner request ("i did like the finish date next
-    // to the summary before") and was the last thing the cancelled three-band merge was going to
-    // carry. It is Row 1's SIBLING, not a registry item — which is what lets it sit there without
-    // undoing ADR-0090 M2-T3, whose point was that a non-operable read-out must not be a stop
-    // inside `role="toolbar"`.
+    // **Re-scoped a fourth time, for ADR-0091 M7-S4, and this time the answer inverts.** The
+    // read-out moved back beside `Summary ▾` at the product owner's request; M4 did that by making
+    // it Row 1's SIBLING, which kept ADR-0090 M2-T3's rule intact — a non-operable read-out must not
+    // be a stop inside `role="toolbar"`.
     //
-    // So the two things worth asserting are: it renders, and it is NOT inside the toolbar. The
-    // old identity-line anchor is gone with the move; keeping it re-scoped to "some div" would be
-    // the pass-for-a-new-reason failure this docblock was already written about once.
+    // M7 puts it **into** the registry, as a `presentational` item. That is a knowing reversal of
+    // M2-T3's placement and it keeps M2-T3's actual principle: `presentational` pins `tabIndex: -1`
+    // and withholds the focusable marker, so the chip is painted by the row without being a stop in
+    // it. The reason it had to move is the `⋯`: that button lives inside the toolbar and must stay
+    // there (it is a roving stop, the arrow keys are a handler on the toolbar container, and the fit
+    // gate scopes its sweep to that element), so while the chip sat outside and to its right the
+    // `⋯` could never be the row's last thing — which is what the product owner saw.
+    //
+    // So the assertions invert: it renders, it IS inside the toolbar, and it is NOT a roving stop.
     const finish = screen.getByText('Finish');
     expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
 
     const row1 = screen.getByRole('toolbar', { name: 'View and navigate' });
-    expect(row1.contains(finish)).toBe(false);
-    // …and it sits immediately after that toolbar, which is what puts it beside `Summary ▾` — the
-    // `object` group is aligned to the toolbar's trailing edge (`alignEndGroup`).
-    expect(row1.compareDocumentPosition(finish) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(row1.parentElement?.contains(finish)).toBe(true);
+    expect(row1.contains(finish)).toBe(true);
+    // The whole of what M2-T3 was protecting, asserted directly rather than via placement.
+    const item = finish.closest('[data-toolbar-item]') ?? finish.closest('span');
+    expect(item?.querySelector('[data-toolbar-focusable]')).toBeNull();
+    expect(finish.closest('[data-toolbar-focusable]')).toBeNull();
   });
 
   it('keeps the plan name as the heading inside main, not in the band (M4-T2)', () => {
