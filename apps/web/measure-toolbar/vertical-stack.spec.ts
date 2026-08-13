@@ -25,6 +25,10 @@ import { writeMeasurement } from './output';
 
 const VIEWPORTS = [
   { width: 1920, height: 1080 },
+  // **1646 — the product owner's Surface Pro** (2880 × 1920 at 175 %), and the width this surface is
+  // actually judged at. It was absent from this harness through the whole of ADR-0090 and ADR-0091,
+  // which is how both epics shipped decisions taken against widths nobody uses.
+  { width: 1646, height: 1097 },
   { width: 1440, height: 960 },
 ];
 
@@ -184,26 +188,55 @@ async function stackHeights(page: Page): Promise<unknown> {
           children: kids,
         };
       })(),
-      // **The app header row's horizontal budget** — what a plan-identity slot inside it would have
-      // to fit into. Reported because M4-T2's first attempt moved the identity line into the band
-      // and measured a **zero** canvas gain: relocating a row within the same column changes
-      // nothing, and only merging it into an existing row can.
+      /**
+       * **The app header row's horizontal budget** — what a plan-identity slot inside it would have
+       * to fit into, and therefore whether ADR-0091's band merge is possible at all.
+       *
+       * **The first version of this could not answer that, and reported a confident zero.** It read
+       * `appHeaderRow.children`, and `AppHeaderRow` (`app-header.tsx:150-156`) renders exactly ONE
+       * child — so the adjacent-pair loop never executed and `widestGap` was 0 at every width **by
+       * construction**. `docs/TECH_DEBT.md` #129 cites that zero as evidence the merge is not
+       * feasible. It is an artefact, not a measurement, and nobody has actually measured this.
+       *
+       * The repair descends through single-child wrappers to the real flex/grid line before
+       * measuring, and reports the nav separately — because if the merge does not fit, the
+       * organisation nav is the only material slack in the row and its cost has to be a number the
+       * product owner can weigh rather than an impression.
+       */
       appHeaderRoom: (() => {
         if (!appHeaderRow) return null;
-        const row = appHeaderRow.getBoundingClientRect();
-        const kids = [...appHeaderRow.children].map((c) => c.getBoundingClientRect());
-        const used = kids.reduce((sum, b) => sum + b.width, 0);
-        // The widest horizontal gap between adjacent children — where a slot would actually land.
-        const sorted = [...kids].sort((a, z) => a.left - z.left);
-        let widestGap = 0;
-        for (let i = 1; i < sorted.length; i++) {
-          widestGap = Math.max(widestGap, sorted[i]!.left - sorted[i - 1]!.right);
+        // Descend while the node has exactly one element child: a chain of layout wrappers is not
+        // the line, and measuring one of them measures nothing.
+        let line: Element = appHeaderRow;
+        let depth = 0;
+        while (line.children.length === 1 && depth < 8) {
+          line = line.children[0]!;
+          depth += 1;
         }
+        const row = appHeaderRow.getBoundingClientRect();
+        const kids = [...line.children].map((c) => ({
+          box: c.getBoundingClientRect(),
+          label:
+            c.getAttribute('aria-label') ??
+            (c.tagName === 'NAV' ? 'nav' : (c.textContent ?? '').trim().slice(0, 24)),
+        }));
+        const used = kids.reduce((sum, k) => sum + k.box.width, 0);
+        const sorted = [...kids].sort((a, z) => a.box.left - z.box.left);
+        let widestGap = 0;
+        for (let i = 1; i < sorted.length; i += 1) {
+          widestGap = Math.max(widestGap, sorted[i]!.box.left - sorted[i - 1]!.box.right);
+        }
+        // The organisation nav on its own — the fallback ladder's first candidate.
+        const nav = appHeaderRow.querySelector('nav');
         return {
           rowWidth: Math.round(row.width),
+          lineDepth: depth,
           childCount: kids.length,
           used: Math.round(used),
+          freeSpace: Math.round(row.width - used),
           widestGap: Math.round(widestGap),
+          navWidth: nav ? Math.round(nav.getBoundingClientRect().width) : null,
+          children: sorted.map((k) => ({ label: k.label, width: Math.round(k.box.width) })),
         };
       })(),
       // Every canvas on the page, because ADR-0026's surface is layered and `querySelector` returns
