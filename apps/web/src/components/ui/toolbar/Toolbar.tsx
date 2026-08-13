@@ -316,6 +316,12 @@ export function Toolbar<Ctx>({
       (itemRefs.current.get(OVERFLOW_ID)?.getBoundingClientRect().width ??
         OVERFLOW_WIDTH_FALLBACK) + OVERFLOW_WRAPPER_PX;
 
+    // Two consequences follow from this one reading, and they are the same fact twice: a row whose
+    // width comes from its own content has no deficit to pay (so it is charged no chrome) and cannot
+    // safely give anything up (so it never demotes) — because on such a row `clientWidth` is an
+    // OUTPUT of the demotion decision, which makes demotion a one-way door. See
+    // `LadderInput.allowDemotion` for the 37 px row this was measured on.
+    const widthConstrained = isWidthConstrained(container);
     const font = fontOf(itemRefs.current.get(bar[0]?.item.id ?? ''));
     const coarsePointer =
       typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -366,7 +372,8 @@ export function Toolbar<Ctx>({
         // for every element, so a demotion switch keyed on it would have turned demotion off in
         // every unit test in the repository. A zero chrome leaves the arithmetic intact and simply
         // stops it inventing a deficit.
-        chrome: isWidthConstrained(container) ? deriveChromeWidth(bar) : 0,
+        chrome: widthConstrained ? deriveChromeWidth(bar) : 0,
+        allowDemotion: widthConstrained,
         core: bar.map(toLadderItem),
         candidates: staticOverflow.map((r, i) => toLadderItem(r, bar.length + i)),
         overflowWidth,

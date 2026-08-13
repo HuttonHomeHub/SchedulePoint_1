@@ -199,6 +199,21 @@ describe('computeLadder — demotion', () => {
     expect(overflowed.has('early')).toBe(overflowed.has('visual'));
   });
 
+  it('never demotes from a row whose width is its own content — the one-way door', () => {
+    // **Measured in a browser, not reasoned about.** The `shrink-0` mode row demoted `Diagram` and
+    // `Gantt` on a transient narrow first pass, then shrink-wrapped to **37 px holding nothing but
+    // the `⋯`** — and could never take them back, because on such a row `available` is an output of
+    // this decision. Three journeys failed looking for a view switch that no longer existed.
+    //
+    // Verified red: without `allowDemotion` the second call overflows both.
+    const core = [button('a', 0), button('b', 1)];
+    const wrapped = { core, available: 37, allowDemotion: false };
+    expect([...computeLadder(input(wrapped)).overflowed]).toEqual([]);
+    expect(
+      [...computeLadder(input({ ...wrapped, allowDemotion: true })).overflowed].length,
+    ).toBeGreaterThan(0);
+  });
+
   it('holds no candidate on the row when the core itself did not fit', () => {
     const core = [button('a', 0), button('b', 1), button('c', 2)];
     const candidates = [button('t3', 9, { group: 'help' })];

@@ -132,6 +132,22 @@ export interface LadderInput {
   candidates: LadderItem[];
   /** The `⋯` button plus its wrapper, as measured (or a fallback before first paint). */
   overflowWidth: number;
+  /**
+   * `false` for a row whose width is **its own content** rather than something a container imposes.
+   *
+   * **On such a row `available` is an output, so demotion is a one-way door.** Demote an item, the
+   * row shrink-wraps narrower, and the narrower row can never afford to take it back. Measured, in
+   * the browser, on the `shrink-0` mode row: a transient narrow first pass pushed `Diagram` and
+   * `Gantt` into the `⋯`, the row collapsed to **37 px holding nothing but that button**, and it
+   * stayed there — three journeys failed looking for a view switch that no longer existed. It is the
+   * exact feedback loop this module's docblock claims to remove, arriving through the container
+   * rather than through item widths, and it only became reachable when plain-button widths stopped
+   * reading 0 on the first unlaid-out pass.
+   *
+   * Labels are still decided normally: the budget left after the base widths is what the current
+   * labels occupy, which retains them and promotes nothing.
+   */
+  allowDemotion?: boolean;
   /** Last pass's answers — read only to give promotion its hysteresis. */
   previouslyLabelled: ReadonlySet<string>;
   previouslyAdmitted: ReadonlySet<string>;
@@ -217,7 +233,7 @@ export function computeLadder(input: LadderInput): LadderResult {
   // ── Stage 2 · demotion ────────────────────────────────────────────────────────────────────────
   // Only if the row is still short after labelling. Note that labels are NOT recomputed afterwards:
   // that would put an output back on the input side, which is the loop this module exists to remove.
-  if (budget < 0) {
+  if (budget < 0 && input.allowDemotion !== false) {
     budget -= overflowWidth; // the `⋯` is certainly going to render
     const queue = [...core].filter((i) => i.demotable).sort((a, b) => byImportance(b, a));
     const companionsOf = (item: LadderItem): LadderItem[] =>

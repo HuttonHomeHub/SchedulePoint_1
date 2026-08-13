@@ -184,6 +184,10 @@ test('M2-T0 — per-item widths on a populated plan', async ({ page }) => {
     report[String(width)] = {
       'View and navigate': await itemWidths(page, 'View and navigate'),
       'Build and manage': await itemWidths(page, 'Build and manage'),
+      // The mode row joined the band in ADR-0091 and was never reported. It is `shrink-0`, so its
+      // container width IS its content — the one row on which a derived item width can overshoot
+      // the real box and invent a deficit, which is worth being able to see.
+      'Plan mode': await itemWidths(page, 'Plan mode'),
     };
   }
 
