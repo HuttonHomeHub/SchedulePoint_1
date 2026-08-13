@@ -395,7 +395,7 @@ export function ToolbarPlanWorkspace({
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
   // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
   // tools read as live while doing nothing on the canvas (ux/a11y review).
-  // The canvas commands the floating selection bar offers (ADR-0090 M2-T1). Assembled HERE because
+  // The canvas commands the docked selection bar offers (ADR-0090 M2-T1). Assembled HERE because
   // this is where both halves already live — `canvasUi` owns isolation, `ctx` owns the viewport
   // commands — and passed to `TsldPanel` as one prop, so that component never learns what isolating
   // means. Memoised: `selectionCtx` is a `useMemo` dependency down there, and a fresh object each
@@ -1097,7 +1097,12 @@ export function ToolbarPlanWorkspace({
                 {resourceStripPanel}
               </div>
               <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
-                <ActivityBottomPanel model={model} />
+                {/* `hostsDock={false}`: this pane is `display: none` whenever the planner is on the
+                    diagram, which is the default, so an outlet here would register while invisible
+                    and take every docked strip out of the accessibility tree. Without one,
+                    `CanvasDock` renders in place — where those strips were before this epic, and
+                    the right answer on a screen with no spare row to dock into. */}
+                <ActivityBottomPanel model={model} hostsDock={false} />
               </div>
             </>
           )}

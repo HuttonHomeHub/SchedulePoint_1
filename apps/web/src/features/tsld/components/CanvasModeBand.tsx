@@ -66,7 +66,7 @@ export function modeStatementText(statement: CanvasModeStatement): string {
  * The **mode statement band** (ADR-0064 T4/T5) — a compact, non-modal strip stating which tool is
  * armed, what click it expects next, and what the last link created.
  *
- * It sits in the **reserved chrome above the scene**, never floating over it. The canvas already
+ * It sits in **reserved chrome, never floating over the scene** — above it until 2026-08-13 and in the canvas dock at the foot of the workspace since (ADR-0092 D2), which is the same rule paying no height for itself. The canvas already
  * carries an ADR-0054 cursor chip, an ADR-0056 Today pill and an ADR-0031 floating selection bar;
  * a fourth overlay would eventually come to rest on top of the very bar a planner is trying to
  * click — which is not hypothetical, it is how this epic's own test harness failed once.

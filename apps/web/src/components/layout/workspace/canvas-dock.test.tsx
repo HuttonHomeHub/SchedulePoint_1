@@ -123,3 +123,34 @@ describe('CanvasDock', () => {
     expect(screen.getByTestId('scene')).toContainElement(screen.getByText('Pick a predecessor.'));
   });
 });
+
+/**
+ * **The narrow single-pane layout must not host the outlet, and this pins the seam.**
+ *
+ * Below `md` the workspace mounts BOTH panes and hides the inactive one with `display: none`. The
+ * default pane is the diagram, so an outlet rendered inside the activities pane registers while
+ * invisible — and `CanvasDock` would then portal the armed-tool statement, both selection bars and
+ * the edit-conflict banner into a node that is in no accessibility tree at all. A WCAG 4.1.3 failure
+ * that looks like nothing on screen, because the strips are simply absent.
+ *
+ * jsdom cannot see the CSS, so this asserts the seam rather than the symptom: `hostsDock={false}`
+ * renders no outlet, which is what lets `CanvasDock` fall back to rendering in place — where those
+ * strips were before this epic, and the right answer on a screen with no spare row to dock into.
+ * Found by the accessibility gate; nothing in the repository exercised the narrow path.
+ */
+describe('the activities panel only hosts the dock when it is asked to', () => {
+  it('renders no outlet with hostsDock=false, so the dock falls back to rendering in place', () => {
+    render(
+      <CanvasDockProvider>
+        <div data-testid="scene">
+          <CanvasDock>
+            <p>Pick a predecessor.</p>
+          </CanvasDock>
+        </div>
+        {/* Stands in for the hidden pane: a panel that does not host the outlet. */}
+        <div data-testid="hidden-pane" />
+      </CanvasDockProvider>,
+    );
+    expect(screen.getByTestId('scene')).toContainElement(screen.getByText('Pick a predecessor.'));
+  });
+});

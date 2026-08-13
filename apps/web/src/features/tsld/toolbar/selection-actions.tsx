@@ -12,7 +12,7 @@ import {
   Users,
   Waypoints,
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 import type { LogicPathMode } from '../render/logic-path';
 
@@ -619,24 +619,55 @@ export function SelectionActionsBar({
    * listbox) so keyboard focus is never stranded on `<body>`. Should be referentially stable. */
   restoreFocus?: () => void;
 }): React.ReactElement | null {
-  const barRef = useRef<HTMLDivElement>(null);
-
-  // Unmounting on deselect (or when the last activity is deleted) would blur whatever inside this
-  // bar held focus onto `<body>`, which silently disables the workspace accelerators — the exact
-  // WCAG 2.4.3 failure ADR-0080's journey found for the bulk delete. So hand focus back first.
-  useEffect(
+  // Losing the bar — on deselect, or when the last activity is deleted — would blur whatever inside
+  // it held focus onto `<body>`, which silently disables the workspace accelerators: the exact WCAG
+  // 2.4.3 failure ADR-0080's journey found for the bulk delete. So hand focus back first.
+  //
+  // **Three things about this are the regression test's doing rather than the author's.**
+  //
+  // First, `context` must be in the dependency array. Deselecting does not unmount this component —
+  // the host renders it whenever `showDiagram && selectionActionsWired`, which does not change — it
+  // passes `context: null`, and the `if (!context) return null` below removes the div on an ordinary
+  // re-render. A cleanup keyed only on the referentially-stable `restoreFocus` runs solely on a true
+  // unmount that ordinary interaction never causes. The rAF loop this replaced had `context` in its
+  // deps and was therefore correct by accident; the dependency went out with the loop.
+  //
+  // Second, that is necessary and NOT sufficient, which is what the test proved: by the time either
+  // a passive or a layout cleanup runs, React has already detached the ref, so the element handle is
+  // `null` and the DOM question "did this bar hold focus?" has no answer left. Both attempts stayed
+  // red against a fix that reads correct.
+  //
+  // So the answer is not a DOM read at all: focus-held is **tracked as it happens**, and the
+  // cleanup consults a boolean. `onBlur` clears it only for a real move to another element — when
+  // the bar is being removed the browser blurs it with no related target, which is exactly the case
+  // the cleanup must still see as "we had focus". The `activeElement` guard then makes the handoff
+  // conditional on focus having actually been dropped, so a planner who moved on themselves is
+  // never yanked back.
+  const heldFocusRef = useRef(false);
+  useLayoutEffect(
     () => () => {
-      const el = barRef.current;
-      if (el && el.contains(document.activeElement)) restoreFocus?.();
+      if (!heldFocusRef.current) return;
+      heldFocusRef.current = false;
+      const active = document.activeElement;
+      if (active === null || active === document.body) restoreFocus?.();
     },
-    [restoreFocus],
+    [context, restoreFocus],
   );
 
   if (!context) return null;
 
   return (
     <div
-      ref={barRef}
+      onFocus={() => {
+        heldFocusRef.current = true;
+      }}
+      onBlur={(event) => {
+        // Only a real move to another element clears it. When the bar is being REMOVED the browser
+        // blurs it with no related target, and that is exactly the case the cleanup must still see
+        // as "we had focus".
+        const next = event.relatedTarget as Node | null;
+        if (next !== null && !event.currentTarget.contains(next)) heldFocusRef.current = false;
+      }}
       // No border, padding or radius: docked, the ROW is the container, and a bar that brings its
       // own box makes the row 6 px taller than the 36 px it already occupied — measured, and the
       // reason the journey's "costs the canvas no height" assertion is an equality rather than a

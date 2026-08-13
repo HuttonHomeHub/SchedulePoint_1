@@ -322,13 +322,13 @@ export interface TsldPanelProps {
   ) => Promise<TsldEditOutcome>;
   /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
    * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). Also the read action
-   * on the floating {@link SelectionActionsBar}. */
+   * on the docked {@link SelectionActionsBar}. */
   onOpenLogic?: (activity: ActivitySummary) => void;
   /** Open the edit dialog for an activity — the **floating selection bar**'s Edit action (ADR-0031).
    * The host owns the dialog so this feature imports no other feature (ADR-0026 D8); its presence
    * (with {@link onDeleteActivity}) mounts the bar over the selected bar. */
   onEditActivity?: (activity: ActivitySummary) => void;
-  /** Delete an activity (host-owned confirm) — the floating selection bar's Delete action (ADR-0031). */
+  /** Delete an activity (host-owned confirm) — the docked selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
   /**
    * Dissolve the selected WBS summary — remove the grouping and keep the work
@@ -346,7 +346,7 @@ export interface TsldPanelProps {
   onDuplicateActivity?: (activity: ActivitySummary) => void;
   /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
   onDuplicateBand?: (activity: ActivitySummary) => void;
-  /** Open the per-activity resource-assignment editor — the floating selection bar's **Resources**
+  /** Open the per-activity resource-assignment editor — the docked selection bar's **Resources**
    * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
    * that surfaces it is itself flag-gated in {@link selectionActionItems}, so flag-off is byte-for-byte. */
@@ -455,7 +455,7 @@ export interface TsldPanelProps {
    */
   floatPathIds?: ReadonlySet<string> | undefined;
   /**
-   * The canvas commands the floating selection bar offers (ADR-0090 M2-T1) — Zoom to, and Isolate
+   * The canvas commands the docked selection bar offers (ADR-0090 M2-T1) — Zoom to, and Isolate
    * logic path. Assembled by the workspace, which already builds every field for the toolbar
    * context; **absent ⇒ the bar is byte-for-byte its pre-M2 self**, which is the rollback contract.
    */
@@ -633,7 +633,7 @@ export function TsldPanel({
   // <body> (they're placed back on the tool to draw again).
   const addActivityRef = useRef<HTMLButtonElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
-  // Where the floating selection bar hands focus back when it hides/unmounts while focused (so a
+  // Where the docked selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
   /**
@@ -1317,7 +1317,7 @@ export function TsldPanel({
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
-  // The floating selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
+  // The docked selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
   // (open-logic + edit + delete). Its mutating actions are pen-gated as a set via `canEditSchedule`,
   // mirroring the main toolbar's `authoringEnabled` (role + pen). Read actions stay available. The
   // context is null when nothing's selected or the host didn't opt in — the bar then renders nothing.
@@ -1325,6 +1325,16 @@ export function TsldPanel({
     onOpenLogic !== undefined && onEditActivity !== undefined && onDeleteActivity !== undefined;
   const selectionCtx = useMemo<SelectionBarContext | null>(() => {
     if (!onOpenLogic || !onEditActivity || !onDeleteActivity) return null;
+    // **A plural selection gets the plural bar and only the plural bar.** `BulkSelectionBar`'s own
+    // docblock has said since ADR-0080 that it "replaces the floating per-object bar rather than
+    // joining it", and the code never did that: this context is derived from the primary id alone,
+    // so two selected activities rendered BOTH bars. Floating, that was a latent inconsistency —
+    // the two sat in physically separate places and each looked right. Docked, they are forced into
+    // one 36 px row that does not wrap, so the collision becomes visible clipping and a control
+    // that is in the tab order and not on the screen. The ADR-0064 §7 shape once more: a correct
+    // decision elsewhere, invisible until an unrelated change moved the arithmetic across a
+    // boundary. Found by the UX gate over this epic's diff.
+    if (selection.ids.length > 1) return null;
     const activity = selectedId ? activities.find((a) => a.id === selectedId) : undefined;
     if (!activity) return null;
     return {
@@ -1361,6 +1371,7 @@ export function TsldPanel({
   }, [
     selectionCanvas,
     selectedId,
+    selection.ids.length,
     activities,
     canEdit,
     scheduleRefusal,

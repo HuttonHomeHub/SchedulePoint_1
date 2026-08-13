@@ -121,7 +121,7 @@ function barButton(bar: HTMLElement, label: string): HTMLElement {
   return btn;
 }
 
-describe('TsldPanel — floating selection-actions bar (mount)', () => {
+describe('TsldPanel — docked selection-actions bar (mount)', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders no floating bar until the host wires the object actions', () => {

@@ -76,6 +76,15 @@ export function CanvasDockProvider({
  *
  * `min-w-0` and `flex-1` rather than a fixed width: the strips are as wide as their content and the
  * row's two fixed ends ("Activities", the expand button) must keep their own space.
+ *
+ * **It wraps, and that is a correctness rule rather than a layout preference.** Two strips can
+ * genuinely want the row at once — an armed tool does not clear the selection, and an edit-conflict
+ * banner can arrive on top of either. A single non-wrapping line with `overflow-hidden` would clip
+ * the second one silently: the controls stay in the DOM and in the tab order, so Tab can land on a
+ * button that is not on the screen, and `overflow: hidden` gives the browser no scrollable box to
+ * reveal it in (WCAG 2.4.7). Wrapping grows the row instead, which `min-h-9` on the host already
+ * allows for. The commonest collision — the singular and plural selection bars — is removed at
+ * source in `TsldPanel`, because ADR-0080 always said the plural bar replaces the singular one.
  */
 export function CanvasDockOutlet(): React.ReactElement {
   const { register, unregister } = useContext(CanvasDockContext);
@@ -92,7 +101,7 @@ export function CanvasDockOutlet(): React.ReactElement {
     },
     [register, unregister],
   );
-  return <div ref={ref} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" />;
+  return <div ref={ref} className="flex min-w-0 flex-1 flex-wrap items-center gap-2" />;
 }
 
 /**

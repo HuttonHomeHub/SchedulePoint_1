@@ -23,8 +23,24 @@ export function ActivityBottomPanel({
   model,
   onCollapse,
   focusCollapseOnMount = false,
+  hostsDock = true,
 }: {
   model: PlanWorkspaceModel;
+  /**
+   * Whether this panel provides the canvas dock's outlet (workspace-chrome M3).
+   *
+   * **`false` on the narrow single-pane layout, and that is a correctness fix rather than a
+   * preference.** Below `md` the workspace mounts BOTH panes and hides the inactive one with
+   * `display: none`; the default pane is the diagram, so an outlet rendered here would register
+   * while invisible, and `CanvasDock` would portal the armed-tool statement, both selection bars
+   * and the edit-conflict banner into a node that is in no accessibility tree at all — a WCAG 4.1.3
+   * failure that looks like nothing on screen, because the strips are simply absent. Withholding
+   * the outlet lets `CanvasDock` fall back to rendering in place, which is exactly where those
+   * strips were before this epic and is the right answer on a screen with no spare row to dock into.
+   * Found by the accessibility gate; no test in the repository exercised the narrow path, and jsdom
+   * could not have seen it (it has no layout to make `display: none` mean anything).
+   */
+  hostsDock?: boolean;
   /** Collapse the panel to its handle. Omitted on the mobile single-pane view (the view toggle
    * switches away from Activities instead), where no collapse control is shown. */
   onCollapse?: () => void;
@@ -56,7 +72,7 @@ export function ActivityBottomPanel({
             land, so they do not move to the other end of the screen when the planner opens the
             activities list. Exactly one outlet is mounted at a time; `CanvasDockProvider` handles
             the hand-over. */}
-        <CanvasDockOutlet />
+        {hostsDock ? <CanvasDockOutlet /> : null}
         <div className="flex shrink-0 items-center gap-2">
           {model.canEditSchedule ? (
             <CreateActivityButton

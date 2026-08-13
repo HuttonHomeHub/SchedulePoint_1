@@ -62,15 +62,18 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
 
   // (2) Reveal the resource view: the docked panel + the aria-hidden canvas strip both appear, and
   // focus moves into the panel (mirrors the activities-panel expand focus move).
-  // Both lenses moved into `View ▾` in ADR-0090 M2-T2 — they were 32 px each on a Row 1 that was
-  // 109 px over its container. `openView()` is idempotent, so each use reads as "reach the control"
-  // rather than "manage a popover", which is what keeps the assertions below about the LENS.
+  // **Resource view is a Row 1 button again**; `Flag over-allocated` stayed in `View ▾`. Both moved
+  // into the popover in ADR-0090 M2-T2, when they were 32 px each on a Row 1 that was 109 px over
+  // its container; ADR-0092 D5 brought this one back at the product owner's request once ADR-0090 M2
+  // and ADR-0091 M7 had bought the row that width. So the two are reached differently now, and this
+  // journey says so rather than wrapping both in one helper that hides which surface each is on.
+  // `openView()` stays idempotent, so its uses read as "reach the control" rather than "manage a
+  // popover" — which is what keeps the assertions below about the LENS.
   const viewTrigger = lookToolbar.getByRole('button', { name: /^View/ });
   const openView = async (): Promise<void> => {
     if ((await viewTrigger.getAttribute('aria-expanded')) !== 'true') await viewTrigger.click();
   };
-  const resourceViewButton = page.getByRole('checkbox', { name: 'Resource view' });
-  await openView();
+  const resourceViewButton = lookToolbar.getByRole('button', { name: 'Resource view' });
   await expect(resourceViewButton).toBeEnabled();
   await resourceViewButton.click();
 
@@ -130,10 +133,8 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
 
   // (4) Toggle Resource view back off — the panel unmounts and the strip canvas is gone (band reclaimed,
   // byte-for-byte parity with the inactive state).
-  await openView();
   await resourceViewButton.click();
-  await openView();
-  await expect(resourceViewButton).not.toBeChecked();
+  await expect(resourceViewButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('region', { name: 'Resource loading' })).toHaveCount(0);
   await expect(page.locator('[data-testid="tsld-resource-strip"]')).toHaveCount(0);
 });

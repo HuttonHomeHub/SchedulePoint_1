@@ -347,7 +347,7 @@ export interface ToolbarItem<Ctx> {
    *   all but is correctly excluded from the roving order for the same reason.
    *
    * **Do not delete this capability** on a reading that the surface has outgrown it. It has not, the
-   * floating selection bar may want it, and a read-out that is *not* excluded from the roving order
+   * docked selection bar may want it, and a read-out that is *not* excluded from the roving order
    * is a focusable stop with nothing to operate — the exact APG defect this field prevents.
    */
   presentational?: boolean;

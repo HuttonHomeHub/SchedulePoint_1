@@ -341,9 +341,6 @@ export interface TsldCanvasProps {
   /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
    * so the toolbar can reflect the active preset without per-frame React state. */
   onZoomStopChange?: (level: ZoomLevel) => void;
-  /** When set, the loop writes the selected activity's live viewport geometry here every frame (or
-   * `null` when it has no drawn position / is off-screen / the surface is hidden), so the floating
-   * {@link SelectionActionsBar} can follow the canvas without per-frame React state (ADR-0026 D3). */
   /**
    * The pinned WBS band (ADR-0063): the groups to draw, or `null` when the band is off. The host
    * derives them (`features/wbs`) because the tsld feature imports no other feature (ADR-0026 D8).
