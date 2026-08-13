@@ -5,15 +5,15 @@ import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   ArrowLeftToLine,
+  BookOpen,
+  CalendarDays,
   ChartArea,
   ChartGantt,
-  CalendarDays,
   Check,
   ChevronDown,
+  Crop,
   DollarSign,
   Eraser,
-  Hand,
-  Crop,
   FileCode,
   FileDown,
   FileSpreadsheet,
@@ -21,6 +21,7 @@ import {
   FileType,
   Filter,
   Gauge,
+  Hand,
   ImageDown,
   Info,
   Layers,
@@ -31,18 +32,19 @@ import {
   Minus,
   Plus,
   Printer,
-  RefreshCw,
   Redo2,
-  Split,
+  RefreshCw,
   Rows3,
   Search,
   Share2,
   SlidersHorizontal,
   Spline,
+  Split,
   SquareDashedMousePointer,
   StickyNote,
   TriangleAlert,
   Undo2,
+  Users,
   Waypoints,
   X,
 } from 'lucide-react';
@@ -195,6 +197,18 @@ interface LensToggle {
    * it is about to do, and the surprise goes rather than the behaviour.
    */
   note?: string;
+  /**
+   * **Promoted to Row 1** (workspace-chrome M4), instead of living inside `View ▾`.
+   *
+   * The product owner asked for the Legend and the Resource view back on the row now that ADR-0090
+   * M2 and ADR-0091 M7 have bought it the width. They are still defined HERE, once — the promotion
+   * derives a registry item from this record rather than restating it — because two definitions of
+   * `checked`/`toggle`/`reason` would drift, and the drift would be invisible: each surface looks
+   * right alone, and only a planner who reaches the same control two ways would ever see one is a
+   * version behind (the ADR-0065 `routeOrthogonal` argument). `lensTogglesIn` excludes anything
+   * promoted, so a control is on the row **or** in the popover and never in both.
+   */
+  promotion?: { icon: React.ReactNode; order: number };
 }
 
 const LENS_TOGGLES: readonly LensToggle[] = [
@@ -224,8 +238,13 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.resourceViewOpen,
     toggle: (ctx) => ctx.toggleResourceView(),
     reason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
-    // The one row here that opens something rather than marking the canvas — see `note` above.
-    note: 'Opens the resource panel and moves focus to it',
+    // **The `note` went with the promotion, and that closes `docs/TECH_DEBT.md` #125 rather than
+    // porting it.** It existed because this row lives(d) inside a popover that invites toggling
+    // several things in one visit, and revealing the resource panel takes focus (ADR-0049), which
+    // closes the popover behind the departing focus — from inside a list, that reads as being
+    // thrown out. On a toolbar button, pressing a control and landing in the panel it opened is
+    // ordinary. The surprise the sentence existed to remove is not there to remove.
+    promotion: { icon: <Users className="size-4" />, order: 21 },
   },
   {
     id: 'over-allocation',
@@ -256,11 +275,44 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.legendOpen,
     toggle: (ctx) => ctx.toggleLegend(),
     reason: () => undefined,
+    promotion: { icon: <BookOpen className="size-4" />, order: 22 },
   },
 ];
 
 function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
-  return LENS_TOGGLES.filter((t) => t.group === group && t.enabled);
+  // `!t.promotion` is the on-the-row-or-in-the-popover invariant, held in one place: a promoted
+  // control leaves `View ▾` by construction rather than by someone remembering to delete its row.
+  return LENS_TOGGLES.filter((t) => t.group === group && t.enabled && !t.promotion);
+}
+
+/**
+ * The Row-1 registry items for the promoted lens toggles (workspace-chrome M4) — **derived** from
+ * the same `LensToggle` records `View ▾` reads, never restated.
+ *
+ * `showLabel: { atLeast: 'comfortable' }` rather than `'auto'`: `autoLabelsFit` is all-or-nothing
+ * for a whole row, so an `'auto'` item follows its neighbours' collective fate and can label itself
+ * at a narrow band that happens to have slack — the trap ADR-0091 D3a records for the zoom cluster.
+ * These two carry a name a planner searches for, so a band rule is what they need.
+ */
+function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
+  return LENS_TOGGLES.filter((t) => t.enabled && t.promotion !== undefined).map((t) => {
+    const promotion = t.promotion as NonNullable<LensToggle['promotion']>;
+    return {
+      id: t.id,
+      group: 'lens',
+      row: 'look',
+      tier: 2,
+      showLabel: { atLeast: 'comfortable' },
+      order: promotion.order,
+      priority: 60,
+      label: t.label,
+      icon: promotion.icon,
+      isActive: (ctx: TsldToolbarContext) => t.checked(ctx),
+      isEnabled: (ctx: TsldToolbarContext) => t.reason(ctx) === undefined,
+      disabledReason: (ctx: TsldToolbarContext) => t.reason(ctx),
+      onActivate: (ctx: TsldToolbarContext) => t.toggle(ctx),
+    } satisfies ToolbarItem<TsldToolbarContext>;
+  });
 }
 
 /**
@@ -2369,6 +2421,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // ADR-0031 "Coming soon" placeholders (byte-for-byte the current bar); flag-on they are the real
     // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
     ...undoRedoToolbarItems(),
+
+    // Legend + Resource view, back on Row 1 (workspace-chrome M4) — see `promotedLensItems`.
+    ...promotedLensItems(),
 
     {
       id: 'summary',

@@ -168,22 +168,21 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByTestId('summary-body')).toBeInTheDocument();
   });
 
-  it('toggles the on-canvas Legend panel from the View popover (Panels section)', () => {
-    // The legend lives on the canvas (ADR-0031 amendment) and its control moved into `View ▾`'s new
-    // Panels section in ADR-0090 M2-T2 — it still renders no key of its own, it still just drives
-    // the workspace's floating panel. `aria-pressed` on a button becomes `checked` on a checkbox;
-    // both halves of the original assertion survive that translation, which is the point of making
-    // it rather than deleting it.
+  it('toggles the on-canvas Legend panel from Row 1, and offers it nowhere else', () => {
+    // The legend lives on the canvas (ADR-0031 amendment). Its control moved into `View ▾`'s Panels
+    // section in ADR-0090 M2-T2 when the row had no width for it, and came BACK to Row 1 in
+    // workspace-chrome M4 at the product owner's request, once M2 and ADR-0091 M7 had bought that
+    // width. So it is a button with `aria-pressed` again — and, because `lensTogglesIn` excludes
+    // anything promoted, it is not also a popover row. The second half is the assertion worth
+    // having: two copies of one control drift invisibly, since each looks right alone.
     const { rerender } = renderRows(ctx({ legendOpen: false }));
-    const openView = (): HTMLElement => {
-      const trigger = screen.getByRole('button', { name: /^View/ });
-      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-      return screen.getByRole('checkbox', { name: 'Legend' });
-    };
-    const legend = openView();
-    expect(legend).not.toBeChecked();
+    const legend = screen.getByRole('button', { name: 'Legend' });
+    expect(legend).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(legend);
     expect(spies.toggleLegend).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    expect(screen.queryByRole('checkbox', { name: 'Legend' })).not.toBeInTheDocument();
 
     const rows = splitByRow(buildTsldToolbarItems());
     const opened = ctx({ legendOpen: true });
@@ -199,7 +198,7 @@ describe('TSLD toolbar registry (two-row)', () => {
         <Toolbar items={rows.do} context={opened} label="Build and manage" authoringEnabled />
       </div>,
     );
-    expect(openView()).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Legend' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {
