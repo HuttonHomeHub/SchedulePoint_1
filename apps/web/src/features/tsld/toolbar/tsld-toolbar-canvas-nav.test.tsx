@@ -48,29 +48,15 @@ function renderRows(context: TsldToolbarContext) {
 }
 
 /**
- * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
+ * The `overflowItem` helper lived here and is **deleted** (ADR-0094, 2026-08-13).
  *
- * Four commands moved to tier 3 so the two rows could label themselves at 1920 — the trade the
- * product owner took with the measured numbers. Nothing about what these assertions prove changes;
- * they open the menu first and read a `menuitem` instead of a top-level button. A `MenuItem` also
- * links its reason by `aria-describedby` rather than a `title`, which is why the shade cases assert
- * the accessible description.
+ * It opened the `⋯` and read a `menuitem`, because ADR-0090 M2 moved four commands to tier 3 so the
+ * two rows could label themselves at 1920. `next-conflict` was one of them, and this file's three
+ * Next-conflict cases were its only callers — promoting the item back to tier 1 left the helper with
+ * nothing to reach. Removed rather than kept "in case": an unused helper documenting a layout that
+ * no longer holds is the drift class this epic is about, and `isolate-logic` (the other command this
+ * file covers) reads its own control directly.
  */
-function overflowItem(name: string | RegExp): HTMLElement {
-  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
-  for (const trigger of more) {
-    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-    // Any of the three menu-item roles: a toggle in the overflow is a `menuitemcheckbox` since
-    // ADR-0090 M2 (it was a plain `menuitem` announcing no state), and `getByRole('menuitem')`
-    // does not match it — which is how that fix announced itself here.
-    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
-      const hit = screen.queryByRole(role, { name });
-      if (hit) return hit;
-    }
-    fireEvent.click(trigger);
-  }
-  throw new Error(`No overflow item named ${String(name)}`);
-}
 
 beforeEach(() => vi.clearAllMocks());
 
