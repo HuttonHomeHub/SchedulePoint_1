@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Crop,
   DollarSign,
-  Eraser,
   FileCode,
   FileDown,
   FileSpreadsheet,
@@ -121,9 +120,11 @@ type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels'
  * **Why a handful of commands sit at tier 3 — last into the `⋯`, first out of it (ADR-0090 M2,
  * amended by ADR-0091 M7's admission rung, which puts them back on the row when there is room).**
  *
- * `next-conflict` and `float-paths` on Row 1, and `clear-visual-placement` on Row 2. (`shortcuts` was
- * a fourth until ADR-0091 M7-S5 moved it into the account menu — an inventory in prose goes stale
- * every time the set changes, which is why the count is not restated here.)
+ * `float-paths` on Row 1. (`shortcuts` was one of these until ADR-0091 M7-S5 moved it into the
+ * account menu; `next-conflict` was until ADR-0094 M2 promoted it to tier 1 so its count could sit on
+ * the bar; `clear-visual-placement` was until ADR-0094 M4-T1 moved it to the selection bar — an
+ * inventory in prose goes stale every time the set changes, which is why the count is not restated
+ * here.)
  * Row 1 was ~360 px short of labelling itself at 1920 and Row 2 ~128 px; these four are what buys
  * both. The trade was put to the product owner with the measured numbers rather than taken here,
  * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
@@ -1768,8 +1769,8 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
  * "Coming soon" stubs (resource-view, share) that make the toolbar read as fully designed and are
  * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
- * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
- * clear-visual-placement under `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
+ * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments and add-note under
+ * `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
  * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV`;
  * export and print under `VITE_EXPORT_PRINT`; the Add menu's Level-of-effort/Hammock placeholders
  * collapse to one live Level-of-Effort item under `VITE_CANVAS_ACTIVITY_TYPES` — each a placeholder
@@ -1789,7 +1790,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  */
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/tier/order/
-  // label/icon each of the four ids carries in BOTH its real (flag-on) item and its
+  // label/icon each remaining id carries in BOTH its real (flag-on) item and its
   // `placeholderItem()` (flag-off) stub, declared once and spread into both so the two branches can't
   // drift (component review C1; mirrors the `add-activity` shared-shape pattern below).
   const todayShape = {
@@ -1815,15 +1816,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // to the hover `title` only (the accessible name stays "Add note").
     description: 'Opens the Logic panel (links & notes)',
     icon: <StickyNote className="size-4" />,
-  };
-  const clearVisualPlacementShape = {
-    id: 'clear-visual-placement',
-    group: 'tools' as const,
-    row: 'do' as const,
-    tier: 3 as const,
-    order: 6,
-    label: 'Clear visual placement',
-    icon: <Eraser className="size-4" />,
   };
   const commentsShape = {
     id: 'comments',
@@ -2397,45 +2389,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // on a drop onto a non-working column: Saturday landed Friday with it on, Monday with it
     // off. The product owner reported seeing no difference and was right. A control whose
     // entire capability is already delivered unconditionally elsewhere is the ADR-0081 shape.
-    // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
-    // falls back to the computed date, toolbar quick-wins F5). Only *meaningful* in Visual mode, but per
-    // the registry's shade-don't-hide rule (ADR-0031 + docs/TOOLBAR_ROADMAP.md) it stays VISIBLE in both
-    // modes and is disabled-with-a-reason outside Visual (U1) — like the mode-early/mode-visual siblings —
-    // so toggling Early↔Visual doesn't shift the bar's silhouette. Pen-gated; it calls only the existing
-    // PATCH + auto-recalc, so the CPM engine + parity gate are untouched. Flag-off it is the "Coming soon"
-    // placeholder, byte-for-byte.
-    TOOLBAR_QUICK_WINS_ENABLED
-      ? {
-          ...clearVisualPlacementShape,
-          penGated: true,
-          isVisible: () => SCHEDULING_MODES_ENABLED,
-          // Enabled only when it's actionable end-to-end: Visual mode AND the pen/role AND not the
-          // read-only Late overlay AND a RESOLVED selection (U3 — a deleted row resolves to undefined).
-          isEnabled: (ctx) =>
-            ctx.schedulingMode === 'VISUAL' &&
-            ctx.canEditSchedule &&
-            !ctx.lateOverlayActive &&
-            ctx.selectedActivity != null,
-          // Precedence ladder (U1/A1/U2/A5): the PERMANENT gates before the transient selection, so a
-          // Viewer with nothing selected isn't first told to "Select an activity". Mode → role/pen →
-          // Late overlay (A1: the generic Toolbar disables penGated items under the overlay while
-          // `canEditSchedule` stays true, so the reason must come from `lateOverlayActive`) → selection.
-          disabledReason: (ctx) =>
-            ctx.schedulingMode !== 'VISUAL'
-              ? 'Only available in Visual mode'
-              : !ctx.canEditSchedule
-                ? (ctx.scheduleRefusal('clear the placement') ?? undefined)
-                : ctx.lateOverlayActive
-                  ? 'Turn off the Late-start overlay to clear the placement'
-                  : ctx.selectedActivity == null
-                    ? 'Select an activity first'
-                    : undefined,
-          onActivate: (ctx) => {
-            const activity = ctx.selectedActivity;
-            if (activity) ctx.clearVisualPlacement(activity.id, activity.version);
-          },
-        }
-      : placeholderItem(clearVisualPlacementShape),
+    // `clear-visual-placement` MOVED to the selection bar (ADR-0094 M4-T1). Its `isEnabled` consulted
+    // `ctx.selectedActivity`, which is ADR-0093's discriminator verbatim: an action whose subject is
+    // the selected object belongs on the object's surface. It stayed here through ADR-0093 only
+    // because it had no twin then; the `visualConflict` remedy IS this action, so it moved rather
+    // than being duplicated. `selection-duplication.structural.test.ts` was verified RED against the
+    // two-copy state first. Its four-condition gate is now `clearVisualPlacementGate` in
+    // `conflict-remedy.ts`, shared by the bar's item and the remedy so they cannot drift.
     // Recalculate + Undo/Redo close the authoring cluster (moved here from the Object/History groups so
     // the pen-gated set is contiguous). Recalculate is enabled only with the pen and when not in flight.
     {

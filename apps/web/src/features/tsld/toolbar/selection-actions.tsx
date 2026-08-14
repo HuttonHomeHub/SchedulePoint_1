@@ -4,17 +4,22 @@ import {
   ClipboardCheck,
   Copy,
   Crosshair,
+  Eraser,
   ListChecks,
   Route,
   SquarePen,
   Trash2,
+  TriangleAlert,
   Ungroup,
   Users,
   Waypoints,
 } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
 
+import type { ConflictKey } from '../render/conflicts';
 import type { LogicPathMode } from '../render/logic-path';
+
+import { CONFLICT_REMEDIES } from './conflict-remedy';
 
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
@@ -35,6 +40,8 @@ import {
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   RESOURCES_ENABLED,
+  SCHEDULING_MODES_ENABLED,
+  TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { cn } from '@/lib/utils';
@@ -69,6 +76,24 @@ export interface SelectionActionContext {
    * the server would 422.
    */
   isSummary: boolean;
+  /**
+   * The conflict the selected activity leads with, or `null` when it is not flagged (ADR-0094 M4).
+   *
+   * Derived by the host from `CONFLICT_FLAGS` against the activity itself — the same single source
+   * the count and the filter run — rather than read off the Next-conflict cursor. So the remedy is
+   * offered whether a planner arrived by cycling or simply clicked the bar, which is what a remedy
+   * attached to the OBJECT means (ADR-0093's discriminator).
+   */
+  conflictKey: ConflictKey | null;
+  /** Whether clearing a hand-placed placement is actionable now, and why not — from the shared
+   * `clearVisualPlacementGate`, so this and the command surface cannot drift. */
+  clearPlacement: { enabled: boolean; reason: string | null };
+  /** Withdraw the selected activity's hand-placed `visualStart`. */
+  onClearVisualPlacement: () => void;
+  /** Open the activity editor where a conflict actually lives. Opaque on purpose: `features/tsld`
+   * must not import `ActivityEditorPurpose` from `features/activities` (§5/§12), so the composition
+   * root maps this the way it already maps the bar's other editor callbacks. */
+  onOpenEditorAt: (at: 'constraint' | 'resources') => void;
   onOpenLogic: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -339,6 +364,57 @@ function IsolateControl({
  */
 
 /**
+ * The conflict remedy, rendered from {@link CONFLICT_REMEDIES} (ADR-0094 M4).
+ *
+ * A `render` item rather than a plain button because its **label is data**: the map decides both the
+ * copy and what activating it does, and `ToolbarItem.label` is a static string. That is the same
+ * constraint that kept the conflict COUNT off the Next-conflict button — but the answer differs, and
+ * for a reason worth stating. There, a variable-width label on a demotable button would have
+ * re-run the width ladder on every click. Here the bar is a short, transient, non-demoting strip, so
+ * a `render` item costs it nothing.
+ *
+ * **It renders only the `openEditorAt` remedies, and that is a decision rather than a gap.** The
+ * third remedy — clearing a hand-placed `visualStart` — is an action the bar already carries in its
+ * own right (M4-T1 moved it here from the command surface), available to every activity in Visual
+ * mode whether or not it is flagged. Rendering a conflict-flavoured twin beside it would be
+ * ADR-0093's defect reproduced inside one surface, one day after removing it between two.
+ *
+ * **Not pen-gated, and not shaded.** Both routes only OPEN the editor, which is a read; the editor
+ * itself gates every write it offers (ADR-0060's per-scope save). Shading the route would leave a
+ * Viewer looking at a flagged bar with no way to see what is wrong with it — which is the dead end
+ * ADR-0082 exists to prevent, not an application of it.
+ */
+function ConflictRemedyControl({
+  ctx,
+  api,
+}: {
+  ctx: SelectionActionContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement | null {
+  const key = ctx.conflictKey;
+  // `barAction` renders nothing: that remedy is an item the bar already carries, and a second copy
+  // of it would be ADR-0093's defect inside one surface. `isVisible` on the registry item says the
+  // same thing, so this is a belt-and-braces guard rather than the rule's only home — and it is the
+  // reason `conflict-remedy.structural.test.ts` asserts every `barAction.itemId` resolves to a real
+  // registered item. A pointer into a registry is only as good as the id being right.
+  if (!key) return null;
+  const remedy = CONFLICT_REMEDIES[key];
+  if (remedy.kind !== 'openEditorAt') return null;
+  return (
+    <button
+      {...api.itemProps}
+      type="button"
+      data-toolbar-focusable=""
+      onClick={() => ctx.onOpenEditorAt(remedy.at)}
+      className={cn(toolbarControlVariants({}), 'gap-1.5')}
+    >
+      <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+      <span className="truncate">{remedy.label}</span>
+    </button>
+  );
+}
+
+/**
  * The selection object-actions, expressed as toolbar items over {@link SelectionActionContext}. Order:
  * Logic → (Progress) → (Resources) → (Steps) → Edit → Delete. Labels use the activities-table's
  * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
@@ -362,6 +438,35 @@ function IsolateControl({
  */
 export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
   defineToolbar<SelectionBarContext>([
+    // ── The conflict remedy (ADR-0094 M4) ───────────────────────────────────────────────────
+    //
+    // FIRST, and conditional: it is present only when the selected activity is actually flagged, and
+    // when it is, it is the reason a planner is looking at this bar at all. Everything after it is
+    // what you can do to any activity; this is what is wrong with THIS one.
+    //
+    // One item, not one per conflict type. The `label` a `ToolbarItem` carries is a plain string, so
+    // three types would otherwise mean three registrations differing only in copy — and the registry
+    // has a precedent both ways (`duplicate`/`duplicate-band` are two items on inverse predicates).
+    // Here the types are mutually exclusive by construction (`leadingConflictKey` returns one), so
+    // one item reading its label from the remedy map keeps the map the single source rather than
+    // spreading it across three registry entries that could each drift.
+    {
+      id: 'conflict-remedy',
+      group: 'object',
+      tier: 1,
+      showLabel: 'always',
+      order: -1,
+      // A placeholder: the live label comes from the remedy map via `render`. `defineToolbar`
+      // rejects an empty label, and the overflow menu reads `item.label` directly.
+      label: 'Fix this conflict',
+      icon: <TriangleAlert className="size-4" />,
+      // Visible only for a conflict whose remedy is a ROUTE. A `barAction` remedy is already on the
+      // bar as its own item, so registering a second control for it would duplicate it — and an
+      // item that renders `null` while claiming a roving stop is worse than one that is absent.
+      isVisible: (ctx) =>
+        ctx.conflictKey !== null && CONFLICT_REMEDIES[ctx.conflictKey].kind === 'openEditorAt',
+      render: (ctx, api) => <ConflictRemedyControl ctx={ctx} api={api} />,
+    },
     {
       id: 'open-logic',
       group: 'object',
@@ -518,6 +623,40 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
       onActivate: (ctx) => ctx.onDelete(),
     },
+    // ── Clear visual placement — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
+    //
+    // Its `isEnabled` consulted `ctx.selectedActivity`, which is ADR-0093's discriminator verbatim:
+    // an action whose subject is the selected object belongs on the object's surface. It was one of
+    // the four selection-consulting command-surface items that ADR-0093 enumerated and left alone,
+    // because at the time only `update-progress` had a twin. This epic gives it one — the
+    // `visualConflict` remedy IS this action — so rather than duplicate it, it moves.
+    //
+    // `selection-duplication.structural.test.ts` was verified RED against the two-copy state before
+    // the command-surface item was deleted: the gate covers this by construction, which was the
+    // whole point of deriving both rosters from the registries rather than listing them.
+    //
+    // Order 6.5 — after Delete, so it demotes to the `⋯` FIRST under width pressure. It is the
+    // rarest action on the bar and the only one that is inert outside Visual mode.
+    ...(SCHEDULING_MODES_ENABLED && TOOLBAR_QUICK_WINS_ENABLED
+      ? [
+          {
+            id: 'clear-visual-placement',
+            group: 'object' as const,
+            tier: 1 as const,
+            showLabel: 'always' as const,
+            order: 6.5,
+            label: 'Clear visual placement',
+            icon: <Eraser className="size-4" />,
+            penGated: true,
+            // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
+            // in — never re-derived here. Two independent copies of a four-condition ladder is how
+            // the count and the filter came to disagree about the word "conflict" in the first place.
+            isEnabled: (ctx: SelectionActionContext) => ctx.clearPlacement.enabled,
+            disabledReason: (ctx: SelectionActionContext) => ctx.clearPlacement.reason ?? undefined,
+            onActivate: (ctx: SelectionActionContext) => ctx.onClearVisualPlacement(),
+          },
+        ]
+      : []),
     // ---------------------------------------------------------------- canvas commands (M2-T1)
     //
     // A separate `find` group, so the primitive draws its rule between "what to do with this

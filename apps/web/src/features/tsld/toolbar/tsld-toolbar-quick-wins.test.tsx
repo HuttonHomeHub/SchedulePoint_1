@@ -32,7 +32,6 @@ const spies = {
   goToDate: vi.fn(),
   revealComments: vi.fn(),
   openActivityNotes: vi.fn(),
-  clearVisualPlacement: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -41,7 +40,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     summaryContent: null,
     revealComments: spies.revealComments,
     openActivityNotes: spies.openActivityNotes,
-    clearVisualPlacement: spies.clearVisualPlacement,
     ...over,
   });
 }
@@ -66,28 +64,6 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
       />
     </div>,
   );
-}
-
-/**
- * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
- *
- * `clear-visual-placement` moved to tier 3 so Row 2 could label itself at 1920 — the trade the
- * product owner took with the measured numbers. It is the narrowest-purpose command on the row: it
- * does nothing outside Visual scheduling mode and is pen-gated on top of that. Nothing these
- * assertions prove changes; they open the menu and read a menu item, whose reason travels by
- * `aria-describedby` rather than a `title`.
- */
-function overflowItem(name: string | RegExp): HTMLElement {
-  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
-  for (const trigger of more) {
-    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
-      const hit = screen.queryByRole(role, { name });
-      if (hit) return hit;
-    }
-    fireEvent.click(trigger);
-  }
-  throw new Error(`No overflow item named ${String(name)}`);
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -199,76 +175,17 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(btn).toHaveAttribute('title', 'Add note — You don’t have permission to add notes');
   });
 
-  // --- F5 · Clear visual placement ----------------------------------------------------------
-  it('Clear visual placement: shaded (not hidden) outside Visual mode, with a mode reason (U1)', () => {
-    // Shade-don't-hide: the button stays on the bar in Early mode (so Early↔Visual doesn't shift the
-    // silhouette) and disables with the reason, rather than disappearing.
-    renderRows(
-      ctx({ schedulingMode: 'EARLY', selectedActivityId: 'a1', selectedActivity: SELECTED }),
-    );
-    const btn = overflowItem('Clear visual placement');
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAccessibleDescription('Only available in Visual mode');
-  });
-
-  it('Clear visual placement: Late-start overlay gives a reason, not a bare disable (A1)', () => {
-    // The overlay makes `authoringEnabled` false (so the penGated item is disabled) while
-    // `canEditSchedule` stays true — the reason must come from `lateOverlayActive`, not fall through.
-    renderRows(
-      ctx({
-        schedulingMode: 'VISUAL',
-        selectedActivityId: 'a1',
-        selectedActivity: SELECTED,
-        canEditSchedule: true,
-        lateOverlayActive: true,
-      }),
-      false,
-    );
-    const btn = overflowItem('Clear visual placement');
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAccessibleDescription(
-      'Turn off the Late-start overlay to clear the placement',
-    );
-  });
-
-  it('Clear visual placement: disabled when the selected row is gone (U3 — resolved selection)', () => {
-    renderRows(
-      ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: undefined }),
-      true,
-    );
-    const btn = overflowItem('Clear visual placement');
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAccessibleDescription('Select an activity first');
-  });
-
-  it('Clear visual placement: in Visual mode + pen + selection, clears via clearVisualPlacement(id, version)', () => {
-    renderRows(
-      ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: SELECTED }),
-      true,
-    );
-    const btn = overflowItem('Clear visual placement');
-    expect(btn).not.toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(btn);
-    expect(spies.clearVisualPlacement).toHaveBeenCalledWith('a1', 7);
-  });
-
-  it('Clear visual placement: pen-gated — shaded without the pen even with a selection', () => {
-    renderRows(
-      ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: SELECTED }),
-      false,
-    );
-    const btn = overflowItem('Clear visual placement');
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(btn);
-    expect(spies.clearVisualPlacement).not.toHaveBeenCalled();
-  });
-
-  it('Clear visual placement: disabled with "Select an activity first" when nothing is selected', () => {
-    renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivityId: null }), true);
-    const btn = overflowItem('Clear visual placement');
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAccessibleDescription('Select an activity first');
-  });
+  // --- F5 · Clear visual placement -----------------------------------------------------------
+  //
+  // **Its six cases moved with it** (ADR-0094 M4-T1). The command surface no longer registers this
+  // item — its `isEnabled` consulted the selection, which is ADR-0093's discriminator — so the four
+  // gate conditions are now unit cases against the shared `clearVisualPlacementGate`
+  // (`conflict-remedy.gate.test.ts`, including the precedence between them, which was only ever
+  // implied here by the order the cases happened to be written in) and the rendered
+  // shade/click behaviour is `selection-actions.clear-placement.test.tsx`.
+  //
+  // Moved rather than deleted, and said so here rather than silently: a suite that simply loses six
+  // cases looks identical to a capability that was dropped.
 
   it('has no axe violations with the quick-wins live', async () => {
     const { container } = renderRows(

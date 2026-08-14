@@ -65,6 +65,7 @@ import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildColourLegend } from '@/features/tsld/render/lenses';
 import { lensLegendVarPalette } from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
+import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
@@ -521,6 +522,21 @@ export function ToolbarPlanWorkspace({
       onSteps={model.onStepsActivity}
       canReportProgress={model.canProgress}
       isStepsEligible={(a) => !isDurationDerivedType(a.type)}
+      // The conflict remedies (ADR-0094 M4), and the `clear-visual-placement` action M4-T1 moved off
+      // the command surface onto the selection bar. The gate is computed HERE because it reads the
+      // plan's `schedulingMode` and the Late-start overlay, neither of which `TsldPanel` owns — and
+      // it is the SHARED `clearVisualPlacementGate`, so the bar and any future caller cannot drift
+      // about what "you cannot clear this" means. `hasSelection` is `true` by construction: this bar
+      // renders only for a selection (the ADR-0090 M2-T1 argument).
+      clearPlacement={clearVisualPlacementGate({
+        schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
+        canEditSchedule: model.canEditSchedule,
+        lateOverlayActive,
+        hasSelection: true,
+        scheduleRefusal: model.scheduleRefusal,
+      })}
+      onClearVisualPlacement={(a) => void model.clearVisualPlacement(a.id, a.version)}
+      onOpenEditorAt={model.onOpenActivityEditorAt}
       onSelectionChange={model.onSelectionChange}
       onPluralSelectionChange={model.onPluralSelectionChange}
       onRefresh={model.onTsldRefresh}

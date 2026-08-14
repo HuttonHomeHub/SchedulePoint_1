@@ -48,6 +48,12 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     onProgress: spies.onProgress,
     onSteps: spies.onSteps,
     isSummary: false,
+    // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
+    // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
+    conflictKey: null,
+    clearPlacement: { enabled: true, reason: null },
+    onClearVisualPlacement: vi.fn(),
+    onOpenEditorAt: vi.fn(),
     onDissolve: spies.onDissolve,
     onDuplicate: spies.onDuplicate,
     onDuplicateBand: spies.onDuplicateBand,
@@ -65,7 +71,7 @@ function buttonNames(): (string | null)[] {
 beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar — entry-route actions (flag on)', () => {
-  it('orders the bar Logic → Report progress → Resources → Steps → Edit → Duplicate → Delete', () => {
+  it('orders the bar Logic → Progress → Resources → Steps → Edit → Duplicate → Delete → Clear placement', () => {
     render(<SelectionActionsBar context={ctx()} />);
     expect(buttonNames()).toEqual([
       'Logic',
@@ -78,6 +84,9 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
       // flipped default-on (W5 M5).
       'Duplicate',
       'Delete',
+      // Last, because it is the rarest action on the bar and the only one inert outside Visual mode
+      // — so it is the first to demote to the `⋯` under width pressure (ADR-0094 M4-T1).
+      'Clear visual placement',
     ]);
   });
 

@@ -291,6 +291,33 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         : setResourcesActivityId(a.id),
     [],
   );
+  /**
+   * Open the editor **where a conflict actually lives** (ADR-0094 M4) — the route behind the
+   * selection bar's conflict remedy.
+   *
+   * Composed from the two openers above rather than setting `editorIntent` directly, because those
+   * openers already carry the flag-off fallback each surface needs: with the convergence flag off
+   * there are no tabs to land on, so `resources` must still reach the standalone dialog. A third
+   * copy of that branch is exactly the drift this epic exists to remove.
+   *
+   * `constraint` has no flag-off dialog of its own — a constraint has only ever been editable in the
+   * activity form — so it degrades to the ordinary Edit opener. That is a worse landing, not a dead
+   * end: the field is on the form either way.
+   */
+  const onOpenActivityEditorAt = useCallback(
+    (a: ActivitySummary, at: 'constraint' | 'resources') => {
+      if (at === 'resources') {
+        onResourcesActivity(a);
+        return;
+      }
+      if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
+        setEditorIntent(openActivityEditor(a, 'constraint'));
+        return;
+      }
+      onEditActivity(a);
+    },
+    [onResourcesActivity, onEditActivity],
+  );
   const setResourcesActivity = useCallback(
     (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
     [],
@@ -1968,6 +1995,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     deleteActivityId,
     setDeleteActivityId,
     onEditActivity,
+    // The conflict remedy route (ADR-0094 M4) — see the callback for why it composes the two
+    // existing openers rather than setting the intent itself.
+    onOpenActivityEditorAt,
     onDeleteActivity,
     // Dissolve target (WBS improvements M2) — set by the canvas selection bar, rendered by
     // ActivityCrudDialogs. Inert when `VITE_WBS_IMPROVEMENTS` is off: nothing sets it.

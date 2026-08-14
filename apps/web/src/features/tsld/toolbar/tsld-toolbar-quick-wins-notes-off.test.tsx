@@ -1,5 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -51,28 +51,6 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
-/**
- * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
- *
- * `clear-visual-placement` moved to tier 3 so Row 2 could label itself at 1920 — the trade the
- * product owner took with the measured numbers. It is the narrowest-purpose command on the row: it
- * does nothing outside Visual scheduling mode and is pen-gated on top of that. Nothing these
- * assertions prove changes; they open the menu and read a menu item, whose reason travels by
- * `aria-describedby` rather than a `title`.
- */
-function overflowItem(name: string | RegExp): HTMLElement {
-  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
-  for (const trigger of more) {
-    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
-      const hit = screen.queryByRole(role, { name });
-      if (hit) return hit;
-    }
-    fireEvent.click(trigger);
-  }
-  throw new Error(`No overflow item named ${String(name)}`);
-}
-
 describe('TSLD toolbar quick-wins (VITE_NOTES off)', () => {
   it('hides Comments and Add note when notes are disabled (T6)', () => {
     renderRows(ctx());
@@ -80,9 +58,13 @@ describe('TSLD toolbar quick-wins (VITE_NOTES off)', () => {
     expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument();
   });
 
-  it('still offers the notes-independent quick-wins', () => {
+  it('still offers the notes-independent quick-win', () => {
     renderRows(ctx());
+    // Singular since ADR-0094 M4-T1: Clear visual placement was the other half and moved to the
+    // selection bar (`selection-actions.clear-placement.test.tsx` covers it there), leaving
+    // Go-to-today as the only quick-win on this surface that does not depend on notes. Reworded
+    // rather than left plural, because a heading that promises two and shows one is the kind of
+    // small inaccuracy this repository keeps finding a year later.
     expect(screen.getByRole('button', { name: 'Go to today' })).toBeInTheDocument();
-    expect(overflowItem('Clear visual placement')).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -52,41 +52,21 @@ function renderRows(context: TsldToolbarContext) {
   );
 }
 
-/**
- * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
- *
- * `clear-visual-placement` moved to tier 3 so Row 2 could label itself at 1920 — the trade the
- * product owner took with the measured numbers. It is the narrowest-purpose command on the row: it
- * does nothing outside Visual scheduling mode and is pen-gated on top of that. Nothing these
- * assertions prove changes; they open the menu and read a menu item, whose reason travels by
- * `aria-describedby` rather than a `title`.
- */
-function overflowItem(name: string | RegExp): HTMLElement {
-  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
-  for (const trigger of more) {
-    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
-      const hit = screen.queryByRole(role, { name });
-      if (hit) return hit;
-    }
-    fireEvent.click(trigger);
-  }
-  throw new Error(`No overflow item named ${String(name)}`);
-}
-
 describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', () => {
-  it('keeps all four ids as "Coming soon" placeholders, byte-for-byte', () => {
+  it('keeps the command-surface quick-win ids as "Coming soon" placeholders, byte-for-byte', () => {
     renderRows(ctx());
     for (const name of ['Go to today', 'Comments', 'Add note']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
-    // The fifth is in the `⋯` since ADR-0090 M2 moved it to tier 3 — RELOCATED here rather than
-    // dropped from the list, which is what would have quietly turned a four-id census into a
-    // four-id one. Its reason travels by `aria-describedby` in a menu, not a `title`.
-    const cleared = overflowItem('Clear visual placement');
-    expect(cleared).toHaveAttribute('aria-disabled', 'true');
-    expect(cleared).toHaveAccessibleDescription('Coming soon');
+    // **Clear visual placement was a fourth here and is deliberately gone** (ADR-0094 M4-T1).
+    // It moved to the selection bar, which registers it behind the SAME `VITE_TOOLBAR_QUICK_WINS`
+    // flag — so the rollback contract survives, it is just not this surface's any more. Asserted as
+    // an absence rather than dropped from the list: a census that quietly shrinks is how a
+    // capability goes missing without anything failing (ADR-0073 C4's shape).
+    expect(
+      screen.queryByRole('button', { name: 'Clear visual placement' }),
+    ).not.toBeInTheDocument();
   });
 });
