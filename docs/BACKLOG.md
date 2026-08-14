@@ -37,6 +37,15 @@ a product idea that has not yet earned a roadmap line:
   smaller holes belong to the same conversation: `add-note` and
   `clear-visual-placement` are still reachable from a Gantt selection, so the
   read-only claim above is currently true of the bars and not of the toolbar.
+  **Corrected 2026-08-14, and the correction is a behaviour change nobody recorded at the time.**
+  ADR-0094 M4-T1 moved `clear-visual-placement` off the command surface onto the canvas selection
+  bar, and the workspace renders `GanttPanel` **instead of** `TsldPanel` (one surface at a time,
+  `plan-workspace-toolbar.tsx`), so that bar never mounts in the Gantt. The item is therefore no
+  longer reachable from a Gantt selection at all. That **narrows this epic's inherited requirement
+  to `Report progress` plus `add-note`** and makes ADR-0059's read-only claim more nearly true — but
+  it is a capability removed from a view, decided as a side effect of a rule about which surface an
+  action belongs on, and it went into neither ADR-0094 nor its pull request. Recorded here rather
+  than left for the Gantt epic to rediscover, which is how the same omission is usually found.
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.
