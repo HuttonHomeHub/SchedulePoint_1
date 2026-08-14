@@ -1,7 +1,9 @@
 # Implementation Plan: Conflict review
 
 - **Spec:** [`feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting product-owner approval to build
+- **Status:** **Approved in principle** 2026-08-13, pending the specialist review pass — M4-T1
+  brought forward and run against the PLAN rather than the diff (the ADR-0090 precedent, where a
+  five-specialist pre-approval review found blocking defects in the proposed repair itself).
 - **Date:** 2026-08-13
 - **Proposes:** ADR-0094
 
@@ -37,9 +39,12 @@ to the product owner surfaces before any code is written.
 - **The label is variable-width**, which the harness must account for: `3 conflicts` and
   `12 of 137` are not the same number of pixels. Measure the **worst realistic case**, not the
   fixture's.
-- **If something demotes**, that trade goes back to the product owner with the names — it is not
-  absorbed. **This task can stop the epic**, or change D-a to the icon+number variant they were
-  offered.
+- **The escalation path is CLOSED** (product owner, 2026-08-13): _"for the spacing i will accept
+  what it comes out at for the time being"_. This task therefore no longer decides anything — it
+  **records**. Measure it, write the numbers down, and name whatever demotes in the ADR; do **not**
+  come back for a decision, and do **not** quietly switch to the icon+number variant to dodge a
+  demotion. "For the time being" is what makes that safe: it is reversible on a later look, which
+  it would not be if the trade went unrecorded.
 - **Tests:** none (measurement). **Output:** `m0-measurements.md`.
 
 ##### M0-T2 — Confirm the two `conflict` meanings and their blast radius (≈ small)
@@ -193,14 +198,14 @@ Per §21, plus for this epic specifically:
 
 ## Risks & assumptions (rollup)
 
-| Risk                                                                    | Likelihood | Impact | Mitigation                                                                                                                    |
-| ----------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| Row 1 cannot afford the button and something demotes                    | **medium** | medium | M0-T1 measures first; the trade goes back to the product owner, with the icon+number variant as the fallback they already saw |
-| The count label's width varies with the number                          | high       | low    | Measure the worst realistic case, not the fixture's                                                                           |
-| Widening the filter breaks a consumer                                   | low        | medium | M0-T2 enumerates them before M2 touches anything                                                                              |
-| The count becomes a second live region saying what is already announced | medium     | medium | M1-T1 asserts `aria-hidden`, as both existing read-outs do                                                                    |
-| "No button" reads as a missing feature rather than a decision           | medium     | medium | M3-T1 owns the copy; M4-T1 points the UX gate at exactly this                                                                 |
-| The specialist gates do not run again                                   | medium     | medium | M4-T1 states the carry-over explicitly rather than letting it lapse silently                                                  |
+| Risk                                                                    | Likelihood | Impact | Mitigation                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Row 1 cannot afford the button and something demotes                    | **medium** | low    | **Accepted in advance** (2026-08-13) — M0-T1 records what moved rather than escalating. The icon+number variant stays available for a later look, and the ADR names the demoted item so a future reader can price the reversal |
+| The count label's width varies with the number                          | high       | low    | Measure the worst realistic case, not the fixture's                                                                                                                                                                            |
+| Widening the filter breaks a consumer                                   | low        | medium | M0-T2 enumerates them before M2 touches anything                                                                                                                                                                               |
+| The count becomes a second live region saying what is already announced | medium     | medium | M1-T1 asserts `aria-hidden`, as both existing read-outs do                                                                                                                                                                     |
+| "No button" reads as a missing feature rather than a decision           | medium     | medium | M3-T1 owns the copy; M4-T1 points the UX gate at exactly this                                                                                                                                                                  |
+| The specialist gates do not run again                                   | medium     | medium | M4-T1 states the carry-over explicitly rather than letting it lapse silently                                                                                                                                                   |
 
 **Assumption to check, not trust:** that no existing `ActivityEditorPurpose` already reaches the
 Scheduling tab. M0-T3 checks it.
