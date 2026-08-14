@@ -572,7 +572,11 @@ export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_L
  *   predecessor+successor chain (full, or a driving-only sub-chain from `DependencySummary.isDriving`),
  *   reusing the Stage A `dimmedIds` dim seam (unioned with any active filter dim) + the a11y listbox mark.
  * - **Next conflict** — cycles the plan's flagged activities (constraintViolated / visualConflict /
- *   externalDriven / levelingWindowExceeded / negative total float), each centred + selected + announced.
+ *   levelingWindowExceeded), each centred + selected + announced. It cycled **five** flags until
+ *   ADR-0094 narrowed the set to what a planner can act on: `externalDriven` left (an imported date
+ *   driving an activity is normal on a programme, and the schedule summary strip already reports it)
+ *   and negative total float left (one root cause counted N times down a chain, and the only member
+ *   with no remedy — still visible via `isCritical` and the float colouring).
  * A third aid, **Snap to grid**, shipped here and was **deleted on 2026-08-13**. It rounded a dropped
  * `visualStart` to the nearest working day before the PATCH — but `compute.ts:335-338` wraps every
  * `visualStart` in `rollForwardToWorking` unconditionally, so the toggle had no observable effect in
