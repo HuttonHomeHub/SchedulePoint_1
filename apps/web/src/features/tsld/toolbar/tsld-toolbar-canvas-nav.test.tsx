@@ -152,7 +152,12 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
       ctx({
         hasConflicts: true,
         conflictCount: 5,
-        currentConflict: { id: 'x', index: 2, total: 5, reasons: ['constraint conflict'] },
+        currentConflict: {
+          index: 2,
+          total: 5,
+          name: 'Pour slab',
+          reasons: ['constraint conflict'],
+        },
       }),
     );
     expect(screen.getByRole('button', { name: 'Next conflict' })).toHaveAccessibleDescription(
