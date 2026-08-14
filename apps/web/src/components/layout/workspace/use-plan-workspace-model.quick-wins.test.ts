@@ -325,3 +325,31 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     );
   });
 });
+
+/**
+ * **The conflict remedies' composition root** (ADR-0094 M4-T3).
+ *
+ * `onOpenActivityEditorAt` is the seam between a pure remedy map in `features/tsld` and an editor
+ * intent in `features/activities` — the boundary that exists because the first must not import the
+ * second (§5/§12). It is exactly the kind of wiring this register keeps recording breaking in
+ * silence: ADR-0080's `bulk` was wired into one host and not the layout its flag selected, and every
+ * unit suite passed. The ux gate asked for this case for that reason.
+ */
+describe('usePlanWorkspaceModel — the conflict remedy routes', () => {
+  it('sends a constraint conflict to the Scheduling tab, not the General one', () => {
+    // The distinction the route exists for: `openActivityEditor(a, 'edit')` lands on General, which
+    // is the editor opening rather than the route working.
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    act(() => result.current.onOpenActivityEditorAt(ACTIVITY, 'constraint'));
+    expect(result.current.editorIntent).toEqual({ activityId: 'a1', tab: 'scheduling' });
+  });
+
+  it('sends a levelling conflict through the EXISTING resources opener', () => {
+    // Composed from `onResourcesActivity` rather than setting the intent itself, because that opener
+    // already carries the flag-off fallback to the standalone dialog. A third copy of that branch is
+    // the drift this epic exists to remove.
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    act(() => result.current.onOpenActivityEditorAt(ACTIVITY, 'resources'));
+    expect(result.current.editorIntent).toEqual({ activityId: 'a1', tab: 'resources' });
+  });
+});

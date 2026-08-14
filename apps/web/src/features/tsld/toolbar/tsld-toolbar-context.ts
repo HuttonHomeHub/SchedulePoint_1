@@ -225,9 +225,9 @@ export interface TsldToolbarContext {
   hasDiagram: boolean;
 
   // --- Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) ------------------------------------------
-  // These wire five previously-"Coming soon" placeholders to shipped features (spec
+  // These wire four previously-"Coming soon" placeholders to shipped features (spec
   // `docs/specs/toolbar-quick-wins/`). Populated on every build; nothing reads them while the flag is
-  // off (the five ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
+  // off (the four ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
   /** The canvas selection lifted to the main toolbar (F0), or null when nothing is selected. Drives
    * the selection-aware items' enabled state. */
   selectedActivityId: string | null;
@@ -247,16 +247,14 @@ export interface TsldToolbarContext {
    * "Open logic". A no-op when nothing is selected. */
   openActivityNotes: () => void;
   /** Whether the viewer may edit the schedule (`canEditSchedule`, Planner+ **and** the pen). Gates the
-   * **Clear visual placement** item (F5), which is additionally pen-gated + Visual-mode-only. */
+   * mutating items. (**Clear visual placement** cited this until ADR-0094 M4-T1 moved it to the
+   * selection bar; {@link lateOverlayActive} below is now read only by that surface's shared gate.) */
   canEditSchedule: boolean;
   /** Whether the read-only Late-start overlay (ADR-0033 M4) is on — the workspace's `authoringEnabled`
    * excludes it, so a pen-gated item can be disabled by the overlay while {@link canEditSchedule} is
-   * still true. Exposed so **Clear visual placement**'s disabled reason can explain that case (F5/A1). */
+   * still true. Exposed so a pen-gated item disabled BY the overlay can explain that case (F5/A1),
+   * and read by the workspace to build the selection bar's shared `clearVisualPlacementGate` input. */
   lateOverlayActive: boolean;
-  /** Clear a bar's hand-placed `visualStart` so it reverts to its computed date (F5, Visual mode). A
-   * faithful subset of the reposition VISUAL branch: the null-`visualStart` PATCH → undo inverse (when
-   * `VITE_UNDO_REDO` is on) → auto-recalc; a stale-version 409 is a non-destructive no-op. */
-  clearVisualPlacement: (activityId: string, version: number) => void;
 
   // --- Insight lenses (VITE_CANVAS_LENSES, group 2/3 · Row 1 · Look) -------------------------
   // Client view state over already-shipped reads (spec `docs/specs/canvas-lenses/`): the filter/search

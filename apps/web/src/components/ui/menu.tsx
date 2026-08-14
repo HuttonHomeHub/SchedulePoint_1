@@ -314,6 +314,7 @@ export function MenuItem({
   selected,
   disabled = false,
   disabledReason,
+  srDescription,
   busy = false,
   children,
 }: {
@@ -337,15 +338,36 @@ export function MenuItem({
   disabled?: boolean;
   /** Why this item is shut, for a reader who can do something about it. Announced as a description. */
   disabledReason?: string;
+  /**
+   * A fact about the item that a sighted reader gets some other way — announced as a description
+   * **whether or not the item is enabled**, which is the whole difference from {@link disabledReason}.
+   *
+   * Added because `srDescription` reached the inline `ToolbarButton` and stopped there: a toolbar
+   * command demoted into this menu silently lost it, so `next-conflict`'s "3 conflicts in this plan"
+   * — the entire AT channel for a count whose visible chip is `aria-hidden` — vanished at exactly the
+   * widths where a planner most needs to know whether opening the menu is worth it. Found by three
+   * independent reviews of ADR-0094's diff, which is the "one correct pattern applied to a control
+   * and not its neighbour" shape this register keeps recording: `disabledReason` had been extended
+   * to both surfaces and this had not.
+   *
+   * Composed **after** `disabledReason` when both apply, matching `ToolbarButton`'s reason-first
+   * order — why you cannot use it outranks what it would tell you.
+   */
+  srDescription?: string;
   /** A write is in flight — `aria-busy`, so the item is not silently inert (ToolbarOverflow parity). */
   busy?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const close = useContext(MenuCloseContext);
   const reasonId = useId();
-  // Only when there IS a reason: `aria-describedby` pointing at an element that renders nothing is
-  // a dangling reference, which some AT reads as an empty description rather than as absence.
-  const describedBy = disabled && disabledReason ? reasonId : undefined;
+  const srDescriptionId = useId();
+  // Only when there IS something to point at: `aria-describedby` pointing at an element that renders
+  // nothing is a dangling reference, which some AT reads as an empty description rather than as
+  // absence. Reason first, then the standing description — the same order `ToolbarButton` composes.
+  const describedBy =
+    [disabled && disabledReason ? reasonId : undefined, srDescription ? srDescriptionId : undefined]
+      .filter(Boolean)
+      .join(' ') || undefined;
   const button = (
     <button
       type="button"
@@ -401,9 +423,16 @@ export function MenuItem({
   return describedBy ? (
     <>
       {button}
-      <span id={reasonId} className="sr-only">
-        {disabledReason}
-      </span>
+      {disabled && disabledReason ? (
+        <span id={reasonId} className="sr-only">
+          {disabledReason}
+        </span>
+      ) : null}
+      {srDescription ? (
+        <span id={srDescriptionId} className="sr-only">
+          {srDescription}
+        </span>
+      ) : null}
     </>
   ) : (
     button

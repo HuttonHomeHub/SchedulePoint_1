@@ -70,6 +70,7 @@ import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
+import { leadingConflictKey } from '../toolbar/conflict-remedy';
 import {
   SelectionActionsBar,
   type SelectionBarContext,
@@ -419,6 +420,22 @@ export interface TsldPanelProps {
    * it from the plan's `schedulingMode` + the Late overlay toggle, gated by `VITE_SCHEDULING_MODES`
    * (flag-off it stays `early`, byte-for-byte). */
   barDateSource?: BarDateSource;
+  /**
+   * The conflict remedy the selection bar offers (ADR-0094 M4) — the shared
+   * `clearVisualPlacementGate`'s verdict plus the action behind it.
+   *
+   * Supplied by the workspace, because the gate reads the plan's `schedulingMode` and the Late-start
+   * overlay, neither of which this component owns. Absent ⇒ a **shut** gate with an honest reason
+   * rather than an enabled button with a no-op behind it, which is the "lit but inert" shape this
+   * repository keeps recording. The editor route is unaffected: reading where a problem lives is not
+   * a write.
+   */
+  clearPlacement?: { enabled: boolean; reason: string | null };
+  /** Withdraw the selected activity's hand-placed `visualStart` (ADR-0094 M4). */
+  onClearVisualPlacement?: (activity: ActivitySummary) => void;
+  /** Open the activity editor where a conflict lives — `constraint` → Scheduling, `resources` →
+   * Resources. Opaque so `features/tsld` need not import `ActivityEditorPurpose` (§5/§12). */
+  onOpenEditorAt?: (activity: ActivitySummary, at: 'constraint' | 'resources') => void;
   /** The plan's baseline-variance rows (`useBaselineVariance`), for the **Baseline overlay** lens
    * (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`). The host passes the shipped
    * variance data (already route-composed for the activities table) so no new fetch is added; the
@@ -526,6 +543,9 @@ export function TsldPanel({
   chromeless = false,
   canvasUi,
   barDateSource = 'early',
+  clearPlacement,
+  onClearVisualPlacement,
+  onOpenEditorAt,
   varianceRows,
   resourceStripActive = false,
   resourceStrip = null,
@@ -1367,6 +1387,18 @@ export function TsldPanel({
       onResources: () => onResources?.(activity),
       onProgress: () => onProgress?.(activity),
       onSteps: () => onSteps?.(activity),
+      // The conflict remedy (ADR-0094 M4). Derived from the activity itself through the SAME
+      // `CONFLICT_FLAGS` the count and the filter run — so the remedy appears whether a planner
+      // arrived by pressing Next conflict or simply clicked the bar, and there is still one
+      // definition of what a conflict is.
+      conflictKey: leadingConflictKey(activity),
+      // Shut with a reason when the host did not wire it — never enabled-but-inert.
+      clearPlacement: clearPlacement ?? {
+        enabled: false,
+        reason: 'Clearing a placement is unavailable here',
+      },
+      onClearVisualPlacement: () => onClearVisualPlacement?.(activity),
+      onOpenEditorAt: (at) => onOpenEditorAt?.(activity, at),
     };
   }, [
     selectionCanvas,
@@ -1386,6 +1418,9 @@ export function TsldPanel({
     onResources,
     onProgress,
     onSteps,
+    clearPlacement,
+    onClearVisualPlacement,
+    onOpenEditorAt,
   ]);
 
   // View controls (read-only or editing) — zoom preset (reflected from the canvas's coarse

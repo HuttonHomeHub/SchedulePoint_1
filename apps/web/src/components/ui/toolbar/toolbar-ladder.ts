@@ -233,8 +233,28 @@ export function computeLadder(input: LadderInput): LadderResult {
   // ── Stage 2 · demotion ────────────────────────────────────────────────────────────────────────
   // Only if the row is still short after labelling. Note that labels are NOT recomputed afterwards:
   // that would put an output back on the input side, which is the loop this module exists to remove.
+  //
+  // **The `⋯` is charged BEFORE the shortfall test whenever it is certain to render — not inside
+  // the branch that test guards.** A row holding an un-admitted tier-3 candidate renders the button
+  // whatever this stage decides, and Stage 3 charges it unconditionally for exactly that reason
+  // (see its comment, which also explains why it is not released when the last candidate is
+  // admitted). Reserving it only inside `budget < 0` made the test ask *"is this row short without
+  // the button it is already painting?"* — so a row that overflowed by less than the button's own
+  // width answered **no**, demoted nothing, and laid out past its container.
+  //
+  // Found by measurement, not by reading (ADR-0094 M0-T1): promoting `next-conflict` to tier 1 put
+  // Row 1 **8 px past its 1008 px container at 1024** with `e2e-toolbar-fit` S4 red, and the
+  // instrumented ladder input showed it believing it had 13 px spare while paying 41 px for an `⋯`
+  // it had never budgeted. The first hypothesis — that the new conflict read-out was the cost —
+  // was wrong: giving that read-out a band floor changed the overhang by exactly zero, because the
+  // fixture plan has no conflicts and the read-out was never rendering. The 8 px predates this
+  // epic; one more tier-1 item is what made it visible.
+  const overflowAlreadyRenders = candidates.length > 0;
+  if (overflowAlreadyRenders) budget -= overflowWidth;
+
   if (budget < 0 && input.allowDemotion !== false) {
-    budget -= overflowWidth; // the `⋯` is certainly going to render
+    // Only when it is not already reserved: a demotion creates the button on a row that had none.
+    if (!overflowAlreadyRenders) budget -= overflowWidth;
     const queue = [...core].filter((i) => i.demotable).sort((a, b) => byImportance(b, a));
     const companionsOf = (item: LadderItem): LadderItem[] =>
       item.demotionGroup
@@ -268,7 +288,9 @@ export function computeLadder(input: LadderInput): LadderResult {
   // the width that would have paid for that admission. Charging it throughout costs the row one
   // narrow band in which the last candidate could have been admitted and is not — a command that
   // stays one click away, which is the direction this whole ladder errs in everywhere else.
-  budget -= overflowWidth;
+  //
+  // The charge itself now happens above, before Stage 2's shortfall test, because that test needs
+  // it too — see there. This stage's rule is unchanged; only the line that applies it moved.
   const coreGroups = new Set(core.map((i) => i.group));
   const ordered = [...candidates].sort(byImportance);
   for (const candidate of ordered) {

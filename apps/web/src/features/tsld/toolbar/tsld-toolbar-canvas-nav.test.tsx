@@ -48,29 +48,15 @@ function renderRows(context: TsldToolbarContext) {
 }
 
 /**
- * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
+ * The `overflowItem` helper lived here and is **deleted** (ADR-0094, 2026-08-13).
  *
- * Four commands moved to tier 3 so the two rows could label themselves at 1920 — the trade the
- * product owner took with the measured numbers. Nothing about what these assertions prove changes;
- * they open the menu first and read a `menuitem` instead of a top-level button. A `MenuItem` also
- * links its reason by `aria-describedby` rather than a `title`, which is why the shade cases assert
- * the accessible description.
+ * It opened the `⋯` and read a `menuitem`, because ADR-0090 M2 moved four commands to tier 3 so the
+ * two rows could label themselves at 1920. `next-conflict` was one of them, and this file's three
+ * Next-conflict cases were its only callers — promoting the item back to tier 1 left the helper with
+ * nothing to reach. Removed rather than kept "in case": an unused helper documenting a layout that
+ * no longer holds is the drift class this epic is about, and `isolate-logic` (the other command this
+ * file covers) reads its own control directly.
  */
-function overflowItem(name: string | RegExp): HTMLElement {
-  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
-  for (const trigger of more) {
-    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-    // Any of the three menu-item roles: a toggle in the overflow is a `menuitemcheckbox` since
-    // ADR-0090 M2 (it was a plain `menuitem` announcing no state), and `getByRole('menuitem')`
-    // does not match it — which is how that fix announced itself here.
-    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
-      const hit = screen.queryByRole(role, { name });
-      if (hit) return hit;
-    }
-    fireEvent.click(trigger);
-  }
-  throw new Error(`No overflow item named ${String(name)}`);
-}
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -118,9 +104,16 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
   });
 
   // ── Next conflict ───────────────────────────────────────────────────────────────────────
+  //
+  // **Reached inline since ADR-0094, not through `overflowItem`.** These three used that helper —
+  // which opens the `⋯` first — because the item was tier 3 and therefore admitted last, so at the
+  // width a planner actually uses it was inside the menu. That is what the epic promoted it out of:
+  // a control shaded "No conflicts to review" inside a menu is a shading nobody sees. A top-level
+  // button links its reason by `title`, not `aria-describedby`, which is why the shade assertions
+  // changed shape with the query.
   it('advances Next conflict when the plan has conflicts', () => {
     renderRows(ctx({ hasConflicts: true, conflictCount: 3 }));
-    const btn = overflowItem('Next conflict');
+    const btn = screen.getByRole('button', { name: 'Next conflict' });
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(btn);
     expect(spies.goToNextConflict).toHaveBeenCalledOnce();
@@ -128,7 +121,7 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
 
   it('shades Next conflict with "No conflicts to review" when there are none', () => {
     renderRows(ctx({ hasConflicts: false }));
-    const btn = overflowItem('Next conflict');
+    const btn = screen.getByRole('button', { name: 'Next conflict' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAccessibleDescription('No conflicts to review');
     fireEvent.click(btn);
@@ -137,7 +130,61 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
 
   it('shades Next conflict with "Add an activity first" on an empty canvas', () => {
     renderRows(ctx({ hasConflicts: false, hasDiagram: false }));
-    expect(overflowItem('Next conflict')).toHaveAccessibleDescription('Add an activity first');
+    expect(screen.getByRole('button', { name: 'Next conflict' })).toHaveAccessibleDescription(
+      'Add an activity first',
+    );
+  });
+
+  // The count reaches assistive tech through the BUTTON, because the read-out beside it is
+  // `aria-hidden` (ADR-0094 M3-T2). Asserted at rest — with nothing selected and no cycle started —
+  // because that is the state the epic exists for and the one a loose "the count is visible"
+  // assertion would have passed against the OLD code for the wrong reason: the old chip already
+  // rendered "Conflict i of n" once you were cycling.
+  it('describes the conflict count to assistive tech at rest, not only mid-cycle', () => {
+    renderRows(ctx({ hasConflicts: true, conflictCount: 3 }));
+    expect(screen.getByRole('button', { name: 'Next conflict' })).toHaveAccessibleDescription(
+      '3 conflicts in this plan',
+    );
+  });
+
+  it('describes the position instead once a planner is stepping', () => {
+    renderRows(
+      ctx({
+        hasConflicts: true,
+        conflictCount: 5,
+        currentConflict: {
+          index: 2,
+          total: 5,
+          name: 'Pour slab',
+          reasons: ['constraint conflict'],
+        },
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Next conflict' })).toHaveAccessibleDescription(
+      'Conflict 2 of 5',
+    );
+  });
+
+  it('says one conflict rather than 1 conflicts', () => {
+    renderRows(ctx({ hasConflicts: true, conflictCount: 1 }));
+    expect(screen.getByRole('button', { name: 'Next conflict' })).toHaveAccessibleDescription(
+      '1 conflict in this plan',
+    );
+  });
+
+  // The visible half. It rendered ONLY while cycling until ADR-0094 — a count that cannot tell you
+  // whether cycling is worth starting, which was the product owner's actual complaint.
+  it('shows the count at rest, before any cycling has started', () => {
+    renderRows(ctx({ hasConflicts: true, conflictCount: 3 }));
+    expect(screen.getByTitle('3 conflicts')).toBeInTheDocument();
+  });
+
+  it('renders no read-out when the plan has no conflicts', () => {
+    const { container } = renderRows(ctx({ hasConflicts: false, conflictCount: 0 }));
+    // Scoped to the read-out's own item, NOT `queryByTitle(/conflict/i)` — which the first version
+    // used and which matched the shaded BUTTON's tooltip ("No conflicts to review"). A query broad
+    // enough to hit a neighbour is a query that cannot say which control it is talking about.
+    expect(container.querySelector('[data-toolbar-item="next-conflict-status"]')).toBeNull();
   });
 
   // ── Snap to grid ────────────────────────────────────────────────────────────────────────

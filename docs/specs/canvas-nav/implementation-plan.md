@@ -1,7 +1,11 @@
 # Implementation Plan: TSLD canvas navigation & authoring aids
 
 - **Feature spec:** `docs/specs/canvas-nav/feature-spec.md`
-- **Status:** Approved (2026-07-19). Decisions: **CQ-1** Isolate ships a **full/driving toggle** (both modes in v1, from `isDriving`); **CQ-2** Next-conflict cycles the **5-flag set** (constraintViolated, visualConflict, externalDriven, levelingWindowExceeded, negative total-float; ordered earlyStart→lane→id); **CQ-3** Snap is **session-local, nearest-working-day**. Single flip at M4.
+- **Status:** Approved (2026-07-19). **CQ-2's five-flag set was narrowed to three by ADR-0094**
+  (2026-08-13) — `externalDriven` and negative total float left the counted set, because a conflict a
+  planner cannot act on teaches them to stop reading the number. Annotated rather than rewritten:
+  this document records what was decided then, and the live set is `CONFLICT_FLAGS` in
+  `apps/web/src/features/tsld/render/conflicts.ts`. Decisions: **CQ-1** Isolate ships a **full/driving toggle** (both modes in v1, from `isDriving`); **CQ-2** Next-conflict cycles the **5-flag set** (constraintViolated, visualConflict, externalDriven, levelingWindowExceeded, negative total-float; ordered earlyStart→lane→id); **CQ-3** Snap is **session-local, nearest-working-day**. Single flip at M4.
 - **Owner:** TBD
 
 ## Breakdown

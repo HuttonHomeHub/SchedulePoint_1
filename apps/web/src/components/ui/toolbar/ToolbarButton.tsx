@@ -39,6 +39,8 @@ export interface ToolbarButtonProps {
   busy?: boolean;
   disabled?: boolean;
   disabledReason?: string | undefined;
+  /** A description read on focus — see `ToolbarItem.srDescription`. Independent of `disabled`. */
+  srDescription?: string | undefined;
   tabIndex: number;
   onActivate: () => void;
   onKeyDown?: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
@@ -58,6 +60,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       busy,
       disabled,
       disabledReason,
+      srDescription,
       tabIndex,
       onActivate,
       onKeyDown,
@@ -73,9 +76,17 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     // bug dropped it), so a terse command is self-explanatory on hover. A disabled title always leads
     // with the reason (which already owns the tooltip); description isn't appended there.
     const reasonId = useId();
+    const srDescriptionId = useId();
     // Only when there IS a reason: an `aria-describedby` pointing at an element that renders nothing
     // is a dangling reference, which some AT reads as an empty description rather than as absence.
-    const describedBy = disabled && disabledReason ? reasonId : undefined;
+    const reasonRef = disabled && disabledReason ? reasonId : undefined;
+    // A persistent description (ADR-0094 M3-T2) — a fact visible beside the control that the name
+    // does not carry. Independent of `disabled`: `next-conflict` needs its count read whether it is
+    // actionable or not.
+    const srRef = srDescription ? srDescriptionId : undefined;
+    // **Reason first when both apply.** A shaded control's most useful sentence is why it is shut;
+    // the standing fact reads after it.
+    const describedBy = [reasonRef, srRef].filter(Boolean).join(' ') || undefined;
     // When a reason node is rendered, the accessible NAME is pinned to `label` via `aria-label`.
     // The span has to live inside the button — that is this component's single root, and a sibling
     // would need a wrapper the toolbar's flex layout and its `data-toolbar-focusable` query both
@@ -121,9 +132,14 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
           </span>
         ) : null}
         {showLabel ? <span className="truncate">{label}</span> : null}
-        {describedBy ? (
+        {reasonRef ? (
           <span id={reasonId} className="sr-only">
             {disabledReason}
+          </span>
+        ) : null}
+        {srRef ? (
+          <span id={srDescriptionId} className="sr-only">
+            {srDescription}
           </span>
         ) : null}
       </button>

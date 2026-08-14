@@ -96,7 +96,6 @@ export function makeTsldToolbarContext(
     openActivityNotes: vi.fn(),
     canEditSchedule: true,
     lateOverlayActive: false,
-    clearVisualPlacement: vi.fn(),
     // Insight lenses
     filterQuery: '',
     setFilterQuery: vi.fn(),

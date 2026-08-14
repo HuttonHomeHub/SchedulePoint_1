@@ -35,7 +35,16 @@ export type ActivityEditorPurpose =
   | 'resources'
   | 'notes'
   /** Manage a WBS summary's membership — only ever raised for a `WBS_SUMMARY`. */
-  | 'members';
+  | 'members'
+  /**
+   * Fix a constraint that broke logic (ADR-0094 M4-T3) — the Scheduling tab.
+   *
+   * The only purpose the conflict remedies needed that did not already exist: `resources` covers a
+   * levelling overrun, and the hand-placed clash has a real one-click fix rather than a route. It is
+   * NOT `'edit'`, which lands on General: a planner sent to fix a mandatory constraint should arrive
+   * where the constraint is, not where the name is.
+   */
+  | 'constraint';
 
 export interface ActivityEditorIntent {
   activityId: string;
@@ -77,6 +86,8 @@ export function openActivityEditor(
       return { activityId: activity.id, tab: 'progress' };
     case 'steps':
       return { activityId: activity.id, tab: 'progress', focusSteps: true };
+    case 'constraint':
+      return { activityId: activity.id, tab: 'scheduling' };
     case 'edit':
       return { activityId: activity.id, tab: 'general' };
   }

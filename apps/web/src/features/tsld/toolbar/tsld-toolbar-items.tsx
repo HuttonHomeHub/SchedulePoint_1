@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Crop,
   DollarSign,
-  Eraser,
   FileCode,
   FileDown,
   FileSpreadsheet,
@@ -121,9 +120,11 @@ type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels'
  * **Why a handful of commands sit at tier 3 — last into the `⋯`, first out of it (ADR-0090 M2,
  * amended by ADR-0091 M7's admission rung, which puts them back on the row when there is room).**
  *
- * `next-conflict` and `float-paths` on Row 1, and `clear-visual-placement` on Row 2. (`shortcuts` was
- * a fourth until ADR-0091 M7-S5 moved it into the account menu — an inventory in prose goes stale
- * every time the set changes, which is why the count is not restated here.)
+ * `float-paths` on Row 1. (`shortcuts` was one of these until ADR-0091 M7-S5 moved it into the
+ * account menu; `next-conflict` was until ADR-0094 M2 promoted it to tier 1 so its count could sit on
+ * the bar; `clear-visual-placement` was until ADR-0094 M4-T1 moved it to the selection bar — an
+ * inventory in prose goes stale every time the set changes, which is why the count is not restated
+ * here.)
  * Row 1 was ~360 px short of labelling itself at 1920 and Row 2 ~128 px; these four are what buys
  * both. The trade was put to the product owner with the measured numbers rather than taken here,
  * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
@@ -1438,26 +1439,62 @@ function CurrentConflictStatus({
   itemProps: ToolbarItemRenderApi['itemProps'];
 }): React.ReactElement | null {
   const current = ctx.currentConflict;
-  if (!current) return null;
-  const reason = current.reasons[0] ?? 'conflict';
+  // **Two states, and the idle one is the whole point of ADR-0094 M3-T2.** This used to render only
+  // while a planner was already cycling (`currentConflict != null`), which is a count that cannot
+  // tell you whether cycling is worth starting — the product owner's actual complaint. Idle it now
+  // states the magnitude; stepping it states the position and the reason.
+  //
+  // **Two further states the plan required a decision on, both settled as "no special case", and
+  // recorded because a silent default reads like an oversight** (M3-T2; the accessibility and ux
+  // gates both asked):
+  //
+  // - **Isolating.** `useConflictNavigation` forces `currentConflict` to `null` while the logic-path
+  //   isolation lens is on, so this reverts from "2 of 3" to "3 conflicts" mid-cycle. That is the
+  //   honest reading: isolation replaces the scene with a subgraph, so a position within a walk of
+  //   the whole plan is no longer a position within what the planner is looking at. It degrades to
+  //   the magnitude rather than inventing a "paused" state, which would be a fourth string to keep
+  //   true and says nothing the reader cannot see.
+  // - **Filtered.** The count is of the WHOLE plan, deliberately, and does not follow the active
+  //   filter or search. "How many conflicts does this plan have" is the question the control answers,
+  //   and a count that shrinks when a planner filters to Critical would answer a different one every
+  //   time the lens changed — while the Next-conflict cycle it labels still walks all of them
+  //   (`orderedConflictHits` reads the plan, not the filtered set), so a filtered count would
+  //   disagree with the very cycle it sits beside. The accepted cost is that a planner filtered to
+  //   something other than "Has conflict" reads "3 conflicts" beside a canvas showing fewer
+  //   un-dimmed bars; the plan rated that the state most likely to be reported as a bug, and it is
+  //   the lesser of the two wrongs.
+  if (!current && !ctx.hasConflicts) return null;
+  const label = current
+    ? `Conflict ${current.index} of ${current.total}`
+    : `${ctx.conflictCount} ${ctx.conflictCount === 1 ? 'conflict' : 'conflicts'}`;
+  const reason = current ? (current.reasons[0] ?? 'conflict') : null;
   return (
     <span
       {...itemProps}
       // Purely the VISIBLE readout for sighted users (U2). The spoken channel is the shared polite
       // announcer that `goToNextConflict` already writes to — so this chip is `aria-hidden` to avoid a
       // second, duplicate live-region announcing the same "Conflict i of n" text.
+      //
+      // Being hidden is why the BUTTON carries `srDescription`: an AT user has to reach the same fact
+      // some other way, and a description read on focus is that way without a second announcement.
       aria-hidden="true"
-      title={`Conflict ${current.index} of ${current.total}: ${current.reasons.join(', ')}`}
+      title={
+        current
+          ? `Conflict ${current.index} of ${current.total}: ${current.reasons.join(', ')}`
+          : label
+      }
       className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[14rem] gap-1')}
     >
       <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="shrink-0 whitespace-nowrap">
-        Conflict {current.index} of {current.total}
-      </span>
-      <span aria-hidden="true" className="shrink-0">
-        ·
-      </span>
-      <span className="truncate">{reason}</span>
+      <span className="shrink-0 whitespace-nowrap">{label}</span>
+      {reason ? (
+        <>
+          <span aria-hidden="true" className="shrink-0">
+            ·
+          </span>
+          <span className="truncate">{reason}</span>
+        </>
+      ) : null}
     </span>
   );
 }
@@ -1752,8 +1789,8 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
  * "Coming soon" stubs (resource-view, share) that make the toolbar read as fully designed and are
  * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
- * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments, add-note, update-progress and
- * clear-visual-placement under `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
+ * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments and add-note under
+ * `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
  * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV`;
  * export and print under `VITE_EXPORT_PRINT`; the Add menu's Level-of-effort/Hammock placeholders
  * collapse to one live Level-of-Effort item under `VITE_CANVAS_ACTIVITY_TYPES` — each a placeholder
@@ -1773,7 +1810,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  */
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/tier/order/
-  // label/icon each of the five ids carries in BOTH its real (flag-on) item and its
+  // label/icon each remaining id carries in BOTH its real (flag-on) item and its
   // `placeholderItem()` (flag-off) stub, declared once and spread into both so the two branches can't
   // drift (component review C1; mirrors the `add-activity` shared-shape pattern below).
   const todayShape = {
@@ -1799,15 +1836,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // to the hover `title` only (the accessible name stays "Add note").
     description: 'Opens the Logic panel (links & notes)',
     icon: <StickyNote className="size-4" />,
-  };
-  const clearVisualPlacementShape = {
-    id: 'clear-visual-placement',
-    group: 'tools' as const,
-    row: 'do' as const,
-    tier: 3 as const,
-    order: 6,
-    label: 'Clear visual placement',
-    icon: <Eraser className="size-4" />,
   };
   const commentsShape = {
     id: 'comments',
@@ -1849,8 +1877,35 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'next-conflict',
     group: 'find' as const,
     row: 'look' as const,
-    tier: 3 as const,
+    // **Tier 1 since ADR-0094, and the label stays STATIC.** Tier 3 is admitted last, so at 1646 this
+    // sat in the `⋯` — where its "No conflicts to review" shading was a shading nobody saw, and its
+    // count could not tell a planner whether opening the menu was worth it.
+    //
+    // The count is NOT folded into this label, and that was decided twice. `ToolbarItem.label` is a
+    // plain string; making it context-bearing would widen a shared primitive for one caller, reduce
+    // the accessible name to "2 of 3" (a status, not a command), and — because a label's width is
+    // derived — re-run the whole ladder on every click, moving other controls under the planner's
+    // cursor between two clicks of the same button. It also fails for the reason the ORIGINAL
+    // refusal gave, which survives this promotion intact: a label is painted only when labels fit.
+    // The count lives in `next-conflict-status` instead, which is a `render` item and therefore
+    // measured rather than derived.
+    tier: 1 as const,
     order: 2,
+    /**
+     * **A command outranks the read-out that describes it** (ADR-0094 M5).
+     *
+     * Without this the flag-on journey found the epic's purpose inverting the moment it applied:
+     * `next-conflict-status` is a `render` item and therefore **cannot demote**, so at the ordinary
+     * 1280 px journey viewport the ~130 px it takes the instant a plan HAS a conflict pushed
+     * something off the row — and the lowest-ranked candidate was the button the chip labels
+     * (default priority is `-order`, i.e. −2, below every neighbour). The result was a count sitting
+     * on the row beside no way to act on it, in the only state this epic exists for.
+     *
+     * 90 rather than 100: navigation still survives longest (ADR-0090 D3), but this outranks the
+     * lenses at 60 and everything on default. The read-out cannot be given the lower rank instead —
+     * it has no rank, which is precisely the asymmetry that caused this.
+     */
+    priority: 90,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
   };
@@ -2149,6 +2204,17 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
               : ctx.hasConflicts
                 ? undefined
                 : 'No conflicts to review',
+          // The count reaches assistive tech HERE, because the read-out beside it is `aria-hidden`
+          // (ADR-0094 M3-T2). Without this an AT user met an enabled button called "Next conflict"
+          // with no magnitude until they activated it — while a sighted planner read "3 conflicts"
+          // at rest. Same requirement, half the audience. Read on focus, never announced: the polite
+          // announcer already speaks the position on activation.
+          srDescription: (ctx) =>
+            ctx.currentConflict
+              ? `Conflict ${String(ctx.currentConflict.index)} of ${String(ctx.currentConflict.total)}`
+              : ctx.hasConflicts
+                ? `${String(ctx.conflictCount)} ${ctx.conflictCount === 1 ? 'conflict' : 'conflicts'} in this plan`
+                : undefined,
           onActivate: (ctx) => ctx.goToNextConflict(),
         }
       : placeholderItem(nextConflictShape),
@@ -2219,7 +2285,32 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 3,
       label: 'Current conflict',
       presentational: true,
-      isVisible: (ctx) => ctx.currentConflict != null,
+      /**
+       * Visible whenever there is something to count — not only mid-cycle (ADR-0094 M3-T2) — **and
+       * only once the row is at least `compact`.**
+       *
+       * The band floor is the Project-finish chip's answer to the same problem, for the same reason:
+       * a `render` item can never demote, so every pixel it takes is paid at every width, and the
+       * only answer available to such an item is to withhold itself.
+       *
+       * **It is not, however, what fixed the S4 overhang this epic hit, and that is worth saying.**
+       * This paragraph first claimed it was: `e2e-toolbar-fit` S4 went red at 1024 when
+       * `next-conflict` was promoted to tier 1, the read-out was the obvious new pinned cost, and
+       * the floor was written with the overhang cited as its evidence. Adding it changed the
+       * overhang by **exactly zero px** — the fixture plan carries no conflicts, so this chip was
+       * never rendering at that width at all. The real cause was `computeLadder` testing for a
+       * shortfall without charging the `⋯` it was already painting (`toolbar-ladder.ts`, Stage 2).
+       * The floor stays because the reasoning for it is sound on its own; the claim that it fixed
+       * something is withdrawn rather than deleted, because the wrong version is the more
+       * instructive half (ADR-0076 Class 3, caught by measuring instead of shipping the story).
+       *
+       * The count is not lost to an AT user below `compact`: `next-conflict`'s `srDescription`
+       * carries it, and that is read from the button rather than from this chip (which is
+       * `aria-hidden`). A sighted planner there loses the resting magnitude and keeps the button,
+       * which is a glance rather than a capability — the same trade the finish chip records.
+       */
+      isVisible: (ctx, env) =>
+        (ctx.hasConflicts || ctx.currentConflict != null) && bandIsAtLeast(env.layout, 'compact'),
       render: (ctx, api) => <CurrentConflictStatus ctx={ctx} itemProps={api.itemProps} />,
     },
 
@@ -2355,45 +2446,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // on a drop onto a non-working column: Saturday landed Friday with it on, Monday with it
     // off. The product owner reported seeing no difference and was right. A control whose
     // entire capability is already delivered unconditionally elsewhere is the ADR-0081 shape.
-    // Clear visual placement — a Visual-planning action (drops a bar's hand-placed `visualStart` so it
-    // falls back to the computed date, toolbar quick-wins F5). Only *meaningful* in Visual mode, but per
-    // the registry's shade-don't-hide rule (ADR-0031 + docs/TOOLBAR_ROADMAP.md) it stays VISIBLE in both
-    // modes and is disabled-with-a-reason outside Visual (U1) — like the mode-early/mode-visual siblings —
-    // so toggling Early↔Visual doesn't shift the bar's silhouette. Pen-gated; it calls only the existing
-    // PATCH + auto-recalc, so the CPM engine + parity gate are untouched. Flag-off it is the "Coming soon"
-    // placeholder, byte-for-byte.
-    TOOLBAR_QUICK_WINS_ENABLED
-      ? {
-          ...clearVisualPlacementShape,
-          penGated: true,
-          isVisible: () => SCHEDULING_MODES_ENABLED,
-          // Enabled only when it's actionable end-to-end: Visual mode AND the pen/role AND not the
-          // read-only Late overlay AND a RESOLVED selection (U3 — a deleted row resolves to undefined).
-          isEnabled: (ctx) =>
-            ctx.schedulingMode === 'VISUAL' &&
-            ctx.canEditSchedule &&
-            !ctx.lateOverlayActive &&
-            ctx.selectedActivity != null,
-          // Precedence ladder (U1/A1/U2/A5): the PERMANENT gates before the transient selection, so a
-          // Viewer with nothing selected isn't first told to "Select an activity". Mode → role/pen →
-          // Late overlay (A1: the generic Toolbar disables penGated items under the overlay while
-          // `canEditSchedule` stays true, so the reason must come from `lateOverlayActive`) → selection.
-          disabledReason: (ctx) =>
-            ctx.schedulingMode !== 'VISUAL'
-              ? 'Only available in Visual mode'
-              : !ctx.canEditSchedule
-                ? (ctx.scheduleRefusal('clear the placement') ?? undefined)
-                : ctx.lateOverlayActive
-                  ? 'Turn off the Late-start overlay to clear the placement'
-                  : ctx.selectedActivity == null
-                    ? 'Select an activity first'
-                    : undefined,
-          onActivate: (ctx) => {
-            const activity = ctx.selectedActivity;
-            if (activity) ctx.clearVisualPlacement(activity.id, activity.version);
-          },
-        }
-      : placeholderItem(clearVisualPlacementShape),
+    // `clear-visual-placement` MOVED to the selection bar (ADR-0094 M4-T1). Its `isEnabled` consulted
+    // `ctx.selectedActivity`, which is ADR-0093's discriminator verbatim: an action whose subject is
+    // the selected object belongs on the object's surface. It stayed here through ADR-0093 only
+    // because it had no twin then; the `visualConflict` remedy IS this action, so it moved rather
+    // than being duplicated. `selection-duplication.structural.test.ts` was verified RED against the
+    // two-copy state first. Its four-condition gate is now `clearVisualPlacementGate` in
+    // `conflict-remedy.ts`, shared by the bar's item and the remedy so they cannot drift.
     // Recalculate + Undo/Redo close the authoring cluster (moved here from the Object/History groups so
     // the pen-gated set is contiguous). Recalculate is enabled only with the pen and when not in flight.
     {

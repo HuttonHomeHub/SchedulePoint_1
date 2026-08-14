@@ -9,37 +9,74 @@
 
 import { compareByTimeThenLane } from './ordering';
 
-/** The minimal activity shape the conflict machinery reads — a subset of `ActivitySummary`. */
-export interface ConflictableActivity {
+/**
+ * The four fields a conflict predicate actually reads.
+ *
+ * **Split out of {@link ConflictableActivity} (ADR-0094 M1-T2), and the split is load-bearing.**
+ * `ConflictFlag.matches` used to take the full shape — including `id`, `earlyStart` and `laneIndex`,
+ * which no predicate has ever read and which exist only for {@link orderedConflicts}' sort. Reusing
+ * those predicates for the canvas **filter** (the epic's D2: one set, one meaning) would therefore
+ * have forced `MatchableActivity` in `lenses.ts` to grow three ordering fields it has no use for —
+ * bad coupling arriving through an over-broad signature rather than through a real dependency.
+ */
+export interface ConflictFlagFields {
+  constraintViolated: boolean;
+  visualConflict: boolean;
+  levelingWindowExceeded: boolean;
+}
+
+/** The minimal activity shape the conflict machinery reads — a subset of `ActivitySummary`. The flag
+ * fields plus the three {@link orderedConflicts} orders by. */
+export interface ConflictableActivity extends ConflictFlagFields {
   id: string;
   name: string;
   earlyStart: string | null;
   laneIndex: number;
-  constraintViolated: boolean;
-  visualConflict: boolean;
-  externalDriven: boolean;
-  levelingWindowExceeded: boolean;
-  totalFloat: number | null;
-}
-
-/** One conflict flag in the v1 set (CQ-2): a stable key, a human reason label, and the predicate over an
- * already-shipped engine flag. Single source, so the set + copy can't drift across the app. */
-export interface ConflictFlag {
-  key: string;
-  label: string;
-  matches: (activity: ConflictableActivity) => boolean;
 }
 
 /**
- * The v1 *Next conflict* flag set (CQ-2), in the order reasons are listed for a multi-flag activity.
- * **Near-critical is deliberately excluded** — it is a lens/insight, not a conflict. Additive: a future
- * flag drops in here without touching the ordering / cursor logic.
+ * The closed set of conflict keys.
+ *
+ * **A union rather than `string` (ADR-0094 M1-T1), so the remedy map can be total.** The component
+ * layer picks each conflict's remedy from a `Record<ConflictKey, Remedy>`; with an open `string` key
+ * that record could silently miss a flag or hold a stale one, which is precisely the
+ * drift-by-omission this epic exists to remove. Closed, adding a flag is a **typecheck failure at
+ * the map** rather than a conflict that lands on screen with no remedy behind it.
+ */
+export type ConflictKey = 'constraintViolated' | 'visualConflict' | 'levelingWindowExceeded';
+
+/** One conflict flag: a stable key, a human reason label, and the predicate over an already-shipped
+ * engine flag. Single source, so the set + copy can't drift across the app. */
+export interface ConflictFlag {
+  key: ConflictKey;
+  label: string;
+  matches: (activity: ConflictFlagFields) => boolean;
+}
+
+/**
+ * The *Next conflict* flag set, in the order reasons are listed for a multi-flag activity.
+ * **Near-critical is deliberately excluded** — it is a lens/insight, not a conflict.
  *
  * - `constraintViolated`     — a mandatory constraint broke logic (ADR-0035 §7)
  * - `visualConflict`         — a Visual-Planning placement conflicts with logic (ADR-0033)
- * - `externalDriven`         — an imported external date drives the activity (ADR-0043)
  * - `levelingWindowExceeded` — resource levelling pushed it past its window (ADR-0041 §3)
- * - `negativeFloat`          — negative total float (`totalFloat < 0`, an over-constrained activity)
+ *
+ * **It held five until ADR-0094, and both departures were the same argument.** A counted conflict is
+ * something a planner can *act on*; a fact they cannot act on is noise that teaches them to stop
+ * reading the number.
+ *
+ * - `externalDriven` left because an imported date driving an activity is **normal** on a programme
+ *   with real interfaces. It is still reported, by `ScheduleSummaryStrip`'s `externalDrivenCount`.
+ * - `negativeFloat` left for the same reason and one more: it propagates **backwards** along a
+ *   chain, so one unmeetable deadline flags every predecessor feeding it — one root cause counted N
+ *   times, on exactly the plans that most need review, and the only member with no remedy at all.
+ *   Counting just the *root* was tried and withdrawn: {@link matchesActivityFilter} takes ONE
+ *   activity, so a graph-dependent predicate cannot be expressed there, and the count and the filter
+ *   would have disagreed — the very defect this epic exists to fix, recreated by its own fix. It is
+ *   still fully visible: it drives `isCritical` (ADR-0035's TF ≤ 0 default) and `FLOAT_BUCKETS[0]`.
+ *
+ * **The accepted cost, stated rather than discovered:** an over-constrained plan can now show zero
+ * conflicts. The Schedule summary strip carries that weight alone.
  */
 export const CONFLICT_FLAGS: readonly ConflictFlag[] = [
   {
@@ -53,27 +90,30 @@ export const CONFLICT_FLAGS: readonly ConflictFlag[] = [
     matches: (a) => a.visualConflict,
   },
   {
-    key: 'externalDriven',
-    label: 'external date driver',
-    matches: (a) => a.externalDriven,
-  },
-  {
     key: 'levelingWindowExceeded',
     label: 'levelling window exceeded',
     matches: (a) => a.levelingWindowExceeded,
   },
-  {
-    key: 'negativeFloat',
-    label: 'negative total float',
-    matches: (a) => a.totalFloat !== null && a.totalFloat < 0,
-  },
 ];
 
-/** A flagged activity to visit — its id, name, and the human reason(s) it matched (for the announcement). */
+/**
+ * A flagged activity to visit — its id, name, the human reason(s) it matched (for the announcement)
+ * and the **keys** behind them.
+ *
+ * **`keys` is not a duplicate of `reasons` (ADR-0094 M1-T3).** `reasons` is display copy; `keys` is
+ * what the remedy is chosen by. Carrying only the labels — which is what this type did until now —
+ * would have left the selection bar picking a planner's remedy by matching a UI string, so a wording
+ * tweak to a `label` would silently break it. Three independent reviewers reached that finding, which
+ * is the strongest signal the review pass produced.
+ *
+ * Both are ordered by {@link CONFLICT_FLAGS}, and `keys[0]` is therefore the reason a multi-flag
+ * activity leads with — the one the bar names and offers a remedy for.
+ */
 export interface ConflictHit {
   id: string;
   name: string;
   reasons: string[];
+  keys: ConflictKey[];
 }
 
 /**
@@ -84,20 +124,21 @@ export interface ConflictHit {
 export function orderedConflicts(activities: readonly ConflictableActivity[]): ConflictHit[] {
   const hits: Array<ConflictHit & { earlyStart: string | null; laneIndex: number }> = [];
   for (const activity of activities) {
-    const reasons = CONFLICT_FLAGS.filter((flag) => flag.matches(activity)).map(
-      (flag) => flag.label,
-    );
-    if (reasons.length === 0) continue;
+    // Matched ONCE and projected twice: the display copy and the keys the remedy is chosen by are
+    // two views of the same match, so they cannot fall out of step (ADR-0094 M1-T3).
+    const matched = CONFLICT_FLAGS.filter((flag) => flag.matches(activity));
+    if (matched.length === 0) continue;
     hits.push({
       id: activity.id,
       name: activity.name,
-      reasons,
+      reasons: matched.map((flag) => flag.label),
+      keys: matched.map((flag) => flag.key),
       earlyStart: activity.earlyStart,
       laneIndex: activity.laneIndex,
     });
   }
   hits.sort(compareByTimeThenLane);
-  return hits.map(({ id, name, reasons }) => ({ id, name, reasons }));
+  return hits.map(({ id, name, reasons, keys }) => ({ id, name, reasons, keys }));
 }
 
 /**

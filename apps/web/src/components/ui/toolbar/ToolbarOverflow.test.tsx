@@ -44,6 +44,7 @@ function resolved(over: Partial<ResolvedToolbarItem<Ctx>> = {}): ResolvedToolbar
     active: false,
     busy: false,
     disabledReason: undefined,
+    srDescription: undefined,
     icon: null,
     ...over,
   };
@@ -278,5 +279,72 @@ describe('ToolbarOverflow — toggles vs segments (ADR-0090 M5)', () => {
   it('leaves an item with no isActive a plain menuitem', () => {
     const menu = openOverflow([LIVE]);
     expect(within(menu).getByRole('menuitem', { name: 'Fit to window' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * **A demoted command keeps the description that carries its only AT-legible fact** (ADR-0094 M5).
+ *
+ * `srDescription` was added to the shared registry so `next-conflict` could tell an AT user how many
+ * conflicts a plan holds — a magnitude a sighted planner reads off the chip beside the button, which
+ * is deliberately `aria-hidden` so the polite announcer is not doubled. It reached `ToolbarButton`
+ * and stopped: this surface forwarded `disabledReason` and nothing else, and `MenuItem` had no
+ * channel for a description on an ENABLED item at all. So a command demoted into the `⋯` — which is
+ * what happens under width pressure, and `next-conflict` is demotable — silently dropped the count.
+ *
+ * Two reviewers and one accessibility audit found it independently in the same diff. It is the shape
+ * this register keeps recording: one correct pattern applied to a control and not its neighbour.
+ *
+ * Verified red first — without the forwarding both cases report no accessible description.
+ */
+describe('an overflowed item keeps its standing description', () => {
+  it('describes an ENABLED item, which `disabledReason` structurally cannot', () => {
+    render(
+      <ToolbarOverflow
+        items={[
+          resolved({
+            item: {
+              id: 'next-conflict',
+              group: 'find',
+              tier: 1,
+              order: 0,
+              label: 'Next conflict',
+              onActivate: () => {},
+            },
+            srDescription: '3 conflicts in this plan',
+          }),
+        ]}
+        context={{ ok: true }}
+        groupLabels={GROUP_LABELS}
+        tabIndex={0}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
+    const item = screen.getByRole('menuitem', { name: 'Next conflict' });
+    expect(item).toHaveAccessibleDescription('3 conflicts in this plan');
+    // And the NAME is untouched: a command whose name is a status is not a command.
+    expect(item).toHaveAccessibleName('Next conflict');
+  });
+
+  it('puts the refusal first when an item is both shut and described', () => {
+    // The order `ToolbarButton` composes: why you cannot use it outranks what it would tell you.
+    render(
+      <ToolbarOverflow
+        items={[
+          resolved({
+            enabled: false,
+            disabledReason: 'No conflicts to review',
+            srDescription: '0 conflicts in this plan',
+          }),
+        ]}
+        context={{ ok: true }}
+        groupLabels={GROUP_LABELS}
+        tabIndex={0}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Add activity' })).toHaveAccessibleDescription(
+      'No conflicts to review 0 conflicts in this plan',
+    );
   });
 });

@@ -34,9 +34,16 @@ describe('selection-gated commands do not duplicate the canvas dock (ADR-0093)',
    * The two surfaces punctuate differently on purpose — the command surface used
    * `Report progress…` (ADR's ellipsis convention: a plain command that opens a dialog) and the
    * dock uses `Report progress` — so a raw string comparison would have called the duplication two
-   * different actions. Trailing ellipsis and case are stripped for that reason, and only for it.
+   * different actions. The trailing ellipsis is stripped for that reason, and only for it.
+   *
+   * It also lower-cased, until the ADR-0093 carry-over review pointed out that the docblock's own
+   * "and only for it" was false: the two labels this gate was written for differ in punctuation and
+   * not in case, so the fold solved nothing here and only widened what counts as a duplicate —
+   * raising the chance of a future PR being blocked by a coincidental collision between two
+   * unrelated commands. Narrowed rather than documented, because there is no case-variance to
+   * document.
    */
-  const normalise = (label: string): string => label.replace(/…$/, '').trim().toLowerCase();
+  const normalise = (label: string): string => label.replace(/…$/, '').trim();
 
   const dockIds = new Set(selectionActionItems.map((item) => item.id));
   const dockLabels = new Set(selectionActionItems.map((item) => normalise(item.label)));
@@ -64,7 +71,7 @@ describe('selection-gated commands do not duplicate the canvas dock (ADR-0093)',
       [...dockLabels],
       'the dock is where reporting progress lives now — if this fails the capability has moved ' +
         'or been lost, which is a different (and worse) change than the one this file guards',
-    ).toContain('report progress');
+    ).toContain('Report progress');
 
     expect(toolbarItems.map((item) => item.id)).not.toContain('update-progress');
   });

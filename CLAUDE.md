@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 933 web
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 939 web
 > source files with 31 flag-scoped Playwright suites beside the base journey, and
-> 93 ADRs.
+> 94 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2148,6 +2148,61 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   would have reported a false pass — this epic's subject in miniature. The Gantt cost is **accepted,
   not mitigated**, and inherited by the Gantt-editing epic through `docs/BACKLOG.md` rather than
   promised here. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0094** _(Accepted; M0–M5 landed 2026-08-14)_ — One meaning of "conflict", and a remedy on the
+  object. The product owner asked for three things about the **Next conflict** button — shade it when
+  there is nothing to review, put the count on it, and offer a fix when you land on one — and reading
+  the code to answer them turned up a fourth nobody had reported, because it is invisible from either
+  side: the Filter menu's **Has conflict** lens matched `visualConflict` **alone** while the cycle one
+  item away counted the whole set. Nothing was wrong in either file; the wrongness lived only in the
+  relationship (the ADR-0093 shape), and it was unreportable **because** of the other two defects —
+  the count existed only mid-cycle and the button lived in the `⋯`, so nobody could ever see the two
+  numbers disagree. Putting the count on the bar is exactly what would have exposed it. So the fix is
+  a computed gate, with a **pinned positive case** so it cannot be satisfied by an empty set, and a
+  blind spot stated in its own docblock: it proves the rule is sourced once and cannot prove the two
+  read an equally fresh list, which is the journey's half.
+  **The plan's own central justification was false and was reversed before anything was built.** It
+  said to fold the count into the button's label and explained the earlier refusal as "a consequence
+  of tier 3"; the comment it cited says nothing about tier and opens _"The plan said to fold this into
+  `next-conflict`'s label. Measurement says do not."_ A context-bearing label re-runs the width ladder
+  on every click — moving controls under the planner's cursor between two presses of the same button —
+  and reduces the accessible name to a status. ADR-0076 Class 3, caught by reading the file.
+  The conflict set **narrows five → three** on the product owner's call, and `negativeFloat` is the
+  instructive loss: one root cause counted N times down a chain, which a planner cannot act on, and the
+  only member with no remedy — so dropping it removed a whole "no button, explanation only" state, a
+  graph-aware stage and a four-consumer signature change. What remains is a **total
+  `Record<ConflictKey, ConflictRemedy>`**: adding a flag becomes a typecheck failure rather than a
+  conflict reaching a planner with nothing behind it.
+  The remedy goes on the **object**, because the cycle already selects it. A second on-canvas strip was
+  designed, costed and **withdrawn** — it would have re-created the duplicate ADR-0093 removed one day
+  earlier, and that ADR's gate **could not have seen it**, since it compares two registries and a third
+  is invisible to it. `clear-visual-placement` therefore **moves** to the selection bar rather than
+  being duplicated (its `isEnabled` consulted the selection, which is ADR-0093's discriminator
+  verbatim), with the duplication gate **verified RED against the two-copy state first**. One of the
+  three remedies then renders **nothing**: `visualConflict`'s fix is that moved item, and a
+  conflict-flavoured twin beside it would be ADR-0093's defect reproduced **inside one surface**, one
+  day after removing it between two.
+  **M0-T1's measurement found a pre-existing defect in the shared ladder**, and its own first
+  hypothesis was wrong in a way worth keeping: the obvious cause of Row 1 laying out 8 px past its
+  container at 1024 was the new read-out, and giving it a band floor changed the overhang by **exactly
+  zero px** — the fixture plan has no conflicts, so that chip was never rendering there. The real cause
+  was `computeLadder` charging the `⋯` **inside** the `budget < 0` branch, so the shortfall test asked
+  _"is this row short without the button it is already rendering?"_ Any row over by less than the
+  button's own width answers no. Fourth consecutive epic whose width expectation its own measurement
+  contradicted.
+  **M5's gates found three more, one of them reached independently by all three reviewers.**
+  `srDescription` — added so an AT user could learn the count the `aria-hidden` chip carries visually —
+  reached the inline button and stopped: the overflow forwarded `disabledReason` and nothing else, and
+  `MenuItem` had no channel for a description on an **enabled** item at all. Not hypothetical, and the
+  journey is how that was settled: it hit the demotion on its **first run**, because
+  `next-conflict-status` cannot demote and the ~130 px it takes the instant a plan HAS a conflict
+  pushed the button it labels off the row — the epic's purpose inverting in the only state it exists
+  for. A command now outranks the read-out that describes it; the read-out cannot take the lower rank,
+  because it has none. The ux gate separately found the `visualConflict` remedy carrying no signal at
+  all (last on the bar, neutral icon, nine controls to hunt), fixed by the **icon** and not the
+  position, since a per-context order would re-run the ladder as the selection changes. And two reviews
+  called `ConflictRemedyControl`'s zero rendered coverage blocking — which M4-T2's own definition of
+  done had said first. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down

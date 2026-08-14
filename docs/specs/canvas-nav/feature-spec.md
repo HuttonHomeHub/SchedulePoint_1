@@ -1,5 +1,10 @@
 # Feature Spec: TSLD canvas navigation & authoring aids
 
+> **Superseded in part by ADR-0094 (2026-08-13):** the Next-conflict set named below is five flags;
+> it is now **three**. `externalDriven` and negative total float were removed as facts a planner
+> cannot act on. Left as written — this is the record of what was decided in July, and
+> `CONFLICT_FLAGS` is the live source.
+
 - **Status:** Draft (awaiting approval)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-20

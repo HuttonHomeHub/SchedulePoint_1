@@ -341,13 +341,17 @@ describe('TSLD toolbar registry (two-row)', () => {
     // placeholder earns its place on a persistent row a planner scans, not on a transient bar).
     // `Snap to grid` left on 2026-08-13, deleted with the control: the engine rolls every
     // `visualStart` forward to a working day unconditionally, so the toggle had nothing to toggle.
-    // `Next conflict` is what remains, and since ADR-0090 M2 it is a tier-3 item — so flag-off its
-    // placeholder lives in the `⋯` rather than inline, which is what this now pins.
+    // `Next conflict` is what remains.
+    //
+    // **It moved back INLINE on 2026-08-13 (ADR-0094).** From ADR-0090 M2 until then it was a
+    // tier-3 item, so flag-off its placeholder lived in the `⋯` and this test opened the menu to
+    // find it. The epic promoted it to tier 1 — and because one `nextConflictShape` is spread into
+    // both the flag-on item and its `placeholderItem()` stub, the PLACEHOLDER moved with it. That is
+    // the shared-shape pattern working as intended: the two branches cannot drift, including in
+    // where they sit. The paragraph is updated with the assertion because a stale explanation is
+    // the half a reader would otherwise trust.
     renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
-    for (const trigger of screen.queryAllByRole('button', { name: 'More toolbar actions' })) {
-      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-    }
-    const btn = screen.getByRole('menuitem', { name: 'Next conflict' });
+    const btn = screen.getByRole('button', { name: 'Next conflict' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAccessibleDescription('Coming soon');
   });

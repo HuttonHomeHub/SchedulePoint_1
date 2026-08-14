@@ -32,7 +32,9 @@ function matchable(over: Partial<MatchableActivity> = {}): MatchableActivity {
     name: 'Pour concrete',
     isCritical: false,
     constraintType: null,
+    constraintViolated: false,
     visualConflict: false,
+    levelingWindowExceeded: false,
     ...over,
   };
 }
@@ -69,6 +71,30 @@ describe('matchesActivityFilter', () => {
     expect(matchesActivityFilter(matchable({ visualConflict: true }), '', conflict)).toBe(true);
     expect(matchesActivityFilter(matchable({ visualConflict: false }), '', conflict)).toBe(false);
   });
+
+  // ADR-0094 D2 / D-e. "Has conflict" used to mean `visualConflict` ALONE, while the Next-conflict
+  // count beside it in the same toolbar group counted the whole `CONFLICT_FLAGS` set. Invisible
+  // while the count was transient and the button buried; the moment the count is on the bar, a
+  // planner who filters sees fewer bars than the number promised and reasonably concludes the
+  // product is broken. One word, one meaning — sourced from `CONFLICT_FLAGS`, never re-derived.
+  it('matches every flag in CONFLICT_FLAGS, not just the visual-placement one', () => {
+    const conflict = new Set<FilterAttr>(['conflict']);
+    // Each of these was a FALSE before the widening: the filter could not see them at all.
+    expect(matchesActivityFilter(matchable({ constraintViolated: true }), '', conflict)).toBe(true);
+    expect(matchesActivityFilter(matchable({ levelingWindowExceeded: true }), '', conflict)).toBe(
+      true,
+    );
+    // And an activity with none of them still does not match.
+    expect(matchesActivityFilter(matchable(), '', conflict)).toBe(false);
+  });
+
+  // NOTE, deliberately not a test. "The filter does not match a departed flag" cannot be asserted
+  // here: after the widening `MatchableActivity` carries only `ConflictFlagFields`, so
+  // `matchable({ totalFloat: -5 })` is a TYPE error, and written before the widening it passed
+  // green for the wrong reason — the runtime simply ignored a property the shape never had. That is
+  // exactly the "passes against the old code for the wrong reason" trap, so it is recorded rather
+  // than shipped. The real guarantee is structural: the filter reads `CONFLICT_FLAGS`, and
+  // `conflicts.test.ts` pins that set to the three actionable keys.
 
   it('is the intersection of text AND every toggled attribute', () => {
     const attrs = new Set<FilterAttr>(['critical', 'conflict']);

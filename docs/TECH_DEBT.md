@@ -2350,6 +2350,29 @@ conditional-render change would do it); if it does, the restore belongs on the l
 rather than on a frame counted from the dialog. Until then the journey should be treated as a known
 intermittent, and a red run on this assertion alone re-run before being investigated as new.
 
+**Re-measured 2026-08-14 (ADR-0094), doubling the sample — and the result is that the sample is
+still too small to say anything.** That epic's local journey sweep hit it, and ADR-0094 adds an item
+to the very selection bar this journey drives (`clear-visual-placement` moves there), which is the
+same class of change M3 was suspected of. So the method above was repeated: five runs on the epic
+branch, five on the pre-epic tree at `fdc21ef`, `retries: 0` on both.
+
+| tree                  | pass rate |
+| --------------------- | --------- |
+| pre-epic (`fdc21ef`)  | 4 / 5     |
+| ADR-0094 branch       | 3 / 5     |
+| M3-era figure (above) | 3 / 4     |
+
+All three are consistent with one underlying rate somewhere around 70–80 %, and 3/5 against 4/5 is
+not a difference five runs can detect. **The honest reading is that the flake is confirmed
+pre-existing and unchanged as far as this can tell — not that the change is exonerated**, which
+would need a sample nobody has yet paid for. Recorded because "we re-ran it and it passed" is how an
+intermittent gets quietly re-attributed to whoever last touched the file.
+
+**One thing that measurement did settle**, and it explains why this has never been red in CI:
+`playwright.multi-select.config.ts:32` sets `retries: process.env.CI ? 2 : 0`. A ~25 % per-run
+failure rate becomes ~1.5 % with two retries, so CI absorbs it and only a local sweep sees it. That
+is the right configuration and it is also why the rate can drift a long way before anything notices.
+
 ## 129. The 56 px app header row is the last recoverable band above the canvas
 
 **Raised:** 2026-08-12 (ADR-0090 M4-T2) · **Size:** L · **Owner:** a shell/ADR-0055 pass, not a toolbar one
@@ -2484,3 +2507,30 @@ export`, `Report progress…`, `Snap to grid` are the next three, ≈161 px toge
 `gap-1`; reduce the coarse padding itself (`pointer-coarse:px-3` → `px-2.5`, 40 → 36 px, still well
 clear of WCAG 2.5.8's 24 px floor). Note that reducing `px-2` does **not** help here — the coarse
 variant overrides it.
+
+## 134. A `render` item outranks every command on its row, and nothing says so
+
+**Raised:** 2026-08-14 (ADR-0094 M5) · **Size:** S · **Risk if left:** medium
+
+`computeLadder`'s Stage 2 demotes by `priority`, defaulting to `-order`. A **`render` item has no
+rank at all** — it is not demotable, so it never enters the queue — which means every pinned
+read-out, popover trigger and segmented control on a row implicitly outranks every plain command on
+it, at every width, whatever their relative importance.
+
+That is usually harmless and once was not. ADR-0094 promoted `next-conflict` to tier 1 and put a
+count chip beside it; the chip is a `render` item, so the ~130 px it takes the instant a plan HAS a
+conflict pushed the button it labels into the `⋯` — a count on the row beside no way to act on it,
+in the only state that epic exists for. The fix was `priority: 90` on that one command, which is
+correct and local and does nothing for the next occurrence.
+
+**What is owed is a rule, not a constant.** Either a `render` item declares a rank and the ladder
+honours it when deciding what to shed (which needs a way for a non-demotable item to _withdraw_, as
+the Project-finish chip and the conflict read-out both do by hand with `bandIsAtLeast`), or the
+asymmetry is documented at `LadderItem.demotable` so the next author reaches for `priority` on
+purpose rather than after a journey finds it. Prefer the second first: it is a docblock and a test,
+and the first is a ladder change with three consumers.
+
+**Related, and the reason this is worth a row rather than a comment:** ADR-0094's own record notes
+this is the **fourth consecutive epic** whose width expectation its own measurement contradicted
+(ADR-0091 D4, ADR-0092 M4, ADR-0093's withdrawn width argument, ADR-0094 M0-T1 and this). Four is
+enough to stop calling it coincidence and start calling it a property of the surface.

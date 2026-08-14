@@ -42,7 +42,7 @@ describe('TOOLBAR_QUICK_WINS_ENABLED', () => {
   it('is on by default (delivered & enabled, 2026-07-19; no VITE_TOOLBAR_QUICK_WINS set)', () => {
     // The five quick-wins are wired to shipped features and on by default now that their specialist
     // reviews (a11y / ux / component / perf / security / test) are green (M3). Setting
-    // VITE_TOOLBAR_QUICK_WINS=false ships the five ids as their "Coming soon" placeholders — the
+    // VITE_TOOLBAR_QUICK_WINS=false ships the four ids as their "Coming soon" placeholders — the
     // byte-for-byte rollback path.
     expect(TOOLBAR_QUICK_WINS_ENABLED).toBe(true);
   });

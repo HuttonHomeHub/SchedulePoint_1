@@ -48,6 +48,12 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canReportProgress: true,
     stepsEligible: true,
     isSummary: true,
+    // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
+    // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
+    conflictKey: null,
+    clearPlacement: { enabled: true, reason: null },
+    onClearVisualPlacement: vi.fn(),
+    onOpenEditorAt: vi.fn(),
     onOpenLogic: spies.onOpenLogic,
     onEdit: spies.onEdit,
     onDelete: spies.onDelete,

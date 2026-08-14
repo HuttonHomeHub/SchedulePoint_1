@@ -1,5 +1,7 @@
 import type { ActivitySummary, BaselineVarianceRow, ConstraintType } from '@repo/types';
 
+import { CONFLICT_FLAGS, type ConflictFlagFields } from './conflicts';
+
 /**
  * The pure, renderer-agnostic logic behind the TSLD **insight lenses** (spec
  * `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`): the client-side **filter matcher**, the
@@ -18,7 +20,15 @@ import type { ActivitySummary, BaselineVarianceRow, ConstraintType } from '@repo
  * already-shipped `ActivitySummary` field, so the lens adds no new data:
  * - `critical`   → `isCritical` (on the critical path)
  * - `constraint` → a set date constraint (`constraintType !== null`)
- * - `conflict`   → a Visual-Planning placement conflict (`visualConflict`)
+ * - `conflict`   → **any** member of `CONFLICT_FLAGS` — the same set the Next-conflict count and
+ *   cycle use (ADR-0094 D2).
+ *
+ * That last one meant `visualConflict` **alone** until ADR-0094, while the Next-conflict control
+ * sitting beside it in the same `find` group counted the whole set. Two meanings of one word, one
+ * toolbar apart. It was invisible while the count only appeared mid-cycle and the button lived in
+ * the `⋯`; putting the count on the bar would have made a planner who filters see fewer bars than
+ * the number promised. Sourced from `CONFLICT_FLAGS` rather than re-derived, so the two cannot
+ * drift again — pinned by `lenses.conflict-source.structural.test.ts`.
  */
 export type FilterAttr = 'critical' | 'constraint' | 'conflict';
 
@@ -30,12 +40,11 @@ export const FILTER_ATTRS: ReadonlyArray<{ attr: FilterAttr; label: string }> = 
 ];
 
 /** The minimal activity shape the matcher reads — a subset of {@link ActivitySummary}. */
-export interface MatchableActivity {
+export interface MatchableActivity extends ConflictFlagFields {
   code: string | null;
   name: string;
   isCritical: boolean;
   constraintType: ConstraintType | null;
-  visualConflict: boolean;
 }
 
 function matchesAttr(activity: MatchableActivity, attr: FilterAttr): boolean {
@@ -45,7 +54,10 @@ function matchesAttr(activity: MatchableActivity, attr: FilterAttr): boolean {
     case 'constraint':
       return activity.constraintType !== null;
     case 'conflict':
-      return activity.visualConflict;
+      // The SAME predicates the count and the cycle run — not a second opinion about what a
+      // conflict is. `ConflictFlagFields` is exactly the fields they read, which is why extending it
+      // costs this shape nothing it does not use (ADR-0094 M1-T2).
+      return CONFLICT_FLAGS.some((flag) => flag.matches(activity));
   }
 }
 

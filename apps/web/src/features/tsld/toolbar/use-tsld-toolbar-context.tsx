@@ -152,18 +152,12 @@ export function useTsldToolbarContext({
 
   const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
   // Selection-aware quick-wins (spec `docs/specs/toolbar-quick-wins/`): the lifted canvas selection +
-  // the role capabilities + the shipped seams the five items call. Read directly off the model so no
+  // the role capabilities + the shipped seams the remaining items call. Read directly off the model so no
   // rule is re-derived; nothing here does anything until a flag-on item reads it. The two open-*
   // callbacks are defined inline in the memo below (keyed on the selection, which is exactly when the
   // context re-identifies anyway), so they need no separate stabilisation.
-  const {
-    todayIso,
-    selectedActivityId,
-    selectedActivity,
-    canWriteNotes,
-    revealActivityNotes,
-    clearVisualPlacement,
-  } = model;
+  const { todayIso, selectedActivityId, selectedActivity, canWriteNotes, revealActivityNotes } =
+    model;
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing; the workspace derives it the
   // same way to build `authoringEnabled`. Expose it on the context so a pen-gated item disabled BY the
   // overlay (not by role/pen) can still explain why (toolbar quick-wins A1) — `canEditSchedule` stays
@@ -519,7 +513,6 @@ export function useTsldToolbarContext({
       },
       canEditSchedule,
       lateOverlayActive,
-      clearVisualPlacement,
 
       // Insight lenses (VITE_CANVAS_LENSES) — read the lens view state + wire its setters; the Baseline
       // gate reads the shared variance query. Inert while the flag is off (the ids resolve to stubs).
@@ -832,7 +825,6 @@ export function useTsldToolbarContext({
     canWriteNotes,
     revealActivityNotes,
     lateOverlayActive,
-    clearVisualPlacement,
     // Insight lenses — re-identify only when the lens view state / variance status changes (setters
     // are stable). `lensState` is one memoised object off `useTsldCanvasUiState`, so it churns only
     // on a real lens change.
