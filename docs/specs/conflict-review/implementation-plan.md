@@ -15,14 +15,14 @@ Approved in principle, then reviewed before a line was built (the ADR-0090 prece
 specialists; **three findings reached independently by two or more of them**, which is the same
 pattern that decision recorded.
 
-| #   | Finding                                                                                                                                                                           | Effect                                 |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| 1   | `ToolbarItem.label` is a static string; the count-on-button design was **refused once before, on measurement**, and the spec's justification for reversing that refusal was false | D1 reversed. M1 re-shaped              |
-| 2   | `ConflictHit` carries display labels, not keys — a per-type remedy would match on UI copy (**3 reviewers**)                                                                       | New M1 type work, before anything else |
-| 3   | A new dock strip re-creates the ADR-0093 duplicate **and the gate cannot see it** (**2 reviewers**)                                                                               | M3 re-shaped: no new strip             |
-| 4   | The filter feeds **four** consumers, including the export/print scope                                                                                                             | M2 scope widened                       |
-| 5   | Six existing tests + a flag-off parity pin must be rewritten                                                                                                                      | M1 re-sized; it is not "≈ one PR"      |
-| 6   | `negativeFloat` is one root counted N times                                                                                                                                       | D-f: root-only counting                |
+| #   | Finding                                                                                                                                                                           | Effect                                   |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| 1   | `ToolbarItem.label` is a static string; the count-on-button design was **refused once before, on measurement**, and the spec's justification for reversing that refusal was false | D1 reversed; the button work is **M3**   |
+| 2   | `ConflictHit` carries display labels, not keys — a per-type remedy would match on UI copy (**3 reviewers**)                                                                       | New M1 type work, before anything else   |
+| 3   | A new dock strip re-creates the ADR-0093 duplicate **and the gate cannot see it** (**2 reviewers**)                                                                               | **M4** re-shaped: no new strip           |
+| 4   | The filter feeds **four** consumers, including the export/print scope                                                                                                             | M2 scope widened                         |
+| 5   | Six existing tests + a flag-off parity pin must be rewritten                                                                                                                      | Inventoried in M0-T4, rewritten in M3-T1 |
+| 6   | `negativeFloat` is one root counted N times                                                                                                                                       | D-f: root-only counting                  |
 
 ---
 
@@ -121,7 +121,7 @@ would publish a figure and then change its meaning in the next release.
   filter routes through `CONFLICT_FLAGS`, no hand-rolled boolean) plus **one pinned positive case**,
   so a degenerate empty state cannot pass by both sides trivially agreeing on nothing.
 - **State the blind spot in the test's own docblock:** it proves the _rule_ is one source, not that
-  both call sites read an equally fresh activity list. That half is M4-T2's.
+  both call sites read an equally fresh activity list. That half is the journey's (M5-T2).
 - **Decide the guest meaning deliberately** — after widening, "Has conflict" means negative float
   only for a guest. State the reduced meaning or withhold the attribute.
 
