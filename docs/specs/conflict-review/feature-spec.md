@@ -85,7 +85,7 @@ milder case. Put to the product owner (D-f).
 
 - **Planners** — the people who review and clear conflicts; the only role that can act on most of them.
 - **Contributors / Viewers** — can see the count and step through; most fixes are pen-gated, so the
-  strip must say why an action is shut rather than hide it (ADR-0082).
+  bar must say why an action is shut rather than hide it (ADR-0082).
 
 ### Decisions taken (product owner, 2026-08-13)
 
@@ -98,7 +98,7 @@ All five were put with their costs and answered:
 | D-c | Imported external dates               | **Not a conflict.** Out of the counted set; it stays on the Schedule summary strip                                                                                                                                      |
 | D-d | Delivery                              | **One epic, all together**                                                                                                                                                                                              |
 | D-e | The two meanings of "conflict" (F1)   | **Make them the same** — the Filter's "Has conflict" widens to match the counted set                                                                                                                                    |
-| D-f | Negative float (raised by the review) | **Count the root only** — the activity where the negative float originates, not every activity inheriting it down the chain                                                                                             |
+| D-f | Negative float (raised by the review) | ~~Count the root only~~ → **Drop it from the counted set** (revised 2026-08-13, when root-only was found to recreate F1 — see D3)                                                                                       |
 
 ### Success criteria
 
@@ -108,7 +108,8 @@ All five were put with their costs and answered:
   `condensed` exactly as the Project-finish chip does — a stated floor beats a criterion that cannot
   be met.
 - One meaning of "conflict" across the toolbar, asserted structurally rather than by reading.
-- The strip never offers an action that does nothing.
+- No remedy is ever offered that does nothing. (After D-f's revision this is structural: all three
+  remaining types have one.)
 - No width regression: Row 1's labelled count at 1646 is **measured** before and after, and if
   promoting the button demotes something else, that trade is reported rather than absorbed.
 
@@ -129,18 +130,30 @@ All five were put with their costs and answered:
 
 - Given I activate it, then the control reads `2 of 3` and the canvas centres and selects the
   activity, as it does today.
-- The separate `next-conflict-status` chip is **retired** — one control, one statement.
+- ~~The separate `next-conflict-status` chip is **retired** — one control, one statement.~~
+  **Reversed with D1.** The chip is **kept** and made persistent. Retiring it before a replacement
+  existed would have left a sighted planner cycling with no visible statement of what the current
+  conflict is. Corrected here because an implementer builds from §2, and a spec whose acceptance
+  criteria state the reversed decision is the ADR-0058 class inside the document citing it — flagged
+  independently by two reviewers.
 
-**US-3 — As a planner, the strip names the problem and offers what will actually help.**
+**US-3 — As a planner, the remedy that fits the conflict is on the activity I have landed on.**
 
-- Given the current conflict is a **hand-placed clash** (`visualConflict`), the strip offers a real
-  fix — clear the visual placement — pen-gated, with a reason when shut.
-- Given a **broken constraint** (`constraintViolated`), the strip offers _Open in editor_ at the
-  Scheduling tab.
-- Given a **levelling overrun** (`levelingWindowExceeded`), the strip offers _Open in editor_ at the
-  Resources tab.
-- Given **negative float**, the strip explains and offers **no action button**, because there is no
-  single act that resolves an over-constrained network.
+The cycle **selects** the activity, so the selection bar is already there. The remedies are
+conditional items on it — not a second strip (§4 D4).
+
+- **Hand-placed clash** (`visualConflict`) → **Clear visual placement**, pen-gated with a reason when
+  shut. This command **moves** here off the command surface.
+- **Broken constraint** (`constraintViolated`) → _Open in editor_ at the Scheduling tab.
+- **Levelling overrun** (`levelingWindowExceeded`) → _Open in editor_ at the Resources tab.
+
+> **There is no longer a "no button" case, and that is the shape of the epic changing under a
+> decision rather than a gap being papered over.** The first version had one — negative float, which
+> had no remedy — and specified an explanation with no control. Dropping `negativeFloat` from the
+> counted set (D-f, revised) leaves **three** types, **all of which have a remedy**. So D-b's "no
+> button where the honest answer is information" is now vacuous, and the copy the UX review drafted
+> for it is not needed. Recorded rather than silently deleted, because the reasoning is what a later
+> reader needs if a remedy-less flag is ever proposed again.
 
 **US-4 — As a planner, filtering to conflicts finds the same things the count counts.**
 
@@ -155,12 +168,11 @@ All five were put with their costs and answered:
 
 - **The conflict set changes under you** (a recalculation lands mid-cycle). Today's cursor
   behaviour is unchanged by this epic and is explicitly out of scope; if the count changes while the
-  strip is open, the strip re-derives from the live set like every other dock consumer.
+  bar is open, it re-derives from the live set like every other dock consumer.
 - **The fix is shut.** `clear-visual-placement` needs Visual mode, the pen and a selection. The
-  strip shades it with the reason rather than hiding it — otherwise the one type with a real fix
-  silently looks like the types without one.
+  bar shades it with the reason rather than hiding it (ADR-0082).
 - **A single activity carries several flags.** `CONFLICT_FLAGS` is already ordered for exactly this
-  (`conflicts.ts:33`); the strip names the **first** matching reason and offers that type's action.
+  (`conflicts.ts:33`); the bar names the **first** matching reason and offers that type's remedy.
 - **Plural selection.** Out of scope — the cycle is singular by construction.
 
 ### Permissions
@@ -177,7 +189,9 @@ real fix is pen-gated because the underlying command already is.
 - `render/conflicts.ts` — `CONFLICT_FLAGS`, the single ordered source of the set and its copy.
 - `render/ordering.ts` — the shared comparator; the cycle and search already agree on plan order.
 - `commands/use-conflict-navigation.ts` — the cursor.
-- `CanvasDock` (ADR-0092) — the strip's host, at **zero canvas height**, already proven.
+- `selectionActionItems` (`selection-actions.tsx`) — the remedies' home. **Not** a new `CanvasDock`
+  strip: the cycle selects, so this bar is already present, and the dock outlet is `flex-wrap` — a
+  second strip would grow the row in the only state it can occur in (§4 D4).
 - `clear-visual-placement` — the one real fix, already a wired command.
 - `openActivityEditor(activity, purpose)` — the editor route.
 
@@ -187,10 +201,12 @@ real fix is pen-gated because the underlying command already is.
   `'resources'`, but `ActivityEditorPurpose` has no member mapping to `scheduling` — `'edit'` maps
   to `general` (`activity-editor-intent.ts:76-82`). US-3 needs one new purpose.
 - **`clear-visual-placement` is itself `tier: 3`** (`:1807`) — so both the conflict cycle and its
-  only real fix are in the `⋯` today. The strip gives that fix a home where it is needed.
+  only real fix are in the `⋯` today. It **moves** to the selection bar, which is where ADR-0093's
+  own discriminator says it belongs anyway: its `isEnabled` consults the selection.
 - **Widening the filter is a behaviour change to a shipped control.** `MatchableActivity` currently
   carries only `visualConflict`; matching the counted set means it grows the other fields. This is
-  the one part of the epic that changes what an existing control returns, and it needs its own test.
+  ~~the one part of the epic that changes what an existing control returns~~ — **four consumers, not
+  one** (§4). It needs its own test.
 
 ### Dependencies
 
@@ -264,18 +280,35 @@ flag becomes a typecheck failure at the map rather than a silently missing remed
 live on `ConflictFlag`: `conflicts.ts` is pure by decision (ADR-0078), and a remedy is a command id,
 an editor purpose and a gate — all component-layer knowledge.
 
-**D3 — `externalDriven` leaves the set** (D-c), and **`negativeFloat` is counted at its root only**
-(D-f). The root test is pure and cheap — _a negative-float activity none of whose successors also
-has negative float_ — and the dependency graph is already in the toolbar context
-(`use-tsld-toolbar-context.tsx:147`), where `logic-path.ts` already builds successor maps from it.
+**D3 — The counted set narrows from five to three, and every survivor has a remedy.**
+`externalDriven` leaves (D-c) and `negativeFloat` leaves (D-f, revised). What remains is
+`constraintViolated`, `visualConflict`, `levelingWindowExceeded`.
 
-**Its structural consequence is stated rather than discovered:** every other flag is a per-activity
-predicate, and this one needs the graph. `CONFLICT_FLAGS` stops being a uniform list of
-`(activity) => boolean`, which is a real change to that file's shape and the reason this decision is
-not a free addition.
+**D-f was answered twice, and the second answer is the instructive one.** The product owner first
+chose _count the root only_ — a negative-float activity none of whose successors also has negative
+float. That is buildable and cheap; the graph is already in the toolbar context. The confirmation
+review then found it **recreates F1, the defect this epic exists to remove**:
+`matchesActivityFilter` takes **one activity** (`lenses.ts:58-72`), so a graph-dependent predicate
+cannot be expressed there. Count and cycle would show roots; the filter would show every affected
+activity. Count says 3, filter shows 40 — and M2's structural assertion would have stayed **green**,
+because the divergence is not in the flag list but in a post-filter stage only one consumer runs.
+US-4 would have been false on delivery.
+
+Put back with three ways out; the product owner chose to **drop it**, which is D-c's argument applied
+consistently. What that buys beyond correctness:
+
+- Every flag stays a uniform `(activity) => boolean`, so D2's mechanism holds intact.
+- No edges parameter on `orderedConflicts`, and no signature change across its four consumers.
+- **No remedy-less type**, so the "explanation with no button" case disappears (US-3).
+- That milestone halves.
+
+Nothing is hidden: negative float already drives `isCritical` under ADR-0035's TF ≤ 0 default and
+`FLOAT_BUCKETS[0]` ("Critical / ≤ 0 days", `lenses.ts:108`) — carried twice elsewhere before this
+epic and still is. **The accepted cost, stated:** an over-constrained plan can show zero conflicts,
+so the Schedule summary strip carries that weight alone.
 
 **D4 — No new strip. The remedies join the surface that already exists.** The conflict cycle
-**selects** the activity (`use-conflict-navigation.ts:96`), so the selection bar is the strip's
+**selects** the activity (`use-conflict-navigation.ts:96`), so the selection bar would be a strip's
 permanent co-occupant, and the dock outlet is `flex-wrap` — _"Wrapping grows the row instead"_
 (`canvas-dock.tsx:78-87`). A second strip would therefore cost canvas height in exactly the state it
 can occur in, which is what ADR-0092 spent a milestone buying back.
@@ -298,13 +331,13 @@ mitigation is a commit boundary per milestone.
 
 ### Options considered
 
-|     | Option                                                                 | Verdict                                                                                                               |
-| --- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| A   | Count on the button (`label` widened to a ctx function)                | **Rejected on review** — refused once before on measurement; unbounded variable width; accessible name loses its verb |
-| B   | Promote the button, make the existing read-out persistent              | **Chosen**                                                                                                            |
-| C   | A bounded numeric badge on `ToolbarButton` (fixed width, capped `99+`) | Viable fallback if the count must sit on the button — a _contained_ primitive change with a constant ladder cost      |
-| D   | A new per-type conflict strip in the dock                              | **Rejected** — wraps the dock row, and re-creates the ADR-0093 duplicate invisibly to its gate                        |
-| E   | Leave the button in `⋯`                                                | Rejected — the shading already exists and is unread _because_ of where it is                                          |
+|     | Option                                                                 | Verdict                                                                                                                                                                                                                                                                                                  |
+| --- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A   | Count on the button (`label` widened to a ctx function)                | **Rejected on review** — refused once before on measurement; unbounded variable width; accessible name loses its verb                                                                                                                                                                                    |
+| B   | Promote the button, make the existing read-out persistent              | **Chosen**                                                                                                                                                                                                                                                                                               |
+| C   | A bounded numeric badge on `ToolbarButton` (fixed width, capped `99+`) | **Rejected, with conditions** — kept so the next author does not re-ask. Needs a `ToolbarButton` change _and_ a `BADGE_PX` ladder constant, is reachable only if D-a reopens, and **caps the count**: it buys constant width by discarding information on exactly the plans where the count matters most |
+| D   | A new per-type conflict strip in the dock                              | **Rejected** — wraps the dock row, and re-creates the ADR-0093 duplicate invisibly to its gate                                                                                                                                                                                                           |
+| E   | Leave the button in `⋯`                                                | Rejected — the shading already exists and is unread _because_ of where it is                                                                                                                                                                                                                             |
 
 ### What the review changed, recorded rather than smoothed over
 
@@ -319,6 +352,21 @@ above; two further corrections belong here rather than in the plan:
   match count, and **the export / print scope** (`use-tsld-toolbar-context.tsx:305-319`) — so it
   changes what a filtered PNG, PDF or printed programme _contains_. That is the highest-stakes
   consumer and it appeared nowhere in this spec.
+- **The persistent read-out is `aria-hidden`, so it serves nobody using a screen reader.** Found on
+  the confirmation pass, and it is the mirror of the bug the revision had just fixed: US-1 exists so
+  a planner can read the count **without acting**, and the read-out delivers that for sighted users
+  while an AT user gets an enabled button named "Next conflict" and no magnitude until they activate
+  it. Information conveyed visually and withheld from the accessibility tree — WCAG 1.3.1, not a
+  nicety. The fix is the mechanism this same file already uses for the search field's count
+  (`tsld-toolbar-items.tsx:934-944`): an `aria-describedby` link from the button to a **non-live**
+  `sr-only` node, read on focus and on demand, never a second live region.
+- **The "filtered PDF" escalation was wrong, and it was mine.** The architecture review said widening
+  the filter changes what a filtered **PNG / PDF / printed programme** contains, and this spec, its
+  commit message and the report to the product owner all repeated it. Checked: `isMatching` reaches
+  **only** `export-csv.ts:148-153`, and only when the planner picks "Matching activities only (N)";
+  `render-export-image.ts` contains **zero** references to any filter, dim or match input. The
+  correction to "four consumers, not one" stands — the escalation to images does not. Repeating a
+  reviewer's claim without checking it is the same failure as trusting a document, one source along.
 - **The guest surface gains a third meaning of the word.** `guest-api.ts` zeroes three of the four
   flags but passes `totalFloat` through, so after widening "Has conflict" means _negative float
   only_ for a guest. Today it means nothing at all (always false), so this is an improvement — but

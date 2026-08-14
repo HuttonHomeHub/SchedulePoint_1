@@ -1,9 +1,10 @@
 # Implementation Plan: Conflict review
 
 - **Spec:** [`feature-spec.md`](./feature-spec.md)
-- **Status:** **Revised 2026-08-13 against the five-specialist pre-approval review** (two blocked,
-  three pass-with-nits). The spec's central decision is **reversed**; the milestone order is
-  **flipped**; M1 is re-sized. Back to the product owner for a look before build.
+- **Status:** **Approved to build**, 2026-08-13. Revised against the five-specialist pre-approval
+  review, then **confirmed by all five on a second pass** — every blocking finding resolved. That
+  second pass raised two more, both folded here: an accessibility gap (the read-out is `aria-hidden`)
+  and **N1**, which sent one decision back to the product owner and simplified the epic.
 - **Date:** 2026-08-13
 - **Proposes:** ADR-0094
 
@@ -15,14 +16,29 @@ Approved in principle, then reviewed before a line was built (the ADR-0090 prece
 specialists; **three findings reached independently by two or more of them**, which is the same
 pattern that decision recorded.
 
-| #   | Finding                                                                                                                                                                           | Effect                                   |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 1   | `ToolbarItem.label` is a static string; the count-on-button design was **refused once before, on measurement**, and the spec's justification for reversing that refusal was false | D1 reversed; the button work is **M3**   |
-| 2   | `ConflictHit` carries display labels, not keys — a per-type remedy would match on UI copy (**3 reviewers**)                                                                       | New M1 type work, before anything else   |
-| 3   | A new dock strip re-creates the ADR-0093 duplicate **and the gate cannot see it** (**2 reviewers**)                                                                               | **M4** re-shaped: no new strip           |
-| 4   | The filter feeds **four** consumers, including the export/print scope                                                                                                             | M2 scope widened                         |
-| 5   | Six existing tests + a flag-off parity pin must be rewritten                                                                                                                      | Inventoried in M0-T4, rewritten in M3-T1 |
-| 6   | `negativeFloat` is one root counted N times                                                                                                                                       | D-f: root-only counting                  |
+| #   | Finding                                                                                                                                                                           | Effect                                                                  |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 1   | `ToolbarItem.label` is a static string; the count-on-button design was **refused once before, on measurement**, and the spec's justification for reversing that refusal was false | D1 reversed; the button work is **M3**                                  |
+| 2   | `ConflictHit` carries display labels, not keys — a per-type remedy would match on UI copy (**3 reviewers**)                                                                       | New M1 type work, before anything else                                  |
+| 3   | A new dock strip re-creates the ADR-0093 duplicate **and the gate cannot see it** (**2 reviewers**)                                                                               | **M4** re-shaped: no new strip                                          |
+| 4   | The filter feeds **four** consumers, including the export/print scope                                                                                                             | M2 scope widened                                                        |
+| 5   | Six existing tests + a flag-off parity pin must be rewritten                                                                                                                      | Inventoried in M0-T4, rewritten in M3-T1                                |
+| 6   | `negativeFloat` is one root counted N times                                                                                                                                       | D-f: root-only → **dropped from the set** on the confirmation pass (N1) |
+
+### What the confirmation pass added
+
+All five reviewers confirmed their blocking findings resolved. Two new ones came back:
+
+- **N1 (blocking, product-owner decision).** Root-only negative float recreates F1 — see M2-T2. The
+  product owner dropped the flag instead, which **shrinks** the epic.
+- **A11y (blocking, cheap).** The persistent read-out is `aria-hidden`, so an AT user still cannot
+  read the count without acting — the exact requirement M3-T2 exists for. Folded into M3-T2 as an
+  `aria-describedby` link to a non-live `sr-only` node, the search field's existing pattern.
+
+And one correction to a claim **this plan repeated from a reviewer without checking**: widening the
+filter does **not** change what a filtered PNG, PDF or printed programme contains. `isMatching`
+reaches only the CSV export; `render-export-image.ts` has no filter input at all. "Four consumers,
+not one" stands; the escalation to images does not.
 
 ---
 
@@ -56,6 +72,11 @@ design, not because a change was judged too small (§19.3).
   the ADR, and do **not** switch mechanism to dodge a demotion — that would trade a recorded cost
   for an unrecorded one, which is what makes "for the time being" reversible.
 - **Also measure the read-out's own withdrawal band**, since D1 now pins it at `compact`.
+- **Stub the read-out at its WIDEST too, not only the button** (N2). It is capped at
+  `max-w-[14rem]` = 224 px (`tsld-toolbar-items.tsx:1451`), it is **non-demotable** (a `render` item
+  has no `onActivate`), and it swings from ~70 px idle to its cap on the first click. Against
+  ADR-0091 M7's ~382 px of Row-1 slack at 1646, a promoted button plus a pinned chip at cap is most
+  of it. Measuring only the button would measure the easy half.
 
 ##### M0-T2 — Enumerate all four filter consumers (≈ small)
 
@@ -125,21 +146,24 @@ would publish a figure and then change its meaning in the next release.
 - **Decide the guest meaning deliberately** — after widening, "Has conflict" means negative float
   only for a guest. State the reduced meaning or withhold the attribute.
 
-##### M2-T2 — `externalDriven` leaves; `negativeFloat` counts its root only (≈ one PR)
+##### M2-T2 — The counted set narrows from five to three (≈ small — **halved on review**)
 
-- `externalDriven` out. Add nothing — `ScheduleSummaryStrip` already reports it.
-- **Root-only negative float** (D-f): a negative-float activity **none of whose successors also has
-  negative float**. Pure, O(edges), no engine data, no new endpoint.
-- **This breaks the uniform flag shape** and the plan says so rather than discovering it: every
-  other flag is `(activity) => boolean`; this one needs the graph. Decide where that lives —
-  most likely a post-filter stage in `orderedConflicts`, keeping `conflicts.ts` pure (the graph is
-  data, not React).
-- **Docs in the same commit or it is the register's own drift class:** `conflicts.ts`'s docblock,
-  **`env.ts:573-574`** (which names the flag set) and `docs/specs/canvas-nav/`. The first version
-  named only the first of the three.
-- **Tests:** an externally-driven activity is not counted, not cycled, not matched; a chain of five
-  negative-float activities counts **one**; `conflicts.test.ts:27-35`'s hardcoded five-key array
-  becomes four.
+- `externalDriven` out (D-c). `negativeFloat` out (D-f, **revised**).
+- **Why root-only was withdrawn:** it recreates F1. `matchesActivityFilter` takes one activity, so a
+  graph-dependent predicate cannot live there — count and cycle would show roots while the filter
+  showed every affected activity, and M2-T1's structural assertion would have stayed **green**,
+  because the divergence sits in a post-filter stage only one consumer runs. Put back to the product
+  owner; they chose to drop it.
+- **What that removes from this plan:** the edges parameter on `orderedConflicts`, the signature
+  change across its four consumers, the graph-aware stage, the chain/diamond/fan-out/bridged test
+  matrix, and the "no button" case in M4. Every flag stays a uniform `(activity) => boolean`.
+- **Add nothing for either.** `ScheduleSummaryStrip` already reports `externalDrivenCount`; negative
+  float already drives `isCritical` (ADR-0035 TF ≤ 0) and `FLOAT_BUCKETS[0]`.
+- **Docs in the same commit** or it is the register's own drift class: `conflicts.ts`'s docblock,
+  **`env.ts:573-574`** (which names the set) and `docs/specs/canvas-nav/`.
+- **Tests:** an externally-driven activity and a negative-float activity, each with no other flag,
+  are not counted, not cycled and not matched; `conflicts.test.ts:27-35`'s hardcoded five-key array
+  becomes three.
 
 ---
 
@@ -165,6 +189,19 @@ Entry point (ADR-0081): the Next-conflict control and its read-out, Row 1.
 - **Keeps the reason on screen**, which is why the chip is no longer retired: retiring it before a
   replacement existed would have left sighted users cycling with no visible statement of what the
   current conflict is.
+- **Link the button to it for AT** (confirmation-pass blocker): the read-out is `aria-hidden`, so on
+  its own it gives a screen-reader user nothing until they activate — which defeats this task's own
+  requirement. Give its text a stable id and point `next-conflict`'s `aria-describedby` at it,
+  composed with the existing shaded-reason id when both apply. **Non-live, read on focus** — the
+  search field's existing pattern (`tsld-toolbar-items.tsx:934-944`), never a second live region.
+- **Two states the first version left undefined, now specified** (S6):
+  - **Isolating** — `currentConflict` is null while `isolateActive` (`use-conflict-navigation.ts:72`),
+    so a pinned read-out would silently drop from `2 of 3` back to `3 conflicts` mid-cycle. Decide
+    and state which: hold the position, or say "paused while isolating".
+  - **Filtered** — `orderedConflictHits` reads the whole plan, so `3 conflicts` shows while the
+    filter dims to one visible. Now that the read-out is **persistent** this is on screen
+    permanently rather than transiently, and it is F1 one layer along — the state most likely to be
+    reported as a bug.
 
 ##### M3-T3 — Hold the fit gate (≈ small)
 
@@ -192,8 +229,10 @@ worry is gone — but the **read-out** is variable-width and pinned, so it is wh
   `aria-disabled` never native, one `aria-describedby`-linked reason.
 - **Opaque callbacks, not an imported `ActivityEditorPurpose`** — `features/tsld` must not import
   from `features/activities` (§5/§12); the composition root wires it, as the bar already does.
-- **Negative float gets no button**, and its copy must read as a decision. Use a different icon from
-  the actionable types and state _why_ there is no action, not merely that there is none.
+- ~~Negative float gets no button, and its copy must read as a decision.~~ **There is no longer a
+  remedy-less type.** D-f's revision leaves three, all with a remedy, so this requirement — and the
+  copy the UX review drafted for it — is vacuous. Struck rather than deleted, so a later proposal
+  for a remedy-less flag is argued rather than slipped in.
 - **Specify what happens after the one real fix succeeds** — it triggers a recalc that clears the
   very conflict the bar is describing. Unspecified in the first version, and it is the primary path
   the epic exists to create.
@@ -259,13 +298,13 @@ measurement (§19.10); behaviour-changing assertions **verified red first**.
 
 ## Risks & assumptions (rollup)
 
-| Risk                                                      | Likelihood | Impact   | Mitigation                                                                                                     |
-| --------------------------------------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------- |
-| Promoting the button demotes something                    | medium     | low      | **Accepted in advance**; M0-T1 records what moved                                                              |
-| The widened filter changes an export's contents unnoticed | **medium** | **high** | M0-T2 names this consumer specifically; M5-T2 asserts it                                                       |
-| The root-only rule mis-identifies the root on a diamond   | medium     | medium   | Test a chain, a diamond and a disconnected pair; the rule is "no negative-float successor", not "no successor" |
-| The remedy items crowd the selection bar                  | medium     | low      | They are conditional on the current conflict, so at most one shows                                             |
-| A future flag lands with no remedy                        | low        | medium   | The total `Record<ConflictKey, Remedy>` makes it a typecheck failure                                           |
+| Risk                                                      | Likelihood | Impact   | Mitigation                                                                                   |
+| --------------------------------------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------- |
+| Promoting the button demotes something                    | medium     | low      | **Accepted in advance**; M0-T1 records what moved                                            |
+| The widened filter changes an export's contents unnoticed | **medium** | **high** | M0-T2 names this consumer specifically; M5-T2 asserts it                                     |
+| A remedy-less flag is proposed again later                | low        | medium   | D3 records why `negativeFloat` left, so the next proposal is argued rather than re-litigated |
+| The remedy items crowd the selection bar                  | medium     | low      | They are conditional on the current conflict, so at most one shows                           |
+| A future flag lands with no remedy                        | low        | medium   | The total `Record<ConflictKey, Remedy>` makes it a typecheck failure                         |
 
 **Assumptions to check, not trust:** that `orderedConflicts` is the right home for a graph-aware
 predicate (M2-T2), and that no consumer depends on `CONFLICT_FLAGS` being a uniform list of
