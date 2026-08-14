@@ -200,6 +200,16 @@ keep `main` releasable.
   a computed gate rather than a convention. Measured rather than argued, and the obvious claim was
   **false**: removing a 163 px labelled item bought Row 2 no label at all (13 inline / 11 labelled
   either side at 1646). What it bought instead was the `⋯` disappearing from that row entirely.
+- **One meaning of "conflict", and a remedy on the object** (ADR-0094). The Next-conflict button was
+  in the `⋯`, where its shading was a shading nobody opens the menu to see; its count existed only
+  once you were already cycling; and the Filter menu's **Has conflict** lens meant something
+  different from the cycle one item away. That third defect was unreportable **because** of the
+  other two — nobody could ever see the two numbers disagree — which is why the fix is a computed
+  gate. Landing on a conflict now offers the remedy on the activity itself, and one of the three
+  remedies deliberately renders nothing: its fix is an item the bar already carries, and a
+  conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
+  journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
+  demote, so it pushed the command it labels off the row in the only state the epic exists for.
 
 ## Delivered — operations & supportability
 
