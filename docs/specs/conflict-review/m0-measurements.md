@@ -39,6 +39,13 @@ one source along — and this epic is about that failure.
 Two fixture helpers construct bare `MatchableActivity` literals and will fail **typecheck** when it
 grows: `lenses.test.ts:29-38` (`matchable()`), `search-matches.test.ts:8-19` (`row()`).
 
+> **Corrected on contact: it is five files, not two.** Building M2-T1 surfaced three more —
+> `search-escape.test.ts`, `search-match-identity.test.ts` and `use-search-navigation.test.ts`, all
+> constructing `SearchableActivity` (which extends `MatchableActivity`). The enumeration was done by
+> grepping the _type name_, which misses fixtures typed through a subtype. Harmless here — the
+> compiler names every one and they are all one-line fixture edits — but the method was wrong, and
+> an enumeration that undercounts is worth recording as such rather than quietly widened.
+
 ### The guest path — **checked, not assumed**
 
 `guest-api.ts:190-235` already returns a full `ActivitySummary` with every flag present and zeroed,
