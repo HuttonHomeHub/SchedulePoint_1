@@ -44,6 +44,7 @@ function resolved(over: Partial<ResolvedToolbarItem<Ctx>> = {}): ResolvedToolbar
     active: false,
     busy: false,
     disabledReason: undefined,
+    srDescription: undefined,
     icon: null,
     ...over,
   };

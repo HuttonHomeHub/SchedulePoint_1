@@ -661,6 +661,7 @@ export function Toolbar<Ctx>({
                 {...(r.item.isActive ? { pressed: r.active } : {})}
                 disabled={!r.enabled}
                 disabledReason={r.disabledReason}
+                srDescription={r.srDescription}
                 tabIndex={tabIndexFor(r.item.id)}
                 onActivate={() => r.item.onActivate!(context)}
                 onFocus={() => setActiveId(r.item.id)}

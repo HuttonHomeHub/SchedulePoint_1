@@ -181,9 +181,27 @@ describe('resolveItems', () => {
 describe('partitionByTier', () => {
   it('sends tier-3 to overflow and keeps tier-1/2 on the bar, order preserved', () => {
     const resolved: ResolvedToolbarItem<Ctx>[] = [
-      { item: base({ id: 'a', tier: 1 }), enabled: true, active: false, disabledReason: undefined },
-      { item: base({ id: 'b', tier: 2 }), enabled: true, active: false, disabledReason: undefined },
-      { item: base({ id: 'c', tier: 3 }), enabled: true, active: false, disabledReason: undefined },
+      {
+        item: base({ id: 'a', tier: 1 }),
+        enabled: true,
+        active: false,
+        disabledReason: undefined,
+        srDescription: undefined,
+      },
+      {
+        item: base({ id: 'b', tier: 2 }),
+        enabled: true,
+        active: false,
+        disabledReason: undefined,
+        srDescription: undefined,
+      },
+      {
+        item: base({ id: 'c', tier: 3 }),
+        enabled: true,
+        active: false,
+        disabledReason: undefined,
+        srDescription: undefined,
+      },
     ];
     const { bar, overflow } = partitionByTier(resolved);
     expect(bar.map((r) => r.item.id)).toEqual(['a', 'b']);

@@ -325,6 +325,24 @@ export interface ToolbarItem<Ctx> {
   isBusy?: (ctx: Ctx) => boolean;
   /** Human reason shown/announced when disabled (e.g. "Start editing to add activities"). */
   disabledReason?: (ctx: Ctx) => string | undefined;
+  /**
+   * A description read to assistive tech **on focus**, when the item's own name does not carry a
+   * fact a sighted user can already see beside it (ADR-0094 M3-T2).
+   *
+   * Added for `next-conflict`, whose count lives in an `aria-hidden` read-out next to it: a sighted
+   * planner sees "3 conflicts" at rest and an AT user got an enabled button called "Next conflict"
+   * and no magnitude until they activated it — information conveyed visually and withheld from the
+   * accessibility tree, which is the requirement that milestone exists to meet, failed for half its
+   * audience.
+   *
+   * **Not a live region, and that distinction is the whole design.** It is an `sr-only` node linked
+   * by `aria-describedby`, read on focus and on demand — the mechanism the search field already
+   * uses for its match count. A live region here would say the same sentence the polite announcer
+   * already speaks on activation, twice.
+   *
+   * Composed with `disabledReason`'s node when both apply, so a shaded item still leads with why.
+   */
+  srDescription?: (ctx: Ctx) => string | undefined;
   /** Plain-button activation. Mutually exclusive with {@link render}. */
   onActivate?: (ctx: Ctx) => void;
   /**
@@ -361,6 +379,8 @@ export interface ResolvedToolbarItem<Ctx> {
   enabled: boolean;
   active: boolean;
   disabledReason: string | undefined;
+  /** The resolved {@link ToolbarItem.srDescription}, or `undefined`. */
+  srDescription: string | undefined;
   /**
    * The item's icon with any ctx form already applied — **the only supported read**. A plain
    * `ReactNode` icon appears here unchanged (identity), so reading this is never worse than reading
@@ -491,6 +511,7 @@ export function resolveItems<Ctx>(
         enabled,
         active: item.isActive?.(ctx) ?? false,
         disabledReason: enabled ? undefined : item.disabledReason?.(ctx),
+        srDescription: item.srDescription?.(ctx),
         // A function icon is called exactly once here, not per consumer: the bar and the `⋯`
         // overflow both render from this resolution, and calling it twice would let one item paint
         // two different icons in the two places it can appear.

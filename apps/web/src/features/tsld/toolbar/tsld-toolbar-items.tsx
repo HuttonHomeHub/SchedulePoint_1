@@ -1438,26 +1438,42 @@ function CurrentConflictStatus({
   itemProps: ToolbarItemRenderApi['itemProps'];
 }): React.ReactElement | null {
   const current = ctx.currentConflict;
-  if (!current) return null;
-  const reason = current.reasons[0] ?? 'conflict';
+  // **Two states, and the idle one is the whole point of ADR-0094 M3-T2.** This used to render only
+  // while a planner was already cycling (`currentConflict != null`), which is a count that cannot
+  // tell you whether cycling is worth starting — the product owner's actual complaint. Idle it now
+  // states the magnitude; stepping it states the position and the reason.
+  if (!current && !ctx.hasConflicts) return null;
+  const label = current
+    ? `Conflict ${current.index} of ${current.total}`
+    : `${ctx.conflictCount} ${ctx.conflictCount === 1 ? 'conflict' : 'conflicts'}`;
+  const reason = current ? (current.reasons[0] ?? 'conflict') : null;
   return (
     <span
       {...itemProps}
       // Purely the VISIBLE readout for sighted users (U2). The spoken channel is the shared polite
       // announcer that `goToNextConflict` already writes to — so this chip is `aria-hidden` to avoid a
       // second, duplicate live-region announcing the same "Conflict i of n" text.
+      //
+      // Being hidden is why the BUTTON carries `srDescription`: an AT user has to reach the same fact
+      // some other way, and a description read on focus is that way without a second announcement.
       aria-hidden="true"
-      title={`Conflict ${current.index} of ${current.total}: ${current.reasons.join(', ')}`}
+      title={
+        current
+          ? `Conflict ${current.index} of ${current.total}: ${current.reasons.join(', ')}`
+          : label
+      }
       className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[14rem] gap-1')}
     >
       <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="shrink-0 whitespace-nowrap">
-        Conflict {current.index} of {current.total}
-      </span>
-      <span aria-hidden="true" className="shrink-0">
-        ·
-      </span>
-      <span className="truncate">{reason}</span>
+      <span className="shrink-0 whitespace-nowrap">{label}</span>
+      {reason ? (
+        <>
+          <span aria-hidden="true" className="shrink-0">
+            ·
+          </span>
+          <span className="truncate">{reason}</span>
+        </>
+      ) : null}
     </span>
   );
 }
@@ -1849,7 +1865,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'next-conflict',
     group: 'find' as const,
     row: 'look' as const,
-    tier: 3 as const,
+    // **Tier 1 since ADR-0094, and the label stays STATIC.** Tier 3 is admitted last, so at 1646 this
+    // sat in the `⋯` — where its "No conflicts to review" shading was a shading nobody saw, and its
+    // count could not tell a planner whether opening the menu was worth it.
+    //
+    // The count is NOT folded into this label, and that was decided twice. `ToolbarItem.label` is a
+    // plain string; making it context-bearing would widen a shared primitive for one caller, reduce
+    // the accessible name to "2 of 3" (a status, not a command), and — because a label's width is
+    // derived — re-run the whole ladder on every click, moving other controls under the planner's
+    // cursor between two clicks of the same button. It also fails for the reason the ORIGINAL
+    // refusal gave, which survives this promotion intact: a label is painted only when labels fit.
+    // The count lives in `next-conflict-status` instead, which is a `render` item and therefore
+    // measured rather than derived.
+    tier: 1 as const,
     order: 2,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
@@ -2149,6 +2177,17 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
               : ctx.hasConflicts
                 ? undefined
                 : 'No conflicts to review',
+          // The count reaches assistive tech HERE, because the read-out beside it is `aria-hidden`
+          // (ADR-0094 M3-T2). Without this an AT user met an enabled button called "Next conflict"
+          // with no magnitude until they activated it — while a sighted planner read "3 conflicts"
+          // at rest. Same requirement, half the audience. Read on focus, never announced: the polite
+          // announcer already speaks the position on activation.
+          srDescription: (ctx) =>
+            ctx.currentConflict
+              ? `Conflict ${String(ctx.currentConflict.index)} of ${String(ctx.currentConflict.total)}`
+              : ctx.hasConflicts
+                ? `${String(ctx.conflictCount)} ${ctx.conflictCount === 1 ? 'conflict' : 'conflicts'} in this plan`
+                : undefined,
           onActivate: (ctx) => ctx.goToNextConflict(),
         }
       : placeholderItem(nextConflictShape),
@@ -2219,7 +2258,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 3,
       label: 'Current conflict',
       presentational: true,
-      isVisible: (ctx) => ctx.currentConflict != null,
+      // Visible whenever there is something to count — not only mid-cycle (ADR-0094 M3-T2). The
+      // band floor is the Project-finish chip's answer to the same problem: a pinned `render` item
+      // is measured and non-demotable, so it must withdraw itself rather than crowd a narrow row.
+      isVisible: (ctx) => ctx.hasConflicts || ctx.currentConflict != null,
       render: (ctx, api) => <CurrentConflictStatus ctx={ctx} itemProps={api.itemProps} />,
     },
 
