@@ -2250,10 +2250,32 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 3,
       label: 'Current conflict',
       presentational: true,
-      // Visible whenever there is something to count — not only mid-cycle (ADR-0094 M3-T2). The
-      // band floor is the Project-finish chip's answer to the same problem: a pinned `render` item
-      // is measured and non-demotable, so it must withdraw itself rather than crowd a narrow row.
-      isVisible: (ctx) => ctx.hasConflicts || ctx.currentConflict != null,
+      /**
+       * Visible whenever there is something to count — not only mid-cycle (ADR-0094 M3-T2) — **and
+       * only once the row is at least `compact`.**
+       *
+       * The band floor is the Project-finish chip's answer to the same problem, for the same reason:
+       * a `render` item can never demote, so every pixel it takes is paid at every width, and the
+       * only answer available to such an item is to withhold itself.
+       *
+       * **It is not, however, what fixed the S4 overhang this epic hit, and that is worth saying.**
+       * This paragraph first claimed it was: `e2e-toolbar-fit` S4 went red at 1024 when
+       * `next-conflict` was promoted to tier 1, the read-out was the obvious new pinned cost, and
+       * the floor was written with the overhang cited as its evidence. Adding it changed the
+       * overhang by **exactly zero px** — the fixture plan carries no conflicts, so this chip was
+       * never rendering at that width at all. The real cause was `computeLadder` testing for a
+       * shortfall without charging the `⋯` it was already painting (`toolbar-ladder.ts`, Stage 2).
+       * The floor stays because the reasoning for it is sound on its own; the claim that it fixed
+       * something is withdrawn rather than deleted, because the wrong version is the more
+       * instructive half (ADR-0076 Class 3, caught by measuring instead of shipping the story).
+       *
+       * The count is not lost to an AT user below `compact`: `next-conflict`'s `srDescription`
+       * carries it, and that is read from the button rather than from this chip (which is
+       * `aria-hidden`). A sighted planner there loses the resting magnitude and keeps the button,
+       * which is a glance rather than a capability — the same trade the finish chip records.
+       */
+      isVisible: (ctx, env) =>
+        (ctx.hasConflicts || ctx.currentConflict != null) && bandIsAtLeast(env.layout, 'compact'),
       render: (ctx, api) => <CurrentConflictStatus ctx={ctx} itemProps={api.itemProps} />,
     },
 

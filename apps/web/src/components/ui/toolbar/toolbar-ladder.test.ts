@@ -355,3 +355,64 @@ describe('the derived widths are tied to the styles they are derived from', () =
     expect(iconOnlyWidth(WITH_ICON, true)).toBe(24 + 16);
   });
 });
+
+/**
+ * **A row already painting the `⋯` pays for it before it decides whether it is short.**
+ *
+ * The defect ADR-0094 M0-T1 found by measurement. `overflowWidth` was subtracted *inside* the
+ * `budget < 0` branch, so the shortfall test asked "is this row short **without** the button it is
+ * already rendering?" A row holding an un-admitted tier-3 candidate always renders that button, so
+ * a row over by less than the button's own width answered **no**, demoted nothing, and laid out
+ * past its container — which `e2e-toolbar-fit` S4 reported as 8 px at 1024 on Row 1 the moment one
+ * more tier-1 item joined it.
+ *
+ * Stage 3 had the rule right all along and says so in its own comment: with candidates present the
+ * `⋯` is charged unconditionally, and is deliberately not released even when every candidate is
+ * admitted. This is that rule applied one stage earlier, which is why it is a move rather than a
+ * new charge — and why nothing about admission changes.
+ *
+ * Verified red first: with the reservation back inside the branch, the first case demotes nothing.
+ */
+describe('computeLadder — the `⋯` is reserved before the shortfall test', () => {
+  // Six 32 px icon-only buttons + five 4 px gaps = 212. A 240 px row holds them with 28 px spare —
+  // less than the 44 px `⋯` that the un-admitted candidate forces onto it.
+  const core = [0, 1, 2, 3, 4, 5].map((i) => button(`c${String(i)}`, i, { labelPolicy: 'never' }));
+
+  it('demotes when the row fits its items but not its overflow button', () => {
+    const result = computeLadder(
+      input({
+        available: 240,
+        core,
+        // One candidate, far too wide to be admitted — so the `⋯` is certain to render.
+        candidates: [button('tier3', 9, { baseWidth: 500, labelPolicy: 'never' })],
+      }),
+    );
+    expect(result.overflowed.has('tier3')).toBe(true);
+    expect(
+      result.overflowed.size,
+      'the row is 16 px short once the `⋯` is charged, so exactly one item leaves',
+    ).toBeGreaterThan(1);
+  });
+
+  it('does not charge the `⋯` twice on a row that has no candidates', () => {
+    // 212 of items in a 240 px row, no candidates: nothing forces the button, so nothing demotes
+    // and the row keeps all six. The old code and the new agree here — pinned so a future
+    // simplification cannot turn the reservation unconditional and quietly demote from full rows.
+    const result = computeLadder(input({ available: 240, core, candidates: [] }));
+    expect(result.overflowed.size).toBe(0);
+  });
+
+  it('still admits a candidate that fits with the `⋯` charged', () => {
+    // Admission's own arithmetic is untouched: the charge simply happens earlier in the same
+    // function, so a roomy row behaves exactly as before.
+    const result = computeLadder(
+      input({
+        available: 1000,
+        core,
+        candidates: [button('tier3', 9, { baseWidth: 32, labelPolicy: 'never' })],
+      }),
+    );
+    expect(result.admitted.has('tier3')).toBe(true);
+    expect(result.overflowed.size).toBe(0);
+  });
+});
