@@ -2350,6 +2350,29 @@ conditional-render change would do it); if it does, the restore belongs on the l
 rather than on a frame counted from the dialog. Until then the journey should be treated as a known
 intermittent, and a red run on this assertion alone re-run before being investigated as new.
 
+**Re-measured 2026-08-14 (ADR-0094), doubling the sample — and the result is that the sample is
+still too small to say anything.** That epic's local journey sweep hit it, and ADR-0094 adds an item
+to the very selection bar this journey drives (`clear-visual-placement` moves there), which is the
+same class of change M3 was suspected of. So the method above was repeated: five runs on the epic
+branch, five on the pre-epic tree at `fdc21ef`, `retries: 0` on both.
+
+| tree                  | pass rate |
+| --------------------- | --------- |
+| pre-epic (`fdc21ef`)  | 4 / 5     |
+| ADR-0094 branch       | 3 / 5     |
+| M3-era figure (above) | 3 / 4     |
+
+All three are consistent with one underlying rate somewhere around 70–80 %, and 3/5 against 4/5 is
+not a difference five runs can detect. **The honest reading is that the flake is confirmed
+pre-existing and unchanged as far as this can tell — not that the change is exonerated**, which
+would need a sample nobody has yet paid for. Recorded because "we re-ran it and it passed" is how an
+intermittent gets quietly re-attributed to whoever last touched the file.
+
+**One thing that measurement did settle**, and it explains why this has never been red in CI:
+`playwright.multi-select.config.ts:32` sets `retries: process.env.CI ? 2 : 0`. A ~25 % per-run
+failure rate becomes ~1.5 % with two retries, so CI absorbs it and only a local sweep sees it. That
+is the right configuration and it is also why the rate can drift a long way before anything notices.
+
 ## 129. The 56 px app header row is the last recoverable band above the canvas
 
 **Raised:** 2026-08-12 (ADR-0090 M4-T2) · **Size:** L · **Owner:** a shell/ADR-0055 pass, not a toolbar one
