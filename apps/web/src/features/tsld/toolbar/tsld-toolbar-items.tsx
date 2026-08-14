@@ -1443,6 +1443,26 @@ function CurrentConflictStatus({
   // while a planner was already cycling (`currentConflict != null`), which is a count that cannot
   // tell you whether cycling is worth starting — the product owner's actual complaint. Idle it now
   // states the magnitude; stepping it states the position and the reason.
+  //
+  // **Two further states the plan required a decision on, both settled as "no special case", and
+  // recorded because a silent default reads like an oversight** (M3-T2; the accessibility and ux
+  // gates both asked):
+  //
+  // - **Isolating.** `useConflictNavigation` forces `currentConflict` to `null` while the logic-path
+  //   isolation lens is on, so this reverts from "2 of 3" to "3 conflicts" mid-cycle. That is the
+  //   honest reading: isolation replaces the scene with a subgraph, so a position within a walk of
+  //   the whole plan is no longer a position within what the planner is looking at. It degrades to
+  //   the magnitude rather than inventing a "paused" state, which would be a fourth string to keep
+  //   true and says nothing the reader cannot see.
+  // - **Filtered.** The count is of the WHOLE plan, deliberately, and does not follow the active
+  //   filter or search. "How many conflicts does this plan have" is the question the control answers,
+  //   and a count that shrinks when a planner filters to Critical would answer a different one every
+  //   time the lens changed — while the Next-conflict cycle it labels still walks all of them
+  //   (`orderedConflictHits` reads the plan, not the filtered set), so a filtered count would
+  //   disagree with the very cycle it sits beside. The accepted cost is that a planner filtered to
+  //   something other than "Has conflict" reads "3 conflicts" beside a canvas showing fewer
+  //   un-dimmed bars; the plan rated that the state most likely to be reported as a bug, and it is
+  //   the lesser of the two wrongs.
   if (!current && !ctx.hasConflicts) return null;
   const label = current
     ? `Conflict ${current.index} of ${current.total}`
@@ -1871,6 +1891,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // measured rather than derived.
     tier: 1 as const,
     order: 2,
+    /**
+     * **A command outranks the read-out that describes it** (ADR-0094 M5).
+     *
+     * Without this the flag-on journey found the epic's purpose inverting the moment it applied:
+     * `next-conflict-status` is a `render` item and therefore **cannot demote**, so at the ordinary
+     * 1280 px journey viewport the ~130 px it takes the instant a plan HAS a conflict pushed
+     * something off the row — and the lowest-ranked candidate was the button the chip labels
+     * (default priority is `-order`, i.e. −2, below every neighbour). The result was a count sitting
+     * on the row beside no way to act on it, in the only state this epic exists for.
+     *
+     * 90 rather than 100: navigation still survives longest (ADR-0090 D3), but this outranks the
+     * lenses at 60 and everything on default. The read-out cannot be given the lower rank instead —
+     * it has no rank, which is precisely the asymmetry that caused this.
+     */
+    priority: 90,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
   };

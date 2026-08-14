@@ -80,6 +80,13 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
             ? { selected: r.active }
             : { checked: r.active }
           : {})}
+        // The item's standing description follows it into the menu (ADR-0094 M5). It did not: this
+        // surface forwarded `disabledReason` and stopped, so a demoted `next-conflict` lost the
+        // count — the ONLY channel an AT user has for it, since the visible chip is `aria-hidden` —
+        // at exactly the widths where knowing whether to open the menu matters most. Three
+        // independent reviews of one diff found it; `MenuItem` grew the prop rather than this file
+        // growing a bespoke span, so the composition order stays in one place.
+        {...(r.srDescription ? { srDescription: r.srDescription } : {})}
         onSelect={() => r.item.onActivate!(context)}
       >
         {icon}
@@ -102,6 +109,7 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
       {...(r.item.isActive ? { checked: r.active } : {})}
       {...(r.busy ? { busy: true } : {})}
       {...(r.disabledReason ? { disabledReason: r.disabledReason } : {})}
+      {...(r.srDescription ? { srDescription: r.srDescription } : {})}
       onSelect={NOOP}
     >
       {icon}

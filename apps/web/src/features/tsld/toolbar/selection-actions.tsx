@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
 
+import type { BulkActionGate } from '../components/BulkSelectionBar';
 import type { ConflictKey } from '../render/conflicts';
 import type { LogicPathMode } from '../render/logic-path';
 
@@ -86,8 +87,10 @@ export interface SelectionActionContext {
    */
   conflictKey: ConflictKey | null;
   /** Whether clearing a hand-placed placement is actionable now, and why not — from the shared
-   * `clearVisualPlacementGate`, so this and the command surface cannot drift. */
-  clearPlacement: { enabled: boolean; reason: string | null };
+   * `clearVisualPlacementGate`, so this and the command surface cannot drift. The SAME
+   * `BulkActionGate` type the plural bar uses, imported rather than re-typed: a third structurally
+   * identical gate object is how two of them end up disagreeing about what `reason: null` means. */
+  clearPlacement: BulkActionGate;
   /** Withdraw the selected activity's hand-placed `visualStart`. */
   onClearVisualPlacement: () => void;
   /** Open the activity editor where a conflict actually lives. Opaque on purpose: `features/tsld`
@@ -402,9 +405,10 @@ function ConflictRemedyControl({
   if (remedy.kind !== 'openEditorAt') return null;
   return (
     <button
+      // `api.itemProps` already carries the focusable marker for a non-presentational render item;
+      // repeating it was harmless duplication the accessibility gate asked to remove.
       {...api.itemProps}
       type="button"
-      data-toolbar-focusable=""
       onClick={() => ctx.onOpenEditorAt(remedy.at)}
       className={cn(toolbarControlVariants({}), 'gap-1.5')}
     >
@@ -439,6 +443,14 @@ function ConflictRemedyControl({
 export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
   defineToolbar<SelectionBarContext>([
     // ── The conflict remedy (ADR-0094 M4) ───────────────────────────────────────────────────
+    //
+    // **Deliberately NOT gated on `VITE_CANVAS_NAV`**, which gates the Next-conflict cycle and its
+    // count. The flag governs a way of FINDING a flagged activity; the flag on the activity is the
+    // engine's and is real whether or not that navigation exists. A planner who reaches a conflicted
+    // bar by clicking it, or by the Has-conflict filter, should be offered the remedy — gating it
+    // would make the fix reachable only through one route to the problem. Said here because the
+    // component gate asked whether it was an oversight, and every other flag interaction in these
+    // registries is annotated.
     //
     // FIRST, and conditional: it is present only when the selected activity is actually flagged, and
     // when it is, it is the reason a planner is looking at this bar at all. Everything after it is
@@ -646,7 +658,27 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             showLabel: 'always' as const,
             order: 6.5,
             label: 'Clear visual placement',
-            icon: <Eraser className="size-4" />,
+            /**
+             * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
+             *
+             * The ux gate's blocking finding, and it is the epic's own purpose failing on its
+             * commonest conflict type. The two route remedies render first, ahead of Logic, with a
+             * conflict icon; this one sits last, after Delete, with a neutral icon — so a planner
+             * who pressed Next conflict, read "visual placement conflict" and landed on the bar had
+             * to hunt nine controls for the one that answers it. The `barAction` decision (do not
+             * render a twin) is right and stays; what it left out was any signal at all.
+             *
+             * The icon rather than the position, because `order` is static and a per-context order
+             * would re-run the width ladder as the selection changes — moving controls under the
+             * planner's cursor, which is exactly what kept the count off the `next-conflict` label.
+             * `icon` already takes a ctx form for precisely this kind of state.
+             */
+            icon: (ctx: SelectionActionContext) =>
+              ctx.conflictKey === 'visualConflict' ? (
+                <TriangleAlert className="size-4" />
+              ) : (
+                <Eraser className="size-4" />
+              ),
             penGated: true,
             // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
             // in — never re-derived here. Two independent copies of a four-condition ladder is how

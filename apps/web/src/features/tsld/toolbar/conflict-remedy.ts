@@ -56,10 +56,14 @@ export const CONFLICT_REMEDIES: Readonly<Record<ConflictKey, ConflictRemedy>> = 
     itemId: 'clear-visual-placement',
     label: 'Clear visual placement',
   },
-  // A route, not a fix — which constraint to relax, or by how much, is the planner's judgement.
-  // `constraint` lands on Scheduling rather than General: send someone to fix a constraint and they
+  // A route, not a fix — which constraint to relax, or by how much, is the planner's judgement, and
+  // the copy says so. It read "Fix the constraint…" until the ux gate put the two routes side by
+  // side: they are structurally identical, so calling one a fix and the other a review promised a
+  // single-click resolution from one of them that neither can give. This comment had said as much
+  // since the map was written; the label had not.
+  // `constraint` lands on Scheduling rather than General: send someone to a constraint and they
   // should arrive where the constraint is.
-  constraintViolated: { kind: 'openEditorAt', at: 'constraint', label: 'Fix the constraint…' },
+  constraintViolated: { kind: 'openEditorAt', at: 'constraint', label: 'Review the constraint…' },
   // Also a route. Re-level, widen the window or change the assignment — three different answers, so
   // offering one button would be picking for them.
   levelingWindowExceeded: { kind: 'openEditorAt', at: 'resources', label: 'Review resources…' },

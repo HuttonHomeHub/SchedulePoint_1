@@ -161,6 +161,37 @@ export async function recalculate(page: Page, orgSlug: string): Promise<void> {
  * point: M2's claim is that the raw dropped day is stored and the SERVER performs the roll, and
  * reading only one of the two cannot tell that apart from the client having rolled it first.
  */
+/**
+ * Link two activities finish-to-start, through the public REST API (ADR-0094 M5).
+ *
+ * A logic tie is what gives a successor a `logicEarliest` later than the data date, which is the
+ * only way to produce a `visualConflict` by dragging: the engine flags one when a hand-placed start
+ * lands **before** the earliest the network allows (`compute.ts:345`). Seeded rather than drawn with
+ * the Link tool, because the tie is this journey's fixture and not its subject — drawing it would
+ * put ADR-0064's two-click pick between the test and the thing it is testing.
+ */
+export async function linkActivities(
+  page: Page,
+  orgSlug: string,
+  predecessorId: string,
+  successorId: string,
+): Promise<void> {
+  const planId = openPlanId(page);
+  const error = await page.evaluate(
+    async ({ org, id, from, to }: { org: string; id: string; from: string; to: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ predecessorId: from, successorId: to, type: 'FS' }),
+      });
+      return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+    },
+    { org: orgSlug, id: planId, from: predecessorId, to: successorId },
+  );
+  if (error !== null) throw new Error(`linking rejected: ${error}`);
+}
+
 export interface PlacementRow {
   id: string;
   name: string;
@@ -168,6 +199,8 @@ export interface PlacementRow {
   visualStart: string | null;
   visualEffectiveStart: string | null;
   earlyStart: string | null;
+  /** The engine's own verdict on the placement — read rather than inferred from the two dates. */
+  visualConflict: boolean;
 }
 
 /** Every activity in the open plan, with its placement fields. Paged; every response checked. */
@@ -290,6 +323,35 @@ export async function findBarInRow(page: Page, activityId: string, y: number): P
     if ((await selectedActivityId(page)) === activityId) return x;
   }
   throw new Error(`no point in row y=${String(y)} hit ${activityId}`);
+}
+
+/**
+ * Find a bar **anywhere on the canvas**, sweeping the full width rather than the probe columns.
+ *
+ * {@link findBar}'s six columns all sit within 200 px of the left edge, which is a working
+ * assumption and not a general one: it holds for an activity starting at the data date and fails
+ * for anything the network pushes later. Measured on a three-activity plan with one FS tie, two
+ * zoom-out steps in — the successor's bar sat at **x 660–820**, so every probe column missed it and
+ * the failure read as "no probed canvas point hit …", i.e. like a bar that is not drawn rather than
+ * a probe aimed in the wrong place.
+ *
+ * Kept as a separate helper rather than widening `findBar`, because `findBar`'s narrowness is what
+ * makes it cheap: it early-exits on the first hit and most journeys look for a bar at day 0. This
+ * one is for the case where the bar's day is a consequence of the plan's logic.
+ */
+export async function findBarWide(
+  page: Page,
+  activityId: string,
+): Promise<{ x: number; y: number }> {
+  const box = await canvas(page).boundingBox();
+  if (!box) throw new Error('canvas has no bounding box');
+  for (let y = 16; y <= PROBE_MAX_Y; y += PROBE_STEP_Y) {
+    for (let x = 20; x < box.width - 10; x += 40) {
+      await canvas(page).click({ position: { x, y } });
+      if ((await selectedActivityId(page)) === activityId) return { x, y };
+    }
+  }
+  throw new Error(`no canvas point in the full sweep hit ${activityId}`);
 }
 
 /**
