@@ -486,18 +486,19 @@ export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
 /**
  * TSLD toolbar quick-wins (spec `docs/specs/toolbar-quick-wins/`). **OFF by default during build** —
  * it will flip on after the specialist reviews (a11y / ux / component / perf) are green (M3). When on,
- * it wires five previously-"Coming soon" TSLD toolbar buttons to already-shipped features — no new
- * domain capability, no API/schema/engine change:
+ * it wires four previously-"Coming soon" TSLD toolbar buttons to already-shipped features — no new
+ * domain capability, no API/schema/engine change. **It wired FIVE until ADR-0093** removed
+ * `update-progress` from the command surface altogether (not flag-off — the shape is deleted), so
+ * this flag no longer gates it in either direction:
  *
  * - **Go to today** — pans the canvas to today's date line (reuses the `goToDate` left-inset view jump).
  * - **Comments** — reveals + focuses the plan-level notes thread (`PlanNotesSection`, `VITE_NOTES`).
- * - **Report progress…** — opens `ActivityProgressDialog` for the selected activity (Contributor+).
  * - **Add note** — opens the selected activity's Logic panel at its Notes section (`VITE_NOTES`).
  * - **Clear visual placement** — drops the selected bar's hand-placed `visualStart` (Visual mode, pen).
  *
- * **ON by default** (2026-07-19, product sign-off) now that the five commands are wired to already-
+ * **ON by default** (2026-07-19, product sign-off) now that the commands are wired to already-
  * shipped features and the accessibility / ux / component / performance / security / test reviews are
- * green. Each of the five ids resolves to its real {@link ToolbarItem} when on, and to its existing
+ * green. Each of the four ids resolves to its real {@link ToolbarItem} when on, and to its existing
  * `placeholderItem()` "Coming soon" stub when off — so `VITE_TOOLBAR_QUICK_WINS=false` restores the
  * placeholders byte-for-byte (emergency rollback / opt-out).
  *

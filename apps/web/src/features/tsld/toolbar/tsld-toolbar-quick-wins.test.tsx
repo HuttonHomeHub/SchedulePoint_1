@@ -11,7 +11,7 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
  * Flag-ON TSLD toolbar quick-wins (spec `docs/specs/toolbar-quick-wins/`). Pins `VITE_TOOLBAR_QUICK_WINS`
- * on — plus the flags the five items compose with (`VITE_NOTES` for Comments/Add-note,
+ * on — plus the flags the four items compose with (`VITE_NOTES` for Comments/Add-note,
  * `VITE_SCHEDULING_MODES`/canvas authoring for Clear-visual-placement) — and asserts each item's
  * visible/enabled/disabledReason/onActivate against the pen-gating matrix. The flag-OFF byte-for-byte
  * placeholders are covered in `tsld-toolbar.test.tsx`.

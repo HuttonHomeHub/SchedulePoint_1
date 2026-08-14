@@ -1773,7 +1773,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  */
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/tier/order/
-  // label/icon each of the five ids carries in BOTH its real (flag-on) item and its
+  // label/icon each of the four ids carries in BOTH its real (flag-on) item and its
   // `placeholderItem()` (flag-off) stub, declared once and spread into both so the two branches can't
   // drift (component review C1; mirrors the `add-activity` shared-shape pattern below).
   const todayShape = {

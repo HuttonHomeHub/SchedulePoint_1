@@ -75,7 +75,7 @@ function overflowItem(name: string | RegExp): HTMLElement {
 }
 
 describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', () => {
-  it('keeps all five ids as "Coming soon" placeholders, byte-for-byte', () => {
+  it('keeps all four ids as "Coming soon" placeholders, byte-for-byte', () => {
     renderRows(ctx());
     for (const name of ['Go to today', 'Comments', 'Add note']) {
       const btn = screen.getByRole('button', { name });
@@ -83,7 +83,7 @@ describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', (
       expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
     }
     // The fifth is in the `⋯` since ADR-0090 M2 moved it to tier 3 — RELOCATED here rather than
-    // dropped from the list, which is what would have quietly turned a five-id census into a
+    // dropped from the list, which is what would have quietly turned a four-id census into a
     // four-id one. Its reason travels by `aria-describedby` in a menu, not a `title`.
     const cleared = overflowItem('Clear visual placement');
     expect(cleared).toHaveAttribute('aria-disabled', 'true');

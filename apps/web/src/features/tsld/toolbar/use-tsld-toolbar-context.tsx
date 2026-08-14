@@ -152,7 +152,7 @@ export function useTsldToolbarContext({
 
   const { canRecalc, canEditSchedule, canWrite, setEditing } = model;
   // Selection-aware quick-wins (spec `docs/specs/toolbar-quick-wins/`): the lifted canvas selection +
-  // the role capabilities + the shipped seams the five items call. Read directly off the model so no
+  // the role capabilities + the shipped seams the remaining items call. Read directly off the model so no
   // rule is re-derived; nothing here does anything until a flag-on item reads it. The two open-*
   // callbacks are defined inline in the memo below (keyed on the selection, which is exactly when the
   // context re-identifies anyway), so they need no separate stabilisation.

@@ -225,9 +225,9 @@ export interface TsldToolbarContext {
   hasDiagram: boolean;
 
   // --- Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) ------------------------------------------
-  // These wire five previously-"Coming soon" placeholders to shipped features (spec
+  // These wire four previously-"Coming soon" placeholders to shipped features (spec
   // `docs/specs/toolbar-quick-wins/`). Populated on every build; nothing reads them while the flag is
-  // off (the five ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
+  // off (the four ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
   /** The canvas selection lifted to the main toolbar (F0), or null when nothing is selected. Drives
    * the selection-aware items' enabled state. */
   selectedActivityId: string | null;
