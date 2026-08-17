@@ -199,9 +199,12 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
           totalFloat: number | null;
           isCritical: boolean;
         }[],
+        // Nested endpoint OBJECTS, not flat `*Id` fields — `DependencySummary` →
+        // `DependencyEndpoint` in `packages/types`. Reading the flat names gave undefined for every
+        // link and a confident 0 crossings.
         dependencies: (await get(`/api/v1/organizations/${slug}/plans/${id}/dependencies`)) as {
-          predecessorId: string;
-          successorId: string;
+          predecessor: { id: string };
+          successor: { id: string };
         }[],
       };
     },
