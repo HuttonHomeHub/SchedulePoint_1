@@ -10,6 +10,7 @@ import {
   chartWidth,
   spanGeometry,
 } from '../layout/bar-geometry';
+import { dateAtChartX, startDayAtChartX } from '../layout/drag-day';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
   DEFAULT_GANTT_SORT,
@@ -25,6 +26,7 @@ import {
 } from '../layout/row-model';
 import { NUDGE_DAYS, barMoveGate, moveAnnouncement, type GanttBarDrag } from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
+import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 
 import { GanttCell } from './GanttCell';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
@@ -651,6 +653,7 @@ export function GanttPanel({
               barDateSource,
               hoursPerDayFor,
               editing,
+              drag,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -838,6 +841,7 @@ interface GanttRowViewProps {
   barDateSource: BarDateSource | undefined;
   hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
   editing: GanttGridEditing | undefined;
+  drag: GanttBarDrag | undefined;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -861,6 +865,7 @@ function GanttRowView({
   barDateSource,
   hoursPerDayFor,
   editing,
+  drag,
   gridWidth,
   variance,
   showVariance,
@@ -874,6 +879,34 @@ function GanttRowView({
 }: GanttRowViewProps): React.ReactElement {
   const { activity, depth, hasChildren, expanded } = row;
   const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
+
+  // The pointer gesture. `movable` is the object's answer AND the reader's, resolved by the same
+  // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
+  // two affordances for one capability must not disagree about whether it exists.
+  const moveGate = drag === undefined ? null : barMoveGate(activity, drag);
+  const barStartIso = barDatesFor(activity, barDateSource).start;
+  const commitDrag = useCallback(
+    (deltaX: number) => {
+      if (drag === null || drag === undefined) return;
+      const { plannedStartIso } = drag;
+      if (plannedStartIso === null || barStartIso === null || geometry === null) return;
+      const startDay = startDayAtChartX({
+        anchorIso,
+        plannedStartIso,
+        pxPerDay,
+        x: geometry.x + deltaX,
+      });
+      drag.moveTo(activity.id, startDay);
+      drag.announce(
+        moveAnnouncement(activity.name, dateAtChartX(anchorIso, pxPerDay, geometry.x + deltaX)),
+      );
+    },
+    [drag, barStartIso, geometry, anchorIso, pxPerDay, activity.id, activity.name],
+  );
+  const barDrag = useBarPointerDrag({
+    enabled: moveGate?.movable === true && geometry !== null,
+    onCommit: commitDrag,
+  });
   const ghost =
     showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 
@@ -1075,7 +1108,17 @@ function GanttRowView({
                     ? 'bg-foreground/70'
                     : 'bg-primary/60 ring-primary/70 ring-1 ring-inset',
               )}
-              style={{ left: geometry.x, width: geometry.width }}
+              // The ghost is a TRANSFORM on the live bar, not a second element: one bar means the
+              // planner is dragging the thing they grabbed, and it costs no extra node per row.
+              style={{
+                left: geometry.x,
+                width: geometry.width,
+                ...(barDrag.deltaX === null
+                  ? {}
+                  : { transform: `translateX(${String(barDrag.deltaX)}px)`, opacity: 0.75 }),
+                ...(moveGate?.movable === true ? { cursor: 'grab', pointerEvents: 'auto' } : {}),
+              }}
+              onPointerDown={barDrag.onPointerDown}
             >
               {geometry.progress > 0 ? (
                 <span
