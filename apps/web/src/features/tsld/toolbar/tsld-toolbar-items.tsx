@@ -2425,7 +2425,18 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...addNoteShape,
-          isVisible: () => NOTES_ENABLED,
+          // **Not in the Gantt (M1).** Spec F4 found this was the ONLY way a Contributor reached
+          // progress from a Gantt selection — via a button labelled "Add note" plus a tab change,
+          // which is the discoverability failure that milestone exists to fix. Now that the object
+          // bar is docked in the Gantt with a correctly-labelled route, leaving this here would add
+          // a third entry point beside two bad ones rather than replacing them: ADR-0093's defect
+          // reproduced inside the milestone meant to discharge it, which is exactly how the ux
+          // review put it.
+          //
+          // It stays on the canvas, where it is the toolbar's own route into the Logic panel for a
+          // planner working from the command surface (entry-route gap #6, in `addNoteShape`'s own
+          // description).
+          isVisible: (ctx) => NOTES_ENABLED && ctx.planView !== 'gantt',
           // Gate on the RESOLVED row (U3): an id whose row was deleted elsewhere resolves to undefined,
           // so an enabled button always has a real target for `openActivityNotes`.
           isEnabled: (ctx) => ctx.canWriteNotes && ctx.selectedActivity != null,

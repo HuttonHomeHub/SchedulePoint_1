@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
-import { CanvasDockProvider } from './canvas-dock';
+import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { ResourceStripPanel } from './resource-strip-panel';
@@ -55,6 +55,8 @@ import {
 } from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import { PlanNotesSection } from '@/features/notes';
+import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
+import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
@@ -599,55 +601,143 @@ export function ToolbarPlanWorkspace({
     return both;
   }, [searchNavActive, ctx.matchedIds, floatPaths.emphasisIds]);
 
+  /**
+   * Hand focus back to the Gantt grid when the object bar unmounts while holding it.
+   *
+   * Queries rather than holding a ref because `GanttPanel` exposes none, and the alternative — a new
+   * imperative handle — would be a wider change for one callback. It targets the row that is the
+   * current roving tab stop (`tabIndex=0`), falling back to the grid itself, so focus lands where
+   * the keyboard user left it rather than at the top.
+   *
+   * Referentially stable, which `SelectionActionsBar` asks for in its own docblock: an unstable
+   * `restoreFocus` re-runs its unmount effect and can hand focus back on a render that was not an
+   * unmount at all.
+   */
+  const focusGanttGrid = useCallback(() => {
+    const grid = document.querySelector('[role="treegrid"]');
+    const stop = grid?.querySelector<HTMLElement>('[role="row"][tabindex="0"]');
+    (stop ?? (grid as HTMLElement | null))?.focus();
+  }, []);
+
+  /**
+   * **The Gantt's object-action context — M1, discharging the ADR-0093 promise.**
+   *
+   * ADR-0093 took `Report progress` off the command surface because an object action belongs on the
+   * object, and its replacement — the canvas dock — was canvas-only. The product owner accepted
+   * that on 2026-08-13 **explicitly on the basis that the Gantt would pick it up here**, so until
+   * this exists a Contributor working in the Gantt reaches progress only through the activities
+   * table's row menu. That is the oldest thing outstanding in this epic.
+   *
+   * Built by the SAME `buildSelectionBarContext` the canvas uses, with `canvas: null`. Everything
+   * else comes from `model`, which already supplies every one of these to `TsldPanel` a hundred
+   * lines above — so this is a second CALL, never a second assembly. Two hosts each assembling the
+   * object's context is the defect this epic found twice already at one layer up.
+   */
+  // Not wrapped in `useMemo`: passing `model` wholesale as a dependency made the React Compiler
+  // report "Existing memoization could not be preserved" — a manual memo it cannot verify is worse
+  // than none, because it opts the whole component out of compilation. Building the object each
+  // render is a handful of closures over values the host already holds.
+  const ganttSelectionCtx = buildSelectionBarContext({
+    // The whole of the difference. The two canvas-only items (zoom-to-selection, isolate) gate
+    // on `canvas !== null` and therefore do not render here — absent rather than shaded, because
+    // they are things the object cannot do in this projection, not things this reader may not
+    // do (ADR-0082's omit branch).
+    canvas: null,
+    activities: model.activities.data ?? [],
+    selectedId: model.selectedActivityId ?? model.logicActivity?.id,
+    // The Gantt has no plural selection of its own yet (ADR-0080's model is canvas-derived and
+    // lifting it is its own slice, spec D4), so a singular selection is the only kind there is.
+    selectionCount: 1,
+    canEditSchedule: model.canEditSchedule,
+    scheduleRefusal: model.scheduleRefusal,
+    canReportProgress: model.canProgress,
+    isStepsEligible: (a) => !isDurationDerivedType(a.type),
+    clearPlacement: clearVisualPlacementGate({
+      schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
+      canEditSchedule: model.canEditSchedule,
+      lateOverlayActive,
+      hasSelection: true,
+      scheduleRefusal: model.scheduleRefusal,
+    }),
+    onOpenLogic: model.onOpenLogic,
+    onEdit: model.onEditActivity,
+    onDelete: model.onDeleteActivity,
+    onDissolve: model.onDissolveSummary,
+    onDuplicate: (a) => void model.onDuplicateActivity(a),
+    onDuplicateBand: model.onDuplicateBand,
+    onResources: model.onResourcesActivity,
+    onProgress: model.onProgressActivity,
+    onSteps: model.onStepsActivity,
+    onClearVisualPlacement: (a) => void model.clearVisualPlacement(a.id, a.version),
+    onOpenEditorAt: model.onOpenActivityEditorAt,
+  });
+
   const surface =
     ctx.planView === 'gantt' ? (
-      <GanttPanel
-        key={`${model.planId}-gantt`}
-        activities={model.activities.data ?? []}
-        // One zoom control for both projections (ADR-0056 presets, ADR-0059 §2): the toolbar's
-        // preset drives the diagram and the chart alike, so switching view keeps the scale.
-        zoomLevel={ctx.zoomPreset}
-        // Which persisted dates draw each bar — the SAME expression the canvas below receives, for
-        // the same reason the float-path set above is shared: two derivations of "where does this
-        // bar go" would drift, and the drift would be invisible because each view stays internally
-        // consistent. It was worse than drift here — the Gantt had no such input at all and read
-        // `earlyStart` unconditionally, so a VISUAL plan's chart and diagram disagreed about every
-        // hand-placed bar (`docs/TECH_DEBT.md` #135). Flag-off this is always `early`.
-        barDateSource={barDateSource}
-        // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
-        // variance rows the activities table already fetches — no extra query. Undefined when no
-        // baseline is active, and the chart is then byte-for-byte what it was.
-        varianceByActivityId={model.varianceByActivityId}
-        loading={model.activities.isPending}
-        // Selection is workspace state, not view state — which this file already claimed above and
-        // did not do. The Gantt fed only `logicActivity`, so the toolbar's selection-aware items
-        // (which read `selectedActivityId`) were answering with a stale CANVAS selection while the
-        // Gantt showed something else, and were shaded forever in a session that started in the
-        // Gantt. Both stores are now written together. Found by the ui-architect review of the
-        // Float paths panel, whose "select a row, press Float paths" journey is unbuildable without
-        // it (audit F4).
-        onSelectActivity={(activity) => {
-          model.onSelectionChange(activity.id);
-          model.setLogicActivity(activity);
-        }}
-        selectedActivityId={model.selectedActivityId ?? model.logicActivity?.id}
-        // Float-path emphasis (audit F4): the SAME derived set the canvas above receives, so the
-        // two views cannot disagree about which activities are on the path. Bring-into-view follows
-        // the workspace selection, which the panel lifts when a chain row is activated —
-        // scroll only, never focus, so the planner stays in the panel they are reading.
-        // Emphasis is one prop with two possible sources (M4). When BOTH a float path and a live
-        // search are narrowing, it is their **intersection** — the planner asking for both means
-        // "the matches that are also on the path", and a union would emphasise activities neither
-        // question selected. Defined here rather than left to whichever happens to be non-empty,
-        // because "whichever is set" is not a rule, it is an accident that only shows up when both
-        // are on at once.
-        emphasisIds={ganttEmphasisIds}
-        {...(searchNavActive && ctx.currentMatchId !== null
-          ? { bringIntoViewActivityId: ctx.currentMatchId }
-          : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
-            ? { bringIntoViewActivityId: model.selectedActivityId }
-            : {})}
-      />
+      <>
+        <GanttPanel
+          key={`${model.planId}-gantt`}
+          activities={model.activities.data ?? []}
+          // One zoom control for both projections (ADR-0056 presets, ADR-0059 §2): the toolbar's
+          // preset drives the diagram and the chart alike, so switching view keeps the scale.
+          zoomLevel={ctx.zoomPreset}
+          // Which persisted dates draw each bar — the SAME expression the canvas below receives, for
+          // the same reason the float-path set above is shared: two derivations of "where does this
+          // bar go" would drift, and the drift would be invisible because each view stays internally
+          // consistent. It was worse than drift here — the Gantt had no such input at all and read
+          // `earlyStart` unconditionally, so a VISUAL plan's chart and diagram disagreed about every
+          // hand-placed bar (`docs/TECH_DEBT.md` #135). Flag-off this is always `early`.
+          barDateSource={barDateSource}
+          // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
+          // variance rows the activities table already fetches — no extra query. Undefined when no
+          // baseline is active, and the chart is then byte-for-byte what it was.
+          varianceByActivityId={model.varianceByActivityId}
+          loading={model.activities.isPending}
+          // Selection is workspace state, not view state — which this file already claimed above and
+          // did not do. The Gantt fed only `logicActivity`, so the toolbar's selection-aware items
+          // (which read `selectedActivityId`) were answering with a stale CANVAS selection while the
+          // Gantt showed something else, and were shaded forever in a session that started in the
+          // Gantt. Both stores are now written together. Found by the ui-architect review of the
+          // Float paths panel, whose "select a row, press Float paths" journey is unbuildable without
+          // it (audit F4).
+          onSelectActivity={(activity) => {
+            model.onSelectionChange(activity.id);
+            model.setLogicActivity(activity);
+          }}
+          selectedActivityId={model.selectedActivityId ?? model.logicActivity?.id}
+          // Float-path emphasis (audit F4): the SAME derived set the canvas above receives, so the
+          // two views cannot disagree about which activities are on the path. Bring-into-view follows
+          // the workspace selection, which the panel lifts when a chain row is activated —
+          // scroll only, never focus, so the planner stays in the panel they are reading.
+          // Emphasis is one prop with two possible sources (M4). When BOTH a float path and a live
+          // search are narrowing, it is their **intersection** — the planner asking for both means
+          // "the matches that are also on the path", and a union would emphasise activities neither
+          // question selected. Defined here rather than left to whichever happens to be non-empty,
+          // because "whichever is set" is not a rule, it is an accident that only shows up when both
+          // are on at once.
+          emphasisIds={ganttEmphasisIds}
+          {...(searchNavActive && ctx.currentMatchId !== null
+            ? { bringIntoViewActivityId: ctx.currentMatchId }
+            : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+              ? { bringIntoViewActivityId: model.selectedActivityId }
+              : {})}
+        />
+        {/*
+          The object-action bar, in the Gantt (M1). `CanvasDock` portals it into the Activities
+          handle row when that outlet is registered and renders it in place when it is not — the
+          ADR-0092 parity contract, unchanged. It is the SAME `SelectionActionsBar` the canvas
+          renders, from the same registry, so the two views cannot offer different actions on the
+          same object; only `canvas: null` differs.
+
+          `restoreFocus` hands focus back to the grid when the bar unmounts while holding it. Without
+          it, deselecting drops focus to `<body>` and silently disables the workspace accelerators —
+          the WCAG 2.4.3 failure ADR-0080's journey found for the bulk delete, which this repo has
+          now shipped three times in different costumes.
+        */}
+        <CanvasDock>
+          <SelectionActionsBar context={ganttSelectionCtx} restoreFocus={focusGanttGrid} />
+        </CanvasDock>
+      </>
     ) : (
       canvas
     );
