@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-import { writeMeasurement } from '../measure-toolbar/output';
 import {
   createClient,
   createPlan,
@@ -10,6 +9,7 @@ import {
   seedActivities,
   showGantt,
 } from '../e2e-gantt/support';
+import { writeMeasurement } from '../measure-toolbar/output';
 
 /**
  * **M0-T1 R5 — how many dependency links cross a Gantt viewport, and does the sort order change it.**
