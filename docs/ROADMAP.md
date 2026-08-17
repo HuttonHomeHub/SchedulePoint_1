@@ -210,6 +210,19 @@ keep `main` releasable.
   conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
   journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
   demote, so it pushed the command it labels off the row in the only state the epic exists for.
+- **The Gantt becomes a working surface** (ADR-0095). ADR-0059 shipped the chart read-only; ADR-0093
+  then moved `Report progress` onto the canvas dock — a surface the Gantt does not have — so the view
+  had a selection and nothing to do with it. It now carries the **same** object-action bar (called,
+  not rebuilt), in-cell editing of name and duration with a per-cell write scope, bar drag with
+  keyboard equivalents, and dependency arrows behind a default-off `Logic links` toggle. ADR-0059 §4's
+  objection to arrows is answered by the **geometry**, not the substrate — its phrase is about
+  _routing_, and a Gantt row holds one bar, so a link is an elbow through whitespace; that is now a
+  structural test rather than a paragraph. Culling is measured (p95 71–74 and sort-independent at
+  2,160 activities / 3,200 links, against a rejected rule reaching 88), and a gated cell is
+  **read-only, not disabled** — which removes the 1.4.3 exemption `disabled:opacity-50` relies on, so
+  the treatment dims the chrome and never the value. Measuring before adding a column found **Float
+  painted 80 px on top of the chart**; the M6 gate pass found a **data-loss** path where arrow keys
+  in an open cell moved focus off an unsaved edit. Gantt editing was ADR-0059's deferred M5.
 
 ## Delivered — operations & supportability
 
@@ -313,9 +326,10 @@ discriminators. Each becomes a spec/plan before build:
 - **Gantt view** — **shipped** (ADR-0059, `VITE_GANTT_VIEW` default-on 2026-07-28): a
   grid-and-bar projection of the same model behind a TSLD | Gantt switch, with WBS summary rows,
   the baseline variance bar ADR-0025 deferred "until a Gantt exists", and a printed programme.
-  Read-only by design — the brief says read-primary, and editing stays in the TSLD. Rendered as
-  virtualized DOM rows rather than Canvas 2D, because virtualization removes the premise ADR-0026
-  chose canvas for. Dependency arrows and Gantt editing are the deliberate next candidates.
+  Rendered as virtualized DOM rows rather than Canvas 2D, because virtualization removes the premise
+  ADR-0026 chose canvas for. It shipped **read-only by design**, with dependency arrows and editing
+  named as the deliberate next candidates; both landed on 2026-08-17 (ADR-0095), so that sentence is
+  no longer the current state and the deferred M5 is closed.
 - **WBS improvements** — **shipped** (ADR-0063, `VITE_WBS_IMPROVEMENTS` default-on 2026-07-30):
   making the shipped WBS (ADR-0038) workable rather than merely present. Membership is managed
   from the summary (a Members tab) **and** from the list (table multi-select + bulk assign);
