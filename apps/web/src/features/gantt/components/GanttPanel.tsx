@@ -37,10 +37,12 @@ import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 
 import { GanttCell } from './GanttCell';
 import { GanttLinkOverlay } from './GanttLinkOverlay';
+import { GanttRowMenu } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
+import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
@@ -177,6 +179,15 @@ export interface GanttPanelProps {
    */
   dependencies?: readonly DependencySummary[] | undefined;
   /**
+   * Build the row menu's context for one activity, or null when there is nothing to offer.
+   *
+   * A **function from the host**, not a prebuilt context: the menu is per row and the context
+   * carries that row's callbacks, so a single object would either be wrong for every row but one or
+   * force the panel to assemble one — which is the assembly `buildSelectionBarContext` exists to
+   * keep in a single place (it is the same builder the dock uses, by construction).
+   */
+  rowMenuContextFor?: (activity: ActivitySummary) => SelectionBarContext | null;
+  /**
    * Draw EVERY link in the window, not only the selected row's. Default off (the product owner's
    * Q1 answer): logic on a dense programme is a thicket, and the selection path answers "why is
    * this bar here?" without it.
@@ -240,6 +251,7 @@ export function GanttPanel({
   editing,
   drag,
   dependencies,
+  rowMenuContextFor,
   showAllLinks = false,
   loading = false,
   error,
@@ -732,6 +744,7 @@ export function GanttPanel({
               editing,
               drag,
               dependencies,
+              rowMenuContextFor,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -921,6 +934,7 @@ interface GanttRowViewProps {
   editing: GanttGridEditing | undefined;
   drag: GanttBarDrag | undefined;
   dependencies: readonly DependencySummary[] | undefined;
+  rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -946,6 +960,7 @@ function GanttRowView({
   editing,
   drag,
   dependencies,
+  rowMenuContextFor,
   gridWidth,
   variance,
   showVariance,
@@ -961,6 +976,7 @@ function GanttRowView({
   const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
   const linkSummary =
     dependencies === undefined ? null : predecessorSummary(activity.id, dependencies);
+  const rowMenuContext = rowMenuContextFor?.(activity) ?? null;
 
   // The pointer gesture. `movable` is the object's answer AND the reader's, resolved by the same
   // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
@@ -1185,6 +1201,13 @@ function GanttRowView({
             The SVG is `aria-hidden` (an elbow is not readable), so without this the overlay would
             be the first graphical-only carrier on a surface whose own docblock forbids that. */}
         {linkSummary === null ? null : <span className="sr-only">{linkSummary}</span>}
+        {/* The row menu (M5-T3) — the dock's own roster rendered as a menu, never a third copy of
+            it. `selection-duplication.structural.test.ts` asserts this file's component names no
+            action literally, closing the hole ADR-0094 recorded when it noted the gate compares two
+            registries and cannot see a third. */}
+        {rowMenuContext === null ? null : (
+          <GanttRowMenu context={rowMenuContext} activityName={activity.name} />
+        )}
         {showVariance ? (
           <div
             role="gridcell"

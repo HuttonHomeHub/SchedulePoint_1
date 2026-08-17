@@ -60,7 +60,10 @@ import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import type { GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
 import { PlanNotesSection } from '@/features/notes';
-import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
+import {
+  buildSelectionBarContext,
+  type SelectionContextInput,
+} from '@/features/plan-actions/build-selection-context';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
@@ -730,7 +733,7 @@ export function ToolbarPlanWorkspace({
   // report "Existing memoization could not be preserved" — a manual memo it cannot verify is worse
   // than none, because it opts the whole component out of compilation. Building the object each
   // render is a handful of closures over values the host already holds.
-  const ganttSelectionCtx = buildSelectionBarContext({
+  const ganttSelectionInput: SelectionContextInput = {
     // The whole of the difference. The two canvas-only items (zoom-to-selection, isolate) gate
     // on `canvas !== null` and therefore do not render here — absent rather than shaded, because
     // they are things the object cannot do in this projection, not things this reader may not
@@ -763,7 +766,26 @@ export function ToolbarPlanWorkspace({
     onSteps: model.onStepsActivity,
     onClearVisualPlacement: (a) => void model.clearVisualPlacement(a.id, a.version),
     onOpenEditorAt: model.onOpenActivityEditorAt,
-  });
+  };
+
+  const ganttSelectionCtx = buildSelectionBarContext(ganttSelectionInput);
+
+  /**
+   * One row's menu context (M5-T3), from the SAME input object the bar above is built from — so a
+   * row menu and the docked bar cannot offer different things for one activity, and there is no
+   * second assembly to keep in step. That identity is the point of `buildSelectionBarContext`
+   * existing at all.
+   *
+   * `selectionCount: 1` is restated rather than inherited: a row menu always acts on its own row,
+   * and passing the live count would make every row menu vanish the moment a planner happened to
+   * have two bars selected elsewhere.
+   */
+  const rowMenuContextFor = (activity: ActivitySummary) =>
+    buildSelectionBarContext({
+      ...ganttSelectionInput,
+      selectedId: activity.id,
+      selectionCount: 1,
+    });
 
   const surface =
     ctx.planView === 'gantt' ? (
@@ -795,6 +817,10 @@ export function ToolbarPlanWorkspace({
           // planner asked for.
           dependencies={model.dependencies.data ?? []}
           showAllLinks={canvasUi.viewToggles.logicLinks === true}
+          // The row menu's context (M5-T3). The SAME builder the dock uses, called per row — so
+          // the menu and the bar cannot offer different things for one activity, and there is no
+          // second assembly to keep in step.
+          rowMenuContextFor={rowMenuContextFor}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { selectionActionItems } from './selection-actions';
@@ -74,5 +77,53 @@ describe('selection-gated commands do not duplicate the canvas dock (ADR-0093)',
     ).toContain('Report progress');
 
     expect(toolbarItems.map((item) => item.id)).not.toContain('update-progress');
+  });
+});
+
+/**
+ * **The third roster ADR-0094 said this gate could not see.**
+ *
+ * That decision withdrew a second on-canvas remedy strip partly because the gate above "compares
+ * two registries and a third is invisible to it" — recorded as a known hole rather than fixed,
+ * because nothing then had a third. M5-T3's Gantt row menu is that third surface, so the hole is
+ * closed here rather than inherited.
+ *
+ * The assertion is deliberately about **derivation, not equality**. Comparing rendered rosters would
+ * need a mounted menu and a context, and would then pass if BOTH went empty — the ADR-0081 shape,
+ * where a green suite cannot tell "the duplicate is gone" from "the capability is gone". Asserting
+ * that the file imports the registry and declares no roster of its own catches the thing that
+ * actually goes wrong: somebody typing the list out because it was quicker.
+ */
+describe('the Gantt row menu is the dock roster, not a third copy of it', () => {
+  const ROW_MENU = join(import.meta.dirname, '..', '..', 'gantt', 'components', 'GanttRowMenu.tsx');
+  const source = readFileSync(ROW_MENU, 'utf8');
+
+  it('derives its items from `selectionActionItems`', () => {
+    expect(
+      source.includes('selectionActionItems'),
+      'GanttRowMenu no longer reads the shared registry',
+    ).toBe(true);
+  });
+
+  it('declares no roster of its own', () => {
+    // A hand-written list is the failure mode: an array or record of action labels/ids sitting in
+    // this file. Matching on the LABELS the registry already owns, so a copy is caught by the very
+    // strings it copied.
+    // Comments stripped first. This fired on its own first run against the DOCBLOCK above, which
+    // cites `Report progress` while explaining why there is no roster — the prose that documents
+    // the rule is exactly the text most likely to name the things it forbids restating. Same
+    // treatment `link-paths.structural.test.ts` gives its obstacle terms, and for the same reason.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const rosterish = selectionActionItems
+      .map((item) => item.label)
+      .filter((label): label is string => typeof label === 'string')
+      .filter((label) => new RegExp(`['"\`]${label}['"\`]`).test(code));
+
+    expect(
+      rosterish,
+      `GanttRowMenu names dock actions literally (${rosterish.join(', ')}).\n\n` +
+        `That is a third roster, which the gate above structurally cannot compare — ADR-0094 ` +
+        `recorded exactly this hole. Render from \`selectionActionItems\` instead.`,
+    ).toEqual([]);
   });
 });
