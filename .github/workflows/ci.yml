@@ -231,12 +231,14 @@ jobs:
       - name: Web end-to-end tests (editing flags on)
         run: pnpm --filter @repo/web test:e2e:edit
 
-      # Flag-ON canvas-maximal toolbar journey (playwright.toolbar.config.ts) serving the app with
-      # VITE_CANVAS_TOOLBAR on (layered on VITE_CANVAS_WORKSPACE + the editing flags + enforced pen),
-      # so the toolbar-hosted workspace — slim header + one command toolbar over a chromeless canvas,
-      # activities panel collapsed by default — is exercised end to end (ADR-0031). Runs last, after
-      # the prior runs tear down their servers, reusing the ports.
-      - name: Web end-to-end tests (canvas toolbar flag on)
+      # The canvas-maximal toolbar journey (playwright.toolbar.config.ts): the toolbar-hosted
+      # workspace — slim header + one command toolbar over a chromeless canvas, activities panel
+      # collapsed by default — exercised end to end with the editing flags on and the pen enforced
+      # (ADR-0031). It is NOT a flag-on journey any more, and this comment said it was until
+      # ADR-0088 D3: `VITE_CANVAS_TOOLBAR` and `VITE_CANVAS_WORKSPACE` are both retired, so there is
+      # no layering left to describe — this is the only plan workspace there is. Runs after the
+      # prior runs tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (canvas toolbar workspace)
         run: pnpm --filter @repo/web test:e2e:toolbar
 
       # The toolbar FIT gate (playwright.toolbar-fit.config.ts, ADR-0090 M1). One invariant: a
@@ -327,7 +329,7 @@ jobs:
       # calendar is offered to its own project's plan picker and absent from a sibling project's, and
       # archiving a resource retires it from the picker while its existing assignment survives
       # untouched. Runs last, after the prior runs tear down their servers, reusing the ports.
-      - name: Web end-to-end tests (library scoping flag on)
+      - name: Web end-to-end tests (library scoping)
         run: pnpm --filter @repo/web test:e2e:library
 
       # The calendar shift-editor journey (playwright.calendar-shifts.config.ts). No longer flag-on:
@@ -337,7 +339,7 @@ jobs:
       # not flatten them (the defect the epic was opened on), a calendar with no working week stays
       # savable on the SECOND save, and a dated exception's hours can be edited in place through the
       # per-exception PATCH — the only place its optimistic `version` is testable at all.
-      - name: Web end-to-end tests (calendar shift editor flag on)
+      - name: Web end-to-end tests (calendar shift editor)
         run: pnpm --filter @repo/web test:e2e:calendar-shifts
 
       # Flag-ON sub-day durations/lags journey (playwright.sub-day.config.ts) serving the app with
