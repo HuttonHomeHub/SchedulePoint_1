@@ -65,7 +65,6 @@ export default defineConfig({
               // The legacy stacked plan page, not the canvas workspace: this suite is about two
               // FIELDS and two table columns, and driving them through a canvas would add a dozen
               // reasons to fail for something the epic is not about.
-              VITE_CANVAS_WORKSPACE: 'false',
               // The pen must be real, because every write here is pen-gated (ADR-0028) and a
               // duration that saves without the lock is not the thing being tested.
               VITE_PLAN_EDIT_LOCK: 'true',

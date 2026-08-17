@@ -1,7 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { addActivity, createAndOpenPlan, onboard, openProject, recalculate } from './support';
+import {
+  addActivity,
+  awaitComputedSchedule,
+  createAndOpenPlan,
+  onboard,
+  openProject,
+  recalculate,
+} from './support';
 
 /**
  * Flag-ON **live cross-plan / programme scheduling** journey (`VITE_PROGRAMME_SCHEDULING`,
@@ -17,18 +24,19 @@ import { addActivity, createAndOpenPlan, onboard, openProject, recalculate } fro
  * 4. **Staleness**: recalculating the upstream alone leaves the downstream stale (the banner appears);
  *    a programme recalculate clears it.
  *
- * Runs on the legacy stacked plan-detail page with the pen off (see the config), so it is pen-free.
+ * Runs on the plan workspace with the pen off (see the config), so it is pen-free — it moved off
+ * the legacy stacked page when `VITE_CANVAS_WORKSPACE` retired.
  */
 test('a planner links plans across projects and recalculates the programme', async ({ page }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await openProject(page);
 
   // Upstream plan: a long activity so its computed finish clearly gates the downstream.
   await createAndOpenPlan(page, 'Procurement');
   await addActivity(page, 'Deliver steel', 20);
   await recalculate(page);
-  await expect(page.getByText('Project finish')).toBeVisible();
+  await awaitComputedSchedule(page, orgSlug);
 
   // Downstream plan: back to the project, then a second plan with one activity.
   await page.getByRole('link', { name: 'Riverside' }).click();

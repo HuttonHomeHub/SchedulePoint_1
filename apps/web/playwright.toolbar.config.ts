@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
  * rather than lost, which is the difference between deleting a redundant suite and deleting
  * coverage.
  *
- * Serves the web bundle with `VITE_CANVAS_WORKSPACE=true` plus the editing surface + pen so a
+ * Serves the web bundle with the editing surface + pen so a
  * Planner can drive the real toolbar commands. Like `playwright.edit.config.ts`, the flags bake at
  * `webServer` start, so this is a separate config on the same ports; it runs as its own CI step
  * after the prior suites tear down. Chromium only (the base suite carries firefox/webkit;
@@ -63,7 +63,6 @@ export default defineConfig({
             // toolbar layout (plain Add toggle, edge-drag), so pin it OFF — authoring has its own
             // flag-on suite (playwright.authoring.config.ts).
             env: {
-              VITE_CANVAS_WORKSPACE: 'true',
               VITE_CANVAS_AUTHORING: 'false',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',

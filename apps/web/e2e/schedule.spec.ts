@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 import { chooseComboboxOption, comboboxField } from './combobox';
+import { awaitComputedSchedule, showActivities } from './workspace';
 
 /**
  * The CPM schedule journey (M6): a Planner sets the plan's start date, adds two
@@ -47,6 +48,7 @@ async function openNewPlan(page: Page): Promise<void> {
 }
 
 async function addActivity(page: Page, name: string): Promise<void> {
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(name);
   await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
@@ -57,7 +59,7 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
 
   // Give the plan a start date so it can be scheduled.
@@ -85,13 +87,29 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   await expect(dialog.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 
-  // Before recompute the summary is not yet calculated.
-  await expect(page.getByText(/Schedule not yet calculated/)).toBeVisible();
-
+  // There was a "before recompute there is no computed schedule" assertion here, and it is
+  // DELETED rather than converted, because the state it asserted no longer exists on this surface.
+  // The legacy stacked page had no canvas and therefore no ADR-0032 auto-recalc; the workspace
+  // does, and `use-plan-workspace-model.ts:560-570` fires `autoRecalc.notify()` on any change to
+  // the scheduling-input signature whenever `CANVAS_AUTHORING_ENABLED && canRecalc && plannedStart`
+  // — all three of which hold by the line above. So the two activities and their link recalculate
+  // on their own, and asserting "not yet computed" is a race the test can only win by being faster
+  // than a debounce. CI proved that: it passed on Chromium and failed on firefox and webkit alone,
+  // which is a timing difference and not a browser difference.
+  //
+  // This is the same call already made in `tsld.spec.ts` (its "Recalculate the schedule to plot…"
+  // assertion went for the same reason) — applied there and missed here first time round, which is
+  // the one-control-and-not-its-neighbour shape the register keeps recording.
+  //
+  // Say what is lost rather than let the suite imply otherwise: `awaitComputedSchedule` below can
+  // now be satisfied by the auto-recalc, so this journey no longer proves the button is what
+  // produced the dates. It still proves the button is present, pressable and harmless, and the
+  // critical-path badge and the axe pass below are the substance either way. Nothing available to a
+  // client can distinguish the two recalculations — they are the same request.
   await page.getByRole('button', { name: 'Recalculate' }).click();
 
   // The summary strip and the table now show the computed schedule.
-  await expect(page.getByText('Project finish')).toBeVisible();
+  await awaitComputedSchedule(page, orgSlug);
   await expect(page.getByRole('cell', { name: 'Critical', exact: true }).first()).toBeVisible();
 
   // The computed plan view is accessible.
@@ -102,7 +120,7 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
 
 test('a planner picks the plan calendar and recalculates on it (accessible)', async ({ page }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
 
   // Give the plan a start date so it can be scheduled.
@@ -116,6 +134,13 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   // The plan defaults to the org's seeded Standard (Mon–Fri) calendar. Behind
   // `VITE_LIBRARY_SCOPING` (ADR-0053 §4) this picker is the shared APG combobox, not a native
   // `<select>` — the empty option renders as its label rather than blanking the field.
+  //
+  // It sits in **Schedule settings** on the workspace, not inline on the page: the legacy stacked
+  // layout could afford a settings block beside the table, and the canvas-maximal one collects
+  // "everything that changes how this plan's dates are calculated" behind one Row-2 trigger
+  // (`Settings…`). So the dialog has to be opened before the picker exists.
+  await page.getByRole('button', { name: 'Settings…' }).click();
+  await expect(page.getByRole('dialog', { name: 'Schedule settings' })).toBeVisible();
   const calendar = comboboxField(page, 'Calendar');
   await expect(calendar).toHaveValue('Standard');
 
@@ -123,9 +148,16 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   await chooseComboboxOption(page, 'Calendar', 'None (all days work)');
   await chooseComboboxOption(page, 'Calendar', 'Standard');
 
+  // Close it: it is a modal, so it blocks the activities panel underneath.
+  await page
+    .getByRole('dialog', { name: 'Schedule settings' })
+    .getByRole('button', { name: 'Close dialog' })
+    .click();
+  await expect(page.getByRole('dialog', { name: 'Schedule settings' })).toBeHidden();
+
   await addActivity(page, 'Excavate');
   await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect(page.getByText('Project finish')).toBeVisible();
+  await awaitComputedSchedule(page, orgSlug);
 
   // The plan view with the calendar picker is accessible.
   expect(

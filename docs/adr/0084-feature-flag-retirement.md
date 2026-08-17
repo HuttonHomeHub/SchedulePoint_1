@@ -5,6 +5,11 @@
 **Extends:** ADR-0058 (drift control — what cannot be gated goes to a reconciliation pass; what can,
 becomes a computed gate) and ADR-0076 (a claim that decides something carries its evidence).
 **Amends:** nothing. **Supersedes:** nothing.
+**Superseded in part by [ADR-0088](0088-flag-classification.md): D2, D3, D4a and D4b** — the 30-day
+horizon, the batch queue, the weighting and the cadence. **D1, D5 and D6 stand.** This line exists
+because the header said "Supersedes: nothing" in both directions and carried no superseded-by, so a
+reader landing here first would implement a schedule the gate stopped enforcing, using a weighting
+ADR-0088 D6 measured as inverted.
 
 ## Context — 58 flags, every one of them on
 
@@ -45,6 +50,11 @@ prose does not survive contact with a busy epic.
 
 The date is **when the flag flipped default-on**, not when it was created. That is the moment the
 rollback contract started, and it is the only date that bears on when it should end.
+
+> **D2, D3, D4a and D4b below are SUPERSEDED by [ADR-0088](0088-flag-classification.md).** Flags
+> are classified, not scheduled: a flag retires because it selects a second implementation of a
+> surface, never because a date arrived. The batch dates in `scripts/flag-retirement.json` are
+> vestigial. Read D1, D5 and D6 here; read everything about _when_ a flag retires there.
 
 ### D2 — The horizon is 30 days, and it is measured in releases even though it is written in days
 

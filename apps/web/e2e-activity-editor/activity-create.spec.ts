@@ -7,6 +7,7 @@ import {
   onboard,
   openEditor,
   openProject,
+  showActivities,
 } from './support';
 
 /**
@@ -39,6 +40,7 @@ test.describe('the create dialog and the editor agree', () => {
     await ensurePen(page);
 
     // A phase to nest under, and an activity to nest. Both are ordinary creates.
+    await showActivities(page);
     await page.getByRole('button', { name: 'New activity' }).click();
     const create = page.getByRole('dialog');
     await create.getByLabel('Name').fill('Phase 1');
@@ -85,6 +87,7 @@ test.describe('the create dialog and the editor agree', () => {
     await createAndOpenPlan(page, 'Breakdown');
     await ensurePen(page);
 
+    await showActivities(page);
     await page.getByRole('button', { name: 'New activity' }).click();
     const summary = page.getByRole('dialog');
     await summary.getByLabel('Name').fill('Substructure');
@@ -95,6 +98,7 @@ test.describe('the create dialog and the editor agree', () => {
 
     // **The option's text (D2).** The editor listed a summary by name alone, so two phases sharing
     // a name were indistinguishable; both now carry the code a planner actually refers to.
+    await showActivities(page);
     await page.getByRole('button', { name: 'New activity' }).click();
     const create = page.getByRole('dialog');
     await create.getByLabel('Name').fill('Pour slab');
@@ -145,6 +149,7 @@ test.describe('the create dialog and the editor agree', () => {
     const editorHint = await hintOf('editor');
     await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
 
+    await showActivities(page);
     await page.getByRole('button', { name: 'New activity' }).click();
     const createHint = await hintOf('create');
 

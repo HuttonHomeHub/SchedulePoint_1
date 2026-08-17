@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { awaitComputedSchedule, showActivities } from './workspace';
+
 /**
  * The Time-Scaled Logic Diagram journey (M8, read-only — ADR-0026): a Planner schedules a
  * plan, then sees the Logic diagram section render the computed activities on the Canvas 2D
@@ -45,6 +47,7 @@ async function openNewPlan(page: Page): Promise<void> {
 }
 
 async function addActivity(page: Page, name: string): Promise<void> {
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(name);
   await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
@@ -55,7 +58,7 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
@@ -69,11 +72,24 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
-  await expect(diagram.getByText(/Recalculate the schedule to plot/)).toBeVisible();
+  // **The pre-recalculation assertion is deliberately gone, and the reason is a real behaviour
+  // change rather than a moved control.**
+  //
+  // This asserted TsldPanel's hint line, "Recalculate the schedule to plot…". Two things retired
+  // it. The workspace renders that panel **chromeless** — the toolbar hosts its controls — so the
+  // hint row is absent by design. And the obvious replacement, "the parallel listbox is empty
+  // until the schedule computes", is simply false here: measured, it already holds both
+  // activities. `CANVAS_AUTHORING_ENABLED` is DERIVED from the flag being retired
+  // (`config/env.ts`), so turning the workspace on turns authoring on too — and an authoring
+  // canvas is live from the first activity rather than after the first recalculation (ADR-0032:
+  // render when a timeline anchor exists). There is no longer a "nothing is plotted yet" state to
+  // assert, so nothing is asserted instead of asserting something weaker.
+  //
+  // The post-recalculation checks below are unchanged and carry the weight.
 
   // Recalculate → the canvas renders and the parallel listbox mirrors the activities.
   await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect(page.getByText('Project finish')).toBeVisible();
+  await awaitComputedSchedule(page, orgSlug);
   const listbox = diagram.getByRole('listbox', { name: 'Activities in the diagram' });
   await expect(listbox).toBeAttached();
   await expect(diagram.getByRole('option')).toHaveCount(2);
@@ -106,7 +122,15 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   await expect(page.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeHidden();
 
   // The "Fit to plan" control re-frames the diagram without error.
-  await expect(diagram.getByRole('button', { name: 'Fit to plan' })).toBeVisible();
+  //
+  // It is on the command surface now, not inside the diagram region — the workspace renders
+  // `TsldPanel` chromeless and the toolbar owns the viewport commands (ADR-0091 M7 folded them
+  // into `Zoom ▾`). Located by `[data-toolbar-item]` rather than by copy, because at narrower
+  // bands this item is icon-only by design (`showLabel: { atLeast: 'comfortable' }`) and its
+  // visible text is not something a journey may assume.
+  await expect(
+    page.getByRole('toolbar', { name: 'View and navigate' }).locator('[data-toolbar-item="fit"]'),
+  ).toBeVisible();
 
   // The plan view with the rendered logic diagram is accessible.
   expect(

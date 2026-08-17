@@ -67,7 +67,6 @@ export default defineConfig({
               // the state users will actually see.
               VITE_CANVAS_AUTHORING_FLOW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_CANVAS_WORKSPACE: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
               // Pinned OFF, mirroring the LOE / Gantt / WBS suites: this journey is about the

@@ -198,7 +198,7 @@ export async function activityCount(page: Page, orgSlug: string): Promise<number
  * collapsible bottom panel rather than being the page. Idempotent: expands only if collapsed.
  *
  * This journey needs both surfaces — the table for M4b's bulk assign and the canvas for M4's band —
- * so it runs with `VITE_CANVAS_WORKSPACE: 'true'` and cannot borrow the activity-editor journey's
+ * so it runs on the plan workspace and cannot borrow the activity-editor journey's
  * trick of turning that flag off to get a plain table page.
  */
 export async function openActivitiesPanel(page: Page): Promise<void> {

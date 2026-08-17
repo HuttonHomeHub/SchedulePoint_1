@@ -74,7 +74,6 @@ export default defineConfig({
               // The Gantt is half the claim — the item must be live there, not shaded.
               VITE_GANTT_VIEW: 'true',
               // The toolbar item lives in the TSLD registry, which the canvas workspace hosts.
-              VITE_CANVAS_WORKSPACE: 'true',
               // No pen: this analysis is read-only and is NOT pen-gated. Leaving the lock off keeps
               // the journey about what it is about — a planner reading, not authoring.
               VITE_PLAN_EDIT_LOCK: 'false',

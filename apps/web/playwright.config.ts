@@ -57,17 +57,14 @@ export default defineConfig({
             // journeys stay covered even though both now default ON in the shipped
             // bundle (apps/web/src/config/env.ts, 2026-07-12). The flags-ON editing
             // surface has its own harness, playwright.edit.config.ts (test:e2e:edit).
-            // VITE_CANVAS_WORKSPACE is likewise pinned OFF here so these plan-surface
-            // journeys keep exercising the legacy stacked plan-detail page (the flag-off
-            // fallback). The workspace-ON surface is covered by every other flag-on
-            // harness — 14 of them pin VITE_CANVAS_WORKSPACE: 'true', playwright.toolbar
-            // .config.ts foremost. This comment named playwright.workspace.config.ts
-            // until ADR-0088 D3 deleted it with VITE_CANVAS_TOOLBAR; the coverage moved,
-            // so the pointer had to as well.
+            // It ALSO pinned VITE_CANVAS_WORKSPACE off until ADR-0088 D3 retired that flag, so
+            // these journeys exercised the legacy stacked plan-detail page. Eight of the
+            // seventeen specs here were converted to the surviving workspace when it went; the
+            // other nine never rendered plan-detail content at all and were untouched. The pen
+            // pins above are a SEPARATE question and deliberately stay (TECH_DEBT #121).
             env: {
               VITE_TSLD_EDITING: 'false',
               VITE_PLAN_EDIT_LOCK: 'false',
-              VITE_CANVAS_WORKSPACE: 'false',
             },
           },
         ],

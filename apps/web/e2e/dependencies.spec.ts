@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { showActivities } from './workspace';
+
 /**
  * The Logic panel journey (read): onboard, create a plan with an activity, open
  * the activity's Logic panel from the activities table, and see the (empty)
@@ -45,6 +47,7 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
 
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Excavate');
   await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
@@ -104,6 +107,7 @@ test('a planner adds a dependency, is stopped from making a loop, and removes it
   await page.getByRole('link', { name: 'Baseline' }).click();
 
   for (const name of ['Excavate', 'Pour slab']) {
+    await showActivities(page);
     await page.getByRole('button', { name: 'New activity' }).click();
     await page.getByRole('dialog').getByLabel('Name').fill(name);
     await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();

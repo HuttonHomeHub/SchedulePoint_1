@@ -490,12 +490,30 @@ M6 was to retire `VITE_CANVAS_WORKSPACE`, the estate's last Class A flag, whose
 epic whether or not it acts.
 
 It acts by taking the milestone's **own stated off-ramp**, on a number that did not exist when the
-milestone was scheduled. All seven flag-off harnesses were probed with a bare pin-flip: **all seven
-fail, 27 specs in total** (base 8 of 17, `activity-editor` 11, `edit` 3, `sub-day` 2, and one each
-for `notes`, `programme`, `assignment-lag`). Not one is a configuration edit. Three of them — base,
-`programme`, `notes` — additionally pin the pen off **deliberately** to stay pen-free, so converting
-those must first establish that each journey works pen-free against the surviving workspace, or the
-conversion silently changes what it tests.
+milestone was scheduled. Seven flag-off harnesses pin the flag; **five were probed with a bare
+pin-flip and all five fail** — `edit` 3, `sub-day` 2, and one each for `notes`, `programme`,
+`assignment-lag`: 8 specs. Not one is a configuration edit.
+
+> **Corrected 2026-08-14.** This paragraph said "all seven flag-off harnesses were probed… all seven
+> fail, 27 specs in total". They were not. `m6-harness-conversion.md` §2 marks `activity-editor` and
+> base as `_unprobed_` and closes "**do not infer their result from these five**" — and the missing
+> 19 (base 8 of 17, `activity-editor` 11) are spec counts derived by reading, not probe results.
+> They are the two largest suites, so the headline figure rested mostly on an inference drawn from
+> the very document that forbade it. **ADR-0076 Class 3, in a milestone whose entire purpose was to
+> defer on a measurement rather than on an estimate** — which is what makes it worth keeping rather
+> than silently fixing. The five probes stand; 27 is a reasonable expectation and is not a
+> measurement. Found by an architecture review of the flag-cleanup pass, three weeks later. The same
+> false sentence was live in `scripts/flag-retirement.json`'s deferral reason and is corrected there
+> too — one claim, copied, so the correction had to be as well.
+>
+> **The two missing probes were then run (2026-08-14) and the inference was numerically right:**
+> base fails 8 of 17, `activity-editor` 11 of 11, giving exactly the 27 originally claimed. That is
+> recorded rather than used to walk the correction back. Being right is not the same as having
+> measured, and a correct guess does not retrospectively validate the method — the assertion was
+> unfounded when it was made, which is the whole of the finding. Three of them — base,
+> `programme`, `notes` — additionally pin the pen off **deliberately** to stay pen-free, so converting
+> those must first establish that each journey works pen-free against the surviving workspace, or the
+> conversion silently changes what it tests.
 
 So the trigger is **re-recorded with that measurement** in `scripts/flag-retirement.json` and
 `docs/TECH_DEBT.md` #122, per M6's own rule that _deferring is a decision; ignoring is a defect_. The
