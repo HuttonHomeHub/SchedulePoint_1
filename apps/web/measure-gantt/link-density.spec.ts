@@ -166,6 +166,40 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
   // Report what it actually seeded rather than what it asked for — the `seedActivities` rule.
   expect(seeded.badCount, `seeding rejected ${seeded.badCount}: ${seeded.bad.join('; ')}`).toBe(0);
 
+  // **Recalculate FIRST, then read.** This block used to run AFTER the graph read, and the
+  // consequence was not a slightly-off number: `isCritical` and `totalFloat` are engine-written
+  // columns, so reading them before the engine has run reports every activity as non-critical. The
+  // harness printed `criticalShare: 0` and the shape gate asserting "< 0.9 or this is one queue"
+  // could not fail — a gate that always passes, which is the thing this epic keeps writing down.
+  //
+  // The earlier "100% critical" reading was the same race in the other direction: ADR-0032's
+  // coalesced auto-recalc had fired by then, so that run read a computed plan and this one did not.
+  // Both numbers were reads of a moving target. The fix is to force the recalculation and wait for
+  // it, so the shape assertions are made against a settled schedule.
+  // Recalculate before switching view: the Gantt draws from engine-computed columns, so without
+  // this it renders its "not calculated" state and there is no grid to read an order from. The
+  // journey helper's own flow does this; seeding alone does not.
+  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          async ({ org, id }: { org: string; id: string }) => {
+            const res = await fetch(
+              `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+              { credentials: 'include' },
+            );
+            if (!res.ok) return 0;
+            return ((await res.json()) as { data: { earlyFinish: string | null }[] }).data.filter(
+              (a) => a.earlyFinish !== null,
+            ).length;
+          },
+          { org: orgSlug, id: planId },
+        ),
+      { message: 'the recalculation never produced computed dates', timeout: 60_000 },
+    )
+    .toBeGreaterThan(0);
+
   // Read the graph from the API rather than the DOM: a link's row span is a property of the plan and
   // the current order, not of what happens to be painted.
   const graph = await page.evaluate(
@@ -232,30 +266,6 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
     `${(criticalShare * 100).toFixed(0)}% critical — this looks like one queue`,
   ).toBeLessThan(0.9);
   expect(linksPerActivity, 'a plan with almost no logic measures nothing').toBeGreaterThan(0.3);
-
-  // Recalculate before switching view: the Gantt draws from engine-computed columns, so without
-  // this it renders its "not calculated" state and there is no grid to read an order from. The
-  // journey helper's own flow does this; seeding alone does not.
-  await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(
-          async ({ org, id }: { org: string; id: string }) => {
-            const res = await fetch(
-              `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
-              { credentials: 'include' },
-            );
-            if (!res.ok) return 0;
-            return ((await res.json()) as { data: { earlyFinish: string | null }[] }).data.filter(
-              (a) => a.earlyFinish !== null,
-            ).length;
-          },
-          { org: orgSlug, id: planId },
-        ),
-      { message: 'the recalculation never produced computed dates', timeout: 60_000 },
-    )
-    .toBeGreaterThan(0);
 
   await showGantt(page);
 
