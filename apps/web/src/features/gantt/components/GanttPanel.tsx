@@ -709,6 +709,13 @@ function GanttRowView({
     <div
       ref={registerRef}
       role="row"
+      // The row's subject, in the DOM. Added for the M0-T1 density harness, which needs the ORDER
+      // the grid is currently presenting — that changes with the sort, which is shipped
+      // (`:278-284`), and cannot be recovered from the API without duplicating the row model's own
+      // ordering. Not harness-only scaffolding: M1's journey locators need a stable handle on a row
+      // too, and `[data-toolbar-item]` is the precedent — ADR-0091 records three journeys breaking
+      // because they located controls by their copy instead.
+      data-activity-id={activity.id}
       // Header occupies row 1, so data rows are 1-based from 2 — and the index is the row's
       // position in the FULL set, not the rendered window, which is what makes virtualization
       // invisible to assistive technology.
