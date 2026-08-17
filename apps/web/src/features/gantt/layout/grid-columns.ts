@@ -2,6 +2,7 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 
 import type { GanttSortKey } from './row-model';
 
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -18,8 +19,17 @@ export interface GanttColumn {
   key: GanttSortKey;
   label: string;
   align?: 'right';
-  /** The cell's text for an activity — also the accessible content, never derived from the bar. */
-  value: (activity: ActivitySummary) => string;
+  /**
+   * The cell's text for an activity — also the accessible content, never derived from the bar.
+   *
+   * `source` is the same {@link BarDateSource} the bars are drawn from (ADR-0033), defaulting to
+   * `early` so every EARLY-mode plan and every existing caller is unchanged. It is a **parameter
+   * rather than a second date lookup** because the cells are the accessible carrier: this docblock
+   * has always said the bar is decorative reinforcement, and until 2026-08-17 a VISUAL plan's Start
+   * cell printed January beside a bar drawn in February — the contradiction visible on one screen
+   * (`docs/TECH_DEBT.md` #135).
+   */
+  value: (activity: ActivitySummary, source?: BarDateSource) => string;
 }
 
 /**
@@ -34,12 +44,18 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
   {
     key: 'earlyStart',
     label: 'Start',
-    value: (a) => (a.earlyStart === null ? '—' : formatCalendarDate(a.earlyStart)),
+    value: (a, source) => {
+      const { start } = barDatesFor(a, source);
+      return start === null ? '—' : formatCalendarDate(start);
+    },
   },
   {
     key: 'earlyFinish',
     label: 'Finish',
-    value: (a) => (a.earlyFinish === null ? '—' : formatCalendarDate(a.earlyFinish)),
+    value: (a, source) => {
+      const { finish } = barDatesFor(a, source);
+      return finish === null ? '—' : formatCalendarDate(finish);
+    },
   },
   {
     key: 'totalFloat',

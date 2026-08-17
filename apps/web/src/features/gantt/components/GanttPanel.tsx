@@ -193,10 +193,18 @@ export function GanttPanel({
     // The derived Unassigned bucket (WBS improvements M3). `buildRows` additionally requires at
     // least one real summary before it emits the bucket — heading a flat plan "Unassigned" would
     // invent a hierarchy it does not have.
-    () => buildRows(activities, sort, collapsed, { unassignedBucket: WBS_IMPROVEMENTS_ENABLED }),
-    [activities, sort, collapsed],
+    () =>
+      buildRows(activities, sort, collapsed, {
+        unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+        // The bucket's span follows the drawn dates. `buildRows` had accepted this option since the
+        // WBS band shipped and this caller never passed it, so the one row summarising the plan's
+        // unfiled work was framed on the early dates in a VISUAL plan while its members' bars sat
+        // elsewhere — plumbing that existed and was not connected.
+        barDateSource,
+      }),
+    [activities, sort, collapsed, barDateSource],
   );
-  const span = useMemo(() => rowsDateSpan(rows), [rows]);
+  const span = useMemo(() => rowsDateSpan(rows, barDateSource), [rows, barDateSource]);
   const anchor = span === null ? null : chartAnchor(span);
   const chartPx = span === null ? 0 : chartWidth(span, pxPerDay);
 
@@ -791,7 +799,7 @@ function GanttRowView({
               </button>
             ) : null}
             <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
-              {column.value(activity)}
+              {column.value(activity, barDateSource)}
             </span>
             {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
                 emphasis alone is precisely the WCAG 1.4.1 defect ADR-0055 exists about. Rendered

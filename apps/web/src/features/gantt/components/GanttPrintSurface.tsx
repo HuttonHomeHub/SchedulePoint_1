@@ -94,8 +94,9 @@ export function GanttPrintSurface({
   // the collapse set is empty here, so every member prints under it.
   const rows = buildRows(activities, DEFAULT_GANTT_SORT, new Set(), {
     unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+    barDateSource,
   });
-  const span = rowsDateSpan(rows);
+  const span = rowsDateSpan(rows, barDateSource);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   const gridWidth =
@@ -236,7 +237,7 @@ function PrintRow({
           style={i === 0 ? { paddingLeft: 4 + depth * 10 } : undefined}
         >
           <span className={activity.type === 'WBS_SUMMARY' ? 'gantt-print-summary' : undefined}>
-            {column.value(activity)}
+            {column.value(activity, barDateSource)}
           </span>
         </td>
       ))}
