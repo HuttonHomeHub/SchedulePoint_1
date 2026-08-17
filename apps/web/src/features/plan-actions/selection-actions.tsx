@@ -16,10 +16,6 @@ import {
 } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
 
-import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
-import type { ConflictKey } from '@/features/tsld/render/conflicts';
-import type { LogicPathMode } from '@/features/tsld/render/logic-path';
-
 import { CONFLICT_REMEDIES } from './conflict-remedy';
 
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
@@ -45,6 +41,9 @@ import {
   TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
+import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
+import type { ConflictKey } from '@/features/tsld/render/conflicts';
+import type { LogicPathMode } from '@/features/tsld/render/logic-path';
 import { cn } from '@/lib/utils';
 
 /**
