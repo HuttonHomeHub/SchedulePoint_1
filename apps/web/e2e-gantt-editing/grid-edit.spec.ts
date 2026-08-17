@@ -239,25 +239,28 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
   // Focus a row the way a keyboard planner does, then enter cell mode. The unit suite proves F2
   // calls `begin`; only a browser proves the row is focusable, the handler is bound to something
   // that actually receives the key, and the field ends up focused.
-  // Wait for the row to actually HOLD focus before pressing F2, and **re-click if it does not**.
-  // F2 goes to whatever is focused, so a click that has not settled sends it to the document.
+  // Establish that focus is INSIDE the row before pressing F2 — F2 goes to whatever is focused, so
+  // a click that has not settled sends it to the document.
   //
-  // Waiting alone was the first fix and is not enough: on the failing run the locator resolved to
-  // the right row — `aria-selected="true"`, `tabindex="0"` — and that row was simply not the
-  // active element, fourteen polls in a row. So the click DID land and select; something rendered
-  // over the top of it and took focus with it, which a settle-wait can never recover because the
-  // element that would have been focused no longer exists. This lands right after a recalculation,
-  // where a refetch re-renders the grid, and the panel deliberately does not restore focus on a
-  // background refetch (`GanttPanel.tsx:352-359`) — that rule exists so a refetch cannot yank
-  // focus back out of wherever the planner has moved to.
+  // Not `toBeFocused()` on the row itself, which is what this asserted first and is wrong for a
+  // reason worth writing down: Playwright clicks an element's CENTRE, and the row's centre is a
+  // cell. The page snapshot on the failing run named it — `gridcell "5 d" [active]`, the Duration
+  // column M2 added — with the row correctly `aria-selected="true"` beside it. So the gesture had
+  // worked and the assertion was describing a different element; a settle-wait and then a retry
+  // both failed against perfectly correct behaviour, which is the ADR-0076 shape in a test.
   //
-  // Retrying the gesture is what a planner does, and it still fails if the row can NEVER hold
-  // focus, so a real regression is not masked.
+  // A cell taking focus is right for a grid, and F2 still reaches the handler because the keydown
+  // bubbles. What must be true before pressing it is only that focus is somewhere in this row.
   const row = ganttRow(page, 'Seeded 0');
-  await expect(async () => {
-    await row.click();
-    await expect(row).toBeFocused({ timeout: 1_000 });
-  }).toPass({ timeout: 30_000 });
+  await row.click();
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+  await expect
+    .poll(
+      async () =>
+        row.evaluate((el) => el === document.activeElement || el.contains(document.activeElement)),
+      { timeout: 10_000 },
+    )
+    .toBe(true);
   await page.keyboard.press('F2');
 
   const field = page.getByRole('textbox', { name: /Activity, Seeded 0/ });
