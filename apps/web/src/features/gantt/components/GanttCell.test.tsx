@@ -70,6 +70,18 @@ describe('a cell that is shut', () => {
     );
   });
 
+  it('gives a SIGHTED planner the reason too, not only a screen-reader one', () => {
+    // The mirror of ADR-0082's defect. "A summary rolls this up from the activities inside it" is
+    // not deducible from a dimmed fill, and dimming plus silence reads as breakage.
+    renderCell({ gate: shut });
+    expect(screen.getByRole('gridcell')).toHaveAttribute('title', 'Start editing to change this.');
+  });
+
+  it('carries no title when it is writable, so a live cell has no phantom tooltip', () => {
+    renderCell();
+    expect(screen.getByRole('gridcell')).not.toHaveAttribute('title');
+  });
+
   it('does not open on double-click', () => {
     const onBegin = vi.fn();
     renderCell({ gate: shut, onBegin });
@@ -163,6 +175,39 @@ describe('a cell that is open', () => {
     // ADR-0079's rule — an Escape typed into a field belongs to that field — applied to a cell.
     expect(onRowKeyDown).not.toHaveBeenCalled();
   });
+
+  it.each(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'])(
+    'keeps %s inside the field, so the grid cannot move focus off an unsaved edit',
+    (key) => {
+      // The M6 accessibility gate's first finding, and a DATA-LOSS path: the grid's handler runs on
+      // the bubbled event, so ArrowUp moved focus to another row while the reducer still held this
+      // cell as `editing` — orphaning the typed text with no announcement, after which F2 on the
+      // new row overwrote it silently.
+      const onRowKeyDown = vi.fn();
+      render(
+        <div role="treegrid">
+          <div role="row" tabIndex={-1} onKeyDown={onRowKeyDown}>
+            <GanttCell
+              value="5 d"
+              label="Duration, Foundations"
+              colIndex={3}
+              width={84}
+              gate={open}
+              editing
+              text="4h"
+              onBegin={noop}
+              onChange={noop}
+              onCommit={noop}
+              onCancel={noop}
+            />
+          </div>
+        </div>,
+      );
+
+      fireEvent.keyDown(screen.getByRole('textbox'), { key });
+      expect(onRowKeyDown).not.toHaveBeenCalled();
+    },
+  );
 
   it('stops accepting input while the write is in flight, without disabling the field', () => {
     const onChange = vi.fn();

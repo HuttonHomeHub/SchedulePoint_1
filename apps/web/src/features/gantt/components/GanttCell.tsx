@@ -117,6 +117,13 @@ export function GanttCell({
       // `aria-disabled`, which announces the cell as inoperable and is how a value a planner still
       // needs to READ gets treated as decoration.
       aria-readonly={gate.readOnly ? true : undefined}
+      // **A sighted planner gets the reason too.** It was `sr-only` alone until the M6 ux gate,
+      // which is the mirror of the defect ADR-0082 was written about: a reason nobody can reach.
+      // "A summary rolls this up from the activities inside it" is not deducible from a dimmed
+      // fill, and the two precedents in this tree disagreed with the omission — `ToolbarButton`
+      // gives a shaded control a native `title`, and the `View ▾` lens toggles render the reason
+      // visibly, with a comment saying a sighted planner needs it as much as a screen-reader one.
+      {...(gate.readOnly && gate.reason !== null ? { title: gate.reason } : {})}
       {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
       className={cn(
         'shrink-0 truncate px-2 text-xs',
@@ -167,6 +174,29 @@ export function GanttCell({
             if (event.key === 'Tab') {
               // Commit and let focus move — a spreadsheet's Tab saves, it does not discard.
               onCommit();
+              return;
+            }
+            // **Every other navigation key belongs to the field while the field is open.**
+            //
+            // This was the M6 accessibility gate's first finding and it is a DATA-LOSS path, not a
+            // nicety. The grid's own handler runs unconditionally on the bubbled event, so an
+            // ArrowLeft meant to move the caret toggled the row's disclosure AND had its default
+            // cancelled — and an ArrowUp moved real focus to another row while the reducer still
+            // held this cell as `editing`, orphaning the typed text with no announcement. F2 on the
+            // new row then overwrote it silently.
+            //
+            // `stopPropagation` only: the field's own default behaviour (caret movement, selection)
+            // is exactly what should happen, so `preventDefault` would trade one broken key for
+            // another. Same rule as Enter and Escape above — ADR-0079's "a key typed into a field
+            // belongs to that field", which this component applied to two keys and not to six.
+            if (
+              event.key.startsWith('Arrow') ||
+              event.key === 'Home' ||
+              event.key === 'End' ||
+              event.key === 'PageUp' ||
+              event.key === 'PageDown'
+            ) {
+              event.stopPropagation();
             }
           }}
           onBlur={onCancel}

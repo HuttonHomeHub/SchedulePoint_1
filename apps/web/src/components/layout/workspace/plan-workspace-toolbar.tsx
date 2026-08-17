@@ -237,6 +237,39 @@ export function ToolbarPlanWorkspace({
   // toolbar-context builder means the six spec files that render that builder standalone need no
   // router of their own.
   const [planView, setPlanView] = usePlanViewMode();
+  // Hoisted above the toolbar context because the PRINT path needs both, and re-deriving them
+  // there would be the second derivation `host-parity.structural.test.ts` exists to prevent —
+  // on the one artefact where a disagreement is least visible and most costly.
+  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
+
+  const barDateSource = SCHEDULING_MODES_ENABLED
+    ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
+    : 'early';
+
+  /**
+   * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in
+   * `GanttPanel`.
+   *
+   * That panel has never known what a calendar is, and handing it the list so it could `.find()` per
+   * row would make a display component a consumer of the calendar query — ADR-0089 D2b's rule for a
+   * cross-scope fact is that the host resolves it and passes a plain value.
+   *
+   * One derivation, deliberately, even though only one host consumes it today: the canvas needs the
+   * same factor the moment M3's drag parses a typed duration, and two spellings of "how long is a
+   * day here" would disagree about what `4h` means in two views of one plan — `barDateSource` one
+   * field along. `host-parity.structural.test.ts` names this as its next candidate row and cannot
+   * express it yet, because its `pending` rule asserts a fact reaching the Gantt has also reached
+   * the canvas, and this one legitimately has not.
+   */
+  const hoursPerDayFor = useCallback(
+    (activity: ActivitySummary): number | undefined =>
+      effectiveHoursPerDay(model.calendars.data ?? [], {
+        activityCalendarId: activity.calendarId ?? '',
+        ...(plan.calendarId == null ? {} : { planCalendarId: plan.calendarId }),
+      }),
+    [model.calendars.data, plan.calendarId],
+  );
+
   const ctx = useTsldToolbarContext({
     model,
     plan,
@@ -247,6 +280,8 @@ export function ToolbarPlanWorkspace({
     toggleFloatPaths,
     planView,
     setPlanView,
+    barDateSource,
+    hoursPerDayFor,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
@@ -429,8 +464,6 @@ export function ToolbarPlanWorkspace({
     ],
   );
 
-  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
-
   /**
    * May this reader change the schedule right now — role and pen fused (ADR-0060), minus the
    * Late-start overlay, which is read-only analysis (ADR-0033 M4).
@@ -472,33 +505,6 @@ export function ToolbarPlanWorkspace({
   // gave about its sibling `canEdit`: two copies of a host-shared value drift, and a drift between
   // two views of one plan is invisible from either view alone. Pinned by
   // `gantt-canvas-bar-dates.test.tsx`, which asserts both hosts receive the identical value.
-  const barDateSource = SCHEDULING_MODES_ENABLED
-    ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
-    : 'early';
-
-  /**
-   * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in
-   * `GanttPanel`.
-   *
-   * That panel has never known what a calendar is, and handing it the list so it could `.find()` per
-   * row would make a display component a consumer of the calendar query — ADR-0089 D2b's rule for a
-   * cross-scope fact is that the host resolves it and passes a plain value.
-   *
-   * One derivation, deliberately, even though only one host consumes it today: the canvas needs the
-   * same factor the moment M3's drag parses a typed duration, and two spellings of "how long is a
-   * day here" would disagree about what `4h` means in two views of one plan — `barDateSource` one
-   * field along. `host-parity.structural.test.ts` names this as its next candidate row and cannot
-   * express it yet, because its `pending` rule asserts a fact reaching the Gantt has also reached
-   * the canvas, and this one legitimately has not.
-   */
-  const hoursPerDayFor = useCallback(
-    (activity: ActivitySummary): number | undefined =>
-      effectiveHoursPerDay(model.calendars.data ?? [], {
-        activityCalendarId: activity.calendarId ?? '',
-        ...(plan.calendarId == null ? {} : { planCalendarId: plan.calendarId }),
-      }),
-    [model.calendars.data, plan.calendarId],
-  );
 
   // The partial PATCH (ADR-0060 §4), not the whole-definition one — a cell writes a slice.
   const updateActivityFields = useUpdateActivityFields(model.orgSlug, model.planId);
@@ -523,6 +529,13 @@ export function ToolbarPlanWorkspace({
     barDateSource,
     hoursPerDayFor,
     updateFields: updateActivityFields.mutateAsync,
+    announce: ganttAnnounce,
+    // Focus returns to the row the cell closed on (WCAG 2.4.3). The panel exposes no row handle, so
+    // this asks the grid to restore its own roving stop — the smallest seam that keeps focus inside
+    // the widget rather than dropping it to `<body>`.
+    onCellClosed: () => {
+      document.querySelector<HTMLElement>('[role="treegrid"] [role="row"][tabindex="0"]')?.focus();
+    },
     recordUpdate: model.recordActivityUpdate,
   });
 
@@ -729,10 +742,16 @@ export function ToolbarPlanWorkspace({
    * lines above — so this is a second CALL, never a second assembly. Two hosts each assembling the
    * object's context is the defect this epic found twice already at one layer up.
    */
-  // Not wrapped in `useMemo`: passing `model` wholesale as a dependency made the React Compiler
-  // report "Existing memoization could not be preserved" — a manual memo it cannot verify is worse
-  // than none, because it opts the whole component out of compilation. Building the object each
+  // Not wrapped in `useMemo`: passing `model` wholesale as a dependency made the React Compiler's
+  // lint analysis report "Existing memoization could not be preserved". Building the object each
   // render is a handful of closures over values the host already holds.
+  //
+  // The reason is narrower than this comment first claimed, and the M6 performance gate was right
+  // about that half: `babel-plugin-react-compiler` is **not** wired into `vite.config.ts`, so there
+  // is no build-time compilation for a manual memo to opt out of. What runs is the analysis inside
+  // `eslint-plugin-react-hooks` v7. The memo would also buy nothing today for a second reason
+  // measured there — nothing downstream is `React.memo`'d, so a stable reference has no comparison
+  // to pass.
   const ganttSelectionInput: SelectionContextInput = {
     // The whole of the difference. The two canvas-only items (zoom-to-selection, isolate) gate
     // on `canvas !== null` and therefore do not render here — absent rather than shaded, because

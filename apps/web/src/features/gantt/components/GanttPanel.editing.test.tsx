@@ -74,6 +74,7 @@ function editingBundle(over: Partial<GanttGridEditing> = {}): GanttGridEditing {
     commit: vi.fn(),
     cancel: vi.fn(),
     errorMessage: null,
+    onCellClosed: vi.fn(),
     ...over,
   };
 }

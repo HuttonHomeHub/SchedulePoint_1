@@ -137,13 +137,36 @@ export function ganttLinkPaths({
  */
 export function predecessorSummary(
   activityId: string,
-  dependencies: readonly DependencySummary[],
+  predecessorsById: ReadonlyMap<string, readonly string[]>,
 ): string | null {
-  const names = dependencies
-    .filter((d) => d.successor.id === activityId)
-    .map((d) => d.predecessor.name)
-    .filter((name): name is string => typeof name === 'string' && name.length > 0);
-
-  if (names.length === 0) return null;
+  const names = predecessorsById.get(activityId);
+  if (names === undefined || names.length === 0) return null;
   return `Follows ${names.join(', ')}.`;
+}
+
+/**
+ * Predecessor names keyed by successor id — built ONCE per dependency set.
+ *
+ * It took the whole dependency array and filtered it **per row** until the M6 performance gate
+ * measured the consequence: 40 mounted rows × 3,200 dependencies is 128,000 comparisons per full
+ * render, and because the edit state lives above the panel with no memo boundary, that ran again on
+ * **every keystroke** — for a predecessor list that had not changed for 39 of the 40 rows.
+ *
+ * The pattern was already in the same file: `rowIndexById` solves exactly this "which row is this
+ * id" problem with a `useMemo`'d `Map`, three hundred lines above the call site that did not use
+ * it. One correct pattern applied to one lookup and not its neighbour, which is the shape this
+ * register keeps recording — here caught by measurement rather than by reading.
+ */
+export function predecessorNamesBySuccessor(
+  dependencies: readonly DependencySummary[],
+): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const dependency of dependencies) {
+    const name = dependency.predecessor.name;
+    if (typeof name !== 'string' || name.length === 0) continue;
+    const existing = map.get(dependency.successor.id);
+    if (existing) existing.push(name);
+    else map.set(dependency.successor.id, [name]);
+  }
+  return map;
 }

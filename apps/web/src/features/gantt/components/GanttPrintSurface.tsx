@@ -293,6 +293,19 @@ export interface PrintGanttInput {
   subtitle: string;
   activities: readonly ActivitySummary[];
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow> | undefined;
+  /**
+   * Which persisted dates the bars are drawn from (ADR-0033).
+   *
+   * **This was the half TECH_DEBT #135's fix missed.** `GanttPrintSurface` gained the prop and this
+   * input type did not, so the only production caller could not pass it and never did — the props
+   * were threaded and dead, while the commit that added them cited the printed programme as the
+   * reason ("nobody in a progress meeting can check it against the diagram"). Found by the M6
+   * test-engineering gate; an ADR-0076 Class 3 claim in my own commit message, which said the
+   * source was threaded through the print surface when only its signature was.
+   */
+  barDateSource?: BarDateSource | undefined;
+  /** The Duration column's per-activity day factor (ADR-0068), for the same reason. */
+  hoursPerDayFor?: ((activity: ActivitySummary) => number | undefined) | undefined;
 }
 
 /**
@@ -307,6 +320,8 @@ export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDe
       subtitle={input.subtitle}
       activities={input.activities}
       {...(input.varianceByActivityId ? { varianceByActivityId: input.varianceByActivityId } : {})}
+      {...(input.barDateSource ? { barDateSource: input.barDateSource } : {})}
+      {...(input.hoursPerDayFor ? { hoursPerDayFor: input.hoursPerDayFor } : {})}
     />,
     deps,
   );

@@ -1,7 +1,7 @@
 import type { DependencySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { ganttLinkPaths, predecessorSummary } from './link-paths';
+import { ganttLinkPaths, predecessorNamesBySuccessor, predecessorSummary } from './link-paths';
 
 /**
  * **M4-T1 — which links are drawn, and what is said about the ones that are not.**
@@ -140,14 +140,19 @@ describe('the textual equivalent', () => {
   it('names the predecessors rather than counting them', () => {
     // "2 predecessors" says there is something to look for and not what it is; the whole question a
     // planner asks of a link is WHICH activity.
-    expect(predecessorSummary('c', [link('1', 'a', 'c'), link('2', 'b', 'c')])).toBe(
-      'Follows A, B.',
-    );
+    // Through the real index builder, so the two halves are tested together — a hand-built Map here
+    // would let the builder and the reader disagree about a shape only they share.
+    expect(
+      predecessorSummary(
+        'c',
+        predecessorNamesBySuccessor([link('1', 'a', 'c'), link('2', 'b', 'c')]),
+      ),
+    ).toBe('Follows A, B.');
   });
 
   it('says nothing at all for a row with no predecessors', () => {
     // Not "Follows nothing" — an empty sentence on every unconstrained row is noise in the one
     // channel a screen-reader user has.
-    expect(predecessorSummary('a', [link('1', 'a', 'b')])).toBeNull();
+    expect(predecessorSummary('a', predecessorNamesBySuccessor([link('1', 'a', 'b')]))).toBeNull();
   });
 });

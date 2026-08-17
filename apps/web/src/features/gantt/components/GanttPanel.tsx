@@ -12,7 +12,11 @@ import {
 } from '../layout/bar-geometry';
 import { dateAtChartX, durationDaysForFinishAtX, startDayAtChartX } from '../layout/drag-day';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
-import { ganttLinkPaths, predecessorSummary } from '../layout/link-paths';
+import {
+  ganttLinkPaths,
+  predecessorNamesBySuccessor,
+  predecessorSummary,
+} from '../layout/link-paths';
 import {
   DEFAULT_GANTT_SORT,
   buildRows,
@@ -318,6 +322,11 @@ export function GanttPanel({
     });
     return map;
   }, [rows]);
+  // Built once per dependency set, not per row. See `predecessorNamesBySuccessor`.
+  const predecessorsById = useMemo(
+    () => predecessorNamesBySuccessor(dependencies ?? []),
+    [dependencies],
+  );
   const linkSet = useMemo(
     () =>
       ganttLinkPaths({
@@ -380,7 +389,26 @@ export function GanttPanel({
   // a one-shot token: it is passed for as long as a path is selected, so "re-runs" means "every
   // time anything in the plan changes". Found by the performance gate.
   const activitiesRef = useRef(activities);
-  activitiesRef.current = activities;
+  // Synced in an EFFECT, never during render.
+  //
+  // It was `activitiesRef.current = activities` in the render body, which React forbids, and
+  // `pnpm lint` did not catch it. `eslint-plugin-react-hooks` v7 carries the React Compiler's
+  // analysis as lint rules — that is where `react-hooks/refs` comes from — but this component also
+  // calls `useVirtualizer`, which the same analysis reports as an **incompatible library** and then
+  // bails out of the WHOLE component for (the `Compilation Skipped` warning `pnpm lint` prints for
+  // this file, every run). The M6 component gate reproduced that blind spot in an isolated
+  // component rather than asserting it. So the rule that caught the identical pattern in
+  // `use-gantt-grid-editing.ts` gave no protection here: the same defect, in the same diff, in the
+  // one file the tool cannot see.
+  //
+  // Worth being precise, because the M6 performance gate over-read this in the other direction and
+  // reported the compiler as "not running at all": `babel-plugin-react-compiler` is indeed **not**
+  // wired into `vite.config.ts`, so nothing is auto-memoized in the shipped bundle — but the
+  // analysis does run, in the linter, and it is what refused this write.
+  // The idiom is `TsldPanel.tsx:813-816`'s — a deps-free effect.
+  useEffect(() => {
+    activitiesRef.current = activities;
+  });
   useEffect(() => {
     if (bringIntoViewActivityId === undefined) return;
     if (emphasisRowIndex >= 0) {
@@ -458,6 +486,35 @@ export function GanttPanel({
     return true;
   };
 
+  /**
+   * Lengthen or shorten the focused activity by `deltaDays`, or say why it cannot change.
+   *
+   * The keyboard half of the finish-edge drag. Refuses below one day for the reason the pointer
+   * path does: a zero-duration activity IS a milestone, and a keystroke must not be able to change
+   * an activity's type.
+   */
+  const resizeBar = (row: GanttRow, deltaDays: number): boolean => {
+    if (drag === undefined || row.kind !== 'activity') return false;
+    const activity = row.activity;
+    const gate = barMoveGate(activity, drag);
+    if (!gate.movable) {
+      if (gate.reason !== null) drag.announce(gate.reason);
+      return true;
+    }
+    if (activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE') {
+      drag.announce('A milestone marks a moment, so it has no duration.');
+      return true;
+    }
+    const next = Math.max(1, activity.durationDays + deltaDays);
+    if (next === activity.durationDays) {
+      drag.announce(`${activity.name} is already one day long.`);
+      return true;
+    }
+    drag.resizeTo(activity.id, next);
+    drag.announce(resizeAnnouncement(activity.name, next));
+    return true;
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const index = tabStopIndex;
     const row = rows[index];
@@ -490,6 +547,19 @@ export function GanttPanel({
         // 2.1.1 failure; matching the canvas verbatim means a planner learns one chord, not two.
         if (event.altKey) {
           if (nudgeBar(row, event.key === 'ArrowRight' ? NUDGE_DAYS : -NUDGE_DAYS)) {
+            event.preventDefault();
+          }
+          break;
+        }
+        // **Shift+←/→ changes the duration** — ADR-0052's chord, matching the canvas.
+        //
+        // This was MISSING until the M6 ux gate, while a comment beside the pointer handle claimed
+        // it existed and called that handle "an additional affordance rather than the only one".
+        // It was the only one: resizing was pointer-only, a WCAG 2.1.1 gap, with the docblock
+        // actively telling the next reader it was not. ADR-0076 Class 3 — a decision-bearing claim
+        // asserted and never checked — inside an epic that had already fixed two of its own.
+        if (event.shiftKey) {
+          if (resizeBar(row, event.key === 'ArrowRight' ? NUDGE_DAYS : -NUDGE_DAYS)) {
             event.preventDefault();
           }
           break;
@@ -744,6 +814,7 @@ export function GanttPanel({
               editing,
               drag,
               dependencies,
+              predecessorsById,
               rowMenuContextFor,
               gridWidth,
               showVariance,
@@ -934,6 +1005,7 @@ interface GanttRowViewProps {
   editing: GanttGridEditing | undefined;
   drag: GanttBarDrag | undefined;
   dependencies: readonly DependencySummary[] | undefined;
+  predecessorsById: ReadonlyMap<string, readonly string[]>;
   rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
@@ -960,6 +1032,7 @@ function GanttRowView({
   editing,
   drag,
   dependencies,
+  predecessorsById,
   rowMenuContextFor,
   gridWidth,
   variance,
@@ -975,8 +1048,12 @@ function GanttRowView({
   const { activity, depth, hasChildren, expanded } = row;
   const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
   const linkSummary =
-    dependencies === undefined ? null : predecessorSummary(activity.id, dependencies);
-  const rowMenuContext = rowMenuContextFor?.(activity) ?? null;
+    dependencies === undefined ? null : predecessorSummary(activity.id, predecessorsById);
+  // A THUNK, not a built object. `buildSelectionBarContext` scans the whole plan, and this runs per
+  // mounted row — measured at 40 calls per keystroke on a 2,000-activity plan (M6 performance gate).
+  // The menu builds it when it opens, which removes the cost from the render path rather than
+  // reducing it.
+  const rowMenuContext = rowMenuContextFor ?? null;
 
   // The pointer gesture. `movable` is the object's answer AND the reader's, resolved by the same
   // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
@@ -1206,7 +1283,7 @@ function GanttRowView({
             action literally, closing the hole ADR-0094 recorded when it noted the gate compares two
             registries and cannot see a third. */}
         {rowMenuContext === null ? null : (
-          <GanttRowMenu context={rowMenuContext} activityName={activity.name} />
+          <GanttRowMenu context={() => rowMenuContext(activity)} activityName={activity.name} />
         )}
         {showVariance ? (
           <div

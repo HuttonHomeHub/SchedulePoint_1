@@ -1,5 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 
 import { commitCell, type UpdateActivityFieldsFn } from './cell-commit';
 import {
@@ -36,6 +36,8 @@ export function useGanttGridEditing({
   barDateSource,
   hoursPerDayFor,
   updateFields,
+  announce,
+  onCellClosed,
   recordUpdate,
 }: {
   activities: readonly ActivitySummary[];
@@ -45,6 +47,10 @@ export function useGanttGridEditing({
   barDateSource: BarDateSource | undefined;
   hoursPerDayFor: (activity: ActivitySummary) => number | undefined;
   updateFields: UpdateActivityFieldsFn;
+  /** The shared polite live region. A committed write that says nothing is invisible to AT. */
+  announce: (message: string) => void;
+  /** Restore focus to the row a cell just closed on (WCAG 2.4.3). */
+  onCellClosed: () => void;
   /** ADR-0048. A no-op when `VITE_UNDO_REDO` is off, so this needs no flag of its own. */
   recordUpdate: (before: ActivitySummary, after: ActivitySummary) => void;
 }): GanttGridEditing {
@@ -55,9 +61,16 @@ export function useGanttGridEditing({
   // keep `commit` stable across renders — a habit borrowed from the canvas, where a new function per
   // frame really does cost something. Here it bought nothing and cost a rule: React reconciles a
   // child by position, not by prop identity, so a fresh `commit` does not remount the input or drop
-  // its caret. The React Compiler was right to refuse the render-phase ref writes, and the fix was
-  // to delete the reason for them rather than to suppress it.
-  const find = (id: string): ActivitySummary | undefined => activities.find((a) => a.id === id);
+  // its caret. `eslint-plugin-react-hooks` v7 (which carries the React Compiler's analysis in the
+  // linter, whether or not the babel plugin is wired into the build — it is not) refused the
+  // render-phase ref writes, and the fix was to delete the reason for them rather than suppress it.
+  //
+  // The lookup is a **Map**, not a scan. `gateFor` is called once per EDITABLE COLUMN per rendered
+  // row, so on a 40-row window that is 160 calls, each of which was an `activities.find` over the
+  // whole plan — measured by the M6 performance gate at up to 320,000 comparisons per render, and
+  // repeated on every keystroke because the edit state lives above the panel.
+  const byId = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
+  const find = (id: string): ActivitySummary | undefined => byId.get(id);
 
   // Not memoized, for the same reason `commit` is not: it closes over `activities`, so a dependency
   // array that omitted them would go stale and one that included them would rebuild every
@@ -85,7 +98,8 @@ export function useGanttGridEditing({
   const cancel = useCallback(() => {
     setErrorMessage(null);
     dispatch({ type: 'cancel' });
-  }, []);
+    onCellClosed();
+  }, [onCellClosed]);
 
   const commit = async (): Promise<void> => {
     const current = state;
@@ -97,6 +111,7 @@ export function useGanttGridEditing({
     // and an undo entry on a cell the planner merely tabbed through.
     if (current.text === current.seed) {
       dispatch({ type: 'cancel' });
+      onCellClosed();
       return;
     }
 
@@ -115,11 +130,20 @@ export function useGanttGridEditing({
       // PATCHes a definition that really existed.
       recordUpdate(before, result.activity);
       dispatch({ type: 'resolved' });
+      // Announced AND focus-restored. A commit that neither speaks nor moves focus is functionally
+      // invisible to a screen-reader user even though it succeeded (WCAG 4.1.3) — `ganttDrag` had
+      // announced every move since M3 and this had announced nothing, which is one correct pattern
+      // applied to a control and not its neighbour, found by the M6 accessibility gate.
+      announce(`${before.name} updated.`);
+      onCellClosed();
       return;
     }
 
     setErrorMessage(result.failure.message);
     dispatch({ type: 'failed', message: result.failure.message });
+    // Spoken too: the text stays in the field for correction, but a refusal a planner cannot see
+    // (the cell may be off-screen after a recalculation) would otherwise be silent.
+    announce(result.failure.message);
   };
 
   // See the docblock: report the row's CURRENT rendered text and let the reducer decide whether it
@@ -153,5 +177,6 @@ export function useGanttGridEditing({
     commit: () => void commit(),
     cancel,
     errorMessage,
+    onCellClosed,
   };
 }

@@ -367,6 +367,34 @@ function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof 
   );
 }
 
+/**
+ * Toggles that belong to **one view only**, and which view.
+ *
+ * `logicLinks` switches the GANTT's dependency arrows; the diagram has always drawn its logic
+ * unconditionally, so on the canvas the control is a live checkbox that changes nothing — which
+ * reads as a broken control rather than an honest one. Found by the M6 ux gate, which also pointed
+ * at the fix sitting in the same diff: `add-note` gates on `ctx.planView !== 'gantt'`, exactly the
+ * per-view scoping this needed and did not get.
+ *
+ * A map rather than a per-key `if`, so the next view-specific toggle is an entry rather than a
+ * branch — and so `TSLD_VIEW_TOGGLE_KEYS` (which the registry test pins) keeps listing the whole
+ * vocabulary while the PANEL shows what applies here.
+ */
+const VIEW_SCOPED_TOGGLES: Partial<Record<keyof TsldViewToggles, 'gantt' | 'tsld'>> = {
+  logicLinks: 'gantt',
+};
+
+/** The keys `View▾` offers for the view currently on screen. */
+function viewToggleKeysFor(
+  group: ViewToggleGroupId,
+  planView: string,
+): ReadonlyArray<keyof TsldViewToggles> {
+  return visibleViewToggleKeysIn(group).filter((key) => {
+    const only = VIEW_SCOPED_TOGGLES[key];
+    return only === undefined || only === planView;
+  });
+}
+
 /** The keys `View▾` actually offers (every group, flag-off-gated members excluded), exported so a
  * test can pin the registry against drift. */
 export const TSLD_VIEW_TOGGLE_KEYS: ReadonlyArray<keyof TsldViewToggles> =
@@ -1543,7 +1571,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
   return (
     <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
       {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
-        const keys = visibleViewToggleKeysIn(id);
+        const keys = viewToggleKeysFor(id, ctx.planView);
         const lenses = lensTogglesIn(id);
         // `zoom` and `insight` render content that is not a toggle or a lens (the two radio
         // groups), so an emptiness test that only counts those would drop them. Without this the

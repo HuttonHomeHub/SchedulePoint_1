@@ -238,7 +238,14 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
   // Focus a row the way a keyboard planner does, then enter cell mode. The unit suite proves F2
   // calls `begin`; only a browser proves the row is focusable, the handler is bound to something
   // that actually receives the key, and the field ends up focused.
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  // Wait for the row to actually HOLD focus before pressing F2. Clicking and pressing immediately
+  // passed in isolation and failed once inside a full-suite run — F2 goes to whatever is focused,
+  // so a click that has not settled sends it to the document. A timing artefact of the test rather
+  // than a product defect (it passes alone, in its own file, and on the re-run), fixed by waiting
+  // for the state the gesture depends on rather than by a sleep.
+  const row = page.getByRole('row').filter({ hasText: 'Seeded 0' }).first();
+  await row.click();
+  await expect(row).toBeFocused();
   await page.keyboard.press('F2');
 
   const field = page.getByRole('textbox', { name: /Activity, Seeded 0/ });

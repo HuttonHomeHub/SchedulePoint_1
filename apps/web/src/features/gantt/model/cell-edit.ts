@@ -222,6 +222,17 @@ export interface GanttGridEditing {
   cancel: () => void;
   /** The message from the last refusal, or null. */
   errorMessage: string | null;
+  /**
+   * Called when a cell closes for any reason — committed, cancelled or refused-then-abandoned.
+   *
+   * The host restores focus to the row. Without it the `<input>` unmounts while holding real DOM
+   * focus and focus falls to `<body>`: because cells are `tabIndex={-1}` and one row carries the
+   * roving `tabIndex={0}`, the planner's next Tab restarts at the top of the PAGE rather than
+   * resuming the grid. Not "focus moved somewhere" — genuinely lost (WCAG 2.4.3), and found by the
+   * M6 accessibility gate, which also noticed the grid's own Escape branch had become unreachable
+   * dead code once the cell started stopping that event.
+   */
+  onCellClosed: () => void;
 }
 
 /**

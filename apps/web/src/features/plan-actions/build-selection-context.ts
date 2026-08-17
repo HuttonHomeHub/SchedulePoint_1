@@ -71,6 +71,9 @@ export interface SelectionContextInput {
  */
 export function buildSelectionBarContext(input: SelectionContextInput): SelectionBarContext | null {
   if (input.selectionCount > 1) return null;
+  // A linear scan, and deliberately still one: this is called ONCE per bar (and, since the M6
+  // performance gate, only when a row menu actually opens — not per rendered row). An index would
+  // have to be built and threaded by every caller to save a scan nobody runs in a loop.
   const activity = input.selectedId
     ? input.activities.find((a) => a.id === input.selectedId)
     : undefined;
