@@ -870,6 +870,32 @@ it (the culling resolution, R5 across three sort orders, the permanent no-obstac
 the `sr-only` summary, the contrast gate), so reordering now buys an optics gain against a heavier
 milestone. It starts when M1 is done, as the dependency graph already allows.
 
+### The fixture M0-T1 measures on does not exist
+
+**Found by trying to name it.** The performance review asked for the specific catalogue plan rather
+than the description "an imported-shape 2,000-activity plan", per CLAUDE.md §19.10 — a
+decision-bearing number should carry a reproducible fixture. Naming it turns up that the catalogue's
+largest plan is **`plan:scale-500`** (`docs/TEST_PLAYBOOK.md`); there is no 2,000-activity plan in it,
+and `grep -oE 'plan:scale-[0-9]+' docs/TEST_PLAYBOOK.md` returns exactly one row.
+
+So the figure this epic has been reasoning with — ~16 crossing links typically, ~1,067 sorted by
+float, the ≤300 threshold, "40 rows out of 2,000" — rests on a plan **nobody can seed**. Every one of
+those numbers came from arithmetic over ADR-0073 C3.0's measured 3,200-links-per-2,000-activities
+ratio, which is a real measurement of a real programme, but not of anything in this repository's
+catalogue.
+
+**M0-T1 must therefore do one of two things, and say which:**
+
+1. **Extend the catalogue** with an imported-shape plan at 2,000 (ADR-0066's tiers already have the
+   machinery, and the shape matters more than the count — `plan:scale-500` itself was once "one long
+   queue", which is the trap ADR-0066 M4 records). This is the honest option if the numbers are going
+   to be quoted at 2,000.
+2. **Measure at 500 and state the extrapolation**, rather than reporting a 2,000-activity figure
+   derived from a 500-activity run as though it were measured.
+
+What it must not do is describe the fixture. That is how ADR-0065's budget came to be quoted for
+months without anyone running it (`docs/TECH_DEBT.md` #75).
+
 ### Recorded, not actioned
 
 Sub-day precision loss on a bar-end resize (ADR-0070's rounding class on a new surface); `GanttColumn.key`
