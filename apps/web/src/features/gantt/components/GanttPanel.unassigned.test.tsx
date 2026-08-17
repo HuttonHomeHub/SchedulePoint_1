@@ -96,7 +96,9 @@ describe('GanttPanel — the Unassigned bucket (flag on)', () => {
     fireEvent.click(bucketRow());
     expect(onSelectActivity).not.toHaveBeenCalled();
     // …and a real row still does, so the test above is not passing because nothing works.
-    fireEvent.click(screen.getByText('Piling').closest('[role="row"]')!);
+    // `getAllByText(...)[0]` — the first match is the grid CELL; M5's bar label prints the name a
+    // second time beside the bar (aria-hidden, so the accessibility tree still has one).
+    fireEvent.click(screen.getAllByText('Piling')[0]!.closest('[role="row"]')!);
     expect(onSelectActivity).toHaveBeenCalledTimes(1);
   });
 

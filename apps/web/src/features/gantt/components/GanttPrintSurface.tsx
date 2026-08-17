@@ -2,6 +2,7 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 
 import './GanttPrintSurface.css';
 
+import { barLabelMode, constraintBadge } from '../layout/bar-annotations';
 import { barGeometry, baselineGeometry, chartAnchor, fitPxPerDay } from '../layout/bar-geometry';
 import { GANTT_COLUMNS, varianceText } from '../layout/grid-columns';
 import {
@@ -231,6 +232,19 @@ function PrintRow({
 }: PrintRowProps): React.ReactElement {
   const { activity, depth } = row;
   const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
+  // The same annotations the screen draws (M5 legibility). The spec calls bar labels "the largest
+  // single legibility win in a PRINTED programme" — a chart whose bars are anonymous sends the
+  // reader's eye back across the page to the grid for every one — so this is the surface they were
+  // adopted for, and rendering them on screen and not here would have missed the point.
+  const badge = constraintBadge(activity);
+  const labelMode =
+    geometry === null || geometry.milestone
+      ? 'none'
+      : barLabelMode({
+          chartPx,
+          barRight: geometry.x + geometry.width,
+          labelChars: activity.name.length + (badge === null ? 0 : 2),
+        });
   const ghost =
     showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 
@@ -279,6 +293,22 @@ function PrintRow({
                 />
               ) : null}
             </span>
+            {labelMode === 'name' ? (
+              <span
+                className="gantt-print-bar-label"
+                style={{ left: geometry.x + geometry.width + 6 }}
+              >
+                {badge === null ? null : <span className="gantt-print-badge">{badge.glyph} </span>}
+                {activity.name}
+              </span>
+            ) : badge === null ? null : (
+              <span
+                className="gantt-print-badge gantt-print-bar-label"
+                style={{ left: geometry.x + geometry.width + 4 }}
+              >
+                {badge.glyph}
+              </span>
+            )}
           </>
         )}
       </td>

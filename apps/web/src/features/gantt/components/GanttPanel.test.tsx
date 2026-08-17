@@ -116,7 +116,11 @@ describe('GanttPanel — the grid', () => {
     render(<GanttPanel activities={TWO} />);
     const first = rows()[0]!;
     expect(within(first).getByText('A10')).toBeInTheDocument();
-    expect(within(first).getByText('Excavate')).toBeInTheDocument();
+    // Scoped to the CELLS, not the whole row. M5's bar label prints the name a second time beside
+    // the bar — `aria-hidden`, so the accessibility tree still has exactly one, which is what this
+    // test is about. `getByText` sees both, so it now asks the question it always meant to.
+    const nameCell = within(first).getAllByRole('gridcell')[1]!;
+    expect(within(nameCell).getByText('Excavate')).toBeInTheDocument();
     expect(within(first).getAllByRole('gridcell').length).toBeGreaterThan(3);
   });
 
@@ -142,7 +146,10 @@ describe('GanttPanel — sorting', () => {
       .getAllByRole('columnheader')
       .find((h) => within(h).queryByRole('button', { name: /Activity/ }));
     expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
-    expect(within(rows()[0]!).getByText('Excavate')).toBeInTheDocument();
+    // The name CELL of the first row — M5's bar label prints the name a second time beside the bar.
+    expect(
+      within(within(rows()[0]!).getAllByRole('gridcell')[1]!).getByText('Excavate'),
+    ).toBeInTheDocument();
   });
 
   it('toggles to descending on a second click of the same column', () => {

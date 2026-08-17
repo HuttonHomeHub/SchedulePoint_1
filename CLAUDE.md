@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 970 web
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 972 web
 > source files with 32 flag-scoped Playwright suites beside the base journey, and
 > 95 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2237,8 +2237,8 @@ progress` off the command surface because **an object action belongs on the obje
   print path whose props were threaded while its only caller was not, contradicting the commit
   message that introduced them. Two reviewers were **partly wrong** and that is recorded: the React
   Compiler's analysis does run (in `eslint-plugin-react-hooks` v7), though not at build time.
-  M5 shipped **T3 only**; the columns chooser, bar labels, Indent/Outdent, Insert and view-memory are
-  named as unbuilt rather than implied, and `PROJECT_BRIEF.md` §8's "edit supported" is called
+  M5 shipped the row menu, **bar labels** and the **constraint badge**; the columns chooser,
+  Indent/Outdent, Insert and view-memory are named as unbuilt rather than implied, and `PROJECT_BRIEF.md` §8's "edit supported" is called
   **substantially** met rather than closed.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a

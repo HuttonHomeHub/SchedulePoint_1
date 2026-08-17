@@ -1,6 +1,7 @@
 # ADR-0095 — The Gantt becomes a working surface
 
-- **Status:** Accepted (M0–M4 + M5-T3 landed 2026-08-17; the rest of M5 deferred and named below)
+- **Status:** Accepted (M0–M4 + M5's row menu, bar labels and constraint badge landed 2026-08-17;
+  the rest of M5 deferred and named below)
 - **Date:** 2026-08-17
 - **Supersedes:** nothing
 - **Amends:** ADR-0059 (its §4 "read-only, no dependency arrows" first ship, and its §2 shared time
@@ -180,11 +181,29 @@ The measured findings were folded as measured: three O(n) scans that ran per row
 keystroke are now `Map` lookups or deferred to the menu's own open. The pattern was already in the
 same file — `rowIndexById`, three hundred lines above the call sites that did not use it.
 
+### D8 — What is drawn beside a bar, and why it is one module
+
+**Bar labels (B10f)** are the spec's "largest single legibility win in a **printed** programme", and
+both P6 and Powerproject do it: a chart whose bars are anonymous sends the reader's eye back across
+the page to the grid for every one. The **constraint badge** is the state behind the one-per-session
+note — that note explains the _moment_ a constraint is written, and without a lasting mark a planner
+returning next week cannot see which bars are pinned, which is exactly when it matters, because a
+pinned bar is the one that will not move when the logic says it should.
+
+They share a module because they occupy the same strip of chart and would otherwise be two
+components competing for it. Withholding is by **available room**, not a zoom threshold: a threshold
+is a second answer to "does this fit?" and goes stale the moment a font or a column width changes.
+A badge survives when its label does not — a dense chart is precisely when somebody is hunting for
+pinned bars. Both are `aria-hidden`: the cells already carry the name and the editor carries the
+constraint, so these reinforce rather than duplicate, and the accessibility tree still holds exactly
+one of each. On paper the badge prints **black**, so the glyph carries the meaning and colour carries
+none — WCAG 1.4.1 holding by construction on the one surface where colour cannot be relied on.
+
 ### What this milestone did NOT ship
 
-Recorded here rather than implied. M5 shipped **T3 only**; the columns chooser (T1), bar labels (T2),
-Indent/Outdent (T4), Insert activity (T5) and view memory in URL search params (T6) are **not built**
-and are `docs/TECH_DEBT.md` rows. The Gantt's **start-edge** resize is also deliberately absent (D4):
+Recorded here rather than implied. M5 shipped the **row menu (T3)**, **bar labels (T2)** and the
+**constraint badge**; the columns chooser (T1), Indent/Outdent (T4), Insert activity (T5) and view
+memory in URL search params (T6) are **not built** and are `docs/TECH_DEBT.md` rows. The Gantt's **start-edge** resize is also deliberately absent (D4):
 it carries a mode-dependent meaning, and shipping it without the mode statement the canvas has beside
 it would leave a planner unable to tell which of two writes their drag just made.
 

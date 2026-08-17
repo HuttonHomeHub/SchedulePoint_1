@@ -22,6 +22,11 @@ Dependency arrows arrive behind **View ▾ → Logic links**, off by default —
 always draws that row's own links, so "why is this bar here?" is answerable without turning anything
 on. Every row also carries its predecessors in words for screen-reader users.
 
+Bars now carry their **activity name** beside them and a mark on any bar that is **pinned by a
+constraint** — both on screen and in the printed programme, where an anonymous bar sends the reader
+back across the page to the grid for every one. Labels stand down where there is no room rather than
+overlapping; the pinned mark stays, because a dense chart is exactly when you are looking for it.
+
 Also fixes a defect visible only to someone opening one plan two ways: in Visual mode the chart drew
 every hand-placed bar from the wrong dates, on screen, in the grid's own date columns, in its sort
 order, and in the printed programme.

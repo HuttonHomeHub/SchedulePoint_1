@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { barLabelMode, constraintBadge } from '../layout/bar-annotations';
 import {
   barGeometry,
   baselineGeometry,
@@ -1054,6 +1055,15 @@ function GanttRowView({
   // The menu builds it when it opens, which removes the cost from the render path rather than
   // reducing it.
   const rowMenuContext = rowMenuContextFor ?? null;
+  const badge = constraintBadge(activity);
+  const labelMode =
+    geometry === null || geometry.milestone
+      ? 'none'
+      : barLabelMode({
+          chartPx,
+          barRight: geometry.x + geometry.width,
+          labelChars: activity.name.length + (badge === null ? 0 : 2),
+        });
 
   // The pointer gesture. `movable` is the object's answer AND the reader's, resolved by the same
   // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
@@ -1361,6 +1371,36 @@ function GanttRowView({
                 />
               ) : null}
             </span>
+            {/* **The bar's own name, and its pinned mark** (M5 legibility, B10f). Both `aria-hidden`:
+                the grid cells already carry the name and the editor carries the constraint, so
+                these are reinforcement rather than a second carrier — and duplicating the name into
+                the accessibility tree would make every row announce it twice. Withheld when there
+                is no room rather than allowed to overlap (ADR-0054's Dates rule applied to text). */}
+            {labelMode === 'name' ? (
+              <span
+                aria-hidden="true"
+                className="text-muted-foreground pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap"
+                style={{ left: geometry.x + geometry.width + 6 }}
+              >
+                {badge === null ? null : (
+                  <span className="text-warning-text mr-1" title={badge.label}>
+                    {badge.glyph}
+                  </span>
+                )}
+                {activity.name}
+              </span>
+            ) : badge === null ? null : (
+              // No room for the name, but the badge still fits — a pinned bar must not lose its mark
+              // just because the chart is dense, which is precisely when a planner is hunting for it.
+              <span
+                aria-hidden="true"
+                className="text-warning-text pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px]"
+                style={{ left: geometry.x + geometry.width + 4 }}
+                title={badge.label}
+              >
+                {badge.glyph}
+              </span>
+            )}
             {/* The finish-edge handle. Rendered only when the bar can be resized, so it is never a
                 lit-but-inert grab zone — and never on a milestone, which has no length to change.
                 Eight pixels wide, straddling the edge, which is the smallest zone a pointer finds
