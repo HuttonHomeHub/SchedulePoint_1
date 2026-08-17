@@ -256,6 +256,60 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
 
   await showGantt(page);
 
+  /**
+   * The FULL row order the Gantt is currently presenting, as `id → zero-based index`.
+   *
+   * The rendered window is ~39 rows, but each row carries `aria-rowindex` = its position in the
+   * **whole** set (`GanttPanel.tsx`: "the index is the row's position in the FULL set, not the
+   * rendered window, which is what makes virtualization invisible to assistive technology"). So
+   * scrolling the container and accumulating `(id, aria-rowindex)` reconstructs the entire order
+   * without duplicating the row model's sorting — which is the thing that must not be reimplemented,
+   * because a second ordering would drift from the one on screen exactly when it mattered.
+   */
+  async function fullOrder(): Promise<Map<string, number>> {
+    const seen = new Map<string, number>();
+    // The treegrid is INSIDE the scroller, not the scroller itself (`GanttPanel.tsx:395` — the
+    // `overflow-auto` div carries `scrollRef` and wraps the grid at `:411`). Scrolling the treegrid
+    // moved nothing, the order stayed at one window, and the guard below correctly refused to report
+    // a density from it. So walk up to the first genuinely scrollable ancestor.
+    const step = async (delta: number): Promise<number> =>
+      page.evaluate((by) => {
+        let el = document.querySelector('[role="treegrid"]')?.parentElement ?? null;
+        while (el && el.scrollHeight <= el.clientHeight) el = el.parentElement;
+        if (!el) return -1;
+        el.scrollTop = by < 0 ? 0 : el.scrollTop + el.clientHeight * 0.8;
+        return el.scrollTop;
+      }, delta);
+
+    let lastSize = -1;
+    for (let i = 0; i < 300 && seen.size !== lastSize; i += 1) {
+      lastSize = seen.size;
+      const batch = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="row"][data-activity-id]')].map((el) => ({
+          id: (el as HTMLElement).dataset.activityId ?? '',
+          index: Number((el as HTMLElement).getAttribute('aria-rowindex') ?? '0') - 2,
+        })),
+      );
+      for (const row of batch) if (row.id) seen.set(row.id, row.index);
+      const top = await step(1);
+      expect(top, 'no scrollable ancestor above the treegrid').not.toBe(-1);
+      await page.waitForTimeout(120);
+    }
+    await step(-1);
+    await page.waitForTimeout(150);
+    return seen;
+  }
+
+  /** Rows rendered right now, in full-set coordinates — the window a crossing is measured against. */
+  async function renderedWindow(): Promise<{ start: number; end: number; count: number }> {
+    const idx = await page.evaluate(() =>
+      [...document.querySelectorAll('[role="row"][data-activity-id]')].map(
+        (el) => Number((el as HTMLElement).getAttribute('aria-rowindex') ?? '0') - 2,
+      ),
+    );
+    return { start: Math.min(...idx), end: Math.max(...idx), count: idx.length };
+  }
+
   const readings: Record<string, unknown>[] = [];
   for (const sort of SORTS) {
     if (sort !== '(default)') {
@@ -264,20 +318,67 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
         .getByRole('button', { name: new RegExp(`^${sort}`, 'i') })
         .first()
         .click();
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(400);
     }
 
-    // The row order as the Gantt currently presents it, read from the rendered grid's own row ids.
-    const order = await page.evaluate(() =>
-      [...document.querySelectorAll('[role="row"][data-activity-id]')].map(
-        (el) => (el as HTMLElement).dataset.activityId ?? '',
-      ),
-    );
+    const order = await fullOrder();
+    const win = await renderedWindow();
+    const height = Math.max(1, win.end - win.start + 1);
+
+    // Sweep the window down the plan and count, per position, the links that would be DRAWN under
+    // each candidate rule. The two differ and the difference is the whole of M4's cost question:
+    //
+    //   endpointVisible — at least one endpoint inside the window. This is the adopted rule, and it
+    //     is what `render/paint.ts:1042` has shipped on the canvas all along. Bounded by the summed
+    //     degree of the rendered rows, so it cannot depend on the sort.
+    //   spanCrosses    — the interval [min,max] overlaps the window, INCLUDING links with both
+    //     endpoints outside it. Recorded to show what the rejected rule would have cost; it is a
+    //     function of the plan and the order, not of the viewport.
+    const positions: number[] = [];
+    for (
+      let start = 0;
+      start + height <= order.size;
+      start += Math.max(1, Math.floor(height / 2))
+    ) {
+      positions.push(start);
+    }
+    if (positions.length === 0) positions.push(0);
+
+    const endpointVisible: number[] = [];
+    const spanCrosses: number[] = [];
+    for (const start of positions) {
+      const end = start + height - 1;
+      let inWindow = 0;
+      let crossing = 0;
+      for (const dep of graph.dependencies) {
+        // `predecessor`/`successor` are nested OBJECTS on the DTO, not flat `*Id` fields
+        // (`packages/types` DependencySummary → DependencyEndpoint). The first version read
+        // `dep.predecessorId`, got `undefined` for every link, and reported 0 crossings against 320
+        // links — a plausible-looking zero produced by a field name I assumed instead of read.
+        const a = order.get(dep.predecessor.id);
+        const b = order.get(dep.successor.id);
+        if (a === undefined || b === undefined) continue;
+        const lo = Math.min(a, b);
+        const hi = Math.max(a, b);
+        if ((a >= start && a <= end) || (b >= start && b <= end)) inWindow += 1;
+        if (lo <= end && hi >= start) crossing += 1;
+      }
+      endpointVisible.push(inWindow);
+      spanCrosses.push(crossing);
+    }
+
+    const p95 = (xs: number[]) =>
+      xs.length === 0
+        ? 0
+        : [...xs].sort((m, n) => m - n)[Math.min(xs.length - 1, Math.floor(xs.length * 0.95))]!;
 
     readings.push({
       sort,
-      visibleRows: order.length,
-      note: order.length === 0 ? 'no data-activity-id on rows — see below' : 'ok',
+      orderedRows: order.size,
+      renderedRows: win.count,
+      windowsSampled: positions.length,
+      endpointVisible: { p95: p95(endpointVisible), max: Math.max(...endpointVisible) },
+      spanCrosses: { p95: p95(spanCrosses), max: Math.max(...spanCrosses) },
     });
   }
 
@@ -292,10 +393,29 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
   });
   test.info().annotations.push({ type: 'measurement', description: path });
 
+  // A zero against a plan that HAS links is a defect in the harness, not a finding about the Gantt.
+  // This exists because the first run reported exactly that, from a mis-read field name.
+  if (graph.dependencies.length > 0) {
+    expect(
+      readings.some((r) => ((r.endpointVisible as { max: number }).max ?? 0) > 0),
+      `every window counted 0 links while the plan has ${graph.dependencies.length} — the ids are not matching`,
+    ).toBe(true);
+  }
+
   // The harness must not report a density it did not establish. If the rows carry no activity id
   // there is nothing to compute spans from, and that is a finding about the DOM, not a zero.
+  // The harness must not report a density it did not establish.
   expect(
-    readings.every((r) => (r.visibleRows as number) > 0),
-    'no row carried a data-activity-id — the span cannot be derived from the DOM as written',
+    readings.every((r) => (r.orderedRows as number) > 0),
+    'no row carried a data-activity-id — the order cannot be derived from the DOM',
   ).toBe(true);
+  // Every sort must have reconstructed the WHOLE plan, or the crossing counts are taken against a
+  // partial order and are meaningless. This is the assertion that stops a short scroll being
+  // reported as a low density.
+  for (const r of readings) {
+    expect(
+      r.orderedRows,
+      `${r.sort}: reconstructed only ${r.orderedRows} of ${graph.activities.length} rows`,
+    ).toBe(graph.activities.length);
+  }
 });
