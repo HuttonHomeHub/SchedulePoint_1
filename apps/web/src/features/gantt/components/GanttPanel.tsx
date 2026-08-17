@@ -38,7 +38,9 @@ import {
   type GanttBarDrag,
 } from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
+import { DEFAULT_HIDDEN_COLUMNS, type GanttColumnKey } from '../model/gantt-view-state';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
+import type { GanttViewStateBundle } from '../model/use-gantt-view-state';
 
 import { GanttCell } from './GanttCell';
 import { GanttLinkOverlay } from './GanttLinkOverlay';
@@ -93,26 +95,29 @@ const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
 
 const columnWidth = (column: GanttColumn): number => SCREEN_COLUMN_WIDTHS[column.key] ?? 90;
 
-const COLUMNS = GANTT_COLUMNS;
-const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0);
+/**
+ * The hidden set a panel with no `viewState` uses — `predecessors` only, i.e. exactly the six
+ * columns that shipped in ADR-0059. A module constant so it is one allocation rather than a new
+ * Set per render, which would re-identify the `COLUMNS` memo on every pass.
+ */
+const DEFAULT_HIDDEN_SET: ReadonlySet<GanttColumnKey> = new Set(DEFAULT_HIDDEN_COLUMNS);
 
 /**
- * Width of the pinned identity/date grid, without the optional variance column.
+ * The pinned identity/date grid's width is **derived from the columns it draws, never declared** —
+ * now per render, because M5-T1 lets a planner switch columns off.
  *
- * **Derived from the columns, never declared.** It was the literal `420` while the columns summed to
- * 500, and the two were never reconciled because `TOTAL_COLUMN_WIDTH` was computed, exported and
- * consumed by **nothing** — two answers to "how wide is the grid", one of them dead. Measured in
- * Chromium at 1646 on 2026-08-17: the pinned block ended at x=709 while the **Float** column
- * rendered at 729–789, so it sat 80 px **on top of the chart** with its header overlapping the
- * Timeline header, the pinned block's `z-10` painting it over the bars. Every child is `shrink-0`,
- * so the flex row simply overflowed its own box.
+ * It was once the literal `420` while the columns summed to 500, and the two were never reconciled
+ * because the computed constant was exported and consumed by **nothing** — two answers to "how wide
+ * is the grid", one of them dead. Measured in Chromium at 1646 on 2026-08-17: the pinned block
+ * ended at x=709 while the **Float** column rendered at 729–789, so it sat 80 px **on top of the
+ * chart**, the pinned block's `z-10` painting it over the bars. Every child is `shrink-0`, so the
+ * flex row simply overflowed its own box.
  *
  * Nobody had reported it, and it is easy to see why: Float is the last column, the overlap lands on
  * whitespace unless a bar starts near the left edge, and the numbers involved look deliberate. It
- * was found by measuring before adding a column rather than after — the plan's M2-T1 risk said to
- * measure, and adding Duration on top of the literal would have pushed the overlap to ~180 px.
+ * was found by measuring before adding a column rather than after. Hiding a column now makes the
+ * width move on every choice, which is precisely why it must stay a derivation.
  */
-const GRID_WIDTH = TOTAL_COLUMN_WIDTH;
 
 /** Width of the variance column, shown only when a baseline is active. */
 const VARIANCE_COLUMN_WIDTH = 72;
@@ -198,6 +203,13 @@ export interface GanttPanelProps {
    * this bar here?" without it.
    */
   showAllLinks?: boolean;
+  /**
+   * Sort, hidden columns and the collapse set, made to stick in the URL (M5-T6).
+   *
+   * Absent, the panel keeps its own state and is byte-for-byte the chart that shipped in M5 — which
+   * is what the print surface and every suite mounting this component outside a router rely on.
+   */
+  viewState?: GanttViewStateBundle | undefined;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -264,13 +276,37 @@ export function GanttPanel({
   selectedActivityId,
   emphasisIds,
   bringIntoViewActivityId,
+  viewState,
 }: GanttPanelProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocus = useRef(false);
 
-  const [sort, setSort] = useState<GanttSort>(DEFAULT_GANTT_SORT);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  // Sort and the collapse set are the panel's own state UNLESS a host supplies `viewState` — the
+  // bundle idiom this epic already uses for `editing`, `drag` and `dependencies`. Absent, the panel
+  // behaves byte-for-byte as it did before M5-T6, which is what keeps the print surface and every
+  // suite that mounts this component outside a router untouched (`useUrlFilterState`'s own docblock
+  // names props as the answer for exactly that case).
+  const [ownSort, setOwnSort] = useState<GanttSort>(DEFAULT_GANTT_SORT);
+  const [ownCollapsed, setOwnCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const sort = viewState?.sort ?? ownSort;
+  const collapsed = viewState?.collapsed ?? ownCollapsed;
+  const setSort = viewState?.onSortChange ?? setOwnSort;
+  const setCollapsed = viewState?.onCollapsedChange ?? setOwnCollapsed;
+
+  /**
+   * The columns this render draws, and their total width.
+   *
+   * Without a bundle the hidden set is the DEFAULT one, which hides `predecessors` and nothing
+   * else — i.e. exactly the six columns that shipped in ADR-0059. That is the parity contract, and
+   * it is a derivation rather than a branch: there is no "columns feature off" path to keep in step.
+   */
+  const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
+  const COLUMNS = useMemo(
+    () => GANTT_COLUMNS.filter((c) => !hiddenColumns.has(c.key)),
+    [hiddenColumns],
+  );
+  const GRID_WIDTH = useMemo(() => COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0), [COLUMNS]);
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The bar region's own width, measured so the zoom preset can frame its target range in the
@@ -284,7 +320,11 @@ export function GanttPanel({
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+    // `GRID_WIDTH` is now a per-render value (M5-T1 made the columns hideable), so it belongs in
+    // the deps: hiding a column changes how much room the bars have, and an effect that only ever
+    // measured on mount would leave `barRegionWidth` — and therefore the zoom preset's px-per-day —
+    // describing a grid that is no longer there, until the next window resize happened to fix it.
+  }, [GRID_WIDTH]);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   const gridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
@@ -432,30 +472,38 @@ export function GanttPanel({
       cursor = byId.get(cursor)?.parentId ?? null;
     }
     if (ancestors.size === 0) return;
-    setCollapsed((prev) => {
-      if ([...ancestors].every((id) => !prev.has(id))) return prev;
-      const next = new Set(prev);
-      for (const id of ancestors) next.delete(id);
-      return next;
-    });
-  }, [bringIntoViewActivityId, emphasisRowIndex, virtualizer]);
+    // Value, not an updater: a host-supplied `onCollapsedChange` writes the URL and takes the next
+    // set, so both paths have to agree on a plain call. The no-op guard is kept and matters more
+    // here than it did — writing an unchanged set would push a navigation on every render.
+    if ([...ancestors].every((id) => !collapsed.has(id))) return;
+    const expanded = new Set(collapsed);
+    for (const id of ancestors) expanded.delete(id);
+    setCollapsed(expanded);
+  }, [bringIntoViewActivityId, emphasisRowIndex, virtualizer, collapsed, setCollapsed]);
 
-  const toggleCollapsed = useCallback((id: string, collapse: boolean): void => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
+  const toggleCollapsed = useCallback(
+    (id: string, collapse: boolean): void => {
+      const next = new Set(collapsed);
       if (collapse) next.add(id);
       else next.delete(id);
-      return next;
-    });
-  }, []);
+      setCollapsed(next);
+    },
+    [collapsed, setCollapsed],
+  );
 
-  const onSort = useCallback((key: GanttSortKey): void => {
-    setSort((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
-        : { key, direction: 'asc' },
-    );
-  }, []);
+  const onSort = useCallback(
+    (key: GanttSortKey): void => {
+      // Computed from the CURRENT sort rather than passed as an updater function: a host-supplied
+      // `onSortChange` writes the URL and takes a value, not a reducer, so the two paths have to
+      // agree on a plain call. The toggle rule is identical either way.
+      const next: GanttSort =
+        sort.key === key
+          ? { key, direction: sort.direction === 'asc' ? 'desc' : 'asc' }
+          : { key, direction: 'asc' };
+      setSort(next);
+    },
+    [sort, setSort],
+  );
 
   const focusedIndex = rows.findIndex((r) => rowId(r) === focusedId);
   // The roving tab stop: the focused row, or the first row when nothing has been focused yet, so
@@ -732,31 +780,55 @@ export function GanttPanel({
           >
             {COLUMNS.map((column, i) => {
               const active = sort.key === column.key;
+              const sortable = column.sortable !== false;
               return (
                 <div
                   key={column.key}
                   role="columnheader"
                   aria-colindex={i + 1}
-                  aria-sort={
-                    active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
-                  }
+                  // `aria-sort` only where sorting is offered. On a column that cannot be sorted,
+                  // `none` is not "no sort applied" — it announces a sortable column nobody has
+                  // sorted yet, which is a promise the header does not keep.
+                  {...(sortable
+                    ? {
+                        'aria-sort': active
+                          ? sort.direction === 'asc'
+                            ? ('ascending' as const)
+                            : ('descending' as const)
+                          : ('none' as const),
+                      }
+                    : {})}
                   className="shrink-0 px-2 pb-1"
                   style={{ width: columnWidth(column) }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onSort(column.key)}
-                    className={cn(
-                      'focus-visible:ring-ring w-full rounded-sm text-xs font-medium focus-visible:ring-2 focus-visible:outline-none',
-                      column.align === 'right' ? 'text-right' : 'text-left',
-                      active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    {column.label}
-                    {active ? (
-                      <span aria-hidden="true">{sort.direction === 'asc' ? ' ▲' : ' ▼'}</span>
-                    ) : null}
-                  </button>
+                  {sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(column.key as GanttSortKey)}
+                      className={cn(
+                        'focus-visible:ring-ring w-full rounded-sm text-xs font-medium focus-visible:ring-2 focus-visible:outline-none',
+                        column.align === 'right' ? 'text-right' : 'text-left',
+                        active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {column.label}
+                      {active ? (
+                        <span aria-hidden="true">{sort.direction === 'asc' ? ' ▲' : ' ▼'}</span>
+                      ) : null}
+                    </button>
+                  ) : (
+                    // Plain text, NOT a shaded button: there is nothing here a planner could do if
+                    // only they had permission, so a disabled control would be ADR-0082's "omit"
+                    // case dressed as its "shade with a reason" case.
+                    <span
+                      className={cn(
+                        'text-muted-foreground block w-full text-xs font-medium',
+                        column.align === 'right' ? 'text-right' : 'text-left',
+                      )}
+                    >
+                      {column.label}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -832,6 +904,7 @@ export function GanttPanel({
               predecessorsById,
               rowMenuContextFor,
               actionColumns,
+              columns: COLUMNS,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -876,6 +949,7 @@ export function GanttPanel({
  */
 function GanttBucketRowView({
   actionColumns,
+  columns: COLUMNS,
   row,
   rowIndex,
   top,
@@ -899,6 +973,8 @@ function GanttBucketRowView({
   gridWidth: number;
   showVariance: boolean;
   actionColumns: number;
+  /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
+  columns: readonly GanttColumn[];
   isTabStop: boolean;
   registerRef: (element: HTMLDivElement | null) => void;
   onFocusRow: () => void;
@@ -1026,6 +1102,8 @@ interface GanttRowViewProps {
   predecessorsById: ReadonlyMap<string, readonly string[]>;
   rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
   actionColumns: number;
+  /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
+  columns: readonly GanttColumn[];
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -1041,6 +1119,7 @@ interface GanttRowViewProps {
 
 function GanttRowView({
   actionColumns,
+  columns: COLUMNS,
   row,
   rowIndex,
   top,
@@ -1069,6 +1148,10 @@ function GanttRowView({
   const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
   const linkSummary =
     dependencies === undefined ? null : predecessorSummary(activity.id, predecessorsById);
+  // The SAME index the sentence above reads, handed to the Predecessors column (M5-T1) rather than
+  // looked up a second way — one answer to "what does this follow?", which is the rule
+  // `bar-dates.ts` and `routeOrthogonal` both exist to enforce.
+  const predecessorNames = predecessorsById.get(activity.id);
   // A THUNK, not a built object. `buildSelectionBarContext` scans the whole plan, and this runs per
   // mounted row — measured at 40 calls per keystroke on a 2,000-activity plan (M6 performance gate).
   // The menu builds it when it opens, which removes the cost from the render path rather than
@@ -1205,7 +1288,12 @@ function GanttRowView({
         style={{ width: gridWidth }}
       >
         {COLUMNS.map((column, i) => {
-          const text = column.value(activity, barDateSource, hoursPerDayFor?.(activity));
+          const text = column.value(
+            activity,
+            barDateSource,
+            hoursPerDayFor?.(activity),
+            predecessorNames,
+          );
           const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
           // An editable cell only where BOTH are true: the host supplied an editing bundle, and this
           // column maps to one. Neither implies the other — the print surface has no bundle, and
@@ -1285,7 +1373,12 @@ function GanttRowView({
                 </button>
               ) : null}
               <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
-                {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
+                {column.value(
+                  activity,
+                  barDateSource,
+                  hoursPerDayFor?.(activity),
+                  predecessorNames,
+                )}
               </span>
               {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
                 emphasis alone is precisely the WCAG 1.4.1 defect ADR-0055 exists about. Rendered
@@ -1448,4 +1541,4 @@ function GanttRowView({
   );
 }
 
-export { GRID_WIDTH, TOTAL_COLUMN_WIDTH, FALLBACK_PX_PER_DAY };
+export { FALLBACK_PX_PER_DAY };

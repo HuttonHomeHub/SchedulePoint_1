@@ -1,6 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 
-import type { GanttSortKey } from './row-model';
+import type { GanttColumnKey } from '../model/gantt-view-state';
 
 // From the domain module that owns the activity, the established shape here — `row-model.ts` already
 // reaches into `@/features/wbs` for `deriveWbsGroups`, whose docblock calls itself "the ONE
@@ -24,9 +24,19 @@ import { formatCalendarDate } from '@/lib/format-date';
  * their surface; only the semantics live here.
  */
 export interface GanttColumn {
-  key: GanttSortKey;
+  key: GanttColumnKey;
   label: string;
   align?: 'right';
+  /**
+   * Whether the header offers this column as a sort.
+   *
+   * Absent means **yes** — every column predating ADR-0095 M5-T1 is sortable, and defaulting the
+   * other way would have silently removed six sorts. `predecessors` is the first that is not: the
+   * comparator is `GanttSortKey`-typed and a predecessor LIST has no order a planner would mean by
+   * "sort by it". Declared rather than inferred from the key's type, because the two would drift
+   * the moment a non-sortable column happened to share a name with a sort key.
+   */
+  sortable?: false;
   /**
    * The cell's text for an activity — also the accessible content, never derived from the bar.
    *
@@ -37,7 +47,12 @@ export interface GanttColumn {
    * cell printed January beside a bar drawn in February — the contradiction visible on one screen
    * (`docs/TECH_DEBT.md` #135).
    */
-  value: (activity: ActivitySummary, source?: BarDateSource, hoursPerDay?: number) => string;
+  value: (
+    activity: ActivitySummary,
+    source?: BarDateSource,
+    hoursPerDay?: number,
+    predecessorNames?: readonly string[],
+  ) => string;
 }
 
 /**
@@ -92,6 +107,27 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
     align: 'right',
     value: (a) => (a.totalFloat === null ? '—' : `${a.totalFloat}d`),
   },
+  {
+    key: 'predecessors',
+    label: 'Predecessors',
+    sortable: false,
+    /**
+     * The logic, as text in the grid (M5-T1).
+     *
+     * The same fact the row's `sr-only` sentence carries and the arrows draw — from the SAME
+     * `predecessorNamesBySuccessor` index, passed in rather than recomputed, because a second
+     * answer to "what does this follow?" is the drift `bar-dates.ts` and `routeOrthogonal` were
+     * both created to end. Here it is visible rather than screen-reader-only, which is the point:
+     * a printed programme carrying its own logic needs no second document beside it.
+     *
+     * Off by default (`DEFAULT_HIDDEN_COLUMNS`) — it is the widest column, and a chart that grew
+     * one overnight for every existing plan is a change nobody asked for.
+     */
+    value: (_a, _source, _hoursPerDay, predecessorNames) =>
+      predecessorNames === undefined || predecessorNames.length === 0
+        ? '—'
+        : predecessorNames.join(', '),
+  },
 ];
 
 /**
@@ -127,8 +163,9 @@ export function ganttCellText(
   activity: ActivitySummary,
   source: BarDateSource | undefined,
   hoursPerDay: number | undefined,
+  predecessorNames?: readonly string[],
 ): string | null {
   const column = GANTT_COLUMNS.find((c) => c.key === key);
   if (column === undefined) return null;
-  return column.value(activity, source, hoursPerDay);
+  return column.value(activity, source, hoursPerDay, predecessorNames);
 }
