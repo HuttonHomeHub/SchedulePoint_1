@@ -103,6 +103,17 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   // `bg-warning text-warning-foreground`, so the pairing is one autocomplete away, and an
   // unasserted-but-available token pair is exactly the trap this suite exists to remove.
   ['--muted', '--muted-foreground', 'secondary text on a muted block'],
+  // **A read-only grid cell, and the trap ADR-0083 found going the other way.** A gated field is
+  // read-only rather than `disabled`, so the reader can still read the value — which REMOVES the
+  // 1.4.3 exemption `disabled:opacity-50` currently relies on. The treatment therefore dims the
+  // CHROME and never the VALUE: the cell fill drops to `--muted` while the text stays
+  // `--foreground`. This pair is asserted BEFORE the CSS that needs it exists (M2-T4), because a
+  // pair added afterwards is a pair that shipped unchecked.
+  [
+    '--muted',
+    '--foreground',
+    'the value in a read-only field, whose chrome is dimmed and text is not',
+  ],
   ['--success', '--success-foreground', 'the label of a solid success fill'],
   ['--warning', '--warning-foreground', 'the label of a solid warning fill'],
   ['--info', '--info-foreground', 'the label of a solid info fill'],
