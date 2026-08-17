@@ -47,9 +47,17 @@ describe('the cell gate is the editor gate, not a copy of it', () => {
     });
     // Spread, so not reference-equal — but every field the editor decided must survive verbatim.
     // A drift here is a grid and a dialog disagreeing about the same permission on the same row.
-    expect(resolved.writable).toBe(gating.general.writable);
-    expect(resolved.reason).toBe(gating.general.reason);
-    expect(resolved.readable).toBe(gating.general.readable);
+    //
+    // Derived from the scope object's OWN keys rather than a hand-written list of three. A list
+    // goes stale the day `ScopeGate` grows a field, and it goes stale silently: the new field
+    // simply never reaches the grid and nothing fails. That is the ADR-0073 C4 defect in miniature
+    // — a literal falling behind the vocabulary it was written against — and the fix is the same
+    // one, derive it.
+    for (const key of Object.keys(gating.general) as (keyof typeof gating.general)[]) {
+      expect(resolved[key], `${key} was re-decided rather than carried through`).toBe(
+        gating.general[key],
+      );
+    }
   });
 
   it('routes a progress cell to the progress scope, which is NOT pen-gated', () => {

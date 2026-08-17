@@ -16,9 +16,19 @@ import type {
  * eventually guess differently from its sibling. ADR-0062 pinned Logic and Resources to the same
  * object by an identity test rather than by a comment, and this does the same for the grid.
  *
- * So {@link ganttCellGate} **returns the editor's own object**, by reference. The identity
- * assertion in the test beside this file is the enforcement: a second `{ writable, reason }`
- * assembled here would pass every behavioural test and fail that one.
+ * So {@link ganttCellGate} **selects** the editor's scope object and adds one derived field; it does
+ * not re-decide anything. It is deliberately NOT reference-equal — `readOnly` has to be added, so
+ * the return is a spread — and the test beside this file asserts every decided field survives
+ * verbatim rather than asserting identity.
+ *
+ * That distinction is recorded because the first version of this docblock claimed "returns the
+ * editor's own object, by reference" while the code spread it, and the test's own comment said so
+ * one file over. ADR-0076 Class 3 — a decision-bearing claim asserted rather than checked — inside a
+ * paragraph about not restating decisions. Corrected rather than quietly reworded, because the
+ * weaker guarantee is the one a reader has to know. The obvious residual — a field added to
+ * `ScopeGate` later never reaching the grid, silently — is closed rather than documented: the test
+ * derives its assertion from the scope object's **own keys**, so a new field is carried through or
+ * the suite says which one was not (the ADR-0073 C4 rule, derive rather than restate).
  */
 
 /** Why a cell that could otherwise be typed into is not, right now. */
