@@ -209,3 +209,68 @@ describe('on a plan that has not been calculated', () => {
     );
   });
 });
+
+describe('keyboard entry into a cell', () => {
+  const grid = () => screen.getByRole('treegrid');
+
+  it('opens the first writable cell on F2', () => {
+    const begin = vi.fn();
+    renderGrid(editingBundle({ begin }));
+
+    fireEvent.keyDown(grid(), { key: 'F2' });
+    // The Activity column is the first editable one, so that is where F2 lands. Seeded from the
+    // rendered text like the pointer path — one seed, not two.
+    expect(begin).toHaveBeenCalledWith({ activityId: 'a1', key: 'name' }, 'Foundations');
+  });
+
+  it('skips a cell the gate has shut and opens the next writable one', () => {
+    // Otherwise F2 would appear to do nothing on a row whose first editable column happens to be
+    // read-only — a dead key, which is the lit-but-inert shape one keystroke along.
+    const begin = vi.fn();
+    renderGrid(
+      editingBundle({
+        begin,
+        gateFor: (key) => (key === 'name' ? SHUT : OPEN),
+      }),
+    );
+
+    fireEvent.keyDown(grid(), { key: 'F2' });
+    expect(begin).toHaveBeenCalledWith({ activityId: 'a1', key: 'duration' }, '5 d');
+  });
+
+  it('does nothing on F2 when every editable cell is shut', () => {
+    const begin = vi.fn();
+    renderGrid(editingBundle({ begin, gateFor: () => SHUT }));
+    fireEvent.keyDown(grid(), { key: 'F2' });
+    expect(begin).not.toHaveBeenCalled();
+  });
+
+  it('does nothing on F2 with no editing bundle at all', () => {
+    renderGrid(undefined);
+    fireEvent.keyDown(grid(), { key: 'F2' });
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('returns to row mode on Escape', () => {
+    const cancel = vi.fn();
+    const state = reduceCellEdit(IDLE, {
+      type: 'begin',
+      target: { activityId: 'a1', key: 'duration' },
+      seed: '5 d',
+    });
+    renderGrid(editingBundle({ state, cancel }));
+
+    fireEvent.keyDown(grid(), { key: 'Escape' });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves Escape alone when no cell is open, so the rung below still gets it', () => {
+    // Escape is a ladder (ADR-0064/ADR-0080): the cell, then the grid, then whatever the workspace
+    // does with it. Swallowing it here unconditionally would take a rung away from a planner who
+    // has no cell open at all.
+    const cancel = vi.fn();
+    renderGrid(editingBundle({ cancel }));
+    fireEvent.keyDown(grid(), { key: 'Escape' });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+});

@@ -395,6 +395,41 @@ export function GanttPanel({
         }
         break;
       }
+      case 'F2': {
+        // The APG grid convention for "start editing the focused thing", and the reason cells are
+        // `tabIndex={-1}` rather than tab stops: a treegrid navigates by row and enters a cell on
+        // demand, so a keyboard planner is not made to tab through six cells per row to reach the
+        // seventh row.
+        //
+        // It opens the FIRST writable editable cell rather than a remembered column. A per-row
+        // memory would be the better spreadsheet behaviour and needs a cell cursor to hang it on;
+        // this milestone deliberately ships the entry point rather than the cursor, and says so
+        // rather than leaving a reader to infer that F2 is arbitrary.
+        if (!row || row.kind !== 'activity' || editing === undefined) break;
+        const activity = row.activity;
+        for (const column of COLUMNS) {
+          const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
+          if (cellKey === undefined) continue;
+          if (!editing.gateFor(cellKey, activity.id).writable) continue;
+          event.preventDefault();
+          editing.begin(
+            { activityId: activity.id, key: cellKey },
+            column.value(activity, barDateSource, hoursPerDayFor?.(activity)),
+          );
+          break;
+        }
+        break;
+      }
+      case 'Escape': {
+        // Returns from cell mode to row mode. The cell's own handler already stops Escape reaching
+        // here while a field is open (ADR-0079's rule — an Escape typed into a field belongs to that
+        // field), so this only runs when the planner is on a row; it is the rung below.
+        if (editing === undefined || editing.state.status === 'idle') break;
+        event.preventDefault();
+        editing.cancel();
+        focusRowAt(index);
+        break;
+      }
       default:
         break;
     }
