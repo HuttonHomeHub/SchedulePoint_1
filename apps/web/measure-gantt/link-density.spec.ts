@@ -87,84 +87,93 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
   // programme. `scaleSpec` builds phases, sub-phases, WBS bands and 1.45 links per activity, which
   // is what the sort orders in R5 are supposed to rearrange.
   const spec = scaleSpec({ activities: ACTIVITY_COUNT });
-  const seeded = await page.evaluate(
-    async ({
-      org,
-      id,
-      activities,
-      dependencies,
-    }: {
-      org: string;
-      id: string;
-      activities: {
-        key: string;
-        code: string;
-        name: string;
-        type: string;
-        durationMinutes: number;
-        parentKey: string | null;
-      }[];
-      dependencies: {
-        predecessorKey: string;
-        successorKey: string;
-        type: string;
-        lagMinutes: number;
-      }[];
-    }) => {
-      const ids = new Map<string, string>();
-      const bad: string[] = [];
-      // Summaries first: a child names its parent, so the parent must already have an id.
-      const ordered = [...activities].sort((a, b) =>
-        a.type === 'WBS_SUMMARY' && b.type !== 'WBS_SUMMARY'
-          ? -1
-          : a.type !== 'WBS_SUMMARY' && b.type === 'WBS_SUMMARY'
-            ? 1
-            : 0,
-      );
-      for (const a of ordered) {
-        const res = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            name: a.name,
-            code: a.code,
-            type: a.type,
-            durationDays: Math.max(0, Math.round(a.durationMinutes / 1440)),
-            ...(a.parentKey && ids.has(a.parentKey) ? { parentId: ids.get(a.parentKey) } : {}),
-          }),
-        });
-        if (!res.ok) {
-          bad.push(`${a.code}: ${res.status} ${(await res.text()).slice(0, 120)}`);
-          continue;
-        }
-        ids.set(a.key, ((await res.json()) as { data: { id: string } }).data.id);
-      }
-      let links = 0;
-      for (const d of dependencies) {
-        const p = ids.get(d.predecessorKey),
-          q = ids.get(d.successorKey);
-        if (!p || !q) continue;
-        const res = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ predecessorId: p, successorId: q, type: d.type, lagDays: 0 }),
-        });
-        if (res.ok) links += 1;
-        else bad.push(`link ${d.predecessorKey}->${d.successorKey}: ${res.status}`);
-      }
-      return { created: ids.size, links, bad: bad.slice(0, 5), badCount: bad.length };
-    },
-    {
-      org: orgSlug,
-      id: planId,
-      activities: spec.activities as never,
-      dependencies: (spec.dependencies ?? []) as never,
-    },
+
+  // **Seeded in chunks, not one long `page.evaluate`.** At 2,000 activities the single-evaluate
+  // version issued ~5,200 sequential requests inside one call and died with `TypeError: Failed to
+  // fetch` — a page-context lifetime problem, not a server one, and it reads like a network error
+  // rather than "your evaluate ran too long". Chunking keeps each call short and lets the id map
+  // live in Node.
+  const CHUNK = 100;
+  const ids = new Map<string, string>();
+  const bad: string[] = [];
+
+  // Summaries first: a child names its parent by id, so the parent must exist before it.
+  const ordered = [...spec.activities].sort((a, b) =>
+    a.type === 'WBS_SUMMARY' && b.type !== 'WBS_SUMMARY'
+      ? -1
+      : a.type !== 'WBS_SUMMARY' && b.type === 'WBS_SUMMARY'
+        ? 1
+        : 0,
   );
+
+  for (let start = 0; start < ordered.length; start += CHUNK) {
+    const slice = ordered.slice(start, start + CHUNK).map((a) => ({
+      key: a.key,
+      code: a.code,
+      name: a.name,
+      type: a.type,
+      durationDays: Math.max(0, Math.round(a.durationMinutes / 1440)),
+      parentId: a.parentKey ? (ids.get(a.parentKey) ?? null) : null,
+    }));
+    const out = await page.evaluate(
+      async ({ org, id, rows }: { org: string; id: string; rows: typeof slice }) => {
+        const made: [string, string][] = [];
+        const failed: string[] = [];
+        for (const r of rows) {
+          const res = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              name: r.name,
+              code: r.code,
+              type: r.type,
+              durationDays: r.durationDays,
+              ...(r.parentId ? { parentId: r.parentId } : {}),
+            }),
+          });
+          if (!res.ok) {
+            failed.push(`${r.code}: ${res.status} ${(await res.text()).slice(0, 100)}`);
+            continue;
+          }
+          made.push([r.key, ((await res.json()) as { data: { id: string } }).data.id]);
+        }
+        return { made, failed };
+      },
+      { org: orgSlug, id: planId, rows: slice },
+    );
+    for (const [key, value] of out.made) ids.set(key, value);
+    bad.push(...out.failed);
+  }
+
+  const deps = (spec.dependencies ?? []).flatMap((d) => {
+    const p = ids.get(d.predecessorKey);
+    const q = ids.get(d.successorKey);
+    return p && q ? [{ predecessorId: p, successorId: q, type: d.type }] : [];
+  });
+  for (let start = 0; start < deps.length; start += CHUNK) {
+    const slice = deps.slice(start, start + CHUNK);
+    const failed = await page.evaluate(
+      async ({ org, id, rows }: { org: string; id: string; rows: typeof slice }) => {
+        const out: string[] = [];
+        for (const r of rows) {
+          const res = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ...r, lagDays: 0 }),
+          });
+          if (!res.ok) out.push(`link: ${res.status} ${(await res.text()).slice(0, 100)}`);
+        }
+        return out;
+      },
+      { org: orgSlug, id: planId, rows: slice },
+    );
+    bad.push(...failed);
+  }
+
   // Report what it actually seeded rather than what it asked for — the `seedActivities` rule.
-  expect(seeded.badCount, `seeding rejected ${seeded.badCount}: ${seeded.bad.join('; ')}`).toBe(0);
+  expect(bad.length, `seeding rejected ${bad.length}: ${bad.slice(0, 3).join('; ')}`).toBe(0);
 
   // **Recalculate FIRST, then read.** This block used to run AFTER the graph read, and the
   // consequence was not a slightly-off number: `isCritical` and `totalFloat` are engine-written
