@@ -26,7 +26,7 @@ flowchart LR
   M1 --> M4["M4 · Logic visible<br/>(Q1)"]
   M3 --> M5["M5 · Legibility + memory"]
   M4 --> M5
-  M5 --> M6["M6 · Gate pass + flag flip + ADR"]
+  M5 --> M6["M6 · Gate pass + ADR"]
 ```
 
 ### Epic
@@ -36,9 +36,21 @@ Asta Powerproject, discharge ADR-0093 D5's inherited requirement, and close the 
 in [`PROJECT_BRIEF.md`](../../PROJECT_BRIEF.md) §8. Roadmap theme: "Gantt view — the secondary
 tabular projection of the same model".
 
-**Feature flag (pending Q4):** `VITE_GANTT_EDITING`, derived from `GANTT_VIEW_ENABLED`,
-**default-off**, Class B — a one-line guard at each seam, never a second JSX root
-(`scripts/flag-retirement.json:543`, `classACap: 0`). Flipped at M6.
+**Feature flag — NONE (Q4 answered 2026-08-17: unflagged, commit boundaries only).** The spec
+recommended `VITE_GANTT_EDITING` default-off; the product owner chose unflagged, which accepts
+the cost that flag existed to avoid: the host auto-pulls every release (ADR-0047), so **each
+milestone reaches the running system on the day it merges.** That is only safe under the
+ordering constraint below, which is stricter than "commit boundaries" and is the honest price
+of the choice:
+
+> **Every milestone leaves the Gantt coherent for a planner who finds it mid-epic.** No
+> milestone merges with an affordance that is visible and inert, a control whose write path is
+> half-built, or a gesture with no undo. A milestone that cannot meet that is **split until it
+> can** — this is a merge condition, not an aspiration, and M6's gate pass is too late to
+> discover it.
+
+This also removes the estate's need for its first `flagDefaultOff` call, so M0-T2's
+**[UNMEASURED]** unknown disappears rather than being resolved
 
 ---
 
@@ -104,23 +116,25 @@ precedent).
   8. Write `docs/specs/gantt-editing/m0-measurements.md`; add `test:e2e:measure-gantt` to
      `apps/web/package.json`. **Not** a CI step — a harness, not a gate.
 
-##### Task M0-T2 — Verify the flag mechanics before writing the flag
+##### Task M0-T2 — Prove each milestone can merge coherently, before any of them does
 
-- **Description:** the estate has **no default-off flag** (ADR-0084: `flagDefaultOff` is called zero
-  times), so `pnpm check:flags`'s behaviour on one is unverified.
+- **Description:** Q4's answer (unflagged) makes the ordering constraint above a **merge condition**,
+  and a condition nobody checks until M6 is a condition that fails at M6. Walk M1–M5 and, for each,
+  name what a planner finds on the running host the day it merges. This replaces the flag-mechanics
+  task the spec had here: with no flag there is nothing to verify about `flagDefaultOff`, and the
+  estate keeps its record of zero such calls.
 - **Complexity:** S
 - **Dependencies:** none
-- **Risks:** discovering at M6 that the gate demands an `@enabled` date a default-off flag cannot
-  have → find out now, on a throwaway branch.
-- **Testing:** `pnpm check:flags` green with the declaration in place.
+- **Risks:** a milestone that cannot be made coherent is found late, when splitting it is expensive →
+  find it now, on paper, when splitting is free.
+- **Testing:** none — this is a written artefact reviewed before M1 starts.
 - **Development steps:**
-  1. Declare `VITE_GANTT_EDITING` in `env.ts` as
-     `GANTT_VIEW_ENABLED && flagDefaultOff(import.meta.env.VITE_GANTT_EDITING)` with its docblock.
-  2. Register it in `scripts/flag-retirement.json` with `class: "B"`, `derivedFrom:
-"GANTT_VIEW_ENABLED"` and a batch **no earlier than its parent's** (ADR-0084 D4 — the gate
-     failed on exactly this on its own first run).
-  3. Run `pnpm check:flags`; if it rejects a dateless declaration, decide and record whether the tag
-     is added at the flip or the gate is widened. Do not guess.
+  1. For each of M1–M5 write one sentence: what is newly visible, what it does, and what it does
+     **not** yet do that a planner might reasonably expect from what they can see.
+  2. Flag any milestone whose sentence contains "but you cannot yet" about something its own new
+     affordance implies — that is the lit-but-inert shape (ADR-0059 M6, ADR-0062 M6, ADR-0064 §7).
+  3. Split those before M1 starts, and record the split. M3 is the one to look at hardest: a bar that
+     drags but has no undo, or drags in EARLY mode only, is exactly this defect.
 
 ---
 
@@ -407,19 +421,44 @@ written at the dropped day and successors moved; drag in **VISUAL** mode, assert
 
 ---
 
-## Milestone 4 — Logic is visible _(content pending Q1)_
+## Milestone 4 — Logic is visible _(Q1 answered: **option C**)_
 
-**Outcome (recommended default, option B):** selecting a row draws its predecessor and successor
-links on the chart, so "why is this bar here?" is answerable without leaving the view.
-**Entry point:** select any row — the arrows appear with the selection. Under option C a
-**Show logic links** toggle joins `View ▾` (never Row 1 or Row 2 — SC-6).
-**Journey:** `e2e-gantt-editing/logic-overlay.spec.ts` — select a row with a known predecessor;
-assert the path renders; assert it is `aria-hidden` and the textual equivalent is present.
+**Outcome:** a **Show logic links** toggle in `View ▾` (never Row 1 or Row 2 — SC-6), **default
+off**, draws every dependency whose row span crosses the visible window. Selecting a row draws that
+row's predecessors and successors regardless of the toggle, so "why is this bar here?" is answerable
+without turning anything on.
+**Entry point:** `View ▾ → Show logic links` for the full set; selecting a row for its own links.
+**Journey:** `e2e-gantt-editing/logic-overlay.spec.ts` — select a row with a known predecessor,
+assert the path renders, assert it is `aria-hidden` and the textual equivalent is present; then
+toggle all-links on and assert a link between two rows neither of which is selected.
 
-> **This milestone does not start until Q1 is answered.** If the answer is A, the milestone is
-> deleted rather than reduced, and the decision is recorded in the ADR with M0-T1 R5's number beside
-> it. If the answer is C, the R5 threshold (p95 window-crossing links ≤ 300) governs, and exceeding
-> it declines C **on the measurement** rather than on the arguer.
+> **Q1 was answered C ahead of the measurement, and that changes what M0-T1 R5 is for.** The
+> product-owner decision (2026-08-17, feature-spec "Answered") adopts all-links-behind-a-toggle
+> without making it conditional on the count. R5 still runs, unchanged, at the same point — but its
+> output now **sizes the mitigation** rather than deciding whether this milestone happens. There is
+> no longer a number that declines C.
+>
+> **So the ≤ 300 threshold becomes a performance requirement with a named fallback.** If p95
+> window-crossing links exceeds 300 on the 2,000-activity imported-shape fixture, M4 ships a bounded
+> strategy — cull to the visible window first, then cap — and **the cap is stated on screen** ("N
+> links not shown"). A silent cap is precisely the defect class this register keeps recording
+> (ADR-0081's dark capability, ADR-0059 M6's lit-but-inert zoom, ADR-0090's "no silent caps"), so
+> either the count is visible or there is no cap.
+>
+> **Selection-only is not skipped; it is the first slice and the toggle's off-state.** It is what a
+> planner reads when tracing one bar, it is bounded by that activity's degree in every real
+> programme, and it is the fallback surface if the all-links path measures badly. Building C without
+> it would leave the off-state empty and make the toggle the only route to any logic at all.
+>
+> **The routing objection is weaker here than ADR-0059 §4 implies, and the reason is worth stating
+> because neither that ADR nor this spec's first draft said it.** ADR-0059's phrase is "arbitrary
+> link **routing**", and routing cost — obstacle avoidance, corridor bundling (ADR-0065) — is
+> independent of the render target, so answering "SVG, not canvas" does not by itself answer it.
+> What answers it is the geometry: TSLD bars **share lanes**, so a link must be routed around bars
+> that sit between its endpoints; Gantt rows are **one bar per row, vertically separated**, so a
+> link is a simple elbow through whitespace. ADR-0065's expensive half does not arise. That is the
+> strongest argument for showing logic in the Gantt and it is being recorded, not assumed —
+> M4-T1 asserts that the derivation contains no obstacle search.
 
 #### Feature: M4-F1 — The overlay · **L**
 
@@ -436,8 +475,11 @@ assert the path renders; assert it is `aria-hidden` and the textual equivalent i
 - **M4-T2** — SVG paths + driving/non-driving cue reused from the canvas · **M**
 - **M4-T3** — off-window stubs + the budget test · **M**
 - **M4-T4** — journey + a11y assertion · **S**
-- **M4-T5** — _(option C only)_ the `View ▾` toggle, derived from the same `LensToggle` records the
+- **M4-T5** — the `View ▾` toggle, derived from the same `LensToggle` records the
   popover reads (ADR-0092 D5's rule: never restated beside them) · **S**
+- **M4-T6** — the bounded strategy **if and only if** R5's p95 exceeds 300: cull to the visible
+  window, then cap with the withheld count stated on screen. Skipped, and recorded as skipped
+  with the measured number beside it, if R5 comes in under. · **M**
 
 ---
 
@@ -485,7 +527,7 @@ they survive; open a row menu and assert its items are the dock's.
 
 ---
 
-## Milestone 6 — The gate pass, the flag flip, and the ADR
+## Milestone 6 — The gate pass and the ADR
 
 **Outcome:** the epic is enabled by default, the ADR is filed, and the register is corrected.
 **Entry point:** none new — this milestone lights what M1–M5 built.
@@ -510,8 +552,9 @@ as a formality:
 
 - **M6-T1** run the gates; fold blocking findings **each with a regression test verified red against
   the old code first** · **L**
-- **M6-T2** flip `VITE_GANTT_EDITING` default-on; add the `@enabled` tag; update
-  `flag-retirement.json` · **S**
+- **M6-T2** _(no flag to flip — Q4)_. Instead: confirm `scripts/flag-retirement.json` is
+  **unchanged** by this epic and that `pnpm check:flags` still reports the same live count, so
+  an epic that deliberately added no flag cannot have added one by accident · **S**
 - **M6-T3** file the ADR · **M** — it must record: the amendment to **ADR-0059 §4**; Q1's answer with
   M0-T1 R5's number beside it; the B1–B10 adopt/decline table as the decomposition of "comparable to
   P6/Powerproject"; spec F4's correction to `BACKLOG.md`; and **what was measured and contradicted
@@ -548,16 +591,16 @@ the signal named in the spec's §4 that the milestone has drifted.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                          | Likelihood | Impact | Mitigation                                                                                                                                                                                                                |
-| -------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Q1 answered "all links, always"** and the measurement then refuses it    | med        | high   | R5's threshold is named **before** the answer, so the measurement decides. D is not recommended in any case.                                                                                                              |
-| Spec **F4** is wrong — `add-note` does not reach the editor from the Gantt | med        | med    | M0-T1 R1 runs it before M1 is designed against it. Either answer leaves M1's work identical; only its framing and journey assertions change.                                                                              |
-| Spec **F5** is wrong — `onTsldResize` is not lane-free                     | low        | med    | M3-T3 verifies the signature before assuming it, the way F5 itself was established.                                                                                                                                       |
-| The lift (M0-F2) regresses the canvas invisibly                            | med        | high   | Acceptance is that **every existing suite passes unchanged**; if one needs editing, the move stops.                                                                                                                       |
-| Editing state per row breaks the bounded-live-node claim                   | med        | med    | R4 is the baseline; SC-4 is re-measured at M6 by the performance gate rather than assumed.                                                                                                                                |
-| Below `md` the docked bar is invisible                                     | med        | med    | R7 measures it; M1-T2 decides it; a journey case at a narrow viewport pins it. ADR-0092 M6 shipped exactly this defect untested.                                                                                          |
-| The Gantt becomes attractive enough to pull planners off the TSLD          | med        | med    | ADR-0059 accepted this risk and recorded the brief's §7 metric as **unmeasurable** (no telemetry facade). This epic increases it and cannot measure it — stated, not solved.                                              |
-| Two spreadsheets — this grid and `ActivitiesTable` — drift                 | med        | med    | Shared column semantics (`grid-columns.ts`) and one action registry. A UX gate question at M6 rather than a claim now.                                                                                                    |
-| Something needs a schema change mid-epic                                   | low        | med    | Named in advance (M5-T1's persisted column choice). `database-architect` opens **before** any code, with no self-assessment of size (CLAUDE.md §19.3).                                                                    |
-| A width regression on the command surface                                  | low        | med    | Nothing is added to Row 1 or Row 2 by design; `e2e-toolbar-fit` proves it. Note the selection bar is **out of that gate's scope by decision** (TECH_DEBT #124), so its own width is unguarded — worth one M6 measurement. |
-| `pnpm check:flags` rejects a default-off flag                              | med        | low    | M0-T2 finds out first, on a throwaway branch, rather than at M6.                                                                                                                                                          |
+| Risk / assumption                                                               | Likelihood | Impact   | Mitigation                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------- | ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Q1 answered "all links, always"** and the measurement then refuses it         | med        | high     | R5's threshold is named **before** the answer, so the measurement decides. D is not recommended in any case.                                                                                                              |
+| Spec **F4** is wrong — `add-note` does not reach the editor from the Gantt      | med        | med      | M0-T1 R1 runs it before M1 is designed against it. Either answer leaves M1's work identical; only its framing and journey assertions change.                                                                              |
+| Spec **F5** is wrong — `onTsldResize` is not lane-free                          | low        | med      | M3-T3 verifies the signature before assuming it, the way F5 itself was established.                                                                                                                                       |
+| The lift (M0-F2) regresses the canvas invisibly                                 | med        | high     | Acceptance is that **every existing suite passes unchanged**; if one needs editing, the move stops.                                                                                                                       |
+| Editing state per row breaks the bounded-live-node claim                        | med        | med      | R4 is the baseline; SC-4 is re-measured at M6 by the performance gate rather than assumed.                                                                                                                                |
+| Below `md` the docked bar is invisible                                          | med        | med      | R7 measures it; M1-T2 decides it; a journey case at a narrow viewport pins it. ADR-0092 M6 shipped exactly this defect untested.                                                                                          |
+| The Gantt becomes attractive enough to pull planners off the TSLD               | med        | med      | ADR-0059 accepted this risk and recorded the brief's §7 metric as **unmeasurable** (no telemetry facade). This epic increases it and cannot measure it — stated, not solved.                                              |
+| Two spreadsheets — this grid and `ActivitiesTable` — drift                      | med        | med      | Shared column semantics (`grid-columns.ts`) and one action registry. A UX gate question at M6 rather than a claim now.                                                                                                    |
+| Something needs a schema change mid-epic                                        | low        | med      | Named in advance (M5-T1's persisted column choice). `database-architect` opens **before** any code, with no self-assessment of size (CLAUDE.md §19.3).                                                                    |
+| A width regression on the command surface                                       | low        | med      | Nothing is added to Row 1 or Row 2 by design; `e2e-toolbar-fit` proves it. Note the selection bar is **out of that gate's scope by decision** (TECH_DEBT #124), so its own width is unguarded — worth one M6 measurement. |
+| A milestone merges to the auto-pulling host in a half-built state (Q4: no flag) | med        | **high** | The ordering constraint is a merge condition, and M0-T2 walks M1–M5 against it before M1 starts rather than discovering it at M6.                                                                                         |

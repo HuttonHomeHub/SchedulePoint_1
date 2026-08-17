@@ -348,6 +348,45 @@ Four are CRITICAL. Everything else has a stated default and does not block.
 > than its parent (ADR-0084 D4, and `flag-retirement.json` records that gate failing on its own
 > first run).
 
+### Answered — product-owner decisions, 2026-08-17
+
+All four criticals are settled. **Two depart from the recommended default**, and both change the
+shape of the work rather than merely selecting an option, so what they cost is recorded here rather
+than discovered during build.
+
+**Q1 → C (all links behind a toggle, default off).** Adopted **ahead of** the M0-T1 R5 measurement
+rather than conditionally on it. The consequence is a real one and must not be quietly dropped: the
+window-crossing link count stops being a **go/no-go gate** and becomes a **performance requirement**.
+M0-T1 R5 still runs, at the same point, on the same fixture — but its output now sizes the mitigation
+instead of deciding whether M4 happens. If p95 exceeds 300, M4 ships a bounded strategy (cull to the
+visible window, then cap with an honest "N links not shown" statement) rather than being declined.
+**A cap that is silent is the defect this register keeps recording** (ADR-0081's dark capability,
+ADR-0059 M6's lit-but-inert zoom), so the count is stated on screen or there is no cap.
+The B overlay is not skipped — it is M4's first slice and the toggle's off-state, because
+selection-only is what a planner reads when tracing one bar, and it is the fallback if the all-links
+path measures badly.
+
+**Q2 → the recommended default.** Typing a date writes the constraint the drag writes, with one
+non-blocking inline note per session.
+
+**Q3 → the recommended default.** Docked bar in M1, row menu in M5 from the **same**
+`selectionActionItems` registry.
+
+**Q4 → unflagged, commit boundaries only** (the spec recommended a default-off flag). This accepts
+the cost the flag existed to avoid: the host auto-pulls every release (ADR-0047), so **each milestone
+reaches the running system as it merges.** That is only safe under a constraint the plan must now
+carry, and it is a constraint on ordering rather than a note:
+
+> **Every milestone must leave the Gantt in a coherent state for a planner who finds it mid-epic.**
+> No milestone may merge with an affordance that is visible and inert, a control whose write path is
+> half-built, or a gesture with no undo. A milestone that cannot meet that is split until it can.
+
+That is stricter than "commit boundaries", and it is the honest price of the choice. It also removes
+this epic's need for the estate's first `flagDefaultOff` call, which M0 had listed as **[UNMEASURED]**
+(`pnpm check:flags` has never seen a default-off flag) — so that unknown disappears rather than being
+resolved. M1 already satisfies the constraint by construction: it discharges the inherited
+requirement and is complete in itself.
+
 **Stated defaults, not blocking.** (D1) Editing is **not** offered in the printed programme or the
 guest share view. (D2) The Gantt does not gain its own zoom or its own time-scale — ADR-0059 §2
 stands. (D3) A Gantt drag **never changes lane**, so a planner cannot silently rearrange the diagram
