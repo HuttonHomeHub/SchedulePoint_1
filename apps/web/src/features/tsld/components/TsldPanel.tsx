@@ -90,13 +90,13 @@ import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
 
 import { CanvasDock } from '@/components/layout/workspace/canvas-dock';
-import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
+import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
