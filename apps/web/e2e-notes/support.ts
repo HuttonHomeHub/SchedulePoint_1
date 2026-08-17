@@ -48,7 +48,36 @@ export async function createAndOpenPlan(page: Page, name: string): Promise<void>
 }
 
 /** Add an activity to the open plan's activities table. */
+/**
+ * Make the activities table visible.
+ *
+ * The panel is **collapsed by default** on the plan workspace (ADR-0030), and it returns to that
+ * default on every reload — which is what this suite does mid-test to defeat the client cache. So
+ * this is needed in two places, not one: before the New-activity button can be clicked, and again
+ * after any `page.reload()` before the table can be read. Idempotent, so calling it when the panel
+ * is already open costs nothing.
+ */
+export async function showActivities(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: 'Expand activities panel' });
+  const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+  // **Wait on the TOGGLE, not on the table.** Two traps, both paid for:
+  //
+  // 1. `DataTable` returns its empty state instead of a `<table>` when there are no rows
+  //    (`data-table.tsx:86`), so an empty plan has no table to wait for — and this helper runs
+  //    before the first activity exists.
+  // 2. `isVisible()` is a snapshot, not a wait. Called straight after `page.reload()` it answers
+  //    "no" because the app has not painted, the expand is skipped, and the missing table then
+  //    reads exactly like the edit under test having failed to persist.
+  //
+  // The toggle is present in one state or the other whenever the workspace has rendered, which is
+  // the invariant worth waiting on. Idempotent.
+  await expect(expand.or(collapse).first()).toBeVisible();
+  if (await expand.isVisible()) await expand.click();
+  await expect(collapse).toBeVisible();
+}
+
 export async function addActivity(page: Page, name: string): Promise<void> {
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name').fill(name);

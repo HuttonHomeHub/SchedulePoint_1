@@ -7,6 +7,7 @@ import {
   createEightHourCalendar,
   ensurePen,
   onboard,
+  showActivities,
   openEdit,
   openProject,
   planIdOf,
@@ -51,6 +52,9 @@ test('a sub-day duration and lag round-trip through the real API', async ({ page
   // re-assert it before touching a writer surface. `ensurePen` returns immediately if it is held.
   await page.reload();
   await ensurePen(page);
+  // The panel's collapsed default comes back with the reload, so the table below is not in the DOM
+  // until this runs. On the legacy stacked page the table was simply always there.
+  await showActivities(page);
 
   // The table reads back what was typed (M4). `0 d` here would be the pre-epic defect, and is also
   // what the same column prints for a milestone.
@@ -89,6 +93,8 @@ test('a sub-day duration and lag round-trip through the real API', async ({ page
   await expect(editDialog).toBeHidden();
 
   await page.reload();
+  // Second reload, second collapse — the panel default is per-load, not per-session.
+  await showActivities(page);
   await expect(rowCell(page, 'Lift plant (revised)')).toContainText('4h');
 
   expect(

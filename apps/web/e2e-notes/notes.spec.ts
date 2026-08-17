@@ -16,8 +16,10 @@ import { addActivity, createAndOpenPlan, onboard, openProject } from './support'
  * 6. **Delete** the note → the thread is empty and the badge is gone.
  * 7. An **axe** wcag2a/wcag2aa pass with the notes surface visible — zero violations.
  *
- * Runs on the legacy stacked plan-detail page with the pen off (see the config); notes are not
- * pen-gated regardless (ADR-0046), so no lock dance.
+ * Runs on the plan workspace with the pen off (see the config); notes are not pen-gated regardless
+ * (ADR-0046), so no lock dance. It ran on the legacy stacked page until that surface was retired
+ * with `VITE_CANVAS_WORKSPACE`; the only change the move needed was expanding the activities panel,
+ * which is collapsed by default here (`support.ts`).
  */
 test('a member adds, edits and deletes a note and the row badge tracks it', async ({ page }) => {
   const stamp = Date.now();
