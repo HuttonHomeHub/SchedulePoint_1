@@ -34,6 +34,7 @@
     "e2e-designed-ui",
     "e2e-designed-chrome",
     "e2e-gantt",
+    "e2e-gantt-editing",
     "e2e-activity-editor",
     "e2e-wbs",
     "e2e-calendar-shifts",

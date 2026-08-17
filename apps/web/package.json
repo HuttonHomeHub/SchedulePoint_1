@@ -49,7 +49,8 @@
     "test:e2e:account-verify": "playwright test --config playwright.account-verify.config.ts --pass-with-no-tests",
     "test:e2e:csp": "playwright test --config playwright.csp.config.ts --pass-with-no-tests",
     "test:e2e:public": "playwright test --config playwright.public.config.ts --pass-with-no-tests",
-    "clean": "rimraf dist .turbo *.tsbuildinfo"
+    "clean": "rimraf dist .turbo *.tsbuildinfo",
+    "test:e2e:gantt-editing": "playwright test --config playwright.gantt-editing.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.8.0",
