@@ -288,6 +288,12 @@ export function GanttPanel({
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   const gridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
+  // The row menu occupies a COLUMN, and every index after it shifts. `role="row"` may contain only
+  // cells (`gridcell`/`columnheader`/`rowheader`), so M5-T3's trigger sitting as a direct child of
+  // the row was an `aria-required-children` violation — axe rates it critical, and it fired once
+  // per rendered row. Derived at panel level rather than per row so the header, the activity rows
+  // and the WBS bucket rows cannot disagree about where the Timeline column starts.
+  const actionColumns = rowMenuContextFor === undefined ? 0 : 1;
 
   const pxPerDay =
     barRegionWidth > 0 ? pxPerDayForPreset(zoomLevel, barRegionWidth) : FALLBACK_PX_PER_DAY;
@@ -707,7 +713,7 @@ export function GanttPanel({
         role="treegrid"
         aria-label="Schedule as a bar chart"
         aria-rowcount={rows.length + 1}
-        aria-colcount={COLUMNS.length + (showVariance ? 2 : 1)}
+        aria-colcount={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
         // Rows carry the roving tab stop, so the grid itself is never tabbed to — but an
         // interactive role must still be focusable, so it stays a programmatic focus target.
         tabIndex={-1}
@@ -754,10 +760,18 @@ export function GanttPanel({
                 </div>
               );
             })}
+            {actionColumns === 0 ? null : (
+              // `sr-only`, so it names the column for assistive technology without taking layout —
+              // the trigger sits in the slack at the end of the pinned block and has no visible
+              // heading of its own.
+              <div role="columnheader" aria-colindex={COLUMNS.length + 1} className="sr-only">
+                Actions
+              </div>
+            )}
             {showVariance ? (
               <div
                 role="columnheader"
-                aria-colindex={COLUMNS.length + 1}
+                aria-colindex={COLUMNS.length + actionColumns + 1}
                 aria-sort="none"
                 className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs font-medium"
                 style={{ width: VARIANCE_COLUMN_WIDTH }}
@@ -768,7 +782,7 @@ export function GanttPanel({
           </div>
           <div
             role="columnheader"
-            aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
+            aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
             aria-sort="none"
             className="border-border shrink-0 border-b"
             style={{ width: chartPx }}
@@ -817,6 +831,7 @@ export function GanttPanel({
               dependencies,
               predecessorsById,
               rowMenuContextFor,
+              actionColumns,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -860,6 +875,7 @@ export function GanttPanel({
  * the keyboard cannot reach is a grouping half the users cannot collapse.
  */
 function GanttBucketRowView({
+  actionColumns,
   row,
   rowIndex,
   top,
@@ -882,6 +898,7 @@ function GanttBucketRowView({
   pxPerDay: number;
   gridWidth: number;
   showVariance: boolean;
+  actionColumns: number;
   isTabStop: boolean;
   registerRef: (element: HTMLDivElement | null) => void;
   onFocusRow: () => void;
@@ -958,7 +975,7 @@ function GanttBucketRowView({
 
       <div
         role="gridcell"
-        aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
+        aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
         className="relative h-full shrink-0"
         style={{ width: chartPx }}
       >
@@ -1008,6 +1025,7 @@ interface GanttRowViewProps {
   dependencies: readonly DependencySummary[] | undefined;
   predecessorsById: ReadonlyMap<string, readonly string[]>;
   rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
+  actionColumns: number;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -1022,6 +1040,7 @@ interface GanttRowViewProps {
 }
 
 function GanttRowView({
+  actionColumns,
   row,
   rowIndex,
   top,
@@ -1293,12 +1312,19 @@ function GanttRowView({
             action literally, closing the hole ADR-0094 recorded when it noted the gate compares two
             registries and cannot see a third. */}
         {rowMenuContext === null ? null : (
-          <GanttRowMenu context={() => rowMenuContext(activity)} activityName={activity.name} />
+          // Wrapped in a CELL, never a bare child of the row: `role="row"` may contain only
+          // `gridcell`/`columnheader`/`rowheader`, and a loose `button[aria-haspopup]` is an
+          // `aria-required-children` violation axe rates CRITICAL — one per rendered row, which the
+          // `e2e-gantt` journey's scan caught after this shipped. The sr-only link summary above is
+          // untouched: it carries no role, so it is text content rather than an unallowed child.
+          <div role="gridcell" aria-colindex={COLUMNS.length + 1} className="flex shrink-0">
+            <GanttRowMenu context={() => rowMenuContext(activity)} activityName={activity.name} />
+          </div>
         )}
         {showVariance ? (
           <div
             role="gridcell"
-            aria-colindex={COLUMNS.length + 1}
+            aria-colindex={COLUMNS.length + actionColumns + 1}
             className={cn(
               'shrink-0 truncate px-2 text-right text-xs',
               // Direction is carried by the WORD, not the colour — "late"/"early" reads the same
@@ -1314,7 +1340,7 @@ function GanttRowView({
 
       <div
         role="gridcell"
-        aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
+        aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
         className="relative h-full shrink-0"
         style={{ width: chartPx }}
       >
