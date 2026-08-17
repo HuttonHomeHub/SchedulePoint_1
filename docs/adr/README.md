@@ -118,3 +118,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0092](0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)         | The canvas dock, and the vertical budget           | Accepted           |
 | [0093](0093-an-object-action-belongs-on-the-object.md)                    | An object action belongs on the object             | Accepted           |
 | [0094](0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)        | One meaning of "conflict", a remedy on the object  | Accepted           |
+| [0095](0095-the-gantt-becomes-a-working-surface.md)                       | The Gantt becomes a working surface                | Accepted           |

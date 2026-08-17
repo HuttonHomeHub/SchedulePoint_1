@@ -167,3 +167,27 @@ export async function showGantt(page: Page): Promise<void> {
 export function diagramActivityList(page: Page): ReturnType<Page['getByRole']> {
   return page.getByRole('listbox', { name: 'Activities in the diagram' });
 }
+
+/**
+ * A Gantt row, located by its **name cell** rather than by the row's text.
+ *
+ * ADR-0095 gave every row the arrows' textual equivalent — an `sr-only`
+ * "Follows <predecessors>." rendered as a direct child of the row — so a successor's row contains
+ * its predecessors' NAMES. A `filter({ hasText })` locator therefore matches rows that are not the
+ * activity being addressed, and `.first()` then picks whichever of them the sort put on top.
+ *
+ * `e2e-float-paths` shipped exactly that and failed in CI: its fixture puts the successor at
+ * `laneIndex: 0`, so the successor's row came first and BOTH of its row locators collapsed onto it
+ * — one assertion passing and its neighbour failing against the same element. The journeys here
+ * pass under the same pattern only because their seeded rows happen to sort the other way round,
+ * which is not a property any of them assert.
+ *
+ * **Anchored, never exact**: the float-path de-emphasis marker renders INSIDE the name cell, so an
+ * exact match would miss precisely the rows those assertions are about.
+ */
+export function ganttRow(page: Page, name: string): ReturnType<Page['getByRole']> {
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByRole('gridcell', { name: new RegExp(`^${name}\\b`) }) })
+    .first();
+}

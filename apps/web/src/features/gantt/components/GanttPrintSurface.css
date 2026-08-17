@@ -234,3 +234,24 @@
     margin-left: 12px;
   }
 }
+
+/*
+ * Bar labels and the constraint badge (M5 legibility, B10f).
+ *
+ * Black on white: the printed programme is judged in black and white, so the `--warning-text` the
+ * screen badge uses would print as an indistinguishable grey. The glyph carries the meaning here
+ * and the colour carries none — which is the 1.4.1 rule holding by construction rather than by
+ * validation, on the one surface where colour cannot be relied on at all.
+ */
+.gantt-print-bar-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 7pt;
+  white-space: nowrap;
+  color: #000;
+}
+
+.gantt-print-badge {
+  font-weight: 700;
+}

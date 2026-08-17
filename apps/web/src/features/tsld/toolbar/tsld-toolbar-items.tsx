@@ -337,6 +337,16 @@ const VIEW_TOGGLE_META: Record<
     enabled: CANVAS_VISUAL_LANGUAGE_ENABLED,
   },
   wbsBand: { group: 'structure', label: 'WBS band', enabled: WBS_IMPROVEMENTS_ENABLED },
+  // The Gantt's dependency arrows (M4). Listed under `structure` because that is what it is —
+  // the shape of the programme rather than a marker on it — and it lives in `View ▾` rather than
+  // on Row 1 or Row 2 deliberately (spec SC-6): those rows are already the subject of two epics
+  // spent fitting them, and a toggle nobody presses twice a session does not earn a slot there.
+  //
+  // No `enabled` gate: this epic has no feature flag (the product owner's Q4 choice), so the item
+  // is offered wherever the menu is. On the canvas it is inert — the diagram has always drawn its
+  // logic — which is honest rather than confusing: the toggle says what the VIEW shows, and the
+  // view that ignores it is the one already showing everything.
+  logicLinks: { group: 'structure', label: 'Logic links' },
   // The data-date status line (canvas status & feedback M1) — listed before Today because on a
   // statused programme the data date sits left of (before) today, and the menu order should read
   // in diagram order. Flag-off it is filtered out, so `View▾` offers no such toggle (the parity
@@ -355,6 +365,34 @@ function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof 
   return (Object.keys(VIEW_TOGGLE_META) as Array<keyof TsldViewToggles>).filter(
     (key) => VIEW_TOGGLE_META[key].group === group && VIEW_TOGGLE_META[key].enabled !== false,
   );
+}
+
+/**
+ * Toggles that belong to **one view only**, and which view.
+ *
+ * `logicLinks` switches the GANTT's dependency arrows; the diagram has always drawn its logic
+ * unconditionally, so on the canvas the control is a live checkbox that changes nothing — which
+ * reads as a broken control rather than an honest one. Found by the M6 ux gate, which also pointed
+ * at the fix sitting in the same diff: `add-note` gates on `ctx.planView !== 'gantt'`, exactly the
+ * per-view scoping this needed and did not get.
+ *
+ * A map rather than a per-key `if`, so the next view-specific toggle is an entry rather than a
+ * branch — and so `TSLD_VIEW_TOGGLE_KEYS` (which the registry test pins) keeps listing the whole
+ * vocabulary while the PANEL shows what applies here.
+ */
+const VIEW_SCOPED_TOGGLES: Partial<Record<keyof TsldViewToggles, 'gantt' | 'tsld'>> = {
+  logicLinks: 'gantt',
+};
+
+/** The keys `View▾` offers for the view currently on screen. */
+function viewToggleKeysFor(
+  group: ViewToggleGroupId,
+  planView: string,
+): ReadonlyArray<keyof TsldViewToggles> {
+  return visibleViewToggleKeysIn(group).filter((key) => {
+    const only = VIEW_SCOPED_TOGGLES[key];
+    return only === undefined || only === planView;
+  });
 }
 
 /** The keys `View▾` actually offers (every group, flag-off-gated members excluded), exported so a
@@ -1533,7 +1571,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
   return (
     <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
       {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
-        const keys = visibleViewToggleKeysIn(id);
+        const keys = viewToggleKeysFor(id, ctx.planView);
         const lenses = lensTogglesIn(id);
         // `zoom` and `insight` render content that is not a toggle or a lens (the two radio
         // groups), so an emptiness test that only counts those would drop them. Without this the
@@ -2425,7 +2463,18 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...addNoteShape,
-          isVisible: () => NOTES_ENABLED,
+          // **Not in the Gantt (M1).** Spec F4 found this was the ONLY way a Contributor reached
+          // progress from a Gantt selection — via a button labelled "Add note" plus a tab change,
+          // which is the discoverability failure that milestone exists to fix. Now that the object
+          // bar is docked in the Gantt with a correctly-labelled route, leaving this here would add
+          // a third entry point beside two bad ones rather than replacing them: ADR-0093's defect
+          // reproduced inside the milestone meant to discharge it, which is exactly how the ux
+          // review put it.
+          //
+          // It stays on the canvas, where it is the toolbar's own route into the Logic panel for a
+          // planner working from the command surface (entry-route gap #6, in `addNoteShape`'s own
+          // description).
+          isVisible: (ctx) => NOTES_ENABLED && ctx.planView !== 'gantt',
           // Gate on the RESOLVED row (U3): an id whose row was deleted elsewhere resolves to undefined,
           // so an enabled button always has a real target for `openActivityNotes`.
           isEnabled: (ctx) => ctx.canWriteNotes && ctx.selectedActivity != null,

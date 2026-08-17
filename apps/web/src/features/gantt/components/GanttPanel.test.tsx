@@ -72,7 +72,14 @@ describe('GanttPanel — states', () => {
   it('refuses to draw a chart for a plan that has never been calculated', () => {
     render(<GanttPanel activities={[anActivity({ earlyStart: null, earlyFinish: null })]} />);
     expect(screen.getByText('This plan has not been calculated')).toBeInTheDocument();
-    expect(screen.queryByRole('treegrid')).not.toBeInTheDocument();
+    // The GRID renders from M2-T4 — the cells are how a planner names activities and sets durations
+    // on a freshly created plan, which is exactly when they do that. What must NOT render is a
+    // chart: no ruler, because a date scale over an empty chart is the invented fact the whole
+    // branch exists to avoid.
+    expect(screen.getByRole('treegrid')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /Timeline/ })?.textContent).not.toMatch(
+      /\d{4}/,
+    );
   });
 
   it('counts the activities correctly in the not-calculated copy', () => {
@@ -109,7 +116,11 @@ describe('GanttPanel — the grid', () => {
     render(<GanttPanel activities={TWO} />);
     const first = rows()[0]!;
     expect(within(first).getByText('A10')).toBeInTheDocument();
-    expect(within(first).getByText('Excavate')).toBeInTheDocument();
+    // Scoped to the CELLS, not the whole row. M5's bar label prints the name a second time beside
+    // the bar — `aria-hidden`, so the accessibility tree still has exactly one, which is what this
+    // test is about. `getByText` sees both, so it now asks the question it always meant to.
+    const nameCell = within(first).getAllByRole('gridcell')[1]!;
+    expect(within(nameCell).getByText('Excavate')).toBeInTheDocument();
     expect(within(first).getAllByRole('gridcell').length).toBeGreaterThan(3);
   });
 
@@ -135,7 +146,10 @@ describe('GanttPanel — sorting', () => {
       .getAllByRole('columnheader')
       .find((h) => within(h).queryByRole('button', { name: /Activity/ }));
     expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
-    expect(within(rows()[0]!).getByText('Excavate')).toBeInTheDocument();
+    // The name CELL of the first row — M5's bar label prints the name a second time beside the bar.
+    expect(
+      within(within(rows()[0]!).getAllByRole('gridcell')[1]!).getByText('Excavate'),
+    ).toBeInTheDocument();
   });
 
   it('toggles to descending on a second click of the same column', () => {
@@ -430,8 +444,10 @@ describe('GanttPanel — baseline variance (ADR-0025)', () => {
   it('keeps the chart column index correct when the variance column is present', () => {
     withVariance([varianceRow()]);
     const grid = screen.getByRole('treegrid');
-    // Five sortable columns + variance + the chart.
-    expect(grid).toHaveAttribute('aria-colcount', '7');
+    // Six sortable columns + variance + the chart. Was five until M2-T1 added Duration — updated
+    // deliberately rather than loosened, because this assertion's whole job is to notice that the
+    // chart's own column index moved when a grid column arrived beside it.
+    expect(grid).toHaveAttribute('aria-colcount', '8');
   });
 });
 

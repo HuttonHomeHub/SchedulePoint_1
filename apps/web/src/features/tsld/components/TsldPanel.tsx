@@ -70,7 +70,6 @@ import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
-import { leadingConflictKey } from '../toolbar/conflict-remedy';
 import {
   SelectionActionsBar,
   type SelectionBarContext,
@@ -97,6 +96,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
+import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import { deriveWbsBandSource } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
@@ -1343,85 +1343,58 @@ export function TsldPanel({
   // context is null when nothing's selected or the host didn't opt in — the bar then renders nothing.
   const selectionActionsWired =
     onOpenLogic !== undefined && onEditActivity !== undefined && onDeleteActivity !== undefined;
-  const selectionCtx = useMemo<SelectionBarContext | null>(() => {
-    if (!onOpenLogic || !onEditActivity || !onDeleteActivity) return null;
-    // **A plural selection gets the plural bar and only the plural bar.** `BulkSelectionBar`'s own
-    // docblock has said since ADR-0080 that it "replaces the floating per-object bar rather than
-    // joining it", and the code never did that: this context is derived from the primary id alone,
-    // so two selected activities rendered BOTH bars. Floating, that was a latent inconsistency —
-    // the two sat in physically separate places and each looked right. Docked, they are forced into
-    // one 36 px row that does not wrap, so the collision becomes visible clipping and a control
-    // that is in the tab order and not on the screen. The ADR-0064 §7 shape once more: a correct
-    // decision elsewhere, invisible until an unrelated change moved the arithmetic across a
-    // boundary. Found by the UX gate over this epic's diff.
-    if (selection.ids.length > 1) return null;
-    const activity = selectedId ? activities.find((a) => a.id === selectedId) : undefined;
-    if (!activity) return null;
-    return {
-      // The canvas half, supplied whole by the workspace or not at all (ADR-0090 M2-T1). ONE prop
-      // rather than seven: `TsldPanel` renders the bar but owns none of this state — isolation's
-      // setters, the viewport command — so threading the fields individually would give this
-      // component isolate vocabulary it has no reason to know, and seven chances to wire six.
-      canvas: selectionCanvas ?? null,
-      targetName: activity.name,
-      canEditSchedule: canEdit,
+  // Assembled by the SHARED builder in `features/plan-actions`, not here (M0-F2 / M1). This lived
+  // in the panel, which made it a canvas artefact by accident of location; the Gantt needs the same
+  // bar over the same objects, and two hosts assembling it independently is the defect this epic
+  // already found twice one layer up (`barDateSource`, `lateOverlayActive`). The canvas half is the
+  // whole of the difference and is passed as one prop.
+  const selectionCtx = useMemo<SelectionBarContext | null>(
+    () =>
+      buildSelectionBarContext({
+        canvas: selectionCanvas ?? null,
+        activities,
+        selectedId,
+        selectionCount: selection.ids.length,
+        canEditSchedule: canEdit,
+        scheduleRefusal,
+        canReportProgress,
+        isStepsEligible,
+        clearPlacement,
+        onOpenLogic: (a) => onOpenLogic?.(a),
+        onEdit: (a) => onEditActivity?.(a),
+        onDelete: (a) => onDeleteActivity?.(a),
+        onDissolve: onDissolveSummary,
+        onDuplicate: onDuplicateActivity,
+        onDuplicateBand,
+        onResources,
+        onProgress,
+        onSteps,
+        onClearVisualPlacement,
+        onOpenEditorAt,
+      }),
+    [
+      selectionCanvas,
+      selectedId,
+      selection.ids.length,
+      activities,
+      canEdit,
       scheduleRefusal,
       canReportProgress,
-      // Whether this selection can carry weighted steps (host predicate; false when absent) — matching
-      // the activities-table's `!isDurationDerivedType` gate. Read by the Steps item's `isVisible`.
-      stepsEligible: isStepsEligible ? isStepsEligible(activity) : false,
-      // Read from the selected row's own type rather than from a host predicate: "is this a
-      // summary?" is a fact about the activity, not a policy the host could reasonably differ on.
-      isSummary: activity.type === 'WBS_SUMMARY',
-      onOpenLogic: () => onOpenLogic(activity),
-      onEdit: () => onEditActivity(activity),
-      onDelete: () => onDeleteActivity(activity),
-      // A no-op when the host didn't wire it — same shape as the entry-route actions below, and the
-      // `dissolve` item is only registered behind its flag anyway.
-      onDissolve: () => onDissolveSummary?.(activity),
-      onDuplicate: () => onDuplicateActivity?.(activity),
-      onDuplicateBand: () => onDuplicateBand?.(activity),
-      // The entry-route actions (Progress / Resources / Steps). Each is a no-op when the host didn't wire
-      // it (the corresponding toolbar item is itself flag-gated, so it only renders when the flag — and
-      // this handler — are present); building them unconditionally keeps the fields plain + required.
-      onResources: () => onResources?.(activity),
-      onProgress: () => onProgress?.(activity),
-      onSteps: () => onSteps?.(activity),
-      // The conflict remedy (ADR-0094 M4). Derived from the activity itself through the SAME
-      // `CONFLICT_FLAGS` the count and the filter run — so the remedy appears whether a planner
-      // arrived by pressing Next conflict or simply clicked the bar, and there is still one
-      // definition of what a conflict is.
-      conflictKey: leadingConflictKey(activity),
-      // Shut with a reason when the host did not wire it — never enabled-but-inert.
-      clearPlacement: clearPlacement ?? {
-        enabled: false,
-        reason: 'Clearing a placement is unavailable here',
-      },
-      onClearVisualPlacement: () => onClearVisualPlacement?.(activity),
-      onOpenEditorAt: (at) => onOpenEditorAt?.(activity, at),
-    };
-  }, [
-    selectionCanvas,
-    selectedId,
-    selection.ids.length,
-    activities,
-    canEdit,
-    scheduleRefusal,
-    canReportProgress,
-    isStepsEligible,
-    onOpenLogic,
-    onEditActivity,
-    onDeleteActivity,
-    onDissolveSummary,
-    onDuplicateActivity,
-    onDuplicateBand,
-    onResources,
-    onProgress,
-    onSteps,
-    clearPlacement,
-    onClearVisualPlacement,
-    onOpenEditorAt,
-  ]);
+      isStepsEligible,
+      clearPlacement,
+      onOpenLogic,
+      onEditActivity,
+      onDeleteActivity,
+      onDissolveSummary,
+      onDuplicateActivity,
+      onDuplicateBand,
+      onResources,
+      onProgress,
+      onSteps,
+      onClearVisualPlacement,
+      onOpenEditorAt,
+    ],
+  );
 
   // View controls (read-only or editing) — zoom preset (reflected from the canvas's coarse
   // stop-crossing callback) + layer toggles + the imperative canvas handle — now live in the

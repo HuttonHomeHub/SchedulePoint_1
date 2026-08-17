@@ -10,6 +10,73 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-17 — Reconciliation pass at the ADR-0088 D3 flag-retirement boundary
+
+**What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
+flag-retirement epic. Three epics had shipped since the 2026-08-13 pass (ADR-0093, ADR-0094, this
+one). Documentation only; no product behaviour changed.
+
+**1. The mail claim's third copy — and it is the expensive reading.** `docs/ARCHITECTURE.md` §10 still
+said the mail port "exists with a **logging** implementation only; no transport is configured, so
+invitation emails are logged rather than sent". `SmtpMailService` has shipped for weeks and the
+deployed host sends. `CLAUDE.md` §17 was corrected on 2026-08-04 and `docs/BACKLOG.md` on 2026-08-05
+— **this file was never opened**, which is [`RECONCILE.md`](RECONCILE.md) §1's own sibling
+instruction failing for the third time. BACKLOG's correction records exactly what this wording costs:
+it "is the reading that leads someone to build a second mail path". It was sitting in the
+architecture document the entire time.
+
+**2. ADR-0012 names CASL, which has never existed in this repository.** Its Decision puts
+permission→capability logic in a policy layer "evaluated with **CASL**". CASL is in no `package.json`
+and no source file. Same species as ADR-0006's shadcn/ui + Radix clause, which got a status-line
+correction on 2026-08-04 while its sibling went unchecked. The reason no gate caught it is
+**structural**: `ARCHITECTURE.md` §10 lists ADRs that are _wholly_ unbuilt, and ADR-0012 is mostly
+built — every module depends on its guard — so a partly-built ADR's dead clause has nowhere to be
+seen. §10 now states that limitation in its own text, and ADR-0012 carries the ADR-0006 treatment.
+
+**3. Nine ADRs still called the product "Blank App"** — the pre-rename template name, ADR-0001 among
+them, i.e. the ADR that defines the ADR process. Corrected in place: this changes no decision, only
+the name of the product each decision is about. The two surviving mentions (`CHANGELOG.md` and this
+log's 2026-07-09 entry) are the record of the rename itself and stay.
+
+**4. Register row 31 described two RETIRED flags as live — and I created half of that the same day.**
+It read "`VITE_CANVAS_TOOLBAR` ships dark during build", default-off, "only the default-on flip awaits
+product sign-off", with "three layered flags" as its impact. Both flags are retired; neither is in
+`env.ts`. Its only live content was three fast-follows. I deleted `VITE_CANVAS_WORKSPACE` that morning
+and never asked the register what it said about it — the runbook's "also run a partial pass when you
+resolve a register row" trigger, unfired by the person best placed to fire it. The pattern is worth
+more than the incident: **the author of a change is the worst-placed person to notice what it
+invalidates elsewhere**, which is the argument for the pass existing rather than for trying harder.
+Row 31's item (d) — an empty plan **hides** commands rather than shading them with a reason — is also
+now the minority answer in its own codebase, since ADR-0082 (menus) and ADR-0083 (fields) both settled
+the opposite way; it is a spec↔code reconciliation now, not a matter of taste.
+
+**5. Row 16's blocker is discharged, and nothing said so.** It forbids enabling
+`AUTH_REQUIRE_EMAIL_VERIFICATION` until a web bundle carrying ADR-0074 M2 is live. That shipped in
+`web-v0.75.0`; the host auto-pulls every release (ADR-0047) and the current tag is `web-v0.90.1` —
+sixteen releases past. What remains is one operator action, not engineering work. A row whose blocker
+has quietly been met reads exactly like one still blocked, and so stays a priority below whatever is
+being built — the failure ADR-0085 named when it insisted an unconditioned `M` carries a written
+trigger.
+
+**6. The sixth shadcn/ui claim, and a rule followed rather than overridden.** The 2026-07-08 stack
+entry in this file still credits shadcn/ui; the 2026-08-04 pass corrected five documents and left it.
+It was annotated in place and then **the annotation was reverted**, because this file's own header
+says decisions are not edited once recorded — a new entry is the sanctioned way to correct course, and
+this is that entry. Recorded explicitly so the next reader does not "fix" it by annotating: the entry
+is accurate about what was decided on 2026-07-08, and ADR-0006's status line is where the outcome
+lives. The tension is real — a reader of that entry alone still meets a library we do not use — and it
+is resolved in favour of the log's integrity, deliberately rather than by omission.
+
+**Clean.** Every count correct, so step 1 found nothing — the 2026-08-13 deletions held.
+`package.json` descriptions accurate. The agent invariants naming absent libraries (BullMQ, Radix,
+shadcn/ui) are all correct **negations**. The three `REFERENCE_FEATURE` exemplars exist. The four
+wholly-unbuilt ADRs are still unbuilt, with no dependency installed for any of them.
+
+**Method note.** Step 7 ran against this session's **own** unreviewed diff — the 27 converted
+Playwright specs and the CI/config changes — rather than against something already reviewed.
+
+---
+
 ### 2026-08-13 — Reconciliation pass at the ADR-0092 epic boundary
 
 **What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the

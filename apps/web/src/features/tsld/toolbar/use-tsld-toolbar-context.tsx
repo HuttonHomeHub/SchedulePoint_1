@@ -46,6 +46,7 @@ import {
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import { ProjectFinishChip } from '@/features/schedule/components/ProjectFinishChip';
+import type { BarDateSource } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */
@@ -68,6 +69,8 @@ export function useTsldToolbarContext({
   revealComments,
   toggleFloatPaths = () => {},
   planView = DEFAULT_PLAN_VIEW_MODE,
+  barDateSource,
+  hoursPerDayFor,
   setPlanView = () => {},
 }: {
   model: PlanWorkspaceModel;
@@ -100,6 +103,18 @@ export function useTsldToolbarContext({
    * Defaults describe a build with no Gantt: the diagram, and switching is a no-op.
    */
   planView?: PlanViewMode;
+  /**
+   * Which persisted dates the bars are drawn from (ADR-0033), and the Duration column's day factor
+   * (ADR-0068) — passed IN rather than re-derived here.
+   *
+   * The workspace already derives both once and hands them to `GanttPanel`; deriving them a second
+   * time in this hook is exactly the divergence `host-parity.structural.test.ts` exists to prevent,
+   * and the printed programme is the artefact where a disagreement would be least noticeable and
+   * most costly. Threading them is what made the printed Gantt honour the scheduling mode at all —
+   * the print surface's props had been added and left unwired (M6 test-engineering gate).
+   */
+  barDateSource?: BarDateSource | undefined;
+  hoursPerDayFor?: ((activity: ActivitySummary) => number | undefined) | undefined;
   setPlanView?: (view: PlanViewMode) => void;
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
@@ -669,6 +684,12 @@ export function useTsldToolbarContext({
             ...(model.varianceByActivityId
               ? { varianceByActivityId: model.varianceByActivityId }
               : {}),
+            // The printed programme reads the SAME dates the screen does. Without these it drew
+            // every VISUAL-mode bar from the early columns while the chart beside it drew them
+            // from the effective-Visual ones — and paper is where that is hardest to notice and
+            // most expensive, because the reader has nothing to compare it against.
+            ...(barDateSource ? { barDateSource } : {}),
+            ...(hoursPerDayFor ? { hoursPerDayFor } : {}),
           });
           announce(`Printing ${plan.name}.`);
           return;
@@ -763,6 +784,10 @@ export function useTsldToolbarContext({
       },
     };
   }, [
+    // The printed Gantt reads these (M6 test gate). Listed rather than silenced — an omitted
+    // dependency here would print the dates the plan had when the memo last ran.
+    barDateSource,
+    hoursPerDayFor,
     zoomPreset,
     // The three extracted viewport commands (ADR-0078 S11). Each is a `useCallback` over the same
     // inputs the inline arrow closed over, so the memo re-identifies exactly as often as before —

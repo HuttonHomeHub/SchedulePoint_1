@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 
 import { daysBetween, isMilestone } from '@/features/tsld/render/render-model';
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 
 /**
  * How a row's bar is drawn. All values are pixels in the bar region's own coordinate space, where
@@ -48,18 +49,25 @@ export function barGeometry(
   activity: ActivitySummary,
   anchorIso: string,
   pxPerDay: number,
+  source: BarDateSource = 'early',
 ): BarGeometry | null {
-  const { earlyStart, earlyFinish } = activity;
-  if (earlyStart === null || earlyFinish === null) return null;
+  // `source` reads the SAME resolver the canvas uses (`lib/bar-dates.ts`). This destructured
+  // `activity.earlyStart` unconditionally until 2026-08-17, so a VISUAL plan's Gantt drew every
+  // hand-placed bar from the wrong columns while the diagram drew it from the right ones — each
+  // view internally consistent, the disagreement visible only to someone opening both
+  // (`docs/TECH_DEBT.md` #135). Defaulted to `early` so every existing caller and test is
+  // unchanged; the workspace passes the real source.
+  const { start: barStart, finish: barFinish } = barDatesFor(activity, source);
+  if (barStart === null || barFinish === null) return null;
 
-  const startOffset = daysBetween(anchorIso, earlyStart);
+  const startOffset = daysBetween(anchorIso, barStart);
   const x = startOffset * pxPerDay;
 
   if (isMilestone(activity.type)) {
     return { x, width: 0, milestone: true, progress: 0, floatWidth: 0 };
   }
 
-  const spanDays = daysBetween(earlyStart, earlyFinish) + 1;
+  const spanDays = daysBetween(barStart, barFinish) + 1;
   const width = Math.max(spanDays * pxPerDay, MIN_BAR_WIDTH_PX);
 
   // Total float is measured in the activity's own calendar (ADR-0037) and stored in whole days;

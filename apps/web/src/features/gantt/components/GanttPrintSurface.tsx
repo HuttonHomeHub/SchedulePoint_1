@@ -2,6 +2,7 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 
 import './GanttPrintSurface.css';
 
+import { barLabelMode, constraintBadge } from '../layout/bar-annotations';
 import { barGeometry, baselineGeometry, chartAnchor, fitPxPerDay } from '../layout/bar-geometry';
 import { GANTT_COLUMNS, varianceText } from '../layout/grid-columns';
 import {
@@ -15,6 +16,7 @@ import {
 import { buildRulerTicks } from '../layout/ruler-ticks';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import type { BarDateSource } from '@/lib/bar-dates';
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
 
 /**
@@ -69,12 +71,23 @@ export interface GanttPrintSurfaceProps {
   subtitle: string;
   activities: readonly ActivitySummary[];
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow> | undefined;
+  /**
+   * Which persisted dates draw each bar (ADR-0033) — the same value the live panel gets. A printed
+   * programme is the artefact that leaves the building and gets read in a progress meeting, so it
+   * drawing a VISUAL plan from the early columns is the worse half of `docs/TECH_DEBT.md` #135:
+   * nobody in that room can compare it against the diagram.
+   */
+  barDateSource?: BarDateSource;
+  /** The activity's working-hours factor for the Duration column — host-resolved, as on screen. */
+  hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
 }
 
 export function GanttPrintSurface({
   title,
   subtitle,
   activities,
+  barDateSource,
+  hoursPerDayFor,
   varianceByActivityId,
 }: GanttPrintSurfaceProps): React.ReactElement {
   // Printing is a snapshot, so the document takes the default order rather than whatever the
@@ -85,8 +98,9 @@ export function GanttPrintSurface({
   // the collapse set is empty here, so every member prints under it.
   const rows = buildRows(activities, DEFAULT_GANTT_SORT, new Set(), {
     unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+    barDateSource,
   });
-  const span = rowsDateSpan(rows);
+  const span = rowsDateSpan(rows, barDateSource);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   const gridWidth =
@@ -169,6 +183,8 @@ export function GanttPrintSurface({
                     row={row}
                     anchorIso={anchor}
                     pxPerDay={pxPerDay}
+                    barDateSource={barDateSource}
+                    hoursPerDayFor={hoursPerDayFor}
                     chartPx={chartPx}
                     variance={varianceByActivityId?.get(rowId(row))}
                     showVariance={showVariance}
@@ -197,6 +213,8 @@ interface PrintRowProps {
   row: GanttActivityRow;
   anchorIso: string;
   pxPerDay: number;
+  barDateSource: BarDateSource | undefined;
+  hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
   chartPx: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -206,12 +224,27 @@ function PrintRow({
   row,
   anchorIso,
   pxPerDay,
+  barDateSource,
+  hoursPerDayFor,
   chartPx,
   variance,
   showVariance,
 }: PrintRowProps): React.ReactElement {
   const { activity, depth } = row;
-  const geometry = barGeometry(activity, anchorIso, pxPerDay);
+  const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
+  // The same annotations the screen draws (M5 legibility). The spec calls bar labels "the largest
+  // single legibility win in a PRINTED programme" — a chart whose bars are anonymous sends the
+  // reader's eye back across the page to the grid for every one — so this is the surface they were
+  // adopted for, and rendering them on screen and not here would have missed the point.
+  const badge = constraintBadge(activity);
+  const labelMode =
+    geometry === null || geometry.milestone
+      ? 'none'
+      : barLabelMode({
+          chartPx,
+          barRight: geometry.x + geometry.width,
+          labelChars: activity.name.length + (badge === null ? 0 : 2),
+        });
   const ghost =
     showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 
@@ -224,7 +257,7 @@ function PrintRow({
           style={i === 0 ? { paddingLeft: 4 + depth * 10 } : undefined}
         >
           <span className={activity.type === 'WBS_SUMMARY' ? 'gantt-print-summary' : undefined}>
-            {column.value(activity)}
+            {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
           </span>
         </td>
       ))}
@@ -260,6 +293,22 @@ function PrintRow({
                 />
               ) : null}
             </span>
+            {labelMode === 'name' ? (
+              <span
+                className="gantt-print-bar-label"
+                style={{ left: geometry.x + geometry.width + 6 }}
+              >
+                {badge === null ? null : <span className="gantt-print-badge">{badge.glyph} </span>}
+                {activity.name}
+              </span>
+            ) : badge === null ? null : (
+              <span
+                className="gantt-print-badge gantt-print-bar-label"
+                style={{ left: geometry.x + geometry.width + 4 }}
+              >
+                {badge.glyph}
+              </span>
+            )}
           </>
         )}
       </td>
@@ -274,6 +323,19 @@ export interface PrintGanttInput {
   subtitle: string;
   activities: readonly ActivitySummary[];
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow> | undefined;
+  /**
+   * Which persisted dates the bars are drawn from (ADR-0033).
+   *
+   * **This was the half TECH_DEBT #135's fix missed.** `GanttPrintSurface` gained the prop and this
+   * input type did not, so the only production caller could not pass it and never did — the props
+   * were threaded and dead, while the commit that added them cited the printed programme as the
+   * reason ("nobody in a progress meeting can check it against the diagram"). Found by the M6
+   * test-engineering gate; an ADR-0076 Class 3 claim in my own commit message, which said the
+   * source was threaded through the print surface when only its signature was.
+   */
+  barDateSource?: BarDateSource | undefined;
+  /** The Duration column's per-activity day factor (ADR-0068), for the same reason. */
+  hoursPerDayFor?: ((activity: ActivitySummary) => number | undefined) | undefined;
 }
 
 /**
@@ -288,6 +350,8 @@ export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDe
       subtitle={input.subtitle}
       activities={input.activities}
       {...(input.varianceByActivityId ? { varianceByActivityId: input.varianceByActivityId } : {})}
+      {...(input.barDateSource ? { barDateSource: input.barDateSource } : {})}
+      {...(input.hoursPerDayFor ? { hoursPerDayFor: input.hoursPerDayFor } : {})}
     />,
     deps,
   );

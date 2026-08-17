@@ -1,12 +1,23 @@
 # ADR-0012: Authorization — RBAC with resource scoping
 
-- **Status:** Accepted
+- **Status:** Accepted — **except the CASL clause, which was never adopted.** The
+  `PermissionsGuard` + `@RequirePermissions()` decorator, the permission set, the
+  resource-scope checks and deny-by-default are all live and binding; every module
+  in `apps/api/src/modules/` is built on them. The policy layer is **plain
+  TypeScript**: CASL appears in no `package.json` and in no source file, and it
+  never has. Recorded by the 2026-08-17 reconciliation pass, which found this ADR
+  naming a library that does not exist — the identical defect ADR-0006's status
+  line records for its shadcn/ui + Radix clause, corrected on 2026-08-04 while its
+  sibling here was never opened. It is also invisible to
+  [`ARCHITECTURE.md` §10](../ARCHITECTURE.md), because that table holds ADRs that
+  are **wholly** unbuilt and this one is mostly built. Adopting a policy engine is
+  an ADR-level decision that has not been taken.
 - **Date:** 2026-07-08
 - **Deciders:** Backend architecture, Security
 
 ## Context
 
-Blank App is multi-tenant at the organisation level: users belong to one or more
+SchedulePoint is multi-tenant at the organisation level: users belong to one or more
 organisations and may only act on data for organisations they're a member of, with
 different capabilities (e.g. owner vs. member). We need an authorization model
 that is expressive enough for this, simple to reason about, and enforced

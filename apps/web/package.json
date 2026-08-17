@@ -21,6 +21,7 @@
     "test:e2e:toolbar-fit": "playwright test --config playwright.toolbar-fit.config.ts --pass-with-no-tests",
     "test:e2e:workspace-chrome": "playwright test --config playwright.workspace-chrome.config.ts --pass-with-no-tests",
     "measure:toolbar": "playwright test --config playwright.measure-toolbar.config.ts",
+    "measure:gantt": "playwright test --config playwright.measure-gantt.config.ts",
     "test:e2e:authoring": "playwright test --config playwright.authoring.config.ts --pass-with-no-tests",
     "test:e2e:authoring-flow": "playwright test --config playwright.authoring-flow.config.ts --pass-with-no-tests",
     "test:e2e:programme": "playwright test --config playwright.programme.config.ts --pass-with-no-tests",
@@ -49,7 +50,8 @@
     "test:e2e:account-verify": "playwright test --config playwright.account-verify.config.ts --pass-with-no-tests",
     "test:e2e:csp": "playwright test --config playwright.csp.config.ts --pass-with-no-tests",
     "test:e2e:public": "playwright test --config playwright.public.config.ts --pass-with-no-tests",
-    "clean": "rimraf dist .turbo *.tsbuildinfo"
+    "clean": "rimraf dist .turbo *.tsbuildinfo",
+    "test:e2e:gantt-editing": "playwright test --config playwright.gantt-editing.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.8.0",

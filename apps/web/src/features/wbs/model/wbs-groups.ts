@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 
-import type { BarDateSource } from '@/features/tsld';
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 
 /**
  * The **one** definition of "what groups does this plan have, and what is in each" — consumed by
@@ -63,18 +63,18 @@ export interface WbsGroups {
 /**
  * Pick the dates this activity is currently drawn at, matching `toRenderActivities`' selection so
  * the bucket's span follows Early/Visual/Late like every other bar on screen.
+ *
+ * A thin alias for {@link barDatesFor} — this was a **verbatim second copy** of that ternary until
+ * 2026-08-17, written before `lib/bar-dates.ts` existed and left behind when it arrived. Exactly
+ * the drift that module's docblock exists to prevent, one import away from it. Kept as a named
+ * local because two call sites read better for it, and because deleting the name would lose the
+ * sentence above about *why* this follows the drawn dates rather than the early ones.
  */
 function drawnSpan(
   activity: ActivitySummary,
   source: BarDateSource,
 ): { start: string | null; finish: string | null } {
-  if (source === 'visual') {
-    return { start: activity.visualEffectiveStart, finish: activity.visualEffectiveFinish };
-  }
-  if (source === 'late') {
-    return { start: activity.lateStart, finish: activity.lateFinish };
-  }
-  return { start: activity.earlyStart, finish: activity.earlyFinish };
+  return barDatesFor(activity, source);
 }
 
 /**

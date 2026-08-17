@@ -1,7 +1,10 @@
 import type { ActivitySummary } from '@repo/types';
 
-import type { BarDateSource } from '@/features/tsld';
 import { deriveWbsGroups, type DerivedGroup } from '@/features/wbs';
+// Straight from `lib/`, not through `@/features/tsld`'s barrel. The type is shared by both views,
+// so reaching for it through the canvas's barrel is the feature-to-feature leak `bar-dates.ts`'
+// docblock names — and it is what made this module's date handling look like a canvas concern.
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 
 /**
  * Which column the grid is ordered by. `wbs` is the plan's own order (the ADR-0038 parent tree,
@@ -110,8 +113,20 @@ function compareNullable<T>(
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-/** Compare two activities on one column. Ties are broken by the caller, not here. */
-function compareOn(a: ActivitySummary, b: ActivitySummary, sort: GanttSort): number {
+/**
+ * Compare two activities on one column. Ties are broken by the caller, not here.
+ *
+ * The date cases read `source` — the same {@link BarDateSource} the bars and the cells use — so the
+ * grid orders by what it is **showing**. Sorting a VISUAL plan by the early dates while the Start
+ * column printed the effective-Visual ones is indistinguishable, to a reader, from not sorting at
+ * all (`docs/TECH_DEBT.md` #135).
+ */
+function compareOn(
+  a: ActivitySummary,
+  b: ActivitySummary,
+  sort: GanttSort,
+  source: BarDateSource,
+): number {
   const dir = sort.direction;
   switch (sort.key) {
     case 'wbs':
@@ -121,9 +136,19 @@ function compareOn(a: ActivitySummary, b: ActivitySummary, sort: GanttSort): num
     case 'code':
       return compareNullable(a.code, b.code, (x, y) => collator.compare(x, y), dir);
     case 'earlyStart':
-      return compareNullable(a.earlyStart, b.earlyStart, (x, y) => x.localeCompare(y), dir);
+      return compareNullable(
+        barDatesFor(a, source).start,
+        barDatesFor(b, source).start,
+        (x, y) => x.localeCompare(y),
+        dir,
+      );
     case 'earlyFinish':
-      return compareNullable(a.earlyFinish, b.earlyFinish, (x, y) => x.localeCompare(y), dir);
+      return compareNullable(
+        barDatesFor(a, source).finish,
+        barDatesFor(b, source).finish,
+        (x, y) => x.localeCompare(y),
+        dir,
+      );
     case 'duration':
       return dir === 'asc' ? a.durationDays - b.durationDays : b.durationDays - a.durationDays;
     case 'totalFloat':
@@ -142,8 +167,9 @@ function compareOn(a: ActivitySummary, b: ActivitySummary, sort: GanttSort): num
 export function sortActivities(
   activities: readonly ActivitySummary[],
   sort: GanttSort,
+  source: BarDateSource = 'early',
 ): ActivitySummary[] {
-  return [...activities].sort((a, b) => compareOn(a, b, sort) || a.id.localeCompare(b.id));
+  return [...activities].sort((a, b) => compareOn(a, b, sort, source) || a.id.localeCompare(b.id));
 }
 
 /**
@@ -163,7 +189,7 @@ export function buildRows(
   activities: readonly ActivitySummary[],
   sort: GanttSort,
   collapsed: ReadonlySet<string> = new Set(),
-  options: { unassignedBucket?: boolean; barDateSource?: BarDateSource } = {},
+  options: { unassignedBucket?: boolean; barDateSource?: BarDateSource | undefined } = {},
 ): GanttRow[] {
   const byParent = new Map<string | null, ActivitySummary[]>();
   const ids = new Set(activities.map((a) => a.id));
@@ -182,7 +208,7 @@ export function buildRows(
   const walk = (parentId: string | null, depth: number): void => {
     const siblings = byParent.get(parentId);
     if (!siblings) return;
-    for (const activity of sortActivities(siblings, sort)) {
+    for (const activity of sortActivities(siblings, sort, options.barDateSource ?? 'early')) {
       const children = byParent.get(activity.id);
       const hasChildren = children !== undefined && children.length > 0;
       const expanded = hasChildren ? !collapsed.has(activity.id) : undefined;
@@ -241,7 +267,7 @@ export function buildRows(
  */
 function bucketFor(
   activities: readonly ActivitySummary[],
-  options: { barDateSource?: BarDateSource },
+  options: { barDateSource?: BarDateSource | undefined },
 ): DerivedGroup | null {
   const groups = deriveWbsGroups(activities, { source: options.barDateSource ?? 'early' });
   if (groups.unassigned === null || groups.summaries.length === 0) return null;
@@ -255,7 +281,10 @@ function bucketFor(
  * a plan whose only activities are uncalculated has no span, and must render its "not calculated"
  * state rather than a chart anchored on an arbitrary date.
  */
-export function rowsDateSpan(rows: readonly GanttRow[]): { start: string; finish: string } | null {
+export function rowsDateSpan(
+  rows: readonly GanttRow[],
+  source: BarDateSource = 'early',
+): { start: string; finish: string } | null {
   let start: string | null = null;
   let finish: string | null = null;
   const widen = (rowStart: string | null, rowFinish: string | null): void => {
@@ -266,8 +295,17 @@ export function rowsDateSpan(rows: readonly GanttRow[]): { start: string; finish
     // The bucket counts too. When it is expanded its span merely restates its members'; when it is
     // COLLAPSED they are not rows at all, and skipping it would frame a chart its own bar hangs off
     // the end of.
+    //
+    // The activity branch read `earlyStart`/`earlyFinish` unconditionally until 2026-08-17, three
+    // lines below a bucket branch that had already been made source-aware — so in a VISUAL plan a
+    // bar the engine pushed past its early finish fell OUTSIDE the framed extent, and the chart did
+    // not contain its own content. That reads as a rendering fault rather than a date bug, which is
+    // why it survived: nobody looks for a scheduling defect in a clipped bar.
     if (row.kind === 'bucket') widen(row.start, row.finish);
-    else widen(row.activity.earlyStart, row.activity.earlyFinish);
+    else {
+      const { start: rowStart, finish: rowFinish } = barDatesFor(row.activity, source);
+      widen(rowStart, rowFinish);
+    }
   }
   return start !== null && finish !== null ? { start, finish } : null;
 }

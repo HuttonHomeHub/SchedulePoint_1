@@ -1,8 +1,9 @@
-import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { barLabelMode, constraintBadge } from '../layout/bar-annotations';
 import {
   barGeometry,
   baselineGeometry,
@@ -10,7 +11,13 @@ import {
   chartWidth,
   spanGeometry,
 } from '../layout/bar-geometry';
+import { dateAtChartX, durationDaysForFinishAtX, startDayAtChartX } from '../layout/drag-day';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
+import {
+  ganttLinkPaths,
+  predecessorNamesBySuccessor,
+  predecessorSummary,
+} from '../layout/link-paths';
 import {
   DEFAULT_GANTT_SORT,
   buildRows,
@@ -19,23 +26,36 @@ import {
   rowsDateSpan,
   type GanttActivityRow,
   type GanttBucketRow,
+  type GanttRow,
   type GanttSort,
   type GanttSortKey,
 } from '../layout/row-model';
+import {
+  NUDGE_DAYS,
+  barMoveGate,
+  moveAnnouncement,
+  resizeAnnouncement,
+  type GanttBarDrag,
+} from '../model/bar-drag';
+import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
+import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 
+import { GanttCell } from './GanttCell';
+import { GanttLinkOverlay } from './GanttLinkOverlay';
+import { GanttRowMenu } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
+import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
+import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { cn } from '@/lib/utils';
 
 /** Row height in pixels. Fixed, so the virtualizer needs no measurement pass. */
 export const GANTT_ROW_HEIGHT = 32;
-
-/** Width of the pinned identity/date grid, without the optional variance column. */
-const GRID_WIDTH = 420;
 
 /**
  * The scale used before the bar region has been measured, and whenever measurement is
@@ -48,10 +68,24 @@ const FALLBACK_PX_PER_DAY = 6;
 /** Frames roughly a year — the range a stakeholder reading a programme usually wants first. */
 const DEFAULT_ZOOM: ZoomLevel = 'month';
 
+/**
+ * The anchor used when nothing is scheduled yet.
+ *
+ * Never visible: with no dates every `barGeometry` call returns null, so no bar is positioned
+ * against it. It exists so the grid can render on an uncalculated plan without the chart having to
+ * invent a date and present it as fact — a fixed constant rather than `today`, so two renders a day
+ * apart produce identical output and nothing in a test depends on the clock.
+ */
+const UNSCHEDULED_ANCHOR = '1970-01-01';
+
 /** On-screen column widths, keyed to the shared {@link GANTT_COLUMNS} semantics. */
 const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
   code: 80,
   name: 180,
+  // Wide enough for the longest realistic sub-day read-out (`12d 7h 45m`) without wrapping; the
+  // whole-day case (`5 d`) is far shorter, and a column sized for the common case would truncate
+  // exactly the values ADR-0070 exists to make visible.
+  duration: 84,
   earlyStart: 90,
   earlyFinish: 90,
   totalFloat: 60,
@@ -61,6 +95,24 @@ const columnWidth = (column: GanttColumn): number => SCREEN_COLUMN_WIDTHS[column
 
 const COLUMNS = GANTT_COLUMNS;
 const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0);
+
+/**
+ * Width of the pinned identity/date grid, without the optional variance column.
+ *
+ * **Derived from the columns, never declared.** It was the literal `420` while the columns summed to
+ * 500, and the two were never reconciled because `TOTAL_COLUMN_WIDTH` was computed, exported and
+ * consumed by **nothing** — two answers to "how wide is the grid", one of them dead. Measured in
+ * Chromium at 1646 on 2026-08-17: the pinned block ended at x=709 while the **Float** column
+ * rendered at 729–789, so it sat 80 px **on top of the chart** with its header overlapping the
+ * Timeline header, the pinned block's `z-10` painting it over the bars. Every child is `shrink-0`,
+ * so the flex row simply overflowed its own box.
+ *
+ * Nobody had reported it, and it is easy to see why: Float is the last column, the overlap lands on
+ * whitespace unless a bar starts near the left edge, and the numbers involved look deliberate. It
+ * was found by measuring before adding a column rather than after — the plan's M2-T1 risk said to
+ * measure, and adding Duration on top of the literal would have pushed the overlap to ~180 px.
+ */
+const GRID_WIDTH = TOTAL_COLUMN_WIDTH;
 
 /** Width of the variance column, shown only when a baseline is active. */
 const VARIANCE_COLUMN_WIDTH = 72;
@@ -94,6 +146,58 @@ export interface GanttPanelProps {
    * much schedule a screen holds.
    */
   zoomLevel?: ZoomLevel;
+  /**
+   * Which persisted dates draw each bar (ADR-0033) — the same value, from the same resolver, that
+   * the canvas receives. Absent ⇒ `early`, which is what this panel did unconditionally until
+   * 2026-08-17 and is still correct for every EARLY-mode plan (`docs/TECH_DEBT.md` #135).
+   */
+  barDateSource?: BarDateSource;
+  /**
+   * The activity's own working-hours factor (ADR-0068), for the Duration column.
+   *
+   * A **resolver from the host**, not a calendar list: this panel has never known what a calendar
+   * is, and giving it one to run `.find()` per row would make a display component a consumer of the
+   * calendar query. ADR-0089 D2b makes host-resolution the rule for a cross-scope fact, and
+   * `host-parity.structural.test.ts` is what stops one host supplying it and the other not — which
+   * is how the Gantt came to read `earlyStart` unconditionally in the first place.
+   *
+   * Absent, or returning undefined, ⇒ the read-out degrades to whole working days, which is the
+   * same path as `VITE_SUB_DAY_DURATIONS` off (ADR-0070).
+   */
+  hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
+  /**
+   * In-grid editing (M2). **Absent ⇒ the read-only grid renders byte-for-byte**, which is what
+   * keeps every pre-existing test of this panel meaningful through the change rather than merely
+   * passing, and what lets the print surface share `GANTT_COLUMNS` without ever growing an editing
+   * path.
+   */
+  editing?: GanttGridEditing | undefined;
+  /**
+   * Bar movement (M3). Absent ⇒ no gesture and no keyboard binding, which is the read-only chart
+   * exactly as it was — the same parity contract `editing` carries.
+   */
+  drag?: GanttBarDrag | undefined;
+  /**
+   * The plan's dependencies, for the logic overlay (M4). Absent ⇒ no arrows and no textual
+   * equivalent — the read-only chart exactly as it was, the same parity contract the other two
+   * bundles carry.
+   */
+  dependencies?: readonly DependencySummary[] | undefined;
+  /**
+   * Build the row menu's context for one activity, or null when there is nothing to offer.
+   *
+   * A **function from the host**, not a prebuilt context: the menu is per row and the context
+   * carries that row's callbacks, so a single object would either be wrong for every row but one or
+   * force the panel to assemble one — which is the assembly `buildSelectionBarContext` exists to
+   * keep in a single place (it is the same builder the dock uses, by construction).
+   */
+  rowMenuContextFor?: (activity: ActivitySummary) => SelectionBarContext | null;
+  /**
+   * Draw EVERY link in the window, not only the selected row's. Default off (the product owner's
+   * Q1 answer): logic on a dense programme is a thicket, and the selection path answers "why is
+   * this bar here?" without it.
+   */
+  showAllLinks?: boolean;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -147,6 +251,13 @@ export function GanttPanel({
   activities,
   varianceByActivityId,
   zoomLevel = DEFAULT_ZOOM,
+  barDateSource,
+  hoursPerDayFor,
+  editing,
+  drag,
+  dependencies,
+  rowMenuContextFor,
+  showAllLinks = false,
   loading = false,
   error,
   onSelectActivity,
@@ -177,6 +288,12 @@ export function GanttPanel({
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   const gridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
+  // The row menu occupies a COLUMN, and every index after it shifts. `role="row"` may contain only
+  // cells (`gridcell`/`columnheader`/`rowheader`), so M5-T3's trigger sitting as a direct child of
+  // the row was an `aria-required-children` violation — axe rates it critical, and it fired once
+  // per rendered row. Derived at panel level rather than per row so the header, the activity rows
+  // and the WBS bucket rows cannot disagree about where the Timeline column starts.
+  const actionColumns = rowMenuContextFor === undefined ? 0 : 1;
 
   const pxPerDay =
     barRegionWidth > 0 ? pxPerDayForPreset(zoomLevel, barRegionWidth) : FALLBACK_PX_PER_DAY;
@@ -185,10 +302,48 @@ export function GanttPanel({
     // The derived Unassigned bucket (WBS improvements M3). `buildRows` additionally requires at
     // least one real summary before it emits the bucket — heading a flat plan "Unassigned" would
     // invent a hierarchy it does not have.
-    () => buildRows(activities, sort, collapsed, { unassignedBucket: WBS_IMPROVEMENTS_ENABLED }),
-    [activities, sort, collapsed],
+    () =>
+      buildRows(activities, sort, collapsed, {
+        unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+        // The bucket's span follows the drawn dates. `buildRows` had accepted this option since the
+        // WBS band shipped and this caller never passed it, so the one row summarising the plan's
+        // unfiled work was framed on the early dates in a VISUAL plan while its members' bars sat
+        // elsewhere — plumbing that existed and was not connected.
+        barDateSource,
+      }),
+    [activities, sort, collapsed, barDateSource],
   );
-  const span = useMemo(() => rowsDateSpan(rows), [rows]);
+  const span = useMemo(() => rowsDateSpan(rows, barDateSource), [rows, barDateSource]);
+
+  /**
+   * The arrows for the rows currently mounted.
+   *
+   * Keyed by the RENDERED rows rather than by a scroll range, so "is this endpoint on screen?" and
+   * "where is it?" come from one lookup — a range comparison could disagree with what the
+   * virtualizer actually mounted, and the disagreement would show as an arrow pointing at nothing.
+   */
+  const rowIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    rows.forEach((r, index) => {
+      if (r.kind === 'activity') map.set(r.activity.id, index);
+    });
+    return map;
+  }, [rows]);
+  // Built once per dependency set, not per row. See `predecessorNamesBySuccessor`.
+  const predecessorsById = useMemo(
+    () => predecessorNamesBySuccessor(dependencies ?? []),
+    [dependencies],
+  );
+  const linkSet = useMemo(
+    () =>
+      ganttLinkPaths({
+        dependencies: dependencies ?? [],
+        rowIndexById,
+        showAll: showAllLinks,
+        selectedId: selectedActivityId,
+      }),
+    [dependencies, rowIndexById, showAllLinks, selectedActivityId],
+  );
   const anchor = span === null ? null : chartAnchor(span);
   const chartPx = span === null ? 0 : chartWidth(span, pxPerDay);
 
@@ -241,7 +396,26 @@ export function GanttPanel({
   // a one-shot token: it is passed for as long as a path is selected, so "re-runs" means "every
   // time anything in the plan changes". Found by the performance gate.
   const activitiesRef = useRef(activities);
-  activitiesRef.current = activities;
+  // Synced in an EFFECT, never during render.
+  //
+  // It was `activitiesRef.current = activities` in the render body, which React forbids, and
+  // `pnpm lint` did not catch it. `eslint-plugin-react-hooks` v7 carries the React Compiler's
+  // analysis as lint rules — that is where `react-hooks/refs` comes from — but this component also
+  // calls `useVirtualizer`, which the same analysis reports as an **incompatible library** and then
+  // bails out of the WHOLE component for (the `Compilation Skipped` warning `pnpm lint` prints for
+  // this file, every run). The M6 component gate reproduced that blind spot in an isolated
+  // component rather than asserting it. So the rule that caught the identical pattern in
+  // `use-gantt-grid-editing.ts` gave no protection here: the same defect, in the same diff, in the
+  // one file the tool cannot see.
+  //
+  // Worth being precise, because the M6 performance gate over-read this in the other direction and
+  // reported the compiler as "not running at all": `babel-plugin-react-compiler` is indeed **not**
+  // wired into `vite.config.ts`, so nothing is auto-memoized in the shipped bundle — but the
+  // analysis does run, in the linter, and it is what refused this write.
+  // The idiom is `TsldPanel.tsx:813-816`'s — a deps-free effect.
+  useEffect(() => {
+    activitiesRef.current = activities;
+  });
   useEffect(() => {
     if (bringIntoViewActivityId === undefined) return;
     if (emphasisRowIndex >= 0) {
@@ -288,6 +462,66 @@ export function GanttPanel({
   // one Tab always reaches the grid and arrow keys take over from there.
   const tabStopIndex = focusedIndex >= 0 ? focusedIndex : 0;
 
+  /**
+   * Move the focused activity's bar by `deltaDays`, or report why it cannot move.
+   *
+   * Returns whether the key was ours, so the caller only calls `preventDefault` when something
+   * actually happened — a swallowed Alt+Arrow that did nothing would take the browser's own
+   * behaviour away for no benefit.
+   *
+   * A refusal is **announced**, never silent. A nudge that does nothing and says nothing is
+   * indistinguishable from a dead key, which is the lit-but-inert shape this register keeps
+   * recording; and on a chart the bar that did not move may be off-screen anyway.
+   */
+  const nudgeBar = (row: GanttRow, deltaDays: number): boolean => {
+    if (drag === undefined || row.kind !== 'activity') return false;
+    const activity = row.activity;
+    const gate = barMoveGate(activity, drag);
+    if (!gate.movable) {
+      if (gate.reason !== null) drag.announce(gate.reason);
+      return true;
+    }
+    const { plannedStartIso } = drag;
+    const start = barDatesFor(activity, barDateSource).start;
+    if (plannedStartIso === null || start === null) {
+      drag.announce('This activity has no scheduled start to move yet.');
+      return true;
+    }
+    const startDay = daysBetween(plannedStartIso, start) + deltaDays;
+    drag.moveTo(activity.id, startDay);
+    drag.announce(moveAnnouncement(activity.name, addCalendarDays(start, deltaDays)));
+    return true;
+  };
+
+  /**
+   * Lengthen or shorten the focused activity by `deltaDays`, or say why it cannot change.
+   *
+   * The keyboard half of the finish-edge drag. Refuses below one day for the reason the pointer
+   * path does: a zero-duration activity IS a milestone, and a keystroke must not be able to change
+   * an activity's type.
+   */
+  const resizeBar = (row: GanttRow, deltaDays: number): boolean => {
+    if (drag === undefined || row.kind !== 'activity') return false;
+    const activity = row.activity;
+    const gate = barMoveGate(activity, drag);
+    if (!gate.movable) {
+      if (gate.reason !== null) drag.announce(gate.reason);
+      return true;
+    }
+    if (activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE') {
+      drag.announce('A milestone marks a moment, so it has no duration.');
+      return true;
+    }
+    const next = Math.max(1, activity.durationDays + deltaDays);
+    if (next === activity.durationDays) {
+      drag.announce(`${activity.name} is already one day long.`);
+      return true;
+    }
+    drag.resizeTo(activity.id, next);
+    drag.announce(resizeAnnouncement(activity.name, next));
+    return true;
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const index = tabStopIndex;
     const row = rows[index];
@@ -308,22 +542,76 @@ export function GanttPanel({
         event.preventDefault();
         focusRowAt(rows.length - 1);
         break;
-      case 'ArrowRight': {
+      case 'ArrowRight':
+      case 'ArrowLeft': {
         if (!row) break;
+        // **Alt+←/→ nudges the bar; the bare keys stay disclosure.**
+        //
+        // The plan said bare arrows until the accessibility re-review, and they are already bound
+        // to treegrid disclosure right here — so the original would have collided with a shipped
+        // binding while citing a canvas precedent (`TsldPanel.tsx:1848`) that uses Alt for exactly
+        // this. The keyboard equivalent exists at all because a pointer-only capability is a WCAG
+        // 2.1.1 failure; matching the canvas verbatim means a planner learns one chord, not two.
+        if (event.altKey) {
+          if (nudgeBar(row, event.key === 'ArrowRight' ? NUDGE_DAYS : -NUDGE_DAYS)) {
+            event.preventDefault();
+          }
+          break;
+        }
+        // **Shift+←/→ changes the duration** — ADR-0052's chord, matching the canvas.
+        //
+        // This was MISSING until the M6 ux gate, while a comment beside the pointer handle claimed
+        // it existed and called that handle "an additional affordance rather than the only one".
+        // It was the only one: resizing was pointer-only, a WCAG 2.1.1 gap, with the docblock
+        // actively telling the next reader it was not. ADR-0076 Class 3 — a decision-bearing claim
+        // asserted and never checked — inside an epic that had already fixed two of its own.
+        if (event.shiftKey) {
+          if (resizeBar(row, event.key === 'ArrowRight' ? NUDGE_DAYS : -NUDGE_DAYS)) {
+            event.preventDefault();
+          }
+          break;
+        }
         const disclosure = rowDisclosure(row);
-        if (disclosure !== null && !disclosure.expanded) {
+        const wantExpanded = event.key === 'ArrowRight';
+        if (disclosure !== null && disclosure.expanded !== wantExpanded) {
           event.preventDefault();
-          toggleCollapsed(rowId(row), false);
+          toggleCollapsed(rowId(row), !wantExpanded);
         }
         break;
       }
-      case 'ArrowLeft': {
-        if (!row) break;
-        const disclosure = rowDisclosure(row);
-        if (disclosure !== null && disclosure.expanded) {
+      case 'F2': {
+        // The APG grid convention for "start editing the focused thing", and the reason cells are
+        // `tabIndex={-1}` rather than tab stops: a treegrid navigates by row and enters a cell on
+        // demand, so a keyboard planner is not made to tab through six cells per row to reach the
+        // seventh row.
+        //
+        // It opens the FIRST writable editable cell rather than a remembered column. A per-row
+        // memory would be the better spreadsheet behaviour and needs a cell cursor to hang it on;
+        // this milestone deliberately ships the entry point rather than the cursor, and says so
+        // rather than leaving a reader to infer that F2 is arbitrary.
+        if (!row || row.kind !== 'activity' || editing === undefined) break;
+        const activity = row.activity;
+        for (const column of COLUMNS) {
+          const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
+          if (cellKey === undefined) continue;
+          if (!editing.gateFor(cellKey, activity.id).writable) continue;
           event.preventDefault();
-          toggleCollapsed(rowId(row), true);
+          editing.begin(
+            { activityId: activity.id, key: cellKey },
+            column.value(activity, barDateSource, hoursPerDayFor?.(activity)),
+          );
+          break;
         }
+        break;
+      }
+      case 'Escape': {
+        // Returns from cell mode to row mode. The cell's own handler already stops Escape reaching
+        // here while a field is open (ADR-0079's rule — an Escape typed into a field belongs to that
+        // field), so this only runs when the planner is on a row; it is the rung below.
+        if (editing === undefined || editing.state.status === 'idle') break;
+        event.preventDefault();
+        editing.cancel();
+        focusRowAt(index);
         break;
       }
       default:
@@ -367,18 +655,23 @@ export function GanttPanel({
     );
   }
 
-  // Rows exist but nothing is scheduled: the plan has never been calculated. Drawing a chart would
-  // mean choosing an arbitrary anchor date and presenting it as fact.
-  if (span === null || anchor === null) {
-    return (
-      <GanttMessage title="This plan has not been calculated">
-        <p className="text-muted-foreground text-sm">
-          {rows.length === 1 ? 'The activity has' : `All ${rows.length} activities have`} no
-          scheduled dates yet. Recalculate the schedule to see the bar chart.
-        </p>
-      </GanttMessage>
-    );
-  }
+  // Rows exist but nothing is scheduled: the plan has never been calculated. No CHART is drawn —
+  // that would mean choosing an arbitrary anchor date and presenting it as fact — but the grid
+  // renders, and that is a decision rather than an oversight (M2-T4).
+  //
+  // It used to return the message alone, which made every cell unreachable on precisely the plan a
+  // planner is most likely to be typing into: a freshly created one, before the first
+  // recalculation. The first draft of the fix made duration read-only there too; the ux re-review
+  // corrected it and the correction is the better reasoning — a duration is an INPUT, not a rollup,
+  // so it does not depend on a computed schedule the way a date does. `ganttCellGate` reads
+  // `hasComputedSchedule` and shuts the two date cells with a reason that names the action
+  // ("Recalculate the plan to set dates"); name and duration stay writable.
+  //
+  // The anchor falls back to the first row's absence rather than being invented: with no dates,
+  // `barGeometry` returns null for every activity (`bar-geometry.ts:61`), so nothing is drawn at
+  // any anchor and the value can never reach the screen. `chartPx` is already 0 here.
+  const notCalculated = span === null || anchor === null;
+  const safeAnchor = anchor ?? UNSCHEDULED_ANCHOR;
 
   const contentWidth = gridWidth + chartPx;
 
@@ -388,11 +681,39 @@ export function GanttPanel({
       className="bg-background relative min-h-0 flex-1 overflow-auto"
       data-testid="gantt-scroll"
     >
+      {/* The explanation stays even though the grid now renders (M2-T4). Dropping it was the first
+          version of this change and it was wrong twice over: a reader met a chart column with no
+          bars and nothing saying why, and a screen-reader user met it with no cue at all. The grid
+          appearing is the fix for "the cells were unreachable"; it is not a reason to stop saying
+          the plan has not been calculated. */}
+      {/* **The cap says what it withheld.** A silent truncation reads as "that is all the links there
+          are", and a reader draws a conclusion from an absence that is an artefact — the defect
+          class ADR-0081 (a dark capability), ADR-0059 M6 (an inert control) and ADR-0090 ("no
+          silent caps") each record separately. Either the count is visible or there is no cap.
+          `role="status"` so it is not sight-only, since the arrows themselves are aria-hidden. */}
+      {linkSet.withheld > 0 ? (
+        <div
+          role="status"
+          className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
+        >
+          {linkSet.withheld} more {linkSet.withheld === 1 ? 'link is' : 'links are'} not shown.
+        </div>
+      ) : null}
+      {notCalculated ? (
+        <div role="status" className="border-border bg-muted border-b px-3 py-2">
+          <p className="text-foreground text-sm font-medium">This plan has not been calculated</p>
+          <p className="text-muted-foreground text-sm">
+            {rows.length === 1 ? 'The activity has' : `All ${rows.length} activities have`} no
+            scheduled dates yet. Recalculate the schedule to see the bar chart. You can still name
+            activities and set their durations.
+          </p>
+        </div>
+      ) : null}
       <div
         role="treegrid"
         aria-label="Schedule as a bar chart"
         aria-rowcount={rows.length + 1}
-        aria-colcount={COLUMNS.length + (showVariance ? 2 : 1)}
+        aria-colcount={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
         // Rows carry the roving tab stop, so the grid itself is never tabbed to — but an
         // interactive role must still be focusable, so it stays a programmatic focus target.
         tabIndex={-1}
@@ -439,10 +760,18 @@ export function GanttPanel({
                 </div>
               );
             })}
+            {actionColumns === 0 ? null : (
+              // `sr-only`, so it names the column for assistive technology without taking layout —
+              // the trigger sits in the slack at the end of the pinned block and has no visible
+              // heading of its own.
+              <div role="columnheader" aria-colindex={COLUMNS.length + 1} className="sr-only">
+                Actions
+              </div>
+            )}
             {showVariance ? (
               <div
                 role="columnheader"
-                aria-colindex={COLUMNS.length + 1}
+                aria-colindex={COLUMNS.length + actionColumns + 1}
                 aria-sort="none"
                 className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs font-medium"
                 style={{ width: VARIANCE_COLUMN_WIDTH }}
@@ -453,17 +782,38 @@ export function GanttPanel({
           </div>
           <div
             role="columnheader"
-            aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
+            aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
             aria-sort="none"
             className="border-border shrink-0 border-b"
             style={{ width: chartPx }}
           >
             <span className="sr-only">Timeline</span>
-            <GanttRuler anchorIso={anchor} widthPx={chartPx} pxPerDay={pxPerDay} />
+            {/* No ruler on an uncalculated plan: a date scale over an empty chart would be the
+                invented fact the fallback anchor exists to avoid showing. */}
+            {notCalculated ? null : (
+              <GanttRuler anchorIso={safeAnchor} widthPx={chartPx} pxPerDay={pxPerDay} />
+            )}
           </div>
         </div>
 
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+          {/* The logic overlay sits ABOVE the rows and takes no pointer events, so an arrow is
+              never a hole in the drag surface — without that the resize handle under a passing
+              link would silently stop responding on exactly the dense plans where both matter. */}
+          <GanttLinkOverlay
+            paths={linkSet.paths}
+            withheld={linkSet.withheld}
+            rowHeight={GANTT_ROW_HEIGHT}
+            height={virtualizer.getTotalSize()}
+            width={contentWidth}
+            chartLeft={gridWidth}
+            barBoundsForRow={(index) => {
+              const target = rows[index];
+              if (target === undefined || target.kind !== 'activity') return null;
+              const g = barGeometry(target.activity, safeAnchor, pxPerDay, barDateSource);
+              return g === null ? null : { x: g.x, width: g.width };
+            }}
+          />
           {virtualizer.getVirtualItems().map((item) => {
             const row = rows[item.index];
             if (!row) return null;
@@ -471,9 +821,17 @@ export function GanttPanel({
             const shared = {
               rowIndex: item.index,
               top: item.start,
-              anchorIso: anchor,
+              anchorIso: safeAnchor,
               chartPx,
               pxPerDay,
+              barDateSource,
+              hoursPerDayFor,
+              editing,
+              drag,
+              dependencies,
+              predecessorsById,
+              rowMenuContextFor,
+              actionColumns,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -517,6 +875,7 @@ export function GanttPanel({
  * the keyboard cannot reach is a grouping half the users cannot collapse.
  */
 function GanttBucketRowView({
+  actionColumns,
   row,
   rowIndex,
   top,
@@ -539,6 +898,7 @@ function GanttBucketRowView({
   pxPerDay: number;
   gridWidth: number;
   showVariance: boolean;
+  actionColumns: number;
   isTabStop: boolean;
   registerRef: (element: HTMLDivElement | null) => void;
   onFocusRow: () => void;
@@ -615,7 +975,7 @@ function GanttBucketRowView({
 
       <div
         role="gridcell"
-        aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
+        aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
         className="relative h-full shrink-0"
         style={{ width: chartPx }}
       >
@@ -658,6 +1018,14 @@ interface GanttRowViewProps {
   anchorIso: string;
   chartPx: number;
   pxPerDay: number;
+  barDateSource: BarDateSource | undefined;
+  hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
+  editing: GanttGridEditing | undefined;
+  drag: GanttBarDrag | undefined;
+  dependencies: readonly DependencySummary[] | undefined;
+  predecessorsById: ReadonlyMap<string, readonly string[]>;
+  rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
+  actionColumns: number;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -672,12 +1040,20 @@ interface GanttRowViewProps {
 }
 
 function GanttRowView({
+  actionColumns,
   row,
   rowIndex,
   top,
   anchorIso,
   chartPx,
   pxPerDay,
+  barDateSource,
+  hoursPerDayFor,
+  editing,
+  drag,
+  dependencies,
+  predecessorsById,
+  rowMenuContextFor,
   gridWidth,
   variance,
   showVariance,
@@ -690,7 +1066,93 @@ function GanttRowView({
   offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
   const { activity, depth, hasChildren, expanded } = row;
-  const geometry = barGeometry(activity, anchorIso, pxPerDay);
+  const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
+  const linkSummary =
+    dependencies === undefined ? null : predecessorSummary(activity.id, predecessorsById);
+  // A THUNK, not a built object. `buildSelectionBarContext` scans the whole plan, and this runs per
+  // mounted row — measured at 40 calls per keystroke on a 2,000-activity plan (M6 performance gate).
+  // The menu builds it when it opens, which removes the cost from the render path rather than
+  // reducing it.
+  const rowMenuContext = rowMenuContextFor ?? null;
+  const badge = constraintBadge(activity);
+  const labelMode =
+    geometry === null || geometry.milestone
+      ? 'none'
+      : barLabelMode({
+          chartPx,
+          barRight: geometry.x + geometry.width,
+          labelChars: activity.name.length + (badge === null ? 0 : 2),
+        });
+
+  // The pointer gesture. `movable` is the object's answer AND the reader's, resolved by the same
+  // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
+  // two affordances for one capability must not disagree about whether it exists.
+  const moveGate = drag === undefined ? null : barMoveGate(activity, drag);
+  const barStartIso = barDatesFor(activity, barDateSource).start;
+  const commitDrag = useCallback(
+    (deltaX: number) => {
+      if (drag === null || drag === undefined) return;
+      const { plannedStartIso } = drag;
+      if (plannedStartIso === null || barStartIso === null || geometry === null) return;
+      const startDay = startDayAtChartX({
+        anchorIso,
+        plannedStartIso,
+        pxPerDay,
+        x: geometry.x + deltaX,
+      });
+      drag.moveTo(activity.id, startDay);
+      drag.announce(
+        moveAnnouncement(activity.name, dateAtChartX(anchorIso, pxPerDay, geometry.x + deltaX)),
+      );
+    },
+    [drag, barStartIso, geometry, anchorIso, pxPerDay, activity.id, activity.name],
+  );
+  const barDrag = useBarPointerDrag({
+    enabled: moveGate?.movable === true && geometry !== null,
+    onCommit: commitDrag,
+  });
+
+  /**
+   * The finish-edge resize (M3-T3).
+   *
+   * `onTsldResize` with `durationDays` alone — no `startDay` — which is ADR-0052 M3's finish-edge
+   * semantic verbatim rather than a new one invented here. The start edge is deliberately NOT
+   * offered on this surface yet: it carries a MODE-dependent meaning (EARLY writes SNET +
+   * durationDays, VISUAL writes visualStart + durationDays), and shipping it without the mode
+   * statement the canvas has beside it would leave a planner unable to tell which of two writes
+   * their drag just made.
+   */
+  const commitResize = useCallback(
+    (deltaX: number) => {
+      if (drag === null || drag === undefined) return;
+      if (geometry === null || barStartIso === null) return;
+      const durationDays = durationDaysForFinishAtX({
+        startIso: barStartIso,
+        anchorIso,
+        pxPerDay,
+        // The bar's right edge is exclusive in pixels and inclusive in dates, so a day is taken off
+        // before converting — without it every resize would read one day long.
+        x: geometry.x + geometry.width + deltaX - pxPerDay,
+      });
+      if (durationDays === activity.durationDays) return;
+      drag.resizeTo(activity.id, durationDays);
+      drag.announce(resizeAnnouncement(activity.name, durationDays));
+    },
+    [
+      drag,
+      geometry,
+      barStartIso,
+      anchorIso,
+      pxPerDay,
+      activity.id,
+      activity.name,
+      activity.durationDays,
+    ],
+  );
+  const barResize = useBarPointerDrag({
+    enabled: moveGate?.movable === true && geometry !== null && !geometry.milestone,
+    onCommit: commitResize,
+  });
   const ghost =
     showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 
@@ -698,6 +1160,13 @@ function GanttRowView({
     <div
       ref={registerRef}
       role="row"
+      // The row's subject, in the DOM. Added for the M0-T1 density harness, which needs the ORDER
+      // the grid is currently presenting — that changes with the sort, which is shipped
+      // (`:278-284`), and cannot be recovered from the API without duplicating the row model's own
+      // ordering. Not harness-only scaffolding: M1's journey locators need a stable handle on a row
+      // too, and `[data-toolbar-item]` is the precedent — ADR-0091 records three journeys breaking
+      // because they located controls by their copy instead.
+      data-activity-id={activity.id}
       // Header occupies row 1, so data rows are 1-based from 2 — and the index is the row's
       // position in the FULL set, not the rendered window, which is what makes virtualization
       // invisible to assistive technology.
@@ -735,59 +1204,127 @@ function GanttRowView({
         )}
         style={{ width: gridWidth }}
       >
-        {COLUMNS.map((column, i) => (
-          <div
-            key={column.key}
-            role="gridcell"
-            aria-colindex={i + 1}
-            className={cn(
-              'shrink-0 truncate px-2 text-xs',
-              column.align === 'right' ? 'text-right' : 'text-left',
-            )}
-            style={{
-              width: columnWidth(column),
-              // Indentation belongs to the first column only, so the date columns stay aligned
-              // down the page however deep the hierarchy goes.
-              ...(i === 0 ? { paddingLeft: 8 + depth * 14 } : {}),
-            }}
-          >
-            {i === 0 && hasChildren ? (
-              <button
-                type="button"
-                // The row already carries aria-expanded; this control is its visual affordance,
-                // so it is hidden from the accessibility tree rather than announcing a second,
-                // competing expanded state.
-                aria-hidden="true"
-                tabIndex={-1}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggle(activity.id, expanded === true);
-                }}
-                className="text-muted-foreground hover:text-foreground mr-1 inline-flex align-middle"
+        {COLUMNS.map((column, i) => {
+          const text = column.value(activity, barDateSource, hoursPerDayFor?.(activity));
+          const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
+          // An editable cell only where BOTH are true: the host supplied an editing bundle, and this
+          // column maps to one. Neither implies the other — the print surface has no bundle, and
+          // `code`/`totalFloat` are engine output nobody types.
+          const editable = editing !== undefined && cellKey !== undefined;
+
+          if (editable) {
+            const target = { activityId: activity.id, key: cellKey };
+            const cellOpen = isCellOpen(editing.state, target);
+            return (
+              <GanttCell
+                key={column.key}
+                value={text}
+                // The column AND the row, so edit mode announces what is being edited rather than
+                // "edit text". `activity.name` for every column including the name one, where it is
+                // the value being replaced and still the best identifier the row has.
+                label={`${column.label}, ${activity.name}`}
+                colIndex={i + 1}
+                width={columnWidth(column)}
+                align={column.align}
+                gate={editing.gateFor(cellKey, activity.id)}
+                editing={cellOpen}
+                text={cellOpen && editing.state.status !== 'idle' ? editing.state.text : text}
+                busy={cellOpen && editing.state.status === 'committing'}
+                errorMessage={cellOpen ? editing.errorMessage : null}
+                onBegin={() => editing.begin(target, text)}
+                onChange={editing.change}
+                onCommit={editing.commit}
+                onCancel={editing.cancel}
+                className={cn(column.align === 'right' ? 'text-right' : 'text-left')}
               >
-                {expanded === true ? (
-                  <ChevronDown className="size-3" />
-                ) : (
-                  <ChevronRight className="size-3" />
-                )}
-              </button>
-            ) : null}
-            <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
-              {column.value(activity)}
-            </span>
-            {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
+                <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
+                  {text}
+                </span>
+                {offFloatPath && i === 1 ? (
+                  <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
+                ) : null}
+              </GanttCell>
+            );
+          }
+
+          return (
+            <div
+              key={column.key}
+              role="gridcell"
+              aria-colindex={i + 1}
+              className={cn(
+                'shrink-0 truncate px-2 text-xs',
+                column.align === 'right' ? 'text-right' : 'text-left',
+              )}
+              style={{
+                width: columnWidth(column),
+                // Indentation belongs to the first column only, so the date columns stay aligned
+                // down the page however deep the hierarchy goes.
+                ...(i === 0 ? { paddingLeft: 8 + depth * 14 } : {}),
+              }}
+            >
+              {i === 0 && hasChildren ? (
+                <button
+                  type="button"
+                  // The row already carries aria-expanded; this control is its visual affordance,
+                  // so it is hidden from the accessibility tree rather than announcing a second,
+                  // competing expanded state.
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggle(activity.id, expanded === true);
+                  }}
+                  className="text-muted-foreground hover:text-foreground mr-1 inline-flex align-middle"
+                >
+                  {expanded === true ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                </button>
+              ) : null}
+              <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
+                {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
+              </span>
+              {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
                 emphasis alone is precisely the WCAG 1.4.1 defect ADR-0055 exists about. Rendered
                 `sr-only` because the sighted cue is the fade and a visible tag on every off-path
                 row would drown the on-path ones it exists to pick out. */}
-            {offFloatPath && i === 1 ? (
-              <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
-            ) : null}
+              {offFloatPath && i === 1 ? (
+                <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
+              ) : null}
+            </div>
+          );
+        })}
+        {/* The arrows' textual equivalent (spec GV-3), rendered ONCE PER ROW rather than inside a
+            cell. It went into the editable-cell branch first and the test caught it: with no
+            editing bundle the row takes the PLAIN branch, so the sentence existed for some readers
+            and not others — one branch and not its neighbour, the defect this register keeps
+            recording, found here by a test rather than by a reader.
+            Row level is also the honest place: "this follows that" is a fact about the ACTIVITY,
+            not about any one column, and it holds whether or not anybody has turned the arrows on.
+            The SVG is `aria-hidden` (an elbow is not readable), so without this the overlay would
+            be the first graphical-only carrier on a surface whose own docblock forbids that. */}
+        {linkSummary === null ? null : <span className="sr-only">{linkSummary}</span>}
+        {/* The row menu (M5-T3) — the dock's own roster rendered as a menu, never a third copy of
+            it. `selection-duplication.structural.test.ts` asserts this file's component names no
+            action literally, closing the hole ADR-0094 recorded when it noted the gate compares two
+            registries and cannot see a third. */}
+        {rowMenuContext === null ? null : (
+          // Wrapped in a CELL, never a bare child of the row: `role="row"` may contain only
+          // `gridcell`/`columnheader`/`rowheader`, and a loose `button[aria-haspopup]` is an
+          // `aria-required-children` violation axe rates CRITICAL — one per rendered row, which the
+          // `e2e-gantt` journey's scan caught after this shipped. The sr-only link summary above is
+          // untouched: it carries no role, so it is text content rather than an unallowed child.
+          <div role="gridcell" aria-colindex={COLUMNS.length + 1} className="flex shrink-0">
+            <GanttRowMenu context={() => rowMenuContext(activity)} activityName={activity.name} />
           </div>
-        ))}
+        )}
         {showVariance ? (
           <div
             role="gridcell"
-            aria-colindex={COLUMNS.length + 1}
+            aria-colindex={COLUMNS.length + actionColumns + 1}
             className={cn(
               'shrink-0 truncate px-2 text-right text-xs',
               // Direction is carried by the WORD, not the colour — "late"/"early" reads the same
@@ -803,7 +1340,7 @@ function GanttRowView({
 
       <div
         role="gridcell"
-        aria-colindex={COLUMNS.length + (showVariance ? 2 : 1)}
+        aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
         className="relative h-full shrink-0"
         style={{ width: chartPx }}
       >
@@ -841,7 +1378,17 @@ function GanttRowView({
                     ? 'bg-foreground/70'
                     : 'bg-primary/60 ring-primary/70 ring-1 ring-inset',
               )}
-              style={{ left: geometry.x, width: geometry.width }}
+              // The ghost is a TRANSFORM on the live bar, not a second element: one bar means the
+              // planner is dragging the thing they grabbed, and it costs no extra node per row.
+              style={{
+                left: geometry.x,
+                width: geometry.width,
+                ...(barDrag.deltaX === null
+                  ? {}
+                  : { transform: `translateX(${String(barDrag.deltaX)}px)`, opacity: 0.75 }),
+                ...(moveGate?.movable === true ? { cursor: 'grab', pointerEvents: 'auto' } : {}),
+              }}
+              onPointerDown={barDrag.onPointerDown}
             >
               {geometry.progress > 0 ? (
                 <span
@@ -850,6 +1397,50 @@ function GanttRowView({
                 />
               ) : null}
             </span>
+            {/* **The bar's own name, and its pinned mark** (M5 legibility, B10f). Both `aria-hidden`:
+                the grid cells already carry the name and the editor carries the constraint, so
+                these are reinforcement rather than a second carrier — and duplicating the name into
+                the accessibility tree would make every row announce it twice. Withheld when there
+                is no room rather than allowed to overlap (ADR-0054's Dates rule applied to text). */}
+            {labelMode === 'name' ? (
+              <span
+                aria-hidden="true"
+                className="text-muted-foreground pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap"
+                style={{ left: geometry.x + geometry.width + 6 }}
+              >
+                {badge === null ? null : (
+                  <span className="text-warning-text mr-1" title={badge.label}>
+                    {badge.glyph}
+                  </span>
+                )}
+                {activity.name}
+              </span>
+            ) : badge === null ? null : (
+              // No room for the name, but the badge still fits — a pinned bar must not lose its mark
+              // just because the chart is dense, which is precisely when a planner is hunting for it.
+              <span
+                aria-hidden="true"
+                className="text-warning-text pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px]"
+                style={{ left: geometry.x + geometry.width + 4 }}
+                title={badge.label}
+              >
+                {badge.glyph}
+              </span>
+            )}
+            {/* The finish-edge handle. Rendered only when the bar can be resized, so it is never a
+                lit-but-inert grab zone — and never on a milestone, which has no length to change.
+                Eight pixels wide, straddling the edge, which is the smallest zone a pointer finds
+                reliably without eating the neighbouring bar's grab area. Pointer-only by design:
+                the keyboard equivalent is Shift+←/→ on the row (ADR-0052's chord), so this is an
+                additional affordance rather than the only one. */}
+            {moveGate?.movable === true ? (
+              <span
+                aria-hidden="true"
+                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize"
+                style={{ left: geometry.x + geometry.width - 4 }}
+                onPointerDown={barResize.onPointerDown}
+              />
+            ) : null}
           </>
         )}
       </div>

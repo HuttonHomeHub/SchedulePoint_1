@@ -6,7 +6,7 @@
 
 ## Context
 
-Blank App comprises a web client and an API that share types and conventions and
+SchedulePoint comprises a web client and an API that share types and conventions and
 must evolve together. We need a repository structure that keeps the front and
 back ends in lock-step, enables code sharing, and gives fast, cacheable builds
 and tests.

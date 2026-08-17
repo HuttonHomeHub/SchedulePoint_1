@@ -6,7 +6,7 @@
 
 ## Context
 
-Blank App handles sensitive application data and therefore needs robust
+SchedulePoint handles sensitive application data and therefore needs robust
 authentication and session management. Requirements:
 
 - **Self-hosted** — we own user data; no hard dependency on a third-party auth

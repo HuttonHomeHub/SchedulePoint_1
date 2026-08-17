@@ -68,6 +68,11 @@ test('a planner reads the float paths into an activity, in both views', async ({
   const inlineFloatPaths = lookRow.locator('[data-toolbar-item="float-paths"]');
   /** The control, wherever it is — opening the `⋯` only when it is not on the row. */
   const revealFloatPaths = async () => {
+    // Wait for the row to EXIST before asking where the item is. `count()` is a point-in-time read
+    // with no auto-wait, so on a slower machine the first call ran before the toolbar mounted,
+    // found nothing inline, and then waited two minutes for a `⋯` that a wide row never renders —
+    // a helper that reports "the item is in the menu" when what it saw was an empty page.
+    await expect(lookRow).toBeVisible();
     if ((await inlineFloatPaths.count()) > 0) return inlineFloatPaths;
     if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
     return page.getByRole('menuitemcheckbox', { name: 'Float paths' });
@@ -132,12 +137,29 @@ test('a planner reads the float paths into an activity, in both views', async ({
   await expect(panel).toBeVisible();
   await expect(panel.getByRole('button', { name: /\+1d/ })).toBeVisible();
 
-  const drivingRow = page.getByRole('row').filter({ hasText: 'Driving' }).first();
+  // Scoped to the row's NAME CELL, not the row's text. ADR-0095 gave every Gantt row the arrows'
+  // textual equivalent — an `sr-only` "Follows <predecessors>." rendered as a direct child of the
+  // row — so a successor's row now contains its predecessors' names. Here every activity feeds
+  // Target, Target sits at `laneIndex: 0`, and the default sort is `wbs` ascending: Target is the
+  // FIRST row and its text reads "Follows Driving, Branch, Spare 01, …". A `hasText` filter
+  // therefore collapsed BOTH locators below onto that one row, which is why the assertion above
+  // passed and the one below it failed against the same element. The sentence is correct and
+  // deliberate; the locator was relying on a row's text mentioning only its own activity.
+  // Anchored, NOT exact: the de-emphasis marker is rendered inside the name cell itself, so a
+  // dimmed row's cell is named "Driving (off the float path)" — and `exact` would miss precisely
+  // the row these assertions are about.
+  const rowFor = (name: string) =>
+    page
+      .getByRole('row')
+      .filter({ has: page.getByRole('gridcell', { name: new RegExp(`^${name}\\b`) }) })
+      .first();
+
+  const drivingRow = rowFor('Driving');
   await expect(drivingRow).toContainText('(off the float path)');
   // De-emphasis is visual, never structural: the row keeps its tab stop and its activation.
   await expect(drivingRow).toHaveAttribute('tabindex', /-?\d+/);
   await expect(drivingRow).not.toHaveAttribute('aria-disabled', 'true');
-  const branchRow = page.getByRole('row').filter({ hasText: 'Branch' }).first();
+  const branchRow = rowFor('Branch');
   await expect(branchRow).not.toContainText('(off the float path)');
 
   // ── 7 · Closing the panel clears the emphasis, and returns focus to the item ──────────────

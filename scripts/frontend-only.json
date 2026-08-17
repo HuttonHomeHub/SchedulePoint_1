@@ -1,0 +1,7 @@
+{
+  "active": true,
+  "epic": "gantt-editing",
+  "spec": "docs/specs/gantt-editing/",
+  "reason": "ADR-0034's recalculation-parity argument for this epic rests on computeSchedule's INPUT being unchanged. Every milestone is frontend-only by design; a change under apps/api/ can widen that input, and the plan guarded it with a sentence.",
+  "guarded": ["apps/api/"]
+}

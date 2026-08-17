@@ -158,6 +158,15 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   await addActivity(page, 'Excavate');
   await page.getByRole('button', { name: 'Recalculate' }).click();
   await awaitComputedSchedule(page, orgSlug);
+  // `awaitComputedSchedule` reads the API, so on its own it proves the SERVER recalculated and
+  // says nothing about the screen. This test's pre-conversion checkpoint was
+  // `getByText('Project finish')` — a DOM assertion — and swapping it for the API read left the
+  // axe scan as the only thing after it, which checks the accessibility of whatever happens to be
+  // rendered rather than that anything was. The sibling test above kept its `Critical` cell and
+  // this one did not: one control and not its neighbour, found by the reconciliation pass's
+  // test-engineer review. A lone unconstrained activity is on the critical path, so the same
+  // assertion serves — and it proves an engine-computed field reached the table.
+  await expect(page.getByRole('cell', { name: 'Critical', exact: true }).first()).toBeVisible();
 
   // The plan view with the calendar picker is accessible.
   expect(

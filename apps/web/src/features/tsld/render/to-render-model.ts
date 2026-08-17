@@ -1,9 +1,10 @@
-import type { ActivitySummary, DependencySummary, SchedulingMode } from '@repo/types';
+import type { ActivitySummary, DependencySummary } from '@repo/types';
 
 import { activityBarLabel } from './a11y';
 import { laneOverlapIds } from './lane-overlap';
 import type { RenderActivity, RenderEdge } from './render-model';
 
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { activeConstraintAnchor } from '@/lib/constraint-format';
 
 /**
@@ -11,7 +12,9 @@ import { activeConstraintAnchor } from '@/lib/constraint-format';
  * dates) and the default; `visual` reads the engine's effective-Visual dates (VISUAL mode); `late`
  * reads the late dates (the read-only Late-Start overlay, M4).
  */
-export type BarDateSource = 'early' | 'visual' | 'late';
+
+export type { BarDateSource } from '@/lib/bar-dates';
+export { barDateSourceFor } from '@/lib/bar-dates';
 
 /**
  * Pick the bar-date source for the active view (ADR-0033): the read-only **Late overlay** wins for
@@ -19,10 +22,6 @@ export type BarDateSource = 'early' | 'visual' | 'late';
  * dates, `EARLY` → the earliest). Callers gate on `VITE_SCHEDULING_MODES`; flag-off the mode is
  * always `EARLY` and the overlay is never on, so this yields `early` (today's behaviour).
  */
-export function barDateSourceFor(mode: SchedulingMode, lateOverlay: boolean): BarDateSource {
-  if (lateOverlay) return 'late';
-  return mode === 'VISUAL' ? 'visual' : 'early';
-}
 
 /**
  * The seam that maps the API shapes (`ActivitySummary` / `DependencySummary`) to the
@@ -40,17 +39,7 @@ export function toRenderActivities(
 ): RenderActivity[] {
   // Resolve each bar's drawn span once (source-dependent), then reuse it for both the overlap pass
   // and the final render shape — one map over `activities`, no positional re-indexing.
-  const bars = activities.map((a) => ({
-    activity: a,
-    start:
-      source === 'visual' ? a.visualEffectiveStart : source === 'late' ? a.lateStart : a.earlyStart,
-    finish:
-      source === 'visual'
-        ? a.visualEffectiveFinish
-        : source === 'late'
-          ? a.lateFinish
-          : a.earlyFinish,
-  }));
+  const bars = activities.map((a) => ({ activity: a, ...barDatesFor(a, source) }));
   // A manual lane drop can leave two bars overlapping in time in one lane (TECH_DEBT #24c) — flag
   // both, computed on the same dates the bars draw at so the cue matches the picture in every mode.
   const overlapping = laneOverlapIds(

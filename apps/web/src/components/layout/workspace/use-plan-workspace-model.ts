@@ -342,8 +342,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // re-render the whole workspace on every selection transition — including marquee drags, which
   // emit one per frame — to feed something that reads it lazily and renders nothing.
   const pluralSelectionRef = useRef<readonly string[]>([]);
+  // Whether that selection is PLURAL, as reactive state — the one bit of it a renderer needs.
+  // `buildSelectionBarContext` returns null above one (ADR-0080: the bulk bar replaces the singular
+  // one rather than joining it), and the Gantt's bar hard-coded `selectionCount: 1`, so selecting
+  // several on the canvas and switching view offered single-activity actions on one of them — the
+  // ADR-0093 inconsistency this repository has now corrected twice, re-introduced in a third view.
+  //
+  // A BOOLEAN rather than the count, which is what makes it affordable: a marquee emits a new
+  // selection every frame, and `setState` with an unchanged value is a bail-out, so a drag across
+  // forty bars re-renders the workspace once — when it crosses one — instead of once per frame.
+  // That is the cost the ref above exists to avoid, kept.
+  const [pluralSelectionActive, setPluralSelectionActive] = useState(false);
   const onPluralSelectionChange = useCallback((ids: readonly string[]) => {
     pluralSelectionRef.current = ids;
+    setPluralSelectionActive(ids.length > 1);
   }, []);
   // The app clipboard (M3). A ref for the same reason: nothing renders from it, and re-rendering the
   // workspace on a copy would be a visible cost for an invisible change. Cleared on plan switch —
@@ -1918,6 +1930,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     copySelection,
     pasteClipboard,
     onPluralSelectionChange,
+    pluralSelectionActive,
     // Queries
     plan,
     project,

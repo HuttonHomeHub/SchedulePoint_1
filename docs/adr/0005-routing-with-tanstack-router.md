@@ -6,7 +6,7 @@
 
 ## Context
 
-Blank App is a single-page application served as static assets (see
+SchedulePoint is a single-page application served as static assets (see
 `docs/ARCHITECTURE.md`). It needs client-side routing that is type-safe,
 supports nested layouts, treats URL search params as first-class state (for
 filters/pagination on data tables), and integrates with data prefetching and

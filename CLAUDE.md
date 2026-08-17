@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 939 web
-> source files with 31 flag-scoped Playwright suites beside the base journey, and
-> 94 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 972 web
+> source files with 32 flag-scoped Playwright suites beside the base journey, and
+> 95 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2203,6 +2203,43 @@ editing this plan.` and an `Editing` badge, beside a button reading `Stop editin
   position, since a per-context order would re-run the ladder as the selection changes. And two reviews
   called `ConflictRemedyControl`'s zero rendered coverage blocking — which M4-T2's own definition of
   done had said first. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0095** _(Accepted; M0–M4 + M5-T3 landed 2026-08-17)_ — The Gantt becomes a working
+  surface. ADR-0059 shipped the chart read-only and deferred editing; ADR-0093 then took `Report
+progress` off the command surface because **an object action belongs on the object**, and its
+  replacement — the ADR-0092 canvas dock — was canvas-only. The product owner accepted that
+  **explicitly on the basis that the Gantt would pick it up**, so the Gantt had a selection and
+  nothing to do with it. The bar is now the dock's, **called** twice rather than built twice
+  (`canvas: null` makes zoom-to-selection and isolate absent rather than shaded), the grid takes
+  in-cell editing with **per-cell write scope** (ADR-0060's ruling at cell granularity — a grid-wide
+  "can edit" would remove a Contributor's progress write while a Planner holds the pen), bars move
+  by pointer and by `Alt+←/→` (**not** the bare arrows, which were already treegrid disclosure), and
+  dependency arrows land behind a default-off `View ▾` toggle.
+  **ADR-0059 §4's objection to arrows is answered by the GEOMETRY, not by the substrate**, and
+  neither that ADR nor this epic's first spec said so: its phrase is about **routing**, whose cost is
+  independent of the render target — but TSLD bars share lanes while Gantt rows are one bar per row,
+  so a link here is an elbow through whitespace. That is a structural test, not a paragraph. Culling
+  is **at least one endpoint in the window**, measured (p95 71–74, sort-independent, at 2,160
+  activities / 3,200 links) rather than argued, and the cap **always reports its withheld count**.
+  **Three defects were found by measuring or reading rather than from a report.** `GRID_WIDTH` was a
+  literal disagreeing with its own columns, and measuring before adding one found **Float rendering
+  80 px on top of the chart**, painted over the bars by the pinned block's own `z-10`. TECH_DEBT
+  #135's fix had closed the bars and left **four** more sites reading the early dates — the text
+  cells (the accessible carrier), the sort, the chart's framed extent (so a pushed bar fell outside
+  its own chart) and a verbatim duplicate resolver. And `check:frontend-only`, a gate written for
+  this epic, opted in from CI on `contains(github.head_ref, 'gantt')` — which **can never be true**
+  on this repository's one long-lived agent branch: ADR-0088's no-op flag pins in a second costume,
+  written the same week by the same hand that recorded them.
+  **The M6 gate pass blocked on all five reviews**, the largest a **data-loss path** (arrow keys in
+  an open cell bubbled to the grid, moving focus off an unsaved edit that F2 then overwrote
+  silently), plus a row menu rendering every **pen-gated** action as live — found by the first test
+  ever written against it, which `coverage.structural.test.ts` structurally could not demand — and a
+  print path whose props were threaded while its only caller was not, contradicting the commit
+  message that introduced them. Two reviewers were **partly wrong** and that is recorded: the React
+  Compiler's analysis does run (in `eslint-plugin-react-hooks` v7), though not at build time.
+  M5 shipped the row menu, **bar labels** and the **constraint badge**; the columns chooser,
+  Indent/Outdent, Insert and view-memory are named as unbuilt rather than implied, and `PROJECT_BRIEF.md` §8's "edit supported" is called
+  **substantially** met rather than closed.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
