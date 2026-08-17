@@ -415,7 +415,7 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
   for (const r of readings) {
     expect(
       r.orderedRows,
-      `${r.sort}: reconstructed only ${r.orderedRows} of ${graph.activities.length} rows`,
+      `${String(r.sort)}: reconstructed only ${String(r.orderedRows)} of ${graph.activities.length} rows`,
     ).toBe(graph.activities.length);
   }
 });
