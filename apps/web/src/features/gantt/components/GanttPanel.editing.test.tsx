@@ -489,3 +489,64 @@ describe('the logic overlay', () => {
     expect(container.querySelector('svg')?.getAttribute('class')).toContain('pointer-events-none');
   });
 });
+
+/**
+ * **A row's TEXT no longer identifies the row, and the float-paths journey found out in CI.**
+ *
+ * `linkSummary` is rendered as a direct child of the row (the arrows' textual equivalent, GV-3), so
+ * a successor's row now contains its predecessors' NAMES. That is correct and deliberate — but it
+ * means a locator of the form "the first row whose text contains `Branch`" can resolve to the
+ * TARGET's row rather than Branch's own, because Target's row reads "Follows Driving, Branch, …".
+ *
+ * `e2e-float-paths` did exactly that. Its fixture puts Target at `laneIndex: 0`, and the default
+ * sort is `wbs` ascending, so Target is the FIRST row: both `drivingRow` and `branchRow` collapsed
+ * onto it, which is why one assertion passed and its neighbour failed on the same element. The
+ * journey now scopes to the name cell; this pins the property that made the old locator wrong, so
+ * nobody restores it.
+ */
+describe('what a row says it is', () => {
+  const successorDep = (id: string, fromId: string, fromName: string) =>
+    ({
+      id,
+      type: 'FS',
+      predecessor: { id: fromId, code: null, name: fromName },
+      successor: { id: 'target', code: null, name: 'Target' },
+    }) as unknown as DependencySummary;
+
+  const network = () => [
+    activity({ id: 'target', name: 'Target', laneIndex: 0 }),
+    activity({ id: 'driving', name: 'Driving', laneIndex: 1 }),
+    activity({ id: 'branch', name: 'Branch', laneIndex: 2 }),
+  ];
+
+  const deps = () => [
+    successorDep('d1', 'driving', 'Driving'),
+    successorDep('d2', 'branch', 'Branch'),
+  ];
+
+  it("puts a predecessor's name inside the SUCCESSOR's row", () => {
+    render(<GanttPanel activities={network()} dependencies={deps()} showAllLinks />);
+    const target = screen.getAllByRole('row').find((row) => row.textContent?.includes('Follows'));
+    expect(target?.textContent).toContain('Follows Driving, Branch.');
+    // It is the TARGET's row that carries it — the successor, not either predecessor.
+    expect(within(target as HTMLElement).getByRole('gridcell', { name: 'Target' })).toBeVisible();
+  });
+
+  it('so the first row whose TEXT contains a name may not be that activity row', () => {
+    // The CI failure, reduced. Not a defect to fix in the product — the sentence belongs there —
+    // but a property any row locator has to respect.
+    render(<GanttPanel activities={network()} dependencies={deps()} showAllLinks />);
+    const first = screen.getAllByRole('row').find((row) => row.textContent?.includes('Branch'));
+    expect(first?.textContent?.startsWith('Branch')).toBe(false);
+  });
+
+  it('while the NAME CELL identifies the row unambiguously', () => {
+    // Which is what the journey's locator now uses. The summary is a row-level child, never a
+    // gridcell, so scoping to the cell cannot pick it up.
+    render(<GanttPanel activities={network()} dependencies={deps()} showAllLinks />);
+    const named = screen
+      .getAllByRole('gridcell')
+      .filter((cell) => cell.textContent?.trim() === 'Branch');
+    expect(named).toHaveLength(1);
+  });
+});
