@@ -8,6 +8,7 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
+  startEditing,
 } from '../e2e-gantt/support';
 import { writeMeasurement } from '../measure-toolbar/output';
 
@@ -74,23 +75,49 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
   await createProject(page, 'Riverside');
   await createPlan(page, 'Density');
   const planId = openPlanId(page);
+  // Seeding writes through the API, which is pen-gated (ADR-0028) — the harness must hold the plan
+  // edit lock like any other client. Omitting this failed with 200 × 423 LOCKED, which is the guard
+  // working correctly on a caller that had not asked for the pen.
+  await startEditing(page);
   await seedActivities(page, orgSlug, ACTIVITY_COUNT);
 
   // Read the graph from the API rather than the DOM: a link's row span is a property of the plan and
   // the current order, not of what happens to be painted.
   const graph = await page.evaluate(
     async ({ slug, id }: { slug: string; id: string }) => {
+      // Throws rather than returning [] on a bad response. The first version swallowed it, and a
+      // rejected read then presented as "the plan has no activities" — a harness that lies about
+      // what it measured, which is the failure `seedActivities`' own docblock was written about.
+      // Pages to exhaustion at the API's own maximum. `limit` is capped at 100 (422 above it), which
+      // the first version discovered only because this throws instead of returning [] — swallowed, a
+      // rejected read presented as "the plan has no activities", i.e. a harness lying about what it
+      // measured.
       const get = async (path: string) => {
-        const res = await fetch(path, { credentials: 'include' });
-        return res.ok ? ((await res.json()) as { data: unknown[] }).data : [];
+        const out: unknown[] = [];
+        let cursor: string | null = null;
+        for (;;) {
+          const url = `${path}?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+          const res = await fetch(url, { credentials: 'include' });
+          if (!res.ok) throw new Error(`${res.status} ${url}: ${(await res.text()).slice(0, 200)}`);
+          const body = (await res.json()) as {
+            data: unknown[];
+            meta?: { nextCursor?: string | null };
+          };
+          out.push(...body.data);
+          cursor = body.meta?.nextCursor ?? null;
+          if (!cursor || body.data.length === 0) return out;
+        }
       };
       return {
-        activities: (await get(
-          `/api/v1/organizations/${slug}/plans/${id}/activities?limit=5000`,
-        )) as { id: string; totalFloat: number | null; isCritical: boolean }[],
-        dependencies: (await get(
-          `/api/v1/organizations/${slug}/plans/${id}/dependencies?limit=20000`,
-        )) as { predecessorId: string; successorId: string }[],
+        activities: (await get(`/api/v1/organizations/${slug}/plans/${id}/activities`)) as {
+          id: string;
+          totalFloat: number | null;
+          isCritical: boolean;
+        }[],
+        dependencies: (await get(`/api/v1/organizations/${slug}/plans/${id}/dependencies`)) as {
+          predecessorId: string;
+          successorId: string;
+        }[],
       };
     },
     { slug: orgSlug, id: planId },
