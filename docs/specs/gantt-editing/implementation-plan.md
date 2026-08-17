@@ -604,3 +604,151 @@ the signal named in the spec's §4 that the milestone has drifted.
 | Something needs a schema change mid-epic                                        | low        | med      | Named in advance (M5-T1's persisted column choice). `database-architect` opens **before** any code, with no self-assessment of size (CLAUDE.md §19.3).                                                                    |
 | A width regression on the command surface                                       | low        | med      | Nothing is added to Row 1 or Row 2 by design; `e2e-toolbar-fit` proves it. Note the selection bar is **out of that gate's scope by decision** (TECH_DEBT #124), so its own width is unguarded — worth one M6 measurement. |
 | A milestone merges to the auto-pulling host in a half-built state (Q4: no flag) | med        | **high** | The ordering constraint is a merge condition, and M0-T2 walks M1–M5 against it before M1 starts rather than discovering it at M6.                                                                                         |
+
+---
+
+## Review findings — five specialists, folded 2026-08-17
+
+The product owner's approval was conditioned on the reviewers agreeing. **Four of five blocked.**
+Every finding below was verified against the code before folding — two reviewers were wrong on a
+load-bearing claim and one pair disagreed outright, so relaying them unchecked would have written
+a false statement into the plan (ADR-0076).
+
+### The convergent finding: Q2 is decided and no task builds it
+
+**Three reviewers found this independently** (accessibility B2, ui-architect B5, ux #1), which makes
+it the strongest signal in the pass. Q2 was answered — typing a Start/Finish date writes the
+constraint the drag writes — and M2-F2 scopes editable cells to **name, duration and % complete**.
+Start and Finish appear in no task in any milestone. So as written, this epic finishes with a planner
+**unable to type a date at all**, against a brief whose words are "editable duration **and dates**"
+and a bar set by two tools whose planners type into the grid rather than dragging.
+
+**Fix: Start and Finish become editable cells in M2**, carrying Q2's answer. This is the epic's
+central requirement, not an M5 nicety.
+
+### The disagreement, and how it is resolved
+
+**performance-reviewer** and **ui-architect** gave opposite instructions for M4's culling predicate,
+and both were right about their facts:
+
+- performance: endpoint culling is **not** window culling — a link whose endpoints are both
+  off-screen can still cross the window, so an endpoint test silently omits it. Verified: the TSLD
+  painter already ships that weaker OR-test at `render/paint.ts:1042`.
+- ui-architect: a link with both endpoints off-window renders as **a bare vertical line entering and
+  leaving the window with no visible start or end** — it answers no question a planner has — and
+  including them makes the count a function of the plan and the **sort order**, not the viewport.
+  Its arithmetic: sorting by Total float (a control planners already have, `GanttPanel.tsx:278-284`)
+  takes the crossing count from ~16 to ~1,067.
+
+**Resolution: cull to links with at least one endpoint in the rendered row window, and say so.**
+The ui-architect's design wins — but the performance reviewer's fact is why this must be **stated as
+a decision rather than left as a consequence of the predicate**. Crossing-only links are
+**deliberately not drawn**, because a line with no visible endpoint is clutter, and the alternative
+makes the overlay unbounded. That restores the "bounded by the same virtualization as the rows"
+property the spec claimed and had not earned: the bound becomes `visible rows × average degree`
+≈ 40 × 1.6 ≈ **64 paths**, by construction rather than by measurement.
+
+Two consequences follow and are adopted: **R5 sweeps at least three sort orders** (WBS default, Total
+float, Start) rather than the default alone — the imported-shape fixture is the most WBS-local case
+in existence and the least informative single measurement available; and **M4-T6's cap becomes
+unconditional in design**, with the measurement setting its number and never whether it exists,
+because R5 measures one fixture and a denser customer plan would otherwise meet no cap and no code
+path that could add one.
+
+### A live defect in shipped code, found by reading rather than by a report
+
+`GanttPanel` takes **no `barDateSource`**. `layout/bar-geometry.ts:52` reads
+`earlyStart`/`earlyFinish` unconditionally; the canvas is handed
+`barDateSourceFor(plan.schedulingMode, lateOverlay)` and reads `visualEffectiveStart` in VISUAL mode
+(`to-render-model.ts:46`). **So in a VISUAL-mode plan the Gantt and the diagram disagree about where
+every hand-placed bar sits — today.** It is unreported and absent from `docs/TECH_DEBT.md`.
+
+It also makes M3's VISUAL half unbuildable as specified: a drag would write `visualStart`, the engine
+would pin `visualEffectiveStart`, and the Gantt would not read it — **a gesture that mutates the plan
+and reports nothing**, which is worse than lit-but-inert and is exactly what the Q4 merge condition
+forbids. **A read-only slice giving `GanttPanel` the same date-source seam lands in M0, before M3.**
+It repairs the live defect, adds no affordance, and is coherent standing alone.
+
+### The keyboard binding was wrong twice over
+
+M3 proposed bare `←/→` to move a bar's start, citing the canvas as precedent. Both halves fail:
+`GanttPanel.tsx:311-328` **already binds** bare `ArrowLeft`/`ArrowRight` to treegrid expand/collapse,
+and the canvas actually uses **`Alt`+arrows** — its own comment reads _"Alt+arrows nudge the focused
+activity — horizontal = start day (an SNET constraint)"_ (`TsldPanel.tsx:1848`). **Adopt `Alt+←/→`**,
+matching the canvas, and leave the disclosure keys alone.
+
+`GanttPanel` is a `role="treegrid"` with **row-level** roving tabindex (`:565`, `:708`); its
+`role="gridcell"` children carry no `tabIndex`, so cell-level focus does not exist and no task built
+it. **M2 gains an explicit task for the cell-navigation model** before any cell becomes editable, plus
+one for focus survival when a commit re-sorts the grid and the focused row leaves the virtualized
+window — this repo has shipped focus-to-`<body>` three times (ADR-0080, ADR-0063 M6, ADR-0067).
+
+### Where a reviewer was wrong, recorded rather than quietly dropped
+
+**test-engineer** argued M0-T4's engine-import gate guards a channel the module system already
+closes, "because the engine pulls in Prisma/Nest, neither of which bundles for a browser." **False** —
+all 14 files under `apps/api/src/modules/schedule/engine/` contain **zero** Nest or Prisma imports.
+The engine is pure, which is ADR-0022's whole point, so it would bundle happily and M0-T4 guards a
+real open channel. The gate stays.
+
+Its other two findings stand and are adopted: M0-T4's scope widens beyond `features/gantt/` (the
+precedent test self-scopes to `FEATURE_DIR`, so a Gantt-scoped copy would be blind to
+`use-plan-workspace-model.ts`, which is where F5 says the write-path work lives); and the **real**
+risk — an `apps/api` change widening the engine's input — gains a diff check rather than the sentence
+it had.
+
+### The Q4 merge condition was an intention, and is now a gate
+
+M0-T2 was a one-time document reviewed before M1. It cannot see a milestone that drifts during
+implementation, which is how every instance in this register was actually found. **It gains a
+standing rule**: any interactive element added under `features/gantt/` either has a journey assertion
+exercising its full write path, or does not render. M0-T2 also gains the technique the register
+already records working — **a full prop-list diff of `TsldPanel` against `GanttPanel`**
+(`plan-workspace-toolbar.tsx:499-500`: _"found by diffing the two hosts' whole prop lists rather than
+fixing the two the register named"_). That diff is what surfaces the `barDateSource` and
+`lateOverlayActive` gaps, and neither was visible from M0-T2's one-sentence-per-milestone walk.
+
+### Also adopted
+
+- **M1 retires `add-note`'s Gantt route** rather than adding a third entry point beside two bad ones
+  — ADR-0093's defect reproduced inside the milestone meant to discharge it (ux #3).
+- **The editing predicate is derived once** at the workspace including `&& !lateOverlayActive`, and
+  handed identically to both hosts, asserted by identity (ADR-0062's `gating.logic === gating.general`
+  precedent). Without it a Gantt host wiring `model.canEditSchedule` directly would arm drags while
+  the "editing is paused" banner is on screen above them.
+- **Bar-end resize hit-zones are padded to ≥24×24 CSS px** independent of the bar's 14px visual
+  height. The canvas's `EDGE_HANDLE_PX = 8` is invisible to axe because Canvas 2D has no DOM node to
+  measure; in the DOM it becomes a real, measurable 2.5.8 failure. Probed with `elementFromPoint`,
+  the one pattern in this repo that has caught a target-size defect a plain axe scan missed.
+- **The arrow stroke tokens join `token-contrast.test.ts` before the CSS is written** — 1.4.11 applies
+  to a meaningful graphic regardless of `aria-hidden`, and M2 already pre-commits its own pair, so the
+  asymmetry was the tell.
+- **M4 ships a per-row `sr-only` predecessor/successor summary**, not "the Logic tab, and a column at
+  M5". The canvas already speaks this inline (`render/a11y.ts:210-243`), so deferring it would drop
+  below a bar this product already meets — and under Q4 M4 can merge before M5.
+- **`selection-actions.tsx` moves out of `features/tsld/`** in M0-F2, barrel-preserving per ADR-0078:
+  the leak runs the opposite way to the one the brief suspected — a view-agnostic registry is stranded
+  inside one view's folder.
+- **Two hosts, one shared builder** — M0-F2's "the host moves" wording contradicted the acceptance
+  condition three lines below it ("every existing `TsldPanel` suite passes unchanged").
+- **The no-obstacle-search rule becomes a permanent invariant**, not a milestone assertion. The
+  "elbows through whitespace" argument is right in outcome and wrong in derivation: a backward link
+  (SS, FF, negative lag) does pass through intervening rows. The honest rule is _"the route is a
+  fixed-shape polyline and we never avoid obstacles"_, or the first review finding of "the arrows look
+  wrong on backward links" walks ADR-0065's cost straight back in.
+- **M3-T2 commits to rAF/ref-based ghost positioning**, not React state per `pointermove` —
+  `TsldPanel.tsx:995-998` records that exact shape measuring **~1.3 s at 2,000 activities**.
+- **M2 keeps cell-edit state row-local and memoises the row components**, so a keystroke does not
+  re-render ~40 siblings.
+- **M2-T4 gets a stated default** rather than "decide it": name is always editable; duration and dates
+  are read-only with a reason until the plan is calculated.
+- The **F5 `onTsldResize` risk row closes** — verified lane-free at
+  `use-plan-workspace-model.ts:1106-1110`.
+
+### Recorded, not actioned
+
+Sub-day precision loss on a bar-end resize (ADR-0070's rounding class on a new surface); `GanttColumn.key`
+is typed `GanttSortKey` so an unsortable Predecessors column needs the type widened; the Gantt shows no
+`visualConflict` cue though M1 puts ADR-0094's remedy on its selection bar; no `contextmenu` handling
+until M5, so right-click gives browser chrome for four milestones; and the dock bar names its subject
+only in `aria-label`, so a sighted planner sees an unattributed strip.
