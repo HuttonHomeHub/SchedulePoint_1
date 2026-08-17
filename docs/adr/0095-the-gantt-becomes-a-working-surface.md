@@ -136,6 +136,50 @@ owns, so a copy is caught by the strings it copied.
   Timeline header, painted over the bars by the pinned block's own `z-10`. Derived now; re-measured
   overhang 0.
 
+### D7 — The gate pass, and what five specialists found that a human read had not
+
+Five reviews over the combined diff. **All five blocked**, on findings that had passed a human read
+and, in three cases, the epic's own tests.
+
+The largest is a **data-loss path**: arrow keys typed into an open cell bubbled to the treegrid
+handler, so ArrowLeft toggled the row's disclosure instead of moving the caret and ArrowUp moved
+focus to another row while the reducer still held the cell as `editing` — orphaning the typed text
+silently, after which F2 on the new row overwrote it. The cell stopped Enter and Escape and not the
+other six keys: ADR-0079's rule applied to two keys and not their neighbours, which is this
+register's standing shape.
+
+Next, the **row menu rendered every pen-gated action as live**. The registry expresses pen-gating as
+a flag the `Toolbar` primitive resolves centrally; the menu read only `isEnabled`. It was found by
+the **first test ever written against that component**, and `coverage.structural.test.ts`
+structurally could not have demanded one — it matches labels the docked bar already drives, which is
+the blind spot its own docblock names, realised for a whole surface.
+
+Then the **print path, which was never wired**: `GanttPrintSurface` gained `barDateSource` and
+`PrintGanttInput` did not, so the printed programme still drew VISUAL-mode bars from the early
+columns — and the commit that introduced it claimed the source was threaded through the print
+surface when only its signature was. ADR-0076 Class 3, inside the commit that fixed four other
+instances of the same class.
+
+And a **render-phase ref write the linter could not see**. `eslint-plugin-react-hooks` v7 carries
+the React Compiler's analysis, but `GanttPanel` calls `useVirtualizer`, which that analysis reports
+as an incompatible library and then bails out of the whole component for — so the rule that caught
+the identical pattern in a sibling file gave no protection in the one file the tool cannot read. The
+reviewer **reproduced** the blind spot in an isolated component rather than asserting it.
+
+**Two reviewers were partly wrong, and that is recorded rather than dropped.** The performance gate
+reported the React Compiler as "not running at all", reasoning from the build config; the analysis
+does run, in the linter, and is what refused the ref write. Its narrower point holds and the
+comments now say so: `babel-plugin-react-compiler` is not wired into the build, so nothing is
+auto-memoized in the shipped bundle, and a stable callback reference would buy nothing today because
+**nothing in `apps/web` is `React.memo`'d**. The UX gate's fourth finding — the keyboard-shortcuts
+sheet is inert while the Gantt is on screen — is real and is left as debt rather than half-fixed:
+that sheet documents canvas bindings, and the Gantt now has a set of its own, which is a milestone
+rather than a patch.
+
+The measured findings were folded as measured: three O(n) scans that ran per row and re-ran on every
+keystroke are now `Map` lookups or deferred to the menu's own open. The pattern was already in the
+same file — `rowIndexById`, three hundred lines above the call sites that did not use it.
+
 ### What this milestone did NOT ship
 
 Recorded here rather than implied. M5 shipped **T3 only**; the columns chooser (T1), bar labels (T2),
@@ -143,6 +187,11 @@ Indent/Outdent (T4), Insert activity (T5) and view memory in URL search params (
 and are `docs/TECH_DEBT.md` rows. The Gantt's **start-edge** resize is also deliberately absent (D4):
 it carries a mode-dependent meaning, and shipping it without the mode statement the canvas has beside
 it would leave a planner unable to tell which of two writes their drag just made.
+
+The **keyboard-shortcuts sheet** does not open while the Gantt is on screen (`TsldShortcutsHelp` is
+mounted inside `TsldPanel`, which is not rendered in that view) — a lit-but-inert control found by
+the M6 ux gate and deliberately not patched, because this epic gave the Gantt a set of bindings that
+sheet does not document.
 
 `PROJECT_BRIEF.md` §8's "edit supported" is now **substantially** met and is not claimed closed —
 the same care CLAUDE.md's banner had to be corrected into once already for this surface.
