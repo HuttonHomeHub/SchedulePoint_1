@@ -24,26 +24,26 @@ import { describe, expect, it } from 'vitest';
  * **predates** a change. It cannot see a divergence introduced later, because nothing re-runs it.
  * This does, on every push.
  *
- * **`canEdit` is the one to watch.** `TsldPanel` receives `model.canEditSchedule && !lateOverlayActive`
- * — the Late-start overlay is read-only analysis, so editing is suppressed while it is on (ADR-0033
- * M4). The Gantt receives no editability at all today, which is correct while it is read-only and
- * becomes a defect the moment a gesture lands: wiring `canEditSchedule` directly would arm Gantt
- * drags underneath a banner reading "editing is paused". The row below is therefore `pending`, with
- * the milestone that must flip it named — a deliberately dated obligation rather than a comment
- * somebody may or may not read.
+ * **`canEdit` was the one to watch, and M3 flipped it** — the milestone its `pending` row named,
+ * which is what a dated obligation is for. The Late-start overlay is read-only analysis (ADR-0033
+ * M4), so `model.canEditSchedule && !lateOverlayActive` is the real question, and now that the
+ * Gantt moves bars, arming from `canEditSchedule` alone would let them move underneath a banner
+ * reading "editing is paused".
  *
- * **`hoursPerDayFor` is the next candidate, and is deliberately NOT a row yet.** M2-T1 gave the
- * Gantt a Duration column, whose day↔minute factor (ADR-0068) is resolved once in
- * `plan-workspace-toolbar.tsx` and passed only there — the canvas renders no duration text, so it
- * has nothing to feed. That becomes a genuine plan fact at **M3**, when a canvas drag and a Gantt
- * duration cell both parse a typed `4h` and two spellings of "how long is a day here" would make
- * one plan mean two things.
+ * Its row is `required-derivation` rather than `required`, because the Gantt receives it inside the
+ * `drag` bundle and "is the attribute on both tags?" is then the wrong question. What must hold is
+ * that there is ONE `const canEdit =` and the canvas is passed **that binding** — a second
+ * `model.canEditSchedule && !lateOverlayActive` written inline at the other mount would satisfy an
+ * attribute check perfectly and is exactly the drift this file exists to catch. Verified red
+ * against that inline form before being relied on.
  *
- * It is not added as `pending` today because it would **fail**: that branch asserts a fact reaching
- * the Gantt has also reached the canvas, and this one legitimately has not. Weakening the rule to
- * admit it would be fitting the gate to the code — the rule was written for `barDateSource`, whose
- * defect was a *second derivation*, and there is only one here. Naming the obligation in prose is
- * the weaker instrument and is labelled as such; M3 is when it becomes expressible.
+ * **`hoursPerDayFor` is still not a row, and M3 did not change that.** The prose here previously
+ * said M3 would make it expressible, on the reasoning that a canvas drag would need the same
+ * day-factor. It does not: a canvas drag moves a bar by DAYS through `onTsldReposition`, and the
+ * `hoursPerDay` factor is only needed to parse or format a day↔minute value — which the canvas
+ * still does only inside the editor dialog, from its own resolution. Recorded as a corrected
+ * prediction rather than quietly dropped: the obligation was real when written and the milestone
+ * that was supposed to discharge it turned out not to touch it.
  */
 
 const WORKSPACE = join(
@@ -61,15 +61,29 @@ const WORKSPACE = join(
  * `pending` ones must reach both by the milestone named, and are asserted absent-or-shared so the
  * row cannot rot into a silent claim that it is handled.
  */
-const PLAN_FACTS = [
+interface PlanFact {
+  prop: string;
+  status: 'required' | 'required-derivation' | 'pending';
+  /** For a `pending` row: the milestone that must discharge it. */
+  until?: string;
+}
+
+/**
+ * Typed rather than `as const`, so the `pending` loop below survives having **no** pending rows.
+ * With a const tuple TypeScript narrows an empty filter to `never` and the loop stops compiling —
+ * which would make "delete the mechanism" the path of least resistance the first time the queue
+ * empties, and it is exactly the mechanism that catches the next divergence.
+ */
+const PLAN_FACTS: PlanFact[] = [
   { prop: 'activities', status: 'required' },
   { prop: 'barDateSource', status: 'required' },
-  {
-    prop: 'canEdit',
-    status: 'pending',
-    until: 'M3 (bar drag) — the first Gantt gesture that writes',
-  },
-] as const;
+  // Flipped at M3, the milestone the `pending` row named. The Gantt now moves bars, so both hosts
+  // must read the SAME fused role+pen+overlay binding — arming a drag from `canEditSchedule` alone
+  // would let bars move underneath a banner reading "editing is paused". It reaches the Gantt
+  // inside the `drag` bundle rather than as a bare prop, so the assertion below matches the
+  // derivation rather than the attribute name.
+  { prop: 'canEdit', status: 'required-derivation' },
+];
 
 /** The JSX attribute names passed to a host at its mount site. */
 function propsPassedTo(source: string, component: string): Set<string> {
@@ -91,6 +105,25 @@ describe('the two plan hosts receive the same facts about the plan', () => {
     expect(gantt.size).toBeGreaterThan(3);
   });
 
+  for (const fact of PLAN_FACTS.filter((f) => f.status === 'required-derivation')) {
+    it(`derives \`${fact.prop}\` once, and the canvas reads that binding`, () => {
+      // The Gantt receives it inside a bundle, so "is the attribute present on both tags?" is the
+      // wrong question. What must hold is that there is ONE derivation and the canvas uses it —
+      // a second `model.canEditSchedule && !lateOverlayActive` written at the other mount is the
+      // drift this file exists to catch, and it would satisfy an attribute check perfectly.
+      const derivations = source.match(new RegExp(`const ${fact.prop}\\s*=`, 'g')) ?? [];
+      expect(derivations.length, `${fact.prop} must be derived exactly once`).toBe(1);
+      expect(
+        tsld.has(fact.prop),
+        `TsldPanel no longer receives ${fact.prop} — the shared binding was bypassed`,
+      ).toBe(true);
+      expect(
+        source.includes(`${fact.prop}={${fact.prop}}`),
+        `${fact.prop} should be passed by the shared binding, not re-expressed inline`,
+      ).toBe(true);
+    });
+  }
+
   for (const fact of PLAN_FACTS.filter((f) => f.status === 'required')) {
     it(`passes \`${fact.prop}\` to both`, () => {
       expect([...tsld].includes(fact.prop), `TsldPanel is missing ${fact.prop}`).toBe(true);
@@ -99,7 +132,7 @@ describe('the two plan hosts receive the same facts about the plan', () => {
   }
 
   for (const fact of PLAN_FACTS.filter((f) => f.status === 'pending')) {
-    it(`does not give \`${fact.prop}\` to one host only — due at ${'until' in fact ? fact.until : '?'}`, () => {
+    it(`does not give \`${fact.prop}\` to one host only — due at ${fact.until ?? '?'}`, () => {
       // Two states are legitimate and one is not.
       //
       // Legitimate: neither host has it (nothing needs it yet), or BOTH do (the fact arrived and was

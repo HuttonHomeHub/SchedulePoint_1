@@ -2,6 +2,7 @@ import type { ActivitySummary } from '@repo/types';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { GanttBarDrag } from '../model/bar-drag';
 import { IDLE, reduceCellEdit, type GanttGridEditing } from '../model/cell-edit';
 import { ganttCellGate, type GanttCellGate } from '../model/cell-gate';
 
@@ -272,5 +273,88 @@ describe('keyboard entry into a cell', () => {
     renderGrid(editingBundle({ cancel }));
     fireEvent.keyDown(grid(), { key: 'Escape' });
     expect(cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('moving a bar from the keyboard', () => {
+  const grid = () => screen.getByRole('treegrid');
+
+  const dragBundle = (over: Partial<GanttBarDrag> = {}): GanttBarDrag => ({
+    canEdit: true,
+    reason: null,
+    plannedStartIso: '2026-01-01',
+    moveTo: vi.fn(),
+    resizeTo: vi.fn(),
+    announce: vi.fn(),
+    ...over,
+  });
+
+  const renderWithDrag = (drag: GanttBarDrag, activities = [activity()]) =>
+    render(<GanttPanel activities={activities} drag={drag} />);
+
+  it('nudges the start on Alt+ArrowRight, counting from plannedStart', () => {
+    const moveTo = vi.fn();
+    renderWithDrag(dragBundle({ moveTo }));
+
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', altKey: true });
+    // 5 Jan is day 4 from a 1 Jan plannedStart; one day later is day 5. The conversion is the
+    // module's, not restated here — this asserts the wiring reaches it.
+    expect(moveTo).toHaveBeenCalledWith('a1', 5);
+  });
+
+  it('nudges backwards on Alt+ArrowLeft', () => {
+    const moveTo = vi.fn();
+    renderWithDrag(dragBundle({ moveTo }));
+    fireEvent.keyDown(grid(), { key: 'ArrowLeft', altKey: true });
+    expect(moveTo).toHaveBeenCalledWith('a1', 3);
+  });
+
+  it('leaves the BARE arrows to disclosure, which they were already bound to', () => {
+    // The plan said bare arrows until the accessibility re-review. They are treegrid disclosure
+    // keys in this very handler, so the original would have collided with a shipped binding.
+    const moveTo = vi.fn();
+    renderWithDrag(dragBundle({ moveTo }));
+    fireEvent.keyDown(grid(), { key: 'ArrowRight' });
+    fireEvent.keyDown(grid(), { key: 'ArrowLeft' });
+    expect(moveTo).not.toHaveBeenCalled();
+  });
+
+  it('announces the move, because a bar that moved off-screen said nothing otherwise', () => {
+    const announce = vi.fn();
+    renderWithDrag(dragBundle({ announce }));
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', altKey: true });
+    expect(announce).toHaveBeenCalledWith(expect.stringContaining('2026-01-06'));
+  });
+
+  it('refuses with a spoken reason rather than doing nothing', () => {
+    // A nudge that neither moves nor speaks is indistinguishable from a dead key — the lit-but-inert
+    // shape, one keystroke along.
+    const moveTo = vi.fn();
+    const announce = vi.fn();
+    renderWithDrag(
+      dragBundle({ canEdit: false, reason: 'Start editing to change this.', moveTo, announce }),
+    );
+
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', altKey: true });
+    expect(moveTo).not.toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith('Start editing to change this.');
+  });
+
+  it('will not move a summary, and says why that is about the object', () => {
+    // A summary's dates are an engine rollup of its children (ADR-0038): there is nothing on it to
+    // drag, and no good answer to what dragging one would mean for the activities inside it.
+    const moveTo = vi.fn();
+    const announce = vi.fn();
+    renderWithDrag(dragBundle({ moveTo, announce }), [activity({ type: 'WBS_SUMMARY' })]);
+
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', altKey: true });
+    expect(moveTo).not.toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(/summary/i));
+  });
+
+  it('does nothing at all with no drag bundle — the read-only chart', () => {
+    renderGrid(undefined);
+    // No throw, no binding. The parity contract `editing` carries, one prop along.
+    expect(() => fireEvent.keyDown(grid(), { key: 'ArrowRight', altKey: true })).not.toThrow();
   });
 });

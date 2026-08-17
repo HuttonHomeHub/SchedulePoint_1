@@ -27,6 +27,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
+import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
@@ -56,6 +57,7 @@ import {
   FLOAT_PATHS_PANEL_MIN_WIDTH,
 } from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
+import type { GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
 import { PlanNotesSection } from '@/features/notes';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
@@ -426,6 +428,19 @@ export function ToolbarPlanWorkspace({
 
   const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
 
+  /**
+   * May this reader change the schedule right now — role and pen fused (ADR-0060), minus the
+   * Late-start overlay, which is read-only analysis (ADR-0033 M4).
+   *
+   * **Derived once and shared by both hosts** (M3). It was written inline at the `TsldPanel` mount
+   * and `host-parity.structural.test.ts` carried it as a `pending` row with the milestone named,
+   * because arming a Gantt drag from `canEditSchedule` alone would let bars move underneath a
+   * banner reading "editing is paused" — a second expression of one rule, drifting where nobody
+   * looks. That row flips to `required` in the same commit as this hoist.
+   */
+  const canEdit = model.canEditSchedule && !lateOverlayActive;
+  const ganttAnnounce = useAnnounce();
+
   // The workspace keyboard scope — `?` plus the ADR-0048 undo/redo accelerators — as ONE React
   // handler bound to the workspace root. React events follow the React tree, so this keeps working
   // when the toolbar is portalled into the chrome band (ADR-0055 S2); the two native listeners it
@@ -508,6 +523,30 @@ export function ToolbarPlanWorkspace({
     recordUpdate: model.recordActivityUpdate,
   });
 
+  /**
+   * Moving a bar in the Gantt (M3).
+   *
+   * Both writes are the workspace's own — no new path — and both omit `laneIndex`, which makes "a
+   * Gantt drag never changes lane" structural rather than a rule: the Gantt has no lane axis, and
+   * a vertical drag there is a row-reorder question this milestone does not answer.
+   *
+   * The refusal sentence comes from the editor's gate object rather than being written here, so a
+   * planner told why a bar will not move and a planner told why a field will not save are reading
+   * the same rule (ADR-0060 §6).
+   */
+  const ganttDrag: GanttBarDrag = {
+    canEdit,
+    reason: model.activityEditorGating.general.reason,
+    plannedStartIso: plan.plannedStart ?? null,
+    moveTo: (activityId, startDay) => void model.onTsldReposition({ activityId, startDay }),
+    resizeTo: (activityId, durationDays) => void model.onTsldResize({ activityId, durationDays }),
+    // The SHARED polite live region (`components/ui/announcer`), not a second one. ADR-0073 C1
+    // found two empty states collapsed into one sentence in the single channel a screen-reader user
+    // has; a second region would be the same class of problem — two channels competing to be that
+    // one channel.
+    announce: ganttAnnounce,
+  };
+
   const canvas = canvasLoading ? (
     <div
       role="status"
@@ -526,7 +565,7 @@ export function ToolbarPlanWorkspace({
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
-      canEdit={model.canEditSchedule && !lateOverlayActive}
+      canEdit={canEdit}
       scheduleRefusal={model.scheduleRefusal}
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
@@ -747,6 +786,9 @@ export function ToolbarPlanWorkspace({
           // In-grid editing (M2). Its absence is the read-only grid byte-for-byte, so this prop is
           // the entry point the milestone claims (ADR-0081).
           editing={ganttEditing}
+          // Bar movement (M3). `canEdit` is the SHARED binding the canvas receives — the same one,
+          // not a second expression of it (`host-parity.structural.test.ts`).
+          drag={ganttDrag}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.

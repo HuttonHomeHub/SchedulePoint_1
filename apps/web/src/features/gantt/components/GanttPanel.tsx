@@ -19,9 +19,11 @@ import {
   rowsDateSpan,
   type GanttActivityRow,
   type GanttBucketRow,
+  type GanttRow,
   type GanttSort,
   type GanttSortKey,
 } from '../layout/row-model';
+import { NUDGE_DAYS, barMoveGate, moveAnnouncement, type GanttBarDrag } from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
 
 import { GanttCell } from './GanttCell';
@@ -31,7 +33,8 @@ import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
-import type { BarDateSource } from '@/lib/bar-dates';
+import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { cn } from '@/lib/utils';
 
 /** Row height in pixels. Fixed, so the virtualizer needs no measurement pass. */
@@ -152,6 +155,11 @@ export interface GanttPanelProps {
    * path.
    */
   editing?: GanttGridEditing | undefined;
+  /**
+   * Bar movement (M3). Absent ⇒ no gesture and no keyboard binding, which is the read-only chart
+   * exactly as it was — the same parity contract `editing` carries.
+   */
+  drag?: GanttBarDrag | undefined;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -208,6 +216,7 @@ export function GanttPanel({
   barDateSource,
   hoursPerDayFor,
   editing,
+  drag,
   loading = false,
   error,
   onSelectActivity,
@@ -357,6 +366,37 @@ export function GanttPanel({
   // one Tab always reaches the grid and arrow keys take over from there.
   const tabStopIndex = focusedIndex >= 0 ? focusedIndex : 0;
 
+  /**
+   * Move the focused activity's bar by `deltaDays`, or report why it cannot move.
+   *
+   * Returns whether the key was ours, so the caller only calls `preventDefault` when something
+   * actually happened — a swallowed Alt+Arrow that did nothing would take the browser's own
+   * behaviour away for no benefit.
+   *
+   * A refusal is **announced**, never silent. A nudge that does nothing and says nothing is
+   * indistinguishable from a dead key, which is the lit-but-inert shape this register keeps
+   * recording; and on a chart the bar that did not move may be off-screen anyway.
+   */
+  const nudgeBar = (row: GanttRow, deltaDays: number): boolean => {
+    if (drag === undefined || row.kind !== 'activity') return false;
+    const activity = row.activity;
+    const gate = barMoveGate(activity, drag);
+    if (!gate.movable) {
+      if (gate.reason !== null) drag.announce(gate.reason);
+      return true;
+    }
+    const { plannedStartIso } = drag;
+    const start = barDatesFor(activity, barDateSource).start;
+    if (plannedStartIso === null || start === null) {
+      drag.announce('This activity has no scheduled start to move yet.');
+      return true;
+    }
+    const startDay = daysBetween(plannedStartIso, start) + deltaDays;
+    drag.moveTo(activity.id, startDay);
+    drag.announce(moveAnnouncement(activity.name, addCalendarDays(start, deltaDays)));
+    return true;
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const index = tabStopIndex;
     const row = rows[index];
@@ -377,21 +417,27 @@ export function GanttPanel({
         event.preventDefault();
         focusRowAt(rows.length - 1);
         break;
-      case 'ArrowRight': {
-        if (!row) break;
-        const disclosure = rowDisclosure(row);
-        if (disclosure !== null && !disclosure.expanded) {
-          event.preventDefault();
-          toggleCollapsed(rowId(row), false);
-        }
-        break;
-      }
+      case 'ArrowRight':
       case 'ArrowLeft': {
         if (!row) break;
+        // **Alt+←/→ nudges the bar; the bare keys stay disclosure.**
+        //
+        // The plan said bare arrows until the accessibility re-review, and they are already bound
+        // to treegrid disclosure right here — so the original would have collided with a shipped
+        // binding while citing a canvas precedent (`TsldPanel.tsx:1848`) that uses Alt for exactly
+        // this. The keyboard equivalent exists at all because a pointer-only capability is a WCAG
+        // 2.1.1 failure; matching the canvas verbatim means a planner learns one chord, not two.
+        if (event.altKey) {
+          if (nudgeBar(row, event.key === 'ArrowRight' ? NUDGE_DAYS : -NUDGE_DAYS)) {
+            event.preventDefault();
+          }
+          break;
+        }
         const disclosure = rowDisclosure(row);
-        if (disclosure !== null && disclosure.expanded) {
+        const wantExpanded = event.key === 'ArrowRight';
+        if (disclosure !== null && disclosure.expanded !== wantExpanded) {
           event.preventDefault();
-          toggleCollapsed(rowId(row), true);
+          toggleCollapsed(rowId(row), !wantExpanded);
         }
         break;
       }
