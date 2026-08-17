@@ -49,12 +49,14 @@ import {
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities';
+import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import {
   FloatPathsPanel,
   useFloatPathsPanelPrefs,
   FLOAT_PATHS_PANEL_MIN_WIDTH,
 } from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
+import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
 import { PlanNotesSection } from '@/features/notes';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
@@ -480,6 +482,32 @@ export function ToolbarPlanWorkspace({
     [model.calendars.data, plan.calendarId],
   );
 
+  // The partial PATCH (ADR-0060 §4), not the whole-definition one — a cell writes a slice.
+  const updateActivityFields = useUpdateActivityFields(model.orgSlug, model.planId);
+
+  /**
+   * In-grid editing for the Gantt (M2). Built here because it needs the workspace's OWN mutation
+   * and undo recorder — the grid must not open a second write path to an activity (spec F5), and
+   * `recordActivityUpdate` is already a no-op when `VITE_UNDO_REDO` is off, so this needs no flag.
+   *
+   * Deliberately NOT a `host-parity` PLAN_FACT. The canvas edits an activity through its own
+   * gestures and the editor dialog, not through grid cells, so there is nothing on the other host
+   * for this to reach — the same reading that kept `hoursPerDayFor` out of that register, and for
+   * the same reason: the rule there is about a fact BOTH projections must agree on, and a cell
+   * editor is a property of one surface.
+   */
+  const ganttEditing = useGanttGridEditing({
+    activities: model.activities.data ?? [],
+    gating: model.activityEditorGating,
+    // The same question the panel asks before it draws a chart: has anything been scheduled? Read
+    // from the rows rather than a plan flag, so it cannot disagree with what the grid is showing.
+    hasComputedSchedule: (model.activities.data ?? []).some((a) => a.earlyStart !== null),
+    barDateSource,
+    hoursPerDayFor,
+    updateFields: updateActivityFields.mutateAsync,
+    recordUpdate: model.recordActivityUpdate,
+  });
+
   const canvas = canvasLoading ? (
     <div
       role="status"
@@ -716,6 +744,9 @@ export function ToolbarPlanWorkspace({
           barDateSource={barDateSource}
           // The Duration column's factor (M2-T1). Host-resolved above, never looked up in the panel.
           hoursPerDayFor={hoursPerDayFor}
+          // In-grid editing (M2). Its absence is the read-only grid byte-for-byte, so this prop is
+          // the entry point the milestone claims (ADR-0081).
+          editing={ganttEditing}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.
