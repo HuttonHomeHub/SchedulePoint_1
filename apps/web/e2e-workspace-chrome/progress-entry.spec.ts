@@ -103,17 +103,29 @@ test.describe('Progress entry', () => {
 
     // ── The Gantt keeps a route, which is what makes the removal safe there. ──────────────────
     //
-    // The dock is canvas-only by construction, so removing the command copy leaves the Gantt with
-    // no selection-driven action at all. The product owner accepted that on 2026-08-13 **on the
-    // stated basis that the activities-table row menu reaches progress in that view**, with the
-    // proper Gantt affordance inherited by the Gantt-editing epic (`docs/BACKLOG.md`). This
-    // assertion is that basis. If it fails, the decision goes back to them rather than being
-    // patched here.
+    // The dock was canvas-only by construction, so removing the command copy left the Gantt with no
+    // selection-driven action at all. The product owner accepted that on 2026-08-13 **on the stated
+    // basis that the activities-table row menu reaches progress in that view**, with the proper
+    // Gantt affordance inherited by the Gantt-editing epic (`docs/BACKLOG.md`). This assertion is
+    // that basis. If it fails, the decision goes back to them rather than being patched here.
+    //
+    // **That inheritance has since landed (ADR-0095): the Gantt has its own docked bar and its own
+    // row menu.** This assertion still holds, and now for a sharper reason — the selection above is
+    // PLURAL, and no view may offer single-activity actions while several are selected (ADR-0093).
+    // It caught the Gantt bar doing exactly that, because its host asserted `selectionCount: 1`
+    // while the workspace selection survived the view switch. The singular case — a Gantt selection
+    // DOES get the bar — is `e2e-gantt-editing/object-actions.spec.ts`, so it is not restated here.
     await page.getByRole('button', { name: 'Gantt', exact: true }).click();
     await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
 
+    // Scoped to the **activities table**, which is the route this section is about. Unscoped it now
+    // matches the Gantt's own row menu too (ADR-0095 M5-T3) and fails strict mode — an ambiguity
+    // created by the affordance this comment predicted, not by anything being wrong.
     await page.getByRole('button', { name: 'Expand activities panel' }).click();
-    await page.getByRole('button', { name: `Actions for ${dig.name}` }).click();
+    await page
+      .getByRole('table', { name: 'Activities' })
+      .getByRole('button', { name: `Actions for ${dig.name}` })
+      .click();
     await expect(
       page.getByRole('menuitem', { name: 'Report progress' }),
       'the activities-table row menu is the Gantt route, and Q1 was answered on it working',

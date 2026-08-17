@@ -760,9 +760,19 @@ export function ToolbarPlanWorkspace({
     canvas: null,
     activities: model.activities.data ?? [],
     selectedId: model.selectedActivityId ?? model.logicActivity?.id,
-    // The Gantt has no plural selection of its own yet (ADR-0080's model is canvas-derived and
-    // lifting it is its own slice, spec D4), so a singular selection is the only kind there is.
-    selectionCount: 1,
+    // The Gantt has no plural selection of its OWN yet (ADR-0080's model is canvas-derived and
+    // lifting it is its own slice, spec D4) — but the workspace does, and it survives a view
+    // switch. This read `1` unconditionally, so selecting several bars on the canvas and switching
+    // to the Gantt offered single-activity actions on ONE of them, which is precisely the
+    // inconsistency ADR-0093 recorded and corrected, re-appearing in a third view. Caught by
+    // `e2e-workspace-chrome/progress-entry.spec.ts`, whose assertion is the product owner's own
+    // condition for removing the command-surface copy.
+    //
+    // Above one the shared builder returns null, so the Gantt shows NO singular bar — matching the
+    // canvas rule that a plural selection is not acted on one object at a time. It shows no plural
+    // bar either, because it has no plural model; that is spec D4's slice and is a smaller gap
+    // than offering the wrong action.
+    selectionCount: model.pluralSelectionActive ? 2 : 1,
     canEditSchedule: model.canEditSchedule,
     scheduleRefusal: model.scheduleRefusal,
     canReportProgress: model.canProgress,

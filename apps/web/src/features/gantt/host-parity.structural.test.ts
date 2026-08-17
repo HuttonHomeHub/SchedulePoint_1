@@ -167,3 +167,54 @@ describe('the two plan hosts receive the same facts about the plan', () => {
     }
   });
 });
+
+/**
+ * **The plural-selection guard is a plan fact too, and the Gantt asserted its own answer.**
+ *
+ * `buildSelectionBarContext` returns null above one selected activity — the bulk bar replaces the
+ * singular one rather than joining it (ADR-0080) — so the count is the guard. The canvas passes
+ * `selection.ids.length`; the Gantt passed the literal `1`, with a comment explaining that it has
+ * no plural selection of its own. True, and not the question: the WORKSPACE has one, and it
+ * survives a view switch, so selecting several bars on the canvas and pressing Gantt offered
+ * single-activity actions on one of them.
+ *
+ * That is the ADR-0093 inconsistency — "nothing may offer a single-activity action while several
+ * are selected" — re-appearing in a third view, and it is exactly what
+ * `e2e-workspace-chrome/progress-entry.spec.ts` pins, because that assertion is the product
+ * owner's stated condition for removing the command-surface copy at all.
+ *
+ * A literal is what makes this checkable statically: the defect was not a wrong expression but a
+ * constant standing in for one.
+ */
+describe('the Gantt bar honours the workspace plural selection', () => {
+  const source = readFileSync(WORKSPACE, 'utf8');
+
+  it('does not hard-code the selection count for the docked bar', () => {
+    const input = source.slice(
+      source.indexOf('const ganttSelectionInput'),
+      source.indexOf('const ganttSelectionCtx'),
+    );
+    expect(input.length, 'ganttSelectionInput is no longer where this test looks').toBeGreaterThan(
+      200,
+    );
+    expect(
+      /selectionCount:\s*1\s*,/.test(input),
+      'the Gantt bar must not assert a singular selection — the workspace selection can be plural',
+    ).toBe(false);
+    expect(
+      input.includes('pluralSelectionActive'),
+      'the count must come from the workspace selection, not from a constant',
+    ).toBe(true);
+  });
+
+  it('still pins a row menu to its own row', () => {
+    // The row menu is the deliberate exception and must STAY a literal: it acts on the row it sits
+    // in, so inheriting a live count would make every row menu vanish the moment a planner happened
+    // to have two bars selected elsewhere.
+    const rowMenu = source.slice(
+      source.indexOf('const rowMenuContextFor'),
+      source.indexOf('const surface'),
+    );
+    expect(/selectionCount:\s*1\s*,/.test(rowMenu)).toBe(true);
+  });
+});
