@@ -79,6 +79,7 @@ import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remed
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
+import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import {
   useTsldToolbarContext,
   type PlanDialogKind,
@@ -270,6 +271,12 @@ export function ToolbarPlanWorkspace({
     [model.calendars.data, plan.calendarId],
   );
 
+  // The Gantt's view memory (ADR-0095 M5-T6): sort, hidden columns and the collapse set in the URL.
+  // Held HERE rather than in the panel because two surfaces read it — the grid itself and the
+  // `View ▾` Columns chooser — and a second copy is the drift `barDateSource` and the float-path
+  // set were both lifted to this file to end.
+  const ganttViewState = useGanttViewState();
+
   const ctx = useTsldToolbarContext({
     model,
     plan,
@@ -282,6 +289,12 @@ export function ToolbarPlanWorkspace({
     setPlanView,
     barDateSource,
     hoursPerDayFor,
+    // Only in the Gantt: the diagram has no columns to choose, so the group is ABSENT there rather
+    // than shaded (ADR-0082's omit branch — a thing the projection cannot do, not a permission).
+    ganttColumns:
+      planView === 'gantt'
+        ? { hidden: ganttViewState.hiddenColumns, setHidden: ganttViewState.onHiddenColumnsChange }
+        : undefined,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
@@ -850,6 +863,9 @@ export function ToolbarPlanWorkspace({
           // the menu and the bar cannot offer different things for one activity, and there is no
           // second assembly to keep in step.
           rowMenuContextFor={rowMenuContextFor}
+          // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
+          // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
+          viewState={ganttViewState}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.

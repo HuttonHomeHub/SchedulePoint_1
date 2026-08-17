@@ -69,6 +69,7 @@ export function useTsldToolbarContext({
   revealComments,
   toggleFloatPaths = () => {},
   planView = DEFAULT_PLAN_VIEW_MODE,
+  ganttColumns,
   barDateSource,
   hoursPerDayFor,
   setPlanView = () => {},
@@ -103,6 +104,12 @@ export function useTsldToolbarContext({
    * Defaults describe a build with no Gantt: the diagram, and switching is a no-op.
    */
   planView?: PlanViewMode;
+  /**
+   * The Gantt grid's hidden columns and their writer (ADR-0095 M5-T1), or undefined outside that
+   * view. Passed straight through — this hook resolves nothing about it, because the state lives in
+   * the URL and the host already holds the single copy.
+   */
+  ganttColumns?: TsldToolbarContext['ganttColumns'];
   /**
    * Which persisted dates the bars are drawn from (ADR-0033), and the Duration column's day factor
    * (ADR-0068) — passed IN rather than re-derived here.
@@ -396,6 +403,7 @@ export function useTsldToolbarContext({
       // deep-linkable and Back returns to the diagram. Offered to every role — reading the schedule
       // as bars is not an edit — and hard-wired to `'tsld'` when `VITE_GANTT_VIEW` is off.
       planView,
+      ganttColumns,
       setPlanView,
       // Scheduling mode (ADR-0033 M3): read the plan's mode + a pen-gated switch. Read-only viewers
       // get a null setter so the selector renders inert. Announces the switch (the bars re-source on

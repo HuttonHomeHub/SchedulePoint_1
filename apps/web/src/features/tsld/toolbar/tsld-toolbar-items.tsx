@@ -54,6 +54,9 @@ import { ZOOM_RANGE_LABELS } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
+
+import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
+import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import { useFirstUseHint } from './use-first-use-hint';
 
 import { Input } from '@/components/ui/input';
@@ -114,7 +117,7 @@ const ZOOM_LABELS: Record<string, string> = {
  * indicators), and insight overlays (the flag-gated ADR-0054 lenses + the Late-start overlay,
  * which stops being a special case set apart by an incidental border and becomes an ordinary
  * member here). */
-type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels';
+type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels' | 'columns';
 
 /**
  * **Why a handful of commands sit at tier 3 — last into the `⋯`, first out of it (ADR-0090 M2,
@@ -154,6 +157,17 @@ const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: str
   // its own rather than a fourth "overlay", because a panel is a surface you read *beside* the
   // diagram, not a mark drawn *on* it — the distinction the other group names already make.
   { id: 'panels', label: 'Panels' },
+  // The Gantt's grid columns (ADR-0095 M5-T1). Here rather than as a `Columns ▾` button above the
+  // grid, which is what the plan's entry-point line named: that button is a new horizontal band,
+  // and ADR-0092 spent a whole milestone reclaiming 249 px of chrome from above the diagram on the
+  // 1646 px screen this product is judged on. The registry's own note on `logicLinks` — M4's
+  // toggle, one milestone earlier — already made the equivalent call for the two ROWS; this is the
+  // same argument in the vertical axis, and putting the two Gantt view controls in the same place
+  // is worth more than either position on its own.
+  //
+  // Last in the order because it applies to one view: a group that is absent for most of a
+  // planner's session should not sit above the ones that are always there.
+  { id: 'columns', label: 'Columns' },
 ];
 
 /**
@@ -1577,7 +1591,13 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
         // groups), so an emptiness test that only counts those would drop them. Without this the
         // zoom group is registered, ordered, typed — and never rendered: a milestone with no entry
         // point, which is the ADR-0081 defect exactly, and one no typecheck can see.
-        const hasOwnContent = id === 'zoom' || (id === 'insight' && CANVAS_LENSES_ENABLED);
+        // `columns` renders content that is neither a toggle nor a lens, so it needs its entry
+        // here or it would be registered, ordered, typed — and never drawn. That is the exact
+        // failure the zoom group's own note records, and it is invisible to a typecheck.
+        const hasOwnContent =
+          id === 'zoom' ||
+          (id === 'insight' && CANVAS_LENSES_ENABLED) ||
+          (id === 'columns' && ctx.ganttColumns !== undefined);
         if (keys.length === 0 && lenses.length === 0 && !hasOwnContent) return null;
         return (
           <fieldset key={id} className="flex flex-col gap-2">
@@ -1610,6 +1630,31 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                       : (ZOOM_LABELS[level] ?? level)}
                   </label>
                 ))}
+              </div>
+            ) : null}
+            {id === 'columns' && ctx.ganttColumns !== undefined ? (
+              <div className="flex flex-col gap-2">
+                {HIDEABLE_COLUMNS.map((key) => {
+                  const columns = ctx.ganttColumns;
+                  if (columns === undefined) return null;
+                  const shown = !columns.hidden.has(key);
+                  return (
+                    <label key={key} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={shown}
+                        onChange={() => {
+                          const next = new Set(columns.hidden);
+                          if (shown) next.add(key);
+                          else next.delete(key);
+                          columns.setHidden(next);
+                        }}
+                        className="accent-primary size-4"
+                      />
+                      {GANTT_COLUMN_LABELS[key]}
+                    </label>
+                  );
+                })}
               </div>
             ) : null}
             {id === 'insight' && CANVAS_LENSES_ENABLED ? (

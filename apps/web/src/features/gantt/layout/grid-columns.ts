@@ -169,3 +169,15 @@ export function ganttCellText(
   if (column === undefined) return null;
   return column.value(activity, source, hoursPerDay, predecessorNames);
 }
+
+/**
+ * Each column's label, keyed — for surfaces that name a column without drawing it (the `View ▾`
+ * chooser, M5-T1).
+ *
+ * **Derived from {@link GANTT_COLUMNS}, never a second list.** A hand-written record here would be
+ * a second vocabulary for the same six things, and the chooser would go on saying "Float" for a
+ * column the grid had renamed — the exact drift this module was extracted to end for cell text.
+ */
+export const GANTT_COLUMN_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  GANTT_COLUMNS.map((c) => [c.key, c.label]),
+);
