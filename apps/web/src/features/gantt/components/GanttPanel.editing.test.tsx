@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -401,5 +401,90 @@ describe('the bar gestures in the rendered row', () => {
     const { container } = render(<GanttPanel activities={[activity()]} />);
     expect(container.querySelectorAll('.cursor-ew-resize')).toHaveLength(0);
     expect(bars().length).toBeGreaterThan(0);
+  });
+});
+
+describe('the logic overlay', () => {
+  /**
+   * The endpoint NAMES come from the dependency payload, not from the activity list —
+   * `predecessorSummary` reads what the API sends on the edge rather than joining back to a row.
+   * The first version of this fixture derived them from the ids and asserted a name no code path
+   * produces; the test caught it, which is the fixture being wrong rather than the product.
+   */
+  const dep = (id: string, from: string, to: string, fromName: string) =>
+    ({
+      id,
+      type: 'FS',
+      predecessor: { id: from, code: null, name: fromName },
+      successor: { id: to, code: null, name: 'Second' },
+    }) as unknown as DependencySummary;
+
+  const two = () => [
+    activity({ id: 'a1', name: 'First' }),
+    activity({ id: 'a2', name: 'Second', earlyStart: '2026-01-12', earlyFinish: '2026-01-16' }),
+  ];
+
+  it('draws nothing with no dependencies at all — the chart as it was', () => {
+    const { container } = render(<GanttPanel activities={two()} />);
+    expect(container.querySelector('svg')).toBeNull();
+  });
+
+  it('draws nothing with the toggle off and no selection', () => {
+    const { container } = render(
+      <GanttPanel activities={two()} dependencies={[dep('d1', 'a1', 'a2', 'First')]} />,
+    );
+    expect(container.querySelector('svg')).toBeNull();
+  });
+
+  it('draws the selected row links with the toggle OFF', () => {
+    // The toggle's off-state: "why is this bar here?" is answerable without turning anything on.
+    const { container } = render(
+      <GanttPanel
+        activities={two()}
+        dependencies={[dep('d1', 'a1', 'a2', 'First')]}
+        selectedActivityId="a1"
+      />,
+    );
+    expect(container.querySelectorAll('svg path')).toHaveLength(1);
+  });
+
+  it('draws every windowed link with the toggle ON', () => {
+    const { container } = render(
+      <GanttPanel
+        activities={two()}
+        dependencies={[dep('d1', 'a1', 'a2', 'First')]}
+        showAllLinks
+      />,
+    );
+    expect(container.querySelectorAll('svg path')).toHaveLength(1);
+  });
+
+  it('hides the arrows from assistive technology and says it in words instead', () => {
+    // The SVG is aria-hidden because an elbow is not readable; without the sentence the overlay
+    // would be the first graphical-only carrier on a surface whose own docblock forbids that.
+    const { container } = render(
+      <GanttPanel
+        activities={two()}
+        dependencies={[dep('d1', 'a1', 'a2', 'First')]}
+        showAllLinks
+      />,
+    );
+    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText('Follows First.')).toBeInTheDocument();
+  });
+
+  it('takes no pointer events, so an arrow is never a hole in the drag surface', () => {
+    // Without this the resize handle under a passing link stops responding — silently, and on
+    // exactly the dense plans where both features matter.
+    const { container } = render(
+      <GanttPanel
+        activities={two()}
+        dependencies={[dep('d1', 'a1', 'a2', 'First')]}
+        showAllLinks
+      />,
+    );
+    // `getAttribute`, not `.className`: on an SVGElement that property is an SVGAnimatedString and
+    // `toContain` against it silently compares an object. The first version asserted `[]`.
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('pointer-events-none');
   });
 });

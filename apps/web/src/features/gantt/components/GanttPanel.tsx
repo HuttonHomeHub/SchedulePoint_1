@@ -1,4 +1,4 @@
-import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,6 +12,7 @@ import {
 } from '../layout/bar-geometry';
 import { dateAtChartX, durationDaysForFinishAtX, startDayAtChartX } from '../layout/drag-day';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
+import { ganttLinkPaths, predecessorSummary } from '../layout/link-paths';
 import {
   DEFAULT_GANTT_SORT,
   buildRows,
@@ -35,6 +36,7 @@ import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../mo
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 
 import { GanttCell } from './GanttCell';
+import { GanttLinkOverlay } from './GanttLinkOverlay';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
@@ -168,6 +170,18 @@ export interface GanttPanelProps {
    * exactly as it was — the same parity contract `editing` carries.
    */
   drag?: GanttBarDrag | undefined;
+  /**
+   * The plan's dependencies, for the logic overlay (M4). Absent ⇒ no arrows and no textual
+   * equivalent — the read-only chart exactly as it was, the same parity contract the other two
+   * bundles carry.
+   */
+  dependencies?: readonly DependencySummary[] | undefined;
+  /**
+   * Draw EVERY link in the window, not only the selected row's. Default off (the product owner's
+   * Q1 answer): logic on a dense programme is a thicket, and the selection path answers "why is
+   * this bar here?" without it.
+   */
+  showAllLinks?: boolean;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -225,6 +239,8 @@ export function GanttPanel({
   hoursPerDayFor,
   editing,
   drag,
+  dependencies,
+  showAllLinks = false,
   loading = false,
   error,
   onSelectActivity,
@@ -275,6 +291,31 @@ export function GanttPanel({
     [activities, sort, collapsed, barDateSource],
   );
   const span = useMemo(() => rowsDateSpan(rows, barDateSource), [rows, barDateSource]);
+
+  /**
+   * The arrows for the rows currently mounted.
+   *
+   * Keyed by the RENDERED rows rather than by a scroll range, so "is this endpoint on screen?" and
+   * "where is it?" come from one lookup — a range comparison could disagree with what the
+   * virtualizer actually mounted, and the disagreement would show as an arrow pointing at nothing.
+   */
+  const rowIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    rows.forEach((r, index) => {
+      if (r.kind === 'activity') map.set(r.activity.id, index);
+    });
+    return map;
+  }, [rows]);
+  const linkSet = useMemo(
+    () =>
+      ganttLinkPaths({
+        dependencies: dependencies ?? [],
+        rowIndexById,
+        showAll: showAllLinks,
+        selectedId: selectedActivityId,
+      }),
+    [dependencies, rowIndexById, showAllLinks, selectedActivityId],
+  );
   const anchor = span === null ? null : chartAnchor(span);
   const chartPx = span === null ? 0 : chartWidth(span, pxPerDay);
 
@@ -556,6 +597,19 @@ export function GanttPanel({
           bars and nothing saying why, and a screen-reader user met it with no cue at all. The grid
           appearing is the fix for "the cells were unreachable"; it is not a reason to stop saying
           the plan has not been calculated. */}
+      {/* **The cap says what it withheld.** A silent truncation reads as "that is all the links there
+          are", and a reader draws a conclusion from an absence that is an artefact — the defect
+          class ADR-0081 (a dark capability), ADR-0059 M6 (an inert control) and ADR-0090 ("no
+          silent caps") each record separately. Either the count is visible or there is no cap.
+          `role="status"` so it is not sight-only, since the arrows themselves are aria-hidden. */}
+      {linkSet.withheld > 0 ? (
+        <div
+          role="status"
+          className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
+        >
+          {linkSet.withheld} more {linkSet.withheld === 1 ? 'link is' : 'links are'} not shown.
+        </div>
+      ) : null}
       {notCalculated ? (
         <div role="status" className="border-border bg-muted border-b px-3 py-2">
           <p className="text-foreground text-sm font-medium">This plan has not been calculated</p>
@@ -646,6 +700,23 @@ export function GanttPanel({
         </div>
 
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+          {/* The logic overlay sits ABOVE the rows and takes no pointer events, so an arrow is
+              never a hole in the drag surface — without that the resize handle under a passing
+              link would silently stop responding on exactly the dense plans where both matter. */}
+          <GanttLinkOverlay
+            paths={linkSet.paths}
+            withheld={linkSet.withheld}
+            rowHeight={GANTT_ROW_HEIGHT}
+            height={virtualizer.getTotalSize()}
+            width={contentWidth}
+            chartLeft={gridWidth}
+            barBoundsForRow={(index) => {
+              const target = rows[index];
+              if (target === undefined || target.kind !== 'activity') return null;
+              const g = barGeometry(target.activity, safeAnchor, pxPerDay, barDateSource);
+              return g === null ? null : { x: g.x, width: g.width };
+            }}
+          />
           {virtualizer.getVirtualItems().map((item) => {
             const row = rows[item.index];
             if (!row) return null;
@@ -660,6 +731,7 @@ export function GanttPanel({
               hoursPerDayFor,
               editing,
               drag,
+              dependencies,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -848,6 +920,7 @@ interface GanttRowViewProps {
   hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
   editing: GanttGridEditing | undefined;
   drag: GanttBarDrag | undefined;
+  dependencies: readonly DependencySummary[] | undefined;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -872,6 +945,7 @@ function GanttRowView({
   hoursPerDayFor,
   editing,
   drag,
+  dependencies,
   gridWidth,
   variance,
   showVariance,
@@ -885,6 +959,8 @@ function GanttRowView({
 }: GanttRowViewProps): React.ReactElement {
   const { activity, depth, hasChildren, expanded } = row;
   const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
+  const linkSummary =
+    dependencies === undefined ? null : predecessorSummary(activity.id, dependencies);
 
   // The pointer gesture. `movable` is the object's answer AND the reader's, resolved by the same
   // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
@@ -1099,6 +1175,16 @@ function GanttRowView({
             </div>
           );
         })}
+        {/* The arrows' textual equivalent (spec GV-3), rendered ONCE PER ROW rather than inside a
+            cell. It went into the editable-cell branch first and the test caught it: with no
+            editing bundle the row takes the PLAIN branch, so the sentence existed for some readers
+            and not others — one branch and not its neighbour, the defect this register keeps
+            recording, found here by a test rather than by a reader.
+            Row level is also the honest place: "this follows that" is a fact about the ACTIVITY,
+            not about any one column, and it holds whether or not anybody has turned the arrows on.
+            The SVG is `aria-hidden` (an elbow is not readable), so without this the overlay would
+            be the first graphical-only carrier on a surface whose own docblock forbids that. */}
+        {linkSummary === null ? null : <span className="sr-only">{linkSummary}</span>}
         {showVariance ? (
           <div
             role="gridcell"

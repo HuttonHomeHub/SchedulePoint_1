@@ -789,6 +789,12 @@ export function ToolbarPlanWorkspace({
           // Bar movement (M3). `canEdit` is the SHARED binding the canvas receives — the same one,
           // not a second expression of it (`host-parity.structural.test.ts`).
           drag={ganttDrag}
+          // The logic overlay (M4). The plan's dependencies are already fetched for the canvas, so
+          // this adds no query — and `showAllLinks` reads the SAME `View ▾` toggle store the canvas
+          // layers use, rather than a second piece of view state that could disagree about what the
+          // planner asked for.
+          dependencies={model.dependencies.data ?? []}
+          showAllLinks={canvasUi.viewToggles.logicLinks === true}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.

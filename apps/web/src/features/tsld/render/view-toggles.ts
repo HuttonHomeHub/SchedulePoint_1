@@ -58,6 +58,16 @@ export interface TsldViewToggles {
    * painter module never imports a flag; the host composes the gate. Optional ⇒ absent/false ⇒ no
    * band is reserved, mounted or painted (the parity path). */
   wbsBand?: boolean;
+  /**
+   * **Show logic links** — the Gantt's dependency arrows (M4). Read only by the Gantt; the canvas
+   * has always drawn its logic and has no equivalent to switch.
+   *
+   * Defaults **OFF** (the product owner's Q1 answer), which is the one toggle in this set that
+   * does. Logic on a dense programme is a thicket, and a selected row's own links draw regardless
+   * — so the off-state answers "why is this bar here?" without anybody turning anything on, and
+   * the toggle buys the whole-window view rather than the capability.
+   */
+  logicLinks?: boolean;
 }
 
 /** All view layers on — the default before the user toggles anything (the Late overlay starts off). */
@@ -73,4 +83,6 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   // The data-date line defaults ON under its flag (a plan fact, like the month bands' ground);
   // the flag itself — composed by the host, never read here — is what decides reachability.
   dataDate: true,
+  // The exception to "all layers on": see `logicLinks` above.
+  logicLinks: false,
 };

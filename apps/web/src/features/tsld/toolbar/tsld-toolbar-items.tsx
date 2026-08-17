@@ -337,6 +337,16 @@ const VIEW_TOGGLE_META: Record<
     enabled: CANVAS_VISUAL_LANGUAGE_ENABLED,
   },
   wbsBand: { group: 'structure', label: 'WBS band', enabled: WBS_IMPROVEMENTS_ENABLED },
+  // The Gantt's dependency arrows (M4). Listed under `structure` because that is what it is —
+  // the shape of the programme rather than a marker on it — and it lives in `View ▾` rather than
+  // on Row 1 or Row 2 deliberately (spec SC-6): those rows are already the subject of two epics
+  // spent fitting them, and a toggle nobody presses twice a session does not earn a slot there.
+  //
+  // No `enabled` gate: this epic has no feature flag (the product owner's Q4 choice), so the item
+  // is offered wherever the menu is. On the canvas it is inert — the diagram has always drawn its
+  // logic — which is honest rather than confusing: the toggle says what the VIEW shows, and the
+  // view that ignores it is the one already showing everything.
+  logicLinks: { group: 'structure', label: 'Logic links' },
   // The data-date status line (canvas status & feedback M1) — listed before Today because on a
   // statused programme the data date sits left of (before) today, and the menu order should read
   // in diagram order. Flag-off it is filtered out, so `View▾` offers no such toggle (the parity
