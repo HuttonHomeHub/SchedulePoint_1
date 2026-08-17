@@ -504,7 +504,13 @@ pin-flip and all five fail** — `edit` 3, `sub-day` 2, and one each for `notes`
 > than silently fixing. The five probes stand; 27 is a reasonable expectation and is not a
 > measurement. Found by an architecture review of the flag-cleanup pass, three weeks later. The same
 > false sentence was live in `scripts/flag-retirement.json`'s deferral reason and is corrected there
-> too — one claim, copied, so the correction had to be as well. Three of them — base,
+> too — one claim, copied, so the correction had to be as well.
+>
+> **The two missing probes were then run (2026-08-14) and the inference was numerically right:**
+> base fails 8 of 17, `activity-editor` 11 of 11, giving exactly the 27 originally claimed. That is
+> recorded rather than used to walk the correction back. Being right is not the same as having
+> measured, and a correct guess does not retrospectively validate the method — the assertion was
+> unfounded when it was made, which is the whole of the finding. Three of them — base,
 > `programme`, `notes` — additionally pin the pen off **deliberately** to stay pen-free, so converting
 > those must first establish that each journey works pen-free against the surviving workspace, or the
 > conversion silently changes what it tests.
