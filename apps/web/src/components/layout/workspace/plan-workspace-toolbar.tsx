@@ -443,6 +443,15 @@ export function ToolbarPlanWorkspace({
   // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
   // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so
   // selection/viewport state never leaks across a plan→plan nav.
+  // ONE derivation of which persisted dates draw a bar, handed to both hosts (ADR-0033). Written as
+  // a single binding rather than the same expression twice, for the reason the architecture review
+  // gave about its sibling `canEdit`: two copies of a host-shared value drift, and a drift between
+  // two views of one plan is invisible from either view alone. Pinned by
+  // `gantt-canvas-bar-dates.test.tsx`, which asserts both hosts receive the identical value.
+  const barDateSource = SCHEDULING_MODES_ENABLED
+    ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
+    : 'early';
+
   const canvas = canvasLoading ? (
     <div
       role="status"
@@ -458,13 +467,8 @@ export function ToolbarPlanWorkspace({
       activities={model.activities.data ?? []}
       dependencies={model.dependencies.data ?? []}
       dataDate={plan.plannedStart}
-      barDateSource={
-        // ADR-0033: VISUAL plans render the effective-Visual dates; the Late overlay (M4) wins for
-        // display. Flag-off the mode is always EARLY and the overlay off, so this stays `early`.
-        SCHEDULING_MODES_ENABLED
-          ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
-          : 'early'
-      }
+      // ADR-0033, via the single binding above — the Gantt receives the identical value.
+      barDateSource={barDateSource}
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
       canEdit={model.canEditSchedule && !lateOverlayActive}
       scheduleRefusal={model.scheduleRefusal}
@@ -603,6 +607,13 @@ export function ToolbarPlanWorkspace({
         // One zoom control for both projections (ADR-0056 presets, ADR-0059 §2): the toolbar's
         // preset drives the diagram and the chart alike, so switching view keeps the scale.
         zoomLevel={ctx.zoomPreset}
+        // Which persisted dates draw each bar — the SAME expression the canvas below receives, for
+        // the same reason the float-path set above is shared: two derivations of "where does this
+        // bar go" would drift, and the drift would be invisible because each view stays internally
+        // consistent. It was worse than drift here — the Gantt had no such input at all and read
+        // `earlyStart` unconditionally, so a VISUAL plan's chart and diagram disagreed about every
+        // hand-placed bar (`docs/TECH_DEBT.md` #135). Flag-off this is always `early`.
+        barDateSource={barDateSource}
         // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
         // variance rows the activities table already fetches — no extra query. Undefined when no
         // baseline is active, and the chart is then byte-for-byte what it was.

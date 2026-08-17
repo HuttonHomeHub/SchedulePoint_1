@@ -15,6 +15,7 @@ import {
 import { buildRulerTicks } from '../layout/ruler-ticks';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import type { BarDateSource } from '@/lib/bar-dates';
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
 
 /**
@@ -69,12 +70,20 @@ export interface GanttPrintSurfaceProps {
   subtitle: string;
   activities: readonly ActivitySummary[];
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow> | undefined;
+  /**
+   * Which persisted dates draw each bar (ADR-0033) — the same value the live panel gets. A printed
+   * programme is the artefact that leaves the building and gets read in a progress meeting, so it
+   * drawing a VISUAL plan from the early columns is the worse half of `docs/TECH_DEBT.md` #135:
+   * nobody in that room can compare it against the diagram.
+   */
+  barDateSource?: BarDateSource;
 }
 
 export function GanttPrintSurface({
   title,
   subtitle,
   activities,
+  barDateSource,
   varianceByActivityId,
 }: GanttPrintSurfaceProps): React.ReactElement {
   // Printing is a snapshot, so the document takes the default order rather than whatever the
@@ -169,6 +178,7 @@ export function GanttPrintSurface({
                     row={row}
                     anchorIso={anchor}
                     pxPerDay={pxPerDay}
+                    barDateSource={barDateSource}
                     chartPx={chartPx}
                     variance={varianceByActivityId?.get(rowId(row))}
                     showVariance={showVariance}
@@ -197,6 +207,7 @@ interface PrintRowProps {
   row: GanttActivityRow;
   anchorIso: string;
   pxPerDay: number;
+  barDateSource: BarDateSource | undefined;
   chartPx: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -206,12 +217,13 @@ function PrintRow({
   row,
   anchorIso,
   pxPerDay,
+  barDateSource,
   chartPx,
   variance,
   showVariance,
 }: PrintRowProps): React.ReactElement {
   const { activity, depth } = row;
-  const geometry = barGeometry(activity, anchorIso, pxPerDay);
+  const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
   const ghost =
     showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 

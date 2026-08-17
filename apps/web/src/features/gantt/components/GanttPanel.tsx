@@ -29,6 +29,7 @@ import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
+import type { BarDateSource } from '@/lib/bar-dates';
 import { cn } from '@/lib/utils';
 
 /** Row height in pixels. Fixed, so the virtualizer needs no measurement pass. */
@@ -94,6 +95,12 @@ export interface GanttPanelProps {
    * much schedule a screen holds.
    */
   zoomLevel?: ZoomLevel;
+  /**
+   * Which persisted dates draw each bar (ADR-0033) — the same value, from the same resolver, that
+   * the canvas receives. Absent ⇒ `early`, which is what this panel did unconditionally until
+   * 2026-08-17 and is still correct for every EARLY-mode plan (`docs/TECH_DEBT.md` #135).
+   */
+  barDateSource?: BarDateSource;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -147,6 +154,7 @@ export function GanttPanel({
   activities,
   varianceByActivityId,
   zoomLevel = DEFAULT_ZOOM,
+  barDateSource,
   loading = false,
   error,
   onSelectActivity,
@@ -474,6 +482,7 @@ export function GanttPanel({
               anchorIso: anchor,
               chartPx,
               pxPerDay,
+              barDateSource,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -658,6 +667,7 @@ interface GanttRowViewProps {
   anchorIso: string;
   chartPx: number;
   pxPerDay: number;
+  barDateSource: BarDateSource | undefined;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -678,6 +688,7 @@ function GanttRowView({
   anchorIso,
   chartPx,
   pxPerDay,
+  barDateSource,
   gridWidth,
   variance,
   showVariance,
@@ -690,7 +701,7 @@ function GanttRowView({
   offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
   const { activity, depth, hasChildren, expanded } = row;
-  const geometry = barGeometry(activity, anchorIso, pxPerDay);
+  const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
   const ghost =
     showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 
