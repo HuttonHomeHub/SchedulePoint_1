@@ -127,7 +127,11 @@ precedent).
 - **Dependencies:** none
 - **Risks:** a milestone that cannot be made coherent is found late, when splitting it is expensive →
   find it now, on paper, when splitting is free.
-- **Testing:** none — this is a written artefact reviewed before M1 starts.
+- **Testing:** `gantt-coverage.structural.test.ts` and `gantt-host-parity.structural.test.ts`, both
+  verified red first. The walk below is a written artefact; **the two gates are what make the merge
+  condition mechanical**, and they exist because the test-engineer re-review's verdict on the first
+  version was that a rule living only in prose "is not different in kind from the original sentence —
+  it's a better sentence".
 - **Development steps:**
   1. For each of M1–M5 write one sentence: what is newly visible, what it does, and what it does
      **not** yet do that a planner might reasonably expect from what they can see.
@@ -135,6 +139,21 @@ precedent).
      affordance implies — that is the lit-but-inert shape (ADR-0059 M6, ADR-0062 M6, ADR-0064 §7).
   3. Split those before M1 starts, and record the split. M3 is the one to look at hardest: a bar that
      drags but has no undo, or drags in EARLY mode only, is exactly this defect.
+  4. **Write `gantt-coverage.structural.test.ts`** — the `pnpm check:playbook` shape, which CLAUDE.md
+     §7 already describes as gating "that its rows resolve **in both directions**". Enumerate every
+     Gantt-scoped interactive item (toolbar items on the Gantt branch, dock items with `canvas: null`,
+     editable cells, drag handles — anything carrying an id or a `data-*` locator) from the registries
+     themselves, never a hand-written list; grep `e2e-gantt-editing/*.spec.ts` for each id; fail on any
+     id no journey references. `selection-duplication.structural.test.ts` is the precedent — same
+     shape, new pair of registries — so this is not a pattern the repository has to learn. **This is
+     what turns "either it has a journey assertion or it does not render" from a rule into a gate**,
+     and it re-runs on every push rather than once at M0.
+  5. **Write `gantt-host-parity.structural.test.ts`** — an explicit allow-list of the props that
+     legitimately differ between `TsldPanel` and `GanttPanel`, in the shape `REBOUND_NAMES` uses for
+     the token families: CI fails the day a prop is added to one host and not the other unless the
+     allow-list is edited in the same commit. A one-shot diff at M0 catches only drift that predates
+     the epic — which is exactly what it did catch (`barDateSource`, `lateOverlayActive` are both
+     pre-existing) — and has no way to see a divergence M3 or M4 introduces later.
 
 ---
 
@@ -171,14 +190,42 @@ precedent).
 
 ##### Task M0-T4 — Engine-import structural gate
 
-- **Description:** a test that fails on any import from the CPM engine reaching
-  `features/gantt/`, in the shape of `float-paths-view-agnostic.structural.test.ts`.
+- **Description:** a test that fails on any import from the CPM engine reaching **the whole of
+  `apps/web/src`**, in the shape of `float-paths-view-agnostic.structural.test.ts`. **Scope is the
+  whole tree, not `features/gantt/`**: that precedent self-scopes to `FEATURE_DIR` because its
+  concern _was_ directory ownership, and this one's is not — "does anything reach the engine" has
+  nothing to do with which folder does it, and a Gantt-scoped copy would be structurally blind to
+  `use-plan-workspace-model.ts`, which is exactly where F5 says the write-path wiring lands.
 - **Complexity:** S
 - **Dependencies:** —
-- **Risks:** none. It is cheap and it converts the epic's parity claim from prose into a gate
-  (ADR-0058's rule applied to our own spec).
+- **Risks:** none. It is cheap and it converts the epic's parity claim from prose into a gate.
+  **It is not redundant**, and the record of why matters: the test-engineer review called it a gate on
+  a channel the module system already closes, "because the engine pulls in Prisma/Nest, neither of
+  which bundles for a browser". That is false —
+  `grep -rn "^import" apps/api/src/modules/schedule/engine/*.ts | grep -iE "nestjs|prisma"` returns
+  nothing across all 14 files, and the reviewer then went a level further than that itself and
+  confirmed the one transitive hop (`common/validation/calendar-date.ts` → `class-validator`, browser-
+  safe) before withdrawing the claim. The engine is pure — ADR-0022's whole point, and why the
+  conformance package can consume it engine-free — so a relative import would resolve and bundle. The
+  channel is open and this closes it.
 - **Testing:** verified **red** first, by adding a deliberate import and removing it.
 - **Development steps:** write it, verify red, remove the probe, land it.
+
+##### Task M0-T5 — The `apps/api` scope gate
+
+- **Description:** the parity argument's real risk is not a stray import from the web bundle; it is an
+  `apps/api` change **widening the engine's input**. The plan asserted "no task in this epic touches
+  `apps/api`" in prose, which is the one place a real claim was asserted rather than enforced — CLAUDE.md
+  §19.10's own subject. This makes it mechanical: **`git diff --name-only origin/main...HEAD -- apps/api/`
+  must be empty**, failing the check when it is not.
+- **Complexity:** S
+- **Dependencies:** —
+- **Risks:** a legitimate future need to touch `apps/api` trips it. That is the intent — it is a signal
+  the milestone has drifted from a frontend-only epic, and the answer is to say so deliberately, not to
+  discover it at M6.
+- **Testing:** verified **red** first against a throwaway commit touching an `apps/api` file.
+- **Development steps:** add it as a CI step beside the other `check:*` gates, named so the failure
+  message explains what drifted rather than only that a diff was non-empty.
 
 ---
 
