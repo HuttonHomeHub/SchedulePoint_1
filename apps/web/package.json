@@ -71,7 +71,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.12.1",
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "catalog:",
     "@repo/config": "workspace:*",
     "@repo/seed": "workspace:*",
