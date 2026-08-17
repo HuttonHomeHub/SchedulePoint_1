@@ -72,7 +72,14 @@ describe('GanttPanel — states', () => {
   it('refuses to draw a chart for a plan that has never been calculated', () => {
     render(<GanttPanel activities={[anActivity({ earlyStart: null, earlyFinish: null })]} />);
     expect(screen.getByText('This plan has not been calculated')).toBeInTheDocument();
-    expect(screen.queryByRole('treegrid')).not.toBeInTheDocument();
+    // The GRID renders from M2-T4 — the cells are how a planner names activities and sets durations
+    // on a freshly created plan, which is exactly when they do that. What must NOT render is a
+    // chart: no ruler, because a date scale over an empty chart is the invented fact the whole
+    // branch exists to avoid.
+    expect(screen.getByRole('treegrid')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /Timeline/ })?.textContent).not.toMatch(
+      /\d{4}/,
+    );
   });
 
   it('counts the activities correctly in the not-calculated copy', () => {

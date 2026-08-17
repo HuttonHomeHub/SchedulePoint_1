@@ -48,6 +48,16 @@ const FALLBACK_PX_PER_DAY = 6;
 /** Frames roughly a year — the range a stakeholder reading a programme usually wants first. */
 const DEFAULT_ZOOM: ZoomLevel = 'month';
 
+/**
+ * The anchor used when nothing is scheduled yet.
+ *
+ * Never visible: with no dates every `barGeometry` call returns null, so no bar is positioned
+ * against it. It exists so the grid can render on an uncalculated plan without the chart having to
+ * invent a date and present it as fact — a fixed constant rather than `today`, so two renders a day
+ * apart produce identical output and nothing in a test depends on the clock.
+ */
+const UNSCHEDULED_ANCHOR = '1970-01-01';
+
 /** On-screen column widths, keyed to the shared {@link GANTT_COLUMNS} semantics. */
 const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
   code: 80,
@@ -426,18 +436,23 @@ export function GanttPanel({
     );
   }
 
-  // Rows exist but nothing is scheduled: the plan has never been calculated. Drawing a chart would
-  // mean choosing an arbitrary anchor date and presenting it as fact.
-  if (span === null || anchor === null) {
-    return (
-      <GanttMessage title="This plan has not been calculated">
-        <p className="text-muted-foreground text-sm">
-          {rows.length === 1 ? 'The activity has' : `All ${rows.length} activities have`} no
-          scheduled dates yet. Recalculate the schedule to see the bar chart.
-        </p>
-      </GanttMessage>
-    );
-  }
+  // Rows exist but nothing is scheduled: the plan has never been calculated. No CHART is drawn —
+  // that would mean choosing an arbitrary anchor date and presenting it as fact — but the grid
+  // renders, and that is a decision rather than an oversight (M2-T4).
+  //
+  // It used to return the message alone, which made every cell unreachable on precisely the plan a
+  // planner is most likely to be typing into: a freshly created one, before the first
+  // recalculation. The first draft of the fix made duration read-only there too; the ux re-review
+  // corrected it and the correction is the better reasoning — a duration is an INPUT, not a rollup,
+  // so it does not depend on a computed schedule the way a date does. `ganttCellGate` reads
+  // `hasComputedSchedule` and shuts the two date cells with a reason that names the action
+  // ("Recalculate the plan to set dates"); name and duration stay writable.
+  //
+  // The anchor falls back to the first row's absence rather than being invented: with no dates,
+  // `barGeometry` returns null for every activity (`bar-geometry.ts:61`), so nothing is drawn at
+  // any anchor and the value can never reach the screen. `chartPx` is already 0 here.
+  const notCalculated = span === null || anchor === null;
+  const safeAnchor = anchor ?? UNSCHEDULED_ANCHOR;
 
   const contentWidth = gridWidth + chartPx;
 
@@ -447,6 +462,21 @@ export function GanttPanel({
       className="bg-background relative min-h-0 flex-1 overflow-auto"
       data-testid="gantt-scroll"
     >
+      {/* The explanation stays even though the grid now renders (M2-T4). Dropping it was the first
+          version of this change and it was wrong twice over: a reader met a chart column with no
+          bars and nothing saying why, and a screen-reader user met it with no cue at all. The grid
+          appearing is the fix for "the cells were unreachable"; it is not a reason to stop saying
+          the plan has not been calculated. */}
+      {notCalculated ? (
+        <div role="status" className="border-border bg-muted border-b px-3 py-2">
+          <p className="text-foreground text-sm font-medium">This plan has not been calculated</p>
+          <p className="text-muted-foreground text-sm">
+            {rows.length === 1 ? 'The activity has' : `All ${rows.length} activities have`} no
+            scheduled dates yet. Recalculate the schedule to see the bar chart. You can still name
+            activities and set their durations.
+          </p>
+        </div>
+      ) : null}
       <div
         role="treegrid"
         aria-label="Schedule as a bar chart"
@@ -518,7 +548,11 @@ export function GanttPanel({
             style={{ width: chartPx }}
           >
             <span className="sr-only">Timeline</span>
-            <GanttRuler anchorIso={anchor} widthPx={chartPx} pxPerDay={pxPerDay} />
+            {/* No ruler on an uncalculated plan: a date scale over an empty chart would be the
+                invented fact the fallback anchor exists to avoid showing. */}
+            {notCalculated ? null : (
+              <GanttRuler anchorIso={safeAnchor} widthPx={chartPx} pxPerDay={pxPerDay} />
+            )}
           </div>
         </div>
 
@@ -530,7 +564,7 @@ export function GanttPanel({
             const shared = {
               rowIndex: item.index,
               top: item.start,
-              anchorIso: anchor,
+              anchorIso: safeAnchor,
               chartPx,
               pxPerDay,
               barDateSource,

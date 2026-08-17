@@ -3,10 +3,11 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { IDLE, reduceCellEdit, type GanttGridEditing } from '../model/cell-edit';
-import type { GanttCellGate } from '../model/cell-gate';
+import { ganttCellGate, type GanttCellGate } from '../model/cell-gate';
 
 import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 
+import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
@@ -153,5 +154,58 @@ describe('with editing wired in', () => {
     renderGrid(editingBundle({ gateFor: () => SHUT }));
     expect(cellUnder('Code')).not.toHaveAttribute('aria-readonly');
     expect(cellUnder('Float')).not.toHaveAttribute('aria-readonly');
+  });
+});
+
+describe('on a plan that has not been calculated', () => {
+  const unscheduled = () => activity({ earlyStart: null, earlyFinish: null, totalFloat: null });
+
+  it('renders the grid, so the cells are reachable at all', () => {
+    // The branch returned a sentence and NO grid until M2-T4, which made every cell unreachable on
+    // precisely the plan a planner is most likely to be typing into: a fresh one, before the first
+    // recalculation.
+    renderGrid(editingBundle({ hasComputedSchedule: false }), [unscheduled()]);
+    expect(screen.getByRole('treegrid')).toBeInTheDocument();
+  });
+
+  it('still says the plan has not been calculated', () => {
+    // Showing the grid is the fix for "unreachable". It is not a reason to stop explaining why the
+    // chart column is empty — and the explanation is a live region, so it is not sight-only.
+    renderGrid(editingBundle({ hasComputedSchedule: false }), [unscheduled()]);
+    expect(screen.getByRole('status')).toHaveTextContent('This plan has not been calculated');
+  });
+
+  it('keeps name and duration writable there — the half most likely to regress', () => {
+    // Asserted through the REAL gate rather than a stub, because this is the decision itself: a
+    // duration is an input, not a rollup, so it does not depend on a computed schedule the way a
+    // date does. The first draft made it read-only and the ux re-review corrected it.
+    renderGrid(
+      {
+        ...editingBundle({ hasComputedSchedule: false }),
+        gateFor: (key) =>
+          ganttCellGate({
+            key,
+            activity: { type: 'TASK' },
+            gating: deriveActivityEditorGating({
+              penManaged: true,
+              holdsPen: true,
+              canWrite: true,
+              canProgress: true,
+              canReadCost: true,
+            }),
+            hasComputedSchedule: false,
+          }),
+      },
+      [unscheduled()],
+    );
+
+    expect(cellUnder('Activity')).not.toHaveAttribute('aria-readonly');
+    expect(cellUnder('Duration')).not.toHaveAttribute('aria-readonly');
+    // And the dates are shut with an action, not a report of unavailability.
+    const start = cellUnder('Start');
+    expect(start).toHaveAttribute('aria-readonly', 'true');
+    expect(document.getElementById(start.getAttribute('aria-describedby')!)).toHaveTextContent(
+      /Recalculate/i,
+    );
   });
 });
