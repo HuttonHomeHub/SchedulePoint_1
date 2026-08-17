@@ -4,6 +4,7 @@ import {
   createClient,
   createPlan,
   createProject,
+  ganttRow,
   onboard,
   openPlanId,
   seedActivities,
@@ -84,7 +85,7 @@ test('the off-state draws nothing until a row is selected', async ({ page }) => 
 
   // Selecting answers "why is this bar here?" without turning anything on — the toggle's off-state
   // rather than an exception to it.
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await expect(arrows(page)).toHaveCount(1);
 });
 
@@ -113,7 +114,7 @@ test('the arrows are hidden from assistive technology and said in words', async 
   test.setTimeout(180_000);
   await planWithLink(page);
   await showGantt(page);
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
 
   const svg = page.locator('[data-testid="gantt-scroll"] svg').first();
   await expect(svg).toHaveAttribute('aria-hidden', 'true');
@@ -127,7 +128,7 @@ test('an arrow does not steal the pointer from the bar underneath it', async ({ 
   test.setTimeout(180_000);
   await planWithLink(page);
   await showGantt(page);
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await expect(arrows(page)).toHaveCount(1);
 
   // The overlay sits above the bars. Without `pointer-events: none` the resize handle under a

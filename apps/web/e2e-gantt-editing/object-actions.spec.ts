@@ -6,6 +6,7 @@ import {
   createPlan,
   createProject,
   ganttGrid,
+  ganttRow,
   onboard,
   seedActivities,
   showGantt,
@@ -59,7 +60,7 @@ test('a planner acts on a Gantt selection from the docked object bar', async ({ 
 
   // Select a row IN THE GANTT. This is the gesture the promise is about: before M1 it produced a
   // selection with nothing to do with it.
-  const row = page.getByRole('row').filter({ hasText: 'Seeded 0' }).first();
+  const row = ganttRow(page, 'Seeded 0');
   await row.click();
 
   // The bar names its subject, so a planner can tell what they are about to act on.
@@ -90,7 +91,7 @@ test('the Gantt offers no canvas-only action, and no longer offers Add note', as
   await seedActivities(page, orgSlug, 3);
   await page.getByRole('button', { name: 'Recalculate' }).click();
   await showGantt(page);
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
 
   const bar = page.getByRole('toolbar', { name: /Actions for/ });
   await expect(bar).toBeVisible();
@@ -126,7 +127,7 @@ test('the docked bar in the Gantt is accessible', async ({ page }) => {
   await seedActivities(page, orgSlug, 3);
   await page.getByRole('button', { name: 'Recalculate' }).click();
   await showGantt(page);
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await expect(page.getByRole('toolbar', { name: /Actions for/ })).toBeVisible();
 
   /**

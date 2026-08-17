@@ -4,6 +4,7 @@ import {
   createClient,
   createPlan,
   createProject,
+  ganttRow,
   onboard,
   openPlanId,
   seedActivities,
@@ -121,7 +122,7 @@ test('Alt+ArrowRight moves a bar and the move is stored', async ({ page }) => {
   const before = byName(await readActivities(page, orgSlug), 'Seeded 0');
   expect(before.earlyStart).not.toBeNull();
 
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await page.keyboard.press('Alt+ArrowRight');
 
   // Asserted at the API. The bar visibly moving proves the ghost, not the write — and the ghost is
@@ -138,7 +139,7 @@ test('an EARLY-mode move writes a constraint, not a placement', async ({ page })
   const orgSlug = await ganttPlan(page);
   await showGantt(page);
 
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await page.keyboard.press('Alt+ArrowRight');
 
   await expect
@@ -158,7 +159,7 @@ test('a VISUAL-mode move writes a placement, and NO constraint', async ({ page }
   await useVisualMode(page, orgSlug);
   await showGantt(page);
 
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await page.keyboard.press('Alt+ArrowRight');
 
   await expect
@@ -204,7 +205,7 @@ test('a summary refuses to move', async ({ page }) => {
   const asSummary = byName(await readActivities(page, orgSlug), 'Seeded 0');
   expect((asSummary as unknown as { type: string }).type).toBe('WBS_SUMMARY');
   const summaryStart = asSummary.earlyStart;
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await page.keyboard.press('Alt+ArrowRight');
 
   // Nothing written — a summary's dates are an engine rollup of its children (ADR-0038). The spoken

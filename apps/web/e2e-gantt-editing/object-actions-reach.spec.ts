@@ -4,6 +4,7 @@ import {
   createClient,
   createPlan,
   createProject,
+  ganttRow,
   onboard,
   seedActivities,
   showGantt,
@@ -40,7 +41,7 @@ async function ganttPlanWithSelection(page: Page, stamp: number): Promise<string
   await seedActivities(page, orgSlug, 3);
   await page.getByRole('button', { name: 'Recalculate' }).click();
   await showGantt(page);
-  await page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().click();
+  await ganttRow(page, 'Seeded 0').click();
   await expect(page.getByRole('toolbar', { name: /Actions for/ })).toBeVisible();
   return orgSlug;
 }
@@ -71,7 +72,11 @@ test('Duplicate creates a second activity from a Gantt selection', async ({ page
   await bar.getByRole('button', { name: 'Duplicate', exact: true }).click();
   // The copy lands in the grid this view renders, which is the part a canvas test cannot show: the
   // Gantt has its own row model and a write that never reaches it is invisible from the canvas.
-  await expect(page.getByRole('row').filter({ hasText: 'Seeded 0' })).toHaveCount(2, {
+  // Counting, so NOT `ganttRow` — that helper takes `.first()` because every other call site wants
+  // one row, and a count through it would always read 1 and pass whatever the duplicate did.
+  await expect(
+    page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: /^Seeded 0\b/ }) }),
+  ).toHaveCount(2, {
     timeout: 20_000,
   });
 });

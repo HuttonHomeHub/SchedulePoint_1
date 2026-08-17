@@ -5,6 +5,7 @@ import {
   createPlan,
   createProject,
   ensurePen,
+  ganttRow,
   onboard,
   openPlanId,
   seedActivities,
@@ -138,7 +139,7 @@ async function readActivity(
 
 /** The Duration cell on the first seeded row. */
 function durationCell(page: Page) {
-  return page.getByRole('row').filter({ hasText: 'Seeded 0' }).first().getByRole('gridcell').nth(2);
+  return ganttRow(page, 'Seeded 0').getByRole('gridcell').nth(2);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -243,7 +244,7 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
   // so a click that has not settled sends it to the document. A timing artefact of the test rather
   // than a product defect (it passes alone, in its own file, and on the re-run), fixed by waiting
   // for the state the gesture depends on rather than by a sleep.
-  const row = page.getByRole('row').filter({ hasText: 'Seeded 0' }).first();
+  const row = ganttRow(page, 'Seeded 0');
   await row.click();
   await expect(row).toBeFocused();
   await page.keyboard.press('F2');
