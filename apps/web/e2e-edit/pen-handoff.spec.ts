@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { addActivity, openNewPlan, setPlannedStart, startEditing } from './support';
+import { addActivity, showActivities, openNewPlan, setPlannedStart, startEditing } from './support';
 
 /**
  * Flag-ON multi-actor pen hand-off journey (TECH_DEBT #27b). Two real users in one org:
@@ -87,6 +87,10 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   // pen*, which no mocked test distinguishes from "your role cannot write" — and the sentence is
   // the whole point of the change. Before ADR-0082 the four write actions were simply absent, so
   // this assertion fails against the old code by not finding the item at all.
+  // B never adds anything, so nothing has expanded its activities panel — and the row menu this
+  // assertion is about lives inside it. A's panel was expanded as a side effect of `addActivity`;
+  // the reader's was not, which is exactly the asymmetry the collapsed default introduces.
+  await showActivities(b);
   await b.getByRole('button', { name: 'Actions for Excavate' }).click();
   const lockedMenu = b.getByRole('menu');
   const lockedEdit = lockedMenu.getByRole('menuitem', { name: 'Edit' });

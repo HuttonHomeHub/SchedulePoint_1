@@ -1,7 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { addActivity, onboard, openNewPlan, setPlannedStart, startEditing } from './support';
+import {
+  addActivity,
+  awaitComputedSchedule,
+  onboard,
+  openNewPlan,
+  setPlannedStart,
+  startEditing,
+} from './support';
 
 /**
  * Flag-ON keyboard editing journey (TECH_DEBT #25b, partial #25a). Proves the M5 5.2
@@ -16,7 +23,7 @@ test('a planner nudges an activity by keyboard; Alt+arrows never navigate histor
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
   await setPlannedStart(page, '2026-01-01');
   await startEditing(page); // take the pen — editing affordances go live
@@ -26,7 +33,12 @@ test('a planner nudges an activity by keyboard; Alt+arrows never navigate histor
 
   // Recalculate so the diagram has computed activities to plot + navigate.
   await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect(page.getByText('Project finish')).toBeVisible();
+  // The checkpoint used to be `getByText('Project finish')` — the legacy page's
+  // `ScheduleSummaryStrip` label. The workspace carries that fact in the toolbar's finish chip,
+  // which renders the DATE and withholds itself below the `compact` density band, so at this
+  // viewport no locator for it can work. Asserting the computed dates at the API is both
+  // width-independent and a stronger claim: the schedule computed, rather than a word rendered.
+  await awaitComputedSchedule(page, orgSlug);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   const listbox = diagram.getByRole('listbox', { name: 'Activities in the diagram' });
