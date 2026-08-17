@@ -308,7 +308,10 @@ M6's journey found the same field silently refusing `4h` on the surface where it
 
 #### Feature: M2-F2 — In-cell editing, scoped per cell
 
-> **Description:** editable cells for **name**, **duration** and **% complete**. Each cell knows its
+> **Description:** editable cells for **name**, **duration**, **% complete** and — per Q2, folded
+> after three reviewers found it decided-but-unscheduled — **Start** and **Finish**. A typed date
+> writes the constraint the drag writes, with one note per session wired to the shared polite live
+> region (never a second one — `notice-strip.tsx:63-70`). Each cell knows its
 > **write scope** — definition (pen-gated) or progress (role-only) — because ADR-0060 established
 > that a merged save must pick one permission rule and would silently remove a Contributor's ability
 > to report progress. Per-cell scope is that ruling at cell granularity, not a new idea.
@@ -341,13 +344,18 @@ M6's journey found the same field silently refusing `4h` on the surface where it
 ##### Task M2-T4 — Gating and the not-calculated case
 
 - **Complexity:** S · **Dependencies:** M2-T3 · **Risks:** the "plan not calculated" state
-  (`GanttPanel.tsx:372-381`) renders a message instead of a grid, so cells are unreachable there →
-  **decide it**: either the message gains an editable grid or it says so. Silently having no route
-  is the ADR-0081 shape.
-- **Testing:** unit per state; a11y check that a read-only cell keeps its tab stop.
+  (`GanttPanel.tsx:372-381`) renders a message instead of a grid, so cells are unreachable there.
+  **Decided, not left open:** the grid renders, with **name and duration editable** and **Start /
+  Finish read-only carrying a reason** until the plan is calculated. The first draft of this default
+  made duration read-only too; the ux re-review corrected it, and the correction is the better
+  reasoning — **a duration is an input, not a rollup**, it does not depend on a computed schedule the
+  way a date does, and a freshly-created uncalculated plan is precisely when a planner is typing
+  initial durations. Blocking the one field this epic centres on (spec F6) at that moment would have
+  been the conservative choice and the wrong one. Read-only, never `disabled` (ADR-0083).
+- **Testing:** unit per state; a11y check that a read-only cell keeps its tab stop; a case asserting
+  duration IS editable on an uncalculated plan, since that is the half most likely to regress back.
 - **Steps:** gating from `activityEditorGating` (the one derived object, ADR-0060 §6 — never a second
-  `{ writable, reason }` assembled beside it); summary/bucket/milestone rules; the decision above,
-  recorded.
+  `{ writable, reason }` assembled beside it); summary/bucket/milestone rules; the default above.
 
 ##### Task M2-T5 — Journey: the sub-day case
 
@@ -362,8 +370,12 @@ M6's journey found the same field silently refusing `4h` on the surface where it
 **Outcome:** a planner drags a bar to a new start, or drags an end to change duration, and the
 programme re-flows. `PROJECT_BRIEF.md` §11's "editable … dates".
 **Entry point:** the Gantt chart — press and drag any activity bar; or drag its right/left end.
-Keyboard equivalent on the focused row (`Shift+←/→` nudges duration, `←/→` moves the start), because
-a pointer-only capability is a WCAG 2.1.1 failure and the canvas already has the pattern.
+Keyboard equivalent on the focused row: **`Shift+←/→` nudges duration, `Alt+←/→` moves the start** —
+matching the canvas verbatim (`TsldPanel.tsx:1848`: _"Alt+arrows nudge the focused activity —
+horizontal = start day (an SNET constraint)"_). This line said bare `←/→` until the accessibility
+re-review: those are **already bound** to treegrid disclosure (`GanttPanel.tsx:311-328`), so the
+original would have collided with a shipped binding while citing a precedent that says otherwise.
+A pointer-only capability is a WCAG 2.1.1 failure, which is why the equivalent exists at all.
 **Journey:** `e2e-gantt-editing/bar-drag.spec.ts` — drag in **EARLY** mode, assert an SNET was
 written at the dropped day and successors moved; drag in **VISUAL** mode, assert `visualStart` and
 **no** constraint. Note this is only the **second** journey in the repository to run in Visual mode
@@ -641,12 +653,13 @@ and both were right about their facts:
   takes the crossing count from ~16 to ~1,067.
 
 **Resolution: cull to links with at least one endpoint in the rendered row window, and say so.**
+And `paint.ts:1042` is **precedent for the adopted rule, not only evidence for the opposing one**: the canvas has shipped exactly this at-least-one-endpoint test for its entire life, on the surface where link legibility matters most. The Gantt is adopting the painter's existing rule rather than inventing a cheaper one — which makes this an instance of the epic's own anti-drift argument (**both views cull links the same way**) rather than an exception to it.
 The ui-architect's design wins — but the performance reviewer's fact is why this must be **stated as
 a decision rather than left as a consequence of the predicate**. Crossing-only links are
 **deliberately not drawn**, because a line with no visible endpoint is clutter, and the alternative
 makes the overlay unbounded. That restores the "bounded by the same virtualization as the rows"
 property the spec claimed and had not earned: the bound becomes `visible rows × average degree`
-≈ 40 × 1.6 ≈ **64 paths**, by construction rather than by measurement.
+≈ **64 paths typically** — but that is the mean, not the ceiling. The predicate's actual bound is the **summed degree of the rows currently rendered**, so a hub milestone with 200 predecessors (a real shape, and one the seed catalogue's hostile tier carries) puts 200 paths on screen the moment its row enters the window while every other window sits near 16. The property that matters still holds by construction — the count cannot exceed the degrees of the rendered rows, so it is viewport-bounded and **sort-independent** — but B2's cap is sized from this sentence, so it must not be read as a ceiling of 64.
 
 Two consequences follow and are adopted: **R5 sweeps at least three sort orders** (WBS default, Total
 float, Start) rather than the default alone — the imported-shape fixture is the most WBS-local case
@@ -661,12 +674,14 @@ path that could add one.
 `earlyStart`/`earlyFinish` unconditionally; the canvas is handed
 `barDateSourceFor(plan.schedulingMode, lateOverlay)` and reads `visualEffectiveStart` in VISUAL mode
 (`to-render-model.ts:46`). **So in a VISUAL-mode plan the Gantt and the diagram disagree about where
-every hand-placed bar sits — today.** It is unreported and absent from `docs/TECH_DEBT.md`.
+every hand-placed bar sits — today.** It is unreported and was absent from `docs/TECH_DEBT.md`; it is now row **135**.
 
 It also makes M3's VISUAL half unbuildable as specified: a drag would write `visualStart`, the engine
 would pin `visualEffectiveStart`, and the Gantt would not read it — **a gesture that mutates the plan
 and reports nothing**, which is worse than lit-but-inert and is exactly what the Q4 merge condition
-forbids. **A read-only slice giving `GanttPanel` the same date-source seam lands in M0, before M3.**
+forbids. **A read-only slice giving `GanttPanel` the same date-source seam lands BEFORE M2 — in its own PR, ahead of this epic.**
+
+Two corrections to that scheduling, both from the architecture re-review. **Its own PR, not M0**, because M0 declares _"ships dark: nothing changes for any user"_ and this fix visibly moves every hand-placed bar in every VISUAL plan — M0 cannot both carry it and claim to be dark, and under Q4 that declaration is load-bearing. It is also a bug fix judged against ADR-0033 rather than against this spec, so it is a different review conversation, it deserves its own revert boundary, and it should not wait on a measurement harness to be review-ready. And **before M2, not M3**: Q2 moved typed dates into M2, and in VISUAL mode a typed Start date writes `visualStart` exactly as the drag does (`use-plan-workspace-model.ts:1005-1011`), so it carries the identical invisible-write failure. Nothing is broken today because M0 precedes both — but the written reason was wrong, and a wrong reason is how a later reorder moves the slice after M2 with a plausible justification.
 It repairs the live defect, adds no affordance, and is coherent standing alone.
 
 ### The keyboard binding was wrong twice over
@@ -785,6 +800,28 @@ defects twice — ADR-0079's jump count overwritten by a stale filter re-render,
 announcement overwritten by the focus it needed. A sighted planner can glance at residual UI; a
 screen-reader user gets one shot. **M2 carries an explicit task wiring the note to the shared polite
 channel with a race test**, landing with M2 rather than after it.
+
+### The addendum is now carried by the operative sections
+
+**The ux re-review's process point, and it was right.** Everything above was written as a trailing
+addendum while `M2-F2` still read "name, duration and % complete", `M2-T4` still said "decide it",
+and M3's entry point still said bare `←/→`. **A builder works from those sections, not from prose at
+the end of the file** — and the addendum demonstrates the failure in miniature two screens up, where
+a live-region commitment was made in a message and never written down, caught only on a second pass.
+All three are now edited in place, and the ux reviewer's correction to M2-T4's default (duration
+stays editable on an uncalculated plan — it is an input, not a rollup) is adopted over my own more
+conservative first answer.
+
+**The constraint badge is an addition, not a replacement**, so it needs no second trip to the product
+owner: the note explains the _moment_ a constraint is written, the badge sustains awareness after the
+note is gone, and removing the note would leave the badge unexplained the first time it appears. It
+gets its own task with its own contrast pair in `token-contrast.test.ts` rather than riding in free —
+the precedent this fold just set for the arrow-stroke tokens.
+
+**M4 is not pulled forward.** It was suggested while M4 looked render-only; this fold materially grew
+it (the culling resolution, R5 across three sort orders, the permanent no-obstacle-search invariant,
+the `sr-only` summary, the contrast gate), so reordering now buys an optics gain against a heavier
+milestone. It starts when M1 is done, as the dependency graph already allows.
 
 ### Recorded, not actioned
 
