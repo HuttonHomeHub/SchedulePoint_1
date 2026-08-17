@@ -1,7 +1,15 @@
 # ADR-0088 — Feature flags are classified, not scheduled
 
-- **Status:** Proposed
-- **Date:** 2026-08-10
+- **Status:** **Accepted 2026-08-14, retroactively** — it had been governing since it was written,
+  which is the problem it is being accepted to fix. Five retirements were executed under its D3
+  (`VITE_NAV_TREE_CRUD`, `VITE_CANVAS_TOOLBAR`, `VITE_CALENDAR_SHIFT_EDITOR`, `VITE_LIBRARY_SCOPING`,
+  `VITE_ACTIVITY_EDITOR_TABS`), 52 `keep` reasons cite its D4, `scripts/check-flags.mjs` enforces its
+  `classA`/`classACap` model, and **ADR-0090 — which is Accepted — treats `classACap: 1` as binding**.
+  So the register, the gate and an accepted ADR all read this as settled while its own header said
+  Proposed. The date is **not** back-dated: the retroactivity is the finding and hiding it would
+  remove the only evidence that a Proposed decision can quietly become the governing one. Found by an
+  architecture review of the flag-cleanup pass, four days later.
+- **Date:** 2026-08-10 (accepted 2026-08-14)
 - **Deciders:** product owner (asked the question that opened this: "it might be better not to
   retire them"), engineering
 - **Supersedes:** ADR-0084 **D2, D3, D4a, D4b** (the 30-day horizon, the batch queue, the weighting
