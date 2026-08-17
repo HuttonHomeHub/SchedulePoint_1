@@ -148,6 +148,14 @@ precedent).
      shape, new pair of registries — so this is not a pattern the repository has to learn. **This is
      what turns "either it has a journey assertion or it does not render" from a rule into a gate**,
      and it re-runs on every push rather than once at M0.
+     4b. **`gantt-coverage.structural.test.ts` lands with M1, not here — and that is a correction to
+     this task, made when it was picked up.** It cross-references Gantt-scoped registry items against
+     the journey specs that exercise them, and `apps/web/e2e-gantt-editing/` **does not exist until
+     M1 creates it**. Built at M0 it has zero specs to reference, so it either fails on every item on
+     its first run — and ADR-0058 records that a gate failing on day one gets deleted rather than
+     fixed — or it is written to pass with nothing to check, which is a dead assertion reading as
+     coverage. Neither is a gate. It is therefore an M1 task, landing in the same commit as the
+     journey it depends on, which is also when its first real subjects exist.
   5. **Write `gantt-host-parity.structural.test.ts`** — an explicit allow-list of the props that
      legitimately differ between `TsldPanel` and `GanttPanel`, in the shape `REBOUND_NAMES` uses for
      the token families: CI fails the day a prop is added to one host and not the other unless the
