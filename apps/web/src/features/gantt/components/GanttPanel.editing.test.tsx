@@ -358,3 +358,48 @@ describe('moving a bar from the keyboard', () => {
     expect(() => fireEvent.keyDown(grid(), { key: 'ArrowRight', altKey: true })).not.toThrow();
   });
 });
+
+describe('the bar gestures in the rendered row', () => {
+  const dragBundle = (over: Partial<GanttBarDrag> = {}): GanttBarDrag => ({
+    canEdit: true,
+    reason: null,
+    plannedStartIso: '2026-01-01',
+    moveTo: vi.fn(),
+    resizeTo: vi.fn(),
+    announce: vi.fn(),
+    ...over,
+  });
+
+  const bars = () => document.querySelectorAll('[data-activity-id] span[aria-hidden="true"]');
+
+  it('offers a resize handle only where the bar can be moved', () => {
+    const { container, unmount } = render(
+      <GanttPanel activities={[activity()]} drag={dragBundle()} />,
+    );
+    expect(container.querySelectorAll('.cursor-ew-resize')).toHaveLength(1);
+    unmount();
+
+    // Shut: no handle at all rather than an inert grab zone. A handle that does nothing is the
+    // lit-but-inert shape, and on a pointer affordance there is no reason text to explain it.
+    const shut = render(
+      <GanttPanel activities={[activity()]} drag={dragBundle({ canEdit: false })} />,
+    );
+    expect(shut.container.querySelectorAll('.cursor-ew-resize')).toHaveLength(0);
+  });
+
+  it('offers no handle on a milestone, which has no length to change', () => {
+    const { container } = render(
+      <GanttPanel
+        activities={[activity({ type: 'START_MILESTONE', durationDays: 0, durationMinutes: 0 })]}
+        drag={dragBundle()}
+      />,
+    );
+    expect(container.querySelectorAll('.cursor-ew-resize')).toHaveLength(0);
+  });
+
+  it('renders no gesture affordance at all with no drag bundle', () => {
+    const { container } = render(<GanttPanel activities={[activity()]} />);
+    expect(container.querySelectorAll('.cursor-ew-resize')).toHaveLength(0);
+    expect(bars().length).toBeGreaterThan(0);
+  });
+});

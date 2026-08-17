@@ -10,7 +10,7 @@ import {
   chartWidth,
   spanGeometry,
 } from '../layout/bar-geometry';
-import { dateAtChartX, startDayAtChartX } from '../layout/drag-day';
+import { dateAtChartX, durationDaysForFinishAtX, startDayAtChartX } from '../layout/drag-day';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
   DEFAULT_GANTT_SORT,
@@ -24,7 +24,13 @@ import {
   type GanttSort,
   type GanttSortKey,
 } from '../layout/row-model';
-import { NUDGE_DAYS, barMoveGate, moveAnnouncement, type GanttBarDrag } from '../model/bar-drag';
+import {
+  NUDGE_DAYS,
+  barMoveGate,
+  moveAnnouncement,
+  resizeAnnouncement,
+  type GanttBarDrag,
+} from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 
@@ -907,6 +913,48 @@ function GanttRowView({
     enabled: moveGate?.movable === true && geometry !== null,
     onCommit: commitDrag,
   });
+
+  /**
+   * The finish-edge resize (M3-T3).
+   *
+   * `onTsldResize` with `durationDays` alone — no `startDay` — which is ADR-0052 M3's finish-edge
+   * semantic verbatim rather than a new one invented here. The start edge is deliberately NOT
+   * offered on this surface yet: it carries a MODE-dependent meaning (EARLY writes SNET +
+   * durationDays, VISUAL writes visualStart + durationDays), and shipping it without the mode
+   * statement the canvas has beside it would leave a planner unable to tell which of two writes
+   * their drag just made.
+   */
+  const commitResize = useCallback(
+    (deltaX: number) => {
+      if (drag === null || drag === undefined) return;
+      if (geometry === null || barStartIso === null) return;
+      const durationDays = durationDaysForFinishAtX({
+        startIso: barStartIso,
+        anchorIso,
+        pxPerDay,
+        // The bar's right edge is exclusive in pixels and inclusive in dates, so a day is taken off
+        // before converting — without it every resize would read one day long.
+        x: geometry.x + geometry.width + deltaX - pxPerDay,
+      });
+      if (durationDays === activity.durationDays) return;
+      drag.resizeTo(activity.id, durationDays);
+      drag.announce(resizeAnnouncement(activity.name, durationDays));
+    },
+    [
+      drag,
+      geometry,
+      barStartIso,
+      anchorIso,
+      pxPerDay,
+      activity.id,
+      activity.name,
+      activity.durationDays,
+    ],
+  );
+  const barResize = useBarPointerDrag({
+    enabled: moveGate?.movable === true && geometry !== null && !geometry.milestone,
+    onCommit: commitResize,
+  });
   const ghost =
     showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
 
@@ -1127,6 +1175,20 @@ function GanttRowView({
                 />
               ) : null}
             </span>
+            {/* The finish-edge handle. Rendered only when the bar can be resized, so it is never a
+                lit-but-inert grab zone — and never on a milestone, which has no length to change.
+                Eight pixels wide, straddling the edge, which is the smallest zone a pointer finds
+                reliably without eating the neighbouring bar's grab area. Pointer-only by design:
+                the keyboard equivalent is Shift+←/→ on the row (ADR-0052's chord), so this is an
+                additional affordance rather than the only one. */}
+            {moveGate?.movable === true ? (
+              <span
+                aria-hidden="true"
+                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize"
+                style={{ left: geometry.x + geometry.width - 4 }}
+                onPointerDown={barResize.onPointerDown}
+              />
+            ) : null}
           </>
         )}
       </div>
