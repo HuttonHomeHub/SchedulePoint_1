@@ -22,7 +22,9 @@ import {
   type GanttSort,
   type GanttSortKey,
 } from '../layout/row-model';
+import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
 
+import { GanttCell } from './GanttCell';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
@@ -133,6 +135,13 @@ export interface GanttPanelProps {
    * same path as `VITE_SUB_DAY_DURATIONS` off (ADR-0070).
    */
   hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
+  /**
+   * In-grid editing (M2). **Absent ⇒ the read-only grid renders byte-for-byte**, which is what
+   * keeps every pre-existing test of this panel meaningful through the change rather than merely
+   * passing, and what lets the print surface share `GANTT_COLUMNS` without ever growing an editing
+   * path.
+   */
+  editing?: GanttGridEditing | undefined;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -188,6 +197,7 @@ export function GanttPanel({
   zoomLevel = DEFAULT_ZOOM,
   barDateSource,
   hoursPerDayFor,
+  editing,
   loading = false,
   error,
   onSelectActivity,
@@ -525,6 +535,7 @@ export function GanttPanel({
               pxPerDay,
               barDateSource,
               hoursPerDayFor,
+              editing,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -711,6 +722,7 @@ interface GanttRowViewProps {
   pxPerDay: number;
   barDateSource: BarDateSource | undefined;
   hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
+  editing: GanttGridEditing | undefined;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -733,6 +745,7 @@ function GanttRowView({
   pxPerDay,
   barDateSource,
   hoursPerDayFor,
+  editing,
   gridWidth,
   variance,
   showVariance,
@@ -797,55 +810,99 @@ function GanttRowView({
         )}
         style={{ width: gridWidth }}
       >
-        {COLUMNS.map((column, i) => (
-          <div
-            key={column.key}
-            role="gridcell"
-            aria-colindex={i + 1}
-            className={cn(
-              'shrink-0 truncate px-2 text-xs',
-              column.align === 'right' ? 'text-right' : 'text-left',
-            )}
-            style={{
-              width: columnWidth(column),
-              // Indentation belongs to the first column only, so the date columns stay aligned
-              // down the page however deep the hierarchy goes.
-              ...(i === 0 ? { paddingLeft: 8 + depth * 14 } : {}),
-            }}
-          >
-            {i === 0 && hasChildren ? (
-              <button
-                type="button"
-                // The row already carries aria-expanded; this control is its visual affordance,
-                // so it is hidden from the accessibility tree rather than announcing a second,
-                // competing expanded state.
-                aria-hidden="true"
-                tabIndex={-1}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggle(activity.id, expanded === true);
-                }}
-                className="text-muted-foreground hover:text-foreground mr-1 inline-flex align-middle"
+        {COLUMNS.map((column, i) => {
+          const text = column.value(activity, barDateSource, hoursPerDayFor?.(activity));
+          const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
+          // An editable cell only where BOTH are true: the host supplied an editing bundle, and this
+          // column maps to one. Neither implies the other — the print surface has no bundle, and
+          // `code`/`totalFloat` are engine output nobody types.
+          const editable = editing !== undefined && cellKey !== undefined;
+
+          if (editable) {
+            const target = { activityId: activity.id, key: cellKey };
+            const cellOpen = isCellOpen(editing.state, target);
+            return (
+              <GanttCell
+                key={column.key}
+                value={text}
+                // The column AND the row, so edit mode announces what is being edited rather than
+                // "edit text". `activity.name` for every column including the name one, where it is
+                // the value being replaced and still the best identifier the row has.
+                label={`${column.label}, ${activity.name}`}
+                colIndex={i + 1}
+                width={columnWidth(column)}
+                align={column.align}
+                gate={editing.gateFor(cellKey, activity.id)}
+                editing={cellOpen}
+                text={cellOpen && editing.state.status !== 'idle' ? editing.state.text : text}
+                busy={cellOpen && editing.state.status === 'committing'}
+                errorMessage={cellOpen ? editing.errorMessage : null}
+                onBegin={() => editing.begin(target, text)}
+                onChange={editing.change}
+                onCommit={editing.commit}
+                onCancel={editing.cancel}
+                className={cn(column.align === 'right' ? 'text-right' : 'text-left')}
               >
-                {expanded === true ? (
-                  <ChevronDown className="size-3" />
-                ) : (
-                  <ChevronRight className="size-3" />
-                )}
-              </button>
-            ) : null}
-            <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
-              {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
-            </span>
-            {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
+                <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
+                  {text}
+                </span>
+                {offFloatPath && i === 1 ? (
+                  <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
+                ) : null}
+              </GanttCell>
+            );
+          }
+
+          return (
+            <div
+              key={column.key}
+              role="gridcell"
+              aria-colindex={i + 1}
+              className={cn(
+                'shrink-0 truncate px-2 text-xs',
+                column.align === 'right' ? 'text-right' : 'text-left',
+              )}
+              style={{
+                width: columnWidth(column),
+                // Indentation belongs to the first column only, so the date columns stay aligned
+                // down the page however deep the hierarchy goes.
+                ...(i === 0 ? { paddingLeft: 8 + depth * 14 } : {}),
+              }}
+            >
+              {i === 0 && hasChildren ? (
+                <button
+                  type="button"
+                  // The row already carries aria-expanded; this control is its visual affordance,
+                  // so it is hidden from the accessibility tree rather than announcing a second,
+                  // competing expanded state.
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggle(activity.id, expanded === true);
+                  }}
+                  className="text-muted-foreground hover:text-foreground mr-1 inline-flex align-middle"
+                >
+                  {expanded === true ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                </button>
+              ) : null}
+              <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
+                {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
+              </span>
+              {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
                 emphasis alone is precisely the WCAG 1.4.1 defect ADR-0055 exists about. Rendered
                 `sr-only` because the sighted cue is the fade and a visible tag on every off-path
                 row would drown the on-path ones it exists to pick out. */}
-            {offFloatPath && i === 1 ? (
-              <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
-            ) : null}
-          </div>
-        ))}
+              {offFloatPath && i === 1 ? (
+                <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
+              ) : null}
+            </div>
+          );
+        })}
         {showVariance ? (
           <div
             role="gridcell"

@@ -1,3 +1,5 @@
+import type { GanttCellGate } from './cell-gate';
+
 /**
  * **The Gantt grid's cell-edit model — pure, so it can be reasoned about without a browser.**
  *
@@ -199,3 +201,40 @@ export function isCellOpen(state: GanttCellEditState, target: GanttCellTarget): 
 export function isCellDirty(state: GanttCellEditState): boolean {
   return state.status !== 'idle' && state.text !== state.seed;
 }
+
+/**
+ * Everything a row needs to render its cells as editable, bundled.
+ *
+ * **One optional prop rather than eight**, and absent means today's read-only grid renders
+ * byte-for-byte — which is what keeps every pre-existing `GanttPanel` test meaningful through this
+ * change rather than merely passing. It is also the honest shape for the print surface, which
+ * shares `GANTT_COLUMNS` and must never grow an editing path.
+ */
+export interface GanttGridEditing {
+  state: GanttCellEditState;
+  /** Whether the plan has been calculated — the dates are read-only until it has. */
+  hasComputedSchedule: boolean;
+  /** Resolve the gate for one cell. Injected so the row never imports the editor's gating. */
+  gateFor: (key: GanttCellKey, activityId: string) => GanttCellGate;
+  begin: (target: GanttCellTarget, seed: string) => void;
+  change: (text: string) => void;
+  commit: () => void;
+  cancel: () => void;
+  /** The message from the last refusal, or null. */
+  errorMessage: string | null;
+}
+
+/**
+ * The grid column keys that map to an editable cell.
+ *
+ * `percentComplete` is deliberately present in {@link GanttCellKey} and absent here: the grid has
+ * no Progress column yet. Carrying it in the model means adding that column later is a column, not
+ * a re-decision about which permission a progress write needs — and the gate test already covers
+ * it, so the answer cannot quietly change in between.
+ */
+export const GANTT_EDITABLE_COLUMNS: Partial<Record<string, GanttCellKey>> = {
+  name: 'name',
+  duration: 'duration',
+  earlyStart: 'earlyStart',
+  earlyFinish: 'earlyFinish',
+};
