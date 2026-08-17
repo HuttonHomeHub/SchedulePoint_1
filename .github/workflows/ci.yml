@@ -95,6 +95,18 @@ jobs:
       - name: Check the feature-flag retirement schedule
         run: pnpm check:flags
 
+      # A frontend-only epic's recalculation-parity argument (ADR-0034) rests on the CPM engine's
+      # INPUT being unchanged. `engine-import.structural.test.ts` closes one channel — the web client
+      # importing the engine — but the real risk was never that: it is an `apps/api` change quietly
+      # widening the input, which the Gantt-editing plan guarded with a sentence. Opt-in per branch
+      # via FRONTEND_ONLY, so ordinary branches that legitimately touch the API are unaffected;
+      # skipped and said so when unset, because a gate that passes silently when it cannot run is
+      # worse than none (ADR-0088's 135 no-op flag pins).
+      - name: Check the frontend-only boundary
+        run: pnpm check:frontend-only
+        env:
+          FRONTEND_ONLY: ${{ contains(github.head_ref, 'gantt') && '1' || '' }}
+
       # Claims about a DEPENDENCY's internals — file-and-line citations into `better-auth`,
       # `better-call`, `nodemailer`, `zod` and others, several of which whole ADRs rest on. (This
       # comment said "34" until 2026-08-13, when the register held 49: a hard number in a comment
