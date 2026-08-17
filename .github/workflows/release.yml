@@ -51,7 +51,7 @@ jobs:
       # and image publishing are handled explicitly below.
       - name: Create release pull request
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           version: pnpm version-packages
           commit: 'chore(release): version packages'
@@ -68,7 +68,7 @@ jobs:
       # api had already tagged, so the web release was silently skipped (ADR-0027).
       # Per-package tags are monotonic per package, so that collision can't recur.
       #
-      # `hasChangesets` is a changesets/action@v1 output (camelCase). v2 renames it
+      # `hasChangesets` is a changesets/action@v2 output (camelCase). v2 renames it
       # to `has-changesets`, and reading the wrong name yields an EMPTY string — on
       # which `[ "" = "false" ]` is false, so nothing is tagged, nothing is
       # published, and the workflow goes GREEN. The only symptom is that no new
