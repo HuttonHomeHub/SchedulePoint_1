@@ -745,6 +745,47 @@ fixing the two the register named"_). That diff is what surfaces the `barDateSou
 - The **F5 `onTsldResize` risk row closes** — verified lane-free at
   `use-plan-workspace-model.ts:1106-1110`.
 
+### The cell-navigation model, chosen by the accessibility reviewer rather than the implementer
+
+**Row-focus-then-cell-mode, not full APG two-dimensional roving tabindex.** Asked to pick rather
+than leave it open, its reasoning is that only a handful of cells per row are ever editable — this
+is not a dense spreadsheet where every cell is live — so full 2-D arrow navigation would force a
+**second** redefinition of `←/→` on top of the one just settled, for no gain.
+
+- The **row** stays the roving-tabindex unit, unchanged. `↑/↓` move between rows; bare `←/→` keep
+  meaning disclosure; `Alt+←/→` and `Shift+←/→` keep their drag-equivalents. None of that is
+  relitigated.
+- `F2` or `Enter` on a focused row enters **cell mode**, scoped to that row: focus moves to the
+  first editable cell (name → duration → % complete → start → finish, skipping read-only ones).
+- In cell mode, `Tab`/`Shift+Tab` cycle **that row's** editable cells and wrap; `Enter` commits and
+  **exits to row focus** rather than chaining into the next row (chaining reintroduces the ambiguity
+  `Tab` just resolved); `Escape` exits without committing.
+
+The shipped disclosure and row-navigation contract is untouched, which is the property that makes
+this the low-risk choice.
+
+### The axe configuration, named exactly
+
+Every new Gantt-editing journey uses the `e2e-toolbar-fit/fit.spec.ts:598-604` pattern **verbatim**:
+`.withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22a','wcag22aa'])` plus
+`.options({ rules: { 'target-size': { enabled: true } } })`. It is the only configuration in this
+repository verified to surface a target-size failure a plain scan misses — the default ships
+`enabled: false` and the rule is tagged `wcag22aa`, so a narrower tag set would silently pass over
+the ≥24 px hit-zone fix above. "The axe scan is green" has been true and meaningless here before
+(ADR-0090 M5).
+
+### Q2's note is wired to the shared live region, and that is a task
+
+**Caught by the accessibility reviewer re-reading the fold: I said I would adopt this and did not
+write it.** Q2's "say so once per session" note names no `role`, no `aria-live`, and no relationship
+to the shared polite channel (`notice-strip.tsx:63-70`, whose docblock records that a second live
+region duplicating the shared one is a known anti-pattern here). It fires exactly as a coalesced
+recalculation kicks off its own state changes, and this repository has shipped announcement-overwrite
+defects twice — ADR-0079's jump count overwritten by a stale filter re-render, ADR-0080's deletion
+announcement overwritten by the focus it needed. A sighted planner can glance at residual UI; a
+screen-reader user gets one shot. **M2 carries an explicit task wiring the note to the shared polite
+channel with a race test**, landing with M2 rather than after it.
+
 ### Recorded, not actioned
 
 Sub-day precision loss on a bar-end resize (ADR-0070's rounding class on a new surface); `GanttColumn.key`
