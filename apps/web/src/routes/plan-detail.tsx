@@ -1,57 +1,20 @@
 import { Link, useParams } from '@tanstack/react-router';
 
-import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
-import { ActivityCrudDialogs } from '@/components/layout/workspace/activity-crud-dialogs';
-import { PlanDialogs } from '@/components/layout/workspace/plan-dialogs';
+import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { PlanWorkspace } from '@/components/layout/workspace/plan-workspace';
-import {
-  usePlanWorkspaceModel,
-  type LoadedPlan,
-  type PlanWorkspaceModel,
-} from '@/components/layout/workspace/use-plan-workspace-model';
-import { Button } from '@/components/ui/button';
+import { usePlanWorkspaceModel } from '@/components/layout/workspace/use-plan-workspace-model';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  ADVANCED_CONSTRAINTS_ENABLED,
-  CANVAS_WORKSPACE_ENABLED,
-  EARNED_VALUE_ENABLED,
-  FLOAT_CRITICAL_SETTINGS_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
-  NOTES_ENABLED,
-  PROGRAMME_SCHEDULING_ENABLED,
-  PROGRESS_INGESTION_ENABLED,
-  RESOURCE_CURVES_ENABLED,
-  RESOURCE_LEVELLING_ENABLED,
-} from '@/config/env';
-import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
-import { BaselinesPanel, BaselineVarianceSummary } from '@/features/baselines';
-import { EarnedValuePanel } from '@/features/earned-value';
-import { PlanNotesSection } from '@/features/notes';
-import { EditLockBanner, PenReadOnlyNote } from '@/features/plan-lock';
-import {
-  PLAN_STATUS_LABELS,
-  PlanCalendarPicker,
-  PlanEarnedValueSettings,
-  PlanExpectedFinishToggle,
-  PlanExternalRelationshipsSettings,
-  PlanLevellingSettings,
-  PlanRecalcModePicker,
-  PlanScheduleSettings,
-} from '@/features/plans';
-import { ResourceHistogram } from '@/features/resources';
-import {
-  ProgrammeScheduleSection,
-  RecalculateButton,
-  ScheduleSummaryStrip,
-} from '@/features/schedule';
-import { TsldPanel } from '@/features/tsld';
-import { formatCalendarDate } from '@/lib/format-date';
 
 /**
- * A single plan (`/orgs/$orgSlug/plans/$planId`). Route-composed orchestration (queries,
- * gating, TSLD edit callbacks) lives in {@link usePlanWorkspaceModel} so the two layouts
- * share one behaviour. `VITE_CANVAS_WORKSPACE` (ADR-0030) selects the canvas-first
- * {@link PlanWorkspace}; flag-off keeps the legacy stacked page below, byte-for-byte.
+ * A single plan (`/orgs/$orgSlug/plans/$planId`). Route-composed orchestration (queries, gating,
+ * TSLD edit callbacks) lives in {@link usePlanWorkspaceModel}; this route resolves the plan and
+ * hands it to {@link PlanWorkspace}.
+ *
+ * It selected between TWO layouts until `VITE_CANVAS_WORKSPACE` retired (ADR-0088 D3) — the
+ * canvas-first workspace and a ~270-line legacy long-scrolling page, which is now deleted along
+ * with the flag. The model lives where it does because two layouts once shared it; it stays there
+ * because the split between "what this plan needs" and "how it is laid out" is worth keeping
+ * whether or not there is a second layout to prove it.
  */
 export function PlanDetailScreen(): React.ReactElement {
   const params = useParams({ strict: false });
@@ -63,7 +26,7 @@ export function PlanDetailScreen(): React.ReactElement {
   if (planQuery.isPending) {
     // A workspace-shaped skeleton (header + canvas + panel) on the canvas-first path so the load
     // → loaded transition doesn't jump from a small centred box to a full-bleed column (ADR-0030).
-    return CANVAS_WORKSPACE_ENABLED ? (
+    return (
       <div className="flex min-h-0 flex-1 flex-col" aria-busy="true">
         <div className="border-border flex flex-col gap-2 border-b px-4 py-3">
           <div className="bg-muted h-3 w-56 animate-pulse rounded" />
@@ -75,10 +38,6 @@ export function PlanDetailScreen(): React.ReactElement {
         <div className="border-border h-40 shrink-0 border-t px-4 py-3">
           <div className="bg-muted h-4 w-32 animate-pulse rounded" />
         </div>
-      </div>
-    ) : (
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
-        <Spinner label="Loading plan…" />
       </div>
     );
   }
@@ -109,283 +68,5 @@ export function PlanDetailScreen(): React.ReactElement {
 
   const plan = planQuery.data;
 
-  return CANVAS_WORKSPACE_ENABLED ? (
-    <PlanWorkspace model={model} plan={plan} />
-  ) : (
-    <LegacyPlanLayout model={model} plan={plan} />
-  );
-}
-
-/**
- * The legacy long-scrolling plan page — today's surface, kept as the `VITE_CANVAS_WORKSPACE`
- * flag-off fallback. Renders exactly as before; only its data now comes from the shared model.
- */
-function LegacyPlanLayout({
-  model,
-  plan,
-}: {
-  model: PlanWorkspaceModel;
-  plan: LoadedPlan;
-}): React.ReactElement {
-  const { orgSlug, planId } = model;
-  const crumbs: Crumb[] = [
-    { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
-    {
-      label: model.client.data?.name ?? 'Client',
-      to: '/orgs/$orgSlug/clients/$clientId',
-      params: { orgSlug, clientId: model.project.data?.clientId ?? '' },
-    },
-    {
-      label: model.project.data?.name ?? 'Project',
-      to: '/orgs/$orgSlug/projects/$projectId',
-      params: { orgSlug, projectId: plan.projectId },
-    },
-    { label: plan.name },
-  ];
-
-  return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
-      <Breadcrumbs items={crumbs} />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">{plan.name}</h1>
-        {model.canWrite ? (
-          <Button variant="outline" onClick={() => model.setEditing(true)}>
-            Edit plan
-          </Button>
-        ) : null}
-      </div>
-
-      <dl className="mt-4 grid max-w-md grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-        <dt className="text-muted-foreground">Status</dt>
-        <dd>{PLAN_STATUS_LABELS[plan.status]}</dd>
-        <dt className="text-muted-foreground">Planned start</dt>
-        <dd>{formatCalendarDate(plan.plannedStart)}</dd>
-      </dl>
-      {plan.description ? (
-        <p className="text-muted-foreground mt-4 max-w-2xl text-sm">{plan.description}</p>
-      ) : null}
-
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-medium">Schedule</h2>
-        <RecalculateButton orgSlug={orgSlug} planId={planId} canCalculate={model.canRecalc} />
-      </div>
-      <p className="text-muted-foreground mt-1 text-sm">
-        The computed critical path and early/late dates. Recalculate after changing activities,
-        durations, logic, the calendar or any scheduling setting below to bring them up to date.
-      </p>
-      {/* The single "who holds the pen" surface — governs all schedule-model editing below
-          (ADR-0028). Renders nothing when the pen layer is flag-off. */}
-      <div className="mt-3">
-        <EditLockBanner
-          pen={model.pen}
-          {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-        />
-      </div>
-      <div className="mt-3">
-        <PlanCalendarPicker
-          orgSlug={orgSlug}
-          plan={plan}
-          calendars={model.calendars.data ?? []}
-          calendarsLoading={model.calendars.isPending}
-          canEdit={model.canWrite}
-        />
-      </div>
-      {PROGRESS_INGESTION_ENABLED ? (
-        <div className="mt-3">
-          <PlanRecalcModePicker orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
-        </div>
-      ) : null}
-      {ADVANCED_CONSTRAINTS_ENABLED ? (
-        <div className="mt-3">
-          <PlanExpectedFinishToggle orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
-        </div>
-      ) : null}
-      {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
-        <div className="mt-3">
-          <PlanScheduleSettings
-            orgSlug={orgSlug}
-            plan={plan}
-            calendars={model.calendars.data ?? []}
-            canEdit={model.canWrite}
-          />
-        </div>
-      ) : null}
-      {RESOURCE_LEVELLING_ENABLED ? (
-        <div className="mt-3">
-          <PlanLevellingSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
-        </div>
-      ) : null}
-      {INTER_PROJECT_DATES_ENABLED ? (
-        <div className="mt-3">
-          <PlanExternalRelationshipsSettings
-            orgSlug={orgSlug}
-            plan={plan}
-            canEdit={model.canWrite}
-          />
-        </div>
-      ) : null}
-      {EARNED_VALUE_ENABLED ? (
-        <div className="mt-3">
-          <PlanEarnedValueSettings orgSlug={orgSlug} plan={plan} canEdit={model.canWrite} />
-        </div>
-      ) : null}
-      <div className="mt-3">
-        <ScheduleSummaryStrip orgSlug={orgSlug} planId={planId} />
-      </div>
-      {PROGRAMME_SCHEDULING_ENABLED ? (
-        <div className="mt-3">
-          <ProgrammeScheduleSection
-            orgSlug={orgSlug}
-            planId={planId}
-            canRecalc={model.canRecalc}
-            headingLevel={3}
-          />
-        </div>
-      ) : null}
-      {NOTES_ENABLED ? (
-        <div className="mt-3">
-          {/* Nests beside the Schedule block's `h3` siblings (Programme / Baselines), so pass `3`
-              — mounted at the same site as the programme section (ADR-0046). */}
-          <PlanNotesSection
-            orgSlug={orgSlug}
-            planId={planId}
-            canWrite={model.canWriteNotes}
-            headingLevel={3}
-          />
-        </div>
-      ) : null}
-
-      <div className="mt-6">
-        <h3 className="text-base font-medium">Baselines</h3>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Frozen snapshots of the schedule to compare against. The active baseline drives the
-          variance shown in the activities table.
-        </p>
-        <div className="mt-3">
-          <BaselinesPanel orgSlug={orgSlug} planId={planId} canManage={model.canWrite} />
-        </div>
-      </div>
-
-      {EARNED_VALUE_ENABLED ? (
-        <div className="mt-6">
-          <h3 className="text-base font-medium">Earned value</h3>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Cost and schedule performance measured against the active baseline when one exists —
-            SPI, CPI and the forecast at completion, per activity and for the plan as a whole.
-          </p>
-          <div className="mt-3">
-            <EarnedValuePanel
-              orgSlug={orgSlug}
-              planId={planId}
-              activities={model.activities.data ?? []}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {RESOURCE_CURVES_ENABLED ? (
-        <div className="mt-6">
-          <h3 className="text-base font-medium">Resource histogram</h3>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Each resource’s curve-shaped units over time across this plan — a bar chart with a
-            keyboard-navigable data table carrying the same numbers.
-          </p>
-          <div className="mt-3">
-            <ResourceHistogram orgSlug={orgSlug} planId={planId} />
-          </div>
-        </div>
-      ) : null}
-
-      <div className="mt-8">
-        <h2 className="text-lg font-medium">Logic diagram</h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          The Time-Scaled Logic Diagram: activities plotted on the timeline and connected by their
-          logic.
-        </p>
-        {model.penReadOnly ? <PenReadOnlyNote /> : null}
-        <div className="mt-3">
-          <TsldPanel
-            key={planId}
-            activities={model.activities.data ?? []}
-            dependencies={model.dependencies.data ?? []}
-            dataDate={plan.plannedStart}
-            canEdit={model.canEditSchedule}
-            onCreate={model.onTsldCreate}
-            onReposition={model.onTsldReposition}
-            // Bar-end resize (ADR-0052 M2/M3) + lag-anchor drag (M3); armed only under the flag.
-            onResize={model.onTsldResize}
-            onLag={model.onTsldLag}
-            onLink={model.onTsldLink}
-            onAutoArrange={model.onTsldAutoArrange}
-            onOpenLogic={model.onOpenLogic}
-            onRefresh={model.onTsldRefresh}
-            calendar={model.tsldCalendar}
-            todayIso={model.todayIso}
-          />
-        </div>
-      </div>
-
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-medium">Activities</h2>
-        {model.canEditSchedule ? (
-          <CreateActivityButton
-            orgSlug={orgSlug}
-            planId={planId}
-            calendars={model.calendars.data ?? []}
-            calendarsLoading={model.calendars.isPending}
-            calendarsError={model.calendars.isError}
-            {...(model.plan.data?.calendarId == null
-              ? {}
-              : { planCalendarId: model.plan.data.calendarId })}
-            planActivities={model.activities.data ?? []}
-            planActivitiesLoading={model.activities.isPending}
-            planActivitiesError={model.activities.isError}
-          />
-        ) : null}
-      </div>
-      <p className="text-muted-foreground mt-1 text-sm">
-        The activities that make up this plan. Edit their details here; the logic diagram above
-        plots them on the timeline.
-      </p>
-      {model.penReadOnly ? <PenReadOnlyNote /> : null}
-      {model.variance.data ? (
-        <div className="mt-2">
-          <BaselineVarianceSummary summary={model.variance.data.summary} />
-        </div>
-      ) : null}
-      <div className="mt-3">
-        <ActivitiesTable
-          orgSlug={orgSlug}
-          planId={planId}
-          canEditSchedule={model.canEditSchedule}
-          canReportProgress={model.canProgress}
-          editorGating={model.activityEditorGating}
-          onOpenLogic={model.onOpenLogic}
-          onOpenResources={model.onResourcesActivity}
-          onDuplicate={(a) => void model.onDuplicateActivity(a)}
-          calendars={model.calendars.data ?? []}
-          calendarsLoading={model.calendars.isPending}
-          calendarsError={model.calendars.isError}
-          {...(model.plan.data?.calendarId == null
-            ? {}
-            : { planCalendarId: model.plan.data.calendarId })}
-          {...(model.varianceByActivityId
-            ? { varianceByActivityId: model.varianceByActivityId }
-            : {})}
-          {...(model.noteCountByActivityId
-            ? { noteCountByActivityId: model.noteCountByActivityId }
-            : {})}
-        />
-      </div>
-
-      <PlanDialogs model={model} plan={plan} />
-      {/* The host for the shared model's `editorIntent`. The canvas-first workspace has always
-          mounted this; the legacy layout did not, because none of its entry points set an intent —
-          until **Logic** became one (the convergence epic). An entry point that sets state nothing
-          renders is the lit-but-inert dead end the house rule forbids, so both layouts now host the
-          editor. Its other targets (`editActivityId` / `deleteActivityId`) are set only by the
-          canvas selection bar, which this layout does not render, so nothing else changes here. */}
-      <ActivityCrudDialogs model={model} />
-    </div>
-  );
+  return <PlanWorkspace model={model} plan={plan} />;
 }

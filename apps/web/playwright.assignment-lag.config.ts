@@ -70,7 +70,6 @@ export default defineConfig({
               // editor: this suite is about one field, and driving it through a canvas and a tab
               // rail would add a dozen reasons to fail for something the epic is not about. The
               // panel is the SAME component either way (ADR-0062), which is what makes that safe.
-              VITE_CANVAS_WORKSPACE: 'true',
               // The tabbed editor, which is what every shipped bundle contains. This suite pinned
               // it OFF until the dialog-unification epic, proving the field on a surface no
               // operator can produce (ADR-0088 D1). Converting it is cheap for exactly the reason

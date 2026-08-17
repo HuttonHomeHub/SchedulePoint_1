@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
- * the real `PlanDetailScreen` with `CANVAS_WORKSPACE_ENABLED` forced on. (It forced
+ * the real `PlanDetailScreen`. (It forced
  * `CANVAS_TOOLBAR_ENABLED` too until ADR-0088 D3 retired that flag — the toolbar layout is now the
  * only one, so there is nothing to route between.) Proves the layout renders: the two command rows (Look / Do), a
  * full-height chromeless canvas, the activities panel collapsed by default, and the plan actions
@@ -28,7 +28,6 @@ const h = vi.hoisted<{
 
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_WORKSPACE_ENABLED: true,
   // This suite asserts the ADR-0031 toolbar *layout*, not authoring; pin the (now default-on)
   // authoring flag off so the plain Add toggle + inert empty canvas are the subject. Authoring is
   // covered by the tsld-toolbar-authoring / TsldPanel.authoring suites + the flag-on e2e journey.

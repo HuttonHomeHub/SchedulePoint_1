@@ -89,7 +89,6 @@ export default defineConfig({
               // would test a state the product never reaches.
               VITE_CANVAS_MULTI_SELECT: 'true',
               VITE_CANVAS_DIRECT_MANIPULATION: 'true',
-              VITE_CANVAS_WORKSPACE: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               // The undo half: one Ctrl+Z removing a whole paste is one of the seven things this
               // suite must prove, and the accelerator lives behind its own flag.

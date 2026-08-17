@@ -562,6 +562,23 @@ jobs:
             apps/web/playwright-report-designed-chrome/
             apps/web/playwright-report-gantt/
             apps/web/playwright-report-audit/
+            # Added 2026-08-17 (devops review of the flag-cleanup pass). These eleven steps already
+            # existed and already ran; their reports were simply never collected, and
+            # `if-no-files-found: ignore` meant nothing said so. A red run in any of them produced
+            # no artefact to debug from — which is the same class of silent gap as the suites
+            # below, one layer out: the list is prose, and `check-flags.mjs`'s own docblock names
+            # prose as what it cannot cover.
+            apps/web/playwright-report-calendar-shifts/
+            apps/web/playwright-report-sub-day/
+            apps/web/playwright-report-assignment-lag/
+            apps/web/playwright-report-float-paths/
+            apps/web/playwright-report-search-nav/
+            apps/web/playwright-report-multi-select/
+            apps/web/playwright-report-copy-paste/
+            apps/web/playwright-report-toolbar-fit/
+            apps/web/playwright-report-workspace-chrome/
+            apps/web/playwright-report-staff/
+            apps/web/playwright-report-public/
           if-no-files-found: ignore
           retention-days: 7
 

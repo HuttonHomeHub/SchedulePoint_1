@@ -98,6 +98,15 @@
       "retiredOn": "2026-08-11",
       "batch": "batch-9",
       "note": "Its deferral trigger fired: `epic-touch: activity editor`. The register was right that retiring it ALONE collected none of the payoff — the legacy monolith would have survived as the create surface — so the dialog-unification epic closed all ten create/edit divergences and extracted eleven shared field groups first, and this retirement lands inside that epic rather than as a flag chore. Both flag-off Playwright harnesses (sub-day, assignment-lag) were CONVERTED to the shipping surface before the flag went (ADR-0084 D5), which is the ADR-0084 batch-1 lesson applied in advance. Both derived children lose their conjunct: the stranding it guarded — an editor intent with no editor to open — is now unreachable by construction."
+    },
+    {
+      "flag": "VITE_CANVAS_WORKSPACE",
+      "constant": "CANVAS_WORKSPACE_ENABLED",
+      "enabled": "2026-08-03",
+      "enabledSource": "floor",
+      "retiredOn": "2026-08-17",
+      "batch": "batch-12",
+      "note": "ADR-0088 D3 — the estate's LAST Class A flag, retired in the dedicated flag-cleanup pass the product owner called for on 2026-08-12. Its flag-off branch was `LegacyPlanLayout`, a ~270-line long-scrolling second implementation of the plan surface that no shipped bundle could select (ADR-0088 D1); `plan-detail.tsx` goes 391 lines to 67. `CANVAS_AUTHORING_ENABLED` loses its `&& CANVAS_WORKSPACE_ENABLED` conjunct — a derived child outliving its parent, ADR-0084 D4's harmless direction. THE COST WAS THE HARNESSES, NOT THE CODE: seven configs pinned this OFF and all 27 of their specs needed conversion — base 8 of 17, activity-editor 11, edit 3, sub-day 2, and one each for notes, programme and assignment-lag. Nothing was deleted as redundant and nothing had the legacy layout as its SUBJECT; the only suite that ever did went with VITE_CANVAS_TOOLBAR. Two recurring facts became one shared `e2e/workspace.ts`: expanding the collapsed activities panel (wait on the panel TOGGLE — `DataTable` renders no `<table>` at all when there are no rows, and `isVisible()` is a snapshot rather than a wait), and reading the computed schedule from the API instead of the `ScheduleSummaryStrip` label, which is now inside a band-floored toolbar chip that legitimately withholds itself at these viewports. ONE ASSERTION WAS DELETED RATHER THAN CONVERTED, and it is the derivation biting: `tsld.spec.ts` asserted 'Recalculate the schedule to plot…' before recalculating, and with authoring now unconditional the canvas is live from the first activity (ADR-0032), so that state no longer exists. Three unit tests mocked `CANVAS_WORKSPACE_ENABLED: true`; those keys are deleted rather than left inert, which is the residue class the architecture review flagged — a stale key in a `vi.mock` factory still compiles and still passes. The pen pins in base/programme/notes are untouched: a separate question, TECH_DEBT #121. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     }
   ],
   "flags": {
@@ -202,7 +211,6 @@
       "enabled": "2026-08-03",
       "enabledSource": "floor",
       "batch": "batch-13",
-      "derivedFrom": "CANVAS_WORKSPACE_ENABLED",
       "class": "B",
       "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4.",
       "note": "Was derived from CANVAS_TOOLBAR_ENABLED as well until ADR-0088 D3 retired that flag. A retired parent drops its conjunct (ADR-0084 D4): nobody can turn off what no longer exists."
@@ -308,18 +316,6 @@
       "batch": "batch-8",
       "class": "B",
       "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_CANVAS_WORKSPACE": {
-      "constant": "CANVAS_WORKSPACE_ENABLED",
-      "enabled": "2026-08-03",
-      "enabledSource": "floor",
-      "batch": "batch-12",
-      "deferredUntil": {
-        "trigger": "flag-cleanup pass",
-        "debt": "#122",
-        "reason": "PARKED BY THE PRODUCT OWNER 2026-08-12: every flag stays ON for now and the estate is to be cleaned up in one dedicated pass rather than a flag at a time, so the epic-touch trigger this ADR fired is superseded by that decision. The measurement stands and is why the pass is worth batching. MEASURED 2026-08-12 (ADR-0090 M6, docs/specs/workspace-layout/m6-harness-conversion.md). Seven flag-off Playwright configs pin this OFF. ALL SEVEN are now probed and all seven FAIL — 27 specs: base 8 of 17 (the other 9 pass), activity-editor 11, edit 3, sub-day 2, notes 1, programme 1, assignment-lag 1. The last two were probed 2026-08-14, completing the table. CORRECTED 2026-08-14: this field, and ADR-0090 M6, both said all SEVEN were probed and 27 specs fail. They were not. m6-harness-conversion.md 2 marks activity-editor and base as _unprobed_ and closes 'do not infer their result from these five' — and the remaining 19 (base 8 of 17, activity-editor 11) are SPEC COUNTS derived by reading, not probe results. They were the two largest suites, so the headline number rested mostly on an inference. ADR-0076 Class 3, in the one field that records why this flag is deferred. The 2026-08-14 probes then found the inference was numerically RIGHT (8 and 11 exactly) — which is recorded rather than glossed, because being right is not the same as having measured and a correct guess does not retrospectively validate the method. Every failure is a moved control (locator timeout, visibility, value), not a crash: conversions, not rewrites. Not one is a configuration edit; every one needs new selectors against the surviving surface. Three of them (base, programme, notes) additionally pin VITE_TSLD_EDITING and VITE_PLAN_EDIT_LOCK off DELIBERATELY to stay pen-free, so converting those must first establish that the journey works pen-free against the surviving workspace or it silently changes what the journey tests. ADR-0090 fired the epic-touch trigger and took the milestone-s own stated off-ramp on this number rather than holding M1-M5 behind it; the trigger is re-recorded here rather than left to rot. D5 still forbids retiring before the coverage is replaced. Note sub-day and assignment-lag harness BOTH deferred survivors, so converting them is shared work whenever either is taken up."
-      },
-      "class": "A"
     },
     "VITE_COST_ACCRUAL": {
       "constant": "COST_ACCRUAL_ENABLED",
@@ -543,10 +539,8 @@
   },
   "$schema-note": "enabledSource: \"docblock\" = the date the flag itself records; \"floor\" = the earliest date this repository can prove, used for the fourteen flags whose real flip is recorded NOWHERE (ADR-0084). A floor can only make a flag look YOUNGER than it is, so retiring on one is conservative — never premature. It is not corrected by guessing.",
   "sizing": "A batch is sized by BLAST RADIUS. The enablement cohort only sets the EARLIEST date a flag may fall on (enabled + horizonDays); it does not set the batch. Re-spaced 2026-08-09 after the original cohort-only split put 17 flags and ~75 production files into a batch due in nine days — the largest batch on the second-earliest date.\nMEASURED per flag: production files referencing the constant, and the number of playwright*.config.ts files that PIN it. The pin count is the one nobody had: VITE_CANVAS_AUTHORING is pinned in 14 configs and VITE_SCHEDULING_MODES in 13, and CI proved a single pinned config costs six specs to convert, not a line.\nESTIMATED, and labelled as such: weight = files + 3x pins and a cap of 45 per batch. The cadence was fortnightly and is WEEKLY from batch-2 (product owner, 2026-08-09), which finishes the queue 2026-12-01 rather than 2027-03-23. Note what that does to the estimate: the batch COMPOSITION was fitted against a fortnight and now has a week, so the cap is the part now under test — halving the cadence doubles the rate of work without re-sizing a single batch. The weighting, the cap and the cadence all come from ONE completed retirement, so they are a hypothesis rather than a plan. `check:flags` tests it for us — if batch 2 takes longer than its week, the next batch date fails and forces a re-fit against a second data point. Re-fit it then; do not defend it.",
-  "classA": {
-    "VITE_CANVAS_WORKSPACE": "Selects <PlanWorkspace> or <LegacyPlanLayout>, the pre-ADR-0030 stacked plan-detail page. Harnessed by seven configs — the largest conversion cost in the estate, and the register carried NO note for it until ADR-0088 D5."
-  },
-  "classACap": 1,
+  "classA": {},
+  "classACap": 0,
   "$keep-note": "CORRECTED 2026-08-14. All 52 keep reasons read \"Guard-only: ONE LINE of production code, so there is no second product to maintain\" — a factual claim, asserted 52 times, that nobody had checked and that is false for every flag sampled: NOTES_ENABLED has 8 non-test production files, SCHEDULING_MODES_ENABLED 8, CANVAS_LENSES_ENABLED 4. ADR-0088 D4s CONCLUSION survives untouched — the shape is still a guard — but the sentence defending it was wrong, so it now states the SHAPE argument (gates a capability vs selects between two implementations) rather than a line count nobody measured. Found by an architecture review of the flag-cleanup pass. The line count was never the argument; it was a proxy for it, and a proxy that is false is worse than no proxy.",
   "$classA-note": "ADR-0088 D2/D3. Authoritative — `scripts/detect-alternative-surfaces.mjs` is a TRIPWIRE that asserts `detected subset-of classA`, never the converse, because it can only under-detect (a flag branching by early return, by `const B = FLAG ? X : Y`, or through an indirection is invisible to it and is legitimately curated by hand). `classACap` is the MEASURED count and ratchets DOWN after each retirement; raising it needs an ADR.",
   "deferralTriggers": [

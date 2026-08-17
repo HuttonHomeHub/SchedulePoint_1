@@ -126,23 +126,6 @@ export const TSLD_EDITING_ENABLED = flagDefaultOn(import.meta.env.VITE_TSLD_EDIT
 export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
 
 /**
- * Canvas-first plan workspace (ADR-0030, spec `docs/specs/canvas-first-plan-workspace.md`).
- * **ON by default** now that the M5 quality gates are green — the a11y/ux/perf review findings
- * are folded in, a flag-on Playwright journey is wired into CI, and the 538 unit tests pass.
- * That journey was `e2e-workspace/workspace.spec.ts` (`test:e2e:workspace`) until ADR-0088 D3
- * deleted it with `VITE_CANVAS_TOOLBAR`; the workspace-ON surface is now driven by every other
- * flag-on harness — 14 configs pin `VITE_CANVAS_WORKSPACE: 'true'`, `playwright.toolbar.config.ts`
- * foremost, and the splitter assertion unique to the old suite was ported into `e2e-toolbar`.
- * When on, opening a plan renders the TSLD canvas as the primary workspace surface (filling the
- * shell's workspace region) with the activity table as a draggable, collapsible bottom panel.
- * Set `VITE_CANVAS_WORKSPACE=false` to fall back to the legacy long stacked plan-detail page,
- * byte-for-byte (emergency rollback / opt-out).
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_WORKSPACE);
-
-/**
  * Canvas-first plan authoring (ADR-0032, spec `docs/specs/canvas-first-authoring.md`). **ON by
  * default** now that M1–M5 shipped and their quality gates are green — the a11y/ux/component/perf
  * review findings are folded in, the flag-on Playwright journey (`e2e-authoring/authoring.spec.ts`
@@ -165,8 +148,7 @@ export const CANVAS_WORKSPACE_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
  *
  * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */
-export const CANVAS_AUTHORING_ENABLED =
-  flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING) && CANVAS_WORKSPACE_ENABLED;
+export const CANVAS_AUTHORING_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING);
 
 /**
  * Scheduling modes & a de-overloaded plan start (ADR-0033, spec

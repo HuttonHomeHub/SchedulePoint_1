@@ -7,21 +7,23 @@ import { describe, expect, it } from 'vitest';
 /**
  * **Every host that mounts the create affordance gates it on the same write right.**
  *
- * `CreateActivityButton` is rendered from two places — `components/layout/workspace/
- * activity-bottom-panel.tsx` (the layout that ships) and `routes/plan-detail.tsx` (the legacy
- * stacked layout, reachable only with `VITE_CANVAS_WORKSPACE` off). Each decides for itself whether
- * a reader may see it, which is the arrangement this repository keeps being bitten by: ADR-0080
- * shipped a bulk bar wired into one host and not the layout its flag selects, ADR-0064 §7 found the
- * same pattern applied to a control and not its neighbour four times over. A gate is only as good as
- * its least careful mount site.
+ * `CreateActivityButton` is rendered from `components/layout/workspace/activity-bottom-panel.tsx`.
+ * It was rendered from `routes/plan-detail.tsx` too until the legacy stacked layout was deleted with
+ * `VITE_CANVAS_WORKSPACE` (ADR-0088 D3), and **two hosts is the arrangement this file was written
+ * for**: each decided for itself whether a reader may see the control, which is what this repository
+ * keeps being bitten by — ADR-0080 shipped a bulk bar wired into one host and not the layout its
+ * flag selects, ADR-0064 §7 found the same pattern applied to a control and not its neighbour four
+ * times over. A gate is only as good as its least careful mount site.
  *
  * The **behaviour** — a Contributor sees no create button — is asserted through the real route
  * composition in `routes/plan-detail.gating.test.tsx`, which exercises the shipped layout with the
- * Planner cases beside it asserting the same control present. That test cannot reach the legacy
- * layout: it lives behind a default-on flag, and pinning it off here would create a new flag-off
- * harness for a branch no shipped bundle can produce (ADR-0088) — one that a Class A retirement
- * would then have to delete. So the second site is held structurally instead, which has the
- * side-benefit of covering a **third** host the day someone adds one.
+ * Planner cases beside it asserting the same control present.
+ *
+ * **So why keep this now that there is one host?** Because the risk it guards is the SECOND one
+ * arriving, not the second one existing: the file it was written about is gone, and the next host
+ * anybody adds is exactly the case the register's own history says goes ungated. The floor below is
+ * therefore 1 rather than 2 — enough to prove the walker found something, which is the other thing
+ * it was doing — and the gate assertion covers every site there turns out to be.
  *
  * Source text rather than types, for the `field-gate.structural.test.ts` reason: the compiler cannot
  * tell a permission conditional from any other conditional. Only the expression distinguishes them.
@@ -62,10 +64,15 @@ function mountSites(): { file: string; gated: boolean }[] {
 describe('the create-activity affordance', () => {
   const sites = mountSites();
 
-  it('is mounted in more than one place, so a passing scan means something', () => {
-    // A floor, not a count: the assertion below says nothing at all if the walker found nothing,
-    // and the whole risk here is a second host drifting from the first.
-    expect(sites.length).toBeGreaterThanOrEqual(2);
+  it('is mounted somewhere, so a passing scan means something', () => {
+    // A floor, not a count: the assertion below says nothing at all if the walker found nothing —
+    // a broken regex or a moved directory would otherwise read as "every site is gated".
+    //
+    // It was 2 until `VITE_CANVAS_WORKSPACE` retired and took the legacy layout's mount site with
+    // it. Lowering it is the honest move rather than a concession: the floor existed because there
+    // were two hosts to drift apart, and now there is one. What this file still guards is the next
+    // host arriving ungated, and the gate assertion below does that for however many there are.
+    expect(sites.length).toBeGreaterThanOrEqual(1);
   });
 
   it('is gated on the plan’s write right at every one of them', () => {

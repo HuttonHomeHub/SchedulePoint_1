@@ -2008,8 +2008,19 @@ double-submit apart from a slow one. Left open rather than guessed at.
 
 ## 122. Two Class A flags are deferred, and the payoff is not where the register said it was
 
-**Half closed 2026-08-11**: `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE`
-remains open with five harnesses left rather than seven.
+**CLOSED 2026-08-17.** `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089 (2026-08-11);
+`VITE_CANVAS_WORKSPACE` retired in the dedicated flag-cleanup pass the product owner called for.
+`classACap` is now **0** — the estate has no alternative-surface flags left, and every one of the 52
+that remain is a one-line guard formally kept by ADR-0088 D4.
+
+The closing measurement, for the record, because this row's own numbers were wrong twice. All seven
+flag-off harnesses were finally probed — two had only ever been inferred, see the correction in
+`docs/specs/workspace-layout/m6-harness-conversion.md` — and all 27 specs were converted. **None was
+deleted as redundant and none had the legacy layout as its subject**; the only suite that ever did
+went with `VITE_CANVAS_TOOLBAR`. `plan-detail.tsx` goes 391 lines to 67. The line below said "five
+harnesses left rather than seven" and corrected itself twenty lines later; both are history now.
+
+The original entry follows, kept because its estimates are what those numbers correct.
 
 **Parked by the product owner 2026-08-12**, after the measurement below was put to them: **every
 flag stays ON for now, and the estate is cleaned up in one dedicated pass** rather than a flag at a
