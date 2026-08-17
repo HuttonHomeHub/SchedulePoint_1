@@ -62,8 +62,34 @@ export async function releasePen(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
 }
 
+/**
+ * Make the activities table reachable.
+ *
+ * The panel is **collapsed by default** (ADR-0030 — the canvas gets the room), and returns to that
+ * default on every load. Two traps live behind these three lines, both paid for by a failing run
+ * during the conversion rather than found by reading:
+ *
+ * 1. `DataTable` renders its empty state **instead of** a `<table>` when there are no rows
+ *    (`src/components/ui/data-table.tsx:86`), so waiting for the table is wrong on an empty plan —
+ *    which is exactly when this first runs.
+ * 2. `isVisible()` is a snapshot, not a wait. Called straight after a navigation or reload it
+ *    answers "no" because the app has not painted, the expand is skipped, and the missing table
+ *    then reads exactly like the write under test having failed to persist.
+ *
+ * So it waits on the panel **toggle**, which is present in one state or the other whenever the
+ * workspace has rendered. Idempotent.
+ */
+export async function showActivities(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: 'Expand activities panel' });
+  const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+  await expect(expand.or(collapse).first()).toBeVisible();
+  if (await expand.isVisible()) await expand.click();
+  await expect(collapse).toBeVisible();
+}
+
 /** Add an activity to the open plan's activities table. Requires the pen. */
 export async function addActivity(page: Page, name: string): Promise<void> {
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name').fill(name);
