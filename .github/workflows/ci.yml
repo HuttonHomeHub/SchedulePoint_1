@@ -23,6 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # `check:frontend-only` diffs `origin/main...HEAD`, and a three-dot diff needs a merge
+          # base — which a shallow clone does not have. The default depth-1 checkout made that
+          # check fail with "unknown revision" the first time it ever ran for real, because the
+          # branch-name predicate it replaced had never let it run at all. Full history here, and
+          # an explicit fetch of `main` below, because checkout fetches only the ref under test.
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -107,6 +114,9 @@ jobs:
       # the gate written to protect this epic was inert for the whole of it. A gate that cannot fail
       # is ADR-0088's 135 no-op flag pins one costume along — recorded in the script's docblock
       # rather than quietly corrected.
+      - name: Fetch the base branch for diff-based checks
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+
       - name: Check the frontend-only boundary
         run: pnpm check:frontend-only
 
