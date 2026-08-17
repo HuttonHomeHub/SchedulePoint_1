@@ -68,19 +68,35 @@ jobs:
       # api had already tagged, so the web release was silently skipped (ADR-0027).
       # Per-package tags are monotonic per package, so that collision can't recur.
       #
-      # NOTE: `hasChangesets` is a changesets/action@v1 output (camelCase). v2
-      # renames it to `has-changesets`; update this expression when bumping the
-      # major, or the gate silently reads empty and releases stop tagging.
+      # `hasChangesets` is a changesets/action@v1 output (camelCase). v2 renames it
+      # to `has-changesets`, and reading the wrong name yields an EMPTY string — on
+      # which `[ "" = "false" ]` is false, so nothing is tagged, nothing is
+      # published, and the workflow goes GREEN. The only symptom is that no new
+      # image ever reaches GHCR while the host keeps serving the old one, and the
+      # "Version Packages" PR carries no checks by design (§11), so nothing else
+      # would catch it either.
+      #
+      # This was a NOTE telling the next person to update the expression when they
+      # bump the major. Dependabot has now opened exactly that PR (#323), which is
+      # the moment to notice that a comment is not a gate (ADR-0058): the assertion
+      # below turns a silent no-release into a loud failure, so the upgrade breaks
+      # visibly and at the right moment rather than quietly and later.
       - name: Determine release
         id: meta
         run: |
+          HAS_CHANGESETS='${{ steps.changesets.outputs.hasChangesets }}'
+          if [ "$HAS_CHANGESETS" != "true" ] && [ "$HAS_CHANGESETS" != "false" ]; then
+            echo "::error::changesets/action gave hasChangesets='$HAS_CHANGESETS' (expected 'true' or 'false')." >&2
+            echo "::error::v2 renames this output to 'has-changesets'. Update this step for the new name — otherwise the release gate reads empty and silently stops tagging and publishing." >&2
+            exit 1
+          fi
           API_VERSION="$(node -p "require('./apps/api/package.json').version")"
           WEB_VERSION="$(node -p "require('./apps/web/package.json').version")"
           echo "api_version=$API_VERSION" >> "$GITHUB_OUTPUT"
           echo "web_version=$WEB_VERSION" >> "$GITHUB_OUTPUT"
           PUBLISH_API=false
           PUBLISH_WEB=false
-          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ]; then
+          if [ "$HAS_CHANGESETS" = "false" ]; then
             git rev-parse "refs/tags/api-v$API_VERSION" >/dev/null 2>&1 || PUBLISH_API=true
             git rev-parse "refs/tags/web-v$WEB_VERSION" >/dev/null 2>&1 || PUBLISH_WEB=true
           fi
