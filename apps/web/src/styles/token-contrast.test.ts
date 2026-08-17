@@ -131,6 +131,18 @@ const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: st
   // which sits on the page fill rather than a field fill.
   ['--field', '--input', 'the outline of a text field against its own fill'],
   ['--background', '--input', 'the outline of an outline-variant control on the surface'],
+  // **The Gantt's dependency arrows (M4).** A link line is not decoration: it is the only graphical
+  // carrier of "this activity waits for that one", so 1.4.11 applies and the decorative-border
+  // exemption above does not. Asserted BEFORE the CSS that draws them exists — the ADR-0083
+  // ordering, and the same discipline the read-only field pair took, because a pair added after the
+  // fact is a pair that shipped unchecked.
+  //
+  // Two pairs, not one. A link crosses the chart's own ground AND, when it passes behind a row the
+  // reader has selected, the accent fill — and `--accent` is a different value from `--background`
+  // in every theme, so a line validated only against the page would be the thing that vanishes on
+  // exactly the row somebody is looking at.
+  ['--background', '--muted-foreground', 'a dependency arrow against the chart ground'],
+  ['--accent', '--muted-foreground', 'a dependency arrow crossing the selected row'],
 ];
 
 describe.each(THEME_SELECTORS)('%s', (theme) => {
