@@ -911,6 +911,40 @@ queue" while every declared shape number was correct. So M0-T1 still has to asse
 whatever it seeds — link density and float distribution — rather than trusting the count. That was
 right for the wrong reason.
 
+### M0-T1 R5 — MEASURED, and it settles the culling question
+
+Run at **1646×1097** (the product owner's Surface Pro), on `scaleSpec` fixtures seeded through the
+public REST API, 39 rendered rows, sweeping every window position down the plan:
+
+| fixture                           | sort    | at-least-one-endpoint (adopted) p95 / max | span-crosses (rejected) p95 / max |
+| --------------------------------- | ------- | ----------------------------------------- | --------------------------------- |
+| 220 activities, 320 links         | default | 70 / 70                                   | 70 / 70                           |
+|                                   | Float   | 70 / 70                                   | 70 / 70                           |
+|                                   | Start   | 70 / 70                                   | 75 / 75                           |
+| **2,160 activities, 3,200 links** | default | **74 / 83**                               | 75 / 83                           |
+|                                   | Float   | **74 / 80**                               | 75 / 81                           |
+|                                   | Start   | **71 / 82**                               | **88 / 93**                       |
+
+**The adopted rule is bounded by the viewport, and the measurement shows it rather than asserting
+it.** Ten times the plan — 220 → 2,160 activities — moves the p95 from 70 to 71–74. It does not move
+with the sort order either. That is the property the architecture review argued for, now with a
+number behind it: the count is the summed degree of the rendered rows, so neither plan size nor
+ordering can inflate it.
+
+**The rejected rule does grow, and the Start sort is where it shows.** 88 p95 / 93 max against the
+adopted rule's 71 / 82 on the same window — a fifth more paths for links whose endpoints are both
+off-screen, which render as bare verticals answering nothing. At 220 activities the two rules were
+within 5 of each other and that similarity was not evidence; at 2,160 they separate, and they
+separate exactly where predicted (an order that scatters related work).
+
+**Both sit far below the 300 threshold**, so M4's bounded strategy will not bind at this shape. The
+cap still ships unconditionally (B2): R5 measures one generator's idea of a programme, and a denser
+customer plan must meet a cap rather than meet nothing.
+
+Worth noting for the record: the fixture measured **3,200 links for 2,160 activities**, which matches
+ADR-0073 C3.0's independently measured 3,200-per-2,000 almost exactly. The arithmetic the plan
+reasoned with was sound; it simply had not been run.
+
 ### Recorded, not actioned
 
 Sub-day precision loss on a bar-end resize (ADR-0070's rounding class on a new surface); `GanttColumn.key`
