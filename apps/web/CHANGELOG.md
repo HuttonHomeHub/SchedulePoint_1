@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.90.1
+
+### Patch Changes
+
+- [#322](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/322) [`0de139d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0de139d09f332f3089b0889b64260cf3a5f86b22) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Retire `VITE_CANVAS_WORKSPACE`, the last feature flag that selected between two different plan
+  surfaces.
+
+  **No user-visible change.** Every published image already compiled this flag on — a `VITE_` flag is
+  inlined at build time and the release pipeline passes none, so the branch being deleted was
+  unreachable in any shipped bundle (ADR-0088 D1). What goes is the ~270-line legacy long-scrolling
+  plan page it selected when off, and the branch that chose between them.
+
 ## 0.90.0
 
 ### Minor Changes
