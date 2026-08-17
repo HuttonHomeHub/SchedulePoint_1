@@ -31,6 +31,19 @@ import { describe, expect, it } from 'vitest';
  * drags underneath a banner reading "editing is paused". The row below is therefore `pending`, with
  * the milestone that must flip it named — a deliberately dated obligation rather than a comment
  * somebody may or may not read.
+ *
+ * **`hoursPerDayFor` is the next candidate, and is deliberately NOT a row yet.** M2-T1 gave the
+ * Gantt a Duration column, whose day↔minute factor (ADR-0068) is resolved once in
+ * `plan-workspace-toolbar.tsx` and passed only there — the canvas renders no duration text, so it
+ * has nothing to feed. That becomes a genuine plan fact at **M3**, when a canvas drag and a Gantt
+ * duration cell both parse a typed `4h` and two spellings of "how long is a day here" would make
+ * one plan mean two things.
+ *
+ * It is not added as `pending` today because it would **fail**: that branch asserts a fact reaching
+ * the Gantt has also reached the canvas, and this one legitimately has not. Weakening the rule to
+ * admit it would be fitting the gate to the code — the rule was written for `barDateSource`, whose
+ * defect was a *second derivation*, and there is only one here. Naming the obligation in prose is
+ * the weaker instrument and is labelled as such; M3 is when it becomes expressible.
  */
 
 const WORKSPACE = join(

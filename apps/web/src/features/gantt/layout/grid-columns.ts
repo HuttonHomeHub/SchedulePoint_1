@@ -2,6 +2,14 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 
 import type { GanttSortKey } from './row-model';
 
+// From the domain module that owns the activity, the established shape here — `row-model.ts` already
+// reaches into `@/features/wbs` for `deriveWbsGroups`, whose docblock calls itself "the ONE
+// definition" consumed by both the Gantt and the canvas band. A second duration read-out is exactly
+// the drift `bar-dates.ts` was created to end, one field along: this formatter already carries
+// ADR-0070 M4's rule that a whole-day value prints the row's OWN `durationDays` rather than
+// re-deriving it, and a fresh implementation would have re-learnt that by shipping `0 d`.
+import { formatDurationRead } from '@/features/activities/model/duration-field';
+import { isMilestoneType } from '@/features/activities/schemas/activity-schemas';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -29,7 +37,7 @@ export interface GanttColumn {
    * cell printed January beside a bar drawn in February — the contradiction visible on one screen
    * (`docs/TECH_DEBT.md` #135).
    */
-  value: (activity: ActivitySummary, source?: BarDateSource) => string;
+  value: (activity: ActivitySummary, source?: BarDateSource, hoursPerDay?: number) => string;
 }
 
 /**
@@ -41,6 +49,27 @@ export interface GanttColumn {
 export const GANTT_COLUMNS: readonly GanttColumn[] = [
   { key: 'code', label: 'Code', value: (a) => a.code ?? '—' },
   { key: 'name', label: 'Activity', value: (a) => a.name },
+  {
+    key: 'duration',
+    label: 'Duration',
+    align: 'right',
+    /**
+     * The field this epic centres on (spec F6), and the Gantt had no column for it at all — a
+     * planner comparing two bars had to open each activity to learn which was longer.
+     *
+     * `hoursPerDay` is the activity's own calendar factor (ADR-0068), resolved by the HOST and
+     * passed down, never looked up here: a pure column module has no business fetching calendars,
+     * and ADR-0089 D2b makes host-resolution the rule for a cross-scope fact. Absent, the read-out
+     * degrades to whole working days — the same code path as `VITE_SUB_DAY_DURATIONS` off, so the
+     * rollback contract and the not-yet-loaded state cannot rot separately (ADR-0070).
+     *
+     * A milestone reads an em dash, not `0 d`. It genuinely has no duration, and ADR-0070 M4
+     * records `0 d` being printed for real sub-day work — so the two states looked identical on the
+     * one screen listing a plan's work. Printing `0 d` here would re-create that on a second screen.
+     */
+    value: (a, _source, hoursPerDay) =>
+      isMilestoneType(a.type) ? '—' : formatDurationRead(a, hoursPerDay),
+  },
   {
     key: 'earlyStart',
     label: 'Start',

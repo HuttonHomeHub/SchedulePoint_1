@@ -77,6 +77,8 @@ export interface GanttPrintSurfaceProps {
    * nobody in that room can compare it against the diagram.
    */
   barDateSource?: BarDateSource;
+  /** The activity's working-hours factor for the Duration column — host-resolved, as on screen. */
+  hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
 }
 
 export function GanttPrintSurface({
@@ -84,6 +86,7 @@ export function GanttPrintSurface({
   subtitle,
   activities,
   barDateSource,
+  hoursPerDayFor,
   varianceByActivityId,
 }: GanttPrintSurfaceProps): React.ReactElement {
   // Printing is a snapshot, so the document takes the default order rather than whatever the
@@ -180,6 +183,7 @@ export function GanttPrintSurface({
                     anchorIso={anchor}
                     pxPerDay={pxPerDay}
                     barDateSource={barDateSource}
+                    hoursPerDayFor={hoursPerDayFor}
                     chartPx={chartPx}
                     variance={varianceByActivityId?.get(rowId(row))}
                     showVariance={showVariance}
@@ -209,6 +213,7 @@ interface PrintRowProps {
   anchorIso: string;
   pxPerDay: number;
   barDateSource: BarDateSource | undefined;
+  hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
   chartPx: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -219,6 +224,7 @@ function PrintRow({
   anchorIso,
   pxPerDay,
   barDateSource,
+  hoursPerDayFor,
   chartPx,
   variance,
   showVariance,
@@ -237,7 +243,7 @@ function PrintRow({
           style={i === 0 ? { paddingLeft: 4 + depth * 10 } : undefined}
         >
           <span className={activity.type === 'WBS_SUMMARY' ? 'gantt-print-summary' : undefined}>
-            {column.value(activity, barDateSource)}
+            {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
           </span>
         </td>
       ))}

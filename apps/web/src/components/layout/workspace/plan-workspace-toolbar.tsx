@@ -1,3 +1,4 @@
+import type { ActivitySummary } from '@repo/types';
 import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -75,6 +76,7 @@ import {
   useTsldToolbarContext,
   type PlanDialogKind,
 } from '@/features/tsld/toolbar/use-tsld-toolbar-context';
+import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
@@ -454,6 +456,30 @@ export function ToolbarPlanWorkspace({
     ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
     : 'early';
 
+  /**
+   * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in
+   * `GanttPanel`.
+   *
+   * That panel has never known what a calendar is, and handing it the list so it could `.find()` per
+   * row would make a display component a consumer of the calendar query — ADR-0089 D2b's rule for a
+   * cross-scope fact is that the host resolves it and passes a plain value.
+   *
+   * One derivation, deliberately, even though only one host consumes it today: the canvas needs the
+   * same factor the moment M3's drag parses a typed duration, and two spellings of "how long is a
+   * day here" would disagree about what `4h` means in two views of one plan — `barDateSource` one
+   * field along. `host-parity.structural.test.ts` names this as its next candidate row and cannot
+   * express it yet, because its `pending` rule asserts a fact reaching the Gantt has also reached
+   * the canvas, and this one legitimately has not.
+   */
+  const hoursPerDayFor = useCallback(
+    (activity: ActivitySummary): number | undefined =>
+      effectiveHoursPerDay(model.calendars.data ?? [], {
+        activityCalendarId: activity.calendarId ?? '',
+        ...(plan.calendarId == null ? {} : { planCalendarId: plan.calendarId }),
+      }),
+    [model.calendars.data, plan.calendarId],
+  );
+
   const canvas = canvasLoading ? (
     <div
       role="status"
@@ -688,6 +714,8 @@ export function ToolbarPlanWorkspace({
           // `earlyStart` unconditionally, so a VISUAL plan's chart and diagram disagreed about every
           // hand-placed bar (`docs/TECH_DEBT.md` #135). Flag-off this is always `early`.
           barDateSource={barDateSource}
+          // The Duration column's factor (M2-T1). Host-resolved above, never looked up in the panel.
+          hoursPerDayFor={hoursPerDayFor}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.

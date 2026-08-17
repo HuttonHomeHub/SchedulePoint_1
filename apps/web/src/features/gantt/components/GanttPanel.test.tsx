@@ -430,8 +430,10 @@ describe('GanttPanel — baseline variance (ADR-0025)', () => {
   it('keeps the chart column index correct when the variance column is present', () => {
     withVariance([varianceRow()]);
     const grid = screen.getByRole('treegrid');
-    // Five sortable columns + variance + the chart.
-    expect(grid).toHaveAttribute('aria-colcount', '7');
+    // Six sortable columns + variance + the chart. Was five until M2-T1 added Duration — updated
+    // deliberately rather than loosened, because this assertion's whole job is to notice that the
+    // chart's own column index moved when a grid column arrived beside it.
+    expect(grid).toHaveAttribute('aria-colcount', '8');
   });
 });
 

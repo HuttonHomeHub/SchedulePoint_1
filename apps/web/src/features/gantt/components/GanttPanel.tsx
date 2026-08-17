@@ -35,9 +35,6 @@ import { cn } from '@/lib/utils';
 /** Row height in pixels. Fixed, so the virtualizer needs no measurement pass. */
 export const GANTT_ROW_HEIGHT = 32;
 
-/** Width of the pinned identity/date grid, without the optional variance column. */
-const GRID_WIDTH = 420;
-
 /**
  * The scale used before the bar region has been measured, and whenever measurement is
  * unavailable. Not a design constant — the real scale is derived from the container width via
@@ -53,6 +50,10 @@ const DEFAULT_ZOOM: ZoomLevel = 'month';
 const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
   code: 80,
   name: 180,
+  // Wide enough for the longest realistic sub-day read-out (`12d 7h 45m`) without wrapping; the
+  // whole-day case (`5 d`) is far shorter, and a column sized for the common case would truncate
+  // exactly the values ADR-0070 exists to make visible.
+  duration: 84,
   earlyStart: 90,
   earlyFinish: 90,
   totalFloat: 60,
@@ -62,6 +63,24 @@ const columnWidth = (column: GanttColumn): number => SCREEN_COLUMN_WIDTHS[column
 
 const COLUMNS = GANTT_COLUMNS;
 const TOTAL_COLUMN_WIDTH = COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0);
+
+/**
+ * Width of the pinned identity/date grid, without the optional variance column.
+ *
+ * **Derived from the columns, never declared.** It was the literal `420` while the columns summed to
+ * 500, and the two were never reconciled because `TOTAL_COLUMN_WIDTH` was computed, exported and
+ * consumed by **nothing** — two answers to "how wide is the grid", one of them dead. Measured in
+ * Chromium at 1646 on 2026-08-17: the pinned block ended at x=709 while the **Float** column
+ * rendered at 729–789, so it sat 80 px **on top of the chart** with its header overlapping the
+ * Timeline header, the pinned block's `z-10` painting it over the bars. Every child is `shrink-0`,
+ * so the flex row simply overflowed its own box.
+ *
+ * Nobody had reported it, and it is easy to see why: Float is the last column, the overlap lands on
+ * whitespace unless a bar starts near the left edge, and the numbers involved look deliberate. It
+ * was found by measuring before adding a column rather than after — the plan's M2-T1 risk said to
+ * measure, and adding Duration on top of the literal would have pushed the overlap to ~180 px.
+ */
+const GRID_WIDTH = TOTAL_COLUMN_WIDTH;
 
 /** Width of the variance column, shown only when a baseline is active. */
 const VARIANCE_COLUMN_WIDTH = 72;
@@ -101,6 +120,19 @@ export interface GanttPanelProps {
    * 2026-08-17 and is still correct for every EARLY-mode plan (`docs/TECH_DEBT.md` #135).
    */
   barDateSource?: BarDateSource;
+  /**
+   * The activity's own working-hours factor (ADR-0068), for the Duration column.
+   *
+   * A **resolver from the host**, not a calendar list: this panel has never known what a calendar
+   * is, and giving it one to run `.find()` per row would make a display component a consumer of the
+   * calendar query. ADR-0089 D2b makes host-resolution the rule for a cross-scope fact, and
+   * `host-parity.structural.test.ts` is what stops one host supplying it and the other not — which
+   * is how the Gantt came to read `earlyStart` unconditionally in the first place.
+   *
+   * Absent, or returning undefined, ⇒ the read-out degrades to whole working days, which is the
+   * same path as `VITE_SUB_DAY_DURATIONS` off (ADR-0070).
+   */
+  hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -155,6 +187,7 @@ export function GanttPanel({
   varianceByActivityId,
   zoomLevel = DEFAULT_ZOOM,
   barDateSource,
+  hoursPerDayFor,
   loading = false,
   error,
   onSelectActivity,
@@ -491,6 +524,7 @@ export function GanttPanel({
               chartPx,
               pxPerDay,
               barDateSource,
+              hoursPerDayFor,
               gridWidth,
               showVariance,
               isTabStop: item.index === tabStopIndex,
@@ -676,6 +710,7 @@ interface GanttRowViewProps {
   chartPx: number;
   pxPerDay: number;
   barDateSource: BarDateSource | undefined;
+  hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
   gridWidth: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
@@ -697,6 +732,7 @@ function GanttRowView({
   chartPx,
   pxPerDay,
   barDateSource,
+  hoursPerDayFor,
   gridWidth,
   variance,
   showVariance,
@@ -799,7 +835,7 @@ function GanttRowView({
               </button>
             ) : null}
             <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
-              {column.value(activity, barDateSource)}
+              {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
             </span>
             {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
                 emphasis alone is precisely the WCAG 1.4.1 defect ADR-0055 exists about. Rendered
