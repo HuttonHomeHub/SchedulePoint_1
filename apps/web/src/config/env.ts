@@ -137,14 +137,20 @@ export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
  * `VITE_CANVAS_AUTHORING=false` to fall back to table-first authoring + manual recalc + edge-drag
  * linking, byte-for-byte (emergency rollback / opt-out).
  *
- * **Precondition enforced, not just documented:** authoring is meaningful ONLY inside the
- * toolbar-hosted, canvas-first workspace — the Add/Link/start-date controls live in that `Toolbar`,
- * and authoring **suppresses the edge-drag link gesture**. If authoring were on while the toolbar or
- * workspace were off, edge-drag would be gone with no Link tool to replace it — a dead end for
- * on-canvas dependency creation (a11y review). So this flag is gated on its surviving host:
- * turning the workspace off turns authoring off too (and edge-drag returns, byte-for-byte). It was
- * gated on the toolbar flag as well until ADR-0088 D3 retired that one — a retired parent simply
- * drops its conjunct, because nobody can turn off what no longer exists (ADR-0084 D4).
+ * **Precondition now satisfied by construction, not by a conjunct.** Authoring is meaningful ONLY
+ * inside the toolbar-hosted, canvas-first workspace — the Add/Link/start-date controls live in that
+ * `Toolbar`, and authoring **suppresses the edge-drag link gesture**. If authoring were on while
+ * that host were off, edge-drag would be gone with no Link tool to replace it: a dead end for
+ * on-canvas dependency creation (a11y review). This flag therefore carried
+ * `&& CANVAS_TOOLBAR_ENABLED && CANVAS_WORKSPACE_ENABLED`. ADR-0088 D3 retired **both** parents, so
+ * both conjuncts are gone — a retired parent drops its conjunct, because nobody can turn off what no
+ * longer exists (ADR-0084 D4). The dead end is now unreachable because there is exactly one plan
+ * surface and it always hosts the toolbar, which is a stronger guarantee than the conjunct was: a
+ * boolean could be wrong, a deleted alternative cannot.
+ *
+ * This paragraph said "turning the workspace off turns authoring off too" until 2026-08-17 — in the
+ * same commit that deleted the conjunct, two lines below the sentence. Found by the reconciliation
+ * pass's devops review rather than by the author (ADR-0058).
  *
  * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
  */

@@ -256,7 +256,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:toolbar-fit
 
       # Flag-ON canvas-first authoring journey (playwright.authoring.config.ts) serving the app with
-      # VITE_CANVAS_AUTHORING on (layered on the toolbar/workspace/editing/pen flags), so building a
+      # VITE_CANVAS_AUTHORING on (layered on the editing/pen flags), so building a
       # plan directly on the canvas — blank-canvas first draw, inline start date, auto-recalc,
       # on-canvas milestones, two-click linking — is exercised end to end (ADR-0032). Runs last,
       # after the prior runs tear down their servers, reusing the ports.
@@ -279,7 +279,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:notes
 
       # Flag-ON undo/redo journey (playwright.undo.config.ts) serving the app with VITE_UNDO_REDO on
-      # (layered on the canvas authoring/toolbar/workspace/editing/pen flags, with the pen enforced), so
+      # (layered on the canvas authoring + editing/pen flags, with the pen enforced), so
       # the user-visible undo surface — the toolbar Undo/Redo controls, the Ctrl/Cmd+Z keybinding, the
       # announcements — is exercised end to end (ADR-0048 M3). Runs last, after the prior runs tear down
       # their servers, reusing the ports.
@@ -287,7 +287,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:undo
 
       # Flag-ON on-canvas activity types journey (playwright.loe.config.ts) serving the app with
-      # VITE_CANVAS_ACTIVITY_TYPES on (layered on the canvas authoring/toolbar/workspace/editing/pen
+      # VITE_CANVAS_ACTIVITY_TYPES on (layered on the canvas authoring + editing/pen
       # flags, with the pen enforced), so the Level-of-Effort endpoint-pick tool — the Add-menu item,
       # the two-click keyboard pick, and the announcements — is exercised end to end (Stage D). Runs
       # last, after the prior runs tear down their servers, reusing the ports.
@@ -296,7 +296,7 @@ jobs:
 
       # Flag-ON canvas resource view journey (playwright.resource-view.config.ts) serving the app with
       # VITE_CANVAS_RESOURCE_VIEW on (plus VITE_RESOURCES + VITE_RESOURCE_CURVES for the data source,
-      # layered on the canvas authoring/toolbar/workspace/editing/pen flags), so the axis-aligned demand
+      # layered on the canvas authoring + editing/pen flags), so the axis-aligned demand
       # strip — reveal, resource/bucket pickers, the accessible data table, and the on-bar
       # over-allocation highlight — is exercised end to end (Stage E). Runs last, after the prior runs
       # tear down their servers, reusing the ports.
@@ -304,8 +304,8 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:resource-view
 
       # Flag-ON schedule interchange (XER import) journey (playwright.interchange.config.ts) serving
-      # the app with VITE_SCHEDULE_INTERCHANGE on (layered on the canvas authoring/toolbar/workspace/
-      # editing/pen flags), so the whole import loop — "Import from file…", the dry-run review dialog
+      # the app with VITE_SCHEDULE_INTERCHANGE on (layered on the canvas authoring + editing/pen
+      # flags), so the whole import loop — "Import from file…", the dry-run review dialog
       # + report table, and Confirm import committing and opening the new plan — is exercised end to
       # end (Stage C2 M1, ADR-0050). Runs last, after the prior runs tear down their servers, reusing
       # the ports.
@@ -313,7 +313,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:interchange
 
       # Flag-ON External-Guest share links journey (playwright.share.config.ts) serving the app with
-      # VITE_GUEST_SHARE_LINKS on (layered on the canvas authoring/toolbar/workspace/editing/pen flags),
+      # VITE_GUEST_SHARE_LINKS on (layered on the canvas authoring + editing/pen flags),
       # so the whole share loop — the member Share… toolbar item opening ShareLinksDialog (create/list/
       # revoke), the one-time guest URL, and the public session-less `/share#<token>` read-only view
       # across a second, cookie-free browser context (with immediate revocation) — is exercised end to
@@ -418,15 +418,18 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:designed-chrome
 
       # Flag-ON Gantt view journey (playwright.gantt.config.ts) serving the app with VITE_GANTT_VIEW
-      # on (layered on the canvas authoring/toolbar/workspace/editing/pen flags), proving ADR-0059's
+      # on (layered on the canvas authoring + editing/pen flags), proving ADR-0059's
       # claims end to end: an activity authored on the diagram is the same row in the Gantt with the
       # dates the engine computed, `?view=gantt` survives a reload, and the grid is arrow-navigable
       # and axe-clean. Runs after the prior suites tear down their servers, reusing the ports.
       - name: Web end-to-end tests (Gantt view flag on)
         run: pnpm --filter @repo/web test:e2e:gantt
 
-      # Flag-ON tabbed activity editor journey (playwright.activity-editor.config.ts) with
-      # VITE_ACTIVITY_EDITOR_TABS on AND the pen enforced at the API, proving ADR-0060's permission
+      # The tabbed activity editor journey (playwright.activity-editor.config.ts) with the pen
+      # enforced at the API. NOT a flag-on journey: `VITE_ACTIVITY_EDITOR_TABS` was retired on
+      # 2026-08-11 (ADR-0089) and the editor is the only one there is — this comment claimed
+      # otherwise until 2026-08-17, the fourth instance of a defect the same pass fixed three of.
+      # It proves ADR-0060's permission
       # claims against a real 423: two scopes save in one session (the second carrying the version
       # the first produced — a mocked fetch cannot test that), Steps opens the Progress tab focused
       # on its panel, weighted steps take over the physical % with a reason, and a holder-less
@@ -436,7 +439,7 @@ jobs:
       # the pen with a 423, while progress in the same session is not, and a resource assigned from
       # the Resources tab persists. Runs after the prior suites tear down their servers, reusing the
       # ports.
-      - name: Web end-to-end tests (tabbed activity editor flag on)
+      - name: Web end-to-end tests (tabbed activity editor)
         run: pnpm --filter @repo/web test:e2e:activity-editor
 
       # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
