@@ -870,31 +870,38 @@ it (the culling resolution, R5 across three sort orders, the permanent no-obstac
 the `sr-only` summary, the contrast gate), so reordering now buys an optics gain against a heavier
 milestone. It starts when M1 is done, as the dependency graph already allows.
 
-### The fixture M0-T1 measures on does not exist
+### The fixture M0-T1 measures on — WITHDRAWN, I was wrong
 
-**Found by trying to name it.** The performance review asked for the specific catalogue plan rather
-than the description "an imported-shape 2,000-activity plan", per CLAUDE.md §19.10 — a
-decision-bearing number should carry a reproducible fixture. Naming it turns up that the catalogue's
-largest plan is **`plan:scale-500`** (`docs/TEST_PLAYBOOK.md`); there is no 2,000-activity plan in it,
-and `grep -oE 'plan:scale-[0-9]+' docs/TEST_PLAYBOOK.md` returns exactly one row.
+**This section said "the fixture does not exist" and that was false.** It is corrected in place
+rather than deleted, because how it happened matters more than the claim did.
 
-So the figure this epic has been reasoning with — ~16 crossing links typically, ~1,067 sorted by
-float, the ≤300 threshold, "40 rows out of 2,000" — rests on a plan **nobody can seed**. Every one of
-those numbers came from arithmetic over ADR-0073 C3.0's measured 3,200-links-per-2,000-activities
-ratio, which is a real measurement of a real programme, but not of anything in this repository's
-catalogue.
+What I did: grepped `docs/TEST_PLAYBOOK.md` for `plan:scale-[0-9]+`, found one row
+(`plan:scale-500`), and concluded no 2,000-activity plan existed and "nobody can seed one". The
+product owner said they were fairly sure there was one, and a whole generator for it. They were
+right:
 
-**M0-T1 must therefore do one of two things, and say which:**
+- `packages/seed/src/scale/generator.ts:122` — `scaleSpec(options: ScaleOptions)` takes
+  `activities` as a **parameter**, not a fixed set.
+- `packages/seed/src/scale/scale.spec.ts:20` — its own suite exercises `[12, 500, 2_000]`, with
+  shape assertions at 2,000 specifically.
+- `apps/seed-cli/src/args.spec.ts:70-72` — the CLI sizes the tier from **`--activities`**.
 
-1. **Extend the catalogue** with an imported-shape plan at 2,000 (ADR-0066's tiers already have the
-   machinery, and the shape matters more than the count — `plan:scale-500` itself was once "one long
-   queue", which is the trap ADR-0066 M4 records). This is the honest option if the numbers are going
-   to be quoted at 2,000.
-2. **Measure at 500 and state the extrapolation**, rather than reporting a 2,000-activity figure
-   derived from a 500-activity run as though it were measured.
+So seeding the fixture is `schedulepoint-seed scale --activities 2000`, and it always was. **M0-T1
+names that command.** No catalogue extension is needed and no extrapolation from 500 is needed; both
+options this section invented were answers to a problem that did not exist.
 
-What it must not do is describe the fixture. That is how ADR-0065's budget came to be quoted for
-months without anyone running it (`docs/TECH_DEBT.md` #75).
+**The failure is ADR-0076 Class 3, committed inside the commit that lectures about it.** That commit's
+own message says a decision-bearing number must carry a reproducible fixture rather than a
+description — and I then asserted a capability's absence from a single grep of a single document, for
+a naming convention the generator does not use, without opening `packages/seed/`. A parameterised
+generator has no `plan:scale-2000` row to find; searching for one and concluding it is absent is
+searching for the wrong shape and reporting the answer as fact.
+
+The one thing worth carrying forward from the wrong version: `plan:scale-500` is the plan the
+**playbook documents**, and ADR-0066 M4 records that the scale generator once produced "one long
+queue" while every declared shape number was correct. So M0-T1 still has to assert the **shape** of
+whatever it seeds — link density and float distribution — rather than trusting the count. That was
+right for the wrong reason.
 
 ### Recorded, not actioned
 
