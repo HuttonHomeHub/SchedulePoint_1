@@ -72,27 +72,16 @@ export async function awaitComputedSchedule(page: Page, orgSlug: string): Promis
     .toBeGreaterThan(0);
 }
 
-/**
- * Assert the open plan has **no** computed schedule yet — the precondition before a recalculation.
+/*
+ * There was an `expectNoComputedSchedule` here — the mirror of the helper above, asserting a plan
+ * had NOT been scheduled yet — and it is deleted rather than kept for a future caller.
  *
- * The legacy page showed this as `ScheduleSummaryStrip`'s "Schedule not yet calculated". On the
- * workspace that strip lives inside the `Summary ▾` popover, so the text is real but one click
- * away; asserting it would make a precondition check depend on opening a popover. Read at the API
- * instead, symmetrically with {@link awaitComputedSchedule}.
+ * Its one caller was `schedule.spec.ts`'s precondition, and that assertion turned out to be
+ * unwinnable rather than merely awkward: the workspace carries the ADR-0032 auto-recalc, so a plan
+ * with a start date schedules itself the moment its activities change, and "not yet computed" is a
+ * race against a debounce. The spec says so at the line where the assertion used to be.
+ *
+ * Keeping an unused export "in case" is how a helper survives past the fact it was written about —
+ * and this one would sit here reading as though the state it checks is still reachable, which is
+ * the misinformation ADR-0058 is about. Git remembers it.
  */
-export async function expectNoComputedSchedule(page: Page, orgSlug: string): Promise<void> {
-  const planId = new URL(page.url()).pathname.split('/plans/')[1]?.split('/')[0];
-  if (!planId) throw new Error(`no plan id in ${page.url()}`);
-  const computed = await page.evaluate(
-    async ({ slug, id }: { slug: string; id: string }) => {
-      const res = await fetch(`/api/v1/organizations/${slug}/plans/${id}/activities`, {
-        credentials: 'include',
-      });
-      if (!res.ok) return -1;
-      const body = (await res.json()) as { data: { earlyFinish: string | null }[] };
-      return body.data.filter((a) => a.earlyFinish !== null).length;
-    },
-    { slug: orgSlug, id: planId },
-  );
-  expect(computed, 'the plan already has computed dates before the recalculation').toBe(0);
-}

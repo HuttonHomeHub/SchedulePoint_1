@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 import { chooseComboboxOption, comboboxField } from './combobox';
-import { awaitComputedSchedule, expectNoComputedSchedule, showActivities } from './workspace';
+import { awaitComputedSchedule, showActivities } from './workspace';
 
 /**
  * The CPM schedule journey (M6): a Planner sets the plan's start date, adds two
@@ -87,11 +87,25 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   await expect(dialog.getByRole('cell', { name: 'Excavate', exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 
-  // Before recompute there is no computed schedule. The legacy page said so in the summary strip;
-  // on the workspace that strip is inside the `Summary ▾` popover, so the text is real but one
-  // click away — and a precondition check should not depend on opening a popover.
-  await expectNoComputedSchedule(page, orgSlug);
-
+  // There was a "before recompute there is no computed schedule" assertion here, and it is
+  // DELETED rather than converted, because the state it asserted no longer exists on this surface.
+  // The legacy stacked page had no canvas and therefore no ADR-0032 auto-recalc; the workspace
+  // does, and `use-plan-workspace-model.ts:560-570` fires `autoRecalc.notify()` on any change to
+  // the scheduling-input signature whenever `CANVAS_AUTHORING_ENABLED && canRecalc && plannedStart`
+  // — all three of which hold by the line above. So the two activities and their link recalculate
+  // on their own, and asserting "not yet computed" is a race the test can only win by being faster
+  // than a debounce. CI proved that: it passed on Chromium and failed on firefox and webkit alone,
+  // which is a timing difference and not a browser difference.
+  //
+  // This is the same call already made in `tsld.spec.ts` (its "Recalculate the schedule to plot…"
+  // assertion went for the same reason) — applied there and missed here first time round, which is
+  // the one-control-and-not-its-neighbour shape the register keeps recording.
+  //
+  // Say what is lost rather than let the suite imply otherwise: `awaitComputedSchedule` below can
+  // now be satisfied by the auto-recalc, so this journey no longer proves the button is what
+  // produced the dates. It still proves the button is present, pressable and harmless, and the
+  // critical-path badge and the axe pass below are the substance either way. Nothing available to a
+  // client can distinguish the two recalculations — they are the same request.
   await page.getByRole('button', { name: 'Recalculate' }).click();
 
   // The summary strip and the table now show the computed schedule.
