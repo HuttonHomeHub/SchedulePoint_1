@@ -110,3 +110,25 @@ export function varianceText(row: BaselineVarianceRow | undefined): string {
   if (days === 0) return 'On plan';
   return days > 0 ? `+${days}d late` : `${days}d early`;
 }
+
+/**
+ * The text one **editable cell** currently reads, keyed by its cell key rather than its column.
+ *
+ * There is exactly one answer to "what does this cell say", and both the seed (when a planner opens
+ * a cell) and the reseed (when the row changes underneath an untouched one) have to use it. Two
+ * spellings would produce a cell that opens showing one value and silently swaps to another the
+ * first time the plan recalculates — which is the ADR-0065 `routeOrthogonal` argument at its
+ * smallest and nastiest, because the swap only happens on a timer.
+ *
+ * Returns `null` for a key with no column, so a caller cannot accidentally seed from nothing.
+ */
+export function ganttCellText(
+  key: string,
+  activity: ActivitySummary,
+  source: BarDateSource | undefined,
+  hoursPerDay: number | undefined,
+): string | null {
+  const column = GANTT_COLUMNS.find((c) => c.key === key);
+  if (column === undefined) return null;
+  return column.value(activity, source, hoursPerDay);
+}
