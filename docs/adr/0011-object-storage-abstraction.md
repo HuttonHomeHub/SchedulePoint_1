@@ -6,7 +6,7 @@
 
 ## Context
 
-Blank App will handle user files (e.g. receipts/attachments). Files must not live in
+SchedulePoint will handle user files (e.g. receipts/attachments). Files must not live in
 the application container (ephemeral, unscalable) or in the database (bloats
 backups, poor streaming). We also don't want to couple to one cloud provider
 before the hosting platform is chosen (`docs/TECH_DEBT.md`).

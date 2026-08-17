@@ -6,7 +6,7 @@
 
 ## Context
 
-Operating Blank App for a decade requires being able to answer "what happened?" and
+Operating SchedulePoint for a decade requires being able to answer "what happened?" and
 "why is it slow?" in production. We need structured logs, request correlation,
 metrics, and traces — without coupling to a single vendor before the hosting
 platform is chosen (`docs/TECH_DEBT.md`).

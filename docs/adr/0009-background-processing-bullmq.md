@@ -6,7 +6,7 @@
 
 ## Context
 
-Blank App will need work done outside the request/response cycle: sending
+SchedulePoint will need work done outside the request/response cycle: sending
 reminders/notifications, scheduled and recurring generation, exports, and
 retriable side effects. Doing these inline blocks requests, loses work on
 failure, and can't be scheduled or retried reliably.

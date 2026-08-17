@@ -300,8 +300,32 @@ are listed here so nobody reads an ADR and assumes the capability exists:
 | ADR-0011 | File storage via an S3 abstraction        | No object store; no user file uploads.       |
 | ADR-0013 | Observability with OpenTelemetry + Pino   | Pino is wired; **OpenTelemetry is not**.     |
 
-The mail port (`common/mail/`) exists with a **logging** implementation only; no
-transport is configured, so invitation emails are logged rather than sent.
+> **The mail port is not one of these, and this paragraph said it was until
+> 2026-08-17.** It read: _"exists with a **logging** implementation only; no
+> transport is configured, so invitation emails are logged rather than sent."_
+> That is false and was the **third** copy of the same claim: `CLAUDE.md` §17 was
+> corrected on 2026-08-04 and `docs/BACKLOG.md` on 2026-08-05, and this file was
+> never opened — verbatim the [`RECONCILE.md`](RECONCILE.md) §1 warning that when
+> you patch a claim you must ask whether the same hole is in its siblings.
+> `common/mail/smtp-mail.service.ts` is a **real SMTP adapter**, selected whenever
+> `MAIL_SMTP_URL` is configured; `LoggingMailService` is the **fallback** when it
+> is not, so mail is logged-only on a stock dev environment and sent on a
+> configured one. The deployed host has a transport configured and sending
+> (product owner, 2026-08-05) — which is what unblocked `VITE_PASSWORD_RESET`.
+> The wrong reading is the expensive one: it is the reading that leads somebody to
+> build a second mail path.
+> What is genuinely still missing is knowing a send **failed** after Better Auth's
+> handoff (`docs/TECH_DEBT.md` #94), which is an operational gap rather than a
+> structural one.
+
+**A table of wholly-unbuilt ADRs cannot show a partly-built one.** ADR-0012 is
+accepted and mostly live — the `PermissionsGuard`, the permission set and the
+resource-scope checks are what every module is built on — but its Decision also
+names **CASL** for object-level rules, and CASL appears in no manifest and no
+source file. It is invisible here by construction, because the framing above
+("nothing in the running system depends on them") is false of ADR-0012 as a
+whole. The unbuilt clause is instead flagged on the ADR itself, following the
+precedent ADR-0006 set for its own never-adopted shadcn/ui + Radix clause.
 
 ## 11. Deployment topology
 

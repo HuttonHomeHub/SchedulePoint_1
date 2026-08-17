@@ -6,7 +6,7 @@
 
 ## Context
 
-Blank App needs a backend that a small team can build quickly and evolve safely for
+SchedulePoint needs a backend that a small team can build quickly and evolve safely for
 a decade, without prematurely paying the operational tax of microservices. It
 must have clear internal boundaries so it _could_ be split later, strong
 testability, and a single deployable artifact.

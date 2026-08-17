@@ -6,7 +6,7 @@
 
 ## Context
 
-Blank App is intended to be maintained by multiple engineers over many years. The
+SchedulePoint is intended to be maintained by multiple engineers over many years. The
 reasoning behind significant technical decisions is easily lost, leading to
 re-litigation of settled questions and accidental erosion of intent. We want a
 durable, low-friction way to capture _why_ decisions were made.
