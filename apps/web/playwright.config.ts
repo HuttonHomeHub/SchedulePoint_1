@@ -67,7 +67,7 @@ export default defineConfig({
             env: {
               VITE_TSLD_EDITING: 'false',
               VITE_PLAN_EDIT_LOCK: 'false',
-              VITE_CANVAS_WORKSPACE: 'false',
+              VITE_CANVAS_WORKSPACE: 'true',
             },
           },
         ],

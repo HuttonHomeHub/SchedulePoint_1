@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { awaitComputedSchedule, showActivities } from './workspace';
 
 /**
  * The baselines journey (M7, Journey 4): a Planner schedules a plan, captures a
@@ -44,6 +45,7 @@ async function openNewPlan(page: Page): Promise<void> {
 }
 
 async function addActivity(page: Page, name: string): Promise<void> {
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(name);
   await page.getByRole('dialog').getByRole('button', { name: 'Create activity' }).click();
@@ -54,7 +56,7 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
 
   // Schedule the plan: a start date + one activity, then recalculate.
@@ -66,20 +68,38 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
   await addActivity(page, 'Excavate');
   await page.getByRole('button', { name: 'Recalculate' }).click();
-  await expect(page.getByText('Project finish')).toBeVisible();
+  await awaitComputedSchedule(page, orgSlug);
 
   // No baseline yet → no variance column.
   await expect(page.getByRole('columnheader', { name: 'Finish variance' })).toHaveCount(0);
 
   // Capture a baseline; it becomes the plan's active baseline.
-  await page.getByRole('button', { name: 'Capture baseline' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Name').fill('Contract Baseline');
-  await dialog.getByRole('button', { name: 'Capture baseline' }).click();
+  //
+  // The legacy page put `Capture baseline` on the surface directly. On the workspace, baselines,
+  // earned value and the resource histogram share an **Analysis** trigger (ADR-0090 M2-T5 — three
+  // Row-2 stops for three ways of measuring a plan against something), so the button now lives
+  // inside the Baselines dialog that trigger opens.
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('menuitem', { name: /Baselines/ }).click();
+  // Scoped to the Baselines dialog by name: pressing Capture opens the capture FORM, so an
+  // unscoped `getByRole('dialog')` then matches two and the second click lands on the wrong one.
+  const baselines = page.getByRole('dialog', { name: /Baselines/ });
+  await expect(baselines).toBeVisible();
+  // Both live inside the dialog once the form is open — the trigger and the form's submit share a
+  // name — so they are told apart by position rather than by copy.
+  await baselines.getByRole('button', { name: 'Capture baseline' }).first().click();
+  await baselines.getByLabel('Name').fill('Contract Baseline');
+  await baselines.getByRole('button', { name: 'Capture baseline' }).last().click();
   // The baseline name also appears in the row's action-button aria-labels ("… is active"),
   // and "Active" renders both as the badge and the active-row button, so scope to the first.
   await expect(page.getByRole('cell', { name: 'Contract Baseline' }).first()).toBeVisible();
   await expect(page.getByText('Active', { exact: true }).first()).toBeVisible();
+
+  // Close it before reading the table behind it. On the legacy page Baselines was an inline panel
+  // and the table sat below it; here it is a modal, so leaving it open blocks every later
+  // interaction with the workspace underneath.
+  await baselines.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(baselines).toBeHidden();
 
   // The activities table now shows the variance columns; the sole activity matches the
   // just-captured baseline, and the plan-level roll-up appears above the table.

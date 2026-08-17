@@ -62,7 +62,11 @@ test('a user can create a plan and open its detail (accessible)', async ({ page 
 
   await expect(page.getByRole('heading', { name: 'Baseline', exact: true })).toBeVisible();
   await expect(page.getByText('Active', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Time-Scaled Logic Diagram/)).toBeVisible();
+  // The legacy page printed a "Time-Scaled Logic Diagram" section label above the canvas. The
+  // workspace makes the diagram its primary surface, named as a region rather than announced by a
+  // label — so the region IS the assertion, and a stronger one: it is what a screen-reader user
+  // navigates to (ADR-0026 D7).
+  await expect(page.getByRole('region', { name: 'Time-scaled logic diagram' })).toBeVisible();
   // The plan-detail screen is accessible.
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,

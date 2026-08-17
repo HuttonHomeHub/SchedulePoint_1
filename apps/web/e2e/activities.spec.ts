@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { showActivities } from './workspace';
 
 /**
  * The activity-authoring journey: onboard an org, create a client → project →
@@ -45,14 +46,20 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
 
-  // The plan-detail screen shows the (empty) Activities section, and is accessible.
-  await expect(page.getByRole('heading', { name: 'Activities' })).toBeVisible();
+  // The plan workspace shows the (empty) activities panel, and is accessible.
+  //
+  // The legacy stacked page gave the section an `<h2>Activities`; the workspace names the panel
+  // with a plain label in its handle row instead — a heading would claim a document section that
+  // the canvas-maximal layout does not have. The empty state is the assertion that survives, and it
+  // was always the substantive half.
+  await showActivities(page);
   await expect(page.getByText(/No activities yet/)).toBeVisible();
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
 
   // Add a task with a code and a duration.
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
@@ -83,6 +90,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await expect(page.getByRole('cell', { name: '10 d', exact: true })).toBeVisible();
 
   // Adding a milestone hides the duration field and shows an em-dash duration.
+  await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
   await dialog.getByLabel('Name').fill('Kickoff');
   await dialog.getByLabel('Type', { exact: true }).selectOption('START_MILESTONE');
