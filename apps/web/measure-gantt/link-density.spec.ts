@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { scaleSpec } from '@repo/seed';
 
 import {
   createClient,
@@ -6,7 +7,6 @@ import {
   createProject,
   onboard,
   openPlanId,
-  seedActivities,
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
@@ -79,7 +79,92 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
   // edit lock like any other client. Omitting this failed with 200 × 423 LOCKED, which is the guard
   // working correctly on a caller that had not asked for the pen.
   await startEditing(page);
-  await seedActivities(page, orgSlug, ACTIVITY_COUNT);
+
+  // Seed from the REAL scale generator, not `seedActivities`. That helper creates a flat chain of
+  // N activities — it exists to make rows exist — and the first run of this harness measured it at
+  // **100% critical**: one long queue, the exact shape ADR-0066 M4 records at 96%. Every span in a
+  // queue is 1, so crossings are trivially zero and a density figure taken there describes no real
+  // programme. `scaleSpec` builds phases, sub-phases, WBS bands and 1.45 links per activity, which
+  // is what the sort orders in R5 are supposed to rearrange.
+  const spec = scaleSpec({ activities: ACTIVITY_COUNT });
+  const seeded = await page.evaluate(
+    async ({
+      org,
+      id,
+      activities,
+      dependencies,
+    }: {
+      org: string;
+      id: string;
+      activities: {
+        key: string;
+        code: string;
+        name: string;
+        type: string;
+        durationMinutes: number;
+        parentKey: string | null;
+      }[];
+      dependencies: {
+        predecessorKey: string;
+        successorKey: string;
+        type: string;
+        lagMinutes: number;
+      }[];
+    }) => {
+      const ids = new Map<string, string>();
+      const bad: string[] = [];
+      // Summaries first: a child names its parent, so the parent must already have an id.
+      const ordered = [...activities].sort((a, b) =>
+        a.type === 'WBS_SUMMARY' && b.type !== 'WBS_SUMMARY'
+          ? -1
+          : a.type !== 'WBS_SUMMARY' && b.type === 'WBS_SUMMARY'
+            ? 1
+            : 0,
+      );
+      for (const a of ordered) {
+        const res = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: a.name,
+            code: a.code,
+            type: a.type,
+            durationDays: Math.max(0, Math.round(a.durationMinutes / 1440)),
+            ...(a.parentKey && ids.has(a.parentKey) ? { parentId: ids.get(a.parentKey) } : {}),
+          }),
+        });
+        if (!res.ok) {
+          bad.push(`${a.code}: ${res.status} ${(await res.text()).slice(0, 120)}`);
+          continue;
+        }
+        ids.set(a.key, ((await res.json()) as { data: { id: string } }).data.id);
+      }
+      let links = 0;
+      for (const d of dependencies) {
+        const p = ids.get(d.predecessorKey),
+          q = ids.get(d.successorKey);
+        if (!p || !q) continue;
+        const res = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ predecessorId: p, successorId: q, type: d.type, lagDays: 0 }),
+        });
+        if (res.ok) links += 1;
+        else bad.push(`link ${d.predecessorKey}->${d.successorKey}: ${res.status}`);
+      }
+      return { created: ids.size, links, bad: bad.slice(0, 5), badCount: bad.length };
+    },
+    {
+      org: orgSlug,
+      id: planId,
+      activities: spec.activities as never,
+      dependencies: (spec.dependencies ?? []) as never,
+    },
+  );
+  // Report what it actually seeded rather than what it asked for — the `seedActivities` rule.
+  expect(seeded.badCount, `seeding rejected ${seeded.badCount}: ${seeded.bad.join('; ')}`).toBe(0);
 
   // Read the graph from the API rather than the DOM: a link's row span is a property of the plan and
   // the current order, not of what happens to be painted.
@@ -144,6 +229,30 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
     `${(criticalShare * 100).toFixed(0)}% critical — this looks like one queue`,
   ).toBeLessThan(0.9);
   expect(linksPerActivity, 'a plan with almost no logic measures nothing').toBeGreaterThan(0.3);
+
+  // Recalculate before switching view: the Gantt draws from engine-computed columns, so without
+  // this it renders its "not calculated" state and there is no grid to read an order from. The
+  // journey helper's own flow does this; seeding alone does not.
+  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          async ({ org, id }: { org: string; id: string }) => {
+            const res = await fetch(
+              `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+              { credentials: 'include' },
+            );
+            if (!res.ok) return 0;
+            return ((await res.json()) as { data: { earlyFinish: string | null }[] }).data.filter(
+              (a) => a.earlyFinish !== null,
+            ).length;
+          },
+          { org: orgSlug, id: planId },
+        ),
+      { message: 'the recalculation never produced computed dates', timeout: 60_000 },
+    )
+    .toBeGreaterThan(0);
 
   await showGantt(page);
 
