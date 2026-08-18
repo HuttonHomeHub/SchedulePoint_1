@@ -235,10 +235,14 @@ not meanings, so Enter opens the logic editor on the canvas and commits a cell e
 it carries a mode-dependent meaning, and shipping it without the mode statement the canvas has beside
 it would leave a planner unable to tell which of two writes their drag just made.
 
-The **keyboard-shortcuts sheet** does not open while the Gantt is on screen (`TsldShortcutsHelp` is
-mounted inside `TsldPanel`, which is not rendered in that view) — a lit-but-inert control found by
-the M6 ux gate and deliberately not patched, because this epic gave the Gantt a set of bindings that
-sheet does not document.
+The shortcuts-sheet paragraph that stood here said the sheet **does not** open in the Gantt and was
+"deliberately not patched" — five lines below the paragraph recording that it was. It was written
+when M6 found the defect and never revisited when the same document closed it, so this ADR asserted
+both states at once and a reader taking the nearer sentence would have concluded the control is
+still inert. Corrected 2026-08-18 rather than deleted: ADR-0058's rule failing inside the register,
+in a file edited the previous day by the author of the fix, is worth more as a record than a clean
+page. The live statement is the one above — the sheet mounts at the workspace and opens in both
+views.
 
 `PROJECT_BRIEF.md` §8's "edit supported" is now **substantially** met and is not claimed closed —
 the same care CLAUDE.md's banner had to be corrected into once already for this surface.
