@@ -849,6 +849,9 @@ export function ToolbarPlanWorkspace({
         parents: [{ id: activity.id, parentId, version: activity.version }],
       });
     },
+    // M5-T5. The dialog itself is mounted once by `ActivityCrudDialogs`, which already owns the
+    // workspace's activity dialogs so their behaviour cannot drift; this only opens it.
+    onInsert: model.openInsertActivity,
   };
 
   const surface =

@@ -211,6 +211,12 @@ export interface GanttPanelProps {
         canEditSchedule: boolean;
         penRefusal: string | null;
         onReparent: (activity: ActivitySummary, parentId: string | null) => void;
+        /**
+         * Open the create dialog with this parent pre-set (M5-T5). Optional: a host that does not
+         * supply it gets no "Insert activity below" item at all, rather than a shaded one whose
+         * reason is that nobody wired it.
+         */
+        onInsert?: ((parentId: string | null) => void) | undefined;
       }
     | undefined;
   /**
@@ -534,6 +540,17 @@ export function GanttPanel({
             if (!isRefusal(outdent)) rowStructure.onReparent(activity, outdent.parentId);
           },
         },
+        // Insert files the new activity **beside** the row, i.e. under the row's own parent —
+        // not under the row itself. "Below" in a grid means the next line at the same level; a
+        // planner who wanted it nested would use Indent, which is one keystroke away and says so.
+        ...(rowStructure.onInsert === undefined
+          ? {}
+          : {
+              insert: {
+                refusal: null,
+                run: () => rowStructure.onInsert?.(activity.parentId ?? null),
+              },
+            }),
         canEditSchedule: rowStructure.canEditSchedule,
         penRefusal: rowStructure.penRefusal,
       };
