@@ -641,27 +641,29 @@ export function GanttPanel({
     return true;
   };
 
-  // **`ContextMenu` / `Shift+F10` opens the focused row's menu** — the pattern `HierarchyTree`
-  // already ships for the identical shape (a roving-tabindex widget with a per-row `⋯` trigger that
-  // is deliberately not a tab stop). Without it, Indent, Outdent and Insert — which exist ONLY in
-  // that menu, because the docked bar cannot honour them — were reachable by mouse alone (WCAG
-  // 2.1.1, Level A). Keyed by row so the signal reaches the right menu, and a counter so pressing
-  // the key twice on one row reopens it rather than doing nothing the second time.
-  const [menuOpenSignal, setMenuOpenSignal] = useState<{ key: string; seq: number } | null>(null);
-
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const index = tabStopIndex;
     const row = rows[index];
+    // **`ContextMenu` / `Shift+F10` opens the focused row's menu** — the pattern `HierarchyTree`
+    // already ships for the identical shape (a roving-tabindex widget whose per-row `⋯` trigger is
+    // deliberately not a tab stop). Without it, Indent, Outdent and Insert — which exist ONLY in
+    // that menu, because the docked bar cannot carry them — were reachable by mouse alone (WCAG
+    // 2.1.1, Level A).
+    //
+    // It activates the row's OWN trigger rather than signalling the menu to open itself, so the
+    // keyboard and the pointer are one code path by construction and cannot drift about what the
+    // menu contains or where it anchors. The selector is the trigger's semantics
+    // (`aria-haspopup="menu"`), not a class or a test id, so restyling cannot break it.
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-      // Only where a menu is actually rendered — otherwise the key would be swallowed with nothing
-      // to show, which reads as a broken keystroke rather than an absent feature.
-      if (row !== undefined && rowMenuContextFor !== undefined) {
+      const trigger = rowRefs.current
+        .get(rowId(row!))
+        ?.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+      // No trigger means no menu is rendered for this row (a bucket row, or a host that supplies no
+      // `rowMenuContextFor`). Leave the key alone rather than consuming it to show nothing, which
+      // reads as a broken control instead of an absent feature.
+      if (trigger) {
         event.preventDefault();
-        const key = rowId(row);
-        setMenuOpenSignal((prev) => ({
-          key,
-          seq: prev !== null && prev.key === key ? prev.seq + 1 : 1,
-        }));
+        trigger.click();
       }
       return;
     }
@@ -1015,8 +1017,6 @@ export function GanttPanel({
               dependencies,
               predecessorsById,
               rowMenuContextFor,
-              menuOpenSignal:
-                menuOpenSignal !== null && menuOpenSignal.key === id ? menuOpenSignal.seq : 0,
               rowStructureFor,
               actionColumns,
               columns: COLUMNS,
@@ -1219,8 +1219,6 @@ interface GanttRowViewProps {
   dependencies: readonly DependencySummary[] | undefined;
   predecessorsById: ReadonlyMap<string, readonly string[]>;
   rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
-  /** Non-zero when the host's `ContextMenu`/`Shift+F10` asked THIS row to open its menu. */
-  menuOpenSignal: number;
   rowStructureFor:
     ((activity: ActivitySummary) => GanttRowStructureActions | undefined) | undefined;
   actionColumns: number;
@@ -1264,7 +1262,6 @@ function rowOwnsKey(event: React.KeyboardEvent<HTMLElement>): boolean {
 }
 
 function GanttRowView({
-  menuOpenSignal,
   actionColumns,
   columns: COLUMNS,
   rowStructureFor,
@@ -1563,7 +1560,6 @@ function GanttRowView({
             <GanttRowMenu
               context={() => rowMenuContext(activity)}
               activityName={activity.name}
-              openSignal={menuOpenSignal}
               {...(rowStructureFor === undefined ? {} : { structure: rowStructureFor(activity) })}
             />
           </div>

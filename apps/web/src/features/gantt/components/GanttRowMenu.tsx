@@ -1,5 +1,5 @@
 import { MoreHorizontal } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem } from '@/components/ui/menu';
@@ -54,19 +54,6 @@ export interface GanttRowMenuProps {
    * `Report progress`; it was never a ban on a view having gestures of its own.
    */
   structure?: GanttRowStructureActions | undefined;
-  /**
-   * Bumped by the host to open this row's menu from the KEYBOARD (`ContextMenu` / `Shift+F10`).
-   *
-   * The trigger is `tabIndex={-1}` because the grid is one roving tab stop, and the comment below
-   * justified that by saying keyboard users reach the same actions through the row's selection.
-   * That was true when M5-T3 shipped — every item came from the shared roster — and **T4/T5 made it
-   * false**, because Indent, Outdent and Insert exist only in this menu by design (the docked bar
-   * cannot honour them). So the milestone's headline capability had no keyboard path at all: a
-   * WCAG 2.1.1 Level A failure, found by the 2026-08-18 reconciliation pass's specialist gate.
-   *
-   * A counter rather than a boolean, so pressing the key twice on the same row reopens it.
-   */
-  openSignal?: number | undefined;
 }
 
 /** One grid gesture: what it does, and why it cannot (ADR-0082 — shaded with a reason, never gone). */
@@ -95,7 +82,6 @@ export function GanttRowMenu({
   context,
   activityName,
   structure,
-  openSignal,
 }: GanttRowMenuProps): React.ReactElement {
   // `Menu` anchors at a VIEWPORT POINT, not at an element — it clamps x/y to stay on screen, which
   // an element ref cannot express. Read from the trigger at open time rather than held in state, so
@@ -104,19 +90,6 @@ export function GanttRowMenu({
   const [resolved, setResolved] = useState<SelectionBarContext | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const open = anchor !== null && resolved !== null;
-
-  // The keyboard path resolves the SAME anchor and context the click path does, read from the
-  // trigger at open time — so a row scrolled between two opens anchors where it now is, and the
-  // two routes cannot drift about what the menu contains.
-  useEffect(() => {
-    if (openSignal === undefined || openSignal === 0) return;
-    const rect = triggerRef.current?.getBoundingClientRect();
-    setResolved(context());
-    setAnchor({ x: rect?.left ?? 0, y: rect?.bottom ?? 0 });
-    // `context` is a fresh closure each render; depending on it would reopen the menu on every
-    // parent render. The signal is the intent, and it is the only thing that should trigger this.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openSignal]);
 
   // The same classification the coverage gate makes: an item gated on the canvas is not reachable
   // here, and the two canvas-only actions answer false with `canvas: null`.
