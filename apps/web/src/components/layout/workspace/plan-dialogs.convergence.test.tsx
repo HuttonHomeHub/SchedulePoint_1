@@ -40,7 +40,17 @@ vi.mock('@/features/resources', () => ({
 
 /** Captures what the editor was handed, so the seams can be asserted without the real panel. */
 const editorProps = vi.fn();
-vi.mock('@/features/activities', () => ({
+// **Partial**, not total — the `@/features/dependencies` lesson, one feature along. A total mock
+// blanks every export the workspace host imports, not only the ones this suite meant to stub, so a
+// host that starts importing one more symbol fails these at COLLECTION with "no export is defined
+// on the mock". ADR-0095 M5-T4/T5 did exactly that twice (`useUpdateActivityParents`, then
+// `ActivityCreateDialog`).
+vi.mock('@/features/activities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  // Explicit, even though the spread supplies it: the REAL dialog calls `useCreateActivity` and
+  // this suite mounts without a `QueryClientProvider`. The spread stops a new import breaking
+  // collection; the stub stops a mounted one demanding a provider — two different failures.
+  ActivityCreateDialog: () => null,
   useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
   useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
   useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),

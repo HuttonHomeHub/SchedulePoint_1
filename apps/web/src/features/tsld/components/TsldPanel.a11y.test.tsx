@@ -6,9 +6,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
+import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
+
 import { TsldPanel } from './TsldPanel';
 
-beforeEach(() => announceSpy.mockClear());
+/**
+ * The panel's request for the shortcuts help, captured at the seam it already has.
+ *
+ * `canvasUi` is an OPTIONAL prop (`TsldPanel.tsx:416`) that a host may supply instead of the
+ * panel's own `useTsldCanvasUiState()` — the same seam the workspace uses to share one state
+ * across both views. Overriding one field of the real state, rather than mocking the module,
+ * keeps every other behaviour in this file running against the real hook.
+ */
+const setShowHelpSpy = vi.fn();
+
+beforeEach(() => {
+  announceSpy.mockClear();
+  setShowHelpSpy.mockClear();
+});
 
 function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -127,6 +142,26 @@ function renderPanel(activities = [A, B], dependencies = DEP_A_DRIVES_B) {
   return { ...utils, listbox };
 }
 
+/** The real canvas UI state with only `setShowHelp` spied. */
+function PanelWithSpiedHelp() {
+  const ui = useTsldCanvasUiState();
+  return (
+    <TsldPanel
+      activities={[A, B]}
+      dependencies={DEP_A_DRIVES_B}
+      dataDate="2026-01-01"
+      canvasUi={{ ...ui, setShowHelp: setShowHelpSpy }}
+    />
+  );
+}
+
+function renderPanelSpyingHelp() {
+  render(<PanelWithSpiedHelp />);
+  const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+  fireEvent.focus(listbox);
+  return { listbox };
+}
+
 describe('TsldPanel keyboard accessibility (M5 read)', () => {
   it('announces enriched Tier-1 detail (float) when navigating', () => {
     const { listbox } = renderPanel();
@@ -180,13 +215,23 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
     expect(announceSpy).toHaveBeenCalledWith('0 predecessors, 1 successor; drives Excavate');
   });
 
-  it('? opens the keyboard shortcuts help, and the toolbar button does too', () => {
-    const { listbox } = renderPanel();
+  it('? and the toolbar button both ASK for the shortcuts help', () => {
+    // The sheet itself is no longer mounted by this panel, and asserting that it is would pin the
+    // exact defect `docs/TECH_DEBT.md` #137 records: it lived inside `TsldPanel`, which the Gantt
+    // does not render, so in that view `?` and the account-menu item set `showHelp` and **nothing
+    // drew it**. The state was always shared; only the render was trapped, and it now mounts once
+    // at the workspace above both views.
+    //
+    // So what this panel owes is the REQUEST, which is what is asserted here. That the request
+    // produces a dialog is the workspace's contract, covered where the sheet actually lives
+    // (`PlanShortcutsHelp.test.tsx`) and end to end by `e2e-gantt-editing/view-state.spec.ts`.
+    const { listbox } = renderPanelSpyingHelp();
     fireEvent.keyDown(listbox, { key: '?' });
-    expect(screen.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(setShowHelpSpy).toHaveBeenCalledWith(true);
+
+    setShowHelpSpy.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Keyboard shortcuts' }));
-    expect(screen.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeInTheDocument();
+    expect(setShowHelpSpy).toHaveBeenCalledWith(true);
   });
 
   it('moves selection to the nearest survivor and announces when the selected bar is deleted', () => {

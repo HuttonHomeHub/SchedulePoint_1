@@ -9,6 +9,7 @@ import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
 import type { PlanViewMode } from '@/features/gantt';
+import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { InterchangeExportFormat } from '@/features/interchange';
 
 /**
@@ -59,6 +60,24 @@ export interface TsldToolbarContext {
    * schedule as bars is not an edit, so unlike the scheduling-mode selector this is never shaded
    * for a viewer. Registered but not surfaced when `VITE_GANTT_VIEW` is off. */
   setPlanView: (view: PlanViewMode) => void;
+  /**
+   * The Gantt grid's hidden columns and how to change them (ADR-0095 M5-T1).
+   *
+   * Optional, and **absent outside the Gantt** — the chooser is not a shaded control on the
+   * diagram, because the diagram has no columns to choose. ADR-0082's omit branch: a thing the
+   * object cannot do in this projection, not a thing this reader may not do. The `View ▾` panel
+   * therefore drops the whole Columns group rather than rendering an empty one, the same way it
+   * already drops groups whose toggles are all view-scoped away.
+   *
+   * The set itself lives in the URL (M5-T6), so this is the host's URL writer passed down, never a
+   * second copy of the state.
+   */
+  ganttColumns?:
+    | {
+        hidden: ReadonlySet<GanttColumnKey>;
+        setHidden: (next: ReadonlySet<GanttColumnKey>) => void;
+      }
+    | undefined;
   /** The plan's scheduling mode (ADR-0033) — EARLY or VISUAL. Drives the Mode selector's pressed
    * state. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
   schedulingMode: SchedulingMode;

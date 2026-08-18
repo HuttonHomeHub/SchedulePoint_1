@@ -12,6 +12,7 @@ import {
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
 import {
+  ActivityCreateDialog,
   ActivityEditorDialog,
   deleteActivityDescription,
   dissolveSummaryDescription,
@@ -202,6 +203,34 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
             }
           : {})}
       />
+      {/*
+        "Insert activity below" (ADR-0095 M5-T5). Mounted HERE rather than beside the Gantt row
+        menu, for the reason this file's own docblock gives about the editor and the confirmations:
+        one instance the workspace owns cannot drift from itself. The bottom panel's
+        `CreateActivityButton` keeps its own dialog — a different surface with a different trigger —
+        and both now feed the same component with the same props.
+
+        `insertParentId` is three-state: `undefined` closed, `null` open at the top level, an id
+        open inside that summary. Open is therefore `!== undefined`, never a truthiness test, which
+        would treat a top-level insert as closed.
+      */}
+      <ActivityCreateDialog
+        orgSlug={orgSlug}
+        planId={planId}
+        open={model.insertParentId !== undefined}
+        onClose={model.closeInsertActivity}
+        calendars={model.calendars.data ?? []}
+        calendarsLoading={model.calendars.isPending}
+        calendarsError={model.calendars.isError}
+        {...(model.plan.data?.calendarId == null
+          ? {}
+          : { planCalendarId: model.plan.data.calendarId })}
+        planActivities={model.activities.data ?? []}
+        planActivitiesLoading={model.activities.isPending}
+        planActivitiesError={model.activities.isError}
+        {...(model.insertParentId === undefined ? {} : { initialParentId: model.insertParentId })}
+      />
+
       <ConfirmDialog
         open={deleting !== undefined}
         onClose={closeDelete}

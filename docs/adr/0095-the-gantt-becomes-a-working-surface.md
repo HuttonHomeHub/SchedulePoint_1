@@ -199,11 +199,39 @@ constraint, so these reinforce rather than duplicate, and the accessibility tree
 one of each. On paper the badge prints **black**, so the glyph carries the meaning and colour carries
 none — WCAG 1.4.1 holding by construction on the one surface where colour cannot be relied on.
 
-### What this milestone did NOT ship
+### What this milestone did NOT ship — and what closed it afterwards
 
-Recorded here rather than implied. M5 shipped the **row menu (T3)**, **bar labels (T2)** and the
-**constraint badge**; the columns chooser (T1), Indent/Outdent (T4), Insert activity (T5) and view
-memory in URL search params (T6) are **not built** and are `docs/TECH_DEBT.md` rows. The Gantt's **start-edge** resize is also deliberately absent (D4):
+Recorded here rather than implied. M5 first shipped the **row menu (T3)**, **bar labels (T2)** and
+the **constraint badge**, leaving the columns chooser (T1), Indent/Outdent (T4), Insert activity
+(T5) and view memory (T6) unbuilt as `docs/TECH_DEBT.md` #136.
+
+**All four landed on 2026-08-18**, with `apps/web/e2e-gantt-editing/view-state.spec.ts` driving them
+against a real API. Four decisions from that work belong here rather than in a commit message:
+
+- **Indent does not convert a task into a summary.** P6 and MS Project both indent by making the row
+  above the parent, converting it on the way. This cannot: ADR-0038 makes "only a `WBS_SUMMARY` may
+  be a parent" a service invariant, and a summary may never be a dependency endpoint — so the
+  borrowed gesture would silently strip every link on the row above, or fail at the API citing an
+  invariant the planner never invoked. Indent files the row under the nearest **existing** summary
+  and says so plainly when there is none. A smaller capability, and an honest one.
+- **Columns serialise as a HIDDEN list.** With a shown-list, anyone holding an old URL silently
+  loses any column added later; a hidden-list degrades to showing it.
+- **Grid width is deliberately not stored**, though T6 names it: the grid has no resize handle, so
+  nothing can set it. Storing a value no control produces is state claiming a capability the surface
+  does not have. It returns when the grid becomes resizable.
+- **The collapse set is capped at 40 ids**, with the withheld count reported. Ids are 36 characters,
+  and a truncated list half-restores a view while looking deliberate.
+
+**The journey landed after the code, and that is the finding.** T1/T4/T6 shipped in three commits
+with no flag-on journey — the gap ADR-0081 exists about, one epic after it was written. What the
+journey then covered is exactly what the unit suites structurally could not: a reload crossing the
+**real** router, where `docs/TECH_DEBT.md` #96 means a search param arrives as a number rather than
+a string, and every screen test mocks `useSearch` and never crosses it.
+
+`docs/TECH_DEBT.md` **#137** (the shortcuts sheet inert in this view) is closed in the same pass:
+the sheet is renamed `PlanShortcutsHelp`, mounted once at the workspace above both views, and shows
+the Gantt's own bindings. Two lists rather than one merged list — the views share key **names** and
+not meanings, so Enter opens the logic editor on the canvas and commits a cell edit in the grid. The Gantt's **start-edge** resize is also deliberately absent (D4):
 it carries a mode-dependent meaning, and shipping it without the mode statement the canvas has beside
 it would leave a planner unable to tell which of two writes their drag just made.
 

@@ -162,7 +162,13 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-vi.mock('@/features/activities', () => ({
+// **Partial**, not total — the `@/features/dependencies` lesson, one feature along. A total mock
+// blanks every export the workspace host imports, not only the ones this suite meant to stub, so a
+// host that starts importing one more symbol fails these at COLLECTION with "no export is defined
+// on the mock". ADR-0095 M5-T4/T5 did exactly that twice (`useUpdateActivityParents`, then
+// `ActivityCreateDialog`).
+vi.mock('@/features/activities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useActivities: () => query([ACTIVITY]),
   useCreateActivity: () => ({ mutateAsync: vi.fn() }),
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn() }),

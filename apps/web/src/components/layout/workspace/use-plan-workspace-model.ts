@@ -341,6 +341,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // in a ref rather than state: its only consumer is a keydown handler, so storing it in state would
   // re-render the whole workspace on every selection transition — including marquee drags, which
   // emit one per frame — to feed something that reads it lazily and renders nothing.
+  /**
+   * "Insert activity below" (ADR-0095 M5-T5): the create dialog's target parent, or `undefined`
+   * when it is shut. A THREE-state value on purpose — `undefined` closed, `null` open at the top
+   * level, an id open inside that summary — because "no parent" and "not open" are different facts
+   * and collapsing them would make an insert at the top level indistinguishable from a closed
+   * dialog.
+   */
+  const [insertParentId, setInsertParentId] = useState<string | null | undefined>(undefined);
+  const openInsertActivity = useCallback(
+    (parentId: string | null) => setInsertParentId(parentId),
+    [],
+  );
+  const closeInsertActivity = useCallback(() => setInsertParentId(undefined), []);
+
   const pluralSelectionRef = useRef<readonly string[]>([]);
   // Whether that selection is PLURAL, as reactive state — the one bit of it a renderer needs.
   // `buildSelectionBarContext` returns null above one (ADR-0080: the bulk bar replaces the singular
@@ -1931,6 +1945,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     pasteClipboard,
     onPluralSelectionChange,
     pluralSelectionActive,
+    insertParentId,
+    openInsertActivity,
+    closeInsertActivity,
     // Queries
     plan,
     project,

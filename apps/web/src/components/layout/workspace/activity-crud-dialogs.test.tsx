@@ -25,7 +25,17 @@ vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }))
 
 const mutateSpy = vi.fn();
 const onSavedSpy = vi.fn();
-vi.mock('@/features/activities', async () => ({
+// **Partial**, not total — the `@/features/dependencies` lesson, one feature along. A total mock
+// blanks every export this component imports rather than only the ones stubbed here, so the day it
+// started mounting one more (`ActivityCreateDialog`, ADR-0095 M5-T5) the whole file failed at
+// COLLECTION with "no export is defined on the mock".
+vi.mock('@/features/activities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  // Stubbed explicitly even though the spread would supply it: the REAL dialog calls
+  // `useCreateActivity`, and this suite mounts without a `QueryClientProvider`. Partial spread
+  // stops a NEW import breaking collection; an explicit stub stops a mounted one needing a
+  // provider this file has no reason to build. Both, for different failures.
+  ActivityCreateDialog: () => null,
   useDeleteActivity: () => ({ mutate: mutateSpy, isPending: false }),
   useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
   useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),

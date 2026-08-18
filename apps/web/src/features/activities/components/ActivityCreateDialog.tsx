@@ -190,6 +190,7 @@ export function ActivityCreateDialog({
   planActivities = [],
   planActivitiesLoading = false,
   planActivitiesError = false,
+  initialParentId,
 }: {
   orgSlug: string;
   planId: string;
@@ -221,6 +222,16 @@ export function ActivityCreateDialog({
   planActivitiesLoading?: boolean;
   /** The plan activities failed to load — surface it rather than reading as a confirmed "no summaries". */
   planActivitiesError?: boolean;
+  /**
+   * Pre-set the WBS parent (ADR-0095 M5-T5 — "Insert activity below" in the Gantt row menu).
+   *
+   * A **seed, not a lock**: the picker still renders and the planner can change it. Inserting
+   * below a row means "in the section I am looking at", which is a good guess and not a rule — and
+   * a pre-set field they cannot correct is worse than no pre-set at all.
+   *
+   * Undefined leaves the seed exactly as it was, so every existing caller is unchanged.
+   */
+  initialParentId?: string | null;
 }): React.ReactElement {
   const mutation = useCreateActivity(orgSlug, planId);
   const announce = useAnnounce();
@@ -250,7 +261,13 @@ export function ActivityCreateDialog({
   // time — keeps RHF's default and is untouched.
   const general = useScopeForm(
     activityGeneralSchema,
-    (a) => seedGeneral(a, seedFactor),
+    // `initialParentId` overrides the seeded (empty) parent on create. Applied HERE rather than in
+    // `seedGeneral`, which is shared with the editor: there, the parent comes from the row being
+    // edited and an override would be a second answer to the same question.
+    (a) => ({
+      ...seedGeneral(a, seedFactor),
+      ...(initialParentId == null ? {} : { parentId: initialParentId }),
+    }),
     undefined,
     open,
     NO_SCOPE_FOCUS,

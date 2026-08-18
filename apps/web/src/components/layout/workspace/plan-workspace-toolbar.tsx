@@ -7,6 +7,7 @@ import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
+import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import {
   CANVAS_MIN_HEIGHT,
@@ -50,6 +51,7 @@ import {
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities';
+import { useUpdateActivityParents } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import {
   FloatPathsPanel,
@@ -59,6 +61,7 @@ import {
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import type { GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
+import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
 import {
   buildSelectionBarContext,
@@ -270,6 +273,13 @@ export function ToolbarPlanWorkspace({
     [model.calendars.data, plan.calendarId],
   );
 
+  // The Gantt's view memory (ADR-0095 M5-T6): sort, hidden columns and the collapse set in the URL.
+  // Held HERE rather than in the panel because two surfaces read it — the grid itself and the
+  // `View ▾` Columns chooser — and a second copy is the drift `barDateSource` and the float-path
+  // set were both lifted to this file to end.
+  const ganttViewState = useGanttViewState();
+  const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
+
   const ctx = useTsldToolbarContext({
     model,
     plan,
@@ -282,6 +292,12 @@ export function ToolbarPlanWorkspace({
     setPlanView,
     barDateSource,
     hoursPerDayFor,
+    // Only in the Gantt: the diagram has no columns to choose, so the group is ABSENT there rather
+    // than shaded (ADR-0082's omit branch — a thing the projection cannot do, not a permission).
+    ganttColumns:
+      planView === 'gantt'
+        ? { hidden: ganttViewState.hiddenColumns, setHidden: ganttViewState.onHiddenColumnsChange }
+        : undefined,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
@@ -816,6 +832,28 @@ export function ToolbarPlanWorkspace({
       selectionCount: 1,
     });
 
+  /**
+   * The grid's structure WRITE (M5-T4). The panel decides *where* a row goes — it is the only
+   * thing that knows the display order Indent reads — and this supplies the mutation.
+   *
+   * `useUpdateActivityParents` is the ADR-0063 M4b batch the Members panel and the bulk-assign bar
+   * already use, not a second reparent path: it carries each row's `version`, so a stale one
+   * rejects the whole write with a 409 rather than half-moving a tree, and it invalidates the
+   * baseline variance because `parentId` feeds the engine's WBS rollup.
+   */
+  const rowStructure = {
+    canEditSchedule: model.canEditSchedule,
+    penRefusal: model.scheduleRefusal?.('change the structure') ?? null,
+    onReparent: (activity: ActivitySummary, parentId: string | null) => {
+      updateParents.mutate({
+        parents: [{ id: activity.id, parentId, version: activity.version }],
+      });
+    },
+    // M5-T5. The dialog itself is mounted once by `ActivityCrudDialogs`, which already owns the
+    // workspace's activity dialogs so their behaviour cannot drift; this only opens it.
+    onInsert: model.openInsertActivity,
+  };
+
   const surface =
     ctx.planView === 'gantt' ? (
       <>
@@ -850,6 +888,12 @@ export function ToolbarPlanWorkspace({
           // the menu and the bar cannot offer different things for one activity, and there is no
           // second assembly to keep in step.
           rowMenuContextFor={rowMenuContextFor}
+          // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
+          // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
+          viewState={ganttViewState}
+          // Indent / Outdent (M5-T4). The panel resolves WHERE from its own row order; this is the
+          // write.
+          rowStructure={rowStructure}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.
@@ -1213,6 +1257,24 @@ export function ToolbarPlanWorkspace({
           />
         </div>
       ) : null}
+
+      {/*
+        The keyboard-shortcuts sheet, mounted ONCE for the whole workspace (`docs/TECH_DEBT.md`
+        #137). It used to live inside `TsldPanel`, so in the Gantt the `?` binding and the account
+        menu set `showHelp` and nothing rendered — a lit-but-inert control in the view that had
+        just gained six bindings and no other place documenting them. The state was always shared
+        (`use-tsld-canvas-ui-state`); only the render was trapped one level down.
+
+        `view` selects which set it shows. The two views share key NAMES and not meanings — Enter
+        opens the logic editor on the canvas and commits a cell edit in the grid — so one merged
+        list would qualify half its rows into unreadability.
+      */}
+      <PlanShortcutsHelp
+        open={canvasUi.showHelp}
+        onClose={() => canvasUi.setShowHelp(false)}
+        editingEnabled={model.canEditSchedule}
+        view={ctx.planView}
+      />
 
       {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
           has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}
