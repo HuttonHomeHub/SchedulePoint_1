@@ -163,6 +163,26 @@
   --chrome-info-text: oklch(0.8 0.09 245);
   --chrome-ring: oklch(0.786 0.167 70);
 
+  /* The closure members (ADR-0097 §1.5). A status FILL a component can paint on this
+     surface, not an ink — `--chrome-destructive-text` above is the ink. Derived, not
+     chosen: each fill is the least-light value clearing 4:1 against the navy at the
+     highest chroma its hue allows, and each label is the near-black that clears 4.5:1
+     on it. The page's own values measured 2.47:1 (destructive) and 1.34:1 (secondary,
+     info) here — very nearly invisible, and `Button` ships variants painting exactly
+     those two fills. `--info` also gains a hue of its own: the page uses ONE value for
+     both secondary and info, which is why the two failed identically. */
+  --chrome-destructive: oklch(0.61 0.114 27.5); /* 4.00:1 on the surface */
+  --chrome-destructive-foreground: oklch(0.15 0 0); /* 4.92:1 on the fill */
+  --chrome-destructive-hover: oklch(0.68 0.114 27.5); /* 5.28:1, further from the surface */
+  --chrome-secondary: oklch(0.6 0.081 262); /* 4.03:1 on the surface */
+  --chrome-secondary-foreground: oklch(0.15 0 0); /* 4.96:1 on the fill */
+  --chrome-success: oklch(0.585 0.15 143); /* 4.04:1 on the surface */
+  --chrome-success-foreground: oklch(0.15 0 0); /* 4.98:1 on the fill */
+  --chrome-warning: oklch(0.605 0.103 55); /* 4.00:1 on the surface */
+  --chrome-warning-foreground: oklch(0.15 0 0); /* 4.93:1 on the fill */
+  --chrome-info: oklch(0.595 0.123 235); /* 4.06:1 on the surface */
+  --chrome-info-foreground: oklch(0.15 0 0); /* 4.99:1 on the fill */
+
   /* panel — the navigator rail */
   --panel: oklch(0.955 0.004 248);
   --panel-foreground: oklch(0.321 0 0);
@@ -182,6 +202,24 @@
   --panel-warning-text: oklch(0.47 0.11 55);
   --panel-info-text: oklch(0.3 0.075 262);
   --panel-ring: oklch(0.35 0.09 262);
+
+  /* The closure members (ADR-0097 §1.5). The panel is light, so every one of these
+     clears its bar at the page's own value and takes it — declared LITERALLY rather
+     than aliased, because a `var()` here resolves once at this block and a second theme
+     would silently inherit it. Declared at all, rather than left to inherit, because a
+     family that covers some of the closure is the "complete or it is a trap" failure
+     one level down. */
+  --panel-destructive: oklch(0.505 0.19 27.5); /* 5.69:1 */
+  --panel-destructive-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-destructive-hover: oklch(0.455 0.19 27.5); /* 6.96:1, further from the surface */
+  --panel-secondary: oklch(0.338 0.081 262); /* 10.48:1 */
+  --panel-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-success: oklch(0.52 0.15 143); /* 4.54:1 */
+  --panel-success-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-warning: oklch(0.56 0.115 55); /* 4.24:1 */
+  --panel-warning-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-info: oklch(0.338 0.081 262); /* 10.48:1 */
+  --panel-info-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
 
   /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
      THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
@@ -224,6 +262,21 @@
   --brand-warning-text: oklch(0.8 0.14 70);
   --brand-info-text: oklch(0.8 0.09 245);
   --brand-ring: oklch(0.786 0.167 70);
+
+  /* The closure members (ADR-0097 §1.5) — the same derivation as `chrome`, on the same
+     navy. Identical values by arithmetic rather than by copying: both surfaces resolve
+     the same fill, so the same search returns the same answer. */
+  --brand-destructive: oklch(0.61 0.114 27.5); /* 4.00:1 on the surface */
+  --brand-destructive-foreground: oklch(0.15 0 0); /* 4.92:1 on the fill */
+  --brand-destructive-hover: oklch(0.68 0.114 27.5); /* 5.28:1, further from the surface */
+  --brand-secondary: oklch(0.6 0.081 262); /* 4.03:1 on the surface */
+  --brand-secondary-foreground: oklch(0.15 0 0); /* 4.96:1 on the fill */
+  --brand-success: oklch(0.585 0.15 143); /* 4.04:1 on the surface */
+  --brand-success-foreground: oklch(0.15 0 0); /* 4.98:1 on the fill */
+  --brand-warning: oklch(0.605 0.103 55); /* 4.00:1 on the surface */
+  --brand-warning-foreground: oklch(0.15 0 0); /* 4.93:1 on the fill */
+  --brand-info: oklch(0.595 0.123 235); /* 4.06:1 on the surface */
+  --brand-info-foreground: oklch(0.15 0 0); /* 4.99:1 on the fill */
 
   /* White fields on navy — the reference's date and filter inputs. Deliberately
      per-theme: literal white would glare on Dark's near-black chrome. */
@@ -270,6 +323,20 @@
   --auth-warning-text: oklch(0.52 0.13 70);
   --auth-info-text: oklch(0.5 0.13 245);
   --auth-ring: oklch(0.648 0.167 70);
+
+  /* The closure members (ADR-0097 §1.5). The login card is white, so these clear their
+     bars at the page's values — declared literally, for the reason above. */
+  --auth-destructive: oklch(0.505 0.19 27.5); /* 6.48:1 */
+  --auth-destructive-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-destructive-hover: oklch(0.455 0.19 27.5); /* 7.93:1, further from the surface */
+  --auth-secondary: oklch(0.338 0.081 262); /* 11.95:1 */
+  --auth-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-success: oklch(0.52 0.15 143); /* 5.18:1 */
+  --auth-success-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-warning: oklch(0.56 0.115 55); /* 4.83:1 */
+  --auth-warning-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-info: oklch(0.338 0.081 262); /* 11.95:1 */
+  --auth-info-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   /* The page the card floats on. A PAIR rather than a family member, the way
      `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
      17-name vocabulary has no word for "the second stop". Values are the old
@@ -330,6 +397,23 @@
   --warning-text: var(--chrome-warning-text);
   --info-text: var(--chrome-info-text);
   --ring: var(--chrome-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--chrome-destructive);
+  --destructive-foreground: var(--chrome-destructive-foreground);
+  --destructive-hover: var(--chrome-destructive-hover);
+  --secondary: var(--chrome-secondary);
+  --secondary-foreground: var(--chrome-secondary-foreground);
+  --success: var(--chrome-success);
+  --success-foreground: var(--chrome-success-foreground);
+  --warning: var(--chrome-warning);
+  --warning-foreground: var(--chrome-warning-foreground);
+  --info: var(--chrome-info);
+  --info-foreground: var(--chrome-info-foreground);
 }
 
 [data-surface='panel'] {
@@ -351,6 +435,23 @@
   --warning-text: var(--panel-warning-text);
   --info-text: var(--panel-info-text);
   --ring: var(--panel-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--panel-destructive);
+  --destructive-foreground: var(--panel-destructive-foreground);
+  --destructive-hover: var(--panel-destructive-hover);
+  --secondary: var(--panel-secondary);
+  --secondary-foreground: var(--panel-secondary-foreground);
+  --success: var(--panel-success);
+  --success-foreground: var(--panel-success-foreground);
+  --warning: var(--panel-warning);
+  --warning-foreground: var(--panel-warning-foreground);
+  --info: var(--panel-info);
+  --info-foreground: var(--panel-info-foreground);
 }
 
 [data-surface='brand'] {
@@ -372,6 +473,23 @@
   --warning-text: var(--brand-warning-text);
   --info-text: var(--brand-info-text);
   --ring: var(--brand-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--brand-destructive);
+  --destructive-foreground: var(--brand-destructive-foreground);
+  --destructive-hover: var(--brand-destructive-hover);
+  --secondary: var(--brand-secondary);
+  --secondary-foreground: var(--brand-secondary-foreground);
+  --success: var(--brand-success);
+  --success-foreground: var(--brand-success-foreground);
+  --warning: var(--brand-warning);
+  --warning-foreground: var(--brand-warning-foreground);
+  --info: var(--brand-info);
+  --info-foreground: var(--brand-info-foreground);
 }
 
 [data-surface='auth'] {
@@ -393,6 +511,23 @@
   --warning-text: var(--auth-warning-text);
   --info-text: var(--auth-info-text);
   --ring: var(--auth-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--auth-destructive);
+  --destructive-foreground: var(--auth-destructive-foreground);
+  --destructive-hover: var(--auth-destructive-hover);
+  --secondary: var(--auth-secondary);
+  --secondary-foreground: var(--auth-secondary-foreground);
+  --success: var(--auth-success);
+  --success-foreground: var(--auth-success-foreground);
+  --warning: var(--auth-warning);
+  --warning-foreground: var(--auth-warning-foreground);
+  --info: var(--auth-info);
+  --info-foreground: var(--auth-info-foreground);
 }
 
 /* ------------------------------------------------------------------------- */

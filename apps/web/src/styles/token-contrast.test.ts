@@ -82,6 +82,13 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   ['--destructive-hover', '--destructive-foreground', 'the label of a hovered destructive button'],
   ['--destructive', '--destructive-foreground', 'the label of a destructive button at rest'],
   ['--secondary', '--secondary-foreground', 'the label of a secondary button'],
+  // The remaining solid status fills and their labels. `badge.tsx` uses an alpha wash plus the
+  // `-text` variant today and documents why — but `@theme inline` compiles
+  // `bg-warning text-warning-foreground`, so the pairing is one autocomplete away, and an
+  // available-but-unasserted pair is exactly the trap this suite exists to remove.
+  ['--success', '--success-foreground', 'the label on a solid success fill'],
+  ['--warning', '--warning-foreground', 'the label on a solid warning fill'],
+  ['--info', '--info-foreground', 'the label on a solid info fill'],
   ['--field', '--field-foreground', 'what a user types into an input'],
   // The pair nobody had ever checked, and the reason `--field-muted-foreground` exists: a
   // placeholder sits on the FIELD fill, not on the surface. On navy chrome the surface grey
@@ -93,6 +100,11 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   // `bg-warning text-warning-foreground`, so the pairing is one autocomplete away, and an
   // unasserted-but-available token pair is exactly the trap this suite exists to remove.
   ['--muted', '--muted-foreground', 'secondary text on a muted block'],
+  // The neutral `Badge`'s label. Added when ADR-0097's closure made `--secondary-foreground`
+  // scope-derived and the pill — which had been painting it on `--muted` — dropped to 1.53:1 on
+  // navy. The pairing was never asserted, so nothing failed here; `e2e-designed-chrome` caught
+  // it in a browser. Asserting it is the fix; changing the class is only how it passes.
+  ['--muted', '--foreground', 'the label of a neutral status pill'],
   // **A read-only grid cell, and the trap ADR-0083 found going the other way.** A gated field is
   // read-only rather than `disabled`, so the reader can still read the value — which REMOVES the
   // 1.4.3 exemption `disabled:opacity-50` currently relies on. The treatment therefore dims the
@@ -113,18 +125,22 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
 const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
   ['--background', '--ring', 'the focus indicator against the surface it sits on'],
   ['--background', '--primary', 'a primary button against the surface'],
-  // **`--destructive` against the surface is deliberately NOT asserted here, and the reason is a
-  // finding rather than an exemption.** It would fail: 2.92:1 at rest and 2.90:1 hovered, in the
-  // scoped surfaces. That is because `--destructive` is not a rebound name, so inside a scope it
-  // keeps the page's red while `--background` becomes navy — the ADR-0055 §"a family is complete or
-  // it is a trap" shape, and the same one already recorded for `--secondary`.
+  // **The status fills against the surface — asserted now, and this is where the closure pays
+  // off.** These five lines used to be one long comment explaining why `--destructive` could NOT
+  // be asserted: it was not a rebound name, so inside a scope it kept the page's red while
+  // `--background` became navy, and pinning the pair would have pinned a failure. The comment
+  // deferred the decision to ADR-0097 by name, which is exactly what happened — the rebound
+  // family became a closure, these five joined it, and each scope now derives its own fill.
   //
-  // It is latent, not live: the destructive variant renders in `ConfirmDialog` (a modal `<dialog>`,
-  // which the browser puts in the top layer, on page tokens) and in `BulkSelectionBar`. Asserting
-  // it would therefore pin a pairing the product does not currently make, and the fix — whether
-  // `--destructive` joins the rebound family — is a vocabulary decision that belongs to the
-  // design-system rewrite (ADR-0097), not to a hover-contrast fix. Raised there; recorded here so
-  // the absence reads as a decision rather than an oversight.
+  // Measured before that landed: `--destructive` 2.47:1 and `--secondary`/`--info` **1.34:1**
+  // against navy, which is very nearly invisible. `Button` ships `secondary` and `destructive`
+  // variants painting those exact fills, so this was one component move from being live.
+  ['--background', '--destructive', 'a destructive button against the surface'],
+  ['--background', '--destructive-hover', 'the same button, hovered'],
+  ['--background', '--secondary', 'a secondary button against the surface'],
+  ['--background', '--success', 'a solid success fill against the surface'],
+  ['--background', '--warning', 'a solid warning fill against the surface'],
+  ['--background', '--info', 'a solid info fill against the surface'],
   // `--input` is NOT covered by the decorative-border exemption below, and conflating the two
   // is how it went unnoticed at 1.26:1 in every theme. `--field` is valued identically to the
   // surface it sits on by design, so this outline is the ONLY thing that says a text field is

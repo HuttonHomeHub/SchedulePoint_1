@@ -6,12 +6,24 @@ const badgeVariants = cva('inline-flex items-center rounded-full font-medium whi
   variants: {
     // Each pair uses a token validated as legible text ON THAT surface (a `*-text`
     // or `*-foreground` token paired with its own surface), never a solid surface
-    // tone — see the colour-token rule in docs/DESIGN_SYSTEM.md. `muted-foreground`
-    // is tuned for the page background and only reaches 4.34:1 on the lighter
-    // `muted` fill, so the neutral pill uses `secondary-foreground` (the legible
-    // foreground for this surface) to clear WCAG AA on both themes.
+    // tone — see the colour-token rule in docs/DESIGN_SYSTEM.md.
+    //
+    // **The neutral pill used `text-secondary-foreground` on `bg-muted`, and ADR-0097's
+    // closure turned that into a live failure.** The reasoning was sound while
+    // `--secondary-foreground` was a fixed near-white: it was legible on the light `--muted`
+    // where `--muted-foreground` reached only 4.34:1. But `--secondary-foreground` means
+    // "ink ON `--secondary`", and once every scope derived its own — near-black on the navy
+    // surfaces, where the secondary fill is light — the pill composited a near-black label on
+    // a dark navy `--muted` at **1.53:1**. Caught by `e2e-designed-chrome` in a real browser;
+    // no unit test could see it, because the pair is only wrong once a scope rebinds both
+    // halves independently.
+    //
+    // `--foreground` is the fix and not a workaround: a status pill's label is the pill's
+    // CONTENT, not secondary text, and it is the surface's own ink by definition. It measures
+    // 9.98–14.44:1 across the five scopes, and the pairing is now in the contrast census so it
+    // cannot drift back.
     variant: {
-      neutral: 'bg-muted text-secondary-foreground',
+      neutral: 'bg-muted text-foreground',
       critical: 'bg-destructive/10 text-destructive-text',
       warning: 'bg-warning/15 text-warning-text',
     },

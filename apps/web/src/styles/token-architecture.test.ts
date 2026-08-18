@@ -79,27 +79,102 @@ describe('the brand family is theme-invariant, literally', () => {
   });
 });
 
-/** The exact rebind list each `[data-surface]` rule must carry — no more, no fewer. */
-const REBOUND_NAMES = [
-  '--background',
-  '--foreground',
-  '--muted',
-  '--muted-foreground',
-  '--border',
-  '--input',
-  '--accent',
-  '--accent-foreground',
-  '--primary',
-  '--primary-foreground',
-  '--field',
-  '--field-foreground',
-  '--field-muted-foreground',
-  '--destructive-text',
-  '--success-text',
-  '--warning-text',
-  '--info-text',
-  '--ring',
-] as const;
+/**
+ * Tokens deliberately OUTSIDE the closure, each for a reason that is not "we forgot".
+ *
+ * - **Resets** (ADR-0097 §1.5c). `--card` and `--popover` are not family members and not
+ *   exceptions: they are surfaces in miniature, and the honest way to keep ADR-0055's promise
+ *   that "a Card means the same thing everywhere" inside a rebinding world is for a Card to
+ *   restore the page family for its subtree rather than to be governed by whichever scope it
+ *   landed in.
+ * - **Packs** (§1.3). A month band and three gridline tiers have no meaning on a header; a
+ *   gradient's second stop has no sibling in the base vocabulary. Forcing every scope to declare
+ *   them is tokens nobody can use and more chances to get a value wrong. The discriminator: if
+ *   the thing has a semantic sibling in the base vocabulary, rebind it; if it does not, pack it.
+ * - **Data vocabulary.** `--chart-*` is deliberately outside — ADR-0077 records that binding the
+ *   login motif to chart tokens keeps the PAGE theme's values on a pinned panel, which is the
+ *   failure being avoided rather than an oversight.
+ */
+const OUTSIDE_THE_CLOSURE = {
+  resets: ['--card', '--card-foreground', '--popover', '--popover-foreground'],
+  packs: [
+    '--canvas',
+    '--canvas-band',
+    '--canvas-grid-day',
+    '--canvas-grid-month',
+    '--canvas-grid-year',
+    '--canvas-nonworking-hatch',
+    '--ground',
+    '--ground-end',
+  ],
+  data: ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'],
+} as const;
+
+/**
+ * **The rebound family, COMPUTED rather than authored** (ADR-0097 §1.5).
+ *
+ * This used to be a hand-written array of 18 names, and it failed once per discovery: three
+ * separate people found a token outside it — the chrome stub, then `--secondary`, then
+ * `--destructive` — and each time the available answer was "add that one". A rule that fails
+ * once per discovery is not a rule.
+ *
+ * So the family is derived from what a compiled utility can composite. Every unqualified colour
+ * token `@theme inline` exposes becomes `bg-*` / `text-*` / `border-*`, so every one of them can
+ * be painted on, or against, a scoped `--background` — which means every one of them is half of
+ * a pair the scope governs, unless it is deliberately outside for one of the three reasons above.
+ *
+ * **Completeness stops being a count and becomes a property:** a scope is complete when no pair a
+ * compiled utility can composite is split across two scopes. The count is now an output.
+ *
+ * **Its blind spot, stated:** this is what a utility CAN compile, not what the product DOES
+ * render, so it is a superset and governs pairs nobody makes. That is the correct direction to be
+ * wrong in — a governed pair nobody renders costs three lines of CSS; an ungoverned pair somebody
+ * renders costs a WCAG failure nobody can see coming.
+ */
+function computeReboundNames(): string[] {
+  const theme = blockBody('@theme inline');
+  const exposed = [...theme.matchAll(/--color-[\w-]+\s*:\s*var\((--[\w-]+)\)/g)].map(
+    (match) => match[1]!,
+  );
+  const excluded = new Set<string>([
+    ...OUTSIDE_THE_CLOSURE.resets,
+    ...OUTSIDE_THE_CLOSURE.packs,
+    ...OUTSIDE_THE_CLOSURE.data,
+  ]);
+  return [...new Set(exposed)].filter((name) => !excluded.has(name)).sort();
+}
+
+const REBOUND_NAMES = computeReboundNames();
+
+describe('the rebound family is a closure, not a list', () => {
+  it('every exposed colour token is either rebound or deliberately outside', () => {
+    // The assertion that makes the derivation trustworthy: a token added to `@theme inline`
+    // lands in the family automatically, and a token that should NOT be in the family has to be
+    // named in `OUTSIDE_THE_CLOSURE` with a reason. There is no third option, which is exactly
+    // what the hand-written array allowed.
+    const theme = blockBody('@theme inline');
+    const exposed = new Set(
+      [...theme.matchAll(/--color-[\w-]+\s*:\s*var\((--[\w-]+)\)/g)].map((m) => m[1]!),
+    );
+    const accounted = new Set([
+      ...REBOUND_NAMES,
+      ...OUTSIDE_THE_CLOSURE.resets,
+      ...OUTSIDE_THE_CLOSURE.packs,
+      ...OUTSIDE_THE_CLOSURE.data,
+    ]);
+    const orphans = [...exposed].filter((name) => !accounted.has(name));
+    expect(orphans, `unaccounted colour tokens: ${orphans.join(', ')}`).toEqual([]);
+  });
+
+  it('pulls in the status fills three people found one at a time', () => {
+    // Named explicitly, because they are the evidence the closure is worth having: each was
+    // discovered separately and added by hand. Measured against the navy scopes they were
+    // 2.47:1 (destructive) and 1.34:1 (secondary, info) before this landed.
+    for (const name of ['--destructive', '--secondary', '--info', '--success', '--warning']) {
+      expect(REBOUND_NAMES, `${name} is not in the computed family`).toContain(name);
+    }
+  });
+});
 
 describe('@theme inline is load-bearing', () => {
   it('keeps the `inline` keyword', () => {
