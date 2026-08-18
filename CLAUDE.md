@@ -2250,6 +2250,53 @@ progress` off the command surface because **an object action belongs on the obje
   §8's "edit supported" is still called **substantially** met rather than closed: the start-edge
   resize is deliberately absent (D4), and Gantt dependency arrows ship default-off.
 
+- **ADR-0096** _(Accepted; M0–M5 landed 2026-08-18, released `api-v0.50.0` / `web-v0.93.0`)_ —
+  Deleted work expires, and purge is refused structurally. Opened on three complaints about the
+  recycle bin — long and unstructured, an unhelpful "Restore its parent first", a duplicated
+  heading — and reading the code changed two of the three answers. A cascade stamps **one**
+  `delete_batch_id` across a subtree and `restoreBatch` is keyed on it, so most of those messages
+  described work the product **already does**: the list groups by deletion event and the message
+  disappears because the situation does, leaving only the case grouping cannot dissolve — a blocker
+  in a **different** batch — which now names it and offers a two-press restore. The requested
+  **purge is refused**, and structurally rather than by preference: its safeguard ("transfer purged
+  content to the Super Admin account") asks for exactly the reach ADR-0086 makes a **compile
+  error**, and the alternative of relaxing `audit_events`' `ENABLE ALWAYS` triggers was already
+  rejected by ADR-0085 D1. What the request was _for_ is served by **expiry** — nothing had ever
+  expired, which is why the list grows forever — making this the product's **first _aimable_ hard
+  delete of customer content** (interchange's rollback cannot be pointed at existing data). It
+  ships **off**, behind a retroactive 90-day clock and one release of notice, because an unawaited
+  sweep at boot means a single release cannot both preview and arm it.
+  **The load-bearing decision is that the expiry deletes by _ownership scope_, never by
+  `delete_batch_id`** (D5): the cascade leaves `resource_assignments` and
+  `cross_plan_dependencies` unstamped (`docs/TECH_DEBT.md` #139), so a batch-keyed delete passes on
+  a bare plan and violates a foreign key on exactly the plans that matter — resourced ones and
+  programme-linked ones. Proven against a real database with the negative control naming the
+  constraint. D7 records the spec's claim that `RESTRICT` forces level-order deletion as **false**,
+  refuted independently by two reviewers: the RI check is an `AFTER ROW` trigger evaluated at the
+  END of the statement, so a 40-deep WBS chain goes in one statement.
+  **The gate pass earned its place for the sixth epic running.** Six specialists; security passed
+  having re-derived the epic's own numbers from the code, the other five blocked on seven findings.
+  Three were measured rather than argued — Prisma does not chunk an `{ in: [...] }` list, so a
+  cascade over **16,384 activities** threw a bind-parameter error the catch block reported as "the
+  next tick will retry it", leaving the subtree permanently unexpirable, hourly, forever, under a
+  reassuring message. The arming switch itself was **inverted**: `z.coerce.boolean()` is
+  `Boolean(value)`, so `'false'` parsed to `true` and `.env.example` ships that exact line (D10).
+  A missing re-entrancy guard the sibling job carries deliberately; a budget bounding the big-batch
+  case and not the mirror one (100k ordinary deletions ≈ 17 minutes); focus dropped to `<body>` on
+  a dialog's Cancel/close/error paths, third instance of that class here; and all five delete
+  confirmations claiming a deadline that does not exist on an unarmed host — the epic's own honesty
+  rule failing one screen along from the screen that enforces it.
+  **Two more came from CI and both exposed the gate rather than the code.** `scripts/frontend-only.json`
+  still declared the finished gantt-editing epic active, so the first branch to legitimately change
+  `apps/api/` was refused on behalf of a parity argument that was not its own — a stale gate does not
+  go quiet, it goes **wrong about a different epic**. And the BASE Playwright journey still asserted
+  the pre-ADR-0096 screen, because `scripts/e2e-local.sh` mapped `web:<suite>` to
+  `test:e2e:<suite>` and the base is `test:e2e` with **no suffix** — the suite covering the shipped
+  default was the one thing the documented pre-push gate could not run. Both fixed, `web` added as a
+  target, and `docs/TESTING.md` gains the rule: change a screen, run the base journey.
+  **The CPM engine is not imported and the ADR-0034 recalculation parity gate is untouched** — in
+  its honest form: there is nothing here to hold parity for. Builds on ADR-0046/0072/0073/0085/0086/0087.
+
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
   alerts — turned out to need no principal at all (an alert is an outbound POST), but the question
