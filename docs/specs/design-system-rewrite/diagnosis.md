@@ -227,7 +227,34 @@ Confirmed absent, in every theme and every scope:
 **Three of the four pass.** The finding is not four defects; it is that **nobody knows they pass**,
 and the file's own comment at `:101-104` already states the principle it then fails to apply
 generally: _"an unasserted-but-available token pair is exactly the trap this suite exists to
-remove"_. §3 of `design.md` turns that sentence into a derived gate.
+remove"_. §8.1 of `design.md` turns that sentence into a derived gate.
+
+### 2.3a The real shape: a pair whose two halves are governed by different scopes
+
+Three people have now independently found a token outside `REBOUND_NAMES`
+(`token-architecture.test.ts:83-102`) that would fail if a component ever landed somewhere new, and
+each time the remedy proposed was "add that one". **That is a rule which fails once per discovery,
+and it will keep discovering.**
+
+The three, in the order they were found:
+
+| #   | Token           | Found by                      | Number                                                                                              | Status                                                                                         |
+| --- | --------------- | ----------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1   | the chrome stub | ADR-0055's own Context        | `text-muted-foreground` at **2.8:1**, `outline` Button at **1.01:1** on navy                        | **Live.** Fixed by inventing the mechanism                                                     |
+| 2   | `--secondary`   | `corporate-brand` **G3**      | the lighter navy on navy, ~**1.4:1**                                                                | Latent — no `variant="secondary"` renders inside any of the six `<Surface>` sites              |
+| 3   | `--destructive` | the `--destructive-hover` fix | `--background` vs `--destructive` = **2.92:1** at rest, **2.90:1** hovered, inside a scoped surface | Latent — `ConfirmDialog` is a modal `<dialog>` in the top layer, `BulkSelectionBar` is on page |
+
+All three are the same defect: **`--background` is rebound and the fill beside it is not, so the two
+halves of one composited pair are governed by different scopes.** The ratio between them is then not
+a property anybody can reason about — it is an accident of which theme is on and where the component
+landed.
+
+Note what #2 and #3 have in common and what a "complete family" count cannot express: both are
+**latent**, both were found by someone computing something else, and in both cases the honest record
+was to write down the number and _not_ assert a pairing the product does not currently make (which is
+what the `--destructive` fix did, in the test file, with the numbers). **A count of 17, then 18, then
+19 tokens is the wrong instrument** — it says how many names a family has, and the question is
+whether any compiled pair spans two families. `design.md` §1.5 replaces the count with a closure.
 
 ### 2.4 Iconography has a rule and a hole
 
@@ -415,17 +442,15 @@ and says what the seventh would have to prove.
 
 ## §5. The shape of the whole thing, in one table
 
-| Category                   | Finding                                                        | Remedy                                         |
-| -------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
-| Inherited (§1.1)           | One token axis; five disagreeing row/control heights           | A **metric** token kind + a density scope      |
-| Inherited (§1.2)           | No page primitive; `CardTitle` is an `h1`; `text-3xl` unused   | Page vocabulary + a type ramp with a top       |
-| Inherited (§1.3)           | Tabular figures remembered 29 times by 18 files                | A **data** type ramp, applied by the primitive |
-| Inherited (§1.4)           | The accent has a contrast rule and no placement rule           | An **accent role** rule + a census gate        |
-| Never decided (§2.1, §2.2) | `DataTable` is a fifth of its spec; no `EmptyState`/`Skeleton` | Build the four archetypes                      |
-| Never decided (§2.3)       | The contrast pair list is a hand-written inventory             | **Derive** the pair list from `@theme inline`  |
-| Never decided (§2.4, §2.5) | Four toolbar segments have no icons; one prominence channel    | An icon rule + a second prominence channel     |
-| **Semantics (§3)**         | **The canvas is outside the system and outside the gates**     | **The canvas becomes a surface scope**         |
-| Deliberate (§4)            | Borders-first; hand-rolled primitives; portals; pinned brand   | **Kept**, one refined, one cost recorded       |
-
-</content>
-</invoke>
+| Category                   | Finding                                                        | Remedy                                                   |
+| -------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| Inherited (§1.1)           | One token axis; five disagreeing row/control heights           | A **metric** token kind + a density scope                |
+| Inherited (§1.2)           | No page primitive; `CardTitle` is an `h1`; `text-3xl` unused   | Page vocabulary + a type ramp with a top                 |
+| Inherited (§1.3)           | Tabular figures remembered 29 times by 18 files                | A **data** type ramp, applied by the primitive           |
+| Inherited (§1.4)           | The accent has a contrast rule and no placement rule           | An **accent role** rule + a census gate                  |
+| Never decided (§2.1, §2.2) | `DataTable` is a fifth of its spec; no `EmptyState`/`Skeleton` | Build the four archetypes                                |
+| Never decided (§2.3)       | The contrast pair list is a hand-written inventory             | **Derive** the pair list from `@theme inline`            |
+| Never decided (§2.4, §2.5) | Four toolbar segments have no icons; one prominence channel    | An icon rule + a second prominence channel               |
+| **Semantics (§3)**         | **The canvas is outside the system and outside the gates**     | **The canvas becomes a surface scope**                   |
+| **Split pairs (§2.3a)**    | **Three tokens found outside the rebound set, one at a time**  | **A closure rule, not a longer list** (`design.md` §1.5) |
+| Deliberate (§4)            | Borders-first; hand-rolled primitives; portals; pinned brand   | **Kept**, one refined, one cost recorded                 |

@@ -37,7 +37,8 @@ ADR-0055's mechanism is correct and stays, unamended in substance:
 - a family is **complete or it is a trap**;
 - portals leave every scope, so overlays paint on `--popover`;
 - **`--card` is deliberately not a rebound name**, so a `Card` means the same thing everywhere
-  (`docs/DESIGN_SYSTEM.md:283-285`). Kept.
+  (`docs/DESIGN_SYSTEM.md:283-285`). **The promise is kept; the mechanism changes** — §1.5(c) makes a
+  Card a _reset_ rather than an exception, because as an exception it is currently a split pair.
 - **no descendant learns where it is.** This is the property everything else rests on.
 
 I am not proposing a replacement mechanism, and I want to be explicit about why, because the mandate
@@ -119,6 +120,68 @@ they clear that bar: a `dialog` scope (portals already leave every scope — a d
 that is correct), and a `print` scope (the print path is a _palette_, not a surface; it forces light
 values, and giving it a scope means every future value change is applied a fourth time).
 
+### 1.5 What belongs in the rebound family — a closure, not a longer list
+
+This is the question `diagnosis.md` §2.3a poses and it is the most important structural decision in
+the epic after the canvas scope. Three people have found a token outside `REBOUND_NAMES` one at a
+time (the chrome stub, `--secondary`, `--destructive`), and each time the available answer was "add
+that one". **A rule that fails once per discovery is not a rule.**
+
+**The defect is never "a token is not rebound". The defect is a _pair whose two halves are governed
+by different scopes._** `--background` is rebound and becomes navy; `--destructive` is not and keeps
+the page's red; their ratio is then **2.92:1**, and it is nobody's decision — it is an accident of
+which theme is on and where the component landed. Whereas `--secondary`/`--secondary-foreground` is
+_self_-consistent as a fill-and-label pair and only becomes a defect against a rebound
+`--background`. So the property to enforce is not membership; it is **governance agreement**.
+
+Three parts, and they replace the count.
+
+**(a) The page becomes an explicit family, `--page-*`.** Today the page's values _are_ the unqualified
+names, so the unqualified names are simultaneously a source and a binding, and there is nothing to
+restore _from_. Making `:root` bind `--background: var(--page)` &c. costs 18 lines, makes all six
+scopes symmetric, and is the prerequisite for (c).
+
+**(b) `REBOUND_NAMES` is computed as a closure, and asserted rather than authored.**
+
+> Seed the set with the scope's fill and its foreground. Add any token that can be **composited with
+> a member in a utility the build can compile** — a fill painted on it, ink painted on it, a boundary
+> drawn against it. Iterate to a fixed point. That set is the rebound family.
+
+Run over today's `@theme inline`, the closure pulls in what three people found separately —
+`--destructive`, `--destructive-foreground`, `--destructive-hover`, `--secondary`,
+`--secondary-foreground`, and the solid `--success`/`--warning`/`--info` triples — because each is a
+fill a component can paint **on** a scoped `--background`. Nobody has to notice them.
+
+**(c) A second fill inside a scope is a _reset_, not a member.** `--card` and `--popover` are not
+family tokens and not exceptions: they are **surfaces in miniature**, and the honest way to keep
+ADR-0055's promise that _"a `Card` means the same thing everywhere"_ inside a rebinding world is for
+a `Card` to **restore the page family for its subtree** — `[data-surface='card'] { --background:
+var(--card); --foreground: var(--card-foreground); --muted-foreground: var(--page-muted-foreground);
+… }`. A reset is not a new vocabulary; it is the page's, re-entered.
+
+**This closes a live split pair nobody has raised.** `CardDescription` is `text-muted-foreground`
+(`card.tsx:61`) on `bg-card` (`:10`). `--muted-foreground` **is** rebound; `--card` is not. So a Card
+rendered inside the Project Explorer rail takes the _panel's_ grey — chosen for the panel's fill — on
+the _page's_ white card. Latent today because `[data-designed-chrome].corporate` makes that rail
+light (`globals.css:986`); one flag state away from Corporate's navy `--panel-muted-foreground`
+(`oklch(0.78 0.02 264)`, chosen for navy) sitting on white. Under (c) it cannot happen, and under (b)
+it would have been reported the day the pair became compilable.
+
+**So "complete" stops being a count and becomes a property:**
+
+> **A scope is complete when no pair a compiled utility can composite is split across two scopes.**
+
+17, then 18, then 19 was always the wrong instrument — it counts names, and the question is whether
+any pair spans two families. The count becomes an output of the closure, and
+`token-architecture.test.ts` asserts the _closure_, not a hand-written array.
+
+**Its blind spot, stated:** the closure is computed from what a utility **can** compile, not from
+what the product **does** render, so it will be a superset — it will govern pairs the product never
+makes. That is the correct direction to be wrong in (a governed pair nobody renders costs three
+lines of CSS; an ungoverned pair somebody renders costs a WCAG failure nobody can see coming), and it
+is exactly the trade the `--destructive` fix took by _recording_ the 2.92:1 rather than asserting a
+pairing the product does not currently make. Under the closure that judgement is no longer needed.
+
 ---
 
 ## 2. Colour — two changes, and the accent finally gets a job
@@ -174,10 +237,39 @@ See §8.1. `--destructive`/`--destructive-foreground`, `--secondary`/`--secondar
 `--card`/`--muted-foreground`, `--popover`/`--muted-foreground` — three of which pass, hand-computed
 (`diagnosis.md` §2.3), and none of which anyone knew passed.
 
-`--secondary` additionally becomes a **rebound name** (the nineteenth), closing the corporate spec's
-**G3**: today `bg-secondary` inside a scope keeps the page value, which on Corporate's navy band is
-the lighter navy on navy. Verified latent today; this epic makes it live, because designing an
-active state is exactly when somebody reaches for `secondary`.
+`--secondary` and `--destructive` are not "the nineteenth and twentieth names": they arrive because
+the **closure** (§1.5b) pulls them in, along with everything else that can be painted on a scoped
+`--background`. Closing the corporate spec's **G3** stops being a fix and becomes a consequence.
+
+### 2.4 Interaction states are a token, and the rule is directional
+
+`hover:bg-destructive/90` is not `--destructive`. It is `--destructive` composited at 90 % against
+whatever sits behind it, which in Light lightens it toward white and took a Delete button's label to
+**4.32:1** — a live WCAG 1.4.3 failure, found while asserting the rest state and fixed with a
+`--destructive-hover` token in all three themes. **An opacity modifier is a different colour, and the
+matrix measures tokens while the browser paints utilities.**
+
+So: **an interaction state is a token, never a modifier**, and the rule for its value is the one that
+fix established, adopted here unchanged because it generalises:
+
+> **Hover moves the fill _away from the surface it sits on_.**
+
+It reads as an inconsistency — Dark lightens, Light and Corporate darken — and it is not. Darkening
+in Dark takes the fill to **2.96:1** against its own page, so the control would stop being
+distinguishable from what it sits on **in the act of being hovered**. The direction is a per-theme
+fact about which way there is room, not a global preference, and writing it down is what stops the
+next person "fixing" the inconsistency.
+
+Two consequences:
+
+- `--{token}-hover` (and, where a design calls for one, `-active`) joins the **closure**, because it
+  is a fill that carries ink and sits on a scoped surface.
+- **"The surface it sits on" is the governing scope's fill**, not `--background` at `:root`. This is
+  where §1.5 and this rule compose: a hover value derived against the page and rendered on navy is
+  the same split-pair defect one state along.
+
+`bg-primary/90` (`button.tsx:11`) and `bg-secondary/80` (`:12`) are the two remaining modifiers and
+take the same treatment. Neither is measured anywhere today.
 
 ---
 
@@ -427,12 +519,29 @@ So the universe is **derived**: enumerate every `--color-*` fill and every `--co
 assert that **every pair is either measured or explicitly classified with a reason**. Adding a token
 without classifying its pairs fails the build.
 
+**Three extensions, each one a defect somebody actually found:**
+
+- **Alpha-modified fills are separate colours.** `bg-X/90` composites `--color-X` against its
+  backdrop and is not `--color-X`. The census enumerates every `/\d+` colour modifier in
+  `apps/web/src/**` (today: `button.tsx:11,12,19`) and measures the composite. This is the gate that
+  would have caught the Delete button at **4.32:1** hovered while its rest state passed at 4.56:1 —
+  the failure was in the modifier and nothing looked at modifiers.
+- **A split pair is a failure by construction, not by ratio** (§1.5). If one half of a compiled pair
+  is governed by a scope and the other is not, the census fails **regardless of the number**. That is
+  what turns the `--background`/`--destructive` **2.92:1** finding from a judgement call — assert it,
+  or record that the product does not currently make that pairing? — into a rule.
+- **Both directions of an interaction state.** A `-hover` token is measured against its own label
+  **and** against the governing scope's fill, because §2.4's rule is directional and a value derived
+  against the wrong surface is a defect one state along.
+
 Its blind spot, stated in its own docblock, because a census presented as proof is worse than none:
 **it forces a classification, not a correct one.** A pair wrongly classified "never rendered" passes.
 The census makes the omission impossible; it cannot make the judgement.
 
 This is the gate that would have caught `--destructive`/`--destructive-foreground` at **4.56:1** on
-the day it was declared, and `--secondary` the day it was not rebound.
+the day it was declared, its hover at **4.32:1** on the day the modifier was written, `--secondary`
+the day it was not rebound, and the `--background`/`--destructive` split the day a scope existed.
+**Four findings, three finders, one gate.**
 
 ### 8.2 The **plot separation matrix** — new, and canvas-only
 
@@ -479,8 +588,10 @@ rather than a conflict reaching a planner with nothing behind it.
 
 ### 8.6 Existing gates, extended not replaced
 
-`token-architecture.test.ts` gains: per-scope completeness = base 18 + declared packs; the
-`REBOUND_NAMES` list gains `--secondary`; the `canvas` family joins `FAMILIES`; the
+`token-architecture.test.ts` gains: per-scope completeness = **the closure** (§1.5b) + declared
+packs, replacing the hand-written `REBOUND_NAMES` array at `:83-102` with an assertion that the
+declared rebind list **equals** the computed closure — so `--secondary`, `--destructive` and its
+hover arrive without anyone noticing them; the `canvas` family joins `FAMILIES`; the
 `[data-density]` layers get the same "a scoped layer restates its global layer in full" assertion
 that the flag layers have (`:202-221`), because it is the same cascade trap.
 
@@ -521,5 +632,3 @@ hierarchy reads, or that an accent is prominent enough to be an accent. Mechanis
 impossible for a _decision that was made_ to be applied inconsistently; they cannot make the decision.
 That judgement stays with a person looking at a screen, and this design's honest contribution is that
 it reduces the number of screens that person has to look at from every screen to every archetype.
-</content>
-</invoke>

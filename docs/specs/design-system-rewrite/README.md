@@ -90,6 +90,5 @@ already computed it, or **hand-computed** from `globals.css` using this reposito
 (`apps/web/src/test/colour.ts`) — and each one says which. The hand-computed figures are the
 decision-bearing ones and **L0-T1 exists to execute them** rather than trust this document
 (`CLAUDE.md` §19.10; ADR-0076 Class 3). One of them contradicts a sibling spec's hypothesis and
-`diagnosis.md` §0.2 says so rather than routing around it.
-</content>
-</invoke>
+`diagnosis.md` §0.2 says so rather than routing around it — and its verdict was then confirmed
+independently, along with a defect the same computation found that I had missed (§0.2, point 3).
