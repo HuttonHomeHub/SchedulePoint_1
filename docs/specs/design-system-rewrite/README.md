@@ -62,12 +62,13 @@ rebound set is **computed** by closure from the scope's fill and asserted rather
 pulls in `--destructive`, `--secondary`, `--destructive-hover` and the solid status triples with
 nobody having to notice them); and a second fill inside a scope — `Card`, `Popover` — is a **reset**
 rather than a member, which keeps ADR-0055's promise that a `Card` means the same thing everywhere
-_and_ closes a live split pair nobody has raised (`CardDescription` is a rebound `--muted-foreground`
-on an unbound `--card`).
+_and_ closes a **latent** split pair nobody has raised (`CardDescription` is a rebound
+`--muted-foreground` on an unbound `--card`). Latent, not live — verified: there is no `<Card>` or
+`bg-card` inside any of the six `<Surface>` sites. **That is the stronger argument, not the weaker
+one**: the pair is compilable, so it is one component move from being real and nothing in the build
+would report it, and a rule resting on that cannot be falsified by a component moving the other way.
 
-## Critical questions — four, everything else has a stated default
-
-## Answers (product owner, 2026-08-18) — settled, do not re-ask
+## Critical questions — all four answered (product owner, 2026-08-18), settled, do not re-ask
 
 |                           | Answer                                        | Note                                                                                  |
 | ------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
