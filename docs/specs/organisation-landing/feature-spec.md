@@ -1,8 +1,9 @@
 # Feature Spec: The organisation landing page ("Overview")
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** **Approved** — the three critical questions were answered by the product owner on
+  2026-08-18 and are recorded in §6. Ready to build.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
-- **Date:** 2026-08-18
+- **Date:** 2026-08-18 (drafted); 2026-08-18 (decisions folded in)
 - **Tracking issue / epic:** _(to be created)_
 - **Roadmap link:** [`docs/ROADMAP.md`](../../ROADMAP.md) → "Next → Product features"
 - **Related ADR(s):** proposed **ADR-0097** _(provisional number — confirm at filing time; ADR-0071
@@ -125,10 +126,10 @@ constraint rather than an afterthought:
 
 | Role               | What they need from this screen                                   | What the system can actually give them                                                                                                                                                   |
 | ------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Org Admin**      | Where is the work, and what is waiting on me as the administrator | Recently changed; pens they hold; **pending invitations**; expiring deleted items                                                                                                        |
-| **Planner**        | Where is the work, and am I blocking anyone                       | Recently changed; pens they hold, **and whether a colleague has asked for one**; expiring deleted items                                                                                  |
-| **Contributor**    | Which plans am I reporting progress against                       | Recently changed. **Nothing else** — see §1 "The honest limit"                                                                                                                           |
-| **Viewer**         | What is the current state of the programme                        | Recently changed. Nothing else                                                                                                                                                           |
+| **Org Admin**      | Where is the work, and what is waiting on me as the administrator | Jump back in; Recently changed; pens they hold; **pending invitations**; expiring deleted items                                                                                          |
+| **Planner**        | Where is the work, and am I blocking anyone                       | Jump back in; Recently changed; pens they hold, **and whether a colleague has asked for one**; expiring deleted items                                                                    |
+| **Contributor**    | Which plans am I reporting progress against                       | **Jump back in** and Recently changed. Nothing in the attention section — see "The honest limit" below                                                                                   |
+| **Viewer**         | What is the current state of the programme                        | **Jump back in** and Recently changed. Nothing in the attention section                                                                                                                  |
 | **External Guest** | —                                                                 | **Never reaches this screen.** A guest holds a `GuestPrincipal` (ADR-0051) and can read exactly one plan through `/share`; there is no org-scoped route for them and this spec adds none |
 
 **The honest limit, and it is a finding rather than a scoping choice.** SchedulePoint persists
@@ -139,14 +140,19 @@ the database holds are the **edit-lock holder** (`plan_locks.holder_user_id`) an
 both of which are Planner-and-up: `plan:acquire_lock` is granted to Planner + Org Admin
 "deliberately NOT Contributor" (`apps/api/src/common/auth/org-permissions.ts:241-244`).
 
-Therefore **"Needs your attention" is a writer-only section in this epic**, and for a Viewer or
-Contributor the section is _omitted_ rather than shown empty (ADR-0082's rule, applied one tier up).
-That is Critical Question **Q2**.
+Therefore **"Needs your attention" is a writer-only section**, and for a Viewer or Contributor the
+section is _omitted_ rather than shown empty (ADR-0082's rule, applied one tier up).
+
+**The product owner's answer to that (Q2, 2026-08-18) was not to accept the omission but to close
+the gap from the other side: build "Jump back in".** It is the one genuine personalisation available
+without inventing per-user server state — the plans _this reader_ recently opened, remembered by the
+browser — and it works for every role including the two the attention section cannot serve. It is
+therefore a first-class section of this epic (§4.9), not a later idea.
 
 ### Primary use cases
 
-1. **Resume.** A planner signs in and goes straight to the plan they or a colleague last worked on,
-   without walking the Project Explorer tree.
+1. **Resume.** A planner signs in and goes straight back to the plan **they** were last in, without
+   walking the Project Explorer tree.
 2. **Catch up.** A planner sees which plans moved while they were away, and who moved them.
 3. **Unblock.** A planner discovers they are still holding the editing lock on a plan they left
    yesterday — and, more urgently, that a colleague has asked for it.
@@ -158,16 +164,21 @@ That is Critical Question **Q2**.
 ### User journeys
 
 **Happy path (returning planner).** Sign in → `/` → redirect to `/orgs/acme` → the overview paints:
-`<h1>` Acme Construction, "Recently changed" listing up to eight plans with who and when, "Needs
-your attention" with one item ("You are holding the editing lock on **Tower B — Substructure**") →
-click the plan → the workspace opens.
+`<h1>` Acme Construction, "Jump back in" with the three plans this browser last opened, "Recently
+changed" listing up to eight plans with who and when, "Needs your attention" with one item ("You are
+holding the editing lock on **Tower B — Substructure**") → click a plan → the workspace opens.
 
 **Alternate — new organisation.** Sign up → onboarding creates the org → `/orgs/acme` → the
 overview shows the new-organisation state: one sentence and one action ("Add your first client"),
 worded for the reader's role.
 
-**Alternate — Viewer.** Sign in → the overview shows `<h1>` + "Recently changed" only. No attention
-section, no shaded box, no explanation of an absence they cannot act on.
+**Alternate — Viewer.** Sign in → the overview shows `<h1>`, "Jump back in" (if this browser has
+opened plans as this user) and "Recently changed". No attention section, no shaded box, no
+explanation of an absence they cannot act on.
+
+**Alternate — a new device, or a first visit.** "Jump back in" has nothing to remember, so the
+section is **not rendered at all** — an empty "Jump back in" would ask the reader to explain their
+own history to themselves.
 
 **Alternate — from a plan.** A planner deep in the TSLD clicks the **SchedulePoint** wordmark in the
 chrome band → back to the overview. (The band renders `AppHeaderRow` above the portalled toolbar on
@@ -185,18 +196,20 @@ always present. This is what makes removing the nav item safe.)
 
 ### Success criteria
 
-| Criterion                          | Measure                                                                                                                                | How                                                                                                                                                        |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The landing answers "what changed" | On an organisation with ≥ 1 plan touched in the last 30 days, the overview lists it with the correct actor and timestamp               | Flag-on journey `apps/web/e2e-overview/` drives a real API: edit an activity, return to the overview, assert the plan appears with the editing user's name |
-| It costs one request               | Exactly **one** new network request on the landing, in parallel with the existing clients query                                        | Playwright request interception in the journey                                                                                                             |
-| It is fast enough for the LCP path | `GET …/overview` p95 **< 200 ms** at a realistic org size (docs/PERFORMANCE.md), measured against a seeded database, **not estimated** | A measurement task in M1 with the numbers recorded in the ADR                                                                                              |
-| Nothing regresses for a Viewer     | A Viewer sees no attention section and no shaded placeholder                                                                           | Unit test + a role-scoped journey case                                                                                                                     |
-| The route home survives            | `aria-current="page"` on the wordmark when on the landing; the landing reachable from a plan                                           | Journey + unit test                                                                                                                                        |
+| Criterion                                 | Measure                                                                                                                                | How                                                                                                                                                        |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The landing answers "what changed"        | On an organisation with ≥ 1 plan touched in the last 30 days, the overview lists it with the correct actor and timestamp               | Flag-on journey `apps/web/e2e-overview/` drives a real API: edit an activity, return to the overview, assert the plan appears with the editing user's name |
+| It costs one request                      | Exactly **one** new network request on the landing, in parallel with the existing clients query                                        | Playwright request interception in the journey                                                                                                             |
+| It is fast enough for the LCP path        | `GET …/overview` p95 **< 200 ms** at a realistic org size (docs/PERFORMANCE.md), measured against a seeded database, **not estimated** | A measurement task in M1 with the numbers recorded in the ADR                                                                                              |
+| Nothing regresses for a Viewer            | A Viewer sees no attention section and no shaded placeholder                                                                           | Unit test + a role-scoped journey case                                                                                                                     |
+| The route home survives                   | `aria-current="page"` on the wordmark when on the landing; the landing reachable from a plan                                           | Journey + unit test                                                                                                                                        |
+| Resume works, and costs nothing           | "Jump back in" lists the plan just visited, on the **next** landing, with **no additional request**                                    | Journey: open a plan, go home via the wordmark, assert the plan is listed; request interception asserts the count is unchanged                             |
+| A stale remembered plan is not a dead end | A remembered plan that has been deleted, or whose reader has lost access, is **absent** — never a 404 and never a stale name           | API e2e (an id the caller cannot read is dropped) + unit test on the store                                                                                 |
 
 ### Open questions
 
-The critical ones are **Q1–Q3** in §6. Everything else has a stated default and needs no answer to
-proceed.
+**None outstanding.** The three critical questions were answered on 2026-08-18 and the answers are
+recorded in §6; everything else has a stated default.
 
 ---
 
@@ -225,6 +238,10 @@ proceed.
 > - **Given** a soft-deleted plan, project or client, **when** the list renders, **then** nothing
 >   from that subtree appears.
 > - **Given** I click a row, **then** I navigate to `/orgs/:slug/plans/:planId`.
+> - **The copy may not imply more than the data supports** (see §2 "Copy contract"). No row may say
+>   or suggest _what_ changed — the source is a last-writer stamp, and ADR-0073 §3 permanently
+>   excludes ordinary content edits from the audit log, so there is no record in the system that
+>   could back such a claim.
 
 > **US-2** — As a **Planner or Org Admin**, I want to see anything that is waiting on me, so that I
 > stop blocking colleagues without knowing it.
@@ -285,6 +302,31 @@ proceed.
 > - The link's accessible name **contains its visible text** — "SchedulePoint — organisation
 >   overview" — so WCAG 2.5.3 Label in Name holds.
 
+> **US-6** — As **any member, in any role**, I want the landing to offer the plans I was recently
+> working in, so that resuming takes one click instead of a walk down the tree.
+>
+> **Acceptance criteria**
+>
+> - **Given** I have opened plans in this organisation in this browser as this account, **when** I
+>   open the overview, **then** a "Jump back in" section lists up to **5**, most recent first.
+> - **Given** I open a plan, **when** I next return to the overview, **then** that plan is first in
+>   the list — and if it was already listed it **moves** rather than duplicating.
+> - **Given** the section renders, **then** the landing makes **no additional network request** for
+>   it: the remembered ids ride on the overview request that is already being made (§4.5).
+> - **Given** a remembered plan has been **deleted**, **renamed**, **moved**, or is **no longer
+>   readable by me**, **then** the entry is **not rendered** if it is unreachable, and renders the
+>   **current** name if it is reachable. A stale name is never displayed and a click never lands on a
+>   404 (§4.9 D10b).
+> - **Given** I am a **Viewer or Contributor**, **then** the section works exactly as it does for a
+>   Planner — it is the one personalised section every role gets.
+> - **Given** this browser has nothing remembered for this organisation and account, **then** the
+>   section is **omitted entirely** — no heading, no empty state.
+> - **Given** a different account signs in on this browser, **then** they see **their own** list, not
+>   the previous account's (the store is keyed by user id, §4.9 D10a).
+> - **Given** I sign out, **then** the remembered list for that account is cleared from this browser.
+> - **Given** `localStorage` is unavailable (private mode, disabled), **then** the section is simply
+>   absent — never an error (the `lib/active-org.ts:8-22` try/catch precedent).
+
 > **US-5** — As **anyone reading the repository**, I want the flag-off branch of the screen being
 > rewritten to be deleted rather than updated, so that a false sentence is not carried forward.
 >
@@ -319,43 +361,82 @@ activity's `updated_at`, its newest active dependency's `updated_at`), attribute
 **Deriving "needs your attention"** — four independent bounded reads, each gated on the caller's own
 permissions before it is issued (a read that cannot produce a visible item is not issued at all).
 
+**Deriving "jump back in"** — the browser reads its own remembered ids for this organisation and
+account, sends them on the overview request it is already making, and renders only what the server
+hands back with a live name (§4.9).
+
+### Copy contract — what the screen may and may not say
+
+Row attribution can say **that** a plan changed, when, and who wrote last. It cannot say **what**
+changed, because there is no record of that anywhere in the system: `activities.updated_by` is a
+stamp, and ADR-0073 §3 excludes ordinary content edits from the audit log **permanently, by
+decision**. So the copy is constrained, and the constraint is written down here rather than left to
+whoever writes the strings.
+
+| Allowed                                                       | Forbidden, and why                                                                                                                 |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Section heading **"Recently changed"**                        | **"Activity"**, **"Timeline"**, **"What's new"**, **"Feed"** — each promises a record of events, which is exactly what this is not |
+| Caption **"Plans your organisation has worked on recently."** | "Everything that happened in your organisation" — the list is capped, archived plans are excluded, and a deletion is invisible     |
+| Row: **"Sarah Okonkwo · 20 minutes ago"**                     | "Sarah Okonkwo edited 12 activities" — the count does not exist; "Sarah Okonkwo added an activity" — the verb does not exist       |
+| Row: **"Last changed by …"**                                  | "Last edited by …" is acceptable; **"Changes by Sarah"** is not — it implies she is the only one, and the data cannot support that |
+| Empty: **"No plans have changed here yet."**                  | "Nothing has happened" — a deletion, an archive and a change nobody has a row for all read as nothing                              |
+
+The **ui/ux review at M6 checks this table specifically**, because the tempting sentence is always
+the one the data cannot back, and it reads perfectly well.
+
 ### Edge cases
 
-| Case                                       | Expected behaviour                                                                                                                                            |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Organisation with **no clients**           | New-organisation state; role-appropriate copy and action                                                                                                      |
-| Clients but **no plans**                   | "No plans yet" state pointing at the Project Explorer                                                                                                         |
-| Plans exist but **none touched recently**  | Cannot occur — every plan has a `created_at`, so the ordering key is always defined. Recorded because the naive design has this state and this one does not   |
-| **All** plans archived                     | Treated as "no plans yet" (archived plans are excluded)                                                                                                       |
-| A plan with **20,000 activities**          | The per-plan lookup is a top-1 on an indexed `(plan_id, updated_at DESC)` — bounded regardless of plan size (§4.4)                                            |
-| An organisation with **hundreds of plans** | The outer set is bounded and the bound is stated; if measurement says the lateral does not hold, §4.4's rejected alternative is reconsidered **on evidence**  |
-| Two people edited the same plan today      | Only the **latest** is shown. Row attribution is last-writer-wins; the screen must not imply otherwise                                                        |
-| An activity was **deleted**                | Invisible. A soft-deleted row is excluded from the read, so a deletion can _lower_ a plan's position. Stated in §5 as a known limit rather than worked around |
-| The actor left the organisation            | "A former member" — resolved through `org_members`, never `users` directly (§4.4)                                                                             |
-| `updated_by` is null                       | "Unknown"; the row still appears                                                                                                                              |
-| Clock skew / a future timestamp            | Relative time floors at "just now"; never "in 3 minutes"                                                                                                      |
-| The reader holds **no** memberships        | Unreachable — `indexRoute` redirects to `/onboarding` first                                                                                                   |
-| Lock expired between read and click        | The plan opens and its own pen status is authoritative; the overview is a hint, not a lease                                                                   |
-| Retention **disabled**                     | No expiry item, ever                                                                                                                                          |
-| Very long plan/client names                | `wrap-anywhere`, already the `Card` primitive's behaviour (`card.tsx:22-26`, added for exactly this)                                                          |
+| Case                                                                           | Expected behaviour                                                                                                                                            |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Organisation with **no clients**                                               | New-organisation state; role-appropriate copy and action                                                                                                      |
+| Clients but **no plans**                                                       | "No plans yet" state pointing at the Project Explorer                                                                                                         |
+| Plans exist but **none touched recently**                                      | Cannot occur — every plan has a `created_at`, so the ordering key is always defined. Recorded because the naive design has this state and this one does not   |
+| **All** plans archived                                                         | Treated as "no plans yet" (archived plans are excluded)                                                                                                       |
+| A plan with **20,000 activities**                                              | The per-plan lookup is a top-1 on an indexed `(plan_id, updated_at DESC)` — bounded regardless of plan size (§4.4)                                            |
+| An organisation with **hundreds of plans**                                     | The outer set is bounded and the bound is stated; if measurement says the lateral does not hold, §4.4's rejected alternative is reconsidered **on evidence**  |
+| Two people edited the same plan today                                          | Only the **latest** is shown. Row attribution is last-writer-wins; the screen must not imply otherwise                                                        |
+| An activity was **deleted**                                                    | Invisible. A soft-deleted row is excluded from the read, so a deletion can _lower_ a plan's position. Stated in §5 as a known limit rather than worked around |
+| The actor left the organisation                                                | "A former member" — resolved through `org_members`, never `users` directly (§4.4)                                                                             |
+| `updated_by` is null                                                           | "Unknown"; the row still appears                                                                                                                              |
+| Clock skew / a future timestamp                                                | Relative time floors at "just now"; never "in 3 minutes"                                                                                                      |
+| The reader holds **no** memberships                                            | Unreachable — `indexRoute` redirects to `/onboarding` first                                                                                                   |
+| Lock expired between read and click                                            | The plan opens and its own pen status is authoritative; the overview is a hint, not a lease                                                                   |
+| Retention **disabled**                                                         | No expiry item, ever                                                                                                                                          |
+| Very long plan/client names                                                    | `wrap-anywhere`, already the `Card` primitive's behaviour (`card.tsx:22-26`, added for exactly this)                                                          |
+| **Jump back in:** a remembered plan was **deleted**                            | The server does not return it; the entry is dropped from the render **and pruned from the store**, so it stops costing a lookup                               |
+| **Jump back in:** a remembered plan was **renamed**                            | The **current** name renders — names come from the server on every load, never from the store (§4.9 D10b)                                                     |
+| **Jump back in:** the reader **lost access** (role change, moved out of scope) | Indistinguishable from deleted: absent, with no message. A "you no longer have access to X" line would name a plan to someone who may not know it exists      |
+| **Jump back in:** a remembered id from **another organisation**                | The server resolves ids only within the caller's resolved org, so it is dropped silently — the same answer as a made-up id, so there is no oracle             |
+| **Jump back in:** a **second account** on the same browser                     | Sees its own list — the store is keyed by user id — and the previous account's list is cleared at its sign-out (§4.9 D10a)                                    |
+| **Jump back in:** a **second device**                                          | Empty, so the section is omitted. Per-browser is a stated limit (§5), not a bug                                                                               |
+| **Jump back in:** `localStorage` throws or is disabled                         | Section absent; no error surfaces (`lib/active-org.ts:8-22` precedent)                                                                                        |
+| **Jump back in:** the overview request fails                                   | The section is absent along with the rest of the body; the failure is the page's, and there is one Retry rather than one per section                          |
 
 ### Permissions
 
 Deny-by-default, RBAC + organisation scope (ADR-0012). Nothing new is granted.
 
-| Capability             | Permission                                                | Roles                        | Note                                                                                                           |
-| ---------------------- | --------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Read the overview      | **`client:read`**                                         | Viewer upward (every member) | The representative hierarchy-read permission, exactly as the recycle bin uses it (`recycle-bin.service.ts:36`) |
-| See "recently changed" | same                                                      | every member                 | The plan names and change times a member can already read by browsing                                          |
-| See held-lock items    | `plan:acquire_lock`                                       | Planner, Org Admin           | Only a holder is shown their **own** locks — never a roster of who else holds what                             |
-| See invitation items   | `member:invite`-equivalent / Org Admin                    | Org Admin                    | Mirrors `canReadAuditLog`'s pattern in `lib/rbac.ts:120-122`                                                   |
-| See expiry items       | hierarchy write (`canManageHierarchy`, `lib/rbac.ts:7-9`) | Planner, Org Admin           | Only a writer can restore, so only a writer is told                                                            |
+| Capability             | Permission                                                | Roles                        | Note                                                                                                                                                             |
+| ---------------------- | --------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read the overview      | **`client:read`**                                         | Viewer upward (every member) | The representative hierarchy-read permission, exactly as the recycle bin uses it (`recycle-bin.service.ts:36`)                                                   |
+| See "recently changed" | same                                                      | every member                 | The plan names and change times a member can already read by browsing                                                                                            |
+| See held-lock items    | `plan:acquire_lock`                                       | Planner, Org Admin           | Only a holder is shown their **own** locks — never a roster of who else holds what                                                                               |
+| See invitation items   | `member:invite`-equivalent / Org Admin                    | Org Admin                    | Mirrors `canReadAuditLog`'s pattern in `lib/rbac.ts:120-122`                                                                                                     |
+| See expiry items       | hierarchy write (`canManageHierarchy`, `lib/rbac.ts:7-9`) | Planner, Org Admin           | Only a writer can restore, so only a writer is told                                                                                                              |
+| See "jump back in"     | **`plan:read`** on each id, re-checked server-side        | every member                 | The store is a hint; the **server** decides which remembered ids resolve, so a role change or a lost membership removes the entry without the client knowing why |
 
 **Three security properties worth stating rather than assuming:**
 
-1. The endpoint takes **no id of any kind** — the organisation comes from the path slug resolved
-   against the caller's own memberships (`organizations.resolveScope`), and every plan id is
-   derived, never accepted. Anti-IDOR by construction, the ADR-0051 F-M3 shape.
+1. ~~The endpoint takes **no id of any kind**.~~ **Corrected in place when Q2 was answered
+   (2026-08-18), rather than quietly rewritten.** The draft said the endpoint accepts no id at all;
+   "Jump back in" requires it to accept up to five remembered plan ids. The property that mattered
+   is preserved and is now stated precisely: **an accepted id is a filter, never a grant.** Each id
+   is validated as a UUID, capped at 5, and resolved **only within the organisation the path slug
+   already resolved against the caller's own memberships** (`organizations.resolveScope`); an id
+   that is unknown, soft-deleted, in another organisation, or otherwise unreadable is **silently
+   dropped**, so every one of those cases produces an identical response and there is no existence
+   oracle. The organisation itself is still never an input, and no id can widen the scope the slug
+   established. Anti-IDOR by construction remains true; the sentence claiming zero ids does not.
 2. **Actor names resolve through `org_members`, scoped to this organisation** — never through
    `users` by id. A user id that is not a current member of this org cannot be turned into a name by
    this endpoint, so it cannot be used to probe for the existence or display name of an account
@@ -365,37 +446,51 @@ Deny-by-default, RBAC + organisation scope (ADR-0012). Nothing new is granted.
 
 ### Validation rules
 
-Read-only; no request body. Query parameters: **none in M1** (the section sizes are server
-constants, not client input — a client-supplied `limit` on an LCP endpoint is a cost lever pointed
-at the server). Section sizes: recently changed **8**, attention items **5 per kind**, both as named
-constants in the service with the counts surfaced as totals so "and 3 more" is truthful.
+Read-only; no request body.
+
+**Section sizes are server constants, not client input** — recently changed **8**, attention items
+**5 per kind**, jump back in **5** — named constants in the service, with totals surfaced so "and 3
+more" is truthful. There is deliberately **no client-supplied `limit`**: on an LCP endpoint that is a
+cost lever pointed at the server.
+
+**The one query parameter — `recentPlanIds`** (added by Q2's answer, M3):
+
+| Rule                                        | Value                                               | Why                                                                                                                                          |
+| ------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Type                                        | comma-separated UUIDs                               | `ParseUuidPipe`'s existing validation, applied per element                                                                                   |
+| Cardinality                                 | **≤ 5**; more is a **422**, not a silent truncation | A truncation is a cost cap the caller cannot see; a 422 is a contract. The store never sends more, so a request that does is not one of ours |
+| Malformed element                           | **422**                                             | A malformed id is a client bug, and answering 200 hides it                                                                                   |
+| Unknown / foreign / deleted / unreadable id | **silently dropped**                                | All four must be indistinguishable, or the endpoint becomes an existence oracle for plan ids                                                 |
+| Absent                                      | the section is simply not returned                  | The parameter is optional and additive; M1's endpoint is unchanged by M3 for any caller that omits it                                        |
 
 ### Error scenarios
 
-| Scenario                               | Detection                    | User-facing result                                                                                                                                                                                                                            | Status |
-| -------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| No valid session                       | `_authed` guard / API auth   | Redirect to `/sign-in?redirect=…`                                                                                                                                                                                                             | 401    |
-| Not a member of `:orgSlug`             | `organizations.resolveScope` | Router redirects to `/` (existing `ensureOrgMembership`); the API answers **404**, not 403 — no existence oracle                                                                                                                              | 404    |
-| Member without `client:read`           | service `assertCan`          | Not reachable today (every role holds it); the API would answer 403 and the screen shows a friendly forbidden message rather than a blank                                                                                                     | 403    |
-| Overview query fails (5xx / network)   | TanStack Query error state   | `<h1>` still renders; the body shows a friendly message + **Retry**. Never a raw error                                                                                                                                                        | 500    |
-| A section's data is legitimately empty | count = 0                    | The section's own empty line — **and the two empties are kept apart**: "nothing has changed yet" and "nothing matches" are different facts (the ADR-0073 C1 accessibility finding, which collapsed exactly this distinction in a live region) | 200    |
-| Retention disabled                     | `retentionActive` false      | The expiry item is absent, not zeroed                                                                                                                                                                                                         | 200    |
+| Scenario                                        | Detection                    | User-facing result                                                                                                                                                                                                                            | Status |
+| ----------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| No valid session                                | `_authed` guard / API auth   | Redirect to `/sign-in?redirect=…`                                                                                                                                                                                                             | 401    |
+| Not a member of `:orgSlug`                      | `organizations.resolveScope` | Router redirects to `/` (existing `ensureOrgMembership`); the API answers **404**, not 403 — no existence oracle                                                                                                                              | 404    |
+| Member without `client:read`                    | service `assertCan`          | Not reachable today (every role holds it); the API would answer 403 and the screen shows a friendly forbidden message rather than a blank                                                                                                     | 403    |
+| Overview query fails (5xx / network)            | TanStack Query error state   | `<h1>` still renders; the body shows a friendly message + **Retry**. Never a raw error                                                                                                                                                        | 500    |
+| A section's data is legitimately empty          | count = 0                    | The section's own empty line — **and the two empties are kept apart**: "nothing has changed yet" and "nothing matches" are different facts (the ADR-0073 C1 accessibility finding, which collapsed exactly this distinction in a live region) | 200    |
+| Retention disabled                              | `retentionActive` false      | The expiry item is absent, not zeroed                                                                                                                                                                                                         | 200    |
+| More than 5 `recentPlanIds`, or a malformed one | DTO validation               | Not user-reachable (the store caps and writes the values); the API answers 422 and the client logs it. Never a silent truncation                                                                                                              | 422    |
+| A remembered id the caller cannot read          | server-side resolution       | The entry is absent from the response and pruned from the store. **No message** — naming it would disclose a plan to someone who may not know it exists                                                                                       | 200    |
 
 ---
 
 ## 3. Technical analysis
 
-| Area               | Impact                                                               | Notes                                                                                                                                                                                                                          |
-| ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Frontend**       | **High**                                                             | `org-home.tsx` rewritten; new `features/overview/` (screen, sections, hooks, api); `app-header.tsx` (wordmark link, nav item removal); `WelcomeEmptyState` folded into the new empty states; `CardTitle` gains a heading level |
-| **Backend**        | **Medium**                                                           | One new module `modules/overview/` (controller + service + repository), modelled on `modules/recycle-bin` — an org-wide read model, no writes, no engine                                                                       |
-| **Database**       | **Medium — and it goes through database-architect, unconditionally** | No new models, no new columns. **Two candidate partial indexes** on existing tables (§4.4). CLAUDE.md §19.3: a new index is a schema change; there is no "too small to need the agent"                                         |
-| **API**            | **Low–Medium**                                                       | One new `GET`, standard `{ data }` envelope, OpenAPI + `docs/API.md`                                                                                                                                                           |
-| **Security**       | **Low**                                                              | No new permission, no new grant, no id accepted. Actor resolution is org-scoped (§2). No secrets                                                                                                                               |
-| **Performance**    | **High attention — this is the LCP path**                            | +1 request. Query cost analysed in §4.4 and **measured** in M1 before the screen ships                                                                                                                                         |
-| **Infrastructure** | **None**                                                             | No new service, no env var, no container change                                                                                                                                                                                |
-| **Observability**  | **Low**                                                              | The route inherits the standard request log + correlation id. **No audit event** — see below                                                                                                                                   |
-| **Testing**        | **High**                                                             | API e2e (Supertest, roles + scoping), unit (service, repository ordering, every screen state), **flag-on journey `apps/web/e2e-overview/` landing with M2** (ADR-0081 §2), a11y checks                                         |
+| Area               | Impact                                                               | Notes                                                                                                                                                                                                                                                                                                                          |
+| ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Frontend**       | **High**                                                             | `org-home.tsx` rewritten; new `features/overview/` (screen, sections, hooks, api, **the recent-plans store**); `app-header.tsx` (wordmark link, nav item removal); one write call added where a plan workspace opens; `WelcomeEmptyState` folded into the new empty states; `CardTitle` gains a heading level                  |
+| **Backend**        | **Medium**                                                           | One new module `modules/overview/` (controller + service + repository), modelled on `modules/recycle-bin` — an org-wide read model, no writes, no engine. Plus the optional `recentPlanIds` resolution (M3)                                                                                                                    |
+| **Database**       | **Medium — and it goes through database-architect, unconditionally** | No new models, no new columns. **Two candidate partial indexes** on existing tables (§4.4). CLAUDE.md §19.3: a new index is a schema change; there is no "too small to need the agent"                                                                                                                                         |
+| **API**            | **Low–Medium**                                                       | One new `GET`, standard `{ data }` envelope, one optional query parameter (M3), OpenAPI + `docs/API.md`                                                                                                                                                                                                                        |
+| **Security**       | **Low–Medium**                                                       | No new permission, no new grant. **Client-supplied ids arrive (M3)** and are a filter, never a grant — see §2's corrected property 1. Actor resolution is org-scoped. Plan names sit in `localStorage`, keyed by user and cleared at sign-out (§4.9 D10a). No secrets                                                          |
+| **Performance**    | **High attention — this is the LCP path**                            | +1 request **total**, including "Jump back in", which adds a parameter to a call already being made rather than a call of its own. Query cost analysed in §4.4 and **measured** in M1 before the screen ships                                                                                                                  |
+| **Infrastructure** | **None**                                                             | No new service, no env var, no container change                                                                                                                                                                                                                                                                                |
+| **Observability**  | **Low**                                                              | The route inherits the standard request log + correlation id. **No audit event** — see below                                                                                                                                                                                                                                   |
+| **Testing**        | **High**                                                             | API e2e (Supertest, roles + scoping, dropped-id cases), unit (service, repository ordering, the store, every screen state), **journey `apps/web/e2e-overview/` landing with M2** (ADR-0081 §2) and extended by M3–M5, a11y checks. Every screen-touching milestone also runs the **base** journey — `scripts/e2e-local.sh web` |
 
 **Auditing — the decision, made explicitly rather than by omission.** `GET …/overview` writes **no**
 audit event. ADR-0073's two tests: it is a **read** (not durable) with **no blast radius** (it
@@ -441,10 +536,12 @@ flowchart LR
     Shell["AppShell (ADR-0029)<br/>mounted once"]
     Band["ChromeBand → AppHeaderRow<br/>BrandMark → Link (new)"]
     Screen["OrgOverviewScreen<br/>routes/org-home.tsx"]
+    Sec0["JumpBackInSection"]
     Sec1["RecentlyChangedSection"]
     Sec2["NeedsAttentionSection"]
     Empty["OrganisationEmptyState<br/>(role-aware)"]
     Hook["useOrgOverview()<br/>features/overview/api"]
+    Store["recent-plans store<br/>localStorage, keyed by user+org<br/>written where a plan opens"]
   end
 
   subgraph API["apps/api"]
@@ -464,11 +561,19 @@ flowchart LR
 
   Shell --> Band
   Shell --> Screen
-  Screen --> Sec1 & Sec2 & Empty
-  Sec1 & Sec2 --> Hook
-  Hook -->|1 request| Ctrl --> Svc --> Repo
+  Screen --> Sec0 & Sec1 & Sec2 & Empty
+  Sec0 & Sec1 & Sec2 --> Hook
+  Store -->|remembered ids ride along| Hook
+  Hook -->|ONE request, all three sections| Ctrl --> Svc --> Repo
   Repo --> P & A & D & L & I & M
+  Repo -.->|live names for readable ids only| Store
 ```
+
+**"Jump back in" is client-remembered and server-validated, and that pairing is the whole design.**
+The browser holds the ids; the **server** decides which of them resolve, and returns the current
+name. That is what makes a renamed plan render correctly, a deleted one vanish, and one the reader
+has lost access to disappear without a message — and it costs no extra round trip, because the ids
+ride on the request the page is already making.
 
 **It fits the existing architecture without extending it.** The nearest exemplar is
 `modules/recycle-bin` — an organisation-wide read model over the three hierarchy tables, gated on
@@ -494,11 +599,13 @@ sequenceDiagram
   R->>Q: ensureQueryData(session)   %% already warm
   R->>Q: ensureQueryData(organizations)  %% already warm
   Note over R,Q: role for this org read from the organizations<br/>query — zero extra requests (use-org-role.ts:23-26)
-  S->>Q: useOrgOverview('acme')
-  Q->>C: GET /api/v1/organizations/acme/overview
-  C->>V: get(principal, 'acme')
+  S->>Q: useOrgOverview('acme', readRecentPlanIds(userId, 'acme'))
+  Q->>C: GET /api/v1/organizations/acme/overview?recentPlanIds=…
+  C->>V: get(principal, 'acme', ids)
   V->>V: resolveScope(principal, slug)  %% 404 if not a member
   V->>V: assertCan('client:read', org.id)
+  V->>P: resolveRecentPlans(org.id, ids)  %% PK lookups; unreadable ids silently dropped
+  P->>DB: plans WHERE organization_id=? AND deleted_at IS NULL AND id = ANY(?)
   V->>P: recentlyChanged(org.id, 8)
   P->>DB: plans ⨝ LATERAL(top-1 activity) ⨝ LATERAL(top-1 dependency)
   V->>P: myHeldLocks(org.id, principal.userId)   %% only if plan:acquire_lock
@@ -536,14 +643,19 @@ flowchart TD
   Plans -->|no| P0["'No plans yet' → Project Explorer"]
   Plans -->|yes| Body
 
-  Body["h1: organisation name"] --> RC["Recently changed<br/>(up to 8 · who · when)"]
+  Body["h1: organisation name"] --> JBI{Anything remembered<br/>for this user + org?}
+  JBI -->|no| RC
+  JBI -->|yes| JBI1["Jump back in<br/>(up to 5 · live names ·<br/>unreachable entries dropped + pruned)"]
+  JBI1 --> RC
+  Body --> RC["Recently changed<br/>(up to 8 · who · when)"]
   Body --> Att{Planner or Org Admin?}
   Att -->|no| Done([Done — section omitted entirely])
   Att -->|yes| NA{Any items?}
   NA -->|yes| NA1["Needs your attention<br/>lock requests first"]
   NA -->|no| NA0["'Nothing needs you right now.'"]
 
-  RC -->|click a plan| Plan["/orgs/:slug/plans/:planId"]
+  RC -->|click a plan| Plan["/orgs/:slug/plans/:planId<br/>→ writes/refreshes the remembered entry"]
+  JBI1 -->|click| Plan
   NA1 -->|click| Plan
   NA1 -->|click invitations| Members["/orgs/:slug/members"]
   NA1 -->|click expiring| Bin["/orgs/:slug/recently-deleted"]
@@ -554,9 +666,19 @@ flowchart TD
 ### 4.4 Database changes
 
 **No new models. No new columns. No data migration.** Two candidate indexes on existing tables —
-and both are **designed by the database-architect agent and measured before they are written**
-(CLAUDE.md §19.3; if the agent returns nothing or is slow, re-run it — an unavailable agent is a
-reason to wait, never a reason to proceed).
+and both are **designed by the database-architect agent and measured before and after they are
+written** (CLAUDE.md §19.3; if the agent returns nothing or is slow, re-run it — an unavailable agent
+is a reason to wait, never a reason to proceed).
+
+> **Product-owner instruction, 2026-08-18, recorded verbatim in substance:** the indexes go through
+> database-architect **before a line of SQL is written**, and are measured **before and after**.
+> _"That register's rows are full of indexes that were reasoned about and turned out wrong in both
+> directions."_ That is the register's own evidence and it cuts both ways — ADR-0053 M4 measured a
+> candidate partial index at **0.14 ms saved for 1,296 kB** and did not ship it; ADR-0073 C1 measured
+> a missing one at **681–954 ms** on the cheapest path a caller could reach; ADR-0086 M6 found that a
+> strictly _narrower_ partial predicate still sequentially scans, because Postgres matches by
+> expression equality rather than pattern containment. Three findings, three directions, none of them
+> reachable by reasoning. **So: no index ships on an argument, and none is declined on one either.**
 
 **The query the indexes exist to serve:**
 
@@ -615,12 +737,20 @@ reversal, if measurement forces it, is a decision with a reason rather than a re
 is what the product owner explicitly ruled out, and it is the right call: an events table is a
 second write on every edit and a retention question (ADR-0085/0087) for a display feature.
 
+**"Jump back in" adds no index.** Its lookup is `id = ANY($ids)` over at most five ids with an
+`organization_id` predicate — primary-key lookups plus a cheap filter. No new access path, and it is
+included in M1-T2's measurement anyway rather than assumed cheap.
+
 ### 4.5 API changes
 
 **New:** `GET /api/v1/organizations/:orgSlug/overview`
 
 - **Auth:** session cookie; `client:read` in the resolved organisation.
-- **Params:** `orgSlug` only. **No query parameters, no ids.**
+- **Params:** `orgSlug` in the path; **one optional query parameter, `recentPlanIds`** (≤ 5 UUIDs,
+  added in M3 — see §2 "Validation rules" for the full rule table, and §2's corrected security
+  property 1 for why an accepted id is a filter and never a grant). The draft of this spec said "no
+  query parameters, no ids"; that changed when Q2 was answered, and the sentence is corrected rather
+  than deleted.
 - **200** — standard `{ data }` envelope, **no `meta`** (nothing to add: not paginated, and the
   retention flags that `GET …/deleted` serves are consumed server-side here rather than echoed).
 
@@ -630,6 +760,16 @@ second write on every edit and a retention question (ADR-0085/0087) for a displa
     "organisationName": "Acme Construction",
     "isNewOrganisation": false, // no active clients
     "hasPlans": true, // any active, non-archived plan
+    // Present only when `recentPlanIds` was sent. Contains ONLY the ids that resolved to a plan
+    // this caller may read, in the order they were sent (most-recently-opened first). An id that
+    // was deleted, foreign, unknown or unreadable is simply absent — all four look identical.
+    "recentPlans": [
+      {
+        "planId": "0192…",
+        "planName": "Tower B — Substructure",
+        "projectName": "Riverside Phase 2",
+      },
+    ],
     "recentlyChanged": [
       {
         "planId": "0192…",
@@ -666,10 +806,18 @@ second write on every edit and a retention question (ADR-0085/0087) for a displa
 - The two attention counts are **omitted** for readers who may not see them, rather than sent as
   `0`. A zero is a fact about the organisation; an absence is a fact about the reader. Sending `0`
   to a Contributor would leak that there _is_ an answer.
-- **One endpoint, not one per section.** Both sections resolve the same organisation, check the same
-  permission and read the same database in the same request; partial failure is not a real mode, so
-  per-section error isolation buys nothing and costs a second round trip on the LCP path. Section
+- **One endpoint, not one per section.** All three sections resolve the same organisation, check the
+  same permission and read the same database in the same request; partial failure is not a real mode,
+  so per-section error isolation buys nothing and costs a second round trip on the LCP path. Section
   skeletons still come from the single query's pending state.
+- **`recentPlans` echoes only what resolved, and carries no "why".** There is no
+  `{ planId, reason: 'DELETED' }`. Four different causes must produce one answer or the endpoint
+  becomes an oracle for plan ids, and the reader has nothing to do with the reason in any case.
+- **`recentPlans` preserves the caller's order**, because recency lives in the browser and the
+  server has no way to know it. The server filters; it does not rank.
+- **The store's cached name is never sent back to the reader.** The client sends ids only and
+  renders the name the server returns, which is what makes a rename correct itself and a stale label
+  impossible.
 
 **Errors:** 401 (no session), 404 (org not found / not a member — uniform, no existence oracle), 403
 (member without `client:read`, unreachable today), 500. `docs/API.md` gains a short
@@ -679,15 +827,17 @@ second write on every edit and a retention question (ADR-0085/0087) for a displa
 
 **New — `apps/web/src/features/overview/`** (feature-first, `docs/FRONTEND_ARCHITECTURE.md` §40–98):
 
-| Path                                    | What it is                                                                                   |
-| --------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `api/overview-queries.ts`               | `overviewQueryOptions(orgSlug)` + `useOrgOverview()`; key factory `overviewKeys`             |
-| `components/RecentlyChangedSection.tsx` | Heading + list of plan rows; loading / empty / error states                                  |
-| `components/RecentlyChangedRow.tsx`     | Plan name, `project · client`, actor, `<time>`                                               |
-| `components/NeedsAttentionSection.tsx`  | Heading + items; **returns `null`** when the reader can hold none                            |
-| `components/OrganisationEmptyState.tsx` | The three empty states, role-aware                                                           |
-| `model/relative-time.ts`                | Pure `formatRelative(instant, now)`; floors at "just now"; unit-tested against a fixed clock |
-| `index.ts`                              | Barrel                                                                                       |
+| Path                                    | What it is                                                                                                                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `api/overview-queries.ts`               | `overviewQueryOptions(orgSlug, recentPlanIds)` + `useOrgOverview()`; key factory `overviewKeys`                                                                                                  |
+| `components/JumpBackInSection.tsx`      | Heading + up to 5 plan links; **returns `null`** when nothing resolved                                                                                                                           |
+| `components/RecentlyChangedSection.tsx` | Heading + list of plan rows; loading / empty / error states                                                                                                                                      |
+| `components/RecentlyChangedRow.tsx`     | Plan name, `project · client`, actor, `<time>`                                                                                                                                                   |
+| `components/NeedsAttentionSection.tsx`  | Heading + items; **returns `null`** when the reader can hold none                                                                                                                                |
+| `components/OrganisationEmptyState.tsx` | The three empty states, role-aware                                                                                                                                                               |
+| `model/recent-plans.ts`                 | The store: `rememberPlan` / `readRecentPlanIds` / `prunePlans` / `forgetAllForUser`. Pure over an injected `Storage`, so it is testable without a browser and cannot silently depend on a global |
+| `model/relative-time.ts`                | Pure `formatRelative(instant, now)`; floors at "just now"; unit-tested against a fixed clock                                                                                                     |
+| `index.ts`                              | Barrel                                                                                                                                                                                           |
 
 **Changed:**
 
@@ -704,6 +854,11 @@ second write on every edit and a retention question (ADR-0085/0087) for a displa
   `components/ui` change and goes through **component-reviewer**. _(The alternative — reusing
   `FormSection`, which already has `headingLevel?: 2 | 3` at `form-layout.tsx:61,107` — is rejected:
   it is a **form**-layout primitive and its `role="group"` semantics are wrong for a list of plans.)_
+- `routes/plan-detail.tsx` — **one call**, `rememberPlan(...)`, where the plan resolves. It is the
+  only touch this epic makes to the plan workspace, and it deliberately writes **ids only** plus the
+  org and a timestamp — the name is not stored, because the name is what goes stale (§4.9 D10b).
+- The sign-out path — **one call**, `forgetAllForUser(userId)`, so a shared machine does not hand the
+  next account the previous one's plan list.
 
 **Design-system compliance:** tokens only, no colour literals (the ADR-0055 lint rule); no new
 one-off spacing; the screen sits inside the shell's existing `<main>` and adds no landmark; the
@@ -713,12 +868,13 @@ rule — a contrast gate written after the fact is a gate that passes because it
 answer).
 
 **States, all five, per the UX_STANDARDS "every view" rule:** loading (skeletons matching the final
-layout), empty (three distinct organisation states + two distinct section empties), error
-(in-place + retry, `<h1>` preserved), partial (not applicable — one query), success (content).
+layout), empty (three distinct organisation states + two distinct section empties; "Jump back in"
+has **no** empty state by design — it is omitted), error (in-place + retry, `<h1>` preserved),
+partial (not applicable — one query), success (content).
 
 ### 4.7 Implementation approach & alternatives
 
-**Chosen:** a read-model endpoint over existing row attribution, a two-section screen, the wordmark
+**Chosen:** a read-model endpoint over existing row attribution, a three-section screen, the wordmark
 as the route home, and the flag retired rather than the stale branch updated.
 
 **Sections rejected — and this is the part the product owner asked for.** Every one of these is a
@@ -762,8 +918,8 @@ thing a dashboard usually has, and each is refused for a stated reason.
 
 ### 4.8 Decisions
 
-- **D1 — The landing is the organisation overview**, with one `<h1>` (the organisation name) and two
-  sections. It is not a settings page, not a report, and not a product tour.
+- **D1 — The landing is the organisation overview**, with one `<h1>` (the organisation name) and
+  three sections. It is not a settings page, not a report, and not a product tour.
 - **D2 — "Recently changed" is derived from row attribution across `plans` + `activities` +
   `activity_dependencies`**, ordered by `GREATEST(...)`, attributed to the winning row. The
   product owner's decision (row attribution; not a new table; not the audit log) is kept; its
@@ -799,61 +955,131 @@ thing a dashboard usually has, and each is refused for a stated reason.
 - **D9 — No audit event, and the reason is written down** (§3), because ADR-0087 D-note records that
   a rule with a reason is a better artefact than a silence, and the census cannot see this decision
   in either direction.
+- **D10 — "Jump back in" exists, and it is the one section every role gets** (§4.9). It is the
+  product owner's answer to Q2, and it is the only personalisation available without inventing
+  per-user server state.
+- **D10a — The store is keyed by user id and cleared at sign-out.** Without the key, a shared machine
+  hands the second account the first account's plan names — commercially sensitive strings, on the
+  first screen after sign-in, with no action anyone took to cause it.
+- **D10b — The store holds ids; the server supplies names.** This is the load-bearing half. It is
+  what makes a rename correct itself, a deleted plan vanish, and a plan the reader has lost access to
+  disappear silently — none of which a name cached in the browser could do.
+
+---
+
+### 4.9 "Jump back in" — the design in full
+
+The product owner's answer to Q2. The section is worth its own subsection because two of its
+properties are the kind that ship wrong, and both were named when the decision was handed down.
+
+**What it is.** Up to **5** plans this browser has opened, for this organisation and this signed-in
+account, most recent first. Rendered as plain links. Omitted entirely when empty.
+
+**How it costs nothing.** The remembered ids ride on the overview request the page is already
+making (§4.5). There is **no second request**, which is the constraint that made this section
+acceptable on the LCP path in the first place — and the constraint is about the _request_, not about
+server involvement, which is why validating server-side does not violate it.
+
+**The two failure modes, and what each does:**
+
+| Named risk                                                                                                                    | What is built                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **It is per-browser, not per-user.** A shared machine could show another person's recent plans; a second device shows nothing | The store key includes the **user id** (`schedulepoint-recent-plans:<userId>:<orgSlug>`), and **sign-out clears that account's entries**, so the shared-machine case is closed at both ends. The second-device case is left as-is and stated as a limit (§5) — syncing it means per-user server state, which is exactly what this section exists to avoid |
+| **An entry can be stale** — the plan may have been deleted, renamed, moved, or put out of the reader's reach                  | The store holds **ids and a timestamp, never a name**. Names come from the server on every load; an id that does not resolve is **absent from the render and pruned from the store**, so it stops costing a lookup. A stale name therefore cannot be displayed, and a click cannot land on a 404, because the entry is gone before the link is drawn      |
+
+**Does the copy need to admit any of this?** **No, and that is a decision rather than an oversight.**
+The heading "Jump back in" claims only what is true — these are plans _you_ were recently in — and
+the failure the reader could actually be misled by (a name or a plan that is no longer real) is
+**designed out** rather than explained away. An explanatory line ("remembered on this device only")
+would be chrome on a shortcut, and would be the only sentence on the screen describing a storage
+mechanism. The per-device limit belongs in §5 for whoever reads the spec, not on the screen for a
+planner resuming work. **The ux review at M6 gets to disagree**, and this paragraph is what it is
+disagreeing with.
+
+**Rejected: render straight from `localStorage` with the cached name.** Genuinely zero server
+involvement, and it produces exactly the two failures the product owner named — a renamed plan shown
+under its old name, and a click into a 404. Refused for that reason.
+
+**Rejected: a separate request to resolve the names.** Correct, and it spends the request this
+section was scoped not to spend.
+
+**Rejected: storing the plan name as a fallback for when the server call fails.** Tempting, because
+it would let the section render during an error. It is refused because the fallback is precisely the
+stale-name case: the one time the cached name gets used is the one time nobody has checked it.
 
 ---
 
 ## 5. Known limits of this design — say them out loud
 
-Three things this screen will **not** do. Each is a consequence of the accepted data source, and
-each is worth stating so that nobody later reads the absence as a bug or promises the fix casually.
+Four things this screen will **not** do. Each is a consequence of an accepted data source, and each
+is worth stating so that nobody later reads the absence as a bug or promises the fix casually.
 
 1. **It says "this plan changed", never what changed inside it.** No "added 12 activities", no
-   "moved the milestone". Row attribution is a stamp, not a record.
+   "moved the milestone". Row attribution is a stamp, not a record, and ADR-0073 §3 excludes ordinary
+   content edits from the audit log **permanently** — so there is no other source to reach for. The
+   §2 copy contract exists to keep the strings inside that boundary.
 2. **It shows one person per plan — the last one.** If three people worked on a plan today, two are
    invisible. Last-writer-wins is what `updated_by` means.
 3. **A deletion is invisible, and can move a plan _down_ the list.** Soft-deleted rows are excluded
    from the read, so deleting the most recently edited activity removes the timestamp that put the
    plan at the top.
+4. **"Jump back in" is per-browser.** A second device starts empty, and clearing browser data clears
+   it. That is the price of a personalised section that costs no server state and no request; making
+   it follow the user means a table, a write on every plan open, and a retention question
+   (ADR-0085/0087) — which is a different feature with a different justification.
 
 The screen's own copy carries the honest framing ("Plans your organisation has worked on recently"),
 rather than a heading like "Activity" that promises the feed this is not.
 
 ---
 
-## 6. Critical questions
+## 6. Critical questions — asked, and answered
 
-Only three change the design or scope. Everything else has a default above and needs no answer.
+Three questions changed the design or scope. All three were put to the product owner on 2026-08-18;
+two were answered and the third was left to its stated default. The questions are kept in place with
+their answers rather than being replaced by the outcome, so the next reader can see what was
+uncertain and why.
 
-> **Q1 — The feed's source must widen, which adds two indexes. Confirm?**
-> Measurement (§0.1) shows `plans.updated_at` does not move when a plan's content changes, so the
-> accepted "plan row attribution" default would ship an almost-always-empty feed.
-> **Recommended default:** widen to `plans` + `activities` + `activity_dependencies` with two partial
-> indexes designed by database-architect and measured before they are written. Still row
-> attribution; still no new table; still not the audit log.
-> **The alternative** is a narrower feed labelled "Plan settings changed", which nobody wants.
+> **Q1 — The feed's source must widen, which adds two indexes.**
+> _Measurement (§0.1) showed `plans.updated_at` does not move when a plan's content changes, so the
+> accepted "plan row attribution" default would have shipped an almost-always-empty feed._
+>
+> **ANSWERED 2026-08-18 — widen it.** `plans` + `activities` + `activity_dependencies`; still row
+> attribution, still no new table, still not the audit log. **The two partial indexes go through the
+> database-architect agent before a line of SQL is written, and are measured before and after** —
+> because the register's rows are full of indexes that were reasoned about and turned out wrong in
+> **both** directions (§4.4 names three such findings). Built as §4.4 and M1.
 
 > **Q2 — "Needs your attention" is empty for Viewers and Contributors. Accept, or add
 > personalisation?**
-> Every per-user signal the database holds (the pen, invitations, the recycle bin) is Planner-and-up,
-> and "assigned to me" is not derivable because `Resource` has no user link.
-> **Recommended default:** accept it — "Recently changed" serves everyone, and the attention section
-> is omitted rather than shown as an empty box.
-> **If not:** the cheapest genuine personalisation is a client-side **"Jump back in"** list of plans
-> this browser recently opened (localStorage, the `lib/active-org.ts` precedent), which costs **zero**
-> requests and works for every role. Say so now and it becomes M5; say so later and it is a second
-> epic.
+> _Every per-user signal the database holds (the pen, invitations, the recycle bin) is Planner-and-up,
+> and "assigned to me" is not derivable because `Resource` has no user link._
+>
+> **ANSWERED 2026-08-18 — add "Jump back in", in this epic.** The omission was **not** accepted;
+> the gap is closed from the other side with the client-side recent-plans list — localStorage, the
+> `lib/active-org.ts` precedent, **zero additional requests**, and it works for every role. Two
+> conditions came with the answer and both are designed rather than noted: it is **per-browser, not
+> per-user** (closed by keying the store on user id and clearing at sign-out), and **an entry can go
+> stale** (closed by storing ids only and taking names from the server, so a stale name is
+> impossible and a click can never 404). Built as §4.9 and M3.
 
 > **Q3 — When does "Overview" leave the nav?**
-> **Recommended default: M4, after the page has content** — the wordmark link lands earlier (M3) so
-> the route home exists before the labelled one goes.
-> **The challenge you asked for:** a wordmark-home is discoverable _by convention only_, and here the
-> destination is organisation-scoped, which a wordmark does not signal. I still recommend the
-> removal — it is what every user expects, the nav is at six items and TECH_DEBT #23 wants it
-> thinner, and restoring the item is one line — but the first week of use is the measurement, not
-> the argument.
+> **NOT ANSWERED — the recommended default therefore stands:** M4, after the page has content, with
+> the wordmark link landing in M3 so the route home exists before the labelled one goes.
+>
+> **The challenge stays on the record, and deliberately so** — it is reasoning, not a bargaining
+> position, and dropping it now that the answer went the way I recommended would be the worse habit.
+> A wordmark-home is discoverable **by convention only**; it carries no label saying where it goes;
+> and here the destination is **organisation-scoped**, which a wordmark does not signal — this is not
+> a marketing home page, it is _this org's_ overview, and a reader switching organisations has no cue
+> that the mark follows them. I still recommend the removal (it is what every user expects, the nav
+> is at six items, TECH_DEBT #23 wants it thinner, and restoring the item is a one-line revert) —
+> but the first week of real use is the measurement, not this paragraph. **If the product owner or
+> anyone else finds it undiscoverable, put the item back; that is a correction, not a failure.**
 
 **Stated as defaults, not asked:** no feature flag (D7); `VITE_NAV_TREE` retired in M0 (D8); no audit
-event (D9); `schedule_computed_at` excluded (D2a); the six rejected sections (§4.7).
+event (D9); `schedule_computed_at` excluded (D2a); the six rejected sections (§4.7); the copy
+contract (§2); no on-screen explanation of "Jump back in"'s storage (§4.9).
 
 ---
 
