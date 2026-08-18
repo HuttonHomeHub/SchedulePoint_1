@@ -94,34 +94,46 @@ have had a headline width or height number contradicted by their own measurement
 
 ---
 
+### The four, as settled — what was asked, what was answered, and where it now lives
+
 > **CQ-A — Does the diagram get its own ground colour, distinct from the page, in Light and Dark as
 > well as Corporate?**
 > Today only Corporate does, and only behind `VITE_CANVAS_VISUAL_LANGUAGE`
 > (`globals.css:1013-1016`); in Light and Dark `--canvas` is byte-identical to `--card`
-> (`:206`, `:424`). Making the canvas a surface scope is right either way, but a diagram ground that
-> is a distinct working surface is the thing that makes a planner's screen read as a drawing board
-> rather than a web page. **Default: yes — a warm, quiet ground in all three themes.**
+> (`:206`, `:424`).
+> **Answered: yes — a quiet ground in all three themes.** Lands as a **value** change in
+> `migration.md` **L4-2**, not with the structure in L1, so the scope's arrival stays byte-identical
+> and the ground's arrival is its own reviewable diff.
 
 > **CQ-B — One row rhythm across the Project Explorer, the Gantt and the tables, or three?**
 > Today: tree `28` (`HierarchyTree.tsx:26`), Gantt `32` (`GanttPanel.tsx:66`), tables `py-2`
-> (`data-table.tsx:139`). Three surfaces listing the same objects scan at three rhythms.
-> Unifying them is a **visible change to all three**. **Default: one — `--row-h`, at 28.**
+> (`data-table.tsx:139`).
+> **Answered: one — `--row-h`, at 28.** So `migration.md` **L2** no longer carries a per-surface
+> `--row-h-tree`/`--row-h-gantt` pair pending an answer; `--row-h` is one token at 28 and the Gantt's
+> 32 → 28 is a **visible change on the day L2 lands**, which makes L2 no longer byte-identical for
+> that one surface. Recorded as such rather than absorbed.
 
 > **CQ-C — Control density: keep 40 px and tokenise it, or move to 36 px in this epic?**
-> Shipped is `h-10`/40 px (`button.tsx:22`, `input.tsx:17`); `docs/DESIGN_SYSTEM.md:102` documents 36. One of them is wrong. 36 is the planner's rhythm — 1–3 hours a day in the tool
-> (`PROJECT_BRIEF.md` §4), on a 1646 px screen where chrome already takes **31 %** of the height
-> (`workspace-chrome/m0-band-measurement.md` §2). But ADR-0090/0091 derive the toolbar's band floors
-> from **measured** control widths and `e2e-toolbar-fit` asserts them.
-> **Default: tokenise at 40 now (byte-identical), and move to 36 as its own commit with
-> `measure:toolbar` at 1646 in hand.** Not smuggled in as tidying.
+> Shipped is `h-10`/40 px (`button.tsx:22`, `input.tsx:17`); `docs/DESIGN_SYSTEM.md:102` documents 36.
+> **Answered: move to 36 in this epic** — departing from the default, which was to tokenise 40 now
+> and move later. It becomes its own landing, **`migration.md` L2b**, built as a six-step measurement
+> task rather than a token edit. It is the only answer that adds work, and the work it adds is
+> measurement.
 
 > **CQ-D — Is the plot fill-to-fill separation floor a merge gate, and at what number?**
 > The diagram's three bar states are separated by **1.27:1** (Light: ordinary vs critical) and
-> **1.34:1** (Corporate: near-critical vs critical) — hand-computed in `diagnosis.md` §3.3. That
-> ratio **is** the monochrome-print legibility test, because `resolvePrintPalette` prints these
-> tokens on paper. **Default: report the number in L0 (the adjacent-surfaces precedent,
-> `token-contrast.test.ts:189-213`), assert ≥ 1.5:1 in L4 once the values satisfy it** — a gate that
-> is red on the day it lands gets deleted rather than fixed (ADR-0058).
+> **1.34:1** (Corporate: near-critical vs critical) — hand-computed in `diagnosis.md` §3.3.
+> **Answered: report in L0, assert ≥ 1.5:1 in L4** — a gate that is red on the day it lands gets
+> deleted rather than fixed (ADR-0058), and the adjacent-surfaces block at
+> `token-contrast.test.ts:189-213` is the precedent for a computed number that is printed rather than
+> asserted.
+> **One correction travels with this answer.** An earlier draft justified the floor as "the
+> monochrome-print legibility test". It is not: `resolvePrintPalette` carries `outline`
+> (`palette.ts:135`) and `paint.ts` strokes critical and near-critical bars with it on the print path
+> as on screen, so the solid-versus-dashed shape cue satisfies 1.4.1 on paper too. The figures are
+> right and **1.5:1 is a house number, not a standard** — the defect is design quality on the primary
+> surface, not accessibility. Corrected in `diagnosis.md` §3.3, `design.md` §8.2, `hard-surfaces.md`
+> §1 and the ADR's Context.
 
 ## Stated defaults for everything else
 

@@ -56,13 +56,13 @@ would spend the epic's budget on a rewrite that produces the same file.
 The argument, against ADR-0077 §1's five conditions — which is the bar this repository set for a new
 scope and which a proposal must be measured by:
 
-| condition                                                                    | verdict                                                                                                                                                                                                                                                                                                                                                                              |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. The region keeps the semantic names and changes what they resolve to      | **Yes, and this is the whole trick.** `palette.ts` keeps reading `--color-primary`, `--color-destructive`, `--color-warning`, `--color-foreground`, `--color-muted-foreground`, `--color-ring`. Not one line of the painter changes. Only the element passed to `getComputedStyle` does.                                                                                             |
-| 2. The fill is chosen for a reason the page's fill structurally cannot serve | **Yes.** The diagram's ground is a working surface, not a document surface — Corporate already gives it a warm value behind a flag (`globals.css:1014`) and CQ-A proposes it in all three. More importantly, its inks must be validated **against that ground and against each other**, which the page family structurally cannot do because it is validated against `--background`. |
-| 3. The family can be complete and every pair clears its bar by computation   | **Yes — and it is the reason to do it.** `diagnosis.md` §3.3 shows five pairs nothing computes today, two of which land below any floor anyone would set.                                                                                                                                                                                                                            |
-| 4. At least one real consumer on the day it lands                            | **Five.** `resolveTsldPalette`, `resolveWbsBandPalette`, `resolveLensPalette`, `resolveResourceStripPalette`, and the Gantt's chart region (DOM).                                                                                                                                                                                                                                    |
-| 5. It goes through `<Surface>`                                               | **Yes**, and it is the condition that made this design work: the diagram container already exists as a `div` painted `bg-canvas`. It becomes `<Surface tone="canvas">`, and `resolveTsldPalette(root)` — whose signature **already takes an `Element`** (`palette.ts:12`) — is handed that node.                                                                                     |
+| condition                                                                    | verdict                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The region keeps the semantic names and changes what they resolve to      | **Yes, and this is the whole trick.** `palette.ts` keeps reading `--color-primary`, `--color-destructive`, `--color-warning`, `--color-foreground`, `--color-muted-foreground`, `--color-ring`. Not one line of the painter changes. Only the element passed to `getComputedStyle` does.                                                                                                                                                    |
+| 2. The fill is chosen for a reason the page's fill structurally cannot serve | **Yes.** The diagram's ground is a working surface, not a document surface — Corporate already gives it a warm value behind a flag (`globals.css:1014`) and **CQ-A is answered: a quiet ground in all three themes**, landing as a value in L4-2. More importantly, its inks must be validated **against that ground and against each other**, which the page family structurally cannot do because it is validated against `--background`. |
+| 3. The family can be complete and every pair clears its bar by computation   | **Yes — and it is the reason to do it.** `diagnosis.md` §3.3 shows five pairs nothing computes today, two of which land below any floor anyone would set.                                                                                                                                                                                                                                                                                   |
+| 4. At least one real consumer on the day it lands                            | **Five.** `resolveTsldPalette`, `resolveWbsBandPalette`, `resolveLensPalette`, `resolveResourceStripPalette`, and the Gantt's chart region (DOM).                                                                                                                                                                                                                                                                                           |
+| 5. It goes through `<Surface>`                                               | **Yes**, and it is the condition that made this design work: the diagram container already exists as a `div` painted `bg-canvas`. It becomes `<Surface tone="canvas">`, and `resolveTsldPalette(root)` — whose signature **already takes an `Element`** (`palette.ts:12`) — is handed that node.                                                                                                                                            |
 
 **Three consequences fall out for free, which is the test of a mechanism.**
 
@@ -303,17 +303,17 @@ is the semantic; the value is the scope's.
 
 ### 3.2 The tokens
 
-| Token                                   | Means                                                               | Today's shipped value it is frozen at (L2)                 |
-| --------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `--control-h-sm` / `-md` / `-lg`        | Control heights                                                     | 36 / 40 / 44 px (`button.tsx:22-24` — `h-9`/`h-10`/`h-11`) |
-| `--control-h-toolbar`                   | The command row's minor axis                                        | 36 px (`docs/TECH_DEBT.md` #127)                           |
-| `--row-h`                               | A row of records                                                    | **CQ-B.** 28 (tree) / 32 (Gantt) / `py-2` (table) today    |
-| `--ruler-h`                             | A time-axis band                                                    | **40 (TSLD) / 34 (Gantt) today** — unified                 |
-| `--lane-h` / `--lane-bar-h`             | The diagram's row and bar                                           | 28 / 18 (`geometry.ts:35,37`)                              |
-| `--rule-w`                              | Divider / boundary weight                                           | 1 px everywhere today                                      |
-| `--gutter-page` / `-section` / `-field` | The three rhythms `DESIGN_SYSTEM.md:97` names and nothing expresses | 24 / 24 / 16 px                                            |
-| `--radius-plot`                         | The diagram's corner language                                       | 3 px (`render-model.ts:31`) — beside the DOM's 8 px        |
-| `--tap-min`                             | Minimum pointer target                                              | 24 px (WCAG 2.2 §2.5.8) / 44 px house rule                 |
+| Token                                   | Means                                                               | Today's shipped value it is frozen at (L2)                                     |
+| --------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `--control-h-sm` / `-md` / `-lg`        | Control heights                                                     | 36 / 40 / 44 px (`button.tsx:22-24` — `h-9`/`h-10`/`h-11`)                     |
+| `--control-h-toolbar`                   | The command row's minor axis                                        | 36 px (`docs/TECH_DEBT.md` #127)                                               |
+| `--row-h`                               | A row of records                                                    | **28** (CQ-B, answered). Tree keeps 28; **Gantt moves 32 → 28**; tables follow |
+| `--ruler-h`                             | A time-axis band                                                    | **40 (TSLD) / 34 (Gantt) today** — unified                                     |
+| `--lane-h` / `--lane-bar-h`             | The diagram's row and bar                                           | 28 / 18 (`geometry.ts:35,37`)                                                  |
+| `--rule-w`                              | Divider / boundary weight                                           | 1 px everywhere today                                                          |
+| `--gutter-page` / `-section` / `-field` | The three rhythms `DESIGN_SYSTEM.md:97` names and nothing expresses | 24 / 24 / 16 px                                                                |
+| `--radius-plot`                         | The diagram's corner language                                       | 3 px (`render-model.ts:31`) — beside the DOM's 8 px                            |
+| `--tap-min`                             | Minimum pointer target                                              | 24 px (WCAG 2.2 §2.5.8) / 44 px house rule                                     |
 
 ### 3.3 Where a density comes from — the surface decides, not the user
 
@@ -347,8 +347,32 @@ contradicted by their own measurement (ADR-0091 D4, ADR-0092 M4, ADR-0093, ADR-0
 > before and after.**
 
 This is ADR-0055 §8.1's ordering argument — structure before values, because flipping both together
-makes every parity suite meaningless on the day it is needed — applied to metrics. It is also what
-makes CQ-C answerable later rather than guessed now.
+makes every parity suite meaningless on the day it is needed — applied to metrics.
+
+**CQ-C is answered: the control scale moves to 36 px in this epic** (departing from this design's own
+default, which was to tokenise 40 and move later). The rule above is what makes that safe, and it is
+not softened by the answer — **it is what the answer has to obey.** So the move is a landing of its
+own (`migration.md` **L2b**), immediately after the frozen tokens land, and it is built as a
+measurement rather than a value edit:
+
+1. change the value;
+2. re-run `measure:toolbar` **at 1646** — the product owner's actual screen, and the width ADR-0091's
+   retrospective records nobody having measured for two whole epics;
+3. **re-derive the band floors from what it reports** — never adjust them to make the existing gate
+   pass, which would be tuning the instrument to the reading;
+4. update `e2e-toolbar-fit`'s expectations to the measured values;
+5. run **every** journey (ADR-0091 records three broken by a label change and found by CI rather than
+   locally; `scripts/e2e-local.sh web` now covers the base one);
+6. **measure and report the vertical gain rather than asserting one.** Reclaiming height is the point
+   — chrome is 31 % of the workspace at 1646 — and four consecutive epics here have had exactly this
+   kind of headline number contradicted by their own measurement. **If the gain turns out to be
+   small, that is the finding**, and it is reported as one.
+
+Note what step 6 implies and step 1 does not: a 4 px control height does not necessarily buy 4 px of
+band. The command row's minor axis is `--control-h-toolbar` at 36 **already** (`docs/TECH_DEBT.md`
+#127), so the band may not move at all, and the gain may land entirely in the tables, the forms and
+the Explorer. That is a legitimate outcome and it is not the outcome the change is being made for, so
+it is the one most worth measuring.
 
 ---
 

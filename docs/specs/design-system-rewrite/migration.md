@@ -17,14 +17,24 @@ That is ADR-0055 §8.1's argument — _"flipping the structure and the values to
 flag-off parity suite meaningless on the day it is most needed, and turns one reviewable diff into
 two entangled ones"_ — applied to an epic that has no flag to hide behind.
 
-| Landing                                          | Visual change             | Rollback              |
-| ------------------------------------------------ | ------------------------- | --------------------- |
-| **L0** — gates, no CSS                           | none                      | free                  |
-| **L1** — the canvas becomes a scope              | **none, by construction** | free                  |
-| **L2** — metric tokens frozen at shipped values  | **none, by construction** | free                  |
-| **L3** — the page vocabulary                     | yes                       | revert a named range  |
-| **L4** — values                                  | yes, per theme            | revert a named commit |
-| **L5** — the documents re-derived from the gates | none                      | free                  |
+| Landing                                          | Visual change                                 | Rollback              |
+| ------------------------------------------------ | --------------------------------------------- | --------------------- |
+| **L0** — gates, no CSS                           | none                                          | free                  |
+| **L1** — the canvas becomes a scope              | **none, by construction**                     | free                  |
+| **L2** — metric tokens frozen at shipped values  | **none except the Gantt row** (CQ-B, 32 → 28) | free                  |
+| **L2b** — the control scale moves 40 → 36        | **yes, every control** — a measurement task   | revert a named commit |
+| **L3** — the page vocabulary                     | yes                                           | revert a named range  |
+| **L4** — values                                  | yes, per theme                                | revert a named commit |
+| **L5** — the documents re-derived from the gates | none                                          | free                  |
+
+**Two of these changed when the four critical questions were answered** (`README.md`), and both
+changes cost the plan something it should not pretend it still has:
+
+- **CQ-B (one rhythm, at 28)** means L2 is no longer byte-identical. The Gantt's row goes 32 → 28 on
+  the day the token lands. It is one surface and one number, so L2 keeps its position; it does not
+  keep its claim.
+- **CQ-C (move to 36 in this epic)** adds **L2b**, which is the only landing in the plan whose
+  deliverable is a set of measurements rather than a diff.
 
 ---
 
@@ -89,27 +99,98 @@ exactly this kind of change.
 
 ---
 
-## L2 — metric tokens, frozen
+## L2 — metric tokens, frozen (except one)
 
-**Byte-identical by construction.** Declare `--control-h-*`, `--row-h`, `--ruler-h`, `--lane-h`,
-`--lane-bar-h`, `--rule-w`, `--gutter-*`, `--radius-plot`, `--tap-min` at **today's shipped
-numbers**, add `[data-density]` with all three levels resolving to those same numbers, and re-express
-the primitives and the five module constants in terms of them.
+Declare `--control-h-*`, `--row-h`, `--ruler-h`, `--lane-h`, `--lane-bar-h`, `--rule-w`,
+`--gutter-*`, `--radius-plot`, `--tap-min` at **today's shipped numbers**, add `[data-density]` with
+all three levels resolving to those same numbers, and re-express the primitives and the five module
+constants in terms of them.
 
-Four values genuinely disagree today and the freeze has to pick one each. **Each is a CQ, not a
-tidy-up**: `--row-h` (28 vs 32, CQ-B), `--ruler-h` (40 vs 34), `--control-h-md` (40 vs the documented
-36, CQ-C), and the toolbar's minor axis (36, `docs/TECH_DEBT.md` #127). Where the CQ is unanswered,
-**the token is per-surface until it is answered** — a `--row-h-tree` and a `--row-h-gantt` that are
-later collapsed is honest; picking one silently is not.
+Four values genuinely disagree today and the freeze has to pick one each. Two are now answered and
+two are not:
+
+| token              | today                             | L2                                                           |
+| ------------------ | --------------------------------- | ------------------------------------------------------------ |
+| `--row-h`          | 28 tree / 32 Gantt / `py-2` table | **28** — CQ-B answered. **The Gantt moves; this is visible** |
+| `--control-h-md`   | 40 shipped / 36 documented        | **40, frozen** — the move to 36 is CQ-C and is **L2b**       |
+| `--ruler-h`        | 40 TSLD / 34 Gantt                | **unanswered** — stays per-surface until it is               |
+| toolbar minor axis | 36 (`docs/TECH_DEBT.md` #127)     | 36, frozen                                                   |
+
+**Where a value is unanswered the token stays per-surface until it is answered** — a `--ruler-h-tsld`
+and a `--ruler-h-gantt` later collapsed is honest; picking one silently is not.
+
+**So L2 is byte-identical apart from the Gantt row**, and that exception is stated rather than
+absorbed: CQ-B's answer buys one rhythm across three surfaces and costs the plan its cleanest
+rollback claim on one of them.
 
 **Gate: `pnpm --filter @repo/web measure:toolbar` and `test:e2e:toolbar-fit` at 1646, before and
 after, numbers recorded.** Four consecutive epics found their width expectation contradicted by their
-own measurement; this one does not add a fifth by arithmetic.
+own measurement; this one does not add a fifth by arithmetic. The Gantt row change also needs
+`test:e2e:gantt` and `measure:gantt`, because virtualization is measured off that number
+(`GanttPanel.tsx:420`).
 
 Also here: `@media (pointer: coarse)` resolves `[data-density]` to `comfortable`, which is what makes
 `docs/TECH_DEBT.md` #127 closable without adding 16 px to every desktop planner's band. That **is** a
 visible change under a coarse pointer — so it is measured with the first-ever coarse-pointer sweep
 (`docs/TECH_DEBT.md` #133) and, if the numbers are bad, deferred to L4 rather than shipped on hope.
+
+---
+
+## L2b — the control scale moves 40 → 36 (CQ-C)
+
+**This is a measurement task, not a token edit**, and it is the only landing in the plan whose
+deliverable is a set of numbers. It departs from this design's own default — which was to tokenise 40
+and move later, precisely because ADR-0090 and ADR-0091 derive the command surface's band floors from
+**measured** control widths and `e2e-toolbar-fit` asserts them. The answer is to move it now; the
+rule that made the default cautious does not go away, it becomes the method.
+
+**Why it goes here and not in L4.** It is the one value change that alters the _inputs_ to another
+epic's measurements. Everything in L4 is colour and type, which no gate elsewhere derives a floor
+from. Putting L2b immediately after the frozen tokens means the toolbar is re-measured **once**,
+against a tree whose only other change is a no-op re-expression — so a regression has one candidate
+cause rather than four.
+
+### The six steps
+
+1. **Change the value.** `--control-h-sm|md|lg` 36/40/44 → 32/36/40, and `Button`/`Input` follow the
+   token. Nothing else moves in this commit.
+2. **Re-run `pnpm --filter @repo/web measure:toolbar` at 1646** — the product owner's actual screen,
+   and the width ADR-0091's retrospective records nobody having measured for two entire epics. 1920,
+   1440, 1024 and 768 are swept too, but 1646 is the one the answer is judged on.
+3. **Re-derive the band floors from what it reports.** `resolveLayoutMode`'s four floors (1536 /
+   1280 / 1024 / 0, `docs/DESIGN_SYSTEM.md`) and `computeLadder`'s inputs come out of the new
+   measurement. **Do not adjust them to make the existing gate pass** — that is tuning the instrument
+   to the reading, and it is how a measured floor silently becomes a remembered one.
+4. **Update `e2e-toolbar-fit`'s expectations to the measured values**, including the coarse-pointer
+   assertions, which are deliberately written against the figures actually delivered
+   (`docs/TECH_DEBT.md` #127).
+5. **Run every journey.** All 33. ADR-0091's retrospective records three broken by a label change,
+   each found by CI rather than locally, and the rule that replaced that judgement is that a layout
+   change means running all of them. `scripts/e2e-local.sh web` now covers the base one, which is the
+   suite that was previously unrunnable through the documented pre-push gate (ADR-0096).
+6. **Measure and report the vertical gain rather than asserting one.** Re-run
+   `apps/web/measure-toolbar/vertical-stack.spec.ts` at 1646 and record the bands against the
+   2026-08-13 baseline: **shell chrome 192 (header 56, identity 45, row 1 45, row 2 44), above the
+   canvas 249, canvas 558** (`workspace-chrome/m0-band-measurement.md` §2).
+
+### What step 6 is likely to find, said before it is run
+
+A 4 px control height does **not** necessarily buy 4 px of band. The command row's minor axis is
+already 36 (`docs/TECH_DEBT.md` #127) and the row's height is set by `min-h-9` on the control, not by
+`Button`'s default — so **the two toolbar rows may not move at all**, and the gain may land entirely
+in the tables, the forms, the Explorer and the dialogs.
+
+That is a legitimate outcome, it is not the outcome the change is being made for, and it is therefore
+the one most worth measuring. **If the vertical gain is small, that is the finding and it is reported
+as one** — four consecutive epics here have had a headline width or height number contradicted by
+their own measurement (ADR-0091 D4, ADR-0092 M4, ADR-0093, ADR-0094 M0-T1), and in two of those the
+correction was more useful than the change.
+
+### Rollback
+
+One commit. It is the largest single visual change in the epic — **every control in the product, in
+all three themes** — and it deliberately lands alone so that reverting it does not take the token
+architecture with it.
 
 ---
 
