@@ -586,6 +586,16 @@ model Client {
   // patterns at once: the organization_id FK (leftmost prefix), the org-scoped
   // active-list query, AND its deterministic cursor sort (ORDER BY created_at,
   // id). It subsumes a standalone organization_id index, so none is added.
+  //
+  // The recycle bin reads the OPPOSITE set and cannot use it. Its filter and sort
+  // (organization_id = ?, deleted_at IS NOT NULL, ORDER BY deleted_at DESC, id ASC)
+  // are served by a PARTIAL index idx_clients_org_deleted_at (organization_id,
+  // deleted_at DESC, id) WHERE deleted_at IS NOT NULL, added as raw SQL in the
+  // migration because Prisma cannot express a WHERE predicate — so there is NO
+  // @@index for it here (a declared index the database does not have is what broke
+  // prisma:check-drift, TECH_DEBT #54). The same index also serves the hierarchy
+  // expiry scan's organisation-agnostic `deleted_at < :cutoff`. Measured before it
+  // was written; the numbers are in the migration.
   @@index([organizationId, createdAt, id])
   @@map("clients")
 }
@@ -624,6 +634,11 @@ model Project {
   // standalone client_id index. organization_id is indexed on its own to back its
   // FK (RESTRICT) and org-scoped IDOR loads; there is no org-wide ordered project
   // list, so a single column suffices (no composite needed there).
+  //
+  // The recycle-bin branch for projects is served by the partial
+  // idx_projects_org_deleted_at (organization_id, deleted_at DESC, id) WHERE
+  // deleted_at IS NOT NULL — raw SQL in the migration, no @@index here (see the
+  // Client model's note and TECH_DEBT #54).
   @@index([clientId, createdAt, id])
   @@index([organizationId])
   @@map("projects")
@@ -809,6 +824,14 @@ model Plan {
   // (project_id, created_at, id) covers the project FK, the list-plans-under-a-
   // project query and its cursor sort; subsumes a standalone project_id index.
   // organization_id is indexed on its own for its FK and org-scoped IDOR loads.
+  //
+  // The recycle-bin branch for plans — the largest of the three, and the one that
+  // measured 1.2 s per screen open before it existed — is served by the partial
+  // idx_plans_org_deleted_at (organization_id, deleted_at DESC, id) WHERE
+  // deleted_at IS NOT NULL. Raw SQL in the migration, no @@index here (see the
+  // Client model's note and TECH_DEBT #54). `id` is in the key deliberately: a
+  // cascade stamps ONE deleted_at on every row it touches, so paging a large batch
+  // is entirely the id tiebreak.
   @@index([projectId, createdAt, id])
   @@index([organizationId])
   @@map("plans")
@@ -1181,9 +1204,12 @@ model Activity {
   assignments ResourceAssignment[]
 
   // Weighted checklist steps on this activity (M7 rung 5, ADR-0044 §2). RESTRICT FK;
-  // steps soft-delete only. Soft-deleting an activity SHOULD sweep its active steps
-  // (stamped with the same delete_batch_id, mirroring the assignment sweep above) — a
-  // HierarchyLifecycleService follow-on for the F2 build, NOT this schema slice.
+  // steps soft-delete only. Soft-deleting an activity DOES sweep its active steps into
+  // the same delete_batch_id — hierarchy-lifecycle.service.ts:182-201 (under plans) and
+  // :465 (under an activity subtree), with :550 restoring them. This comment said that
+  // sweep was "a later task, NOT this schema slice" until 2026-08-18; it had been built
+  // and the comment was never moved with it. The neighbouring `assignments` comment
+  // above says the same thing and is STILL TRUE — that one really is unswept.
   steps ActivityStep[]
 
   // Threaded notes on this activity (M1, ADR-0046). Parent = this activity (an
