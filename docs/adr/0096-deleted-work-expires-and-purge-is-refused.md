@@ -239,6 +239,16 @@ a change that is the entire basis of the UX this ADR ships. Closed in the same p
 stale `docs/DECISIONS.md` entries the reviewer found beside it, one of which still says the indexes
 were deliberately not built.
 
+**CI then found a tenth, and it belongs to a previous epic.** `check:frontend-only` failed this
+branch: `scripts/frontend-only.json` still declared the **gantt-editing** epic active, three weeks
+after it released as `web-v0.92.0`. That file's own docblock says "the epic's own gate pass removes
+it", and ADR-0095's M6 pass did not — so the first branch to legitimately change `apps/api/` was
+refused, with a message about a recalculation-parity argument that was not its own. A stale gate of
+this kind does not go quiet, which is the failure ADR-0058 usually describes; it goes **wrong about
+a different epic**, and reads as authoritative while doing it. Deactivated with the reason recorded
+in the file, and the failure mode written into the script's docblock so the next epic's gate pass
+has something to act on rather than a sentence to remember.
+
 Every fix carries a regression test verified to fail against the old code first. Two non-blocking
 findings are `docs/TECH_DEBT.md` #140–#141.
 

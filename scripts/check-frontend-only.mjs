@@ -29,6 +29,15 @@
  * shape its parity argument assumed, and the answer is to say so deliberately — reopening the parity
  * question — rather than to discover it at the gate pass.
  *
+ * **The declaration going stale is the other failure, and it happened first.** The gantt-editing
+ * entry stayed `active: true` after that epic released as `web-v0.92.0`, because "the epic's own
+ * gate pass removes it" was a sentence in this docblock and not a step anybody took. It then
+ * blocked ADR-0096 — an epic that legitimately changes `apps/api/`, and whose parity argument is
+ * that the CPM engine is not imported at all — with a message about a parity argument that was not
+ * its own. So a stale declaration does not go quiet; it goes **wrong about a different epic**, which
+ * is worse, and the honest response is to deactivate it there rather than to reason about a
+ * milestone that shipped.
+ *
  * Usage:  node scripts/check-frontend-only.mjs [baseRef]
  */
 import { execFileSync } from 'node:child_process';
