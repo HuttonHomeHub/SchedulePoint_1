@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
+import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
@@ -1253,6 +1254,24 @@ export function ToolbarPlanWorkspace({
           />
         </div>
       ) : null}
+
+      {/*
+        The keyboard-shortcuts sheet, mounted ONCE for the whole workspace (`docs/TECH_DEBT.md`
+        #137). It used to live inside `TsldPanel`, so in the Gantt the `?` binding and the account
+        menu set `showHelp` and nothing rendered — a lit-but-inert control in the view that had
+        just gained six bindings and no other place documenting them. The state was always shared
+        (`use-tsld-canvas-ui-state`); only the render was trapped one level down.
+
+        `view` selects which set it shows. The two views share key NAMES and not meanings — Enter
+        opens the logic editor on the canvas and commits a cell edit in the grid — so one merged
+        list would qualify half its rows into unreadability.
+      */}
+      <PlanShortcutsHelp
+        open={canvasUi.showHelp}
+        onClose={() => canvasUi.setShowHelp(false)}
+        editingEnabled={model.canEditSchedule}
+        view={ctx.planView}
+      />
 
       {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
           has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}

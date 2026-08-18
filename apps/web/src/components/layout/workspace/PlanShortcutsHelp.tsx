@@ -1,4 +1,5 @@
 import { Dialog } from '@/components/ui/dialog';
+import type { PlanViewMode } from '@/features/gantt/view-mode';
 import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
@@ -79,6 +80,35 @@ const UNDO_REDO_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Cmd / Ctrl + Shift + Z  ·  Ctrl + Y', action: 'Redo' },
 ];
 
+/**
+ * **The Gantt's own bindings** (`docs/TECH_DEBT.md` #137).
+ *
+ * ADR-0095 gave that view F2, Enter, Escape, Tab-to-commit, `Alt+←/→` and `Shift+←/→`, and there
+ * was **nowhere documenting them**: this sheet was mounted inside `TsldPanel`, which the Gantt does
+ * not render, so the `?` binding and the account-menu item set a state nothing drew. The M6 ux gate
+ * found the dead control and deliberately did not patch it, because opening a sheet of CANVAS
+ * bindings in the Gantt answers the wrong question. This is the other half.
+ *
+ * Deliberately NOT merged into one list. The two views share key NAMES and not meanings — `Enter`
+ * opens the logic editor on the canvas and commits a cell edit here — so a combined sheet would
+ * have to qualify half its rows with "(in the diagram)", which is a sheet nobody finishes reading.
+ */
+const GANTT_READ_SHORTCUTS: readonly Shortcut[] = [
+  { keys: '↑ / ↓', action: 'Previous / next row' },
+  { keys: 'Home / End', action: 'First / last row' },
+  { keys: '← / →', action: 'Collapse / expand a summary row' },
+  { keys: '?', action: 'Show this shortcuts help' },
+];
+
+const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
+  { keys: 'F2  ·  double-click', action: 'Edit the focused cell (Activity or Duration)' },
+  { keys: 'Enter', action: 'Commit the cell edit' },
+  { keys: 'Tab', action: 'Commit and move to the next cell' },
+  { keys: 'Esc', action: 'Discard the cell edit' },
+  { keys: 'Alt + ← / →', action: 'Move the bar one day earlier / later (recalculates)' },
+  { keys: 'Shift + ← / →', action: 'Shorten / lengthen the bar one day (recalculates)' },
+];
+
 function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactElement {
   return (
     <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
@@ -97,15 +127,45 @@ function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactEle
  * Read shortcuts always show; edit shortcuts appear only when on-canvas editing is enabled. Built
  * on the shared {@link Dialog} (native focus trap + Escape), so it's keyboard-operable by default.
  */
-export function TsldShortcutsHelp({
+export function PlanShortcutsHelp({
   open,
   onClose,
   editingEnabled,
+  view = 'tsld',
 }: {
   open: boolean;
   onClose: () => void;
   editingEnabled: boolean;
+  /**
+   * Which projection the planner is looking at. Defaults to the diagram, so every existing caller
+   * is unchanged — and so a host that forgets to pass it shows the canvas sheet rather than an
+   * empty one.
+   */
+  view?: PlanViewMode;
 }): React.ReactElement {
+  if (view === 'gantt') {
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title="Gantt keyboard shortcuts"
+        description="Focus a row in the chart, then use these keys to navigate and edit."
+      >
+        <div className="flex flex-col gap-5">
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Navigate</h3>
+            <ShortcutList items={GANTT_READ_SHORTCUTS} />
+          </section>
+          {editingEnabled ? (
+            <section className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold">Edit</h3>
+              <ShortcutList items={GANTT_EDIT_SHORTCUTS} />
+            </section>
+          ) : null}
+        </div>
+      </Dialog>
+    );
+  }
   const editShortcuts = [
     ...EDIT_SHORTCUTS,
     ...(CANVAS_DIRECT_MANIPULATION_ENABLED ? DIRECT_MANIPULATION_SHORTCUTS : []),

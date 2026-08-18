@@ -85,7 +85,6 @@ import { EditConflictBanner } from './EditConflictBanner';
 import { LinkChainDialog } from './LinkChainDialog';
 import { sceneTopOffset, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
-import { TsldShortcutsHelp } from './TsldShortcutsHelp';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
 
@@ -624,7 +623,8 @@ export function TsldPanel({
     fitSignal,
     requestFit,
     autoArrangeSignal,
-    showHelp,
+    // `showHelp` is no longer read here — the sheet mounts at the workspace so it renders in BOTH
+    // views (#137). `setShowHelp` stays: the canvas's own `?` binding still opens it.
     setShowHelp,
     canvasControlRef,
     createType,
@@ -2843,11 +2843,12 @@ export function TsldPanel({
         pending={arranging}
       />
 
-      <TsldShortcutsHelp
-        open={showHelp}
-        onClose={() => setShowHelp(false)}
-        editingEnabled={editingEnabled}
-      />
+      {/*
+        The shortcuts sheet is NOT mounted here any more. It lived inside this panel, which the
+        Gantt does not render — so in that view the `?` binding and the account-menu item set
+        `showHelp` and nothing drew it (`docs/TECH_DEBT.md` #137). The state was always shared;
+        only the render was trapped. It now mounts once at the workspace, above both views.
+      */}
     </section>
   );
 }

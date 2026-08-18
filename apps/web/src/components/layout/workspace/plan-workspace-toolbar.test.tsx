@@ -135,9 +135,15 @@ vi.mock('@/features/baselines', () => ({
   BaselinesPanel: () => <div data-testid="baselines-panel" />,
   BaselineVarianceSummary: () => null,
 }));
-vi.mock('@/features/activities', () => ({
+// **Partial**, not total — the `@/features/dependencies` lesson below, one feature along and
+// learnt the same way. ADR-0095 M5-T4 added `useUpdateActivityParents` to the workspace host and
+// these suites failed at COLLECTION with "no export is defined on the mock", because a total mock
+// blanks every export the host imports rather than only the ones a test meant to stub.
+vi.mock('@/features/activities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useActivities: () =>
     query([{ id: 'a1', version: 3, name: 'Excavate', earlyStart: '2026-01-02' }]),
+  useUpdateActivityParents: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateActivity: () => ({ mutateAsync: vi.fn() }),
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn() }),
   useUpdateActivity: () => ({ mutateAsync: vi.fn() }),
