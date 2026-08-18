@@ -24,11 +24,29 @@ remedies:
 That spec's §0.5 established eight findings by reading files. I take all eight as input. The three
 that shape this design most:
 
-- **D1 — a theme in this application can only express colour, structurally.** All 117 declarations
-  in `.corporate` (`globals.css:508-730`) are colours; `--radius` is declared once at `:root:35` and
-  no theme restates it; `@theme inline:1021-1079` maps colours, two font families and four radii
-  derived from that one `--radius`. **This is the spine of the whole rewrite**, and §1 below is what
-  happens when you follow it one step further than that spec needed to.
+- **D1 — a theme in this application can only express colour, structurally.** Every declaration in
+  `.corporate` (`globals.css:508-730`) is a colour; `--radius` is declared once at `:root:35` and no
+  theme restates it; `@theme inline:1021-1079` maps colours, two font families and four radii derived
+  from that one `--radius`. **This is the spine of the whole rewrite**, and §1 below is what happens
+  when you follow it one step further than that spec needed to.
+
+  > **Executed rather than reasoned (2026-08-18).** This was the one claim in these documents load-
+  > bearing enough to be worth running, since the whole rewrite rests on it and the session that
+  > wrote it had no shell. Three commands, in a tree at `a5bd525`:
+  >
+  > - `awk '/^\.corporate \{/,/^}/' globals.css | grep -E '^\s*--' | grep -vE ':\s*(oklch|hsl|rgb|#|var\(|color-mix|transparent|currentColor)'` → **zero lines**. Not "mostly colours": every
+  >   declaration in the block is one.
+  > - `grep -n '^\s*--radius' globals.css` → **one** declaration, at `:35`, plus the four derived
+  >   `--radius-*` in `@theme inline`. No theme block restates it.
+  > - Counting `--radius|spacing|text|font|leading|row|size` declarations per theme block → `:root` 3,
+  >   `.dark` **0**, `.corporate` **0**.
+  >
+  > The count reads 118 by that awk against the 117 quoted above; the difference is one line of
+  > delimiter handling and changes nothing. **The claim is exact and it is the strongest thing in
+  > this document**: density, rhythm, radius, elevation and type are not merely unthemed, they are
+  > outside the mechanism, so no amount of care with colour could have produced a theme that felt
+  > designed.
+
 - **D5 — every content page hand-rolls the same frame.** `mx-auto w-full max-w-6xl flex-1 p-6`,
   verbatim, 15 times across 12 route files. Independently confirmed here: `max-w-6xl` returns 15
   hits under `apps/web/src/routes/`.
@@ -354,12 +372,21 @@ because the same emphasis outline draws the bar's boundary. It is, however, a ba
 pale wash on white — and the ordinary bar, which has **no** outline (only `barStroke` =
 `--color-border`, which is `oklch(0.922 0 0)` = **1.26:1** on white), is carried entirely by its fill.
 
-**What is a real, unmitigated problem is the print path.** `resolvePrintPalette` (`palette.ts:109`)
-resolves the **same tokens** with `.dark` cleared, and ADR-0059 M4 ships a printed programme a
-scheduler hands to a client. A printed programme is routinely monochrome. **The fill-to-fill ratios
-in the table above are exactly the greyscale test**, and in Light an ordinary bar and a critical bar
-land **1.27:1** apart. On a black-and-white printout, the critical path — the single thing the
-document exists to communicate — is distinguishable only by a 2 px outline weight.
+**And the print path is not the unmitigated case either — corrected on verification.** This
+paragraph said the fill-to-fill ratios were "exactly the greyscale test" for a printed programme,
+i.e. that on a monochrome printout the critical path would be carried by nothing but a 2 px outline.
+`resolvePrintPalette` **carries `outline`** (`palette.ts:135`) and `paint.ts` strokes critical and
+near-critical bars with it on the print path exactly as on screen, and two docblocks state that the
+shape cue is what satisfies 1.4.1. So the printed programme keeps the same solid-versus-dashed
+distinction the screen has, and the claim was one step too strong.
+
+**What the 1.27:1 and 1.34:1 figures are** — and they are correct, recomputed independently — is a
+**design-quality failure on the primary surface of a scheduling product, not an accessibility one.**
+The two states a planner most needs to tell apart at a glance, across a wall of bars, differ by an
+amount that is below the threshold at which a difference reads as intentional; the reader recovers
+the distinction by inspecting a stroke rather than by scanning. That is reason enough to fix it, and
+it is a weaker claim than the one it replaces, which is why it is stated rather than the original
+left standing (ADR-0082's precedent: an overstated citation is corrected, not quietly dropped).
 
 **And none of it is gated.** `token-contrast.test.ts` contains the string `canvas` twice: once in a
 comment (`:15`) and once as a flag-attribute name (`:22`). There is **no pair involving `--canvas`,

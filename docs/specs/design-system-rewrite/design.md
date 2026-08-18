@@ -490,7 +490,8 @@ Because "the design system reaches the canvas" is the claim, and a claim needs a
    against the diagram's own ground rather than the page's.
 2. **A separation matrix** (§8.2) that no other surface needs: fills against the ground, fills against
    the **band** (a bar sits on two different grounds and nobody has ever checked the second), inks on
-   their own fills, and **fill against fill** — which is the monochrome-print test.
+   their own fills, and **fill against fill** — the two states a planner most needs to tell apart
+   across a wall of bars.
 3. **Geometry tokens** — `--lane-h`, `--lane-bar-h`, `--radius-plot`, `--ruler-h`, `--rule-w` — so the
    diagram's rhythm is a theme decision rather than five constants in two files.
 4. **A named text size**, from the data ramp, so a bar label, a Gantt cell and a table cell agree.
@@ -566,11 +567,22 @@ For each theme × each canvas flag state:
   deleted rather than fixed (ADR-0058); the adjacent-surfaces block at `token-contrast.test.ts:189-213`
   is the precedent for a computed number that is printed rather than asserted.
 - the same set for the **print** palette, because `resolvePrintPalette` resolves the same tokens onto
-  paper (`palette.ts:109`) and a printed programme is a deliverable a scheduler hands to a client.
+  paper (`palette.ts:109`) and a printed programme is a deliverable a scheduler hands to a client —
+  and because a palette contract that is total on screen and partial on paper is how the two drift.
 
-**Why fill-against-fill is the right number and not an invented one:** the WCAG ratio _is_ a
-luminance ratio, so two fills at 1.27:1 are two greys 1.27:1 apart on a monochrome printout. The gate
-is not a proxy for print legibility; it is print legibility.
+**Why fill-against-fill is the right number, and what it is _not_ — corrected on verification.** An
+earlier draft justified it as "the monochrome-print test", on the reasoning that a WCAG ratio is a
+luminance ratio and `resolvePrintPalette` puts these tokens on paper. **That justification does not
+hold**: the print palette carries `outline` (`palette.ts:135`) and `paint.ts` strokes critical and
+near-critical bars with it on the print path as on screen, so the solid-versus-dashed shape cue
+survives a black-and-white printout and 1.4.1 is satisfied there too.
+
+The honest justification is narrower and still sufficient. A luminance ratio is **the best available
+proxy for "do these two read as different at a glance"**, which is the question a diagram made of
+hundreds of bars actually poses — a planner scanning for the critical path is not inspecting stroke
+patterns. **1.5:1 is a house number, not a standard**, and it is proposed rather than derived; that
+is why CQ-D makes it a reported figure first and an assertion only once the values satisfy it. Anyone
+raising the floor later owes a reason, and "WCAG says so" will not be it.
 
 ### 8.3 The **rhythm gate** — a metric may not be a literal
 

@@ -14,8 +14,11 @@
    the diagram's own ground rather than the page's — closing `diagnosis.md` §3.1, which is the same
    defect ADR-0055 was written about, surviving in the one place ADR-0055 never reached.
 2. **A separation matrix** (`design.md` §8.2), including the two things nobody checks: a fill against
-   the **month band** (a bar sits on two grounds), and fill-against-fill, which **is** the
-   monochrome-print test for a deliverable a scheduler hands to a client.
+   the **month band** (a bar sits on two grounds), and **fill-against-fill** — the two states a
+   planner most needs to tell apart across a wall of bars, currently **1.27:1** in Light and
+   **1.34:1** in Corporate. That is a design-quality failure on the primary surface, **not** an
+   accessibility one: the solid-versus-dashed criticality outline carries 1.4.1, and it carries it on
+   the print path too (`palette.ts:135`), which an earlier draft of this document got wrong.
 3. **`--primary` freed** to mean "an ordinary activity" here and "the action" everywhere else,
    retiring the constraint that pushed Corporate's near-critical to bronze.
 4. **Geometry tokens** — `--lane-h`, `--lane-bar-h`, `--radius-plot`, `--ruler-h`, `--rule-w` — so

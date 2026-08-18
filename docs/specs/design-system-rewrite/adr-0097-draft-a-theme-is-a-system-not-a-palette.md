@@ -93,9 +93,16 @@ fill — surviving in the one place ADR-0055 never reached. It has not surfaced 
 flag-attribute name. There is no pair involving `--canvas`, `--canvas-band`, `--canvas-grid-*` or
 `--canvas-nonworking-hatch` anywhere in the matrix. Hand-computed from `globals.css`
 (`diagnosis.md` §3.3), the three bar states are separated by **1.27:1** in Light (ordinary vs
-critical) and **1.34:1** in Corporate (near-critical vs critical) — and because
-`resolvePrintPalette` resolves the same tokens onto paper for a programme a scheduler hands to a
-client, **that ratio is the monochrome-print legibility test.**
+critical) and **1.34:1** in Corporate (near-critical vs critical).
+
+**That is a design-quality failure on the primary surface of a scheduling product, and it is
+deliberately _not_ claimed as an accessibility one.** A draft of this ADR called it "the
+monochrome-print legibility test", on the reasoning that `resolvePrintPalette` puts the same tokens
+on paper. Verified with a shell: the print palette carries `outline` (`palette.ts:135`), `paint.ts`
+strokes critical and near-critical bars with it on the print path as on screen, and two docblocks
+state that the solid-versus-dashed shape cue is what satisfies 1.4.1. The figures are right —
+recomputed independently — and the claim built on them was one step too strong. Corrected here rather
+than dropped, which is ADR-0082's precedent for an overstated citation.
 
 ### And a rule that fails once per discovery
 
@@ -192,9 +199,22 @@ Three parts:
    three solid status triples — **without anyone having to notice them.**
 3. **A second fill inside a scope is a _reset_, not a member.** `Card` and `Popover` restore the page
    family for their subtree. This _keeps_ ADR-0055's promise that a `Card` means the same thing
-   everywhere, and it closes a live split pair nobody has raised: `CardDescription` is
-   `text-muted-foreground` (rebound) on `bg-card` (not rebound), so a Card in the Project Explorer
-   rail takes the panel's grey — chosen for the panel's fill — on the page's white card.
+   everywhere, and it closes a **latent** split pair nobody has raised: `CardDescription` is
+   `text-muted-foreground` (rebound) on `bg-card` (not rebound), so the two halves of one composited
+   pair would be governed by different scopes.
+
+   **Latent, not live, and the distinction is load-bearing** — it decides whether this ships on its
+   own or inside the rewrite. Verified with a shell: there is **no `<Card>` and no `bg-card` inside
+   any of the six `<Surface>` sites**. A draft of this ADR named the Project Explorer rail as the
+   instance; it is not one — the rail's panel scopes hold the tree and the resizer. The only
+   Card-family usage inside a scope is `auth-shell.tsx:66-70`, which renders
+   `CardHeader`/`CardTitle`/`CardDescription` **without** a `<Card>` wrapper, on `bg-background`,
+   which _is_ rebound — so both halves sit in `auth` and nothing splits.
+
+   **This is the better argument for the closure, not a weaker one.** The pair is compilable, so it
+   is one component move from being real, and nothing in the build would report it. A rule that
+   depends on "it is broken today" can be falsified by a component moving the other way; a rule that
+   depends on "this is one move from breaking and is unreportable" cannot.
 
 **So: a scope is complete when no pair a compiled utility can composite is split across two scopes.**
 The count becomes an output.
@@ -359,8 +379,12 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
   theme gives the diagram a real ground, which is exactly when it would have been a defect.
 - **A theme can express a decision that is not a colour.** Density, rhythm, rule weight, elevation
   mechanism and the diagram's geometry become theme- and density-reachable.
-- **Three latent WCAG failures become impossible rather than undiscovered.** The closure governs
-  every compilable pair; the census covers alpha modifiers; a split pair fails regardless of ratio.
+- **A class of unreportable contrast defect becomes impossible rather than undiscovered.** The
+  closure governs every compilable pair; the census covers alpha modifiers; a split pair fails
+  regardless of ratio. Of the four instances that motivated it, **one was live** (`bg-destructive/90`
+  at 4.32:1, found and fixed while this ADR was being drafted) and **three are latent** — and the
+  latent ones are the better argument, because each is one component move from being real with
+  nothing in the build that would say so.
 - **Two long-standing debts close as consequences rather than as work:** `docs/TECH_DEBT.md` #21(d)
   (no `EmptyState`), and #127 (40 × 36 touch targets against a 44 × 44 house rule) — the latter
   because a density scope can raise a coarse-pointer target without adding 16 px to every desktop
