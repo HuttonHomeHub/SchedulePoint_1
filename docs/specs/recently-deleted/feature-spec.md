@@ -116,6 +116,19 @@ from the day it was deleted; an audit row records the removal on the organisatio
 Marked **CRITICAL** where the answer changes design or scope. Everything else states a default and
 proceeds.
 
+> ## Critical questions — RESOLVED 2026-08-18 (product owner)
+>
+> All four resolved to the spec's own **default**. Recorded here so the questions below read as
+> settled inputs rather than open ones; the reasoning under each is kept because it is why the
+> default is the default, not because the choice is still live.
+>
+> |          | Resolution                                                                                                                                                                                                                                                                                                                         |
+> | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **CQ-1** | **(a)** — the blast radius lives on the organisation's own Recently Deleted screen. ADR-0086 is **not** amended and `staff-boundary.structural.spec.ts` is not touched. Staff cannot restore anything, so the read buys nothing there that justifies widening a boundary whose whole value is that it is structural.               |
+> | **CQ-2** | **Accepted** — M3 ships the countdown and the blast-radius view with nothing deleted; M4 arms the sweep. The single-release promise made to the product owner was refuted by `retention-sweep.service.ts:110-113` (an unawaited sweep at boot), so the promise is met by splitting the work rather than by softening the sentence. |
+> | **CQ-3** | **Accepted** — the 90 days is retroactive and the first armed tick takes the existing backlog. The M3→M4 split is the notice period; `RETENTION_HIERARCHY_DAYS` is the operator override. The product owner chose to arm immediately with this consequence stated.                                                                 |
+> | **CQ-4** | **No** — activities soft-deleted inside live plans are out of scope. The bin never showed them and no countdown ever described them, so including them would expire content no reader was warned about. The growth is recorded as debt instead.                                                                                    |
+
 > **CQ-1 (CRITICAL) — the staff Retention panel collides with ADR-0086's structural boundary, in
 > two ways.** The brief asks for "the age of the oldest soft-deleted row on the staff Retention
 > panel". `apps/api/src/modules/staff/staff-boundary.structural.spec.ts:77-96` fails the build if
