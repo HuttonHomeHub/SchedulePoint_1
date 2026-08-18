@@ -254,6 +254,25 @@ values**, and every later change to one is its own commit with `measure:toolbar`
 expectation contradicted by their own measurement (ADR-0091 D4, ADR-0092 M4, ADR-0093, ADR-0094
 M0-T1); this one does not add a fifth by arithmetic.
 
+**Two values are answered rather than frozen, and both are recorded as departures.**
+
+- **`--row-h` is 28** (CQ-B). The Project Explorer keeps its rhythm, the Gantt moves **32 → 28**, the
+  tables follow. So the metric landing is byte-identical **apart from one surface**, and the plan says
+  so rather than keeping a claim it no longer has.
+- **`--control-h-*` moves 36/40/44 → 32/36/40 in this epic** (CQ-C), **departing from this ADR's own
+  recommendation**, which was to freeze 40 and move later with measurements in hand. The product
+  owner took the move. The recommendation's reason is not withdrawn — it becomes the **method**: the
+  move is a landing of its own whose deliverable is a set of measurements (change the value; re-run
+  `measure:toolbar` at 1646; **re-derive** the band floors from what it reports rather than adjusting
+  them so the existing gate passes; update `e2e-toolbar-fit` to the measured values; run **all 33**
+  journeys; and **measure and report the vertical gain rather than asserting one**).
+
+  The last step is the one that matters. Reclaiming height is the point — chrome is **31 %** of the
+  workspace at 1646 — and the command row's minor axis is **already 36**, so the two toolbar rows may
+  not move at all and the gain may land entirely in tables, forms and dialogs. **If the gain is small,
+  that is the finding.** In two of the four epics whose headline number was contradicted by their own
+  measurement, the correction was more useful than the change.
+
 ### D9 — Two type ramps, and the data ramp owns tabular figures
 
 The prose ramp gets a top (`--text-page`, the size `text-3xl` was documented for and never used),
@@ -409,6 +428,19 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
 - **The plot separation gate ships red-if-asserted**, so it ships **reporting** (CQ-D) until L4. A
   reported number everyone learns to scroll past is a real risk; the mitigation is that L4's first
   commit is the one that satisfies it.
+- **CQ-C's answer adds a landing, and it is the epic's largest single visual change** — every control
+  in the product, in all three themes, in one commit (L2b). The specific risk is not the pixels: it is
+  that the band floors get **adjusted so the existing fit gate passes** instead of re-derived from the
+  new measurement, which turns a measured floor into a remembered one with nothing downstream to
+  catch it. Stated as the failure mode because it is the helpful-looking one.
+- **CQ-C's own payoff may not appear where it is expected.** The command row's minor axis is already
+  36, so the two toolbar rows may not move and the height may come back in tables, forms and dialogs
+  instead. That is why the milestone measures and reports rather than asserting — and **a small gain
+  is a finding, not a failed milestone**.
+- **CQ-B costs the metric landing its clean rollback on one surface.** With `--row-h` at 28 the
+  Gantt's row moves 32 → 28 on the day the token lands, so L2 is byte-identical _apart from_ that. One
+  number, one surface — recorded rather than absorbed, and it takes `test:e2e:gantt` and
+  `measure:gantt` with it because the virtualizer is measured off it.
 - **`resolveTsldPalette`'s root becomes load-bearing.** A function four callers share gains a way to
   be silently wrong — an unmounted or out-of-scope element resolves page values, which is today's
   behaviour and therefore invisible without a dedicated test. `resolvePrintPalette` is the one most

@@ -225,16 +225,23 @@ where the product owner's judgement is the acceptance test.
 
 In order:
 
-1. **The plot values** — the criticality triple re-separated so the L0-T3 report clears the CQ-D
-   floor, in all three themes, in both canvas flag states, **and in the print palette**. The gate is
-   promoted from reporting to asserting **in this commit**, with the values that satisfy it.
-2. **The diagram ground** (CQ-A) — Light and Dark gain a distinct working surface.
+1. **The plot values** — the criticality triple re-separated so the L0-T3 report clears the **≥ 1.5:1**
+   floor (CQ-D, answered), in all three themes, in both canvas flag states, **and in the print
+   palette**. The gate is promoted from reporting to asserting **in this commit**, with the values
+   that satisfy it. Note what the floor is and is not: a **house number** for "do these read as
+   different at a glance", not a WCAG one — the solid-versus-dashed criticality outline carries 1.4.1,
+   on screen and on paper (`palette.ts:135`).
+2. **The diagram ground** (CQ-A, answered: yes) — Light and Dark gain a quiet working surface distinct
+   from the page, joining Corporate's, which until now was flagged.
 3. **The accent placement** (`design.md` §2.2) — the current nav item, the selected row, the active
    mode. `ACCENT_ROLES` lands with it.
 4. **The type ramp's values** — `--text-page` finally has a size, and it is the first time a page
    title has been visually distinct from a section heading.
-5. **Density** (CQ-C), if answered as a move, with its own toolbar measurement.
-6. **Elevation** (`design.md` §4.2) — ten call sites, and the Dark-theme rule written down.
+5. **Elevation** (`design.md` §4.2) — ten call sites, and the Dark-theme rule written down.
+
+**Density is not in this list any more.** CQ-C moved it to **L2b**, ahead of L3, because it is the
+one value change that alters another epic's measured inputs and it must be re-measured against a tree
+with nothing else moving in it.
 
 **Corporate's promotion to the default theme is the sibling epic's**, not this one's, and the
 ordering between them is a product decision. The argument for it going **first** is strong and is
@@ -276,6 +283,20 @@ Said here rather than discovered.
 4. **The plot separation gate is red until L4.** It ships **reporting** for exactly that reason
    (CQ-D), and a reported number that everyone learns to scroll past is a real risk. Mitigation: L4-1
    is the first value commit, so the window is short and named.
+   4a. **L2 is no longer byte-identical** (CQ-B). The Gantt's row goes 32 → 28 with the token, so one
+   surface loses the free rollback the landing was designed to have. One number, one surface, stated
+   rather than absorbed — and it needs `test:e2e:gantt` and `measure:gantt`, because the virtualizer
+   is measured off it (`GanttPanel.tsx:420`).
+   4b. **L2b is the largest single visual change in the epic** (CQ-C): every control in the product, in
+   all three themes, in one commit. It departs from this design's own default, and the default's
+   reason — that ADR-0090/0091 derive band floors from measured control widths — does not go away, it
+   becomes the method. **The specific risk is step 3 of L2b**: adjusting a band floor to make the
+   existing gate pass instead of re-deriving it from the new measurement. That would convert a
+   measured floor into a remembered one silently, and nothing downstream would catch it.
+   4c. **The vertical gain L2b is being made for may not materialise.** The command row's minor axis is
+   already 36, so the two toolbar rows may not move at all and the height may come back entirely in
+   tables, forms and dialogs. That is why step 6 measures and reports rather than asserting — and if
+   the gain is small, **that is the finding**, not a failure of the milestone.
 5. **Density-by-surface means a control's height depends on where it lands.** That is the opposite of
    the surface-scope property that no descendant learns where it is — and the mitigation is only that
    it is inherited CSS rather than a prop, so nobody has to _thread_ it. Somebody will still be
@@ -296,7 +317,12 @@ Said here rather than discovered.
 
 - **Answer `docs/TECH_DEBT.md` #75.** It must leave the canvas budget _measurable_ and re-run the
   harness. It must not quietly become the epic that sets a new number.
-- **Change the toolbar ladder's arithmetic.** ADR-0090/0091 own it.
+- **Change the toolbar ladder's _arithmetic_.** ADR-0090/0091 own `resolveLayoutMode`,
+  `computeLadder`, the hysteresis, the `⋯` costing and the "a shrink-to-fit row must never demote"
+  and "the band width may never be an input to a fit decision" invariants. **L2b re-derives the
+  ladder's _inputs_ — the band floors — from a new measurement, and that is the only thing it may
+  touch.** The distinction is the whole safety argument: an input re-derived from a measurement is
+  the ladder working; an input adjusted so the existing gate passes is the ladder being defeated.
 - **Reopen ADR-0061's form vocabulary, ADR-0082's menu rule or ADR-0083's field rule.** All three are
   recent, gated and correct.
 - **Touch `brand` or `auth` values.** ADR-0077's theme-invariance is a decision, and `globals.css`

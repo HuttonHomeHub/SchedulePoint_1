@@ -303,17 +303,17 @@ is the semantic; the value is the scope's.
 
 ### 3.2 The tokens
 
-| Token                                   | Means                                                               | Today's shipped value it is frozen at (L2)                                     |
-| --------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `--control-h-sm` / `-md` / `-lg`        | Control heights                                                     | 36 / 40 / 44 px (`button.tsx:22-24` — `h-9`/`h-10`/`h-11`)                     |
-| `--control-h-toolbar`                   | The command row's minor axis                                        | 36 px (`docs/TECH_DEBT.md` #127)                                               |
-| `--row-h`                               | A row of records                                                    | **28** (CQ-B, answered). Tree keeps 28; **Gantt moves 32 → 28**; tables follow |
-| `--ruler-h`                             | A time-axis band                                                    | **40 (TSLD) / 34 (Gantt) today** — unified                                     |
-| `--lane-h` / `--lane-bar-h`             | The diagram's row and bar                                           | 28 / 18 (`geometry.ts:35,37`)                                                  |
-| `--rule-w`                              | Divider / boundary weight                                           | 1 px everywhere today                                                          |
-| `--gutter-page` / `-section` / `-field` | The three rhythms `DESIGN_SYSTEM.md:97` names and nothing expresses | 24 / 24 / 16 px                                                                |
-| `--radius-plot`                         | The diagram's corner language                                       | 3 px (`render-model.ts:31`) — beside the DOM's 8 px                            |
-| `--tap-min`                             | Minimum pointer target                                              | 24 px (WCAG 2.2 §2.5.8) / 44 px house rule                                     |
+| Token                                   | Means                                                               | Value at L2, and where it goes                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--control-h-sm` / `-md` / `-lg`        | Control heights                                                     | **36 / 40 / 44 frozen at L2** (`button.tsx:22-24`), then **32 / 36 / 40 at L2b** — CQ-C, measured       |
+| `--control-h-toolbar`                   | The command row's minor axis                                        | 36 px, frozen (`docs/TECH_DEBT.md` #127) — **already 36, which is why L2b's vertical gain is measured** |
+| `--row-h`                               | A row of records                                                    | **28** (CQ-B, answered). Tree keeps 28; **Gantt moves 32 → 28** at L2; tables follow                    |
+| `--ruler-h`                             | A time-axis band                                                    | **Unanswered** — stays per-surface (40 TSLD / 34 Gantt) until it is                                     |
+| `--lane-h` / `--lane-bar-h`             | The diagram's row and bar                                           | 28 / 18 (`geometry.ts:35,37`)                                                                           |
+| `--rule-w`                              | Divider / boundary weight                                           | 1 px everywhere today                                                                                   |
+| `--gutter-page` / `-section` / `-field` | The three rhythms `DESIGN_SYSTEM.md:97` names and nothing expresses | 24 / 24 / 16 px                                                                                         |
+| `--radius-plot`                         | The diagram's corner language                                       | 3 px (`render-model.ts:31`) — beside the DOM's 8 px                                                     |
+| `--tap-min`                             | Minimum pointer target                                              | 24 px (WCAG 2.2 §2.5.8) / 44 px house rule                                                              |
 
 ### 3.3 Where a density comes from — the surface decides, not the user
 
@@ -373,6 +373,19 @@ band. The command row's minor axis is `--control-h-toolbar` at 36 **already** (`
 #127), so the band may not move at all, and the gain may land entirely in the tables, the forms and
 the Explorer. That is a legitimate outcome and it is not the outcome the change is being made for, so
 it is the one most worth measuring.
+
+> **Confirmed with a shell (2026-08-18), so L2b starts from a fact rather than a prediction.**
+> `ToolbarSplitButton.tsx:165` sets `min-h-9` — 36 px — directly on the control, and
+> `plan-workspace-toolbar.tsx:1164` describes the two rows as `py-1` around a `min-h-9` control.
+> Neither takes `Button`'s `h-10` default. So changing that default from 40 to 36 is very unlikely to
+> move the command surface at all.
+>
+> That cuts both ways and both halves matter. **The risk is smaller than CQ-C's answer implied** — the
+> band floors and `e2e-toolbar-fit` are derived from control _widths_ on a row whose height is already
+> 36, so the change should not disturb them. **And the reward is somewhere else than expected**: the
+> 4 px comes back in tables, forms, dialogs and the Project Explorer, not in the chrome above the
+> canvas that the 31 % figure is about. Anyone approving L2b in the hope of reclaiming canvas height
+> should know that before it is built, not after.
 
 ---
 

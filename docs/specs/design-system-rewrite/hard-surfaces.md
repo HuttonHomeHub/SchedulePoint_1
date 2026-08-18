@@ -62,9 +62,10 @@ reasoned about this painter's cost and was wrong by a factor of five.
 
 ### One thing that changes visibly and should be expected
 
-If CQ-A is answered yes, **Light and Dark gain a diagram ground distinct from `--card`** for the
-first time. That is a visible change to the working surface of the primary view in two of three
-themes, and it is a value change, so it lands in **L4** with its own commit and its own before/after.
+**CQ-A is answered yes**, so **Light and Dark gain a diagram ground distinct from `--card`** for the
+first time, joining Corporate's — which existed but only behind a flag. That is a visible change to
+the working surface of the primary view in two of three themes, and it is a value change, so it lands
+in **L4-2** with its own commit and its own before/after, not with the scope in L1.
 
 ---
 
@@ -78,7 +79,9 @@ themes, and it is a value change, so it lands in **L4** with its own commit and 
 - **One ruler.** `--ruler-h` replaces `RULER_HEIGHT = 34` (`GanttRuler.tsx:6`) and
   `RULER_HEIGHT = 40` (`TsldCanvas.tsx:140`). Two bands, 6 px apart, drawing the same axis of the
   same plan.
-- **One row rhythm** — CQ-B. `GANTT_ROW_HEIGHT = 32` (`GanttPanel.tsx:66`) becomes `--row-h`.
+- **One row rhythm at 28** — CQ-B, answered. `GANTT_ROW_HEIGHT = 32` (`GanttPanel.tsx:66`) becomes
+  `--row-h` and **the Gantt row shrinks by 4 px**. This is the one visible change in an otherwise
+  byte-identical landing, and it is the Gantt's, so `test:e2e:gantt` and `measure:gantt` run with it.
 - **Tabular figures by construction.** `GanttCell.tsx:129` is `px-2 text-xs`; under the data ramp it
   is `text-data-sm` and gets tabular figures whether or not anybody remembered.
 - **A `numeric` column concept** shared with `DataTable`, so a duration column in the grid and a
@@ -98,11 +101,19 @@ against `--background` **and** `--accent` (`token-contrast.test.ts:144-145`), a 
 speculatively before the arrows existed. Under the canvas scope those two pairs become correct rather
 than approximate, because `--background` finally means the chart's ground.
 
-### If CQ-B is answered "keep three"
+### What one rhythm costs the Gantt, since that is where it lands
 
-Then `--row-h` is per-surface rather than global, and the Gantt keeps 32 while the tree keeps 28.
-That is a legitimate answer — a Gantt row carries a bar and a tree row carries a label — but it must
-be **a decision with a reason attached to the token**, not three files that never met.
+A Gantt row carries a **bar**; a tree row carries a **label**. Going to 28 gives the bar 4 px less
+vertical room, and the bar is the thing the view exists to draw — so this is the one place CQ-B's
+answer is a real trade rather than a tidy-up, and it is the one to look at first when the values land.
+
+Two things make it acceptable rather than merely decided. The TSLD already draws an 18 px bar in a
+28 px lane (`geometry.ts:35,37`), so 28 is a proven row height for a bar in this product. And the
+Gantt's rows are **one bar per row** with no lane sharing, which is the property ADR-0059 used to
+choose DOM over canvas — there is nothing else competing for the row's height.
+
+If the measurement says otherwise, the honest response is a **named exception with its reason
+attached to the token**, not three files that never met. That is what CQ-B was actually asking.
 
 ---
 
@@ -115,18 +126,37 @@ is mostly to **not break it**.
 
 > **The design system supplies the control metrics. The ladder owns the decisions.**
 
-`resolveLayoutMode`, the four bands, the 48 px asymmetric hysteresis, `computeLadder`,
+`resolveLayoutMode`'s **algorithm**, the 48 px asymmetric hysteresis, `computeLadder`,
 `CHROME_RESIDUAL_PX`, the `⋯` costing, the "a shrink-to-fit row must never demote" rule and the
 "the band width may never be an input to a fit decision" invariant are all ADR-0090/0091's and are
-**untouched**. What changes is where `36`, `40` and `px-2`/`px-3` come from.
+**untouched**. What changes is where `36`, `40` and `px-2`/`px-3` come from — and, at L2b, what the
+four band floors are, **re-derived from a measurement rather than adjusted to fit**.
 
-### The rule that keeps it safe
+### The rule that keeps it safe, and the answer that has to obey it
 
-Metric tokens **land frozen at today's shipped values** (`design.md` §3.4). L2 is byte-identical by
-construction and is proved so by running `measure:toolbar` and `test:e2e:toolbar-fit` at 1646 before
-and after. **CQ-C is not answered in L2.** Four consecutive epics found their width expectation
-contradicted by their own measurement (ADR-0091 D4, ADR-0092 M4, ADR-0093, ADR-0094 M0-T1); this one
-does not add a fifth by arithmetic.
+Metric tokens **land frozen at today's shipped values** in L2 (`design.md` §3.4), which is
+byte-identical for this surface and is proved so by running `measure:toolbar` and
+`test:e2e:toolbar-fit` at 1646 before and after.
+
+**CQ-C is answered: the control scale moves 40 → 36, in this epic** — a departure from the design's
+own default. It is therefore **L2b, a landing of its own**, and its deliverable is a set of
+measurements: change the value, re-measure at 1646, **re-derive** the band floors from what is
+reported, update the fit gate to the measured values, run all 33 journeys, and **measure and report
+the vertical gain rather than asserting one**.
+
+Two things about that are worth stating on this page rather than only in the plan.
+
+**The failure mode is step three.** Adjusting a band floor so the existing gate passes, instead of
+re-deriving it, converts a measured floor into a remembered one — silently, with nothing downstream
+to catch it. That is the ADR-0090/0091 invariant this epic is most able to break, and it breaks it by
+being helpful.
+
+**The gain may not be here at all.** The command row's minor axis is **already 36**
+(`docs/TECH_DEBT.md` #127) and the row's height is set by `min-h-9` on the control rather than by
+`Button`'s default — so the two toolbar rows may not move, and the 4 px may come back entirely in
+tables, forms, dialogs and the Explorer. Four consecutive epics found their headline width or height
+number contradicted by their own measurement (ADR-0091 D4, ADR-0092 M4, ADR-0093, ADR-0094 M0-T1);
+**if this one is small, that is the finding.**
 
 ### What the design system does add, and it is two things the ladder has asked for
 
@@ -169,7 +199,7 @@ What it gets, and each closes a named gap rather than adding a feature:
 | `numeric` flag on `Column<T>`         | 29 hand-applied `tabular-nums` across 18 files (`diagnosis.md` §1.3). Alignment becomes a property of the data, not a `cellClassName` that drifts one column at a time |
 | `Skeleton` rows                       | `docs/UX_STANDARDS.md`'s year-old requirement with no implementation anywhere                                                                                          |
 | A sticky header                       | The doc's own claim; and a 500-activity list is unreadable without one                                                                                                 |
-| `--row-h`                             | CQ-B                                                                                                                                                                   |
+| `--row-h` at 28                       | CQ-B, answered — one rhythm across the Explorer, the Gantt and the tables                                                                                              |
 | The `EmptyState` primitive as default | `docs/TECH_DEBT.md` #21(d)                                                                                                                                             |
 
 **Deliberately not added: sorting and selection.** Both are done today by consumers through
