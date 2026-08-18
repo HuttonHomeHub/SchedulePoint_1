@@ -1,5 +1,39 @@
 # @repo/web
 
+## 0.93.0
+
+### Minor Changes
+
+- [#331](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/331) [`9577f68`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9577f68e8dbcc79e5e82227b3d3e6b163aba949c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Recently deleted: fix the delete confirmation, the recycle bin's staleness, and a focus drop.
+
+  - A delete confirmation no longer claims work is recoverable "for a limited time". Retention ships
+    **off**, so on every host that has not armed it there is no limit — the claim was asserted at the
+    one moment a planner decides whether deleting is safe. The sentence is one shared function now,
+    and the deadline is stated on Recently deleted, where it can be stated honestly with the server's
+    own period.
+  - Deleting a client, project or plan now refreshes Recently deleted. It did not: once a session had
+    opened that screen, every later delete left it serving a cached list, so it said "Nothing has been
+    deleted" underneath a toast saying a client had just been.
+  - Cancelling or closing the "Restore … first" confirmation, or having that restore fail, no longer
+    drops keyboard focus to the page body (WCAG 2.4.3).
+  - The disclosure that lists what a deletion took now names its subject, so it is not heard without
+    an antecedent and is not a substring of the Restore button beside it.
+  - A new plan's start date is labelled `Planned start` rather than `Planned start (optional)`. It is
+    required, and leaving it blank was refused by a message calling it "a project start date" — three
+    names for one control on one screen.
+
+### Patch Changes
+
+- [#331](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/331) [`9577f68`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9577f68e8dbcc79e5e82227b3d3e6b163aba949c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Arm the retention expiry: deleted clients, projects and plans are permanently removed once they pass
+  the retention period (ADR-0096 D2). Off by default — `RETENTION_HIERARCHY_ENABLED=true` arms it, and
+  the clock is retroactive, so read the Recently deleted countdown before doing so. Each permanent
+  deletion writes one `hierarchy.expired` audit event inside the deleting transaction, naming the item
+  and its blast radius.
+
+  Fixes a defect in the arming switch itself: it was declared with `z.coerce.boolean()`, which reads
+  the string `'false'` as **true**, so the documented way to turn off the product's only aimable hard
+  delete turned it on. It is now an enum that refuses any value it cannot read as a decision.
+
 ## 0.92.1
 
 ### Patch Changes
