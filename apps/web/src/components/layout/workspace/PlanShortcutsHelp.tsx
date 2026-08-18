@@ -1,11 +1,11 @@
 import { Dialog } from '@/components/ui/dialog';
-import type { PlanViewMode } from '@/features/gantt/view-mode';
 import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
+import type { PlanViewMode } from '@/features/gantt/view-mode';
 
 interface Shortcut {
   keys: string;

@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
-import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
+import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import {
   CANVAS_MIN_HEIGHT,

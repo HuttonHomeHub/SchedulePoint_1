@@ -795,6 +795,11 @@ export function useTsldToolbarContext({
     // The printed Gantt reads these (M6 test gate). Listed rather than silenced — an omitted
     // dependency here would print the dates the plan had when the memo last ran.
     barDateSource,
+    // The Columns chooser's own state (M5-T1). Omitted at first, and the consequence is exactly
+    // what the comment above warns about one field along: the `View ▾` menu would keep rendering
+    // the checkbox states the memo last saw, so switching a column off would tick nothing and
+    // switching it back on would be unreachable. Caught by lint, not by a reader.
+    ganttColumns,
     hoursPerDayFor,
     zoomPreset,
     // The three extracted viewport commands (ADR-0078 S11). Each is a `useCallback` over the same
