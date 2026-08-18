@@ -16,7 +16,13 @@ const buttonVariants = cva(
         outline:
           'border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        // `hover:bg-destructive-hover`, never `hover:bg-destructive/90`. The alpha form
+        // composites the fill against the PAGE, so on a light surface it lightened toward white
+        // and took the label to 4.32:1 — below 1.4.3, on every Delete button in the product. It
+        // was invisible to both gates: the contrast matrix resolves tokens and a utility is not
+        // one, and the axe suite measures no hover state at all. A token is checkable; an alpha
+        // utility is not, and that is the reason for the shape rather than the colour.
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive-hover',
       },
       size: {
         default: 'h-10 px-4 py-2',

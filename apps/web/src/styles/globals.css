@@ -57,6 +57,14 @@
   /* Status */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
+  /* The hovered fill. A TOKEN, not `bg-destructive/90`, and that is the whole fix: an alpha
+     utility composites against the page and is invisible to `token-contrast.test.ts`, which
+     resolves tokens. Lightening this fill toward a white page took the label to 4.32:1 — a live
+     WCAG 1.4.3 failure on every Delete button, sitting exactly between two gates (the matrix
+     sees no utilities; the axe suite measures no hover state, as its own docblock says).
+     The rule is one sentence and holds in every theme: HOVER MOVES THE FILL AWAY FROM THE PAGE.
+     Here that means darker. 5.27:1 label, 5.51:1 against the page. */
+  --destructive-hover: oklch(0.527 0.245 27.325);
   /* Readable destructive for text & state borders on page surfaces. The solid
      `--destructive` above is tuned as a button surface (light foreground), which
      is too light to also serve as text on light/dark surfaces — this token keeps
@@ -294,6 +302,11 @@
 
   --destructive: oklch(0.52 0.2 22.216);
   --destructive-foreground: oklch(0.985 0 0);
+  /* LIGHTER here, and that is the same rule rather than an exception: the page is near-black,
+     so away-from-the-page is up. Darkening instead would read as consistent and take the fill to
+     2.96:1 against the page — the button would stop being distinguishable from what it sits on
+     (1.4.11) in the act of being hovered. 5.16:1 label, 3.67:1 against the page. */
+  --destructive-hover: oklch(0.55 0.2 22.216);
   /* Lighter than the button surface so red text/borders stay legible on the
      dark background/card (≥ 4.5:1 text, ≥ 3:1 border). */
   --destructive-text: oklch(0.7 0.19 22);
@@ -536,6 +549,8 @@
   /* Status */
   --destructive: oklch(0.505 0.19 27.5);
   --destructive-foreground: oklch(0.985 0 0);
+  /* Darker, as on the light page. 7.60:1 label, 7.53:1 against the page. */
+  --destructive-hover: oklch(0.455 0.19 27.5);
   --destructive-text: oklch(0.505 0.19 27.5);
   --success: oklch(0.52 0.15 143);
   --success-foreground: oklch(0.985 0 0);
@@ -1034,6 +1049,7 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-text: var(--destructive-text);
   --color-success-text: var(--success-text);

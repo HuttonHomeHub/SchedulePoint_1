@@ -92,6 +92,16 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   ['--background', '--info-text', 'an informational message on the surface'],
   ['--accent', '--accent-foreground', 'a hovered or selected row'],
   ['--primary', '--primary-foreground', 'the label of a primary button'],
+  // **The hovered fills, and the reason they are tokens.** `hover:bg-destructive/90` composited
+  // against the page rather than resolving to a value, so it was invisible here — this suite
+  // reads tokens and an alpha utility is not one. It lightened the fill toward a white page and
+  // took the label to 4.32:1: a live 1.4.3 failure on every Delete button, shipped, in the
+  // default theme. It also sat in the one place neither gate reaches, because
+  // `e2e-designed-ui/designed-ui.spec.ts` says in its own docblock that axe measures no hover
+  // state. Asserting the pair is the fix; changing the colour is only how the pair passes.
+  ['--destructive-hover', '--destructive-foreground', 'the label of a hovered destructive button'],
+  ['--destructive', '--destructive-foreground', 'the label of a destructive button at rest'],
+  ['--secondary', '--secondary-foreground', 'the label of a secondary button'],
   ['--field', '--field-foreground', 'what a user types into an input'],
   // The pair nobody had ever checked, and the reason `--field-muted-foreground` exists: a
   // placeholder sits on the FIELD fill, not on the surface. On navy chrome the surface grey
@@ -123,6 +133,18 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
 const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
   ['--background', '--ring', 'the focus indicator against the surface it sits on'],
   ['--background', '--primary', 'a primary button against the surface'],
+  // **`--destructive` against the surface is deliberately NOT asserted here, and the reason is a
+  // finding rather than an exemption.** It would fail: 2.92:1 at rest and 2.90:1 hovered, in the
+  // scoped surfaces. That is because `--destructive` is not a rebound name, so inside a scope it
+  // keeps the page's red while `--background` becomes navy — the ADR-0055 §"a family is complete or
+  // it is a trap" shape, and the same one already recorded for `--secondary`.
+  //
+  // It is latent, not live: the destructive variant renders in `ConfirmDialog` (a modal `<dialog>`,
+  // which the browser puts in the top layer, on page tokens) and in `BulkSelectionBar`. Asserting
+  // it would therefore pin a pairing the product does not currently make, and the fix — whether
+  // `--destructive` joins the rebound family — is a vocabulary decision that belongs to the
+  // design-system rewrite (ADR-0097), not to a hover-contrast fix. Raised there; recorded here so
+  // the absence reads as a decision rather than an oversight.
   // `--input` is NOT covered by the decorative-border exemption below, and conflating the two
   // is how it went unnoticed at 1.26:1 in every theme. `--field` is valued identically to the
   // surface it sits on by design, so this outline is the ONLY thing that says a text field is
