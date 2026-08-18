@@ -576,13 +576,33 @@ pointing at soft-deleted parents:
 the FK — and it would fail on the very cases (a resourced plan, a programme-linked plan) that matter
 most. This is a load-bearing correction to the brief's "batched delete using the `ctid` technique".
 
-**R2 — the activity self-FK forces level-order deletion.** `activities.parent_id` is
-`onDelete: Restrict` (`schema.prisma:1174`). PostgreSQL evaluates `RESTRICT` immediately rather than
-at end of statement, so a single `DELETE FROM activities WHERE plan_id = ANY(...)` is expected to
-fail when a summary and its children are both in it. The design deletes leaves repeatedly until the
-set is empty (WBS depth is bounded and small). **This claim is reasoned from PostgreSQL's documented
-`RESTRICT` semantics and the schema, not observed** — M4-T1's first step is a Supertest case against
-a real database that either confirms it or removes the loop.
+**R2 — ~~the activity self-FK forces level-order deletion~~. FALSE. Corrected in place 2026-08-18.**
+
+The claim was: `activities.parent_id` is `onDelete: Restrict` (`schema.prisma:1174`), PostgreSQL
+evaluates `RESTRICT` immediately rather than at end of statement, so one
+`DELETE FROM activities WHERE plan_id = ANY(...)` fails when a summary and its children are both in
+it — therefore delete leaves repeatedly until the set is empty. It carried its own warning: _"reasoned
+from PostgreSQL's documented `RESTRICT` semantics and the schema, not observed"_.
+
+**It does not fail.** `RESTRICT`'s referential-integrity check is an `AFTER ROW` trigger evaluated at
+the **end of the statement**, so every row the same statement targets is already gone before any
+check runs. Ordering within the statement is irrelevant.
+
+**Two reviewers established this independently, by different methods** — the strongest form of
+evidence available here:
+
+- **database-architect** ran it: a synthetic **100-deep** parent chain plus 1,900 leaves, one
+  statement, `DELETE 2000`, no violation. A negative control that deliberately leaves a child behind
+  fails with `activities_parent_id_fkey`, so the test is not vacuous.
+- **backend-performance** reached the same conclusion from trigger timing and reproduced it on a
+  20-summary / 1,980-child tree.
+
+**Consequences.** The loop is removed from M4-T3, and M4-T1 becomes a confirmation rather than a
+discovery. The loop was also never a performance mitigation: each pass pays the same per-row RI cost,
+so once the `activities(parent_id)` index question is settled it would be pure overhead.
+
+Corrected here rather than left standing beside a contradicting ADR — noticing drift and stepping
+over it leaves the document exactly as wrong as not noticing (ADR-0071).
 
 **R3 — one transaction per batch, never per run.** Per batch, so an interrupted run leaves whole
 batches gone and whole batches present, never half of one. Never per run, so a large backlog cannot
@@ -609,7 +629,7 @@ Supertest case** before M4 ships — it is the epic's single largest correctness
  5. notes                     (by plan ids, which covers activity notes — ADR-0046's denormalised plan_id)
  6. baseline_assignments → baseline_activities → baselines   (by plan ids)
  7. plan_shares               (by plan ids)
- 8. activities                (leaves first, repeated — R2)
+ 8. activities                (ONE statement — R2 was false, see above)
  9. plan_locks                (FK is ON DELETE Cascade — schema.prisma:2022 — so the DB handles it)
 10. plans
 11. calendar_exceptions → calendars   (PROJECT-scoped only, project_id IN scope; shifts and
