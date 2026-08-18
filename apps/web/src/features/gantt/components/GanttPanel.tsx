@@ -38,7 +38,11 @@ import {
   type GanttBarDrag,
 } from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
-import { DEFAULT_HIDDEN_COLUMNS, type GanttColumnKey } from '../model/gantt-view-state';
+import {
+  DEFAULT_HIDDEN_COLUMNS,
+  MAX_COLLAPSED_IN_URL,
+  type GanttColumnKey,
+} from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttViewStateBundle } from '../model/use-gantt-view-state';
@@ -637,9 +641,30 @@ export function GanttPanel({
     return true;
   };
 
+  // **`ContextMenu` / `Shift+F10` opens the focused row's menu** — the pattern `HierarchyTree`
+  // already ships for the identical shape (a roving-tabindex widget with a per-row `⋯` trigger that
+  // is deliberately not a tab stop). Without it, Indent, Outdent and Insert — which exist ONLY in
+  // that menu, because the docked bar cannot honour them — were reachable by mouse alone (WCAG
+  // 2.1.1, Level A). Keyed by row so the signal reaches the right menu, and a counter so pressing
+  // the key twice on one row reopens it rather than doing nothing the second time.
+  const [menuOpenSignal, setMenuOpenSignal] = useState<{ key: string; seq: number } | null>(null);
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const index = tabStopIndex;
     const row = rows[index];
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      // Only where a menu is actually rendered — otherwise the key would be swallowed with nothing
+      // to show, which reads as a broken keystroke rather than an absent feature.
+      if (row !== undefined && rowMenuContextFor !== undefined) {
+        event.preventDefault();
+        const key = rowId(row);
+        setMenuOpenSignal((prev) => ({
+          key,
+          seq: prev !== null && prev.key === key ? prev.seq + 1 : 1,
+        }));
+      }
+      return;
+    }
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -814,6 +839,26 @@ export function GanttPanel({
           {linkSet.withheld} more {linkSet.withheld === 1 ? 'link is' : 'links are'} not shown.
         </div>
       ) : null}
+      {/* **The collapse cap says what it withheld, for the same reason the link cap does.**
+          `serialiseCollapsed` computed this count from the day it shipped, its docblock said it was
+          "reported rather than silently truncated", ADR-0095 and `docs/TECH_DEBT.md` #136 both
+          recorded it as reported — and NOTHING read it. A planner on a programme with more than 40
+          collapsed phases reloaded, watched some re-expand, and was told nothing.
+          That is ADR-0081's shape exactly: a capability with no entry point, its unit test passing
+          because it drives the pure function the UI never calls. It shipped past the author, the
+          pull request, CI and the register row that claimed it — and was caught by the
+          reconciliation pass's own step 7, eight lines below a comment reading "Either the count is
+          visible or there is no cap." */}
+      {viewState !== undefined && viewState.collapsedWithheld > 0 ? (
+        <div
+          role="status"
+          className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
+        >
+          {viewState.collapsedWithheld} collapsed{' '}
+          {viewState.collapsedWithheld === 1 ? 'section is' : 'sections are'} not remembered in this
+          link — the address can only carry {MAX_COLLAPSED_IN_URL}.
+        </div>
+      ) : null}
       {notCalculated ? (
         <div role="status" className="border-border bg-muted border-b px-3 py-2">
           <p className="text-foreground text-sm font-medium">This plan has not been calculated</p>
@@ -970,6 +1015,8 @@ export function GanttPanel({
               dependencies,
               predecessorsById,
               rowMenuContextFor,
+              menuOpenSignal:
+                menuOpenSignal !== null && menuOpenSignal.key === id ? menuOpenSignal.seq : 0,
               rowStructureFor,
               actionColumns,
               columns: COLUMNS,
@@ -1171,6 +1218,8 @@ interface GanttRowViewProps {
   dependencies: readonly DependencySummary[] | undefined;
   predecessorsById: ReadonlyMap<string, readonly string[]>;
   rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
+  /** Non-zero when the host's `ContextMenu`/`Shift+F10` asked THIS row to open its menu. */
+  menuOpenSignal: number;
   rowStructureFor:
     ((activity: ActivitySummary) => GanttRowStructureActions | undefined) | undefined;
   actionColumns: number;
@@ -1190,6 +1239,7 @@ interface GanttRowViewProps {
 }
 
 function GanttRowView({
+  menuOpenSignal,
   actionColumns,
   columns: COLUMNS,
   rowStructureFor,
@@ -1487,6 +1537,7 @@ function GanttRowView({
             <GanttRowMenu
               context={() => rowMenuContext(activity)}
               activityName={activity.name}
+              openSignal={menuOpenSignal}
               {...(rowStructureFor === undefined ? {} : { structure: rowStructureFor(activity) })}
             />
           </div>

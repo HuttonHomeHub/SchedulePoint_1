@@ -845,9 +845,29 @@ export function ToolbarPlanWorkspace({
     canEditSchedule: model.canEditSchedule,
     penRefusal: model.scheduleRefusal?.('change the structure') ?? null,
     onReparent: (activity: ActivitySummary, parentId: string | null) => {
-      updateParents.mutate({
-        parents: [{ id: activity.id, parentId, version: activity.version }],
-      });
+      updateParents.mutate(
+        { parents: [{ id: activity.id, parentId, version: activity.version }] },
+        {
+          // **Both outcomes are announced, and the failure one is why this exists.**
+          // The write has no optimistic update by design, so on a 409 — two planners indenting at
+          // once, which this gesture makes easy — the row simply does not move after the refetch,
+          // with nothing said. A keyboard or screen-reader planner who pressed Indent then has no
+          // way to learn it failed, or why; and a silent no-op is indistinguishable from a control
+          // that does nothing. `WbsBulkAssignBar` and `ActivityMembersPanel` already announce this
+          // exact class of write (the same ADR-0063 M4b batch) — one correct pattern applied to two
+          // controls and not their third, found by the 2026-08-18 reconciliation pass.
+          onSuccess: () => {
+            ganttAnnounce(
+              parentId === null
+                ? `${activity.name} moved to the top level.`
+                : `${activity.name} filed under its summary.`,
+            );
+          },
+          onError: (error: Error) => {
+            ganttAnnounce(`${activity.name} could not be moved. ${error.message}`);
+          },
+        },
+      );
     },
     // M5-T5. The dialog itself is mounted once by `ActivityCrudDialogs`, which already owns the
     // workspace's activity dialogs so their behaviour cannot drift; this only opens it.
