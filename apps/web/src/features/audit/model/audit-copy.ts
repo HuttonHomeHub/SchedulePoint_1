@@ -48,6 +48,10 @@ const TITLES: Record<AuditAction, string> = {
   'auth.password_changed': 'Password changed',
   'auth.password_reset_requested': 'Password reset requested',
   'auth.password_reset_completed': 'Password reset completed',
+  // "Permanently deleted", and the word is doing work: every other deletion in this list is a
+  // soft delete a reader can undo from Recently deleted. This one is the end of the record, and
+  // it is the only row that will ever explain where the work went.
+  'hierarchy.expired': 'Permanently deleted',
   'client.deleted': 'Client deleted',
   'client.restored': 'Client restored',
   'project.deleted': 'Project deleted',
@@ -92,6 +96,17 @@ const TITLES: Record<AuditAction, string> = {
   // subject, and the subject is not spelt out here.
   'staff.access_denied': 'Staff surface refused',
 };
+
+/** One "3 plans" fragment, or null when the count is absent or zero — zero is not worth a word. */
+function countPart(
+  side: Record<string, unknown> | undefined,
+  key: string,
+  one: string,
+  many: string,
+): string | null {
+  const value = count(side, key);
+  return value === null || value === 0 ? null : plural(value, one, many);
+}
 
 function field(side: Record<string, unknown> | undefined, key: string): string | null {
   const value = side?.[key];
@@ -144,6 +159,20 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
     case 'plan.restored': {
       const status = field(changes?.before, 'status') ?? field(changes?.after, 'status');
       return status === null ? null : `Status ${status.toLowerCase()}`;
+    }
+    case 'hierarchy.expired': {
+      // The blast radius, in the same shape a cascade delete reports it — a reader comparing the
+      // deletion row with its expiry row should not have to translate between two vocabularies.
+      const parts = [
+        countPart(changes?.after, 'clientCount', 'client', 'clients'),
+        countPart(changes?.after, 'projectCount', 'project', 'projects'),
+        countPart(changes?.after, 'planCount', 'plan', 'plans'),
+        countPart(changes?.after, 'activityCount', 'activity', 'activities'),
+      ].filter((part) => part !== null);
+      const days = count(changes?.after, 'retentionDays');
+      const radius = parts.length === 0 ? null : parts.join(', ');
+      const period = days === null ? null : `after ${plural(days, 'day', 'days')}`;
+      return [radius, period].filter((p) => p !== null).join(' · ') || null;
     }
     case 'client.deleted':
     case 'client.restored':

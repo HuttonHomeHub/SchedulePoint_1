@@ -3,8 +3,8 @@ import type { DeletedHierarchyItem, DeletedItemsMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
-import { AppConfigService } from '../../config/app-config.service';
 import { ForbiddenError } from '../../common/errors/domain-errors';
+import { AppConfigService } from '../../config/app-config.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 
 import { decodeDeletedCursor, encodeDeletedCursor } from './recycle-bin.cursor';

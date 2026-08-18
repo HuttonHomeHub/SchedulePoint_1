@@ -141,6 +141,28 @@ The obvious home for "how much is about to be deleted" is the ADR-0087 M3 staff 
 touched** — staff cannot restore anything, so the read buys nothing there worth widening a boundary
 whose entire value is that it is structural rather than remembered.
 
+### D10 — The arming switch is an enum, because `z.coerce.boolean()` reads `'false'` as `true`
+
+M3 shipped `RETENTION_HIERARCHY_ENABLED: z.coerce.boolean().default(false)`. That coercion is
+`Boolean(value)`, so **the string `'false'` parses to `true`** — verified rather than reasoned:
+`z.coerce.boolean().parse('false') === true`. On the one switch in this product that permanently
+destroys customer work, the documented way to turn it off turned it on, and `.env.example` ships the
+literal line `RETENTION_HIERARCHY_ENABLED=false`, so **copying the example file was enough to arm
+it**. The three sibling declarations immediately above it — `RETENTION_SWEEP_ENABLED` among them —
+had the correct `z.enum(['true','false']).transform(…)` pattern the whole time: the ADR-0064 §7
+shape for the sixth epic running, one correct pattern applied to a control and not its neighbour.
+
+It is now an enum, so an unreadable value (`yes`, `0`, empty) **fails the boot** rather than being
+guessed at, and the regression test was verified red against the M3 code. A repository-wide sweep
+found `z.coerce.boolean()` used exactly once, here.
+
+The claim about zod is deliberately **not** registered in `scripts/dependency-claims.json`
+(ADR-0076): that register pins a file, a line range and an anchor inside a dependency, and this is
+not a citation into zod's source — it is an executed expression, which is the stronger evidence of
+the two. What matters going forward is not what `z.coerce.boolean()` does but what **this switch**
+does, and `env.validation.spec.ts` asserts that directly, so a zod bump that changed the enum
+transform's behaviour fails a test rather than silently invalidating a paragraph.
+
 ---
 
 ## Consequences
@@ -153,8 +175,11 @@ whose entire value is that it is structural rather than remembered.
 - The CPM engine is not imported. The ADR-0034 recalculation parity gate is untouched — in its honest
   form: there is nothing here to hold parity for. **One real consequence is not covered by that
   sentence**: expiring a plan that is a live cross-plan dependency endpoint changes the _surviving_
-  downstream plan's next input. M4 proves ADR-0045's programme recalc tolerates a vanished upstream
-  against a real database before that code is written.
+  downstream plan's next input. M4 **proved** it against a real database rather than reasoning about
+  it (`test/hierarchy-expiry.e2e-spec.ts`): with the upstream client, project, plan and activity
+  gone, the surviving downstream plan recalculates on both `recalculate-programme` and
+  `recalculate`. The case is green before the expiry as well as after, so the assertion is about the
+  deletion and not about the fixture.
 - A wrong FK order fails loudly (`23503`, naming the constraint) rather than corrupting anything —
   but the batch then never expires and is retried hourly forever, so `23503` must be escalated rather
   than absorbed as ordinary sweep noise.

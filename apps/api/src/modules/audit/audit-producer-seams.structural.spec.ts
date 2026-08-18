@@ -65,6 +65,10 @@ describe('audit producer seams (ADR-0072)', () => {
       'modules/resources/resources.service.ts',
       'modules/baselines/baselines.service.ts',
       'modules/plans/plans.service.ts',
+      // The retention expiry (ADR-0096 D8). The strongest case for the rule in the catalogue: the
+      // deletion is permanent, so "the row failed and the delete committed" would destroy customer
+      // work with nothing anywhere saying it happened.
+      'common/hierarchy/hierarchy-expiry.service.ts',
     ];
     for (const file of transactional) {
       const calls = auditCalls(sourceOf(file));

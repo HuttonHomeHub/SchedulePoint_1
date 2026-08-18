@@ -90,6 +90,18 @@ services:
       RETENTION_CSP_REPORTS_DAYS: ${RETENTION_CSP_REPORTS_DAYS:-30}
       RETENTION_MAIL_EVENTS_DAYS: ${RETENTION_MAIL_EVENTS_DAYS:-365}
       RETENTION_SWEEP_INTERVAL_MINUTES: ${RETENTION_SWEEP_INTERVAL_MINUTES:-60}
+      # Hierarchy expiry (ADR-0096 D2). Permanently deletes soft-deleted clients/projects/plans
+      # past their period. This is the ONLY switch in SchedulePoint that destroys customer work
+      # that a person can still see and restore, so unlike the sweep above it is default-OFF and
+      # arming it is a deliberate operator act.
+      #
+      # The clock is RETROACTIVE (D3): the day this is set to true, everything already older than
+      # the period below goes on the first tick. Read the recycle bin's countdown BEFORE arming —
+      # it ships one release ahead of this switch for exactly that reason (D4).
+      #
+      # Only the literal strings `true` and `false` are accepted; anything else fails the boot.
+      RETENTION_HIERARCHY_ENABLED: ${RETENTION_HIERARCHY_ENABLED:-false}
+      RETENTION_HIERARCHY_DAYS: ${RETENTION_HIERARCHY_DAYS:-90}
       # SchedulePoint staff console (ADR-0086). Comma-separated addresses that may reach
       # /api/v1/staff/*. Empty = nobody, which is the default and the safe direction.
       # Changing it needs host access and a container recreate — deliberately the same bar

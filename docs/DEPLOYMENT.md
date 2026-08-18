@@ -815,6 +815,49 @@ so the first CSP rows become eligible thirty days later and the first mail event
 sweep runs and reports `deleted: 0` until then, which is the correct behaviour and worth knowing so
 an empty result does not read as a broken sweep.
 
+### Deleted work — the switch that destroys something a person can still see
+
+Everything above deletes operational rows nobody has ever looked at. This one is different, and it
+is the only setting in SchedulePoint that permanently destroys **customer work**.
+
+```yaml
+api:
+  environment:
+    RETENTION_HIERARCHY_ENABLED: 'false' # the default, and the safe direction
+    RETENTION_HIERARCHY_DAYS: 90
+```
+
+A client, project or plan a planner deletes is a **soft** delete: the row stays, it appears under
+**Recently deleted**, and it can be restored. With this switch on, the same row is **permanently
+removed** once it has sat there for `RETENTION_HIERARCHY_DAYS`, along with its whole subtree — the
+plans under a client, the activities in those plans, their logic, notes, baselines and resource
+assignments. Nothing brings it back. Nothing in the product can, either: `POST …/purge` does not
+exist and is refused by design (ADR-0096 D1), so there is no button anywhere that does what this
+setting does on a timer.
+
+Three things to know **before** you set it to `true`:
+
+1. **The clock is retroactive.** It counts from when each item was deleted, not from when you armed
+   the switch. On a host that has been running for a year, the first tick — which happens at boot,
+   not an hour later — permanently deletes everything already older than the period. There is no
+   grace window and no dry run.
+2. **Look at Recently deleted first.** That screen ships one release ahead of this switch for
+   exactly this reason (ADR-0096 D4). It shows each deletion's countdown and what would go with it,
+   using **this host's** `RETENTION_HIERARCHY_DAYS` rather than a number baked into the app. Read it,
+   restore anything that should not go, then arm.
+3. **Only `true` and `false` are accepted.** Any other value fails the boot rather than being
+   guessed at — including the empty string. This is stricter than the other switches on purpose: an
+   earlier version used a coercion that read `'false'` as **true**, so the documented way to turn it
+   off turned it on (ADR-0096 D10).
+
+Each permanent deletion writes one `hierarchy.expired` audit event naming the item and how much went
+with it. That row is in the organisation's own audit log, not the staff console, and it is the only
+explanation a planner who finds their work gone will ever get — so it outlives the thing it names, by
+design and permanently (`audit_events` refuses `DELETE`, ADR-0085 D1).
+
+Rollback is `RETENTION_HIERARCHY_ENABLED=false` and a recreate, which creates **no timer at all**.
+It does not bring anything back.
+
 ### When it keeps failing
 
 If the sweep fails **three runs in a row**, one message is POSTed to `MAIL_ALERT_URL` — the same

@@ -193,8 +193,20 @@ export const envSchema = z
      * ships the countdown and the blast radius with this off, so a reader sees what would go before
      * anything does. `retention-sweep.service.ts:110-113` runs an unawaited sweep at boot, so
      * arming and deploying are one event — a single release cannot both preview and delete (D4).
+     *
+     * **`z.enum`, never `z.coerce.boolean()`.** This shipped as `z.coerce.boolean()` in M3 and was
+     * caught while arming the sweep: that coercion is `Boolean(value)`, so the string `'false'`
+     * parses to **`true`** (verified — `z.coerce.boolean().parse('false') === true`). On the one
+     * switch in this product that permanently destroys customer work, the documented way to turn it
+     * off turned it on — and `.env.example` shipped the line `RETENTION_HIERARCHY_ENABLED=false`,
+     * so copying the example file was enough to arm it. The sibling three declarations above had
+     * the right pattern the whole time: the ADR-0064 §7 shape, one correct pattern applied to a
+     * control and not its neighbour.
      */
-    RETENTION_HIERARCHY_ENABLED: z.coerce.boolean().default(false),
+    RETENTION_HIERARCHY_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     /**
      * How often the sweep runs. Hourly by default.
      *

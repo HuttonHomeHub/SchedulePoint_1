@@ -197,3 +197,25 @@ describe('operational alerting configuration (staff console M1)', () => {
     ).not.toThrow();
   });
 });
+
+describe('the switch that permanently deletes customer work', () => {
+  it('reads RETENTION_HIERARCHY_ENABLED=false as OFF', () => {
+    // Shipped in M3 as `z.coerce.boolean()`, which is `Boolean(value)` — so `'false'` parsed to
+    // `true`. The documented way to turn off the product's only aimable hard delete turned it on,
+    // and `.env.example` ships that exact line, so copying the example file armed it.
+    expect(
+      validateEnv({ ...prodBase, RETENTION_HIERARCHY_ENABLED: 'false' })
+        .RETENTION_HIERARCHY_ENABLED,
+    ).toBe(false);
+    expect(
+      validateEnv({ ...prodBase, RETENTION_HIERARCHY_ENABLED: 'true' }).RETENTION_HIERARCHY_ENABLED,
+    ).toBe(true);
+  });
+
+  it('defaults to OFF, and refuses a value it cannot read as a decision', () => {
+    expect(validateEnv({ ...prodBase }).RETENTION_HIERARCHY_ENABLED).toBe(false);
+    // `yes`/`0`/`` are not answers this switch may guess at. Failing to boot is the safe outcome.
+    expect(() => validateEnv({ ...prodBase, RETENTION_HIERARCHY_ENABLED: 'yes' })).toThrow();
+    expect(() => validateEnv({ ...prodBase, RETENTION_HIERARCHY_ENABLED: '0' })).toThrow();
+  });
+});

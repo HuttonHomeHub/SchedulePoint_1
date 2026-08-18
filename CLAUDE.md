@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 56 migrations, 981 web
+> (`apps/api/src/modules/`), 29 Prisma models across 56 migrations, 986 web
 > source files with 32 flag-scoped Playwright suites beside the base journey, and
 > 96 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2410,6 +2410,13 @@ A lighter-weight running log of smaller decisions is in
   `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
   is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
   opposite of the mistake the bullet below this one records.
+- **Retention now covers customer hierarchy too, and it is off.** ADR-0096's expiry
+  permanently deletes soft-deleted clients/projects/plans past
+  `RETENTION_HIERARCHY_DAYS` (90) — see the hard-delete bullet below for what that
+  means. `RETENTION_HIERARCHY_ENABLED` defaults to **`false`**, so on any host
+  that has not opted in, **nothing has ever been permanently deleted** and
+  Recently deleted's countdown is a preview rather than a promise. Do not read
+  "shipped" as "deleting" here.
 - **Retention is enforced on two tables and not on the third, and the difference is a decision.**
   `csp_reports` (30 days) and `mail_events` (12 months) are swept hourly since 2026-08-10
   (ADR-0087) — this application's **first** scheduled work of any kind. `audit_events` is **not**,
@@ -2436,9 +2443,20 @@ A lighter-weight running log of smaller decisions is in
   unblocked `VITE_PASSWORD_RESET`. What is still missing is knowing a send
   **failed**: Better Auth swallows the rejection after handoff, so a broken
   relay produces silently unrecoverable accounts (`docs/TECH_DEBT.md` #94).
-- **Every deletion a user can reach is a soft delete.** `deleted_at` is set, the
-  row stays, and the recycle bin restores it. **One path really does hard-delete
-  and this bullet said "there is no hard-delete path" until 2026-08-18:**
+- **Every deletion a user can reach is a soft delete — and two paths behind it are
+  not.** `deleted_at` is set, the row stays, and the recycle bin restores it. **The
+  retention expiry is the first hard delete that can be AIMED at existing data**
+  (ADR-0096 D2, 2026-08-18): a client, project or plan sitting in the bin past
+  `RETENTION_HIERARCHY_DAYS` is permanently removed with its whole subtree, by a
+  timer inside the API. It ships **off** (`RETENTION_HIERARCHY_ENABLED`, default
+  `false`) and is armed by an operator, and the clock is **retroactive** — the day
+  it is armed, everything already past the period goes on the first tick, which is
+  at boot. There is no purge button and there never will be: `POST …/purge` is
+  refused structurally (D1), so the timer is the only thing in the product that
+  does this. Each expiry writes one `hierarchy.expired` audit row inside the
+  deleting transaction, and that row **outlives the thing it names permanently**,
+  because `audit_events` refuses `DELETE` (ADR-0085 D1). **The second path is
+  older, and this bullet said "there is no hard-delete path" until 2026-08-18:**
   interchange's failure compensation (`interchange.service.ts:1134-1139`) issues
   real `deleteMany`s across assignments, dependencies, activities and the plan
   lock when phase 2's recalculation fails, honouring the "nothing is created on

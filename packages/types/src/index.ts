@@ -2042,6 +2042,17 @@ export const AUDIT_ACTIONS = [
   'project.restored',
   'plan.deleted',
   'plan.restored',
+  /**
+   * A soft-deleted subtree passed its retention period and was PERMANENTLY removed (ADR-0096 D8).
+   *
+   * Passes both ADR-0073 tests and then some: the deletion is durable in the strongest sense — the
+   * rows are gone and no restore exists — and its blast radius is a whole subtree. It is also the
+   * only event in the catalogue with no human actor, which is precisely why it needs recording: a
+   * planner who finds their work missing has no other way to learn what happened to it.
+   *
+   * ONE row per batch carrying scalar counts, never one per swept row.
+   */
+  'hierarchy.expired',
   // — Destructive and structural acts inside a plan (ADR-0073 family D). One row per **user
   //   action**, never per swept row: deleting a WBS summary with forty-one descendants is one
   //   thing a person did, and forty-one rows would bury the fact rather than record it. The
@@ -2189,6 +2200,7 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'project.restored': 'deletions',
   'plan.deleted': 'deletions',
   'plan.restored': 'deletions',
+  'hierarchy.expired': 'deletions',
   'activity.deleted': 'deletions',
   'activity.restored': 'deletions',
   'dependency.deleted': 'deletions',
