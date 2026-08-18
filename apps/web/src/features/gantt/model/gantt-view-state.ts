@@ -63,6 +63,21 @@ export const HIDEABLE_COLUMNS: readonly GanttColumnKey[] = [
  */
 export const DEFAULT_HIDDEN_COLUMNS: readonly GanttColumnKey[] = ['predecessors'];
 
+/**
+ * "Hide nothing", as a value the URL can actually carry.
+ *
+ * The empty string cannot: `useUrlFilterState` deletes a param whose value is `''` (its
+ * defaults-are-omitted rule), so an empty hidden-set round-tripped to *no param at all* — which the
+ * parser then correctly read as the DEFAULT, i.e. Predecessors hidden again. Switching that column
+ * on was therefore unrepresentable.
+ *
+ * Found by `e2e-gantt-editing/view-state.spec.ts` on its first run, and invisible to the unit
+ * suite: those cases hand the parser `''` directly and never cross the hook that deletes it. The
+ * distinction they assert — "hide nothing" is not "say nothing" — was right, and the encoding could
+ * not express it.
+ */
+export const HIDE_NOTHING = 'none';
+
 /** How many collapsed ids the URL will carry. See {@link parseCollapsed}. */
 export const MAX_COLLAPSED_IN_URL = 40;
 
@@ -126,8 +141,10 @@ export function serialiseSort(sort: GanttSort): string {
 export function parseHiddenColumns(value: unknown): ReadonlySet<GanttColumnKey> {
   const raw = asSearchString(value);
   if (raw === null) return new Set(DEFAULT_HIDDEN_COLUMNS);
-  // An explicit empty value means "hide nothing", which is NOT the default and must survive the
-  // round trip — otherwise a planner who switches `predecessors` on cannot express it.
+  // `none` (and, read permissively, an empty string) means "hide nothing", which is NOT the default
+  // and must survive the round trip — otherwise a planner who switches `predecessors` on cannot
+  // express it. See {@link HIDE_NOTHING} for why the empty string alone could not carry it.
+  if (raw === HIDE_NOTHING) return new Set();
   const parts = raw
     .split(',')
     .map((p) => p.trim())
@@ -141,7 +158,8 @@ export function serialiseHiddenColumns(hidden: ReadonlySet<GanttColumnKey>): str
   // Serialised in HIDEABLE_COLUMNS order, not set-insertion order, so the same view produces the
   // same URL whichever order the planner switched things off in — a URL that differs by history is
   // a URL nobody can compare.
-  return HIDEABLE_COLUMNS.filter((key) => hidden.has(key)).join(',');
+  const list = HIDEABLE_COLUMNS.filter((key) => hidden.has(key)).join(',');
+  return list === '' ? HIDE_NOTHING : list;
 }
 
 /**

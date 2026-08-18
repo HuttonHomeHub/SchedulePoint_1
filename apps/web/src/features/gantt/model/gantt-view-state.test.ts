@@ -93,6 +93,24 @@ describe('the hidden-columns param', () => {
     expect(a).toBe('code,totalFloat');
   });
 
+  it('encodes "hide nothing" as a value the URL can CARRY, not the empty string', () => {
+    // The defect `view-state.spec.ts` found on its first run. `useUrlFilterState` deletes any param
+    // whose value is `''` — its defaults-are-omitted rule — so an empty hidden-set round-tripped to
+    // no param at all, which the parser then correctly read as the DEFAULT. Switching Predecessors
+    // ON was therefore unrepresentable.
+    //
+    // The case above asserts the parser's half and passed throughout; nothing crossed the hook that
+    // deletes the value, because unit tests hand the parser its input directly. This asserts the
+    // ENCODING instead: whatever "hide nothing" serialises to must survive a rule that drops empties.
+    const serialised = serialiseHiddenColumns(new Set());
+    expect(serialised).not.toBe('');
+    expect([...parseHiddenColumns(serialised)]).toEqual([]);
+  });
+
+  it('still reads a bare empty string as "hide nothing", for a URL typed by hand', () => {
+    expect([...parseHiddenColumns('')]).toEqual([]);
+  });
+
   it('round-trips every hideable column', () => {
     const all = new Set(HIDEABLE_COLUMNS);
     expect([...parseHiddenColumns(serialiseHiddenColumns(all))].sort()).toEqual(
