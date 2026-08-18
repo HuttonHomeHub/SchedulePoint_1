@@ -590,3 +590,65 @@ three of its four brief claims move when checked, so a reviewer's citation gets 
 **database-architect** (the index question and the FK-safe delete order — mandatory, CLAUDE.md §19.3) and
 **backend-performance** have not yet reported. **M0 does not start until both do**, because the index
 decision and the deletion order are M0/M4 inputs rather than review commentary.
+
+### B10 — backend-performance (blocking, measured)
+
+**The epic's own sizing target costs 6.8–7.5 s per batch today, from one missing index.**
+
+Measured against a CI-matching local Postgres, not reasoned from the schema: a 2,000-activity plan
+(20 `WBS_SUMMARY` + 1,980 children, with dependencies, assignments, notes, baseline rows and shares
+wired up), deleted through the §4.5 order in one transaction:
+
+| Statement                                                 | Cost                         |
+| --------------------------------------------------------- | ---------------------------- |
+| `DELETE FROM activities WHERE plan_id = :id` (2,000 rows) | **6.8–7.5 s**, reproduced ×3 |
+| Every other statement in the order                        | 0.3–10 ms each               |
+| The same delete with a **non-partial** `parent_id` index  | **106–148 ms** (46–65×)      |
+
+**Cause, verified independently.** `activities.parent_id` is `onDelete: Restrict`
+(`schema.prisma:1174`) and its only supporting index is **partial**:
+`WHERE "deleted_at" IS NULL AND "parent_id" IS NOT NULL`
+(`migrations/20260717010000_m5_wbs_hierarchy/migration.sql:63`). That predicate excludes exactly the
+rows this feature deletes. Postgres cannot use a partial index for a RESTRICT check it cannot prove
+satisfies the predicate, so the check falls back to a **sequential scan of the whole `activities`
+table, once per deleted row** — O(batch × table). It gets slower every year as the table grows,
+independently of backlog size. No `statement_timeout` or `lock_timeout` is configured anywhere in
+the repo, so nothing would cut it off.
+
+**The detail that explains why nobody caught it:** the schema comment beside that FK reads
+_"onDelete: Restrict guards against an **accidental** hard delete orphaning children"_. The index and
+the constraint were both designed for a world in which deliberate hard deletes do not happen. **This
+epic is the first that does** — so the cost was latent by construction, not overlooked.
+
+**Why the plan's existing tasks miss it.** M0-T2 briefs the database-architect on two predicates,
+both over `clients`/`projects`/`plans` — nothing routes `activities.parent_id` to it. And M4-T1 is
+scoped to proving the delete ORDER on "a plan with a WBS summary and children", a small correctness
+fixture. **At small N the missing index is invisible**, so M4-T1 as written would very plausibly pass
+while missing this entirely.
+
+**Resolution.**
+
+1. **M0-T2's brief gains `activities.parent_id`** — the index question is not confined to the three
+   hierarchy tables. This is handed to the database-architect rather than decided here.
+2. **M4-T1's fixture runs at the 2,000-activity sizing target** with `EXPLAIN ANALYZE` and timings
+   captured, not merely correctness of the order.
+3. **M4-T3's per-run cap gets a measured number and a stated unit** (rows / plans / wall-clock), the
+   way `RUN_CAP` and `BATCH_SIZE` were. The existing precedent's margins do **not** transfer: a
+   mis-sized `csp_reports` batch costs single-digit milliseconds either way; a mis-sized hierarchy
+   batch can cost seconds. A time-based circuit breaker is the likelier right shape.
+4. **The R2 "delete leaves repeatedly" loop is very probably unnecessary** and was tested directly:
+   one statement deleted the whole 20-summary tree with zero FK violations, because Postgres queues
+   row-level `AFTER` triggers to the END of the statement, so every targeted row is already invisible
+   to the check. If M4-T1 confirms it, drop the loop — it does not reduce the O(batch × table) cost
+   and is pure overhead once the index lands.
+
+**Corroborated, not blocking:** the existing list union measures **60–68 ms per page** at ~52k
+live / ~5k deleted rows per table, and does **not** improve as the cursor advances (seq scans with
+tens of thousands of rows removed by filter). With `apiFetchAllPages`, an org at that scale pays
+≈10 s to open the screen — **pre-existing, unrelated to this epic, and real numbers for TECH_DEBT
+#57's "still unmeasured"**. The grouping is a pure transform over an array the client already holds.
+The org-agnostic expiry candidate scan measures ~11.7 ms per table. No N+1 in `blockedBy`: the parent
+join already exists at `recycle-bin.repository.ts:83,94` and carries more columns, not more queries.
+
+**Also folded:** scope the candidate query by distinct `delete_batch_id` rather than three
+independent per-table scans, which can otherwise select the same logical batch twice.
