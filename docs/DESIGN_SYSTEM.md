@@ -184,11 +184,12 @@ correct in both — reviewers check both.
 
 ### Corporate theme (navy + amber)
 
-A fourth picker entry, and a different _kind_ of thing from the three above: light,
-dark and system are colour **schemes**; Corporate is a **brand skin** — navy chrome
-around a light working canvas — that resolves as a light scheme. It is applied by a
-`.corporate` class on `<html>`, a sibling of `.dark`; exactly one theme class is ever
-stamped, and light stamps none (it is the `:root` baseline).
+**This is now the product's only theme, and it is declared at `:root`** (ADR-0097) —
+no class is stamped on `<html>`, and there is no picker. Navy chrome around a light
+working canvas. The product owner asked for it to become "the main theme that the app
+is designed to"; light, dark and system are withdrawn rather than deprecated, and the
+mechanism that would carry a future dark theme is kept live rather than deleted (see
+`docs/FRONTEND_ARCHITECTURE.md` → Theme management).
 
 | Role                    | Colour                 | Token                                            |
 | ----------------------- | ---------------------- | ------------------------------------------------ |

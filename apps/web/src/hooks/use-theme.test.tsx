@@ -1,98 +1,89 @@
-import { act, render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { ThemeProvider, useTheme } from './use-theme';
+
 import { THEME_STORAGE_KEY } from '@/config/env';
-import { ThemeProvider, useTheme, type Theme } from '@/hooks/use-theme';
 
-/**
- * The theme picker gained a fourth entry — `corporate`, the navy + amber brand skin. Because the
- * token blocks are sibling CSS rules, exactly ONE theme class may sit on `<html>` at a time: a
- * stale `.dark` left behind while `.corporate` is applied would resolve tokens from whichever rule
- * won the cascade rather than from the chosen theme. These tests pin that invariant, the light
- * baseline (which stamps no class at all), and the persistence round-trip.
- *
- * The harness drives the provider directly rather than through a UI control: the picker now lives
- * inside {@link AccountChip}'s menu (S1), and these tests are about the cascade rule, not about
- * whichever surface happens to host the control this month.
- */
-
-const ORDER: Theme[] = ['light', 'dark', 'system', 'corporate'];
-
-function ThemeProbe(): React.ReactElement {
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length]!;
-  return (
-    <>
-      <span data-testid="probe">{`${theme}|${resolvedTheme}`}</span>
-      <button type="button" onClick={() => setTheme(next)}>{`Switch to ${next}`}</button>
-    </>
-  );
+function Probe(): React.ReactElement {
+  const { theme } = useTheme();
+  return <span data-testid="theme">{theme}</span>;
 }
 
-function renderWithProvider(): void {
+function renderProvider(): void {
   render(
     <ThemeProvider>
-      <ThemeProbe />
+      <Probe />
     </ThemeProvider>,
   );
 }
 
-function classes(): string[] {
-  return [...document.documentElement.classList];
-}
-
-beforeEach(() => {
-  window.localStorage.clear();
-  document.documentElement.className = '';
-  // jsdom ships no `matchMedia`; the provider reads it for `system`. A light-preferring
-  // stub keeps these tests about the class-stamping rule rather than OS preference.
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => ({
-      matches: false,
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    }),
+/**
+ * **What this suite proves is an absence, and the absence is the guarantee** (ADR-0097).
+ *
+ * The old arrangement stamped `.dark` or `.corporate` on `<html>`, which meant
+ * `public/theme-boot.js` and this provider each had an opinion about what to paint and a
+ * window in which they could disagree — a flash of the wrong theme. `:root` is now the
+ * theme block, so neither paints, and the cases below are written the way they are because
+ * "no class, ever, whatever is in storage" is the whole contract. A test asserting the
+ * happy path alone would pass equally against a provider that stamped a class for one
+ * stored value out of five.
+ */
+describe('ThemeProvider', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    document.documentElement.className = '';
   });
-});
 
-describe('theme switching', () => {
-  it('stamps exactly one theme class, and none for light', () => {
+  it('reports the one theme', () => {
+    renderProvider();
+    expect(screen.getByTestId('theme')).toHaveTextContent('corporate');
+  });
+
+  it.each([
+    ['dark', 'the preference a reader actually chose before the collapse'],
+    ['light', 'the same, one value along'],
+    ['system', 'the old default, which was never written explicitly by most readers'],
+    ['corporate', 'the value that survives — and still stamps nothing'],
+    ['nonsense', 'a value no version of this product ever wrote'],
+    ['', 'an empty string, which is neither absent nor valid'],
+  ])('stamps no class for a stored %s (%s)', async (stored) => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, stored);
+
+    renderProvider();
+
+    // Not "the right class" — NO class. There is nothing for a boot script to race.
+    expect(document.documentElement.className).toBe('');
+    await waitFor(() => expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull());
+  });
+
+  it('clears a stale preference rather than ignoring it', async () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
-    renderWithProvider();
-    expect(classes()).toContain('dark');
 
-    // dark → corporate must not leave `.dark` behind.
-    act(() => screen.getByRole('button').click()); // dark → system
-    act(() => screen.getByRole('button').click()); // system → corporate
-    expect(classes()).toContain('corporate');
-    expect(classes()).not.toContain('dark');
+    renderProvider();
 
-    // corporate → light stamps nothing: light is the `:root` baseline.
-    act(() => screen.getByRole('button').click());
-    expect(classes()).not.toContain('corporate');
-    expect(classes()).not.toContain('dark');
+    // Removed, not left in place. Leaving it would resurrect a 2026 preference on the day a
+    // new dark design ships — a change nobody asked for, arriving as a surprise.
+    await waitFor(() => expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull());
   });
 
-  it('resolves corporate as a LIGHT colour scheme (its content surfaces are light)', () => {
-    window.localStorage.setItem(THEME_STORAGE_KEY, 'corporate');
-    renderWithProvider();
-    expect(screen.getByTestId('probe')).toHaveTextContent('corporate|light');
-    expect(classes()).toContain('corporate');
+  it('renders when localStorage throws', () => {
+    const original = window.localStorage.removeItem;
+    window.localStorage.removeItem = () => {
+      throw new Error('private mode');
+    };
+    try {
+      renderProvider();
+      // A store we cannot write to changes nothing about what is painted, so it must not
+      // take the app down. There is no fallback to choose between.
+      expect(screen.getByTestId('theme')).toHaveTextContent('corporate');
+      expect(document.documentElement.className).toBe('');
+    } finally {
+      window.localStorage.removeItem = original;
+    }
   });
 
-  it('persists the choice', () => {
-    window.localStorage.setItem(THEME_STORAGE_KEY, 'system');
-    renderWithProvider();
-    act(() => screen.getByRole('button').click());
-    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('corporate');
-  });
-
-  it('ignores an unrecognised stored value rather than stamping it', () => {
-    window.localStorage.setItem(THEME_STORAGE_KEY, 'neon');
-    renderWithProvider();
-    expect(screen.getByTestId('probe')).toHaveTextContent(/^system\|/);
-    expect(classes()).not.toContain('neon');
+  it('throws when used outside the provider', () => {
+    expect(() => render(<Probe />)).toThrow(/must be used within a ThemeProvider/);
   });
 });

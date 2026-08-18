@@ -1,22 +1,32 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Helpers for the **theme-parametrised** accessibility suite (ADR-0055 §5).
+ * Helpers for the accessibility suite that sweeps **stored theme preferences** (ADR-0055 §5,
+ * rescoped by ADR-0097).
  *
- * Every other e2e suite scans the default theme, which is exactly how the Corporate theme
- * shipped with six contrast defects: the axe checks were real, they just never looked at the
- * theme that was broken. This suite exists to look at all four.
+ * It was written because the Corporate theme shipped with six contrast defects past a human
+ * review, a component review and a green axe suite: the axe checks were real, they had simply
+ * never been asked to look at the theme that was broken. Four themes, four scans.
+ *
+ * **There is now one theme, and the sweep is kept rather than collapsed** — because what it
+ * sweeps has changed into something only a real browser can check. Readers still carry
+ * `dark`, `light` and `system` in `localStorage` from before the collapse, and the guarantee
+ * is that every one of them paints the SAME shell: `public/theme-boot.js` stamps nothing and
+ * the provider stamps nothing, so they cannot disagree. jsdom can prove each half in
+ * isolation; only a browser runs the parser-blocking boot script against the real bundle,
+ * which is the exact seam where a flash of the wrong theme would live.
  */
 
-/** The picker's four options — see `hooks/use-theme.tsx`. */
+/** Values a reader's `localStorage` may still hold — see `hooks/use-theme.tsx`. */
 export type ThemeChoice = 'light' | 'dark' | 'system' | 'corporate';
 
 const THEME_STORAGE_KEY = 'schedulepoint-theme';
 
 /**
- * Choose a theme the way a returning user has one: written to storage before the app boots,
- * so the very first paint is the theme under test. Setting it after load would scan a shell
- * that had already rendered (and been measured) in the default.
+ * Seed a stored preference the way a returning user has one: written before the app boots, so
+ * the very first paint is the one under test. Setting it after load would scan a shell that had
+ * already rendered — and the boot script, which is the thing being checked, would have run
+ * against an empty store.
  */
 export async function setTheme(page: Page, theme: ThemeChoice): Promise<void> {
   await page.addInitScript(

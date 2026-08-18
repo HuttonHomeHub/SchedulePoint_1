@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { compositeOver, fmtRatio, parseColour, relativeLuminance, type Srgb } from '@/test/colour';
-import { blockBody, declarations, hasBlock, THEME_SELECTORS, themeTokens } from '@/test/css-blocks';
+import { blockBody, declarations, THEME_SELECTORS, themeTokens } from '@/test/css-blocks';
 
 /**
  * The computed contrast matrix (ADR-0055 §2).
@@ -19,38 +19,18 @@ import { blockBody, declarations, hasBlock, THEME_SELECTORS, themeTokens } from 
 type Scope = 'page' | 'chrome' | 'panel' | 'brand' | 'auth';
 const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand', 'auth'];
 
-const FLAG_ATTRIBUTES = ['data-designed-chrome', 'data-canvas-visual-language'] as const;
-
 /**
- * The flag layers that apply to a theme, in cascade order: the global layer first, then the
- * theme-scoped one (`[attr].corporate`), which has the higher specificity and therefore wins.
- * Absent layers are skipped — a flag whose values are Corporate-only (S3's light rail) has no
- * global block at all.
+ * Resolve the tokens a component would actually see, given a theme and a surface scope —
+ * i.e. replay the cascade by hand.
+ *
+ * **It used to take a third argument, `flagsOn`, and replay the flag-keyed value layers too**
+ * (ADR-0055 §6). ADR-0097 folded those values into the one theme block, so the matrix is
+ * half the size and every cell in it describes something a reader can actually reach — which
+ * the flags-off half had stopped doing the day `VITE_` inlining made it unreachable
+ * (ADR-0088).
  */
-function flagLayersFor(theme: (typeof THEME_SELECTORS)[number]): string[] {
-  const suffix = theme === ':root' ? '' : theme;
-  return FLAG_ATTRIBUTES.flatMap((attribute) =>
-    [`[${attribute}]`, suffix ? `[${attribute}]${suffix}` : ''].filter(
-      (selector) => selector !== '' && hasBlock(selector),
-    ),
-  );
-}
-
-/**
- * Resolve the tokens a component would actually see, given a theme, a surface scope and
- * whether the flagged value layers are applied — i.e. replay the cascade by hand.
- */
-function resolve(
-  theme: (typeof THEME_SELECTORS)[number],
-  scope: Scope,
-  flagsOn: boolean,
-): Map<string, string> {
+function resolve(theme: (typeof THEME_SELECTORS)[number], scope: Scope): Map<string, string> {
   const tokens = new Map(themeTokens(theme));
-  if (flagsOn) {
-    for (const layer of flagLayersFor(theme)) {
-      for (const [name, value] of declarations(blockBody(layer))) tokens.set(name, value);
-    }
-  }
   if (scope === 'page') return tokens;
 
   for (const [name, value] of declarations(blockBody(`[data-surface='${scope}']`))) {
@@ -175,61 +155,54 @@ const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: st
 ];
 
 describe.each(THEME_SELECTORS)('%s', (theme) => {
-  describe.each([false, true])('flag layers applied: %s', (flagsOn) => {
-    describe.each(SCOPES)('%s surface', (scope) => {
-      const tokens = resolve(theme, scope, flagsOn);
+  describe.each(SCOPES)('%s surface', (scope) => {
+    const tokens = resolve(theme, scope);
 
-      it.each(TEXT_PAIRS)('%s / %s — %s — is legible (≥ 4.5:1)', (fill, ink, _why) => {
-        const value = ratio(tokens, fill, ink);
-        expect(
-          value,
-          `${fill} vs ${ink} is ${fmtRatio(value)}, needs 4.5:1`,
-        ).toBeGreaterThanOrEqual(4.5);
-      });
+    it.each(TEXT_PAIRS)('%s / %s — %s — is legible (≥ 4.5:1)', (fill, ink, _why) => {
+      const value = ratio(tokens, fill, ink);
+      expect(value, `${fill} vs ${ink} is ${fmtRatio(value)}, needs 4.5:1`).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    });
 
-      it.each(NON_TEXT_PAIRS)('%s / %s — %s — is perceivable (≥ 3:1)', (fill, ink, _why) => {
-        const value = ratio(tokens, fill, ink);
-        expect(value, `${fill} vs ${ink} is ${fmtRatio(value)}, needs 3:1`).toBeGreaterThanOrEqual(
-          3,
-        );
-      });
+    it.each(NON_TEXT_PAIRS)('%s / %s — %s — is perceivable (≥ 3:1)', (fill, ink, _why) => {
+      const value = ratio(tokens, fill, ink);
+      expect(value, `${fill} vs ${ink} is ${fmtRatio(value)}, needs 3:1`).toBeGreaterThanOrEqual(3);
+    });
 
-      it('reports the decorative border ratio without asserting it', () => {
-        // Deliberately unasserted, and the reason is written down so the next person does not
-        // read a missing assertion as an oversight and "fix" it: WCAG 1.4.11 exempts purely
-        // decorative separators, and our dividers never carry meaning on their own — the
-        // surfaces either side already differ. Dark writes them at 10% alpha, which would fail
-        // a 3:1 rule that was never meant to apply. Reported so a REGRESSION is still visible
-        // in the test output.
-        const value = ratio(tokens, '--background', '--border');
-        expect(value).toBeGreaterThan(1);
-      });
+    it('reports the decorative border ratio without asserting it', () => {
+      // Deliberately unasserted, and the reason is written down so the next person does not
+      // read a missing assertion as an oversight and "fix" it: WCAG 1.4.11 exempts purely
+      // decorative separators, and our dividers never carry meaning on their own — the
+      // surfaces either side already differ. Dark writes them at 10% alpha, which would fail
+      // a 3:1 rule that was never meant to apply. Reported so a REGRESSION is still visible
+      // in the test output.
+      const value = ratio(tokens, '--background', '--border');
+      expect(value).toBeGreaterThan(1);
     });
   });
 });
 
 describe.each(THEME_SELECTORS)('%s — adjacent surfaces', (theme) => {
-  describe.each([false, true])('flag layers applied: %s', (flagsOn) => {
-    /**
-     * How far a surface stands off the page it sits beside — a number `globals.css` quotes in
-     * prose ("the rail sits at 1.09:1 against the page") and, until now, nothing computed. A
-     * comment asserting a ratio no test recomputes is the same failure this epic exists to
-     * close, one level up: the next edit to `--panel` or `--background` could drift it silently
-     * and the file would still claim the old figure.
-     *
-     * Reported, not asserted, and deliberately: 1.4.11 exempts a decorative surface boundary,
-     * every scope keeps a real `border-r`/`border-b` rather than relying on the fill difference,
-     * and the design WANTS these close. What the suite owes is the number, not a threshold.
-     */
-    it.each(['chrome', 'panel', 'brand'] as const)('%s vs the page fill', (scope) => {
-      const page = fillOf(resolve(theme, 'page', flagsOn));
-      const surface = fillOf(resolve(theme, scope, flagsOn));
-      const a = relativeLuminance(page);
-      const b = relativeLuminance(surface);
-      const value = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-      // eslint-disable-next-line no-console
-      console.log(`[ADR-0055 §2] ${theme} flags=${flagsOn} — ${scope} vs page: ${fmtRatio(value)}`);
-      expect(value).toBeGreaterThanOrEqual(1);
-    });
+  /**
+   * How far a surface stands off the page it sits beside — a number `globals.css` quotes in
+   * prose ("the rail sits at 1.09:1 against the page") and, until now, nothing computed. A
+   * comment asserting a ratio no test recomputes is the same failure this epic exists to
+   * close, one level up: the next edit to `--panel` or `--background` could drift it silently
+   * and the file would still claim the old figure.
+   *
+   * Reported, not asserted, and deliberately: 1.4.11 exempts a decorative surface boundary,
+   * every scope keeps a real `border-r`/`border-b` rather than relying on the fill difference,
+   * and the design WANTS these close. What the suite owes is the number, not a threshold.
+   */
+  it.each(['chrome', 'panel', 'brand'] as const)('%s vs the page fill', (scope) => {
+    const page = fillOf(resolve(theme, 'page'));
+    const surface = fillOf(resolve(theme, scope));
+    const a = relativeLuminance(page);
+    const b = relativeLuminance(surface);
+    const value = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    // eslint-disable-next-line no-console
+    console.log(`[ADR-0055 §2] ${theme} — ${scope} vs page: ${fmtRatio(value)}`);
+    expect(value).toBeGreaterThanOrEqual(1);
   });
 });

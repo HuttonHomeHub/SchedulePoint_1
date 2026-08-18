@@ -248,13 +248,22 @@ sequenceDiagram
 
 ## Theme management
 
-- Three modes: **light**, **dark**, **system**. A `ThemeProvider` (Context)
-  stores the preference in `localStorage` and applies/removes the `.dark` class
-  on `<html>`; `system` follows `prefers-color-scheme` live.
-- A fourth entry, **corporate**, is a brand skin rather than a colour scheme (a
-  `.corporate` class, sibling of `.dark`). Exactly one theme class is ever stamped.
-- To avoid a flash of the wrong theme, a tiny inline script in `index.html` sets
-  the class before first paint.
+- **One theme, and `:root` IS its block** (ADR-0097). There is no picker, no
+  `.dark`, no `.corporate`, and nothing is stamped on `<html>`.
+- That is what makes a flash of the wrong theme **structurally impossible** rather
+  than merely avoided: `public/theme-boot.js` and `ThemeProvider` cannot disagree
+  about what to paint, because neither of them paints. Every stored value — `dark`,
+  `light`, `system`, garbage, or a `localStorage` that throws — resolves the same way.
+- **The mechanism is kept live, not vestigial.** `theme-boot.js` still runs, reads
+  and validates on every load and keeps its test; `THEME_SELECTORS` is a one-element
+  **list**; `Theme` is a union with one member. Adding a dark theme back is a block of
+  values and one entry in each. What that does not buy is the design judgement: the
+  canvas's colours carry meaning, so its plot separations need **re-deriving**, not
+  re-tinting.
+- `ThemeProvider`'s one side effect is removing the stale `localStorage` key, once, on
+  first mount — never in `theme-boot.js`, which must stay side-effect-free before paint.
+  Removed rather than ignored, so a 2026 preference is not resurrected on the day a new
+  dark design ships.
 - Components never branch on theme in JS — tokens flip automatically (ADR-0006).
 - **Surface scopes** (ADR-0055) are the orthogonal axis: a theme says what the product
   looks like, a scope says what a token means _in this region_. `<Surface tone="chrome">`
@@ -270,8 +279,11 @@ sequenceDiagram
   failing build, and a diff that reads like a tidy-up. `styles/token-architecture.test.ts`
   pins it.
 - ⚠️ **Declare token values literally, never as `var()` aliases.** A `--field: var(--background)`
-  written in `:root` is substituted at computed-value time, so `.dark` and `.corporate`
-  inherit **Light's** value and never override it. Each theme block restates its own values.
+  written in one theme block is substituted at computed-value time, so a second theme block
+  would inherit the first's value and never override it. Each theme block restates its own
+  values. With one theme this cannot currently bite — which is exactly why it is written
+  down: it becomes live again the moment a second block is added, and by then nobody will
+  remember why the values were literal.
 
 ## Responsive strategy
 

@@ -1,33 +1,12 @@
 import { useNavigate } from '@tanstack/react-router';
-import {
-  Building2,
-  Check,
-  ChevronDown,
-  Keyboard,
-  Monitor,
-  Moon,
-  ScrollText,
-  Sun,
-  UserCog,
-  Wrench,
-} from 'lucide-react';
-import { useId } from 'react';
+import { ChevronDown, Keyboard, ScrollText, UserCog, Wrench } from 'lucide-react';
 
 import { useShortcutsAction } from '@/components/layout/chrome/help-action';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import { ACCOUNT_SETTINGS_ENABLED, AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { useStaffIdentity } from '@/features/staff/api/staff-identity';
-import { useTheme, type Theme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
-
-const THEME_META: Record<Theme, { icon: typeof Sun; label: string }> = {
-  light: { icon: Sun, label: 'Light' },
-  dark: { icon: Moon, label: 'Dark' },
-  system: { icon: Monitor, label: 'System' },
-  corporate: { icon: Building2, label: 'Corporate' },
-};
-const THEMES: Theme[] = ['light', 'dark', 'system', 'corporate'];
 
 /** Initials from a name or, failing that, an email — never more than two characters. */
 function initialsOf(name: string | undefined, email: string | undefined): string {
@@ -57,11 +36,9 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
   const { data: session } = useSession();
   const signOut = useSignOut();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   // Asked only while the menu is open — see the hook for why the deferral is not an optimisation.
   const staff = useStaffIdentity({ enabled: open });
-  const themeLabelId = useId();
   const openShortcuts = useShortcutsAction();
 
   const email = session?.user?.email;
@@ -182,29 +159,6 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             Diagram keyboard shortcuts
           </MenuItem>
         ) : null}
-        <p className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium" id={themeLabelId}>
-          Theme
-        </p>
-        {/* The heading above relates to these four options visually and ONLY visually without
-            this group — a screen-reader user arrowing through the menu would meet four radios
-            with no idea what they choose between (WCAG 1.3.1). `role="group"` is transparent to
-            the APG menu's roving focus, which queries `[role="menuitemradio"]` across all
-            DESCENDANTS of the menu container, not its direct children. */}
-        <div role="group" aria-labelledby={themeLabelId}>
-          {THEMES.map((option) => {
-            const { icon: Icon, label } = THEME_META[option];
-            return (
-              <MenuItem key={option} selected={theme === option} onSelect={() => setTheme(option)}>
-                <Check
-                  aria-hidden="true"
-                  className={cn('size-4', theme === option ? 'opacity-100' : 'opacity-0')}
-                />
-                <Icon aria-hidden="true" className="size-4" />
-                {label}
-              </MenuItem>
-            );
-          })}
-        </div>
         <div className="border-border my-1 border-t" />
         <MenuItem
           // The sign-out mutation's pending state has to survive the move into a menu: a second

@@ -1,81 +1,53 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 
 import { THEME_STORAGE_KEY } from '@/config/env';
 
 /**
- * The themes offered in the picker. `light`/`dark`/`system` are colour SCHEMES;
- * `corporate` is a brand skin (navy chrome, amber primary) that resolves as a light
- * scheme — see the `.corporate` token block in `styles/globals.css`.
+ * The themes this product offers. **One** — and it is a union rather than a bare string
+ * because the mechanism is kept alive, not because it currently distinguishes anything
+ * (ADR-0097).
+ *
+ * A second member is what "add dark back" costs at this layer: one entry here, one entry
+ * in `THEME_SELECTORS`, and a block of values. The expensive half is choosing the values,
+ * and the canvas's plot separations have to be **re-derived** rather than re-tinted,
+ * because on the diagram colour carries meaning.
  */
-export type Theme = 'light' | 'dark' | 'system' | 'corporate';
-
-/** The themes applied by stamping a class of the same name on `<html>`. */
-const CLASS_THEMES = ['dark', 'corporate'] as const;
+export type Theme = 'corporate';
 
 interface ThemeContextValue {
   theme: Theme;
-  /**
-   * The colour SCHEME in effect (`system` resolved). `corporate` resolves to `light`,
-   * because its content surfaces are light — native form controls and scrollbars
-   * should follow suit.
-   */
-  resolvedTheme: 'light' | 'dark';
-  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function prefersDark(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
-function readStoredTheme(): Theme {
-  if (typeof window === 'undefined') return 'system';
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'system' || stored === 'corporate'
-    ? stored
-    : 'system';
-}
+const VALUE: ThemeContextValue = { theme: 'corporate' };
 
 /**
- * Provides theme state and stamps the matching class on `<html>` (`.dark`, `.corporate`,
- * or neither for light). `system` follows `prefers-color-scheme` live. The initial class
- * is set by an inline script in `index.html` to avoid a flash of the wrong theme; this
- * provider keeps it in sync thereafter (docs/FRONTEND_ARCHITECTURE.md).
+ * Provides the theme and stamps **nothing** on `<html>`.
+ *
+ * That is the whole design (ADR-0097): `:root` **is** the theme block, so there is no
+ * class to apply and therefore no window in which the wrong one could be applied. A flash
+ * of the wrong theme is not avoided here, it is **unrepresentable** — `public/theme-boot.js`
+ * and this provider cannot disagree about what to paint, because neither of them paints.
+ *
+ * The one side effect is cleaning up after the old arrangement: a reader who chose `dark`
+ * in 2026 still has that key in `localStorage`, and it is **removed rather than ignored**.
+ * Leaving it would resurrect a preference nobody has been offered for months on the day a
+ * new dark design ships — a change no user asked for, arriving as a surprise. It is done
+ * here and never in `theme-boot.js`, which must stay side-effect-free before first paint.
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-  const [theme, setThemeState] = useState<Theme>(readStoredTheme);
-  const [systemDark, setSystemDark] = useState<boolean>(prefersDark);
-
   useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (event: MediaQueryListEvent): void => setSystemDark(event.matches);
-    media.addEventListener('change', onChange);
-    return () => media.removeEventListener('change', onChange);
-  }, []);
-
-  const resolvedTheme: 'light' | 'dark' =
-    theme === 'system' ? (systemDark ? 'dark' : 'light') : theme === 'corporate' ? 'light' : theme;
-
-  useEffect(() => {
-    // One class at a time: the token blocks are siblings, so leaving a stale one on the
-    // root would resolve tokens from whichever rule wins the cascade rather than the
-    // chosen theme. `light` stamps nothing — it is the `:root` baseline.
-    const applied = theme === 'corporate' ? 'corporate' : resolvedTheme === 'dark' ? 'dark' : null;
-    for (const name of CLASS_THEMES) {
-      document.documentElement.classList.toggle(name, name === applied);
+    try {
+      window.localStorage.removeItem(THEME_STORAGE_KEY);
+    } catch {
+      // A `localStorage` that throws (private mode, a hostile embedder) is not a reason to
+      // fail a render. There is nothing to fall back to and nothing to repair: with one
+      // theme, a key we cannot delete changes nothing about what is painted.
     }
-  }, [theme, resolvedTheme]);
-
-  const setTheme = useCallback((next: Theme): void => {
-    setThemeState(next);
-    window.localStorage.setItem(THEME_STORAGE_KEY, next);
   }, []);
 
-  const value = useMemo<ThemeContextValue>(
-    () => ({ theme, resolvedTheme, setTheme }),
-    [theme, resolvedTheme, setTheme],
-  );
+  const value = useMemo(() => VALUE, []);
 
   return <ThemeContext value={value}>{children}</ThemeContext>;
 }

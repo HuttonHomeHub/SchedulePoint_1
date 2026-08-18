@@ -262,8 +262,10 @@ documents (keep them authoritative):
 Essentials: feature-first structure; server state in TanStack Query; URL state
 in the router (TanStack Router); minimal client state; forms via RHF + Zod;
 styling via semantic tokens + Tailwind v4 + CVA, rebound per **surface scope**
-(ADR-0055). **Mobile-first,
-theme-aware (light/dark/system), and no one-off component styling — ever.** The
+(ADR-0055). **Mobile-first, and no one-off component styling — ever.** The product has
+**one theme**, declared at `:root` (ADR-0097) — light, dark and system were withdrawn,
+and the mechanism that would carry a future dark variant is kept live rather than
+deleted, so "never branch on theme in JS" still holds and still matters. The
 authenticated app is a **persistent app-shell** with a Client → Project → Plan
 **Project Explorer** navigator (ADR-0029); row actions use the hand-rolled APG
 `Menu` primitive (`components/ui/menu.tsx`) — never hover-only (see

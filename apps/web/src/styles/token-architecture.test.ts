@@ -182,42 +182,42 @@ describe.each(FAMILIES)('the [data-surface="%s"] rule', (family) => {
   });
 });
 
-describe('the flag-keyed override layers', () => {
+describe('the flag-keyed override layers are gone', () => {
   it.each(['data-designed-chrome', 'data-canvas-visual-language'])(
-    '%s has a home, so a flagged value change never leaks into a theme block',
+    'no [%s] value layer survives, in any form',
     (attribute) => {
-      // Either a global layer or a theme-scoped one (`[attr].corporate`) — S3's light rail is
-      // Corporate-only, so it takes the scoped form. What matters is that the flag's values
-      // live behind the attribute rather than in the theme block, which is what makes the
-      // rollback byte-for-byte for colour.
-      const anyLayer = [
-        `[${attribute}]`,
-        ...THEME_SELECTORS.filter((t) => t !== ':root').map((t) => `[${attribute}]${t}`),
-      ].some(hasBlock);
-      expect(anyLayer, `no [${attribute}] layer found in globals.css`).toBe(true);
+      // **This assertion replaces two that were its opposite** (ADR-0097). ADR-0055 §6 put
+      // flagged VALUES behind an attribute so a rollback stayed byte-for-byte for colour as
+      // well as markup, and a second gate then had to pin that a theme-scoped layer restated
+      // its global layer in full — because `[attr]` and `.dark` have equal specificity and the
+      // later rule wins, so a scoped layer that forgot a token silently inherited Light's grey.
+      //
+      // Both are now meaningless: the values are folded into the one theme block, and there is
+      // no second theme for a layer to shadow. The trap they guarded cannot be re-set — but a
+      // layer could be re-added by someone reaching for the old pattern, so the gate inverts
+      // rather than disappearing. It is also honest about what it does not cover: a flag that
+      // gates STRUCTURE is untouched by this and always was.
+      const forms = [`[${attribute}]`, ...THEME_SELECTORS.map((t) => `[${attribute}]${t}`)];
+      const found = forms.filter(hasBlock);
+      expect(
+        found,
+        `globals.css still declares ${found.join(', ')} — flagged token values were folded ` +
+          'into the theme block by ADR-0097; a `VITE_` constant is inlined at build time and ' +
+          'was never an operator rollback (ADR-0088).',
+      ).toEqual([]);
     },
   );
-});
 
-describe('a theme-scoped flag layer restates its global layer in full', () => {
-  it.each(['data-designed-chrome', 'data-canvas-visual-language'])(
-    '%s: every token the global layer declares is restated per theme',
-    (attribute) => {
-      if (!hasBlock(`[${attribute}]`)) return; // no global layer ⇒ nothing to shadow
-      const global = [...declarations(blockBody(`[${attribute}]`)).keys()];
-      for (const theme of THEME_SELECTORS.filter((t) => t !== ':root')) {
-        const selector = `[${attribute}]${theme}`;
-        // `[attr]` and `.dark` have EQUAL specificity and both match <html>, so the later rule
-        // wins — the global layer overrides the theme block it sits after. A theme-scoped layer
-        // that forgets a token therefore inherits the global layer's value, which is Light's.
-        // The failure is silent and looks like a colour choice, so it is pinned rather than
-        // trusted: a scoped layer must restate the global list in full, unchanged values included.
-        const scoped = hasBlock(selector) ? declarations(blockBody(selector)) : new Map();
-        const missing = global.filter((name) => !scoped.has(name));
-        expect(missing, `${selector} does not restate ${missing.join(', ')}`).toEqual([]);
-      }
-    },
-  );
+  it('the values those layers held live in the theme block', () => {
+    // The other half, and the reason the deletion above is safe to assert: `--chrome` and
+    // `--panel` were the flag layers' subject, so finding them in the theme proves the fold
+    // happened rather than that the layers were simply dropped. Without this, a commit that
+    // deleted the layers and lost their values would pass the assertion above.
+    const tokens = themeTokens(':root');
+    for (const name of ['--chrome', '--panel', '--canvas', '--canvas-band']) {
+      expect(tokens.get(name), `:root does not declare ${name}`).toBeDefined();
+    }
+  });
 });
 
 describe('the time-axis gridline tiers (tsld-toolbar-canvas-refinements F5)', () => {

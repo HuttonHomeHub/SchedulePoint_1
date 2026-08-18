@@ -24,501 +24,45 @@
    route happens to pull in. */
 @import './print-document.css';
 
-/* Enable class-based dark mode: `<html class="dark">` (see theme management). */
-@custom-variant dark (&:is(.dark *));
-
 /* ------------------------------------------------------------------------- */
-/* Semantic tokens — LIGHT theme                                             */
-/* ------------------------------------------------------------------------- */
-:root {
-  /* Radius scale is derived from a single base for consistency. */
-  --radius: 0.625rem;
-
-  /* Surfaces */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-
-  /* Brand / interactive. L is 0.50 (not lighter) so white foreground clears the
-     WCAG 2.2 AA 4.5:1 contrast bar even after the blue is clipped into the sRGB
-     gamut — verified by axe on a solid primary button (DESIGN_SYSTEM.md). */
-  --primary: oklch(0.5 0.18 255);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.545 0 0);
-
-  /* Status */
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  /* The hovered fill. A TOKEN, not `bg-destructive/90`, and that is the whole fix: an alpha
-     utility composites against the page and is invisible to `token-contrast.test.ts`, which
-     resolves tokens. Lightening this fill toward a white page took the label to 4.32:1 — a live
-     WCAG 1.4.3 failure on every Delete button, sitting exactly between two gates (the matrix
-     sees no utilities; the axe suite measures no hover state, as its own docblock says).
-     The rule is one sentence and holds in every theme: HOVER MOVES THE FILL AWAY FROM THE PAGE.
-     Here that means darker. 5.27:1 label, 5.51:1 against the page. */
-  --destructive-hover: oklch(0.527 0.245 27.325);
-  /* Readable destructive for text & state borders on page surfaces. The solid
-     `--destructive` above is tuned as a button surface (light foreground), which
-     is too light to also serve as text on light/dark surfaces — this token keeps
-     text/borders at ≥ 4.5:1 (text) / ≥ 3:1 (border). See docs/DESIGN_SYSTEM.md. */
-  --destructive-text: oklch(0.505 0.21 27.5);
-  --success: oklch(0.52 0.14 155);
-  --success-foreground: oklch(0.985 0 0);
-  --success-text: oklch(0.48 0.13 150);
-  --warning: oklch(0.769 0.15 80);
-  --warning-foreground: oklch(0.205 0 0);
-  /* Readable warning for TEXT on page surfaces. Like `--destructive-text`, the
-     solid `--warning` above is a surface tone (near-black foreground) and is not
-     legible as coloured text on `background`/`card`; this keeps text ≥ 4.5:1. */
-  --warning-text: oklch(0.48 0.13 80);
-  --info: oklch(0.5 0.14 240);
-  --info-foreground: oklch(0.985 0 0);
-  /* Readable info for TEXT on page surfaces (mirrors `--warning-text`): the solid `--info` above is a
-     surface tone and isn't legible as coloured text on `background`/`card`; this keeps text ≥ 4.5:1. */
-  --info-text: oklch(0.45 0.14 250);
-
-  /* Lines & focus */
-  --border: oklch(0.922 0 0);
-  /* A CONTROL BOUNDARY, not a divider — and the reason it no longer shares `--border`'s value.
-     `--field` is valued identically to the surface it sits on in every theme, so this line is the
-     only thing that says "a text field is here". WCAG 1.4.11 asks for 3:1 where a visual is what
-     identifies a component, and the inherited `0.922` grey was 1.26:1 against white: an input
-     outline nobody could see, in every theme, on every surface. A divider may stay a hairline
-     (1.4.11 exempts decoration); this may not. See `token-contrast.test.ts`, which now gates it. */
-  --input: oklch(0.64 0 0);
-  --ring: oklch(0.55 0.18 255);
-
-  /* Data visualisation (see dataviz standards in DESIGN_SYSTEM.md) */
-  --chart-1: oklch(0.55 0.18 255);
-  --chart-2: oklch(0.6 0.13 185);
-  --chart-3: oklch(0.6 0.13 155);
-  --chart-4: oklch(0.769 0.15 80);
-  --chart-5: oklch(0.627 0.2 320);
-
-  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
-     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
-     `panel` the navigator rail; the page is the `:root` case.
-
-     These families are deliberately NOT mapped into `@theme inline` below, so
-     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
-     is the `[data-surface]` rule, which is what makes the boundary structural
-     rather than a convention someone has to remember.
-
-     Each family is COMPLETE. The bug this replaces was a three-token header stub
-     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
-     text in the chrome reached for the canvas grey, which was invisible the day
-     a theme made chrome and canvas diverge. A surface family is complete or it
-     is a trap. */
-
-  /* Light: chrome and panel carry TODAY's values, so this theme is byte-identical. */
-
-  /* chrome — the top band */
-  --chrome: oklch(1 0 0);
-  --chrome-foreground: oklch(0.145 0 0);
-  --chrome-muted-foreground: oklch(0.545 0 0);
-  --chrome-muted: oklch(0.97 0 0);
-  --chrome-border: oklch(0.922 0 0);
-  --chrome-input: oklch(0.64 0 0);
-  --chrome-accent: oklch(0.97 0 0);
-  --chrome-accent-foreground: oklch(0.205 0 0);
-  --chrome-primary: oklch(0.5 0.18 255);
-  --chrome-primary-foreground: oklch(0.985 0 0);
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.145 0 0);
-  --chrome-field-muted-foreground: oklch(0.545 0 0);
-  --chrome-destructive-text: oklch(0.505 0.21 27.5);
-  --chrome-success-text: oklch(0.48 0.13 150);
-  --chrome-warning-text: oklch(0.48 0.13 80);
-  --chrome-info-text: oklch(0.45 0.14 250);
-  --chrome-ring: oklch(0.55 0.18 255);
-
-  /* panel — the navigator rail */
-  --panel: oklch(0.985 0 0);
-  --panel-foreground: oklch(0.145 0 0);
-  --panel-muted-foreground: oklch(0.545 0 0);
-  --panel-muted: oklch(0.97 0 0);
-  --panel-border: oklch(0.922 0 0);
-  --panel-input: oklch(0.64 0 0);
-  --panel-accent: oklch(0.97 0 0);
-  --panel-accent-foreground: oklch(0.205 0 0);
-  --panel-primary: oklch(0.5 0.18 255);
-  --panel-primary-foreground: oklch(0.985 0 0);
-  --panel-field: oklch(1 0 0);
-  --panel-field-foreground: oklch(0.145 0 0);
-  --panel-field-muted-foreground: oklch(0.545 0 0);
-  --panel-destructive-text: oklch(0.505 0.21 27.5);
-  --panel-success-text: oklch(0.48 0.13 150);
-  --panel-warning-text: oklch(0.48 0.13 80);
-  --panel-info-text: oklch(0.45 0.14 250);
-  --panel-ring: oklch(0.55 0.18 255);
-
-  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
-     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
-
-     This family does not follow the theme. A signed-out visitor cannot choose one
-     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
-     colleague signed in on this machine last month — so the one screen where the
-     product has to be recognisable would otherwise render in one of three
-     identities, selected by something the visitor did not do and cannot undo.
-
-     It is repeated per theme rather than declared once on `:root` because the
-     repetition is what makes the *values* visible where a reader looks for them,
-     and because `token-contrast.test.ts` resolves each theme independently. Note
-     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
-     `.corporate` over `:root` by inheritance, so a member deleted from one theme
-     block is NOT caught by the completeness gate — see the `brand` case in
-     `token-architecture.test.ts`, which pins the literal declarations per block
-     precisely because the inherited read cannot.
-
-     The values are Corporate's navy chrome — already measured against this fill —
-     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
-     across all three themes rather than trusting the provenance.
-
-     Do not "fix" this to follow the theme. That would be undoing the decision. */
-  --brand: oklch(0.252 0.056 264);
-  --brand-foreground: oklch(0.985 0 0);
-  --brand-muted-foreground: oklch(0.78 0.02 264);
-  --brand-muted: oklch(0.32 0.05 264);
-  --brand-border: oklch(1 0 0 / 14%);
-  --brand-input: oklch(0.62 0.02 264);
-  --brand-accent: oklch(0.338 0.081 262);
-  --brand-accent-foreground: oklch(0.985 0 0);
-  --brand-primary: oklch(0.786 0.167 70);
-  --brand-primary-foreground: oklch(0.252 0.056 264);
-  --brand-field: oklch(1 0 0);
-  --brand-field-foreground: oklch(0.321 0 0);
-  --brand-field-muted-foreground: oklch(0.51 0 0);
-  --brand-destructive-text: oklch(0.74 0.15 25);
-  --brand-success-text: oklch(0.8 0.12 150);
-  --brand-warning-text: oklch(0.8 0.14 70);
-  --brand-info-text: oklch(0.8 0.09 245);
-  --brand-ring: oklch(0.786 0.167 70);
-
-  /* A form field's surface has never been the same concept as the page's;
-     pretending it was is what made an outline button invisible on navy. */
-  --field: oklch(1 0 0);
-  --field-foreground: oklch(0.145 0 0);
-  --field-muted-foreground: oklch(0.545 0 0);
-
-  /* The TSLD drawing ground and its alternating month band (ADR-0055 §4).
-     `--canvas` is valued identically to `--card` here so the S4 re-point of the
-     canvas painter is a no-op until the band lands. */
-  --canvas: oklch(1 0 0);
-  --canvas-band: oklch(0.975 0 0);
-
-  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
-     Theme-INVARIANT, like `brand` and for the same reason one step further out.
-     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
-     theme — the boot script picked Dark from their operating system, or
-     Corporate because a colleague signed in on this machine last month. That
-     argument was only ever applied to half the screen: the panel was pinned and
-     the card beside it still followed the theme, so a Dark-mode visitor met a
-     fixed navy panel joined to a dark card. One identity, chosen by nobody.
-     These values are the old app's, sampled from `static/css/main.css`
-     (#14213D navy, #fca311 amber) so the match is exact rather than close —
-     with TWO exceptions, and the exceptions are the point of having a gate.
-     The old app's amber focus ring is 2.02:1 on white and its field outline
-     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
-     are invisible to a person looking at the screen because a focus ring you
-     cannot see looks exactly like a focus ring you have not triggered. So
-     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
-     hue and chroma walked down in lightness to the first value that clears
-     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
-     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
-  --auth: oklch(1 0 0);
-  --auth-foreground: oklch(0.252 0.056 264);
-  --auth-muted: oklch(0.965 0.004 250);
-  --auth-muted-foreground: oklch(0.53 0.017 258);
-  --auth-border: oklch(0.914 0.008 255);
-  --auth-input: oklch(0.64 0.014 256);
-  --auth-accent: oklch(0.958 0.006 250);
-  --auth-accent-foreground: oklch(0.252 0.056 264);
-  --auth-primary: oklch(0.252 0.056 264);
-  --auth-primary-foreground: oklch(0.985 0 0);
-  --auth-field: oklch(0.962 0.005 252);
-  --auth-field-foreground: oklch(0.252 0.056 264);
-  --auth-field-muted-foreground: oklch(0.53 0.017 258);
-  --auth-destructive-text: oklch(0.505 0.213 27);
-  --auth-success-text: oklch(0.403 0.105 147);
-  --auth-warning-text: oklch(0.52 0.13 70);
-  --auth-info-text: oklch(0.5 0.13 245);
-  --auth-ring: oklch(0.648 0.167 70);
-  /* The page the card floats on. A PAIR rather than a family member, the way
-     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
-     17-name vocabulary has no word for "the second stop". Values are the old
-     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
-  --ground: oklch(0.977 0.003 248);
-  --ground-end: oklch(0.845 0.028 249);
-
-  /* Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5):
-     day fainter (so it recedes), month mid-strength, year strongest (darker on this light
-     ground, so it reads as the dominant boundary). Flag-off strokes still use --border alone
-     (`gridLine`). The three steps are spaced widely enough (not merely a hair off --border)
-     that day vs month is reliably distinguishable by lightness alone — accessibility-review
-     finding: the original day/month pair sat ~1.1:1 apart, which read as one shade under
-     colour-vision deficiency or on a low-quality display (WCAG 1.4.1). */
-  --canvas-grid-day: oklch(0.97 0 0);
-  --canvas-grid-month: oklch(0.78 0 0);
-  --canvas-grid-year: oklch(0.58 0 0);
-
-  /* Non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than --muted (the
-     wash it draws over), so a weekend/holiday differs by kind, not just a darker shade of grey. */
-  --canvas-nonworking-hatch: oklch(0.85 0 0);
-
-  /* Typography */
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  --font-mono: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
-}
-
-/* ------------------------------------------------------------------------- */
-/* Semantic tokens — DARK theme                                              */
-/* ------------------------------------------------------------------------- */
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-
-  --primary: oklch(0.65 0.17 255);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-
-  --destructive: oklch(0.52 0.2 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  /* LIGHTER here, and that is the same rule rather than an exception: the page is near-black,
-     so away-from-the-page is up. Darkening instead would read as consistent and take the fill to
-     2.96:1 against the page — the button would stop being distinguishable from what it sits on
-     (1.4.11) in the act of being hovered. 5.16:1 label, 3.67:1 against the page. */
-  --destructive-hover: oklch(0.55 0.2 22.216);
-  /* Lighter than the button surface so red text/borders stay legible on the
-     dark background/card (≥ 4.5:1 text, ≥ 3:1 border). */
-  --destructive-text: oklch(0.7 0.19 22);
-  --success: oklch(0.696 0.14 160);
-  --success-foreground: oklch(0.205 0 0);
-  --success-text: oklch(0.82 0.13 150);
-  --warning: oklch(0.82 0.16 82);
-  --warning-foreground: oklch(0.205 0 0);
-  /* Lighter amber so warning text stays legible on the dark background/card. */
-  --warning-text: oklch(0.85 0.14 82);
-  --info: oklch(0.7 0.13 240);
-  --info-foreground: oklch(0.205 0 0);
-  /* Lighter blue so info text stays legible on the dark background/card. */
-  --info-text: oklch(0.82 0.11 245);
-
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 38%);
-  --ring: oklch(0.65 0.17 255);
-
-  --chart-1: oklch(0.65 0.17 255);
-  --chart-2: oklch(0.696 0.14 185);
-  --chart-3: oklch(0.696 0.14 160);
-  --chart-4: oklch(0.82 0.16 82);
-  --chart-5: oklch(0.7 0.19 320);
-
-  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
-     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
-     `panel` the navigator rail; the page is the `:root` case.
-
-     These families are deliberately NOT mapped into `@theme inline` below, so
-     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
-     is the `[data-surface]` rule, which is what makes the boundary structural
-     rather than a convention someone has to remember.
-
-     Each family is COMPLETE. The bug this replaces was a three-token header stub
-     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
-     text in the chrome reached for the canvas grey, which was invisible the day
-     a theme made chrome and canvas diverge. A surface family is complete or it
-     is a trap. */
-
-  /* Dark: chrome and panel carry TODAY's values, so this theme is byte-identical. */
-
-  /* chrome — the top band */
-  --chrome: oklch(0.145 0 0);
-  --chrome-foreground: oklch(0.985 0 0);
-  --chrome-muted-foreground: oklch(0.708 0 0);
-  --chrome-muted: oklch(0.269 0 0);
-  --chrome-border: oklch(1 0 0 / 10%);
-  --chrome-input: oklch(1 0 0 / 38%);
-  --chrome-accent: oklch(0.269 0 0);
-  --chrome-accent-foreground: oklch(0.985 0 0);
-  --chrome-primary: oklch(0.65 0.17 255);
-  --chrome-primary-foreground: oklch(0.205 0 0);
-  --chrome-field: oklch(0.145 0 0);
-  --chrome-field-foreground: oklch(0.985 0 0);
-  --chrome-field-muted-foreground: oklch(0.708 0 0);
-  --chrome-destructive-text: oklch(0.7 0.19 22);
-  --chrome-success-text: oklch(0.82 0.13 150);
-  --chrome-warning-text: oklch(0.85 0.14 82);
-  --chrome-info-text: oklch(0.82 0.11 245);
-  --chrome-ring: oklch(0.65 0.17 255);
-
-  /* panel — the navigator rail */
-  --panel: oklch(0.205 0 0);
-  --panel-foreground: oklch(0.985 0 0);
-  --panel-muted-foreground: oklch(0.708 0 0);
-  --panel-muted: oklch(0.269 0 0);
-  --panel-border: oklch(1 0 0 / 10%);
-  --panel-input: oklch(1 0 0 / 38%);
-  --panel-accent: oklch(0.269 0 0);
-  --panel-accent-foreground: oklch(0.985 0 0);
-  --panel-primary: oklch(0.65 0.17 255);
-  --panel-primary-foreground: oklch(0.205 0 0);
-  --panel-field: oklch(0.205 0 0);
-  --panel-field-foreground: oklch(0.985 0 0);
-  --panel-field-muted-foreground: oklch(0.708 0 0);
-  --panel-destructive-text: oklch(0.7 0.19 22);
-  --panel-success-text: oklch(0.82 0.13 150);
-  --panel-warning-text: oklch(0.85 0.14 82);
-  --panel-info-text: oklch(0.82 0.11 245);
-  --panel-ring: oklch(0.65 0.17 255);
-
-  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
-     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
-
-     This family does not follow the theme. A signed-out visitor cannot choose one
-     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
-     colleague signed in on this machine last month — so the one screen where the
-     product has to be recognisable would otherwise render in one of three
-     identities, selected by something the visitor did not do and cannot undo.
-
-     It is repeated per theme rather than declared once on `:root` because the
-     repetition is what makes the *values* visible where a reader looks for them,
-     and because `token-contrast.test.ts` resolves each theme independently. Note
-     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
-     `.corporate` over `:root` by inheritance, so a member deleted from one theme
-     block is NOT caught by the completeness gate — see the `brand` case in
-     `token-architecture.test.ts`, which pins the literal declarations per block
-     precisely because the inherited read cannot.
-
-     The values are Corporate's navy chrome — already measured against this fill —
-     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
-     across all three themes rather than trusting the provenance.
-
-     Do not "fix" this to follow the theme. That would be undoing the decision. */
-  --brand: oklch(0.252 0.056 264);
-  --brand-foreground: oklch(0.985 0 0);
-  --brand-muted-foreground: oklch(0.78 0.02 264);
-  --brand-muted: oklch(0.32 0.05 264);
-  --brand-border: oklch(1 0 0 / 14%);
-  --brand-input: oklch(0.62 0.02 264);
-  --brand-accent: oklch(0.338 0.081 262);
-  --brand-accent-foreground: oklch(0.985 0 0);
-  --brand-primary: oklch(0.786 0.167 70);
-  --brand-primary-foreground: oklch(0.252 0.056 264);
-  --brand-field: oklch(1 0 0);
-  --brand-field-foreground: oklch(0.321 0 0);
-  --brand-field-muted-foreground: oklch(0.51 0 0);
-  --brand-destructive-text: oklch(0.74 0.15 25);
-  --brand-success-text: oklch(0.8 0.12 150);
-  --brand-warning-text: oklch(0.8 0.14 70);
-  --brand-info-text: oklch(0.8 0.09 245);
-  --brand-ring: oklch(0.786 0.167 70);
-
-  --field: oklch(0.145 0 0);
-  --field-foreground: oklch(0.985 0 0);
-  --field-muted-foreground: oklch(0.708 0 0);
-  --canvas: oklch(0.205 0 0);
-  --canvas-band: oklch(0.24 0 0);
-
-  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
-     Theme-INVARIANT, like `brand` and for the same reason one step further out.
-     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
-     theme — the boot script picked Dark from their operating system, or
-     Corporate because a colleague signed in on this machine last month. That
-     argument was only ever applied to half the screen: the panel was pinned and
-     the card beside it still followed the theme, so a Dark-mode visitor met a
-     fixed navy panel joined to a dark card. One identity, chosen by nobody.
-     These values are the old app's, sampled from `static/css/main.css`
-     (#14213D navy, #fca311 amber) so the match is exact rather than close —
-     with TWO exceptions, and the exceptions are the point of having a gate.
-     The old app's amber focus ring is 2.02:1 on white and its field outline
-     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
-     are invisible to a person looking at the screen because a focus ring you
-     cannot see looks exactly like a focus ring you have not triggered. So
-     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
-     hue and chroma walked down in lightness to the first value that clears
-     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
-     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
-  --auth: oklch(1 0 0);
-  --auth-foreground: oklch(0.252 0.056 264);
-  --auth-muted: oklch(0.965 0.004 250);
-  --auth-muted-foreground: oklch(0.53 0.017 258);
-  --auth-border: oklch(0.914 0.008 255);
-  --auth-input: oklch(0.64 0.014 256);
-  --auth-accent: oklch(0.958 0.006 250);
-  --auth-accent-foreground: oklch(0.252 0.056 264);
-  --auth-primary: oklch(0.252 0.056 264);
-  --auth-primary-foreground: oklch(0.985 0 0);
-  --auth-field: oklch(0.962 0.005 252);
-  --auth-field-foreground: oklch(0.252 0.056 264);
-  --auth-field-muted-foreground: oklch(0.53 0.017 258);
-  --auth-destructive-text: oklch(0.505 0.213 27);
-  --auth-success-text: oklch(0.403 0.105 147);
-  --auth-warning-text: oklch(0.52 0.13 70);
-  --auth-info-text: oklch(0.5 0.13 245);
-  --auth-ring: oklch(0.648 0.167 70);
-  /* The page the card floats on. A PAIR rather than a family member, the way
-     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
-     17-name vocabulary has no word for "the second stop". Values are the old
-     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
-  --ground: oklch(0.977 0.003 248);
-  --ground-end: oklch(0.845 0.028 249);
-
-  /* Time-axis gridline tiers — day the faintest alpha step, month mid-strength, year the
-     strongest. Same white-at-alpha family as --border so all three stay legible against the
-     near-black canvas, spaced widely enough that day vs month is reliably distinguishable
-     (WCAG 1.4.1 — the original 6%/10% pair read as one shade). */
-  --canvas-grid-day: oklch(1 0 0 / 4%);
-  --canvas-grid-month: oklch(1 0 0 / 17%);
-  --canvas-grid-year: oklch(1 0 0 / 30%);
-
-  /* Non-working hatch stripe (F7a) — a lighter alpha-white step over the muted wash, the same
-     family as the grid tiers above, so it reads against the near-black canvas without a new hue. */
-  --canvas-nonworking-hatch: oklch(1 0 0 / 12%);
-}
-
-/* ------------------------------------------------------------------------- */
-/* Semantic tokens — CORPORATE theme (navy + amber)                          */
+/* The theme (ADR-0097)                                                       */
 /*                                                                            */
-/* A brand skin, not a third light/dark mode: navy chrome around a light      */
-/* working canvas, with amber as the primary action colour. It is a sibling   */
-/* of light/dark in the picker and resolves as a LIGHT scheme (native form    */
-/* controls and scrollbars stay light).                                        */
+/* SchedulePoint has ONE theme, and `:root` IS the theme block. That is not   */
+/* a tidy-up of the old three-theme arrangement — it is what makes a flash of  */
+/* the wrong theme STRUCTURALLY IMPOSSIBLE rather than merely avoided. Every  */
+/* stored preference — `dark`, `light`, `system`, garbage, or a localStorage  */
+/* that throws — resolves to "stamp nothing", so `public/theme-boot.js` and   */
+/* `hooks/use-theme.tsx` cannot disagree about what to paint, because neither */
+/* of them paints anything.                                                    */
 /*                                                                            */
-/* Source palette: navy #14213D, amber #fca311, lighter navy #1f3661,         */
-/* off-white #f8f9fa, body #333. Two constraints shaped how they're mapped:   */
+/* The values are the former `.corporate` skin with its two flag-keyed value  */
+/* layers folded in. The product owner asked for Corporate to become "the     */
+/* main theme that the app is designed to", and those layers were unreachable */
+/* in any published image in any case (ADR-0088: a `VITE_` constant is        */
+/* inlined at build time, so no operator could ever have turned one off).     */
+/*                                                                            */
+/* Navy chrome around a light working canvas, amber as the primary action     */
+/* colour. Two constraints shaped that mapping and both still hold:           */
 /*                                                                            */
 /*  1. Amber is a FILL, never ink or a line on a light surface. #fca311 on    */
 /*     #f8f9fa is 1.9:1 — it fails as text (4.5:1) and as a focus indicator   */
 /*     (3:1). It carries navy ink at 7.9:1, which is where it shines. So      */
-/*     amber is `--primary` (buttons, active states, activity bars) and the   */
+/*     amber is `--primary` (buttons, active states, activity bars), and the  */
 /*     focus ring on light surfaces is navy; amber rings appear only on the   */
-/*     navy chrome, where they reach 7.9:1.                                    */
-/*  2. `--warning` had to move. It is the canvas's NEAR-CRITICAL fill, and in */
-/*     light/dark it is essentially this same amber — so with amber promoted  */
-/*     to primary, an ordinary bar and a near-critical bar would have been    */
-/*     the same colour. Near-critical becomes a deeper bronze here, keeping   */
-/*     three readable states (normal / near-critical / critical) on top of    */
-/*     the dashed-outline shape cue that carries WCAG 1.4.1 regardless.       */
+/*     navy chrome, where they reach 7.9:1.                                   */
+/*  2. `--warning` is the canvas's NEAR-CRITICAL fill. With amber promoted to */
+/*     primary, an ordinary bar and a near-critical bar would otherwise be    */
+/*     the same colour, so near-critical is a deeper bronze — three readable  */
+/*     states (normal / near-critical / critical) on top of the dashed-       */
+/*     outline shape cue that carries WCAG 1.4.1 regardless.                  */
+/*                                                                            */
+/* ADDING A DARK THEME BACK is a block of values and one entry in             */
+/* `THEME_SELECTORS`; the mechanism is kept alive for exactly that. What it   */
+/* is NOT is cheap: a dark diagram whose colours carry meaning needs its plot */
+/* separations RE-DERIVED, not re-tinted, which is design judgement rather    */
+/* than a find-and-replace.                                                    */
 /* ------------------------------------------------------------------------- */
-.corporate {
+:root {
   /* Surfaces — the working canvas stays light and quiet. */
   --background: oklch(0.982 0.002 248);
   --foreground: oklch(0.321 0 0);
@@ -620,24 +164,24 @@
   --chrome-ring: oklch(0.786 0.167 70);
 
   /* panel — the navigator rail */
-  --panel: oklch(0.252 0.056 264);
-  --panel-foreground: oklch(0.985 0 0);
-  --panel-muted-foreground: oklch(0.78 0.02 264);
-  --panel-muted: oklch(0.32 0.05 264);
-  --panel-border: oklch(1 0 0 / 14%);
+  --panel: oklch(0.955 0.004 248);
+  --panel-foreground: oklch(0.321 0 0);
+  --panel-muted-foreground: oklch(0.51 0 0);
+  --panel-muted: oklch(0.92 0.004 248);
+  --panel-border: oklch(0.895 0.005 248);
   --panel-input: oklch(0.62 0.02 264);
-  --panel-accent: oklch(0.338 0.081 262);
-  --panel-accent-foreground: oklch(0.985 0 0);
-  --panel-primary: oklch(0.786 0.167 70);
-  --panel-primary-foreground: oklch(0.252 0.056 264);
+  --panel-accent: oklch(0.955 0.04 78);
+  --panel-accent-foreground: oklch(0.252 0.056 264);
+  --panel-primary: oklch(0.252 0.056 264);
+  --panel-primary-foreground: oklch(0.985 0 0);
   --panel-field: oklch(1 0 0);
   --panel-field-foreground: oklch(0.321 0 0);
   --panel-field-muted-foreground: oklch(0.51 0 0);
-  --panel-destructive-text: oklch(0.74 0.15 25);
-  --panel-success-text: oklch(0.8 0.12 150);
-  --panel-warning-text: oklch(0.8 0.14 70);
-  --panel-info-text: oklch(0.8 0.09 245);
-  --panel-ring: oklch(0.786 0.167 70);
+  --panel-destructive-text: oklch(0.505 0.19 27.5);
+  --panel-success-text: oklch(0.45 0.11 150);
+  --panel-warning-text: oklch(0.47 0.11 55);
+  --panel-info-text: oklch(0.3 0.075 262);
+  --panel-ring: oklch(0.35 0.09 262);
 
   /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
      THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
@@ -686,8 +230,8 @@
   --field: oklch(1 0 0);
   --field-foreground: oklch(0.321 0 0);
   --field-muted-foreground: oklch(0.51 0 0);
-  --canvas: oklch(1 0 0);
-  --canvas-band: oklch(0.972 0.004 90);
+  --canvas: oklch(0.988 0.006 90);
+  --canvas-band: oklch(0.966 0.011 90);
 
   /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
      Theme-INVARIANT, like `brand` and for the same reason one step further out.
@@ -742,6 +286,13 @@
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */
   --canvas-nonworking-hatch: oklch(0.83 0.004 90);
+
+  --radius: 0.625rem;
+  /* Typography */
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -842,192 +393,6 @@
   --warning-text: var(--auth-warning-text);
   --info-text: var(--auth-info-text);
   --ring: var(--auth-ring);
-}
-
-/* ------------------------------------------------------------------------- */
-/* Flag-keyed value overrides (ADR-0055 §6)                                   */
-/*                                                                            */
-/* Later milestones change token VALUES, not just structure — the light        */
-/* Corporate rail (S3) and the cream canvas ground (S4). Those values live      */
-/* here, keyed on an attribute the flag stamps on <html>, so "flag-off is       */
-/* byte-for-byte" stays true for colour as well as markup and a rollback is a   */
-/* single attribute rather than a revert.                                       */
-/*                                                                            */
-/* Both blocks are deliberately empty until their milestone fills them, and     */
-/* BOTH ARE DELETED when their flag is retired — the values fold back into the  */
-/* theme blocks above. If you find these still here with no flag, that is the   */
-/* cleanup that was missed.                                                     */
-/* ------------------------------------------------------------------------- */
-/* S5: Light's and Dark's own designed chrome — the last theme values to land, and
-   deliberately the last, because flipping structure and values in one change makes every
-   flag-off parity suite meaningless on the day it is most needed (ADR-0055 §8.1).
-
-   CASCADE ORDER MATTERS HERE. `[data-designed-chrome]` and `.dark` have the SAME specificity
-   and both match <html>, so this block — being later in the file — wins over the `.dark` theme
-   block. That is why it holds LIGHT's values and why the two theme-scoped blocks below must
-   RESTATE every token it declares, including ones they do not change. A token declared here and
-   forgotten there silently paints Light's grey on a dark theme.
-   `token-architecture.test.ts` pins exactly that, so the trap cannot be re-set by hand. */
-[data-designed-chrome] {
-  /* A band that is a shade off the page, not the page with a line under it. White-on-white
-     asks the 1px border to do all the work of saying "this is chrome, not content". */
-  --chrome: oklch(0.975 0 0);
-  --chrome-foreground: oklch(0.145 0 0);
-  --chrome-muted: oklch(0.955 0 0);
-  --chrome-muted-foreground: oklch(0.535 0 0);
-  --chrome-border: oklch(0.9 0 0);
-  --chrome-input: oklch(0.62 0 0);
-  --chrome-accent: oklch(0.925 0 0);
-  --chrome-accent-foreground: oklch(0.205 0 0);
-  --chrome-primary: oklch(0.5 0.18 255);
-  --chrome-primary-foreground: oklch(0.985 0 0);
-  /* White stays the field even though the band no longer is: a field reads as a place to type
-     because it is LIGHTER than what surrounds it, which only works once the band is not white. */
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.145 0 0);
-  --chrome-field-muted-foreground: oklch(0.535 0 0);
-  --chrome-destructive-text: oklch(0.505 0.21 27.5);
-  --chrome-success-text: oklch(0.48 0.13 150);
-  --chrome-warning-text: oklch(0.48 0.13 80);
-  --chrome-info-text: oklch(0.45 0.14 250);
-  --chrome-ring: oklch(0.55 0.18 255);
-
-  /* The rail sits between the band and the page — lighter than the chrome, darker than the
-     content — so the three surfaces read as a hierarchy rather than as two arbitrary greys. */
-  --panel: oklch(0.98 0 0);
-  --panel-foreground: oklch(0.145 0 0);
-  --panel-muted: oklch(0.96 0 0);
-  --panel-muted-foreground: oklch(0.535 0 0);
-  --panel-border: oklch(0.9 0 0);
-  --panel-input: oklch(0.62 0 0);
-  --panel-accent: oklch(0.93 0 0);
-  --panel-accent-foreground: oklch(0.205 0 0);
-  --panel-primary: oklch(0.5 0.18 255);
-  --panel-primary-foreground: oklch(0.985 0 0);
-  --panel-field: oklch(1 0 0);
-  --panel-field-foreground: oklch(0.145 0 0);
-  --panel-field-muted-foreground: oklch(0.535 0 0);
-  --panel-destructive-text: oklch(0.505 0.21 27.5);
-  --panel-success-text: oklch(0.48 0.13 150);
-  --panel-warning-text: oklch(0.48 0.13 80);
-  --panel-info-text: oklch(0.45 0.14 250);
-  --panel-ring: oklch(0.55 0.18 255);
-}
-
-/* S5: Dark's chrome goes BELOW the page rather than above it — a near-black band with the
-   content lifted off it. Dark themes have no "lighter than white" to reach for, so depth has
-   to run the other way.
-
-   `--chrome-field` is a RAISED DARK, not white (ADR-0055 §8.2). A white field on a near-black
-   band is a glare source at night, which is the condition the theme exists for; if a literal
-   white field is ever wanted here it is a deliberate Dark-theme regression and has to be
-   recorded as one. */
-[data-designed-chrome].dark {
-  --chrome: oklch(0.115 0 0);
-  --chrome-foreground: oklch(0.985 0 0);
-  --chrome-muted: oklch(0.235 0 0);
-  --chrome-muted-foreground: oklch(0.708 0 0);
-  --chrome-border: oklch(1 0 0 / 12%);
-  --chrome-input: oklch(1 0 0 / 38%);
-  --chrome-accent: oklch(0.25 0 0);
-  --chrome-accent-foreground: oklch(0.985 0 0);
-  --chrome-primary: oklch(0.65 0.17 255);
-  --chrome-primary-foreground: oklch(0.205 0 0);
-  --chrome-field: oklch(0.19 0 0);
-  --chrome-field-foreground: oklch(0.985 0 0);
-  --chrome-field-muted-foreground: oklch(0.708 0 0);
-  --chrome-destructive-text: oklch(0.7 0.19 22);
-  --chrome-success-text: oklch(0.82 0.13 150);
-  --chrome-warning-text: oklch(0.85 0.14 82);
-  --chrome-info-text: oklch(0.82 0.11 245);
-  --chrome-ring: oklch(0.65 0.17 255);
-
-  --panel: oklch(0.175 0 0);
-  --panel-foreground: oklch(0.985 0 0);
-  --panel-muted: oklch(0.26 0 0);
-  --panel-muted-foreground: oklch(0.708 0 0);
-  --panel-border: oklch(1 0 0 / 12%);
-  --panel-input: oklch(1 0 0 / 38%);
-  --panel-accent: oklch(0.27 0 0);
-  --panel-accent-foreground: oklch(0.985 0 0);
-  --panel-primary: oklch(0.65 0.17 255);
-  --panel-primary-foreground: oklch(0.205 0 0);
-  --panel-field: oklch(0.215 0 0);
-  --panel-field-foreground: oklch(0.985 0 0);
-  --panel-field-muted-foreground: oklch(0.708 0 0);
-  --panel-destructive-text: oklch(0.7 0.19 22);
-  --panel-success-text: oklch(0.82 0.13 150);
-  --panel-warning-text: oklch(0.85 0.14 82);
-  --panel-info-text: oklch(0.82 0.11 245);
-  --panel-ring: oklch(0.65 0.17 255);
-}
-
-/* S3: Corporate's Project Explorer becomes a LIGHT working surface. One dark band across
-   the top and two light surfaces below it reads as a designed application; three competing
-   dark/light regions does not. Scoped to `.corporate` because Light and Dark already have a
-   light rail — their chrome values land at S5.
-
-   The rail sits at ~1.09:1 against the page. That is deliberately a *preference*, not a WCAG
-   rule (1.4.11 exempts a decorative surface boundary), which is why the "adjacent surfaces"
-   block of `token-contrast.test.ts` RECOMPUTES and prints this number every run rather than
-   asserting a threshold on it — and why the rail keeps a real `border-r` rather than relying
-   on the fill difference alone. (It was quoted here as a hand-computed figure with nothing
-   recomputing it, which is the same trap one level up: a later edit to `--panel` or
-   `--background` would have drifted it silently and this comment would still say 1.09.) */
-[data-designed-chrome].corporate {
-  /* RESTATED, not changed. The global `[data-designed-chrome]` layer above holds Light's grey
-     chrome at equal specificity and earlier in the file, so without these lines Corporate's
-     navy band would silently become that grey. Values are byte-identical to the `.corporate`
-     theme block; `token-architecture.test.ts` fails if one is dropped. */
-  --chrome: oklch(0.252 0.056 264);
-  --chrome-foreground: oklch(0.985 0 0);
-  --chrome-muted: oklch(0.32 0.05 264);
-  --chrome-muted-foreground: oklch(0.78 0.02 264);
-  --chrome-border: oklch(1 0 0 / 14%);
-  --chrome-input: oklch(0.62 0.02 264);
-  --chrome-accent: oklch(0.338 0.081 262);
-  --chrome-accent-foreground: oklch(0.985 0 0);
-  --chrome-primary: oklch(0.786 0.167 70);
-  --chrome-primary-foreground: oklch(0.252 0.056 264);
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.321 0 0);
-  --chrome-field-muted-foreground: oklch(0.51 0 0);
-  --chrome-destructive-text: oklch(0.74 0.15 25);
-  --chrome-success-text: oklch(0.8 0.12 150);
-  --chrome-warning-text: oklch(0.8 0.14 70);
-  --chrome-info-text: oklch(0.8 0.09 245);
-  --chrome-ring: oklch(0.786 0.167 70);
-
-  --panel: oklch(0.955 0.004 248);
-  --panel-foreground: oklch(0.321 0 0);
-  --panel-muted-foreground: oklch(0.51 0 0);
-  --panel-muted: oklch(0.92 0.004 248);
-  --panel-border: oklch(0.895 0.005 248);
-  --panel-input: oklch(0.62 0.02 264);
-  /* The pale amber wash the page already uses for a selected row — the brand accent where
-     ordinary dark text still sits on top of it at full contrast. */
-  --panel-accent: oklch(0.955 0.04 78);
-  --panel-accent-foreground: oklch(0.252 0.056 264);
-  /* Navy, matching the page: amber is 1.9:1 on a light fill and cannot identify a control. */
-  --panel-primary: oklch(0.252 0.056 264);
-  --panel-primary-foreground: oklch(0.985 0 0);
-  --panel-field: oklch(1 0 0);
-  --panel-field-foreground: oklch(0.321 0 0);
-  --panel-field-muted-foreground: oklch(0.51 0 0);
-  --panel-destructive-text: oklch(0.505 0.19 27.5);
-  --panel-success-text: oklch(0.45 0.11 150);
-  --panel-warning-text: oklch(0.47 0.11 55);
-  --panel-info-text: oklch(0.3 0.075 262);
-  --panel-ring: oklch(0.35 0.09 262);
-}
-
-/* S4: Corporate's diagram gets a warm ground and a band a shade deeper than it. Warm rather
-   than the page's cool off-white so the drawing surface reads as a distinct place to work,
-   and OPAQUE rather than an alpha wash — an alpha band would tint whatever it overlaps and
-   would have to be re-checked against every layer above it. */
-[data-canvas-visual-language].corporate {
-  --canvas: oklch(0.988 0.006 90);
-  --canvas-band: oklch(0.966 0.011 90);
 }
 
 /* ------------------------------------------------------------------------- */

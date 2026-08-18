@@ -104,8 +104,12 @@ describe('flag OFF — the prior account menu, byte for byte', () => {
   it('leaves the rest of the menu exactly as it was', () => {
     openAccountMenu();
     expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitemradio', { name: /Light/ })).toBeInTheDocument();
     expect(screen.getByTestId('user-email')).toHaveTextContent('ada@example.com');
+    // This case used to assert a `Light` theme radio here as well, and the assertion went with
+    // the picker in ADR-0097. What this suite exists to prove is that turning
+    // `VITE_ACCOUNT_SETTINGS` off removes ONE entry and disturbs nothing else — so the neighbours
+    // it checks have to be things that still exist, or it stops proving that and starts failing
+    // for an unrelated reason.
   });
 });
 

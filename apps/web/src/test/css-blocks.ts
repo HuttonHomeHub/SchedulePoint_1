@@ -54,11 +54,26 @@ export function declarations(body: string): Map<string, string> {
   return out;
 }
 
-/** The three theme blocks, in the order a reader meets them. */
-export const THEME_SELECTORS = [':root', '.dark', '.corporate'] as const;
+/**
+ * Every theme block in the product. **One** (ADR-0097) — and a LIST rather than a constant,
+ * because that is what keeps the mechanism honest: adding a dark theme back is one entry
+ * here plus a block of values, and every gate that iterates this list picks it up with no
+ * further change.
+ *
+ * A one-element list is deliberately not collapsed to `':root'`. Doing so would let a
+ * spacing scale or a type ramp be declared at `:root` "because that is where tokens live",
+ * which is exactly how the single-theme promise dies quietly — the `token-architecture`
+ * suite's "no design token outside a theme or scope-rebind block" assertion is written
+ * against this list.
+ */
+export const THEME_SELECTORS = [':root'] as const;
 export type ThemeSelector = (typeof THEME_SELECTORS)[number];
 
-/** Resolved declarations per theme. `.dark`/`.corporate` inherit anything they don't restate. */
+/**
+ * Resolved declarations for a theme. With one theme this is `:root`'s own block; the merge
+ * a second theme would need is written out rather than assumed, so the shape of "add dark
+ * back" is visible here rather than rediscovered.
+ */
 export function themeTokens(selector: ThemeSelector): Map<string, string> {
   const root = declarations(blockBody(':root'));
   if (selector === ':root') return root;
