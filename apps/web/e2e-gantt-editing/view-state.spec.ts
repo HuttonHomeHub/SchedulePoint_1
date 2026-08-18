@@ -207,3 +207,104 @@ test('Insert activity below opens the create dialog', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('dialog').getByLabel(/^Name/)).toBeVisible();
 });
+
+test('the row menu opens from the KEYBOARD, and Indent driven that way reaches the API', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const orgSlug = await ganttPlan(page);
+
+  /**
+   * **WCAG 2.1.1, and the only place it can honestly be checked.**
+   *
+   * Indent, Outdent and Insert live ONLY in the row menu — the docked bar cannot honour them — and
+   * that menu's `⋯` trigger is `tabIndex={-1}`, correctly, because the grid is one roving tab stop.
+   * The comment paying for that said keyboard users reach the same actions through the row's
+   * selection, which was **true when M5-T3 shipped** and was made false by T4/T5. The milestone's
+   * headline capability was therefore mouse-only, behind a justification that had been accurate.
+   *
+   * jsdom can prove the handler is bound (`GanttPanel.row-menu-keyboard.test.tsx` does). Only a
+   * browser proves the key reaches it through the real focus model — that the row takes focus at
+   * all, that the keydown is not swallowed by the cell, and that the menu it opens is the focused
+   * row's rather than some other row's.
+   */
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+  const summaryId = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Phase A', type: 'WBS_SUMMARY', laneIndex: 0 }),
+      });
+      if (!response.ok) throw new Error(`create summary: ${response.status}`);
+      return ((await response.json()) as { data: { id: string } }).data.id;
+    },
+    { org: orgSlug, id: planId },
+  );
+  await page.reload();
+  await ensurePen(page); // the reload drops the lease — see the case above
+  await expect(ganttGrid(page)).toBeVisible();
+
+  await page.getByRole('columnheader', { name: 'Activity' }).getByRole('button').click();
+  await expect(page.getByRole('columnheader', { name: 'Activity' })).toHaveAttribute(
+    'aria-sort',
+    'ascending',
+  );
+
+  // Reach the row WITHOUT touching the trigger: click the row to focus it, then drive keys only.
+  // A click on the `⋯` here would test the mouse path this case exists to be independent of.
+  const row = ganttRow(page, 'Seeded 0');
+  await row.click();
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+
+  await page.keyboard.press('Shift+F10');
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+
+  // The three gestures that exist nowhere else. Their presence here IS the accessibility claim.
+  const indent = menu.getByRole('menuitem', { name: 'Indent' });
+  await expect(indent).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Outdent' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Insert activity below' })).toBeVisible();
+
+  // Drive the menu itself by keyboard too — an APG menu takes arrow keys and Enter, and a menu that
+  // opens but cannot be walked is the same dead end one step further in.
+  await expect(indent).toBeEnabled();
+  await indent.press('Enter');
+  // The menu closes on activation, which is also the proof Enter REACHED the button: the row's own
+  // handler used to `preventDefault()` this keystroke out of existence (React events follow the
+  // React tree, and the menu is a portal), so before the fix this stayed open indefinitely.
+  await expect(menu).toBeHidden();
+
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          async ({ org, id }: { org: string; id: string }) => {
+            const response = await fetch(
+              `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+              { credentials: 'include' },
+            );
+            const body = (await response.json()) as {
+              data: { name: string; parentId: string | null }[];
+            };
+            return body.data.find((a) => a.name === 'Seeded 0')?.parentId ?? null;
+          },
+          { org: orgSlug, id: planId },
+        ),
+      { timeout: 20_000 },
+    )
+    .toBe(summaryId);
+
+  // The write says so. Without this the planner presses Indent, the row moves somewhere off screen
+  // in a virtualized grid, and nothing tells them it worked — and on a 409 nothing tells them it
+  // did not, which is the failure this announcement was added for.
+  // The app's live region is `aria-live="polite"` with a testid — NOT `role="status"`, which in this
+  // view belongs to the two cap banners. Asserted here rather than trusted: the first version of
+  // this line looked for a status role and could never have matched, which would have made the
+  // announcement look covered while nothing checked it.
+  await expect
+    .poll(async () => page.getByTestId('announcer').textContent(), { timeout: 20_000 })
+    .toContain('Seeded 0');
+});

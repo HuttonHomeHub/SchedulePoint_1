@@ -104,6 +104,18 @@ import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
 import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import { cn } from '@/lib/utils';
 
+/**
+ * The `View ▾` panel's checkbox/radio row.
+ *
+ * `min-h-6 py-1` is the WCAG 2.2 SC 2.5.8 ≥24px pointer target, which all six of these rows were
+ * missing — they were `flex items-center gap-2 text-sm`, hand-rolled six times, each a copy of the
+ * previous one. `CheckboxField` exists precisely to centralise this and states the floor as its own
+ * job, but it forwards a ref for RHF `register()` and these are controlled toggles inside a menu
+ * panel, so the migration is a larger change than the defect warrants; the remainder is
+ * `docs/TECH_DEBT.md` #138(b). One constant is what stops the seventh copy being written without it.
+ */
+const TOGGLE_ROW = 'flex min-h-6 items-center gap-2 py-1 text-sm';
+
 const ZOOM_LABELS: Record<string, string> = {
   day: 'Day',
   week: 'Week',
@@ -1249,7 +1261,7 @@ function FilterMenuControl({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Show only</legend>
         {FILTER_ATTRS.map(({ attr, label }) => (
-          <label key={attr} className="flex items-center gap-2 text-sm">
+          <label key={attr} className={TOGGLE_ROW}>
             <input
               type="checkbox"
               checked={ctx.filterAttrs.has(attr)}
@@ -1616,7 +1628,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
             {id === 'zoom' ? (
               <div role="radiogroup" aria-label="Zoom level" className="flex flex-col gap-2">
                 {ZOOM_LEVELS.map((level) => (
-                  <label key={level} className="flex items-center gap-2 text-sm">
+                  <label key={level} className={TOGGLE_ROW}>
                     <input
                       type="radio"
                       name="tsld-zoom-preset"
@@ -1638,7 +1650,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                   if (columns === undefined) return null;
                   const shown = !columns.hidden.has(key);
                   return (
-                    <label key={key} className="flex items-center gap-2 text-sm">
+                    <label key={key} className={TOGGLE_ROW}>
                       <input
                         type="checkbox"
                         checked={shown}
@@ -1663,7 +1675,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                 className="border-border mb-1 flex flex-col gap-2 border-b pb-2"
               >
                 {COLOUR_MODE_ORDER.map((mode) => (
-                  <label key={mode} className="flex items-center gap-2 text-sm">
+                  <label key={mode} className={TOGGLE_ROW}>
                     <input
                       type="radio"
                       name="tsld-colour-mode"
@@ -1677,7 +1689,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
               </div>
             ) : null}
             {keys.map((key) => (
-              <label key={key} className="flex items-center gap-2 text-sm">
+              <label key={key} className={TOGGLE_ROW}>
                 <input
                   type="checkbox"
                   checked={ctx.viewToggles[key]}
@@ -1704,12 +1716,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
               const describedBy = [reasonId, noteId].filter(Boolean).join(' ') || undefined;
               return (
                 <div key={lens.id} className="flex flex-col gap-0.5">
-                  <label
-                    className={cn(
-                      'flex items-center gap-2 text-sm',
-                      shut && 'text-muted-foreground',
-                    )}
-                  >
+                  <label className={cn(TOGGLE_ROW, shut && 'text-muted-foreground')}>
                     <input
                       type="checkbox"
                       data-view-lens={lens.id}

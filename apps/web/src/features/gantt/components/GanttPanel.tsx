@@ -1119,6 +1119,7 @@ function GanttBucketRowView({
       onFocus={onFocusRow}
       onClick={() => onToggle(row.id, row.expanded)}
       onKeyDown={(event) => {
+        if (!rowOwnsKey(event)) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onToggle(row.id, row.expanded);
@@ -1236,6 +1237,30 @@ interface GanttRowViewProps {
   onToggle: (id: string, collapse: boolean) => void;
   /** True when a float path is selected and this row is not on it (audit F4). */
   offFloatPath?: boolean;
+}
+
+/**
+ * Should this row's own Enter/Space activation fire for this event?
+ *
+ * **No, when the keystroke came from a control inside the row** — and the case that forced this is
+ * one React makes easy to miss: `GanttRowMenu` portals its menu to `document.body`, so in the DOM
+ * it is nowhere near the row, but **React events follow the React tree**, so an item's `Enter`
+ * propagates straight into this handler. The handler called `preventDefault()` unconditionally,
+ * which suppressed the `<button>`'s native activation — so every menu item was dead to `Enter`, for
+ * every keyboard user, however they had opened the menu. The `⋯` trigger itself was dead the same
+ * way.
+ *
+ * Found by `e2e-gantt-editing`'s keyboard case on its first run: the menu opened and stayed open.
+ * No unit test could see it — jsdom renders the portal in the same tree and the assertion under
+ * test was "the menu opens" — and it is the ADR-0055 portal lesson (React events follow the React
+ * tree, native listeners follow the DOM) arriving through a door nobody had checked.
+ */
+function rowOwnsKey(event: React.KeyboardEvent<HTMLElement>): boolean {
+  const target = event.target as HTMLElement | null;
+  if (target === null || target === event.currentTarget) return true;
+  // Anything that handles its own activation keeps it. Deliberately a capability test rather than
+  // "is this the menu?": the next control put inside a row would hit the identical wall.
+  return target.closest('button,a,input,textarea,select,[role="menu"],[role="dialog"]') === null;
 }
 
 function GanttRowView({
@@ -1386,6 +1411,7 @@ function GanttRowView({
       // Activation lives on the row rather than the grid's key handler: the row knows which
       // activity it is, and a click-only row would be unreachable by keyboard.
       onKeyDown={(event) => {
+        if (!rowOwnsKey(event)) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onSelect?.(activity);

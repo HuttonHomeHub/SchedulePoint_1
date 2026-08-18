@@ -117,7 +117,7 @@ export function DependencyTable({
         // Shift+←/→ nudges THIS link's lag ±1 day — the keyboard equivalent of the canvas
         // lag-anchor drag (WCAG 2.1.1). The canvas's parallel listbox lists *activities*, so this
         // Logic panel is the app's dependencies keyboard surface and the nudge lands here (it is
-        // therefore not listed in the canvas-scoped TsldShortcutsHelp; the hint above the tables
+        // therefore not listed in the canvas-scoped PlanShortcutsHelp; the hint above the tables
         // advertises it). Wired only when the host passes `onNudgeLag` (the direct-manipulation
         // flag + write role) — absent, the row is byte-for-byte today's.
         <div

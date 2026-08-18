@@ -210,9 +210,15 @@ export function GanttRowMenu({
               if (action === undefined) return null;
               // The pen first, then the gesture's own reason — a planner without the pen is told
               // that, not "there is no summary above this row", which would be true and useless.
-              const refusal = !structure.canEditSchedule
-                ? (structure.penRefusal ?? 'You are not editing this plan.')
-                : action.refusal;
+              //
+              // **No fallback sentence.** This read `?? 'You are not editing this plan.'`, which is
+              // currently unreachable — `scheduleRefusal` is always defined when `canEditSchedule`
+              // is false — but hard-codes the PEN framing, so the first host to wire `rowStructure`
+              // without going through it would tell a Viewer to start editing. That is the invented
+              // sentence ADR-0060 M6 records shipping, and a plausible-but-false reason is worse
+              // than an empty one: a reader cannot tell it is wrong. An absent reason renders an
+              // unexplained shaded item, which is visibly incomplete and gets fixed.
+              const refusal = !structure.canEditSchedule ? structure.penRefusal : action.refusal;
               return (
                 <MenuItem
                   key={id}

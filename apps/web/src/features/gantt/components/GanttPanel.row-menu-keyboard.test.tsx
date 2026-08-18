@@ -108,6 +108,38 @@ describe('the Gantt row menu, from the keyboard', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 
+  it('lets Enter reach a menu item instead of hijacking it for row selection', () => {
+    // **React events follow the React TREE, not the DOM tree.** The menu portals to `document.body`,
+    // so it is nowhere near the row in the DOM — and an item's Enter still propagates into the
+    // row's own `onKeyDown`, which called `preventDefault()` unconditionally and suppressed the
+    // `<button>`'s native activation. Every item was dead to Enter for every keyboard user, however
+    // they had opened the menu; the `⋯` trigger was dead the same way.
+    //
+    // Found by `e2e-gantt-editing`'s keyboard case on its first run — the menu opened and stayed
+    // open. Asserted here as the MECHANISM rather than the outcome: jsdom does not perform the
+    // browser's Enter-activates-a-button default at all, so "the menu closed" cannot distinguish
+    // the fix from the defect. `defaultPrevented` is exactly what the browser consults.
+    const grid = renderGrid();
+    fireEvent.focus(grid);
+    fireEvent.keyDown(grid, { key: 'F10', shiftKey: true });
+
+    const indent = screen.getByRole('menuitem', { name: 'Indent' });
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    indent.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('still activates the ROW itself on Enter, which is what the guard must not cost', () => {
+    // The guard bails on keys from controls inside the row. It must not bail on the row's own key,
+    // or selecting a row from the keyboard breaks — a fix that trades one 2.1.1 failure for another.
+    const grid = renderGrid();
+    fireEvent.focus(grid);
+    const row = screen.getAllByRole('row')[1];
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    row?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it('does not swallow the key when no menu is rendered', () => {
     // Without `rowMenuContextFor` there is no menu at all, and a keystroke that consumes itself to
     // show nothing reads as a broken control rather than an absent feature.
