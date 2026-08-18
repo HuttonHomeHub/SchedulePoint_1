@@ -1,16 +1,26 @@
-# ADR-0097: A theme is a system, not a palette — three token axes, a sixth surface, and a closure instead of a list
+# ADR-0097: The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped
 
 - **Status:** **Proposed** — drafted 2026-08-18, stops for approval.
 - **Date:** 2026-08-18
-- **Deciders:** Product owner (the mandate; CQ-A–CQ-D); ui-architect. Inputs from the
-  `corporate-brand` feature-analyst pass and from the `--destructive-hover` fix that landed the same
-  day.
+- **Deciders:** Product owner (the mandate, widened three times; the single-theme decision; CQ-A–CQ-D);
+  ui-architect. Inputs from the `corporate-brand` feature-analyst pass and from the
+  `--destructive-hover` fix that landed the same day.
 - **Spec:** [`../specs/design-system-rewrite/`](./README.md) — `diagnosis.md`, `design.md`,
-  `hard-surfaces.md`, `migration.md`.
+  `screens.md`, `command-surface.md`, `hard-surfaces.md`, `migration.md`.
+
+> **On the scope of this ADR.** It was opened as a token-vocabulary decision and the mandate widened
+> three times while it was being written — to layout and typography, then to _"I remove all
+> restraints"_, then to a single theme. **The decisions below are recorded in the order they were
+> taken, and the later ones simplify the earlier ones rather than replacing them** (D15 removes two
+> themes, which retires a scope D2 had counted and deletes a gate D12 had inherited). That ordering is
+> kept rather than tidied, because a decision record that shows only the final state teaches nothing
+> about how it was reached — and two of these decisions are _reversals of my own recommendation_.
+
 - **Amends:** **ADR-0055** (surface scopes — the mechanism is kept and extended along two new axes;
   §1's "complete or it is a trap" is _strengthened_ into a closure, not weakened). **ADR-0077**
-  (the `brand`/`auth` scopes — theme-invariance untouched; §1's five-condition bar is applied to a
-  sixth scope and gains a sixth condition). **ADR-0006** (tokens/CVA — the token layer gains kinds
+  (`brand` survives on the ordinary argument; **`auth` retires** and §2's theme-invariance reasoning
+  dissolves — see D15). **ADR-0031/0090/0091/0092** (the command surface — the registry's taxonomy is
+  kept and its **renderer** replaced, see D16). **ADR-0006** (tokens/CVA — the token layer gains kinds
   beyond colour).
 - **Supersedes:** nothing.
 - **Builds on:** ADR-0026 (canvas rendering), ADR-0059 (the Gantt substrate), ADR-0061 (form
@@ -190,7 +200,7 @@ This replaces the rule that has failed three times.
 
 Three parts:
 
-1. **The page becomes an explicit family, `--page-*`**, so all six scopes are symmetric and the
+1. **The page becomes an explicit family, `--page-*`**, so every scope is symmetric and the
    unqualified names are always a _binding_, never a source.
 2. **`REBOUND_NAMES` is computed as a closure and asserted, not authored.** Seed with the scope's
    fill and foreground; add any token that can be composited with a member in a utility the build can
@@ -348,6 +358,133 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
 (portals already leave every scope — a dialog _is_ the page, and that is correct) and a `print` scope
 (the print path is a palette, not a surface).
 
+> **Superseded in part by D15.** With one theme, `auth` retires and the count is **five**, declared
+> **once**. The bar for a sixth stands; note that its condition 2 has lost its most-used
+> justification, because "theme-invariance" is no longer a property any region can claim.
+
+### D15 — One theme, and the mechanism kept alive
+
+**Product owner:** _"remove the light dark and system theme and just have the corporate… **keep the
+mechanism, just remove the themes**"_.
+
+`.dark` is deleted; `.corporate`'s values and the two flag-keyed layers fold into **`:root`**, which
+**is** the theme block. `THEME_SELECTORS` becomes a one-element **list**; `Theme` stays a **union**
+with one member; `themeTokens()` and the matrix stay parameterised by selector; `theme-boot.js` keeps
+running, reading, validating and passing its test — it resolves to the default every time and stamps
+nothing, so it cannot rot.
+
+**Making `:root` the theme block is the load-bearing detail.** It means a flash is **structurally
+impossible** rather than avoided: if `localStorage` throws, if the boot script never runs, if
+JavaScript is off, the page still paints a complete theme. Every stored value — `dark`, `light`,
+`system`, `corporate`, garbage, or a throwing store — resolves to "stamp nothing", so the boot script
+and the React provider **cannot disagree about what to paint, because neither paints anything.** That
+removes the one failure mode this area has, rather than testing for it. The stale key is cleared once
+on first mount by the provider (never by the boot script, which must stay side-effect-free before
+paint) — **removed rather than ignored**, because resurrecting a 2026 preference the day a _new_ dark
+design ships is a change nobody asked for at a moment nobody expects.
+
+**What it dissolves:** `.dark`'s ~117 declarations; two of three matrix sweeps; **the `auth` scope
+entirely** (it existed only because ADR-0077 §2's pinning was applied to half a screen, §8.3);
+ADR-0077 §2's theme-invariance argument for `brand`, which survives on the ordinary ADR-0055 ground;
+the theme picker; and — **the first gate this epic retires rather than adds** — the cascade-trap
+assertion at `token-architecture.test.ts:202-221`, which only exists because a global flag layer
+shadows a theme-scoped one.
+
+**What it must not dissolve, and this is the whole of what makes "revisit later" cheap.** Every new
+axis — density, type, elevation, motion — is declared **inside the theme block**, and a structural
+assertion forbids a design token being declared anywhere else. The **theme contract** (the full set
+of names a theme block must declare) is asserted for every selector in `THEME_SELECTORS`. It is very
+easy to hardcode a spacing scale "because there is only one theme" and discover a year later that it
+was never theme-able; under this design there is nowhere else to put it.
+
+> **The cost of adding a designed dark variant: a block of values and one entry in
+> `THEME_SELECTORS`.**
+
+Long form: ~110 declarations in one `[data-theme='dark']` block (against ~117 for today's `.dark` —
+**the axes being added do not make it materially more expensive**), one selector entry, one restored
+branch in a boot script that is still running, one picker entry, and a matrix that sweeps two and
+**names every failing pair**. The honest caveat: choosing good dark values is design work and that
+sentence does not price it — a dark variant of a diagram whose colours carry meaning needs its plot
+separations **re-derived, not re-tinted**. The mechanism is a block and a line; the design is a week's
+judgement.
+
+**And the cost to users, said plainly:** dark mode is an accommodation for some people — light
+sensitivity, migraine, low-light working — not only a preference. It is not a WCAG 2.2 AA failure and
+it is the product owner's call, which they have made. What this design owes in return is that the
+sentence above stays true, and the gate above is what keeps it true.
+
+### D16 — The command surface is reshaped, not fitted a fourth time
+
+`TOOLBAR_GROUPS` (`toolbar-registry.ts:19-32`) is a closed seven-member tuple — `frame · lens · find ·
+tools · object · output · help`. **That is a menu structure.** ADR-0031 designed the menus; ADR-0090,
+ADR-0091 and ADR-0092 spent three epics rendering them as a row and making the row fit.
+
+So: **one band — five labelled menus, a short strip of always-visible commands, the two mode switches,
+the pen.** The **registry is untouched**: every `defineToolbar` item keeps its group, gating,
+`disabledReason`, pen rule and `onActivate`, and `tier` simply stops meaning "how likely to be
+dropped" and starts meaning "on the strip, or in the menu". Only the **renderer** changes.
+
+What it deletes: the label pass that _"sums the whole bar, not the inline half"_ so one 121 px label
+suppresses all of them; the four band floors; the 48 px hysteresis; `CHROME_RESIDUAL_PX`, which
+**over-charges Row 2 by ~47 px** — within a couple of pixels of the width that cost that row its
+labels at 1646; the `⋯` and the **four commands permanently exiled inside it**; and the trade
+`m2-item-widths.md` had to put to the product owner, that _"labels at 1920 cost all three of
+`shortcuts`, `next-conflict` and `float-paths`"_. **A design system that makes a product choose
+between naming its commands and having them is not serving the product.**
+
+**It is gated on its own measurement, and the falsification condition is written first:** if the band
+does not fit at 1646 with **≥ 120 px of slack**, the proposal is **withdrawn** and the fourth-fitting
+option returns. Four consecutive epics had a width expectation contradicted by their own measurement;
+this one says in advance which way it expects to fall.
+
+### D17 — The screens are designed, and the product has one navigator too many
+
+Three moves, in `screens.md`:
+
+1. **The organisation nav (7 links, measured at 637 px) leaves the app header for the Project
+   Explorer rail.** The header nav and the rail are the same layer wearing two shapes — "where in this
+   organisation" and "where in this hierarchy" — and a planner should have one place to look. It also
+   gives `aria-current="page"` a single home, which is the accent's first named role.
+2. **One band above the diagram instead of four.** 190 px of chrome becomes 56; the canvas grows from
+   558 to ~692 at 1646, **~24 %** — more than ADR-0090, ADR-0091 and ADR-0092 delivered between them,
+   and available only because D16 and the nav move free the width those epics did not have. The
+   arithmetic lands **31 px short** on today's measured inputs, with two measured cuts available; **if
+   it does not fit, the two-band fallback ships**, which still returns 90 px. Named up front because
+   ADR-0092 M5 measured a merge, found it 134 px short, and withdrew it.
+3. **The activity editor becomes a docked, resizable panel rather than a modal dialog.** A planner
+   edits an activity in order to change the schedule, and a modal hides the schedule — every
+   `ContextStrip` in ADR-0061 exists to carry facts into a dialog covering the surface those facts came
+   from. Every ADR-0060/0061/0062/0089 decision survives verbatim; only the container changes, which is
+   the ADR-0062 extraction argument run once more. **Retiring it from the dialog retires `Dialog`'s
+   `xl` preset**, whose only consumer it is. This is the largest _behavioural_ change proposed and is
+   gated on `ux-reviewer` plus a product-owner decision.
+
+### D18 — The typeface is self-hosted, and it has never actually been decided
+
+**There is no `@font-face` rule anywhere in `apps/web` and no font file in `apps/web/public/`** —
+which holds exactly `brand/auth-panel.avif`, `favicon.svg` and `theme-boot.js`. Yet `globals.css:278`
+opens the stack with `'Inter'` and `docs/DESIGN_SYSTEM.md:75` describes the family as _"Inter + system
+fallback"_ as though it were served. **So the product's typeface is whatever the reader's machine
+happens to have** — Segoe UI on the product owner's Surface Pro, SF Pro on a Mac — and every
+vertical-rhythm and toolbar-width measurement in this repository was taken in whichever face resolved
+there. It is D2's finding in a second place: the document names one thing and the product ships
+another, and nothing says so.
+
+**One self-hosted variable family, Latin subset: Inter.** Chosen on a design argument rather than by
+default — a scheduling tool's type must be unambiguous at 12–13 px in dense numeric columns, and the
+data ramp structurally depends on the font _having_ a `tnum` table. OFL, so it clears the permissive
+constraint. **No second display face**: the login already carries a photograph and a navy wash doing
+that work. **`--font-mono` is not self-hosted** — eight call sites for identifiers, and 30 kB is not
+that trade.
+
+**The CSP needs no change**, which is the point worth recording: `apps/web/e2e-csp/` serves the real
+policy and it permits **no external origins** (`font-src 'self'`), so "add a font" cannot mean "add a
+CDN" here. Cost: **~35–45 kB on `/sign-in`**, the LCP path of the coldest screen in the product,
+preloaded, `font-display: swap` with metric-overridden fallbacks. `swap` rather than `optional`
+deliberately — `optional` means a first-time visitor may never see the face, which reintroduces
+"the product looks different depending on your machine" through a new door. The layout shift is a
+**`performance-reviewer` question on the built artefact**, not a claim made here.
+
 ---
 
 ## Alternatives considered
@@ -362,6 +499,33 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
   fill identifying a control, and darkening it to 3:1 lands on the bronze `--warning` occupies.
 - **Keep adding names to `REBOUND_NAMES` as they are discovered.** The status quo. **Rejected** —
   three finders, three additions, and the fourth is waiting. D6 replaces the list with a closure.
+- **A fourth fitting pass on the command row.** **Rejected on the evidence**: `m2-item-widths.md`
+  establishes that Row 1's labels at 1920 cost three commands, two of which trace logic. The row is at
+  its floor; the next pass takes function rather than width.
+- **A ribbon** (tabbed groups, labelled, taller band). Solves the label problem and is what P6 and MS
+  Project use. **Rejected because the complaint is vertical** — a ribbon is 90–120 px, worse than the
+  134 px it replaces once the identity line returns, and it hides groups behind tabs, which is the `⋯`
+  problem with better manners.
+- **A command palette only** (⌘K, no bar). **Rejected as the shape** — `PROJECT_BRIEF.md` §4 names
+  project managers and superintendents who are _"less scheduling-savvy"_, and a palette is
+  discoverable only if you already know the command's name. **A good addition later; not the shape.**
+- **A left vertical command rail.** Trades vertical for horizontal — but on a time-scaled diagram the
+  horizontal axis **is time**, so width is the scarcer resource on the surface that matters, and it
+  puts the commands furthest from the canvas's own dock.
+- **Merge the identity line into the app header without moving the nav.** **Already measured and
+  withdrawn**: 456 px of tidying, still 134 px short at 1646, and closing it costs the organisation
+  nav, the wordmark or the mode labels (ADR-0092 M5). D17 closes it by moving the nav, which is the
+  option that measurement left open.
+- **Keep the themes and design three sets of values well.** **Rejected by the product owner**, and the
+  design agrees: every colour decision was a negotiation with two themes nobody was designing, and
+  §0.5.1's collapse is what lets the remaining set be chosen rather than compromised.
+- **Delete the theming mechanism along with the themes.** **Rejected by the product owner** —
+  _"keep the mechanism, just remove the themes"_ — and D15 is what makes that instruction real rather
+  than nominal. A vestigial mechanism that nothing exercises is not a mechanism.
+- **A display typeface for the brand panel, in addition to the UI face.** **Rejected for now** — the
+  login already carries a photograph and a navy wash doing that work, and a second face doubles the
+  byte cost on the coldest screen in the product. Revisit as a route-scoped load if the brand panel
+  needs it after its redesign.
 - **Make `--card` a rebound name.** Would fix the `CardDescription` split pair and would break
   ADR-0055's "a `Card` means the same thing everywhere". **Rejected** in favour of the reset (D6.3),
   which keeps the promise and fixes the pair.
@@ -410,8 +574,16 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
   planner's band, which is the reason that entry is still open.
 - **The organisation landing page (ADR-0098) is served rather than constrained.** All five things its
   §0.3 says the vocabulary cannot express are answered by name and land in L3.
-- **A fourth theme becomes a block of values**, as ADR-0055 promised — but now including its
-  non-colour decisions.
+- **A second theme becomes a block of values and one entry** (D15) — as ADR-0055 promised, but now
+  including its non-colour decisions, and now with a computed contract that names every token a new
+  theme forgets.
+- **The token surface shrinks by roughly two thirds while gaining a scope.** Five families declared
+  once, rather than five families declared three times — and the diagram, the surface that most needed
+  a validated family, is one of the five. **The count went down and the coverage went up**, which is
+  the clearest evidence available that the single-theme decision and the canvas scope are both right.
+- **Every colour decision stops being a negotiation with two themes nobody was designing.** That is
+  the mechanism behind "it looks like a badly designed skin" as much as the missing axes were, and it
+  is the change that makes a bold palette safe to commit to: one target, one computed matrix.
 
 ### Negative / accepted
 
@@ -422,14 +594,14 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
 - **Light and Dark change visibly**, and they were called "secondary". Shared structure means an epic
   commissioned for Corporate restructures the other two. This must be approved rather than
   discovered.
-- **Between L2 and L4 the product is in a half-state** and will look slightly _more_ inconsistent —
+- **Between Landings A and F the product is in a half-state** and will look slightly _more_ inconsistent —
   a real page title beside a card title that has not moved yet. That is the price of not flipping
   structure and values together, which is the trade ADR-0055 §8.1 made deliberately.
 - **The plot separation gate ships red-if-asserted**, so it ships **reporting** (CQ-D) until L4. A
   reported number everyone learns to scroll past is a real risk; the mitigation is that L4's first
   commit is the one that satisfies it.
 - **CQ-C's answer adds a landing, and it is the epic's largest single visual change** — every control
-  in the product, in all three themes, in one commit (L2b). The specific risk is not the pixels: it is
+  in the product, in one commit inside Landing A. The specific risk is not the pixels: it is
   that the band floors get **adjusted so the existing fit gate passes** instead of re-derived from the
   new measurement, which turns a measured floor into a remembered one with nothing downstream to
   catch it. Stated as the failure mode because it is the helpful-looking one.
@@ -438,9 +610,25 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
   instead. That is why the milestone measures and reports rather than asserting — and **a small gain
   is a finding, not a failed milestone**.
 - **CQ-B costs the metric landing its clean rollback on one surface.** With `--row-h` at 28 the
-  Gantt's row moves 32 → 28 on the day the token lands, so L2 is byte-identical _apart from_ that. One
-  number, one surface — recorded rather than absorbed, and it takes `test:e2e:gantt` and
+  Gantt's row moves 32 → 28 on the day the token lands, so Landing A is byte-identical _apart from_
+  that. One number, one surface — recorded rather than absorbed, and it takes `test:e2e:gantt` and
   `measure:gantt` with it because the virtualizer is measured off it.
+- **This is now a large, visible, multi-landing change to a product in daily use.** The product owner
+  runs the ADR-0047 Watchtower profile, so a merged release reaches their host. The sequencing is the
+  mitigation, not a hope: Landing A is nearly invisible, Landing B is a screen that does not exist
+  yet, and the surfaces they use every day change only after they have seen and approved the language.
+- **D16 may be withdrawn by its own measurement**, after the measurement milestone has been spent.
+  That is the correct outcome if the numbers say so, and it is budgeted — but it is a real risk and it
+  is why CQ-I asks whether the reshape should be a separate epic so the rest can land regardless.
+- **D17's editor panel is a workflow change, not a styling one.** If planners dislike it the revert is
+  real work rather than a token flip, which is why it is gated on `ux-reviewer` and a product-owner
+  decision rather than taken here.
+- **Removing dark removes an accommodation** (D15). Not a WCAG failure, the product owner's call —
+  and the one-sentence cost is what keeps "revisit later" honest.
+- **The design collaborators were not run.** The session that produced this had no agent-launch
+  capability, so `screens.md` §9 names which agent must be asked what, and at which point — before
+  values are chosen, not after they ship. The register is full of findings that would have been cheap
+  in design and were expensive at review; that table is this ADR's attempt not to add to it.
 - **`resolveTsldPalette`'s root becomes load-bearing.** A function four callers share gains a way to
   be silently wrong — an unmounted or out-of-scope element resolves page values, which is today's
   behaviour and therefore invisible without a dedicated test. `resolvePrintPalette` is the one most

@@ -10,17 +10,139 @@
 The token layer answers exactly one question — _"what colour is this?"_ — and it answers it in
 exactly one dimension — _"which surface am I on?"_. That was the right size for a clients →
 projects → plans shell. The product it now has to dress is a Canvas-2D time-scaled logic diagram, a
-virtualized Gantt, a 28-stop command surface that must fit at 1646 CSS px, a four-tab activity
+virtualized Gantt, a 32-stop command surface that must fit at 1646 CSS px, a four-tab activity
 editor with per-scope permissions, WBS bands, two libraries, an audit log, a staff console and six
 public screens. **The rewrite adds three axes and one surface**, and changes nothing that already
 works.
 
 | Axis                          | Today                                                     | After                                                                  |
 | ----------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Colour**, scoped by surface | 5 scopes × 18 tokens × 3 themes. Works. Gated.            | 6 scopes (the diagram joins) + **role packs** for what a scope needs   |
+| **Colour**, scoped by surface | 5 scopes × 18 tokens × 3 themes. Works. Gated.            | 5 scopes (the diagram joins, `auth` retires) + **role packs**          |
 | **Metric**, scoped by density | Does not exist. Five disagreeing constants in five files. | `[data-density]`, the `[data-surface]` mechanism reused                |
 | **Type**, two ramps           | One ramp, top unused, data half absent                    | A prose ramp with a top, and a **data ramp** that owns tabular figures |
 | **Meaning on the diagram**    | Borrowed from the page, ungated                           | A validated family, its own separation matrix, its own geometry tokens |
+
+---
+
+## 0.5 One theme — and the mechanism that survives it
+
+**Product owner, 2026-08-18:** _"if it's easier remove the light dark and system theme and just have
+the corporate. We can revisit light and dark at a later date once we have corporate pinned as this is
+what matters most."_ And, on the mechanism: _**"keep the mechanism, just remove the themes"**_.
+
+This is the largest simplification in the epic and it arrived after most of it was designed, so what
+follows is what it **dissolves**, checked rather than assumed, and what it **must not** dissolve.
+
+### 0.5.1 What it dissolves
+
+| Dissolved                                                                       | Was                                                                                   |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `.dark`'s ~117 declarations, and their maintenance on every future value change | `globals.css:278-482`                                                                 |
+| Two of the three sweeps in the contrast matrix                                  | `token-contrast.test.ts:155` — 3 themes × 2 flag states × 5 scopes                    |
+| **The `auth` scope, entirely — 18 tokens** (`screens.md` §7)                    | It existed **only** because ADR-0077 §2's pinning was applied to half a screen (§8.3) |
+| ADR-0077 §2's theme-invariance argument for `brand`                             | `brand` survives on the ordinary ADR-0055 argument: navy panel, off-white page        |
+| Every "which theme is this bad in?" negotiation on every colour                 | The reason the palette reads as compromised rather than chosen                        |
+| The theme picker in the account menu                                            | `account-chip.tsx:197` — a picker with one entry is a lit-but-inert control           |
+
+Token maintenance drops from **5 families × 18 × 3 themes + packs** to **5 families × 18 × 1 + packs**
+— roughly a third of the surface, and every value in it is now chosen for one target and can be
+chosen well.
+
+**The two flagged value layers go with it.** `[data-designed-chrome]` and
+`[data-canvas-visual-language]` exist to hold Light's and Dark's chrome and Corporate's canvas
+separately (`globals.css:856-1016`), and `token-architecture.test.ts:202-221` gates a cascade trap
+that only exists because a global layer shadows a theme-scoped one. With one theme both layers fold
+into it and that gate becomes unnecessary — **the first gate this epic retires rather than adds.**
+
+### 0.5.2 The mechanism stays working, not vestigial
+
+The decision is _remove the themes, keep the ability to have themes_. Concretely:
+
+- **`:root` is the theme block**, and it holds Corporate. Not `.corporate` — the default theme needs
+  no stamping, which makes a flash **structurally impossible** rather than merely avoided: if
+  `localStorage` throws, if the boot script never runs, if JavaScript is disabled, the page still
+  paints a complete theme.
+- **`theme-boot.js` keeps running, keeps reading, keeps validating, keeps its test.** It resolves to
+  the default every time today and stamps nothing. It is exercised on every load, so it cannot rot —
+  which is the difference between a live mechanism and a vestigial one.
+- **`THEME_SELECTORS` becomes a one-element list**, not a hardcoded path. `themeTokens()`,
+  `blockBody()`, the matrix's `describe.each` and the completeness sweep are all already
+  parameterised by selector (`test/css-blocks.ts:58-68`) and stay that way.
+- **`Theme` stays a union type** with one member. `type Theme = 'corporate'` typechecks identically
+  and stays extensible; collapsing it to a literal or deleting it is the thing that would make the
+  next theme a re-architecture.
+
+### 0.5.3 The new axes are themeable by the same mechanism — and this is the part most easily lost
+
+The warning is exactly right: it is very easy to declare a spacing scale at `:root` "because there is
+only one theme" and discover a year later that it was never theme-able. Under this design that
+mistake is **impossible to make quietly**, because `:root` **is** the theme block. There is nowhere
+else to put a value.
+
+So the gate generalises from colour to every kind:
+
+> **The theme contract** — the full set of token names a theme block must declare: 5 surface families
+> × 18, plus the `PLOT` and `GROUND` packs, plus the metric set, the type ramp, the elevation set and
+> the motion set. `token-architecture.test.ts` asserts every selector in `THEME_SELECTORS` declares
+> the whole contract. Today one selector satisfies it; tomorrow two must, and the gate names every
+> token the second one forgets.
+
+Plus one structural assertion that keeps it honest: **no design token may be declared outside a theme
+block or a scope-rebind block.** That is what stops a `--gutter-page: 24px` appearing in a component
+file, or in an `@theme inline` default, where no future theme could reach it.
+
+### 0.5.4 What adding a designed dark variant would cost — the sentence
+
+> **A block of values and one entry in `THEME_SELECTORS`.**
+
+Long form, because the product owner is relying on this: one `[data-theme='dark'] { … }` block
+declaring the theme contract (~110 declarations under this design, against ~117 for today's `.dark` —
+so **the axes I am adding do not make it materially more expensive**); one entry in
+`THEME_SELECTORS`; one branch restored in `theme-boot.js` (which is still running and still tested,
+so the branch is an `if`, not an archaeology exercise); one entry back in the account menu; and the
+contrast matrix sweeps two selectors instead of one, **naming every pair that fails**.
+
+**The honest caveat, and it is not plumbing.** Choosing good dark values is design work and this
+sentence does not price it — a dark variant of a canvas whose colours carry meaning needs its plot
+separations re-derived, not re-tinted. The _mechanism_ is a block and a line; the _design_ is a
+week's judgement. Saying otherwise would be the kind of claim this register exists to catch.
+
+### 0.5.5 A user who has already stored `dark`, `light` or `system`
+
+The one failure mode this area has is that `theme-boot.js` and `use-theme.tsx` are two
+implementations of one rule with no compiler relationship, and they disagree **before first paint**,
+where nothing catches it. So this is specified rather than left to fall out.
+
+| Stored value                      | Boot script                                               | React provider         | Result              |
+| --------------------------------- | --------------------------------------------------------- | ---------------------- | ------------------- |
+| `null` (never chose)              | validates → not in `Theme` → default → **stamps nothing** | same rule, same answer | Corporate, no flash |
+| `'dark'` / `'light'` / `'system'` | validates → not in `Theme` → default → **stamps nothing** | same rule, same answer | Corporate, no flash |
+| `'corporate'`                     | validates → is the default → **stamps nothing**           | same rule, same answer | Corporate, no flash |
+| garbage                           | as above                                                  | as above               | Corporate, no flash |
+| `localStorage` throws             | catch → default → stamps nothing                          | catch → default        | Corporate, no flash |
+
+**Every row resolves to "stamp nothing", and `:root` is Corporate — so the two implementations cannot
+disagree about what to paint, because neither of them paints anything.** That is a stronger guarantee
+than making them agree; it removes the class of failure rather than testing for it. The cross-file
+seam gate still ships (it is what protects the _next_ theme), and it is **verified red first** by
+changing one of the two rules.
+
+**The stale key is removed once, on first mount, by the provider — not by the boot script**, which
+must stay side-effect-free before paint. Idempotent, unobservable.
+
+**Removed rather than ignored, and the reason is a decision:** a stored preference for a theme that
+does not exist is a fact about the past. Leaving it means that the day a designed dark variant ships,
+users who chose dark in 2026 are silently switched into a theme they have never seen, at a moment
+nobody expects. Dark will be a **new** design; opting into it should be a choice.
+
+### 0.5.6 What removing dark actually costs users, said plainly
+
+Dark mode is an accommodation for some people — light sensitivity, migraine, low-light working — not
+only a preference. It is not a WCAG 2.2 AA failure and it is the product owner's call, which they
+have made. What this design owes in return is that §0.5.4's sentence stays true, and §0.5.3's gate is
+what keeps it true. **If a future reader finds that adding dark back is expensive, the failure will
+be a token declared outside a theme block, and that gate is the thing that was supposed to prevent
+it.**
 
 ---
 
@@ -56,13 +178,13 @@ would spend the epic's budget on a rewrite that produces the same file.
 The argument, against ADR-0077 §1's five conditions — which is the bar this repository set for a new
 scope and which a proposal must be measured by:
 
-| condition                                                                    | verdict                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The region keeps the semantic names and changes what they resolve to      | **Yes, and this is the whole trick.** `palette.ts` keeps reading `--color-primary`, `--color-destructive`, `--color-warning`, `--color-foreground`, `--color-muted-foreground`, `--color-ring`. Not one line of the painter changes. Only the element passed to `getComputedStyle` does.                                                                                                                                                    |
-| 2. The fill is chosen for a reason the page's fill structurally cannot serve | **Yes.** The diagram's ground is a working surface, not a document surface — Corporate already gives it a warm value behind a flag (`globals.css:1014`) and **CQ-A is answered: a quiet ground in all three themes**, landing as a value in L4-2. More importantly, its inks must be validated **against that ground and against each other**, which the page family structurally cannot do because it is validated against `--background`. |
-| 3. The family can be complete and every pair clears its bar by computation   | **Yes — and it is the reason to do it.** `diagnosis.md` §3.3 shows five pairs nothing computes today, two of which land below any floor anyone would set.                                                                                                                                                                                                                                                                                   |
-| 4. At least one real consumer on the day it lands                            | **Five.** `resolveTsldPalette`, `resolveWbsBandPalette`, `resolveLensPalette`, `resolveResourceStripPalette`, and the Gantt's chart region (DOM).                                                                                                                                                                                                                                                                                           |
-| 5. It goes through `<Surface>`                                               | **Yes**, and it is the condition that made this design work: the diagram container already exists as a `div` painted `bg-canvas`. It becomes `<Surface tone="canvas">`, and `resolveTsldPalette(root)` — whose signature **already takes an `Element`** (`palette.ts:12`) — is handed that node.                                                                                                                                            |
+| condition                                                                    | verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The region keeps the semantic names and changes what they resolve to      | **Yes, and this is the whole trick.** `palette.ts` keeps reading `--color-primary`, `--color-destructive`, `--color-warning`, `--color-foreground`, `--color-muted-foreground`, `--color-ring`. Not one line of the painter changes. Only the element passed to `getComputedStyle` does.                                                                                                                                                                   |
+| 2. The fill is chosen for a reason the page's fill structurally cannot serve | **Yes.** The diagram's ground is a working surface, not a document surface — Corporate already gives it a warm value behind a flag (`globals.css:1014`) and **CQ-A is answered: a quiet ground**, now one set of values rather than three, landing in Landing E. More importantly, its inks must be validated **against that ground and against each other**, which the page family structurally cannot do because it is validated against `--background`. |
+| 3. The family can be complete and every pair clears its bar by computation   | **Yes — and it is the reason to do it.** `diagnosis.md` §3.3 shows five pairs nothing computes today, two of which land below any floor anyone would set.                                                                                                                                                                                                                                                                                                  |
+| 4. At least one real consumer on the day it lands                            | **Five.** `resolveTsldPalette`, `resolveWbsBandPalette`, `resolveLensPalette`, `resolveResourceStripPalette`, and the Gantt's chart region (DOM).                                                                                                                                                                                                                                                                                                          |
+| 5. It goes through `<Surface>`                                               | **Yes**, and it is the condition that made this design work: the diagram container already exists as a `div` painted `bg-canvas`. It becomes `<Surface tone="canvas">`, and `resolveTsldPalette(root)` — whose signature **already takes an `Element`** (`palette.ts:12`) — is handed that node.                                                                                                                                                           |
 
 **Three consequences fall out for free, which is the test of a mechanism.**
 
@@ -107,18 +229,25 @@ So: ordinary bar → `--primary`. Critical → `--destructive`. Near-critical �
 → `--foreground`. Non-working wash → `--muted`. Ground → `--background`. Month band → `PLOT`,
 because "the alternating stripe under the diagram" is not any of the eighteen names.
 
-### 1.4 Six is the ceiling this design plans for
+### 1.4 Five scopes, and the ceiling
 
-`page`, `chrome`, `panel`, `brand`, `auth`, `canvas`. That is 6 × 18 = 108 base declarations per
-theme, three themes, plus packs — and `diagnosis.md` §4.4 records that `brand` and `auth` alone are
-108 declarations that must be identical across blocks, guarded by an assertion that exists because
-the completeness sweep cannot see them.
+`page`, `chrome`, `panel`, `brand`, `canvas`. **The diagram joins and `auth` retires** (§0.5.1) — so
+the count goes _down_ while gaining the surface that most needed one, which is the clearest available
+evidence that the single-theme decision and the canvas scope are the two right moves.
 
-**A seventh scope must show, in an ADR, what the sixth could not do for it**, in addition to
-ADR-0077 §1's five conditions. Two candidates that will be proposed and should be refused unless
-they clear that bar: a `dialog` scope (portals already leave every scope — a dialog is the page, and
-that is correct), and a `print` scope (the print path is a _palette_, not a surface; it forces light
-values, and giving it a scope means every future value change is applied a fourth time).
+That is 5 × 18 = **90 base declarations, once**, plus packs — against today's 5 × 18 × 3. The
+`brand`/`auth` per-theme repetition that `diagnosis.md` §4.4 records as a real ongoing cost, and the
+assertion at `token-architecture.test.ts:72-80` that exists **because the completeness sweep
+structurally cannot see it**, both disappear: with one theme there is nothing to keep identical
+across blocks.
+
+**A sixth scope must show, in an ADR, what the fifth could not do for it**, in addition to
+ADR-0077 §1's five conditions — noting that condition 2 has just lost its most-used justification,
+because "theme-invariance" is not a property any region can now claim. Two candidates that will be
+proposed and should be refused unless they clear that bar: a `dialog` scope (portals already leave
+every scope — a dialog is the page, and that is correct), and a `print` scope (the print path is a
+_palette_, not a surface; it forces light values, and giving it a scope means every future value
+change is applied twice).
 
 ### 1.5 What belongs in the rebound family — a closure, not a longer list
 
@@ -391,6 +520,59 @@ it is the one most worth measuring.
 
 ## 4. Type, elevation, radius, motion, icons
 
+### 4.0 The typeface — and the finding that it has never been decided
+
+**There is no `@font-face` rule anywhere in `apps/web`, and no font file in `apps/web/public/`**
+(which holds exactly three things: `brand/auth-panel.avif`, `favicon.svg`, `theme-boot.js`). Yet
+`globals.css:278` opens the stack with `'Inter'`, and `docs/DESIGN_SYSTEM.md:75` describes the family
+as _"Inter + system fallback"_ as though it were served.
+
+**So the product's typeface is whatever the reader's machine happens to have.** A designer with Inter
+installed sees Inter; the product owner's Surface Pro sees Segoe UI; a Mac sees SF Pro; a Linux CI
+runner sees something else again. Two people comparing screenshots of the same screen are comparing
+two typefaces, and every vertical-rhythm and toolbar-width measurement in this repository was taken
+in whichever face that machine resolved. **This is the type equivalent of the `--canvas` finding: the
+document names one thing and the product ships another, and nothing says so.**
+
+**Decision: self-host one variable family, subset to Latin.**
+
+- **The family is Inter**, and the reasoning is a design argument rather than a default. A scheduling
+  tool's type has one hard job: be unambiguous at 12–13 px in dense numeric columns, in a product
+  whose content is dates, durations, floats, lags and counts. Inter has **real tabular figures** and a
+  slashed-zero stylistic set — which the data ramp below structurally depends on, because
+  `font-variant-numeric: tabular-nums` does nothing if the font has no `tnum` table. It is OFL, so it
+  clears `PROJECT_BRIEF.md` §18's permissive-licence constraint. And it is already the declared
+  intent, so this decision **makes the document true** rather than changing the product's face for
+  everyone who currently sees it.
+- **Distinctiveness belongs in the brand panel, not the data grid.** The instinct under a
+  "best in class" mandate is to pick something with more personality. The counter-argument is that
+  the one screen where personality pays — the login — already carries a photograph and a navy wash
+  doing that work. **No second display face**, and if the brand panel needs one after its redesign it
+  is a route-scoped load on the public routes only, costed then.
+- **`--font-mono` is not self-hosted.** Eight call sites use it for identifiers and codes; the system
+  stack compares characters perfectly well. 30 kB for eight sites is not a trade worth making, and
+  saying so is cheaper than discovering it in a bundle review.
+
+**What it costs, and the constraint that shapes it.** `apps/web/e2e-csp/` serves the **real**
+Content-Security-Policy, parsed out of `docker-compose.yml` rather than restated, and it permits **no
+external origins** — `font-src 'self'` (ADR-0074 §4). So a webfont must be self-hosted, which is what
+this decision does; **the CSP needs no change at all**, which is worth stating because "add a font"
+usually means "add a CDN" and here it cannot.
+
+| term                          | figure                                                                                             |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| Latin-subset variable `woff2` | **~35–45 kB**, one file, both axes                                                                 |
+| Where it lands                | **`/sign-in`** — the LCP path of the coldest screen in the product (ADR-0077's front door)         |
+| Loading                       | `<link rel="preload" as="font" crossorigin>` + `font-display: swap`                                |
+| Layout shift                  | Mitigated by `size-adjust` / `ascent-override` on a local fallback face, **measured, not assumed** |
+
+`swap` rather than `optional` deliberately: `optional` means a first-time visitor may never see the
+face at all, which reintroduces "the product looks different depending on your machine" through a new
+door. The shift `swap` risks is real and is bounded by metric-overridden fallbacks — and it is a
+**`performance-reviewer` question on the built artefact**, not a claim to make here. This repository
+has an LCP budget (`CLAUDE.md` §15: LCP < 2.5 s on mid-tier mobile over 4G) and 40 kB of font on the
+sign-in path is the single largest addition this epic makes to it.
+
 ### 4.1 Two ramps, because prose and data are not the same reading task
 
 **The prose ramp gets a top.** `--text-page` (the size `text-3xl` was documented for and never used),
@@ -431,10 +613,11 @@ it rather than being inferable only from noticing that Dark's shadows do nothing
 `--radius: 0.625rem` gives `radius-md` = **8 px**, which is the previous Flask app's
 `--border-radius` exactly (`corporate-brand/measurements.md`); the documented 150/200/300 ms band
 contains that app's `0.2s`. Both are already right. `--radius-plot` is added because the diagram's
-3 px corner is a module constant a theme cannot reach; `--motion-fast/base/slow` are added for
-symmetry and are expected to stay identical in all three themes. If that turns out to be true after a
-year, they are a token nobody needed and should be deleted, and this sentence is the note that says
-so.
+3 px corner is a module constant a theme cannot reach; `--motion-fast/base/slow` are added because
+§0.5.3 requires every axis to be theme-declarable, and a future dark variant may genuinely want
+slower transitions on a dark ground. **That is the only reason they exist**, and with one theme they
+are three declarations nobody currently varies. If a dark variant arrives and does not vary them,
+they are a token nobody needed and should be deleted — and this sentence is the note that says so.
 
 ### 4.4 Iconography — the rule, and the four glyphs this document owes
 

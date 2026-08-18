@@ -64,8 +64,9 @@ reasoned about this painter's cost and was wrong by a factor of five.
 
 **CQ-A is answered yes**, so **Light and Dark gain a diagram ground distinct from `--card`** for the
 first time, joining Corporate's — which existed but only behind a flag. That is a visible change to
-the working surface of the primary view in two of three themes, and it is a value change, so it lands
-in **L4-2** with its own commit and its own before/after, not with the scope in L1.
+the working surface of the primary view, and it is a value change — so it lands in **Landing E** with
+its own commit and its own before/after, not with the scope. With one theme (`design.md` §0.5) it is
+**one set of values chosen for one target**, not three compromised across themes.
 
 ---
 

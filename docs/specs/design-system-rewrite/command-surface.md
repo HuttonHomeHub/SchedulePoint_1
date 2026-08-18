@@ -227,4 +227,3 @@ of number this repository has been wrong about four times running.
 reachable), S5/S7 (target size), S9 (the `⋯` is rightmost) and S10 (a trailing group really trails)
 become assertions about a menubar — and **S3 gets easier and more meaningful**, because "every
 command is reachable" stops being "reachable via an unnamed glyph" and becomes "reachable by name".
-</content>

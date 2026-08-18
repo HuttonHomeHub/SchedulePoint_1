@@ -2,47 +2,70 @@
 
 - **Status:** Draft — **stops for approval**. No application code, no CSS.
 - **Author:** ui-architect, 2026-08-18
-- **Mandate:** the product owner, 2026-08-18 — _"For the theme and design you have a blank canvas.
-  The theme and design were set at the beginning but as the app has developed it has been
-  constrained to existing design protocol. This is your opportunity to rewrite the theme and design
-  from the ground up based on the full feature set we have today and what you think will come in the
-  future."_
 - **ADR number:** **0097**, assigned by the coordinator. Drafted here as
   [`adr-0097-draft-a-theme-is-a-system-not-a-palette.md`](./adr-0097-draft-a-theme-is-a-system-not-a-palette.md)
-  and **filed into `docs/adr/` as the first task of the implementation plan**, not the last — the
-  ADR-0077 ordering, for the ADR-0071 reason. It cannot arrive alone: `scripts/check-counts.mjs:55`
-  re-derives the ADR count from `docs/adr/`, so the file, the `CLAUDE.md` §16 entry, the banner
-  count bump and the `docs/adr/README.md` row land in **one commit** or CI goes red.
+  and **filed into `docs/adr/` as the first task of the plan**, not the last — the ADR-0077 ordering,
+  for the ADR-0071 reason. It cannot arrive alone: `scripts/check-counts.mjs:55` re-derives the ADR
+  count from `docs/adr/`, so the file, the `CLAUDE.md` §16 entry, the banner count bump and the
+  `docs/adr/README.md` row land in **one commit** or CI goes red.
+
+## The mandate, as it now stands
+
+Widened three times on 2026-08-18, each time correctly. Verbatim, in order:
+
+> _"The theme and design were set at the beginning but as the app has developed it has been
+> **constrained to existing design protocol**. This is your opportunity to **rewrite the theme and
+> design from the ground up**."_
+
+> _"**Layouts, toolbars, groupings, fonts, button types etc can all change if the agent thinks it
+> will look better.**"_
+
+> _"**I remove all restraints.** I want this app to be best in class in terms of ui/ux. you have free
+> rein in all aspects and agents to make that happen."_
+
+And, separately: _"if it's easier **remove the light dark and system theme and just have the
+corporate**"_ — with _"**keep the mechanism, just remove the themes**"_.
+
+**Three things are treated as inputs rather than constraints**, because they are part of what best in
+class means: WCAG 2.2 AA; the canvas's colours carry meaning; it stays gated.
 
 ---
 
 ## Read in this order
 
-| Document                                                                    | What it is                                                                                                 |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [`diagnosis.md`](./diagnosis.md)                                            | What actually reads as undesigned, on named screens, with the file and line. Sorted into three categories. |
-| [`design.md`](./design.md)                                                  | The design itself: the vocabulary, the rules, what each part is for, and the gates that hold it.           |
-| [`hard-surfaces.md`](./hard-surfaces.md)                                    | The design worked through against the canvas, the Gantt, the command surface, tables, dialogs, the rest.   |
-| [`migration.md`](./migration.md)                                            | Six landings, each shippable and revertible; the rollback; and what gets worse.                            |
-| [`adr-0097-draft-…`](./adr-0097-draft-a-theme-is-a-system-not-a-palette.md) | The decision record, drafted to this repo's standard.                                                      |
+| Document                                                                    | What it is                                                                                  |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [`diagnosis.md`](./diagnosis.md)                                            | What is actually undesigned, on named screens, with the file and line. Three categories.    |
+| [`design.md`](./design.md)                                                  | The vocabulary: one theme, five scopes, three new axes, the typeface, the rules, the gates. |
+| [`screens.md`](./screens.md)                                                | **The product designed** — the six surfaces, at the level of composition and hierarchy.     |
+| [`command-surface.md`](./command-surface.md)                                | **The reshape** — why 32 commands in a row is the wrong instrument, and what replaces it.   |
+| [`hard-surfaces.md`](./hard-surfaces.md)                                    | The vocabulary worked through against the canvas, the Gantt, the toolbar, tables, dialogs.  |
+| [`migration.md`](./migration.md)                                            | Six landings, the early look, the landing-page recommendation, and what gets worse.         |
+| [`adr-0097-draft-…`](./adr-0097-draft-a-theme-is-a-system-not-a-palette.md) | The decision record.                                                                        |
 
-## Relationship to the two specs in flight
+---
 
-- **`docs/specs/corporate-brand/`** — trimmed to verified token defects and the default-flip
-  mechanics. **Its findings are an input here and are not re-derived**; `diagnosis.md` §0 says which
-  are carried, which are extended, and the one I contradict (with the arithmetic).
-- **`docs/specs/organisation-landing/`** (ADR-0098) — the first new primary screen in this world.
-  Its §0.3 asks this rewrite for five things it cannot express today. `design.md` §6 answers all
-  five by name, and `migration.md` L3 lands them before that epic needs them.
+## The four headline moves
 
-## The one-sentence version
+1. **One theme, and the mechanism kept alive.** Corporate becomes the product's appearance; `.dark`
+   is deleted; `:root` **is** the theme block, so a flash is structurally impossible rather than
+   merely avoided. `THEME_SELECTORS` stays a list, `theme-boot.js` stays running and tested, and every
+   new axis — density, type, elevation, motion — is declared inside the theme block, so a future dark
+   variant is **a block of values and one entry** (`design.md` §0.5).
+2. **The diagram joins the design system.** `resolveTsldPalette` resolves from
+   `document.documentElement`, so the bar fill is the _page's_ `--primary` painted on a ground that is
+   not the page. That is ADR-0055's original defect surviving in the one place ADR-0055 never reached,
+   and the contrast matrix has **no canvas pair at all**. The canvas becomes a surface scope; the
+   painter does not change a line.
+3. **The command surface is reshaped, not fitted a fourth time.** `TOOLBAR_GROUPS` is already a menu
+   structure; three epics rendered it as a row and made the row fit. Five menus, eight commands, one
+   band — and the label arithmetic, the band floors, the hysteresis and the `⋯` all disappear
+   (`command-surface.md`).
+4. **The screens are designed.** One band above the diagram instead of four; the rail as the product's
+   only navigator; the activity editor as a docked panel rather than a modal that hides the schedule
+   it is editing (`screens.md`).
 
-The token layer can express **one axis — colour — scoped by one mechanism — the surface** (verified:
-all 117 declarations in `globals.css:508-730` are colours; `--radius` is declared once at `:root:35`
-and no theme restates it), and the app it now has to dress is a Canvas-2D diagram, a virtualized
-Gantt, a 28-stop command surface and eleven data screens — so **the rewrite is not a new palette, it
-is three more axes and one more surface**: the diagram becomes a scope with a validated family,
-density becomes a token, and the type ramp gets a top and a data half.
+---
 
 ## The question that was asked of this design, and its answer
 
@@ -50,105 +73,97 @@ density becomes a token, and the type ramp gets a top and a data half.
 > have now found a token outside it that would fail if a component ever landed somewhere new, and
 > each time the answer has been 'add that one'."_
 
-**Completeness stops being a count and becomes a property**, and the rebound set stops being a list
-and becomes a closure (`design.md` §1.5):
+**Completeness stops being a count and becomes a property** (`design.md` §1.5):
 
 > **The defect is never "a token is not rebound". The defect is a pair whose two halves are governed
 > by different scopes. A scope is complete when no pair a compiled utility can composite is split
 > across two scopes.**
 
-Three parts: the page becomes an explicit `--page-*` family so all six scopes are symmetric; the
-rebound set is **computed** by closure from the scope's fill and asserted rather than authored (which
-pulls in `--destructive`, `--secondary`, `--destructive-hover` and the solid status triples with
-nobody having to notice them); and a second fill inside a scope — `Card`, `Popover` — is a **reset**
-rather than a member, which keeps ADR-0055's promise that a `Card` means the same thing everywhere
-_and_ closes a **latent** split pair nobody has raised (`CardDescription` is a rebound
-`--muted-foreground` on an unbound `--card`). Latent, not live — verified: there is no `<Card>` or
-`bg-card` inside any of the six `<Surface>` sites. **That is the stronger argument, not the weaker
-one**: the pair is compilable, so it is one component move from being real and nothing in the build
-would report it, and a rule resting on that cannot be falsified by a component moving the other way.
-
-## Critical questions — all four answered (product owner, 2026-08-18), settled, do not re-ask
-
-|                           | Answer                                        | Note                                                                                  |
-| ------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **CQ-A** diagram ground   | **Yes — a quiet ground in all three themes.** | As defaulted.                                                                         |
-| **CQ-B** row rhythm       | **One rhythm, at 28.**                        | As defaulted. A visible change to the Gantt (32 → 28) and the tables.                 |
-| **CQ-C** control height   | **Move to 36 IN THIS EPIC.**                  | **Departs from the default**, which was to tokenise 40 now and move later. See below. |
-| **CQ-D** separation floor | **Report in L0, assert ≥ 1.5:1 in L4.**       | As defaulted.                                                                         |
-
-**CQ-C's answer creates a measurement obligation, and the plan must carry it rather than absorb it.**
-The default existed because ADR-0090 and ADR-0091 derive the command surface's band floors from
-**measured** control widths, and `e2e-toolbar-fit` asserts them — those two epics spent most of their
-effort on a row that would not fit at 1646 px, and three of their milestones had a width expectation
-falsified by their own measurement. Moving every control from 40 px to 36 px changes the inputs to
-all of it.
-
-So the height move is **not** a token edit. It is: change the value, re-run `measure:toolbar` at
-1646, re-derive the band floors from what it reports, update `e2e-toolbar-fit`'s expectations to the
-new measurements, and run every journey — ADR-0091's retrospective records three journeys broken by a
-label change and found by CI rather than locally, and its own rule is that a layout change means
-running all of them. Vertical space is the point of the change (chrome takes 31 % of the height at
-1646), so **measure and report the vertical gain** rather than asserting one; four consecutive epics
-have had a headline width or height number contradicted by their own measurement.
+The page becomes an explicit `--page-*` family; the rebound set is **computed by closure** and
+asserted rather than authored; and `Card`/`Popover` become **resets** rather than exceptions — which
+keeps ADR-0055's promise that a `Card` means the same thing everywhere and closes a **latent** split
+pair (`CardDescription`'s rebound `--muted-foreground` on an unbound `--card`). Latent, not live —
+verified. That is the stronger argument: the pair is compilable, so it is one component move from
+being real and nothing would report it.
 
 ---
 
-### The four, as settled — what was asked, what was answered, and where it now lives
+## Critical questions
 
-> **CQ-A — Does the diagram get its own ground colour, distinct from the page, in Light and Dark as
-> well as Corporate?**
-> Today only Corporate does, and only behind `VITE_CANVAS_VISUAL_LANGUAGE`
-> (`globals.css:1013-1016`); in Light and Dark `--canvas` is byte-identical to `--card`
-> (`:206`, `:424`).
-> **Answered: yes — a quiet ground in all three themes.** Lands as a **value** change in
-> `migration.md` **L4-2**, not with the structure in L1, so the scope's arrival stays byte-identical
-> and the ground's arrival is its own reviewable diff.
+### Settled (product owner, 2026-08-18) — do not re-ask
 
-> **CQ-B — One row rhythm across the Project Explorer, the Gantt and the tables, or three?**
-> Today: tree `28` (`HierarchyTree.tsx:26`), Gantt `32` (`GanttPanel.tsx:66`), tables `py-2`
-> (`data-table.tsx:139`).
-> **Answered: one — `--row-h`, at 28.** So `migration.md` **L2** no longer carries a per-surface
-> `--row-h-tree`/`--row-h-gantt` pair pending an answer; `--row-h` is one token at 28 and the Gantt's
-> 32 → 28 is a **visible change on the day L2 lands**, which makes L2 no longer byte-identical for
-> that one surface. Recorded as such rather than absorbed.
+|                           | Answer                                            | Note                                                                               |
+| ------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **CQ-A** diagram ground   | **Yes — a quiet ground.** Now one set of values.  | As defaulted, and cheaper: one theme, not three.                                   |
+| **CQ-B** row rhythm       | **One rhythm, at 28.**                            | A visible change to the Gantt (32 → 28) and the tables.                            |
+| **CQ-C** control height   | **Move to 36 in this epic.**                      | Departs from the default. A measurement task, not a token edit — `migration.md` A. |
+| **CQ-D** separation floor | **Report first, assert ≥ 1.5:1 with the values.** | A **house** number, not a WCAG one — the shape cue carries 1.4.1, on paper too.    |
+| **Themes**                | **Corporate only; keep the mechanism.**           | `design.md` §0.5. Adding dark back: _a block of values and one entry._             |
 
-> **CQ-C — Control density: keep 40 px and tokenise it, or move to 36 px in this epic?**
-> Shipped is `h-10`/40 px (`button.tsx:22`, `input.tsx:17`); `docs/DESIGN_SYSTEM.md:102` documents 36.
-> **Answered: move to 36 in this epic** — departing from the default, which was to tokenise 40 now
-> and move later. It becomes its own landing, **`migration.md` L2b**, built as a six-step measurement
-> task rather than a token edit. It is the only answer that adds work, and the work it adds is
-> measurement.
+### Open — and these are about ambition and sequencing, not permission
 
-> **CQ-D — Is the plot fill-to-fill separation floor a merge gate, and at what number?**
-> The diagram's three bar states are separated by **1.27:1** (Light: ordinary vs critical) and
-> **1.34:1** (Corporate: near-critical vs critical) — hand-computed in `diagnosis.md` §3.3.
-> **Answered: report in L0, assert ≥ 1.5:1 in L4** — a gate that is red on the day it lands gets
-> deleted rather than fixed (ADR-0058), and the adjacent-surfaces block at
-> `token-contrast.test.ts:189-213` is the precedent for a computed number that is printed rather than
-> asserted.
-> **One correction travels with this answer.** An earlier draft justified the floor as "the
-> monochrome-print legibility test". It is not: `resolvePrintPalette` carries `outline`
-> (`palette.ts:135`) and `paint.ts` strokes critical and near-critical bars with it on the print path
-> as on screen, so the solid-versus-dashed shape cue satisfies 1.4.1 on paper too. The figures are
-> right and **1.5:1 is a house number, not a standard** — the defect is design quality on the primary
-> surface, not accessibility. Corrected in `diagnosis.md` §3.3, `design.md` §8.2, `hard-surfaces.md`
-> §1 and the ADR's Context.
+> **CQ-E — Does the organisation landing page's UI wait one landing for the archetypes?**
+> **Recommended: yes**, and it becomes the **first fully-realised screen in the new language**
+> (`migration.md` B). Its data work proceeds unblocked. The reasoning: it is new, so there is no
+> legacy to preserve; it needs exactly the six archetypes; it depends on none of the slow work; and it
+> is the screen they opened this thread about. **The fallback if even one landing is too long**: ship
+> the six archetypes alone — they have no dependency on the token work and could land in days.
+> The option I recommend against is "proceed and get restyled": it would build a sixteenth copy of the
+> page frame and a fourth bespoke empty state, both of which Landing A then has to unpick.
+
+> **CQ-F — The activity editor: modal dialog, or docked panel?**
+> A planner edits an activity to change the schedule, and a modal hides the schedule. Every
+> `ContextStrip` in ADR-0061 exists to carry facts into a dialog covering the surface those facts came
+> from. **Recommended: a docked, resizable right panel**, keeping every ADR-0060/0061/0062/0089
+> decision verbatim and changing only the container. It is the largest _behavioural_ change proposed
+> and needs `ux-reviewer` before it is taken. Retiring it from the dialog also retires `Dialog`'s `xl`
+> preset, whose only consumer it is.
+
+> **CQ-G — Does the organisation nav (7 links, 637 px) leave the app header for the rail?**
+> It is what funds the one-band workspace: 190 px of chrome becomes 56, and the canvas grows ~24 % at 1646. **Recommended: yes** — the header nav and the Project Explorer are the same layer wearing two
+> shapes, and a planner should have one place to look for "where am I". The cost is that six
+> destinations move to a zone in the rail, which is a real relocation for existing users.
+
+> **CQ-H — How much visible change lands in one release?**
+> The product owner's host pulls every release automatically (ADR-0047), so "merged" means "in use by
+> tomorrow". **Recommended: one landing per release**, with A (invisible) and B (a new screen) first,
+> and the surfaces they use daily — C, D, E — only after they have seen and approved the language.
+> The alternative is to batch C+D so the workspace changes once rather than twice; that is a real
+> option and it trades review size for churn.
+
+> **CQ-I — Is the command-surface reshape one epic with the token layer, or two?**
+> **Recommended: one epic, separate landings.** They share no code — the menubar consumes the token
+> layer and nothing else — but they share a _thesis_, and splitting them means the reshape gets
+> re-justified from scratch against three epics of prior measurement. The counter-argument is real and
+> should be put: the reshape is the single highest-risk item here, it may be **withdrawn by its own
+> measurement**, and a separate epic would let the rest land regardless. **If the product owner wants
+> the risk isolated, split it — the plan is written so C is liftable.**
+
+---
 
 ## Stated defaults for everything else
 
-Elevation stays borders-first (`diagnosis.md` §4.1 defends it). Radius, motion and the typeface are
-**not re-derived** — `--radius: 0.625rem` already gives the old app's 8 px exactly. No component
-library. No new `VITE_` flag — a `VITE_` flag is not an operator rollback and never was (ADR-0088);
-the rollback is a commit boundary. `brand` and `auth` stay pinned and untouched (ADR-0077). Corporate
-Dark is not planned. The CPM engine is not imported and no migration runs.
+Elevation stays borders-first, with a token so the model can say which mechanism it uses. Radius and
+motion are **not re-derived** — `--radius: 0.625rem` already gives the old app's 8 px exactly.
+**No component library**: the three things this rewrite most needs sit _below_ the layer one operates
+at, and the behaviour it would supply is already shipped and APG-tested (`diagnosis.md` §4.2) — the
+case is costed there rather than assumed. No new `VITE_` flag; the rollback is a commit boundary.
+The login's composition is not reopened. The CPM engine is not imported and no migration runs.
 
-## What was measured, and what was not
+---
 
-This session had **no shell**. Every ratio in these documents is either quoted from a file that
-already computed it, or **hand-computed** from `globals.css` using this repository's own transform
-(`apps/web/src/test/colour.ts`) — and each one says which. The hand-computed figures are the
-decision-bearing ones and **L0-T1 exists to execute them** rather than trust this document
-(`CLAUDE.md` §19.10; ADR-0076 Class 3). One of them contradicts a sibling spec's hypothesis and
-`diagnosis.md` §0.2 says so rather than routing around it — and its verdict was then confirmed
-independently, along with a defect the same computation found that I had missed (§0.2, point 3).
+## What was measured, what was not, and who I could not ask
+
+This session had **no shell** and **no agent-launch capability**. Every ratio is either quoted from a
+file that computed it or **hand-computed** from `globals.css` using this repository's own transform
+(`apps/web/src/test/colour.ts`), and each says which. Every width is either quoted from
+`docs/specs/workspace-*/` or is **labelled as a prediction with a falsification condition attached**,
+because the single most repeated finding in those three epics is a width expectation contradicted by
+its own measurement.
+
+**The design collaborators were not run**, and `screens.md` §9 says which agent should be asked what,
+at which point — `accessibility-reviewer` on the menubar's keyboard model and the plot floor _before_
+values are chosen; `ux-reviewer` on the editor panel _before_ that decision is taken;
+`component-reviewer` on the archetype set _before_ it is built; `performance-reviewer` on the
+typeface's LCP cost. The register is full of findings that would have been cheap in design and were
+expensive at review; that table exists so this epic does not add to it.

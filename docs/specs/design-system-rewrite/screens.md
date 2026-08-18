@@ -274,4 +274,3 @@ here is the brief for each, at the point it is cheapest.
 The register is full of findings that would have been cheap in design and were expensive at review —
 ADR-0064 §7, ADR-0067 M4, ADR-0086 M6, ADR-0089 M6. This table exists so that does not happen again
 in the largest UI epic the project has attempted.
-</content>

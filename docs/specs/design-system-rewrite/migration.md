@@ -1,331 +1,220 @@
-# Migration — six landings, and what gets worse
+# Migration — what lands, in what order, and what the product owner sees when
 
-> ~989 web source files consume these tokens. A `VITE_` flag is **not** a rollback for the operator
-> and never has been (ADR-0088: Vite inlines `import.meta.env.VITE_*` at build time,
-> `apps/web/Dockerfile` declares one `VITE_` build arg, `docker-publish.yml` passes none,
-> `.dockerignore` strips `**/.env` from the build context). So the rollback here is a **commit
-> boundary**, and the design's job is to make most of the landings byte-identical so that most of
-> the rollbacks are free.
-
----
-
-## 0. The ordering rule, and why each position is load-bearing
-
-**Gates before values. Structure before values. Byte-identical before visible.**
-
-That is ADR-0055 §8.1's argument — _"flipping the structure and the values together makes every
-flag-off parity suite meaningless on the day it is most needed, and turns one reviewable diff into
-two entangled ones"_ — applied to an epic that has no flag to hide behind.
-
-| Landing                                          | Visual change                                 | Rollback              |
-| ------------------------------------------------ | --------------------------------------------- | --------------------- |
-| **L0** — gates, no CSS                           | none                                          | free                  |
-| **L1** — the canvas becomes a scope              | **none, by construction**                     | free                  |
-| **L2** — metric tokens frozen at shipped values  | **none except the Gantt row** (CQ-B, 32 → 28) | free                  |
-| **L2b** — the control scale moves 40 → 36        | **yes, every control** — a measurement task   | revert a named commit |
-| **L3** — the page vocabulary                     | yes                                           | revert a named range  |
-| **L4** — values                                  | yes, per theme                                | revert a named commit |
-| **L5** — the documents re-derived from the gates | none                                          | free                  |
-
-**Two of these changed when the four critical questions were answered** (`README.md`), and both
-changes cost the plan something it should not pretend it still has:
-
-- **CQ-B (one rhythm, at 28)** means L2 is no longer byte-identical. The Gantt's row goes 32 → 28 on
-  the day the token lands. It is one surface and one number, so L2 keeps its position; it does not
-  keep its claim.
-- **CQ-C (move to 36 in this epic)** adds **L2b**, which is the only landing in the plan whose
-  deliverable is a set of measurements rather than a diff.
+> ~989 web source files. A `VITE_` flag is **not** an operator rollback and never has been
+> (ADR-0088: Vite inlines `import.meta.env.VITE_*` at build time, `apps/web/Dockerfile` declares one
+> `VITE_` build arg, `docker-publish.yml` passes none, `.dockerignore` strips `**/.env`). **The
+> rollback is a commit boundary**, and the sequence below is arranged so the largest, riskiest
+> changes are the ones with the cleanest revert.
 
 ---
 
-## L0 — the gates, and nothing else
+## 0. The shape, and why it is not "tokens first"
 
-**No CSS. No component. No route.** This is the milestone that makes every later one checkable.
+An earlier draft of this plan ran **L0 → L5**: gates, then the canvas scope, then metrics, then the
+page vocabulary, then values, then docs. **That ordering is now wrong**, for two reasons that arrived
+after it was written.
 
-- **L0-T1 — execute the arithmetic.** Every hand-computed figure in `diagnosis.md` §0.2 and §3.3 is
-  re-derived by running the repository's own transform. This session had no shell; the numbers were
-  computed by hand and the register punishes a claim that was never run (`CLAUDE.md` §19.10). If an
-  executed figure disagrees, **the document is wrong and is corrected in place**, not quietly.
-- **L0-T2 — the pair census** (`design.md` §8.1), including alpha-modified fills and the split-pair
-  rule. Verified red by removing one existing pair from the assertion and confirming the census names
-  it.
-- **L0-T3 — the plot separation matrix** (`design.md` §8.2), **reporting** the fill-to-fill numbers
-  rather than asserting them (CQ-D). It will print `1.27:1` for Light and `1.34:1` for Corporate on
-  its first run, and those two numbers are the argument for L4.
-- **L0-T4 — the closure** (`design.md` §1.5b) computed and **compared** to today's `REBOUND_NAMES`,
-  reporting the difference. Expected output: `--destructive`, `--destructive-foreground`,
-  `--destructive-hover`, `--secondary`, `--secondary-foreground`, and the three solid status triples.
-  Reported in L0, asserted in L1.
-- **L0-T5 — the rhythm ratchet** at its measured floor: **27 arbitrary sizing values** across
-  `apps/web/src/**/*.tsx` today. Set at the floor, never at zero — ADR-0058's coverage-ratchet
-  lesson, which exists because _"a gate that fails on day one gets deleted rather than fixed"_.
+> **The old labels survive in the sibling documents, which were written against them.** They resolve
+> as follows, and the mapping is here rather than in thirty edits because the _reasoning_ attached to
+> each old label is still correct — only its position moved.
+>
+> | old            | now                                                                         |
+> | -------------- | --------------------------------------------------------------------------- |
+> | L0, L2, L2b    | **A** — foundations (gates, one theme, closure, type, metric, archetypes)   |
+> | L3             | **A** — the archetypes land with the foundations, so **B** can consume them |
+> | —              | **B** — the landing page, fully realised (new)                              |
+> | —              | **C** — the command surface (new)                                           |
+> | —              | **D** — the workspace shape (new)                                           |
+> | L1, L4-1, L4-2 | **E** — the diagram: the canvas scope and its values                        |
+> | L4-3…5, L5     | **F** — remaining screens, accent placement, documents                      |
 
-**Why L0 ships alone:** every one of its assertions is a statement about code that already exists.
-If any of them is red, that is a finding about the shipped product, and it should be reported and
-triaged on its own rather than inside a redesign that can be blamed for it.
+1. **Removing two themes made the token work about a third of its size** (`design.md` §0.5.1). It is
+   no longer the long pole it was, so putting it first no longer buys much.
+2. **"I had free rein" is a bad thing to discover after forty files have changed.** The mandate has
+   widened three times; the product owner needs something real to look at before all of it lands.
 
----
+So the sequence is arranged around **one question: how soon can somebody look at a whole screen in
+the new language?** The answer is **after two landings**, and the screen is the organisation landing
+page.
 
-## L1 — the canvas becomes a scope
+| Landing                                  | What it is                                                 | Visible?              | Rollback              |
+| ---------------------------------------- | ---------------------------------------------------------- | --------------------- | --------------------- |
+| **A — Foundations**                      | one theme, the closure, type + metric + the six archetypes | Almost nothing        | free (mostly no-op)   |
+| **B — The landing page, fully realised** | **the first screen in the new language — the early look**  | **Yes, entirely**     | one screen            |
+| **C — The command surface**              | measure, then the menubar                                  | Yes, the workspace    | revert a named commit |
+| **D — The workspace shape**              | one band, the rail as sole navigator, the activity panel   | Yes, substantially    | revert a named range  |
+| **E — The diagram**                      | the canvas scope, plot separations, the Gantt              | Yes, the primary view | revert a named range  |
+| **F — The remaining screens, and docs**  | tables, editor, staff, public; documents re-derived        | Yes, incrementally    | free                  |
 
-**Byte-identical by construction**, and the construction is worth stating precisely because it is
-what makes the largest structural change in the epic free to revert.
-
-1. Declare a `--canvas-*` family whose 18 base values are **exactly the values those names resolve
-   to today at `:root` / `.dark` / `.corporate`**, plus the `PLOT` pack at today's
-   `--canvas-band` / `--canvas-grid-*` / `--canvas-nonworking-hatch` values.
-2. Add `[data-surface='canvas']` and `'canvas'` to `SurfaceTone`.
-3. Wrap the TSLD diagram container and the Gantt chart region in `<Surface tone="canvas">`.
-4. Pass that element to `resolveTsldPalette`, `resolveWbsBandPalette`, `resolveLensPalette`,
-   `resolveResourceStripPalette` — and **to `resolvePrintPalette`**, which is the one that will be
-   forgotten, because it takes a root, clears `.dark`, and would otherwise keep resolving the page.
-5. Apply the closure from L0-T4 as an assertion.
-
-**Nothing moves, because every canvas value equals its page value on the day it lands.** The proof
-is the existing paint parity suites plus the ADR-0078 S1 whole-scene golden log, which exists for
-exactly this kind of change.
-
-**The two things that can go wrong and their guards:**
-
-- The palette resolves against an unmounted or out-of-scope element and silently returns page values.
-  Guard + a test that asserts the resolved fill **differs** from the page fill when the two token
-  values differ. Without that test the failure is invisible, because "page values" is today's
-  behaviour.
-- `resolvePrintPalette` is missed. A test asserts both resolvers read the same **scope**, not merely
-  the same token names.
-
-**Run `apps/web/scripts/measure-link-routing.mjs` before and after** and record both numbers
-(`hard-surfaces.md` §1).
+**A and B together are the smallest useful pair**, and they are deliberately the two with the least
+risk in the epic: A is nearly all no-op re-expression, and B is a screen that does not exist yet.
 
 ---
 
-## L2 — metric tokens, frozen (except one)
+## A — Foundations
 
-Declare `--control-h-*`, `--row-h`, `--ruler-h`, `--lane-h`, `--lane-bar-h`, `--rule-w`,
-`--gutter-*`, `--radius-plot`, `--tap-min` at **today's shipped numbers**, add `[data-density]` with
-all three levels resolving to those same numbers, and re-express the primitives and the five module
-constants in terms of them.
+**One landing, because the single-theme decision collapsed three into one.**
 
-Four values genuinely disagree today and the freeze has to pick one each. Two are now answered and
-two are not:
+- **Collapse to one theme** (`design.md` §0.5). `.dark` deleted; `.corporate`'s values folded into
+  `:root`; the two flagged value layers folded in with them; `THEME_SELECTORS` becomes a one-element
+  list; `Theme` stays a union with one member; the account menu's picker is removed; the stale
+  `localStorage` key is cleared once on first mount. **`theme-boot.js` keeps running and keeps its
+  test** — the mechanism is live, not vestigial.
+- **Retire the `auth` scope** (`screens.md` §7) — but **check first** whether its four
+  design-motivated deltas become page values or become the reason it stays. A task, not an
+  assumption.
+- **The closure** (`design.md` §1.5): `--page-*` as an explicit family, `REBOUND_NAMES` computed and
+  asserted rather than authored, `Card`/`Popover` as resets.
+- **The gates**: the pair census (including alpha modifiers and the split-pair rule), the theme
+  contract, the "no token outside a theme or scope block" assertion, the rhythm ratchet at its
+  measured floor of **27** arbitrary sizing values. Each **verified red first**.
+- **The type ramp and the self-hosted typeface** (`design.md` §4.0–4.1) — including the finding that
+  the product has never actually shipped Inter.
+- **The metric tokens**, frozen at today's values except `--row-h` at 28 (CQ-B) and the 40 → 36
+  control move (CQ-C), which is its own commit with its own measurement (below).
+- **The six archetypes**: `PageContainer`, `PageHeader`, `SectionCard`, `EmptyState`, `Skeleton`,
+  `ListRow`; `CardTitle` gains `level`.
 
-| token              | today                             | L2                                                           |
-| ------------------ | --------------------------------- | ------------------------------------------------------------ |
-| `--row-h`          | 28 tree / 32 Gantt / `py-2` table | **28** — CQ-B answered. **The Gantt moves; this is visible** |
-| `--control-h-md`   | 40 shipped / 36 documented        | **40, frozen** — the move to 36 is CQ-C and is **L2b**       |
-| `--ruler-h`        | 40 TSLD / 34 Gantt                | **unanswered** — stays per-surface until it is               |
-| toolbar minor axis | 36 (`docs/TECH_DEBT.md` #127)     | 36, frozen                                                   |
+**The 40 → 36 control move stays a measurement task** and keeps the six steps it had: change the
+value; re-run `measure:toolbar` **at 1646**; **re-derive** the band floors rather than adjusting them
+to make the existing gate pass; update `e2e-toolbar-fit` to the measured values; run every journey;
+and **measure and report the vertical gain rather than asserting one**. It lands _before_ C, so the
+menubar is measured against a settled control height rather than a moving one.
 
-**Where a value is unanswered the token stays per-surface until it is answered** — a `--ruler-h-tsld`
-and a `--ruler-h-gantt` later collapsed is honest; picking one silently is not.
-
-**So L2 is byte-identical apart from the Gantt row**, and that exception is stated rather than
-absorbed: CQ-B's answer buys one rhythm across three surfaces and costs the plan its cleanest
-rollback claim on one of them.
-
-**Gate: `pnpm --filter @repo/web measure:toolbar` and `test:e2e:toolbar-fit` at 1646, before and
-after, numbers recorded.** Four consecutive epics found their width expectation contradicted by their
-own measurement; this one does not add a fifth by arithmetic. The Gantt row change also needs
-`test:e2e:gantt` and `measure:gantt`, because virtualization is measured off that number
-(`GanttPanel.tsx:420`).
-
-Also here: `@media (pointer: coarse)` resolves `[data-density]` to `comfortable`, which is what makes
-`docs/TECH_DEBT.md` #127 closable without adding 16 px to every desktop planner's band. That **is** a
-visible change under a coarse pointer — so it is measured with the first-ever coarse-pointer sweep
-(`docs/TECH_DEBT.md` #133) and, if the numbers are bad, deferred to L4 rather than shipped on hope.
+**What A does not do:** it does not touch the canvas, the command surface's shape, or any screen's
+layout. It is the vocabulary and the archetypes, and almost all of it is invisible.
 
 ---
 
-## L2b — the control scale moves 40 → 36 (CQ-C)
+## B — The organisation landing page, fully realised
 
-**This is a measurement task, not a token edit**, and it is the only landing in the plan whose
-deliverable is a set of numbers. It departs from this design's own default — which was to tokenise 40
-and move later, precisely because ADR-0090 and ADR-0091 derive the command surface's band floors from
-**measured** control widths and `e2e-toolbar-fit` asserts them. The answer is to move it now; the
-rule that made the default cautious does not go away, it becomes the method.
+**This is the recommendation the coordinator asked for, and it is option (c): the landing page
+becomes the first fully-realised screen in the new language.**
 
-**Why it goes here and not in L4.** It is the one value change that alters the _inputs_ to another
-epic's measurements. Everything in L4 is colour and type, which no gate elsewhere derives a floor
-from. Putting L2b immediately after the frozen tokens means the toolbar is re-measured **once**,
-against a tree whose only other change is a no-op re-expression — so a regression has one candidate
-cause rather than four.
+### The reasoning
 
-### The six steps
+| Why it, rather than any other screen                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **It is new.** No legacy DOM, no journey asserting its structure, no parity suite to preserve. Every other candidate — the clients list, the workspace — has all three.                            |
+| **It is the screen the product owner opened this thread about**, and the one they will see first after sign-in.                                                                                    |
+| **Its API half is genuinely independent.** Indexes have landed and the read model is next; nothing in this epic touches either.                                                                    |
+| **It needs precisely the six archetypes.** Its own §0.3 lists five gaps and four of them are `EmptyState`, `Skeleton`, a section archetype with a real heading rank, and a list-row archetype.     |
+| **It is the right size to be a proof.** Multiple sections, three empty states, a feed, a metrics strip, links into the hierarchy — large enough to be real, small enough to land in one milestone. |
+| **It does not depend on the hard, slow work.** No canvas scope, no painter, no plot separation matrix, no toolbar arithmetic. It can be finished while all of that is still in flight.             |
 
-1. **Change the value.** `--control-h-sm|md|lg` 36/40/44 → 32/36/40, and `Button`/`Input` follow the
-   token. Nothing else moves in this commit.
-2. **Re-run `pnpm --filter @repo/web measure:toolbar` at 1646** — the product owner's actual screen,
-   and the width ADR-0091's retrospective records nobody having measured for two entire epics. 1920,
-   1440, 1024 and 768 are swept too, but 1646 is the one the answer is judged on.
-3. **Re-derive the band floors from what it reports.** `resolveLayoutMode`'s four floors (1536 /
-   1280 / 1024 / 0, `docs/DESIGN_SYSTEM.md`) and `computeLadder`'s inputs come out of the new
-   measurement. **Do not adjust them to make the existing gate pass** — that is tuning the instrument
-   to the reading, and it is how a measured floor silently becomes a remembered one.
-4. **Update `e2e-toolbar-fit`'s expectations to the measured values**, including the coarse-pointer
-   assertions, which are deliberately written against the figures actually delivered
-   (`docs/TECH_DEBT.md` #127).
-5. **Run every journey.** All 33. ADR-0091's retrospective records three broken by a label change,
-   each found by CI rather than locally, and the rule that replaced that judgement is that a layout
-   change means running all of them. `scripts/e2e-local.sh web` now covers the base one, which is the
-   suite that was previously unrunnable through the documented pre-push gate (ADR-0096).
-6. **Measure and report the vertical gain rather than asserting one.** Re-run
-   `apps/web/measure-toolbar/vertical-stack.spec.ts` at 1646 and record the bands against the
-   2026-08-13 baseline: **shell chrome 192 (header 56, identity 45, row 1 45, row 2 44), above the
-   canvas 249, canvas 558** (`workspace-chrome/m0-band-measurement.md` §2).
+### The condition, and it is not negotiable
 
-### What step 6 is likely to find, said before it is run
+**It must be built from the archetypes, not from a bespoke layout that happens to look right.** A
+beautiful one-off on the flagship screen would falsify this epic's entire thesis on its first
+outing — and it is exactly the failure mode `docs/specs/organisation-landing/` §0.3 was written to
+avoid, one level up. If the screen needs something the vocabulary does not have, **that is a
+requirement on A**, and A is one landing away rather than five.
 
-A 4 px control height does **not** necessarily buy 4 px of band. The command row's minor axis is
-already 36 (`docs/TECH_DEBT.md` #127) and the row's height is set by `min-h-9` on the control, not by
-`Button`'s default — so **the two toolbar rows may not move at all**, and the gain may land entirely
-in the tables, the forms, the Explorer and the dialogs.
+### What I recommend be put to the product owner
 
-That is a legitimate outcome, it is not the outcome the change is being made for, and it is therefore
-the one most worth measuring. **If the vertical gain is small, that is the finding and it is reported
-as one** — four consecutive epics here have had a headline width or height number contradicted by
-their own measurement (ADR-0091 D4, ADR-0092 M4, ADR-0093, ADR-0094 M0-T1), and in two of those the
-correction was more useful than the change.
+> The landing page's **data** work proceeds now, unchanged and unblocked. Its **UI** waits for
+> Landing A — which is one milestone, mostly invisible, and is the shortest path to them seeing a
+> whole screen designed rather than a token file. In exchange for that wait they get the first screen
+> in the new language rather than the last screen in the old one, and they get it **before** the
+> workspace, the canvas or the command surface change under them.
 
-### Rollback
+**Why not "proceed and get restyled":** a promise of "it will look better later" has a poor record
+here, and the specific cost is concrete — the screen would be built against `mx-auto max-w-6xl p-6`
+and hand-rolled empty states, which is a sixteenth copy of the frame and a fourth bespoke empty
+state, both of which A then has to unpick. **Why not "wait for the whole epic":** it would block the
+screen they care most about behind five landings, which is the worst of both.
 
-One commit. It is the largest single visual change in the epic — **every control in the product, in
-all three themes** — and it deliberately lands alone so that reverting it does not take the token
-architecture with it.
+**If the product owner would rather not wait even one landing**, the fallback is a partial A: ship
+only `PageContainer`, `PageHeader`, `SectionCard`, `EmptyState`, `Skeleton` and `ListRow` — the
+archetypes have **no dependency on the token work** and could land in days. That is the compromise to
+offer if the answer is "sooner".
 
 ---
 
-## L3 — the page vocabulary
+## C — The command surface
 
-The first landing with a visible change, and the one the organisation-landing epic is waiting for.
+**Measure first, and the falsification condition is written before the measurement**
+(`command-surface.md` §6): render five labelled menu triggers and the eight-item strip into the
+existing harness at 1646, 1440, 1280, 1024 and 768. **If the band does not fit at 1646 with ≥ 120 px
+of slack, the proposal is withdrawn and the fourth-fitting option returns.**
 
-`PageContainer`, `PageHeader`, `SectionCard`, `EmptyState`, `Skeleton`, `ListRow`; `CardTitle` gains
-`level`; `DataTable` gains `numeric` + sticky header + `Skeleton` rows; **12 route files migrate**;
-`staff.tsx:117-118`'s written workaround is deleted.
+Then, if it holds: the `menubar` primitive, the registry re-pointed (items unchanged — only the
+renderer), the ladder's apparatus deleted, `e2e-toolbar-fit` re-pointed with S3 becoming "reachable
+**by name**" rather than "reachable via an unnamed glyph".
 
-**Why the migration is safe, and it is not because it is small.** Every existing suite queries by
-**role and accessible name** — which is exactly what a frame migration preserves. That is the
-ADR-0062 extraction standard, whose proof was that _"every pre-existing suite passed unchanged"_.
-Where a suite fails, it is asserting a _structure_ rather than a _contract_, and that is worth
-knowing.
-
-**No public component API changes**, which is what makes reverting L3 a revert rather than a
-rewrite (the ADR-0078 barrel-preserving argument).
-
-**All 33 Playwright journeys are run, not reasoned about.** None of them sets a theme, so every one
-paints in whatever the default is and every one sees this DOM change. ADR-0091's retrospective
-records three journeys breaking across one layout change, each found by CI rather than the author,
-and the rule that replaced that judgement: after any label or layout change, run every journey.
+Nine of thirty-three journeys touch the toolbar. All thirty-three are run.
 
 ---
 
-## L4 — values
+## D — The workspace shape
 
-**One theme per commit, and one decision per commit.** This is where the design becomes visible and
-where the product owner's judgement is the acceptance test.
+The three moves that depend on C, in this order:
 
-In order:
-
-1. **The plot values** — the criticality triple re-separated so the L0-T3 report clears the **≥ 1.5:1**
-   floor (CQ-D, answered), in all three themes, in both canvas flag states, **and in the print
-   palette**. The gate is promoted from reporting to asserting **in this commit**, with the values
-   that satisfy it. Note what the floor is and is not: a **house number** for "do these read as
-   different at a glance", not a WCAG one — the solid-versus-dashed criticality outline carries 1.4.1,
-   on screen and on paper (`palette.ts:135`).
-2. **The diagram ground** (CQ-A, answered: yes) — Light and Dark gain a quiet working surface distinct
-   from the page, joining Corporate's, which until now was flagged.
-3. **The accent placement** (`design.md` §2.2) — the current nav item, the selected row, the active
-   mode. `ACCENT_ROLES` lands with it.
-4. **The type ramp's values** — `--text-page` finally has a size, and it is the first time a page
-   title has been visually distinct from a section heading.
-5. **Elevation** (`design.md` §4.2) — ten call sites, and the Dark-theme rule written down.
-
-**Density is not in this list any more.** CQ-C moved it to **L2b**, ahead of L3, because it is the
-one value change that alters another epic's measured inputs and it must be re-measured against a tree
-with nothing else moving in it.
-
-**Corporate's promotion to the default theme is the sibling epic's**, not this one's, and the
-ordering between them is a product decision. The argument for it going **first** is strong and is
-that epic's to make: the product owner cannot judge design work on a theme they are not looking at.
+1. **The organisation nav leaves the header for the rail** (`screens.md` §0, §3). 637 px freed, one
+   navigator, one `aria-current` treatment.
+2. **The band merge**, gated on the arithmetic in `screens.md` §1.2 — ~1677 px against 1646, **31 px
+   short**, with two measured cuts available. **If it does not fit, the two-band fallback ships**, which
+   still returns 90 px and does not depend on the nav move at all. Named up front because ADR-0092 M5
+   measured a merge, found it 134 px short, and withdrew it.
+3. **The activity editor becomes a docked panel** (`screens.md` §2) — the largest behavioural change
+   in the epic, gated on a `ux-reviewer` recommendation and a product-owner decision, and retiring
+   `Dialog`'s `xl` preset with it.
 
 ---
 
-## L5 — the documents, re-derived
+## E — The diagram
 
-`docs/DESIGN_SYSTEM.md` is currently wrong about the type scale (`text-3xl`, unused), the control
-scale (36 vs 40), the table primitive (five features it does not have), the scope count (§230 says
-three, §267 says five) and the family size (§246 says 17, the gate says 18). Every one of those is
-**re-derived from a gate or from the code**, not from another document — the failure this repository
-has recorded more than any other.
+The canvas scope, byte-identical on arrival (`--canvas-*` declared at today's resolved values,
+`resolveTsldPalette(root)` pointed at the `<Surface tone="canvas">` element, and **`resolvePrintPalette`
+with it** — the one that will be forgotten). Then the plot values: the criticality triple re-separated
+so the reported figures clear the ≥ 1.5:1 floor, the gate promoted from reporting to asserting in the
+same commit. Then the Gantt's chart region, ruler and rows.
 
-`docs/COMPONENT_LIBRARY.md` gains the six new primitives. `docs/FRONTEND_ARCHITECTURE.md`'s theme
-section gains the density axis and the canvas scope. `CLAUDE.md` §16 and `docs/adr/README.md` gain
-ADR-0097 — **in the same commit as the ADR file**, because `scripts/check-counts.mjs:55` re-derives
-the count from `docs/adr/`.
+`apps/web/scripts/measure-link-routing.mjs` runs before and after, and the numbers go in the
+milestone record. This epic must leave `docs/TECH_DEBT.md` #75 **measurable**; it must not quietly
+become the epic that answers it.
+
+---
+
+## F — The remaining screens, and the documents
+
+Tables, the Project Explorer's zones, the staff console, the public screens, the dialog set. Then
+`docs/DESIGN_SYSTEM.md` **re-derived from the gates** — it is currently wrong about the type scale
+(`text-3xl`, unused), the control scale, the table primitive, the scope count (§230 says three, §267
+says five) and the family size (§246 says 17, the gate says 18). `CLAUDE.md` §16 and
+`docs/adr/README.md` gain ADR-0097 **in the same commit as the ADR file**, because
+`scripts/check-counts.mjs:55` re-derives the count from `docs/adr/`.
 
 ---
 
 ## What gets worse
 
-Said here rather than discovered.
-
-1. **`globals.css` gets substantially longer.** Six base families × 18, plus packs, plus the metric
-   layers, plus `--page-*`, in three theme blocks. Today it is 1,114 lines. Editing one colour means
-   editing it in more places, and the only thing standing between that and drift is the gates. **This
-   is the epic's largest ongoing cost and it does not go away.**
-2. **Light and Dark change visibly, and they were called "secondary".** The page frame, the type
-   ramp, the row rhythm and the diagram ground are shared structure, so an epic commissioned to make
-   Corporate look designed changes the two themes the product owner called secondary. That is CQ-3(a)
-   in the sibling spec, inherited here, and it should be approved rather than discovered.
-3. **Between L2 and L4 the product is in a half-state.** Metric tokens exist and carry today's
-   disagreeing values; the page vocabulary exists and the values have not been designed. It will look
-   slightly _more_ inconsistent for a period — a real page title next to a card title that has not
-   moved yet — and that is the price of not flipping structure and values together.
-4. **The plot separation gate is red until L4.** It ships **reporting** for exactly that reason
-   (CQ-D), and a reported number that everyone learns to scroll past is a real risk. Mitigation: L4-1
-   is the first value commit, so the window is short and named.
-   4a. **L2 is no longer byte-identical** (CQ-B). The Gantt's row goes 32 → 28 with the token, so one
-   surface loses the free rollback the landing was designed to have. One number, one surface, stated
-   rather than absorbed — and it needs `test:e2e:gantt` and `measure:gantt`, because the virtualizer
-   is measured off it (`GanttPanel.tsx:420`).
-   4b. **L2b is the largest single visual change in the epic** (CQ-C): every control in the product, in
-   all three themes, in one commit. It departs from this design's own default, and the default's
-   reason — that ADR-0090/0091 derive band floors from measured control widths — does not go away, it
-   becomes the method. **The specific risk is step 3 of L2b**: adjusting a band floor to make the
-   existing gate pass instead of re-deriving it from the new measurement. That would convert a
-   measured floor into a remembered one silently, and nothing downstream would catch it.
-   4c. **The vertical gain L2b is being made for may not materialise.** The command row's minor axis is
-   already 36, so the two toolbar rows may not move at all and the height may come back entirely in
-   tables, forms and dialogs. That is why step 6 measures and reports rather than asserting — and if
-   the gain is small, **that is the finding**, not a failure of the milestone.
-5. **Density-by-surface means a control's height depends on where it lands.** That is the opposite of
-   the surface-scope property that no descendant learns where it is — and the mitigation is only that
-   it is inherited CSS rather than a prop, so nobody has to _thread_ it. Somebody will still be
-   surprised by it once.
-6. **The canvas scope makes `resolveTsldPalette`'s root load-bearing.** A function four callers share
-   grows a way to be silently wrong that it did not have before, on the surface with the least
-   observability in the product.
-7. **The closure rule will govern pairs the product never renders** (`design.md` §1.5, blind spot).
-   Three lines of CSS each, and the right direction to be wrong in — but it is more CSS for pairs
-   nobody paints.
-8. **The scope count is now the thing to defend.** Six families is affordable; the seventh is where
-   this becomes unmaintainable, and the only thing preventing it is a written bar and a reviewer who
-   applies it.
+1. **This is now a large, visible, multi-landing change to a product in daily use.** The product owner
+   runs the Watchtower profile, so every release reaches their host (`CLAUDE.md` §17). The sequence
+   above is the mitigation: A is invisible, B is a new screen, and the surfaces they use every day
+   (C, D, E) come after they have seen and approved the language.
+2. **The command surface reshape may be withdrawn by its own measurement**, after the measurement
+   milestone is spent. That is the correct outcome if the numbers say so, and it is budgeted.
+3. **The activity-editor panel is a workflow change, not a styling one.** If planners dislike it, the
+   revert is real work, not a token flip.
+4. **`--row-h` at 28 makes Landing A non-byte-identical** for the Gantt (32 → 28), which takes
+   `test:e2e:gantt` and `measure:gantt` with it.
+5. **Removing dark is an accommodation removed** (`design.md` §0.5.6). Not a WCAG failure, the product
+   owner's call — and §0.5.4's one-sentence cost is what keeps "revisit later" honest.
+6. **`globals.css` still grows**, though far less than before: five families plus packs plus metric,
+   type, elevation and motion — but **once**, not three times.
+7. **Nine journeys touch the toolbar and every screen migration touches a suite.** All thirty-three
+   are run at C, D and F. ADR-0091 records three broken by a label change, each found by CI rather
+   than locally.
 
 ---
 
-## What this epic must not do
+## What this epic must still not do
 
-- **Answer `docs/TECH_DEBT.md` #75.** It must leave the canvas budget _measurable_ and re-run the
-  harness. It must not quietly become the epic that sets a new number.
-- **Change the toolbar ladder's _arithmetic_.** ADR-0090/0091 own `resolveLayoutMode`,
-  `computeLadder`, the hysteresis, the `⋯` costing and the "a shrink-to-fit row must never demote"
-  and "the band width may never be an input to a fit decision" invariants. **L2b re-derives the
-  ladder's _inputs_ — the band floors — from a new measurement, and that is the only thing it may
-  touch.** The distinction is the whole safety argument: an input re-derived from a measurement is
-  the ladder working; an input adjusted so the existing gate passes is the ladder being defeated.
-- **Reopen ADR-0061's form vocabulary, ADR-0082's menu rule or ADR-0083's field rule.** All three are
-  recent, gated and correct.
-- **Touch `brand` or `auth` values.** ADR-0077's theme-invariance is a decision, and `globals.css`
-  says so in capitals for a reason.
-- **Add a component library, a chart library, a toaster or a command palette.** Each is an ADR of its
-  own, and arriving under cover of a token rewrite is how a design system becomes a framework.
+- **Answer `docs/TECH_DEBT.md` #75.** Leave the canvas budget measurable; re-run the harness.
+- **Adjust a toolbar band floor so the existing gate passes**, instead of re-deriving it. That
+  converts a measured floor into a remembered one, silently.
+- **Ship a beautiful one-off on the landing page.** The condition in B is the epic's own thesis
+  applied to itself.
+- **Let the single theme become a hard-coded theme.** `design.md` §0.5.3's gate is the whole of what
+  keeps a future dark variant to "a block of values and one entry".

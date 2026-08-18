@@ -748,6 +748,35 @@ together: `retentionActive: false` is the shipped default, and it means deleted 
 indefinitely — a countdown rendered from `retentionDays` alone would state a consequence the
 installation does not deliver.
 
+### The organisation overview (ADR-0098)
+
+`GET /api/v1/organizations/:orgSlug/overview` — the screen every sign-in already lands on.
+Not paginated, and it carries **no `meta`**: there is nothing to add.
+
+**One endpoint, not one per section.** All three sections resolve the same organisation, check
+the same permission and read the same database in the same request, so partial failure is not a
+real mode — per-section isolation buys nothing and costs a second round trip on the coldest path
+in the product.
+
+Two shape rules are load-bearing and worth stating here rather than only in the DTO:
+
+- **`changedBy` is a discriminated union, never a nullable name.** `{ kind: 'MEMBER', name }`,
+  `{ kind: 'FORMER_MEMBER' }` and `{ kind: 'UNKNOWN' }` are three different facts. A nullable
+  string collapses the last two into an absence a reader cannot tell from a defect. Names are
+  resolved **through the organisation's membership**, never through `users` directly — which is
+  what stops this endpoint turning an arbitrary user id into a display name.
+- **Sections the caller may not read are OMITTED, not zeroed.** `pendingInvitationCount` is
+  absent without `invitation:read`; `expiringDeletedCount` is absent unless the caller may
+  restore **and** hierarchy retention is armed on this host. A zero is a fact about the
+  organisation; an absence is a fact about the reader, and sending `0` would tell a Contributor
+  there is an answer they may not have.
+
+**"Recently changed" is ordered by `GREATEST(plan, newest activity, newest dependency)`**, not by
+`plans.updated_at` — editing an activity does not stamp its plan, and neither does the CPM
+recalculation (ADR-0022). An ordering on the plan row alone ranks a plan somebody has been working
+in all morning below one whose name was corrected last week, and every row on the screen still
+looks correct.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses
