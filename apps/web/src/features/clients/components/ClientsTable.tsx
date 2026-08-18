@@ -11,6 +11,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { deleteCascadeWarning } from '@/lib/delete-copy';
 
 /**
  * The organisation's clients as a table. Each name links to the client's
@@ -137,11 +138,7 @@ export function ClientsTable({
             }}
             onConfirm={confirmDelete}
             title="Delete client"
-            description={
-              deleting
-                ? `Delete “${deleting.name}” and all its projects and plans? You can restore it later.`
-                : ''
-            }
+            description={deleting ? deleteCascadeWarning('client', deleting.name) : ''}
             pending={deleteClient.isPending}
             pendingLabel="Deleting…"
             error={deleteError}

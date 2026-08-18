@@ -267,3 +267,20 @@ export const baselineKeys = {
   variance: (orgSlug: string, planId: string) =>
     [...baselineKeys.all(orgSlug), 'plan', planId, 'variance'] as const,
 };
+
+/**
+ * The recycle bin's list.
+ *
+ * **Here rather than in the feature, because the writers that invalidate it are not the feature.**
+ * Every hierarchy delete puts a row into this list, so `useDeleteClient`/`useDeleteProject`/
+ * `useDeletePlan` all have to invalidate it — and none of them should import a sibling feature to
+ * do so. Restore already did; the deletes did not, so once a session had opened Recently deleted,
+ * every later delete left it showing the cached list. The screen said "Nothing has been deleted"
+ * while a toast on top of it said a client had just been deleted — the one screen whose whole job
+ * is telling somebody their work is recoverable. Found by the ADR-0096 journey, which is the only
+ * thing that navigates away and back.
+ */
+export const deletedItemKeys = {
+  all: (orgSlug: string) => ['deleted-items', orgSlug] as const,
+  list: (orgSlug: string) => [...deletedItemKeys.all(orgSlug), 'list'] as const,
+};

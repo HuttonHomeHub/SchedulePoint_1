@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import type { PlanFormValues } from '../schemas/plan-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { planKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
+import { deletedItemKeys, planKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
 import { planQueryOptions, plansQueryOptions } from '@/lib/query/hierarchy-queries';
 
 // The read-queries live in `lib` (shared) so the navigator rail can consume them
@@ -257,7 +257,10 @@ export function useDeletePlan(orgSlug: string, projectId: string) {
   return useMutation({
     mutationFn: (planId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/plans/${planId}`, { method: 'DELETE' }),
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) }),
+    // …and the recycle bin, which the row arrives in. See `deletedItemKeys`.
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) });
+      await queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) });
+    },
   });
 }

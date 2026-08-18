@@ -23,6 +23,8 @@ function row(overrides: Partial<DeletedRow> = {}): DeletedRow {
     name: 'Acme',
     deletedAt: new Date('2026-07-10T10:00:00.000Z'),
     parentActive: true,
+    deleteBatchId: null,
+    blockedBy: null,
     ...overrides,
   };
 }
@@ -45,8 +47,21 @@ describe('RecycleBinService', () => {
     service = new RecycleBinService(
       organizations as unknown as OrganizationsService,
       repo as unknown as never,
+      // A non-default period on purpose: a test that uses 90 cannot tell a served value from a
+      // hardcoded one, which is the exact defect `retentionDays` exists to prevent.
+      { retentionHierarchyDays: 45, retentionHierarchyEnabled: false } as unknown as never,
       logger,
     );
+  });
+
+  it('serves the retention period from config rather than a constant', async () => {
+    // 45, not 90. A test written against the default cannot distinguish a served value from a
+    // hardcoded one — and a hardcoded one is silently wrong on every host that overrode it, which
+    // is the whole reason this rides in `meta` (ADR-0096 D2).
+    repo.findDeletedPage.mockResolvedValue([]);
+    const page = await service.list(principalWith(['client:read']), 'acme', { limit: 20 });
+    expect(page.meta.retentionDays).toBe(45);
+    expect(page.meta.retentionActive).toBe(false);
   });
 
   it('denies a caller without hierarchy read', async () => {
@@ -70,6 +85,8 @@ describe('RecycleBinService', () => {
         name: 'Baseline',
         deletedAt: new Date('2026-07-10T09:00:00.000Z'),
         parentActive: false,
+        deleteBatchId: null,
+        blockedBy: null,
       }),
       row({
         kind: 'client',
@@ -77,6 +94,8 @@ describe('RecycleBinService', () => {
         name: 'Acme',
         deletedAt: new Date('2026-07-10T11:00:00.000Z'),
         parentActive: true,
+        deleteBatchId: null,
+        blockedBy: null,
       }),
       row({
         kind: 'project',
@@ -84,6 +103,8 @@ describe('RecycleBinService', () => {
         name: 'Riverside',
         deletedAt: new Date('2026-07-10T10:00:00.000Z'),
         parentActive: true,
+        deleteBatchId: null,
+        blockedBy: null,
       }),
     ]);
 
@@ -94,7 +115,7 @@ describe('RecycleBinService', () => {
     expect(items.map((i) => i.id)).toEqual(['p1', 'c1', 'pr1']);
     expect(items[1]).toMatchObject({ kind: 'client', name: 'Acme', canRestore: true });
     expect(items[0]).toMatchObject({ kind: 'plan', canRestore: false });
-    expect(meta).toEqual({ nextCursor: null, hasMore: false });
+    expect(meta).toMatchObject({ nextCursor: null, hasMore: false });
   });
 
   it('over-fetches limit + 1 and returns a cursor for the next page when there is more', async () => {

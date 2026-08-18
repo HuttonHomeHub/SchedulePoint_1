@@ -33,6 +33,21 @@ export interface PageMeta {
 }
 
 /**
+ * The recycle bin's page metadata: pagination, plus the retention period in force (ADR-0096).
+ *
+ * **The period is served, never assumed.** It is an operator override
+ * (`RETENTION_HIERARCHY_DAYS`), so a client constant would make every "expires in N days" on the
+ * screen wrong on any host that changed it — wrong silently, with nothing able to detect the drift.
+ * Carrying it here costs one integer per page and makes the sentence true by construction.
+ */
+export interface DeletedItemsMeta extends PageMeta {
+  /** Days a soft-deleted row is kept before it is permanently removed. */
+  retentionDays: number;
+  /** Whether the sweep is actually deleting yet — false while the countdown ships ahead of it. */
+  retentionActive: boolean;
+}
+
+/**
  * Organisation-scoped roles, least → most privileged (ADR-0016). The API's
  * runtime `OrganizationRole` enum (apps/api/src/common/auth/principal.ts) is the
  * source of truth for values; this const is the cross-boundary contract the web
@@ -715,6 +730,34 @@ export interface DeletedHierarchyItem {
   name: string;
   deletedAt: string;
   canRestore: boolean;
+  /**
+   * The deletion this row was part of (ADR-0096). A cascade stamps ONE id on every row it touches
+   * and `restoreBatch` keys the whole restore on that value, so rows sharing this id come back
+   * together and are shown as one entry rather than as separate, separately-actionable rows.
+   *
+   * Null only for a row soft-deleted before the batch id existed.
+   */
+  deleteBatchId: string | null;
+  /**
+   * The still-deleted ancestor blocking this row's restore, or null when nothing blocks it.
+   *
+   * **Per row, not per group.** A descendant deleted in the SAME cascade also carries a blocker —
+   * its own batch's root — because this is computed from the row's immediate parent. Reading it
+   * per row rather than per group root re-creates exactly the "Restore its parent first" noise
+   * ADR-0096 exists to remove: the group's root is the only row whose blocker is a real obstacle.
+   *
+   * `kind` is never `'plan'`: a plan has no hierarchy descendants, so it can block nothing.
+   */
+  blockedBy: DeletedItemBlocker | null;
+}
+
+/** The ancestor standing between a deleted row and its restore. See {@link DeletedHierarchyItem}. */
+export interface DeletedItemBlocker {
+  kind: 'client' | 'project';
+  id: string;
+  name: string;
+  /** The blocker's OWN deletion, which is what a reader must restore — not this row's. */
+  deleteBatchId: string | null;
 }
 
 /**
@@ -1999,6 +2042,17 @@ export const AUDIT_ACTIONS = [
   'project.restored',
   'plan.deleted',
   'plan.restored',
+  /**
+   * A soft-deleted subtree passed its retention period and was PERMANENTLY removed (ADR-0096 D8).
+   *
+   * Passes both ADR-0073 tests and then some: the deletion is durable in the strongest sense — the
+   * rows are gone and no restore exists — and its blast radius is a whole subtree. It is also the
+   * only event in the catalogue with no human actor, which is precisely why it needs recording: a
+   * planner who finds their work missing has no other way to learn what happened to it.
+   *
+   * ONE row per batch carrying scalar counts, never one per swept row.
+   */
+  'hierarchy.expired',
   // — Destructive and structural acts inside a plan (ADR-0073 family D). One row per **user
   //   action**, never per swept row: deleting a WBS summary with forty-one descendants is one
   //   thing a person did, and forty-one rows would bury the fact rather than record it. The
@@ -2146,6 +2200,7 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'project.restored': 'deletions',
   'plan.deleted': 'deletions',
   'plan.restored': 'deletions',
+  'hierarchy.expired': 'deletions',
   'activity.deleted': 'deletions',
   'activity.restored': 'deletions',
   'dependency.deleted': 'deletions',

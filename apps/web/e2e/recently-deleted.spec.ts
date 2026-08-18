@@ -66,22 +66,34 @@ test('a deleted client cascade is shown and restored from the recycle bin (acces
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText(/No clients yet/)).toBeVisible();
 
-  // The recycle bin: the client is restorable; its descendants say restore the parent first.
+  // The recycle bin: ONE row for the whole deletion (ADR-0096).
   await navLink(page, 'Recently deleted').click();
   await expect(page.getByRole('heading', { name: 'Recently deleted' })).toBeVisible();
-  // Scope to the exact name cell: a bare getByText also matches the announcer live
-  // region, and a non-exact cell match also catches the "Restore client Northgate"
-  // actions cell — exact pins it to the name column.
-  await expect(page.getByRole('cell', { name: 'Northgate', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Restore client Northgate' })).toBeVisible();
-  await expect(page.getByText('Restore its parent first')).toHaveCount(2);
+
+  // **This asserted three rows and "Restore its parent first" twice until ADR-0096.** A cascade
+  // stamps one `delete_batch_id` and the restore is keyed on it, so the descendants were never
+  // independently actionable and that message described work the product already does. It is gone
+  // because the situation is, and the count is the honest way to say so.
+  await expect(page.getByText('Restore its parent first')).toHaveCount(0);
+  await expect(page.getByRole('table', { name: /recently deleted/i }).getByRole('row')).toHaveCount(
+    2, // the header row + one deletion
+  );
+  // What it took is disclosed rather than hidden, and named by kind.
+  await expect(
+    page.getByRole('button', { name: 'Northgate: and 1 project, 1 plan', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Restore client Northgate and 1 project, 1 plan' }),
+  ).toBeVisible();
 
   // The recycle-bin screen is accessible.
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(results.violations).toEqual([]);
 
   // Restoring the client brings the whole batch back and empties the bin.
-  await page.getByRole('button', { name: 'Restore client Northgate' }).click();
+  await page
+    .getByRole('button', { name: 'Restore client Northgate and 1 project, 1 plan' })
+    .click();
   await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
 
   // The client is active again.

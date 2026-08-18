@@ -89,7 +89,7 @@ describe('NavigatorCrud coordinator', () => {
 
     const dialog = screen.getByRole('alertdialog', { name: 'Delete client' });
     expect(dialog).toHaveTextContent(
-      'Delete “Northgate” and all its projects and plans? You can restore it later.',
+      'Delete “Northgate” and all its projects and plans? You can restore it from Recently deleted.',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
@@ -104,7 +104,7 @@ describe('NavigatorCrud coordinator', () => {
     renderCoordinator();
     fireEvent.click(screen.getByText('del-plan'));
     expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(
-      'Delete “Overall Schedule”? You can restore it later.',
+      'Delete “Overall Schedule”? You can restore it from Recently deleted.',
     );
   });
 

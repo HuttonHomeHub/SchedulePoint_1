@@ -1,4 +1,4 @@
-import type { DeletedHierarchyItem } from '@repo/types';
+import type { DeletedHierarchyItem, DeletedItemsMeta } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -7,13 +7,8 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
-import { clientKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
-
-export const deletedItemKeys = {
-  all: (orgSlug: string) => ['deleted-items', orgSlug] as const,
-  list: (orgSlug: string) => [...deletedItemKeys.all(orgSlug), 'list'] as const,
-};
+import { apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
+import { clientKeys, deletedItemKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
 
 /** The soft-deleted clients/projects/plans in an org, newest-deleted first. */
 export function deletedItemsQueryOptions(orgSlug: string) {
@@ -21,11 +16,23 @@ export function deletedItemsQueryOptions(orgSlug: string) {
     queryKey: deletedItemKeys.list(orgSlug),
     // The recycle bin shows everything restorable, not the endpoint's default 20-row page — past 20
     // deletions the older rows became unrestorable from the UI.
-    queryFn: () => apiFetchAllPages<DeletedHierarchyItem>(`/organizations/${orgSlug}/deleted`),
+    // `WithMeta`, because the retention period rides in `meta` and the screen's countdown must be
+    // the SERVER's number — a client constant is silently wrong on any host that overrode it
+    // (ADR-0096 D2). The rows are unchanged; only the envelope's tail is kept.
+    queryFn: () =>
+      apiFetchAllPagesWithMeta<DeletedHierarchyItem, DeletedItemsMeta>(
+        `/organizations/${orgSlug}/deleted`,
+      ),
   });
 }
 
-export function useDeletedItems(orgSlug: string): UseQueryResult<DeletedHierarchyItem[]> {
+/** The bin's rows, plus the retention facts the screen has to state truthfully. */
+export interface DeletedItemsPage {
+  rows: DeletedHierarchyItem[];
+  meta: DeletedItemsMeta | null;
+}
+
+export function useDeletedItems(orgSlug: string): UseQueryResult<DeletedItemsPage> {
   return useQuery(deletedItemsQueryOptions(orgSlug));
 }
 

@@ -56,6 +56,7 @@ import { ZOOM_LEVELS } from '../render/time-scale';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { useFirstUseHint } from './use-first-use-hint';
 
+import { CheckboxField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import type {
@@ -1261,15 +1262,13 @@ function FilterMenuControl({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Show only</legend>
         {FILTER_ATTRS.map(({ attr, label }) => (
-          <label key={attr} className={TOGGLE_ROW}>
-            <input
-              type="checkbox"
-              checked={ctx.filterAttrs.has(attr)}
-              onChange={() => ctx.toggleFilterAttr(attr)}
-              className="accent-primary size-4"
-            />
-            {label}
-          </label>
+          <CheckboxField
+            key={attr}
+            label={label}
+            density="compact"
+            checked={ctx.filterAttrs.has(attr)}
+            onChange={() => ctx.toggleFilterAttr(attr)}
+          />
         ))}
       </fieldset>
     </ToolbarPopover>
@@ -1650,20 +1649,18 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                   if (columns === undefined) return null;
                   const shown = !columns.hidden.has(key);
                   return (
-                    <label key={key} className={TOGGLE_ROW}>
-                      <input
-                        type="checkbox"
-                        checked={shown}
-                        onChange={() => {
-                          const next = new Set(columns.hidden);
-                          if (shown) next.add(key);
-                          else next.delete(key);
-                          columns.setHidden(next);
-                        }}
-                        className="accent-primary size-4"
-                      />
-                      {GANTT_COLUMN_LABELS[key]}
-                    </label>
+                    <CheckboxField
+                      key={key}
+                      label={GANTT_COLUMN_LABELS[key]}
+                      density="compact"
+                      checked={shown}
+                      onChange={() => {
+                        const next = new Set(columns.hidden);
+                        if (shown) next.add(key);
+                        else next.delete(key);
+                        columns.setHidden(next);
+                      }}
+                    />
                   );
                 })}
               </div>
@@ -1689,15 +1686,13 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
               </div>
             ) : null}
             {keys.map((key) => (
-              <label key={key} className={TOGGLE_ROW}>
-                <input
-                  type="checkbox"
-                  checked={ctx.viewToggles[key]}
-                  onChange={() => ctx.toggleView(key)}
-                  className="accent-primary size-4"
-                />
-                {VIEW_TOGGLE_META[key].label}
-              </label>
+              <CheckboxField
+                key={key}
+                label={VIEW_TOGGLE_META[key].label}
+                density="compact"
+                checked={ctx.viewToggles[key]}
+                onChange={() => ctx.toggleView(key)}
+              />
             ))}
             {/* The relocated lens toggles (ADR-0090 M2-T2). `aria-disabled` + a guard rather than
                 native `disabled`, per ADR-0083: a control whose only operation is changing its value
@@ -1709,38 +1704,26 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
             {lenses.map((lens) => {
               const reason = lens.reason(ctx);
               const shut = reason !== undefined;
-              const reasonId = shut ? `tsld-view-${lens.id}-reason` : undefined;
-              const noteId = lens.note ? `tsld-view-${lens.id}-note` : undefined;
-              // Both, space-separated, when both apply — an `aria-describedby` that names only one
-              // silently drops the other, and "why it is shut" and "what it does" are both wanted.
-              const describedBy = [reasonId, noteId].filter(Boolean).join(' ') || undefined;
+              // The ids and the hand-built `aria-describedby` are gone: `CheckboxField` owns both,
+              // and its `mergeDescribedBy` already carries a hint AND a gate reason together —
+              // which is what the removed line was doing by hand, one component down. Keeping a
+              // second implementation of that merge is how the two drift.
               return (
-                <div key={lens.id} className="flex flex-col gap-0.5">
-                  <label className={cn(TOGGLE_ROW, shut && 'text-muted-foreground')}>
-                    <input
-                      type="checkbox"
-                      data-view-lens={lens.id}
-                      checked={lens.checked(ctx)}
-                      aria-disabled={shut || undefined}
-                      {...(describedBy ? { 'aria-describedby': describedBy } : {})}
-                      onChange={() => {
-                        if (!shut) lens.toggle(ctx);
-                      }}
-                      className="accent-primary size-4"
-                    />
-                    {lens.label}
-                  </label>
-                  {shut ? (
-                    <span id={reasonId} className="text-muted-foreground pl-6 text-xs">
-                      {reason}
-                    </span>
-                  ) : null}
-                  {lens.note ? (
-                    <span id={noteId} className="text-muted-foreground pl-6 text-xs">
-                      {lens.note}
-                    </span>
-                  ) : null}
-                </div>
+                <CheckboxField
+                  key={lens.id}
+                  label={lens.label}
+                  density="compact"
+                  data-view-lens={lens.id}
+                  checked={lens.checked(ctx)}
+                  // The lens's own rule, expressed as the gate the primitive already speaks
+                  // (ADR-0083): shut with a LINKED reason rather than a native `disabled`, which
+                  // would take the control out of the tab order and drop its explanation with it.
+                  gate={{ writable: !shut, reason: reason ?? null }}
+                  {...(lens.note ? { hint: lens.note } : {})}
+                  onChange={() => {
+                    if (!shut) lens.toggle(ctx);
+                  }}
+                />
               );
             })}
           </fieldset>

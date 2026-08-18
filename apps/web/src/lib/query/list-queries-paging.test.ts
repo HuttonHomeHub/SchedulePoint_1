@@ -120,7 +120,16 @@ describe('cursor-paginated list queries page to exhaustion', () => {
     const fetchMock = twoPages();
     vi.stubGlobal('fetch', fetchMock);
 
-    const rows = await run(query.options);
+    const result = await run(query.options);
+
+    // **Most of these queries resolve to a bare array; the recycle bin resolves to
+    // `{ rows, meta }`** because its screen must state the SERVER's retention period rather than a
+    // constant (ADR-0096 D2). Normalised here rather than exempting that query from the sweep —
+    // what this gate exists to prove is that every paginated list walks the cursor to exhaustion,
+    // and that is exactly as true of the one with an envelope.
+    const rows: { id: string }[] = Array.isArray(result)
+      ? result
+      : (result as { rows: { id: string }[] }).rows;
 
     expect(rows.map((r) => r.id)).toEqual(['one', 'two']);
     expect(fetchMock).toHaveBeenCalledTimes(2);

@@ -45,6 +45,7 @@
     "test:e2e:gantt": "playwright test --config playwright.gantt.config.ts --pass-with-no-tests",
     "test:e2e:activity-editor": "playwright test --config playwright.activity-editor.config.ts --pass-with-no-tests",
     "test:e2e:wbs": "playwright test --config playwright.wbs.config.ts --pass-with-no-tests",
+    "test:e2e:recently-deleted": "playwright test --config playwright.recently-deleted.config.ts --pass-with-no-tests",
     "test:e2e:audit": "playwright test --config playwright.audit.config.ts --pass-with-no-tests",
     "test:e2e:account": "playwright test --config playwright.account.config.ts --pass-with-no-tests",
     "test:e2e:account-verify": "playwright test --config playwright.account-verify.config.ts --pass-with-no-tests",

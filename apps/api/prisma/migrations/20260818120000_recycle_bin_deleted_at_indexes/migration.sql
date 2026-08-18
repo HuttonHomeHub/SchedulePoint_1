@@ -1,0 +1,126 @@
+-- Recently Deleted (M0-T2): serve the recycle-bin list and the hierarchy expiry scan.
+--
+-- Closes the measure-first escalation `recycle-bin.repository.ts:49-52` reserved and
+-- `docs/TECH_DEBT.md` #57 recorded as "still unmeasured" on 2026-07-27. It is now measured.
+--
+-- TWO PREDICATES, ONE INDEX PER TABLE.
+--
+--   (1) the list  `RecycleBinRepository.findDeletedPage` (recycle-bin.repository.ts:70-104):
+--       `organization_id = ? AND deleted_at IS NOT NULL` + a `(deleted_at, id)` keyset cursor,
+--       `ORDER BY deleted_at DESC, id ASC LIMIT ?`, on all three UNION ALL branches.
+--   (2) the expiry candidate scan: `deleted_at < :cutoff`, ORGANISATION-AGNOSTIC, hourly.
+--
+-- Predicate (2) does not constrain the leading column, so it was NOT obvious this index
+-- would serve it. It does, twice over, and both were verified rather than assumed:
+--
+--   * `deleted_at < :cutoff` IMPLIES `deleted_at IS NOT NULL`, so the partial index is
+--     eligible. Postgres proves this from operator strictness — a different mechanism from
+--     the expression-equality matching `idx_audit_events_staff_occurred` documents, which is
+--     why it was checked rather than reasoned from that precedent.
+--   * the planner then applies `deleted_at < :cutoff` as an INDEX CONDITION on the second
+--     column and scans the whole (small) partial index rather than the (large) table.
+--     Observed: `Index Cond: (deleted_at < '2025-01-01 00:00:00+00')` with no heap access.
+--
+-- MEASURED — PostgreSQL 16.13 (local; CI and the deployed host run 17 — see the caveat at the
+-- foot). Seeded installation: 24 organisations, 625 clients / 5,625 projects / 54,151 plans,
+-- 12,861 soft-deleted rows in three real shapes (client-rooted cascade, project-rooted cascade,
+-- lone plan delete) spread over 400 days. The largest organisation holds 8,773 deleted rows =
+-- 88 pages of the screen's `?limit=100`. Harness + exact seed: docs/specs/recently-deleted/.
+--
+-- (1) ONE SCREEN OPEN — `apiFetchAllPages` walks every page (use-deleted-items.ts:24), so this
+--     is the whole cost of opening Recently deleted, not one request. Median of 9 runs:
+--
+--       org, bin rows (pages)     before      after     after + the query rewrite below
+--       org-xl  8,773  (88)     1,208 ms     466 ms                 239 ms
+--       org-l   2,356  (24)       127 ms      71 ms                  64 ms
+--       org-s      34   (1)       4.3 ms     4.0 ms                 4.2 ms
+--
+--     Page 1 alone, which is what first paint waits on: 22.7-26.6 ms -> 10.0-12.6 ms ->
+--     1.1-1.6 ms. Before the index every page Seq Scans all three tables in full: at org-xl
+--     `Rows Removed by Filter: 45,867` on `plans` for 8,283 kept, i.e. the scan set is the
+--     WHOLE TABLE and not the organisation's rows. TECH_DEBT #57 said "every row for the org
+--     in that table"; for an organisation that dominates the table it is worse than that, and
+--     for a small organisation the planner does use `plans_organization_id_idx` and reads all
+--     of that organisation's LIVE rows to discard them. Either way the cost is set by rows
+--     that are not deleted.
+--
+-- (2) THE EXPIRY SCAN, over the whole installation:
+--
+--       backlog run (a real cutoff, 9,009 candidates)   19.4 ms  ->   9.0 ms
+--       idle run    (nothing to do — the steady state)  13.1-19.0 ms -> 0.73-1.39 ms
+--
+--     The idle run is the one that matters, because after the first sweep clears the backlog
+--     EVERY subsequent hourly run is that run, forever, and its cost was O(all three tables).
+--     Proving an absence was the expensive case — the ADR-0073 C1 shape.
+--
+-- COST. 16 kB + 64 kB + 768 kB = 848 kB, i.e. 22.2% / 7.8% / 6.3% of each table. The index is
+-- sized by the DELETED set, never by the table: a live row does not appear in it at all, so an
+-- INSERT of a live row does NO index maintenance (Postgres evaluates the predicate and skips).
+-- Build time 5.0 / 5.8 / 29.3 ms at the row counts above.
+--
+-- NO HOT REGRESSION, verified rather than reasoned. `organization_id` and `id` never change.
+-- A soft-delete UPDATE (which does change `deleted_at`) was ALREADY non-HOT before this index,
+-- because `deleted_at` sits in the predicate of the existing `uq_*_name` partial uniques on all
+-- three tables. Probed on a purpose-built 5,000-row table with the same index pair: the
+-- soft-delete UPDATE reports 0 HOT updates both WITHOUT and WITH this index, while a control
+-- UPDATE of a genuinely unindexed column reports 4,670/5,000 — so the probe can distinguish the
+-- two cases, and this index does not move the line.
+--
+-- WHY `id` IS IN THE KEY, since it costs 5x the index size (768 kB against 144 kB without it:
+-- every entry becomes unique, which defeats btree deduplication). It buys the exact
+-- `(deleted_at DESC, id ASC)` ordering with no sort node, and it makes the cursor's tiebreak
+-- `(deleted_at = ? AND id > ?)` an index condition instead of a heap filter. That is worth
+-- little on scattered deletions and a great deal on the case this epic exists for: a CASCADE
+-- STAMPS ONE `deleted_at` ON EVERY ROW IT TOUCHES (hierarchy-lifecycle.service.ts:98-99), so a
+-- 2,000-activity programme deleted in one action is 2,000 rows sharing one timestamp, and
+-- paging through them is entirely the id tiebreak. Measured on exactly that shape (one
+-- 2,000-row batch at one instant): with `id` 74 ms / 82 ms per screen open, without it
+-- 83 ms / 108 ms — and the gap grows with the square of the batch size, because without `id`
+-- each page re-filters the whole batch.
+--
+-- WHY DESC IS WRITTEN OUT. The sort is MIXED (`deleted_at DESC, id ASC`), so a backward scan of
+-- an all-ASC index does not produce it — it produces `deleted_at DESC, id DESC`. Verified: with
+-- `(organization_id, deleted_at, id)` the planner falls back to an Incremental Sort.
+--
+-- WHAT THIS DOES NOT DO, stated so nobody re-measures to find out.
+--
+--   * It does not remove the top-N sort from the list. PostgreSQL 16 generates no Merge Append
+--     over a `UNION ALL` here — verified by forcing `enable_sort = off`, which still produced a
+--     Sort at disable-cost, i.e. no ordered path EXISTS — so the union materialises every
+--     deleted row for the organisation before taking 100. The index makes reading them cheap;
+--     it cannot make them un-read. The remaining 2x is a REPOSITORY change, not an index one:
+--     pushing `ORDER BY ... LIMIT :take` into each of the three branches lets each take an
+--     ordered index scan and stop, which is what the third column above measures. That is a
+--     separate, reviewable change and it is deliberately NOT bundled here.
+--   * It does not help an organisation whose bin holds tens of rows (org-s above: 4.3 -> 4.0 ms,
+--     inside the noise). The win is entirely for organisations that have deleted a lot.
+--   * A SECOND, organisation-agnostic partial index `(deleted_at) WHERE deleted_at IS NOT NULL`
+--     was built and measured and is NOT shipped. It takes the idle expiry run from 0.76 ms to
+--     0.24 ms and the backlog run from 10.5 ms to 9.9 ms, for a further 152 kB — 0.5 ms saved
+--     once an hour. That is the ADR-0053 M4 outcome (a candidate that saved 0.14 ms for
+--     1,296 kB and was rejected). Revisit with a trigger rather than a date: when the
+--     installation's soft-deleted row count reaches roughly a million, at which point the idle
+--     run's full scan of these indexes is tens of milliseconds rather than one.
+--   * It is not `CREATE INDEX CONCURRENTLY`; Prisma runs each migration in a transaction, which
+--     forbids it. So each statement takes a SHARE lock — reads continue, WRITES BLOCK — for the
+--     build. Measured at 5.0 / 5.8 / 29.3 ms on 60,401 rows; on this installation's real data it
+--     is smaller again.
+--   * MEASURED ON PostgreSQL 16.13, not 17. Every number above is 16. The one behaviour that
+--     could differ is the missing Merge Append, and the recommended repository rewrite is
+--     deliberately shaped so that it does not depend on the planner acquiring it.
+--
+-- NO `@@index` IS ADDED TO schema.prisma. Prisma cannot express a partial index, and declaring a
+-- full one the database does not have is what broke `prisma:check-drift` as TECH_DEBT #54. The
+-- three models carry a comment pointing here instead.
+
+CREATE INDEX "idx_clients_org_deleted_at"
+  ON "clients" ("organization_id", "deleted_at" DESC, "id")
+  WHERE "deleted_at" IS NOT NULL;
+
+CREATE INDEX "idx_projects_org_deleted_at"
+  ON "projects" ("organization_id", "deleted_at" DESC, "id")
+  WHERE "deleted_at" IS NOT NULL;
+
+CREATE INDEX "idx_plans_org_deleted_at"
+  ON "plans" ("organization_id", "deleted_at" DESC, "id")
+  WHERE "deleted_at" IS NOT NULL;

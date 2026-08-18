@@ -119,6 +119,17 @@ The dotted edges are **decided, not built**. Everything solid is live.
 - Jobs carry the correlation ID; the worker can be split into its own
   deployment later without code changes.
 
+**Two jobs run today, and neither uses any of the above.** ADR-0087 **narrowed** ADR-0009 rather
+than superseding it: `RetentionSweepService` (the `csp_reports`/`mail_events` sweep) and
+`HierarchyExpiryService` (ADR-0096's permanent deletion of expired recycle-bin rows) are each one
+`setInterval`, `.unref()`'d, with no timer at all when disabled — no Redis, no queue, no dependency.
+Their costs are **stated rather than hidden**: per replica, non-durable, no retry. Both are
+idempotent and time-predicated, so a second run finds nothing and a restart is repaired by the next
+tick, which is what makes those costs acceptable **for these two jobs specifically**. ADR-0087 D2
+names the triggers to reopen ADR-0009 — durability, retries, exactly-once, fan-out,
+enqueue-from-a-request, or visible progress. Do not read "two schedulers exist" as "we have a
+scheduler"; a third job that needs any of those triggers needs BullMQ, not a third `setInterval`.
+
 ## Caching strategy (ADR-0010) — _not yet built_
 
 - **Cache-aside** behind a `CacheService` (Redis). Read-through on miss,

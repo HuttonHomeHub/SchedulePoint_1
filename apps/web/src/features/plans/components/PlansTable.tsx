@@ -12,6 +12,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { deleteCascadeWarning } from '@/lib/delete-copy';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -142,7 +143,7 @@ export function PlansTable({
             }}
             onConfirm={confirmDelete}
             title="Delete plan"
-            description={deleting ? `Delete “${deleting.name}”? You can restore it later.` : ''}
+            description={deleting ? deleteCascadeWarning('plan', deleting.name) : ''}
             pending={deletePlan.isPending}
             pendingLabel="Deleting…"
             error={deleteError}

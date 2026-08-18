@@ -73,7 +73,7 @@ describe('PlanFormDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create plan' }));
 
     await waitFor(() =>
-      expect(screen.getAllByText('A project start date is required.').length).toBeGreaterThan(0),
+      expect(screen.getAllByText('A planned start date is required.').length).toBeGreaterThan(0),
     );
     expect(apiFetch).not.toHaveBeenCalled();
   });

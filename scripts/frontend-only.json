@@ -1,7 +1,7 @@
 {
-  "active": true,
-  "epic": "gantt-editing",
-  "spec": "docs/specs/gantt-editing/",
-  "reason": "ADR-0034's recalculation-parity argument for this epic rests on computeSchedule's INPUT being unchanged. Every milestone is frontend-only by design; a change under apps/api/ can widen that input, and the plan guarded it with a sentence.",
+  "active": false,
+  "epic": null,
+  "spec": null,
+  "reason": "No frontend-only epic is in flight. The gantt-editing declaration was left ACTIVE after that epic released as web-v0.92.0 — this file's own docblock says 'the epic's own gate pass removes it', and ADR-0095's M6 pass did not. It first mattered on 2026-08-18, when it blocked ADR-0096, an epic that legitimately changes apps/api/ and whose parity argument is that the CPM engine is not imported at all. A gate outliving its subject is the ADR-0058 shape one layer up: this one did not go quiet, it went wrong about a different epic. Set active:true with an epic and a reason when the next frontend-only epic starts, and remove it in that epic's gate pass.",
   "guarded": ["apps/api/"]
 }

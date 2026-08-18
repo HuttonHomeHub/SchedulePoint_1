@@ -1,4 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
+import { Fragment } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -33,6 +34,7 @@ export function DataTable<T>({
   columns,
   query,
   getRowKey,
+  renderDetail,
   empty,
   loadingLabel,
   errorLabel = 'Couldn’t load this list. Please try again.',
@@ -48,6 +50,15 @@ export function DataTable<T>({
    */
   query: Pick<UseQueryResult<T[]>, 'isPending' | 'isError' | 'data'> & { refetch: () => unknown };
   getRowKey: (row: T) => string;
+  /**
+   * An optional panel rendered as a SIBLING row beneath `row`, spanning every column.
+   *
+   * Return `null`/`undefined` for a row with nothing to disclose — the extra `<tr>` is then not
+   * rendered at all, so a table that never discloses is byte-for-byte what it was before this
+   * prop existed. The disclosure TRIGGER belongs in one of the row's own cells; this only provides
+   * somewhere legal for the panel to live (see the comment at the render site).
+   */
+  renderDetail?: (row: T) => React.ReactNode;
   empty: React.ReactNode;
   loadingLabel: string;
   errorLabel?: string;
@@ -119,15 +130,37 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={getRowKey(row)} className="border-border border-b">
-              {columns.map((column) => (
-                <td key={column.header} className={column.cellClassName ?? 'py-2 pr-4'}>
-                  {column.cell(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const detail = renderDetail?.(row);
+            return (
+              <Fragment key={getRowKey(row)}>
+                <tr className="border-border border-b">
+                  {columns.map((column) => (
+                    <td key={column.header} className={column.cellClassName ?? 'py-2 pr-4'}>
+                      {column.cell(row)}
+                    </td>
+                  ))}
+                </tr>
+                {/* **A SIBLING row with ONE cell spanning the table — never a non-cell child of the
+                    row above.** `role="row"` (which a `<tr>` maps to) may contain only
+                    `gridcell`/`columnheader`/`rowheader`, and putting a panel directly inside a row
+                    is an `aria-required-children` violation axe rates CRITICAL — 110 of them shipped
+                    in ADR-0095 M5 and were caught by a journey rather than by review.
+
+                    Deliberately not a `treegrid`: that pattern buys roving tabindex and per-cell
+                    navigation, which a detail panel with no per-cell actions does not need and
+                    would have to hand-roll. A disclosure over a plain table is the APG pattern that
+                    fits, and it needs no grid roles at all. */}
+                {detail === undefined || detail === null ? null : (
+                  <tr className="border-border border-b">
+                    <td colSpan={columns.length} className="p-0">
+                      {detail}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

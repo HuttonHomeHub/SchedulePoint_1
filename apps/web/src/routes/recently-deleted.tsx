@@ -1,6 +1,5 @@
 import { useParams } from '@tanstack/react-router';
 
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { RecentlyDeletedTable } from '@/features/recently-deleted';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -16,7 +15,6 @@ export function RecentlyDeletedScreen(): React.ReactElement {
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 p-6">
-      <Breadcrumbs items={[{ label: 'Recently deleted' }]} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Recently deleted</h1>
       </div>

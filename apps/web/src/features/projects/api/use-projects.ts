@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import type { ProjectFormValues } from '../schemas/project-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { projectKeys } from '@/lib/query/hierarchy-keys';
+import { deletedItemKeys, projectKeys } from '@/lib/query/hierarchy-keys';
 import { projectQueryOptions, projectsQueryOptions } from '@/lib/query/hierarchy-queries';
 
 // The read-queries live in `lib` (shared) so the navigator rail can consume them
@@ -80,7 +80,12 @@ export function useDeleteProject(orgSlug: string, clientId: string) {
   return useMutation({
     mutationFn: (projectId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/projects/${projectId}`, { method: 'DELETE' }),
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: projectKeys.listByClient(orgSlug, clientId) }),
+    // …and the recycle bin, which the row arrives in. See `deletedItemKeys`.
+    onSettled: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: projectKeys.listByClient(orgSlug, clientId),
+      });
+      await queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) });
+    },
   });
 }

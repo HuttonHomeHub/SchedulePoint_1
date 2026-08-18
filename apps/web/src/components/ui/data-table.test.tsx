@@ -56,4 +56,65 @@ describe('DataTable', () => {
     expect(screen.getByRole('table', { name: 'Rows' })).toBeInTheDocument();
     expect(screen.getByText('Alpha')).toBeInTheDocument();
   });
+
+  /**
+   * `renderDetail` (ADR-0096). The contract is pinned HERE rather than only at its one consumer,
+   * because this primitive is consumed by sixteen features and its promise — byte-identical when
+   * the prop is absent, one cell spanning every column when it is present — is a claim about all
+   * of them.
+   */
+  describe('renderDetail', () => {
+    const two: Column<Row>[] = [
+      { header: 'Name', cell: (row) => row.name },
+      { header: 'Id', cell: (row) => row.id },
+    ];
+    const rows = [{ id: '1', name: 'Alpha' }];
+
+    it('adds no row at all when the prop is absent', () => {
+      const { container } = render(
+        <DataTable {...common} columns={two} query={query({ data: rows })} />,
+      );
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+    });
+
+    it('renders a sibling row whose single cell spans every column', () => {
+      const { container } = render(
+        <DataTable
+          {...common}
+          columns={two}
+          query={query({ data: rows })}
+          renderDetail={(row) => <span>detail for {row.name}</span>}
+        />,
+      );
+      const bodyRows = container.querySelectorAll('tbody tr');
+      expect(bodyRows).toHaveLength(2);
+      const cells = bodyRows[1]!.querySelectorAll('td');
+      expect(cells).toHaveLength(1);
+      // The number, not a hardcoded 2: a column added later must widen this cell with it, or the
+      // detail panel stops spanning the table and the layout silently breaks.
+      expect(cells[0]!.getAttribute('colspan')).toBe(String(two.length));
+      expect(screen.getByText(/detail for Alpha/)).toBeInTheDocument();
+    });
+
+    it('renders no detail row when the callback declines, per row', () => {
+      // Per row, not per table: the one consumer expands one deletion at a time, so a version that
+      // rendered the detail row for every row as soon as any row opened would look correct on a
+      // one-row fixture.
+      const { container } = render(
+        <DataTable
+          {...common}
+          columns={two}
+          query={query({
+            data: [
+              { id: '1', name: 'Alpha' },
+              { id: '2', name: 'Beta' },
+            ],
+          })}
+          renderDetail={(row) => (row.id === '1' ? <span>only Alpha</span> : null)}
+        />,
+      );
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(3);
+      expect(screen.getByText('only Alpha')).toBeInTheDocument();
+    });
+  });
 });

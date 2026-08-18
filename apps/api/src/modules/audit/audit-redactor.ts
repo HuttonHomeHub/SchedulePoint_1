@@ -83,6 +83,22 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   'project.restored': ['name', 'deleteBatchId', 'planCount', 'activityCount', 'dependencyCount'],
   'plan.deleted': ['name', 'status', 'deleteBatchId', 'activityCount', 'dependencyCount'],
   'plan.restored': ['name', 'status', 'deleteBatchId', 'activityCount', 'dependencyCount'],
+  /**
+   * The expiry (ADR-0096 D8). Names WHAT went and HOW MUCH, never the contents — a reader needs to
+   * learn that a subtree was permanently removed and how large it was, not to receive a copy of it
+   * in a table that refuses `DELETE`. `deletedAt` and `retentionDays` are here because the obvious
+   * first question is "why this one?", and the pair answers it without a second lookup.
+   */
+  'hierarchy.expired': [
+    'name',
+    'deleteBatchId',
+    'deletedAt',
+    'retentionDays',
+    'clientCount',
+    'projectCount',
+    'planCount',
+    'activityCount',
+  ],
   // — Destructive and structural acts inside a plan (ADR-0073 family D). Same flattened-count
   //   shape as above, for the same reason.
   //
