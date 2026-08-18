@@ -18,7 +18,8 @@
 
 - **Amends:** **ADR-0055** (surface scopes — the mechanism is kept and extended along two new axes;
   §1's "complete or it is a trap" is _strengthened_ into a closure, not weakened). **ADR-0077**
-  (`brand` survives on the ordinary argument; **`auth` retires** and §2's theme-invariance reasoning
+  (`brand` survives on the ordinary argument; **`auth` survives too, on a different one** — §2's
+  theme-invariance reasoning
   dissolves — see D15). **ADR-0031/0090/0091/0092** (the command surface — the registry's taxonomy is
   kept and its **renderer** replaced, see D16). **ADR-0006** (tokens/CVA — the token layer gains kinds
   beyond colour).
@@ -370,7 +371,9 @@ ADR-0077 §1's five conditions. Two that will be proposed and should be refused:
 (portals already leave every scope — a dialog _is_ the page, and that is correct) and a `print` scope
 (the print path is a palette, not a surface).
 
-> **Superseded in part by D15.** With one theme, `auth` retires and the count is **five**, declared
+> **Superseded in part by D15, and then corrected by measurement — see the note below.** With one
+> theme the `auth` scope loses its original justification, but not its values; the count stays
+> **six**, declared
 > **once**. The bar for a sixth stands; note that its condition 2 has lost its most-used
 > justification, because "theme-invariance" is no longer a property any region can claim.
 
@@ -395,9 +398,26 @@ on first mount by the provider (never by the boot script, which must stay side-e
 paint) — **removed rather than ignored**, because resurrecting a 2026 preference the day a _new_ dark
 design ships is a change nobody asked for at a moment nobody expects.
 
-**What it dissolves:** `.dark`'s ~117 declarations; two of three matrix sweeps; **the `auth` scope
-entirely** (it existed only because ADR-0077 §2's pinning was applied to half a screen, §8.3);
-ADR-0077 §2's theme-invariance argument for `brand`, which survives on the ordinary ADR-0055 ground;
+> **MEASURED, AND THE ANSWER REVERSES THIS: the `auth` scope STAYS.** `migration.md` A said to
+> check whether its "four design-motivated deltas" become page values or are the reason it stays,
+> and rightly called that a task rather than an assumption. Measured on 2026-08-18 by comparing
+> every `--auth-*` token against its page counterpart in OKLCH: **15 of 18 differ, and 12 of those
+> are perceptible (Δ ≥ 0.02)** — not four. The largest is `--auth-ring` at **Δ 0.39**, amber
+> against the page's navy, and it is not a leftover: ADR-0077 M7 derived that exact value up from
+> the old app's 2.02:1 to **3.01–3.36:1** so it would pass WCAG 1.4.11, after the computed matrix
+> caught the original failing. Retiring the scope would discard that derivation along with the
+> field fill, the info/success/warning/destructive inks and the white card that separates the
+> login from an off-white page.
+>
+> So the theme collapse removes `auth`'s ORIGINAL justification — ADR-0077 §2's theme-invariance
+> argument, which no longer distinguishes anything — and leaves it with a better one it had all
+> along: it is the front door, and it is designed. **Scopes are six, not five.** Retiring it would
+> be a visible change to the one screen every stranger meets, which belongs with the screens work
+> and not in a landing whose whole claim is that almost nothing changes.
+
+**What it dissolves:** `.dark`'s ~117 declarations; two of three matrix sweeps; ADR-0077 §2's
+theme-invariance argument — for `brand`, which survives on the ordinary ADR-0055 ground, and for
+`auth`, which survives on its own measured values (the note above);
 the theme picker; and — **the first gate this epic retires rather than adds** — the cascade-trap
 assertion at `token-architecture.test.ts:202-221`, which only exists because a global flag layer
 shadows a theme-scoped one.

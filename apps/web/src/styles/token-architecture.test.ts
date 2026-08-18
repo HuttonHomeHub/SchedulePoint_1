@@ -182,6 +182,77 @@ describe.each(FAMILIES)('the [data-surface="%s"] rule', (family) => {
   });
 });
 
+describe('the auth scope earns its keep', () => {
+  /** Perceptual distance between two OKLCH colours — ΔL plus the chroma vector difference. */
+  function oklchDistance(a: string, b: string): number | null {
+    const parse = (v: string): [number, number, number] | null => {
+      const m = /oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)/.exec(v.trim());
+      return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+    };
+    const x = parse(a);
+    const y = parse(b);
+    if (!x || !y) return null;
+    const toAb = ([, c, h]: [number, number, number]): [number, number] => [
+      c * Math.cos((h * Math.PI) / 180),
+      c * Math.sin((h * Math.PI) / 180),
+    ];
+    const [ax, bx] = toAb(x);
+    const [ay, by] = toAb(y);
+    return Math.hypot(x[0] - y[0], ax - ay, bx - by);
+  }
+
+  it('differs perceptibly from the page, or it is not a scope', () => {
+    // **This assertion exists because the plan said to retire this scope and the measurement
+    // said not to** (ADR-0097). ADR-0077 §2 pinned the login theme-invariant while the rest of
+    // the product followed the theme; with one theme that argument distinguishes nothing, so
+    // `auth` looked like a scope with no remaining reason. Measured, 12 of its 18 tokens differ
+    // from their page counterparts by more than the ~0.02 OKLCH step at which a difference is
+    // visible — led by `--auth-ring`, which ADR-0077 M7 derived from the old app's failing
+    // 2.02:1 up to 3.01–3.36:1 to clear WCAG 1.4.11.
+    //
+    // So the scope survives on its VALUES rather than on its original reasoning, and this gate
+    // is what keeps that honest: if a later change quietly aligns `auth` to the page, the scope
+    // has genuinely become dead weight and should be retired deliberately — not left as 18
+    // aliases that look like a design decision and are not one.
+    const tokens = themeTokens(':root');
+    const pairs: Array<[string, string]> = [
+      ['--auth', '--background'],
+      ['--auth-foreground', '--foreground'],
+      ['--auth-field', '--field'],
+      ['--auth-accent', '--accent'],
+      ['--auth-ring', '--ring'],
+      ['--auth-info-text', '--info-text'],
+      ['--auth-success-text', '--success-text'],
+      ['--auth-warning-text', '--warning-text'],
+    ];
+
+    const perceptible = pairs.filter(([authToken, pageToken]) => {
+      const a = tokens.get(authToken);
+      const b = tokens.get(pageToken);
+      expect(a, `${authToken} is not declared`).toBeDefined();
+      expect(b, `${pageToken} is not declared`).toBeDefined();
+      const distance = oklchDistance(a!, b!);
+      return distance !== null && distance >= 0.02;
+    });
+
+    expect(
+      perceptible.length,
+      'every sampled --auth-* token now matches its page counterpart, so the auth scope is ' +
+        '18 aliases pretending to be a design decision — retire it deliberately or restore ' +
+        'the values (ADR-0097).',
+    ).toBeGreaterThanOrEqual(4);
+  });
+
+  it('keeps the focus ring ADR-0077 M7 derived for WCAG 1.4.11', () => {
+    // Named on its own because it is the single largest delta (~0.39) and the one with a
+    // success criterion behind it: a focus ring you cannot see looks exactly like a focus ring
+    // you have not triggered, which is why the original 2.02:1 survived a human review.
+    const tokens = themeTokens(':root');
+    const distance = oklchDistance(tokens.get('--auth-ring')!, tokens.get('--ring')!);
+    expect(distance, '--auth-ring has collapsed onto the page ring').toBeGreaterThan(0.1);
+  });
+});
+
 describe('the flag-keyed override layers are gone', () => {
   it.each(['data-designed-chrome', 'data-canvas-visual-language'])(
     'no [%s] value layer survives, in any form',

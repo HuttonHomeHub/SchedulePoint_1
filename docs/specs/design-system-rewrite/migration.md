@@ -60,9 +60,11 @@ risk in the epic: A is nearly all no-op re-expression, and B is a screen that do
   list; `Theme` stays a union with one member; the account menu's picker is removed; the stale
   `localStorage` key is cleared once on first mount. **`theme-boot.js` keeps running and keeps its
   test** — the mechanism is live, not vestigial.
-- **Retire the `auth` scope** (`screens.md` §7) — but **check first** whether its four
-  design-motivated deltas become page values or become the reason it stays. A task, not an
-  assumption.
+- ~~**Retire the `auth` scope**~~ — **checked, and it stays.** The check was the right
+  instruction and its answer was not the expected one: 15 of 18 tokens differ from their page
+  counterparts and **12 are perceptible**, led by a focus ring at Δ 0.39 that ADR-0077 M7 derived
+  specifically to clear WCAG 1.4.11. Retiring it would be a visible change to the front door,
+  which does not belong in a landing whose claim is that almost nothing changes. Scopes stay six.
 - **The closure** (`design.md` §1.5): `--page-*` as an explicit family, `REBOUND_NAMES` computed and
   asserted rather than authored, `Card`/`Popover` as resets.
 - **The gates**: the pair census (including alpha modifiers and the split-pair rule), the theme

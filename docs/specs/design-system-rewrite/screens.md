@@ -239,7 +239,10 @@ nothing to be invariant against.
 - **`brand` survives** — on the ordinary ADR-0055 argument, not the invariance one. The panel is navy
   and the page is off-white; that is a region whose fill is chosen for a reason the page's cannot
   serve.
-- **`auth` retires.** It exists only because §2's argument was applied to half the screen
+- ~~**`auth` retires.**~~ **Measured 2026-08-18: it stays.** The premise below is correct as
+  history and wrong as a conclusion — losing its original reason is not the same as having none.
+  12 of its 18 tokens differ perceptibly from the page, including a WCAG-derived focus ring.
+  It exists only because §2's argument was applied to half the screen
   (ADR-0077 §8.3). With one theme the card simply is a card on the page, and an entire 18-token
   family goes with it. Verify before deleting: the four `--auth-*` values that differ from the page's
   by design (the tinted field, the derived amber ring) either become page values or become the
