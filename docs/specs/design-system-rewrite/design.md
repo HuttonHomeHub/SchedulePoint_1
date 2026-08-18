@@ -159,13 +159,24 @@ a `Card` to **restore the page family for its subtree** — `[data-surface='card
 var(--card); --foreground: var(--card-foreground); --muted-foreground: var(--page-muted-foreground);
 … }`. A reset is not a new vocabulary; it is the page's, re-entered.
 
-**This closes a live split pair nobody has raised.** `CardDescription` is `text-muted-foreground`
-(`card.tsx:61`) on `bg-card` (`:10`). `--muted-foreground` **is** rebound; `--card` is not. So a Card
-rendered inside the Project Explorer rail takes the _panel's_ grey — chosen for the panel's fill — on
-the _page's_ white card. Latent today because `[data-designed-chrome].corporate` makes that rail
-light (`globals.css:986`); one flag state away from Corporate's navy `--panel-muted-foreground`
-(`oklch(0.78 0.02 264)`, chosen for navy) sitting on white. Under (c) it cannot happen, and under (b)
-it would have been reported the day the pair became compilable.
+**This closes a split pair nobody has raised.** `CardDescription` is `text-muted-foreground`
+(`card.tsx:61`) on `bg-card` (`:10`). `--muted-foreground` **is** rebound; `--card` is not — so the
+two halves of that pair are governed by different scopes, which is exactly the property §1.5 defines
+the defect as.
+
+> **Corrected on verification (2026-08-18).** This paragraph said "a live split pair" and gave the
+> Project Explorer rail as the instance. It is **latent, not live**, and the rail is not an instance
+> at all: the rail's `<Surface tone="panel">` regions contain the tree and the resizer, and a
+> repository-wide search finds **no `<Card>` or `bg-card` inside any of the six `<Surface>` sites**.
+> The only Card-family usage inside a scope is `auth-shell.tsx:66-70`, which renders `CardHeader` /
+> `CardTitle` / `CardDescription` **without** a `<Card>` wrapper — so there is no `bg-card` — and its
+> fill is `bg-background`, which IS rebound, so both halves sit in the `auth` scope and the pair does
+> not split. Every other Card in the product renders inside `<main>`, which is outside every scope.
+>
+> The structural finding stands and is the reason the closure is right: the pair is compilable, so it
+> is one component move away from being live, and nothing would report it. What does not stand is the
+> word "live", and the distinction decides whether this ships on its own or inside the rewrite.
+> Checked with a shell, which the session that wrote this paragraph did not have.
 
 **So "complete" stops being a count and becomes a property:**
 
