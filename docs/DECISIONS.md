@@ -10,6 +10,32 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-18 — A flag's class was wrong, and the gate that checks it cannot see the shape
+
+**Decision.** `VITE_NAV_TREE` retires (ADR-0098 M0), and its register entry records that it had been
+filed **class B** — a one-line guard — while `authed-layout.tsx:15` was
+`if (NAV_TREE_ENABLED) return <AppShell />;`: an early return selecting between two whole layouts,
+which is the **class A** shape by ADR-0088's own definition.
+
+**Why it matters more than one flag.** ADR-0088 replaced a retirement _calendar_ with a
+_classification_, and class A — "the flag selects which of two different JSX roots a component
+returns" — is the class that ratchets: `classACap` is set at the measured count and lowered after
+each retirement, so an alternative surface beyond the cap fails CI while the conversation is still
+cheap. That mechanism was reading a number it could not compute. `detect-alternative-surfaces.mjs`
+matches ternaries returning JSX and is blind to early returns — this file's own `$classA-note` says
+so — so the measured count was 2 where the true count was 3.
+
+**What was NOT done, deliberately.** `classACap` was not raised. Retiring in the same commit keeps
+the detected count at 0 and leaves the cap untouched; raising a ratchet for a flag that is leaving
+would be the wrong direction, and the register says a raise needs an ADR.
+
+**The residue.** The detector's blind spot is unfixed and is now written down where the next curator
+will meet it. Two flags were found by a person reading code, not by the gate — which is the same
+observation ADR-0088 made about `check-flags.mjs` matching `'true'` and `'false'` identically, one
+mechanism along.
+
+---
+
 ### 2026-08-18 — Reconciliation pass at the ADR-0095 epic boundary
 
 **What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the

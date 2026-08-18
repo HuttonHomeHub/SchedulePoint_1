@@ -22,8 +22,8 @@ const LG_QUERY = '(min-width: 64rem)';
  * workspace region that stay **mounted once**, so navigating between plans swaps only
  * the `<Outlet/>` and the rail keeps its state and warm cache. On `lg`+ the rail is
  * pinned (collapsible + resizable); below `lg` it is an off-canvas drawer opened from
- * the header. Gated by `VITE_NAV_TREE` — see {@link AuthedLayout} for the flag-off
- * path, which stays byte-for-byte today's layout.
+ * the header. **Unconditional** since `VITE_NAV_TREE` retired (2026-08-18): {@link AuthedLayout}
+ * is now this component and nothing else.
  */
 export function AppShell(): React.ReactElement {
   return (

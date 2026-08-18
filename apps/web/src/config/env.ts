@@ -114,18 +114,6 @@ export const PLAN_EDIT_LOCK_ENABLED = flagDefaultOn(import.meta.env.VITE_PLAN_ED
 export const TSLD_EDITING_ENABLED = flagDefaultOn(import.meta.env.VITE_TSLD_EDITING);
 
 /**
- * The persistent app-shell + hierarchy navigator (ADR-0029). **ON by default** now
- * that M1 (shell) and M2 (the accessible Client → Project → Plan tree) have landed
- * with their journeys and a11y gates green — the mounted-once shell (top bar +
- * collapsible/resizable Project Explorer rail + single workspace region) is the
- * default navigation surface. Set `VITE_NAV_TREE=false` to fall back to the previous
- * header-only layout, byte-for-byte (emergency rollback / opt-out).
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const NAV_TREE_ENABLED = flagDefaultOn(import.meta.env.VITE_NAV_TREE);
-
-/**
  * Canvas-first plan authoring (ADR-0032, spec `docs/specs/canvas-first-authoring.md`). **ON by
  * default** now that M1–M5 shipped and their quality gates are green — the a11y/ux/component/perf
  * review findings are folded in, the flag-on Playwright journey (`e2e-authoring/authoring.spec.ts`

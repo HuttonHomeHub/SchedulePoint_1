@@ -1,32 +1,16 @@
-import { Outlet } from '@tanstack/react-router';
-
-import { AppHeader } from '@/components/layout/app-header';
 import { AppShell } from '@/components/layout/navigator/app-shell';
-import { AnnouncerProvider } from '@/components/ui/announcer';
-import { NAV_TREE_ENABLED } from '@/config/env';
 
 /**
- * The authenticated app shell. With `VITE_NAV_TREE` on it is the persistent
- * app-shell (ADR-0029 — {@link AppShell}: mounted-once top bar + Project Explorer
- * rail + workspace region). With the flag off it stays exactly today's layout:
- * header + routed content, so `main` remains releasable during the rollout.
+ * The authenticated app shell — the persistent app-shell of ADR-0029: a mounted-once top bar, the
+ * Project Explorer rail, and one workspace region.
+ *
+ * **This was two layouts until `VITE_NAV_TREE` retired (ADR-0084/0088, 2026-08-18.)** The flag-off
+ * branch was a header-plus-routed-content fallback kept as an emergency rollback — and it had not
+ * been one for a long time: a `VITE_` constant is inlined at build time and no published image
+ * passes it, so no user could reach that branch and none ever had. What it did instead was oblige
+ * every later change to be made twice, which is how it came to carry its own copy of the
+ * `h-dvh` + scrolling-`main` fix.
  */
 export function AuthedLayout(): React.ReactElement {
-  if (NAV_TREE_ENABLED) return <AppShell />;
-
-  return (
-    <AnnouncerProvider>
-      {/* `h-dvh` + a scrolling `<main>`, for the same reason as {@link AppShell}: a minimum leaves
-          the height `auto` and every `flex-1 min-h-0` below it stops being bounded by the viewport.
-          This is the `VITE_NAV_TREE=false` rollback path, so it has to carry the fix too —
-          otherwise rolling the navigator back would resurrect the bug — and it has to carry BOTH
-          halves, because a fixed root without a scroller turns "too tall" into "collides". */}
-      <div className="flex h-dvh flex-col overflow-hidden">
-        <AppHeader />
-        <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-          <Outlet />
-        </main>
-      </div>
-    </AnnouncerProvider>
-  );
+  return <AppShell />;
 }

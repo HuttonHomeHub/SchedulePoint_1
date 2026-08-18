@@ -44,8 +44,8 @@ function HeaderContents(): React.ReactElement {
   // never see the entry point, though the API read itself is member-level.
   const role = useOrgRole(orgSlug ?? '');
   const canWrite = canManageHierarchy(role);
-  // Present only inside the persistent shell (VITE_NAV_TREE on); opens the rail as a
-  // drawer below `lg`, where the pinned rail is hidden.
+  // Opens the rail as a drawer below `lg`, where the pinned rail is hidden. Null outside the
+  // shell — this header is also rendered by `chrome-band.tsx` on the DESIGNED_CHROME-off path.
   const shell = useShell();
 
   return (
