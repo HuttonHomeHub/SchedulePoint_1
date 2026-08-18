@@ -178,6 +178,14 @@ export function ganttCellText(
  * a second vocabulary for the same six things, and the chooser would go on saying "Float" for a
  * column the grid had renamed — the exact drift this module was extracted to end for cell text.
  */
-export const GANTT_COLUMN_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+/**
+ * Keyed by {@link GanttColumnKey}, not by `string`.
+ *
+ * With a `string` key a lookup by a real column key could silently return `undefined` and the
+ * chooser would render a blank checkbox label — and nothing would fail, because `string` accepts
+ * every key including the ones no column has. The narrow type makes "every column has a label" a
+ * compile-time fact instead of a property of `GANTT_COLUMNS` that happens to hold today.
+ */
+export const GANTT_COLUMN_LABELS: Readonly<Record<GanttColumnKey, string>> = Object.fromEntries(
   GANTT_COLUMNS.map((c) => [c.key, c.label]),
-);
+) as Readonly<Record<GanttColumnKey, string>>;

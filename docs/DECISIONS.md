@@ -10,6 +10,78 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-18 — Reconciliation pass at the ADR-0095 epic boundary
+
+**What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
+Gantt-editing epic, whose M5 completion released as `web-v0.92.0` the same day. The previous pass was
+2026-08-17, so the three-month floor was nowhere near — this ran on the epic-boundary trigger, and the
+argument for running it anyway is that three findings existed before it started. Documentation, plus
+four product fixes the specialist gate found. All seven automated gates were green throughout, so every
+finding below comes from the manual half.
+
+**1. The application grew a scheduler, and four documents still said it had not.** ADR-0087 shipped
+`common/operational/retention-sweep.service.ts` on 2026-08-10 — one hourly `setInterval`, `.unref()`'d,
+no Redis — beside `heartbeat.service.ts`'s own timer, and its D2 **narrows** ADR-0009 rather than
+superseding it. `ARCHITECTURE.md` §10's ADR-0009 row still read _"No queue, no Redis. All work is
+synchronous."_ The same hole was in its sibling `.claude/agents/backend-performance-reviewer.md`, whose
+async invariant is a correct negation that had never heard of the sweep — found by RECONCILE §1's own
+standing instruction to check siblings when patching a claim, which is the second consecutive pass that
+instruction has paid for. Both wrong readings are expensive and in opposite directions: one invites
+building a scheduler that already exists, the other invites putting a durable, retryable job on one that
+has neither property.
+
+**2. Three register rows outlived their work, and two broke the register's own rule.** #136 and #137
+were annotated `CLOSED 2026-08-18` — the one thing the file's opening paragraph forbids in bold, because
+a row that says it is done is a row a reader still has to read — and #135 was fixed on 2026-08-17 and
+never closed at all. All three are deleted and entered in the Closed-numbers ledger, which exists so the
+ADRs citing them do not dangle. Row 1's suite count was re-derived: **33**, against the 30 recorded ten
+days earlier. The rule-breaking half is the notable part: the annotations were written by the same hand
+that had read the rule that forbids them, one day earlier.
+
+**3. Two claims in `CLAUDE.md` were false, one of them load-bearing.** Its ADR-0095 entry still named the
+columns chooser, Indent/Outdent, Insert and view memory as unbuilt — three days after they shipped and
+one day after they released. And §17 asserted _"There is no hard-delete or data-erasure path"_, while
+`interchange.service.ts:1134-1139` really does hard-delete on a failed import. The substance was right
+(it cannot be aimed at existing data) and the absolute phrasing was wrong in a way that matters:
+**ADR-0073 C3.4 decided where to write `interchange.imported` precisely because that delete exists**, so
+a reader taking the sentence literally cannot follow that argument. `BACKLOG.md`'s top item described a
+delivered epic as unstarted, contradicting its own convention that a backlog listing finished work is
+worse than none.
+
+**4. Step 7 earned its keep for the fifth pass running, and the fourth finding was mine.** Three
+reviewers were pointed at PR #327 — the M5-completion diff, which had shipped with no gate pass, which
+is the ADR-0081 gap one epic after that decision was written. All three blocked.
+
+- **Indent, Outdent and Insert had no keyboard path at all** — WCAG 2.1.1, Level A. The row-menu
+  trigger is `tabIndex={-1}`, correctly, and that was paid for by a comment saying keyboard users reach
+  the same actions through the row's selection. **That was true when M5-T3 shipped** and was made false
+  by T4/T5, which added three items that exist only in this menu because the docked bar cannot honour
+  them. Not a wrong decision — a correct justification that decayed, with nothing watching it.
+- **The reparent write announced nothing**, on success or on failure, though `WbsBulkAssignBar` and
+  `ActivityMembersPanel` both announce the identical ADR-0063 M4b batch.
+- **`collapsedWithheld` was computed, documented as "reported" in two places, and read by nobody** —
+  eight lines below the link cap's own comment reading _"Either the count is visible or there is no
+  cap."_ Its unit test passed throughout, because it drives the pure function the UI never called.
+- **A false coverage claim of my own**: `TsldPanel.a11y.test.tsx` justified asserting only the shortcut
+  _request_ by citing two covering tests — one file that did not exist and one e2e spec that mentions no
+  shortcut. Both citations were written in the commit that made them false. ADR-0076 Class 3, inside a
+  diff whose commit message invoked the discipline.
+
+All four are fixed with regression tests **verified red first**; the non-blocking remainder is register
+row **#138**.
+
+**5. One near-miss, recorded because the method matters.** #135 was almost reported as an unwired fix
+because the grep for its host used `features/plan-workspace/` — a directory that does not exist (the
+real path is `components/layout/workspace/`). The absence of a match is not evidence when the path is
+wrong, and a pass whose whole method is grep-then-read has to treat an empty result as a question.
+
+**Consequences.** `ARCHITECTURE.md` §10 and the backend-performance agent now describe the scheduler
+honestly and name ADR-0009's reopening trigger. The Gantt's structure gestures are keyboard-operable and
+announced. Both caps in `GanttPanel` now say what they withheld. `PlanShortcutsHelp` has the test that
+was claimed for it. Nothing in the release pipeline changed.
+
+---
+
 ### 2026-08-17 — Reconciliation pass at the ADR-0088 D3 flag-retirement boundary
 
 **What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the

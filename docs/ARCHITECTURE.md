@@ -293,12 +293,26 @@ These ADRs record how we will do something when we need it. Nothing in the
 running system depends on them, and no dependency for them is installed. They
 are listed here so nobody reads an ADR and assumes the capability exists:
 
-| ADR      | Decision                                  | Reality                                      |
-| -------- | ----------------------------------------- | -------------------------------------------- |
-| ADR-0009 | Background processing with BullMQ + Redis | No queue, no Redis. All work is synchronous. |
-| ADR-0010 | Caching strategy with Redis               | No cache layer. Reads go to Postgres.        |
-| ADR-0011 | File storage via an S3 abstraction        | No object store; no user file uploads.       |
-| ADR-0013 | Observability with OpenTelemetry + Pino   | Pino is wired; **OpenTelemetry is not**.     |
+| ADR      | Decision                                  | Reality                                                            |
+| -------- | ----------------------------------------- | ------------------------------------------------------------------ |
+| ADR-0009 | Background processing with BullMQ + Redis | No queue, no Redis. **Not "all work is synchronous"** — see below. |
+| ADR-0010 | Caching strategy with Redis               | No cache layer. Reads go to Postgres.                              |
+| ADR-0011 | File storage via an S3 abstraction        | No object store; no user file uploads.                             |
+| ADR-0013 | Observability with OpenTelemetry + Pino   | Pino is wired; **OpenTelemetry is not**.                           |
+
+> **ADR-0009's row said "All work is synchronous" until 2026-08-18, and that has
+> been false since 2026-08-10.** ADR-0087 gave this application its first
+> scheduled work of any kind — `common/operational/retention-sweep.service.ts`,
+> an hourly `setInterval` that deletes expired `csp_reports` and `mail_events`
+> rows — beside `heartbeat.service.ts`'s own timer. ADR-0087 D2 **narrows**
+> ADR-0009 rather than superseding it, and names the trigger to reopen it
+> (durability across a restart, retries, exactly-once, fan-out,
+> enqueue-from-a-request, visible progress). So the accurate claim is the
+> narrow one: there is no **queue** and no Redis, and the background work that
+> does exist is a single unreffed timer per replica with no durability and no
+> retry. The wrong reading is the expensive one in both directions — it invites
+> either "we have no scheduler, build one" or "we have a scheduler, put this
+> job on it".
 
 > **The mail port is not one of these, and this paragraph said it was until
 > 2026-08-17.** It read: _"exists with a **logging** implementation only; no

@@ -55,6 +55,16 @@ not edit code.
   and Redis (ADR-0009) are designed but not installed, so "offload it to a job"
   is not an available remedy today. Flag genuinely slow synchronous work as the
   case that would justify building the queue; do not review as though it exists.
+  **But there IS a scheduler, and it is not a queue** (added 2026-08-18, the
+  same hole this pass found in `ARCHITECTURE.md` §10): ADR-0087 shipped
+  `common/operational/retention-sweep.service.ts` — one `setInterval`,
+  `.unref()`'d, no Redis, no dependency — which **narrows** ADR-0009 rather
+  than superseding it. It suits work that is idempotent and time-predicated,
+  because a second run finds nothing and a restart is repaired by the next
+  tick. It has **no durability, no retry and runs per replica**, so ADR-0009
+  D2 names the trigger to reopen the queue question: durability across a
+  restart, retries, exactly-once, fan-out, enqueue-from-a-request, or visible
+  progress. Review a new periodic task against that list.
 - **Scalability:** stateless handlers; bounded connection use; backpressure
   (timeouts, payload/pagination caps) present.
 

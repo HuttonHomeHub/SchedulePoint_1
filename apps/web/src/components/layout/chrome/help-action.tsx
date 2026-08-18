@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
  * The keyboard-shortcuts sheet moved off the TSLD toolbar and into the account menu. That menu lives
  * in the app header, which ADR-0029 keeps **plan-unaware**: it mounts once, knows nothing about
  * plans, and must not remount when one opens. The sheet, meanwhile, is a *diagram* reference
- * (`TsldShortcutsHelp`, "Diagram keyboard shortcuts") whose open/closed state belongs to
+ * (`PlanShortcutsHelp`, "Diagram keyboard shortcuts") whose open/closed state belongs to
  * `use-tsld-canvas-ui-state`.
  *
  * So nothing about the dialog moves. The workspace registers a **callback**; the shell renders a

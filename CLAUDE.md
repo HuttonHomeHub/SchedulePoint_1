@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 978 web
+> (`apps/api/src/modules/`), 29 Prisma models across 54 migrations, 981 web
 > source files with 32 flag-scoped Playwright suites beside the base journey, and
 > 95 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2237,9 +2237,18 @@ progress` off the command surface because **an object action belongs on the obje
   print path whose props were threaded while its only caller was not, contradicting the commit
   message that introduced them. Two reviewers were **partly wrong** and that is recorded: the React
   Compiler's analysis does run (in `eslint-plugin-react-hooks` v7), though not at build time.
-  M5 shipped the row menu, **bar labels** and the **constraint badge**; the columns chooser,
-  Indent/Outdent, Insert and view-memory are named as unbuilt rather than implied, and `PROJECT_BRIEF.md` §8's "edit supported" is called
-  **substantially** met rather than closed.
+  M5 shipped the row menu, **bar labels** and the **constraint badge**, and named the columns
+  chooser, Indent/Outdent, Insert and view memory as unbuilt rather than implied; **all four landed
+  2026-08-18** and released as `web-v0.92.0`, closing `docs/TECH_DEBT.md` #136 — along with #137,
+  the shortcuts sheet that had been inert in this view because it was mounted inside `TsldPanel`,
+  which the Gantt does not render. The view memory's own finding is the one worth carrying: the
+  flag-on journey found on its first run that switching the Predecessors column **on** was
+  unrepresentable in the URL, because `useUrlFilterState` deletes any param equal to `''` and "hide
+  nothing" serialised to exactly that — while the unit case asserting that very distinction passed
+  throughout, since it hands the parser `''` directly and never crosses the hook that deletes it.
+  The parser was right and the **encoding** could not survive the round trip. `PROJECT_BRIEF.md`
+  §8's "edit supported" is still called **substantially** met rather than closed: the start-edge
+  resize is deliberately absent (D4), and Gantt dependency arrows ship default-off.
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
@@ -2427,9 +2436,18 @@ A lighter-weight running log of smaller decisions is in
   unblocked `VITE_PASSWORD_RESET`. What is still missing is knowing a send
   **failed**: Better Auth swallows the rejection after handoff, so a broken
   relay produces silently unrecoverable accounts (`docs/TECH_DEBT.md` #94).
-- **Every deletion is a soft delete.** There is no hard-delete or
-  data-erasure path: `deleted_at` is set, the row stays, and the recycle bin
-  restores it. Plan for that when reasoning about retention or a
+- **Every deletion a user can reach is a soft delete.** `deleted_at` is set, the
+  row stays, and the recycle bin restores it. **One path really does hard-delete
+  and this bullet said "there is no hard-delete path" until 2026-08-18:**
+  interchange's failure compensation (`interchange.service.ts:1134-1139`) issues
+  real `deleteMany`s across assignments, dependencies, activities and the plan
+  lock when phase 2's recalculation fails, honouring the "nothing is created on
+  failure" contract for a plan the importer had just created and nobody had yet
+  seen. That is not an erasure path — it cannot be aimed at existing data — but
+  the absolute phrasing was wrong in a load-bearing way: **ADR-0073 C3.4's
+  decision about when to write `interchange.imported` turns on exactly this**,
+  because a row written inside the transaction would outlive its subject and
+  permanently claim an import that was rolled back. Plan for that when reasoning about retention or a
   right-to-erasure request. (An **append-only audit log** and a **data-export
   path** were both listed here as missing until the 2026-08-04 reconciliation
   pass; both had shipped. The log is ADR-0072/0073 — `audit_events`, append-only

@@ -223,8 +223,16 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
     // at the workspace above both views.
     //
     // So what this panel owes is the REQUEST, which is what is asserted here. That the request
-    // produces a dialog is the workspace's contract, covered where the sheet actually lives
-    // (`PlanShortcutsHelp.test.tsx`) and end to end by `e2e-gantt-editing/view-state.spec.ts`.
+    // produces a dialog is the workspace's contract, covered where the sheet actually lives:
+    // `components/layout/workspace/PlanShortcutsHelp.test.tsx`.
+    //
+    // **That citation was false when first written, and both halves of it were.** This comment
+    // named a `PlanShortcutsHelp.test.tsx` that did not exist and an
+    // `e2e-gantt-editing/view-state.spec.ts` that mentions no shortcut at all — so the Gantt branch
+    // the same milestone had just added was covered in no layer while a comment asserted twice that
+    // it was. ADR-0076 Class 3, inside the diff whose commit message invoked the discipline, caught
+    // by the 2026-08-18 reconciliation pass's component gate. The first citation is now true
+    // because the file was written; the second is removed rather than softened.
     const { listbox } = renderPanelSpyingHelp();
     fireEvent.keyDown(listbox, { key: '?' });
     expect(setShowHelpSpy).toHaveBeenCalledWith(true);

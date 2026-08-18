@@ -66,7 +66,7 @@ describe('in the Gantt', () => {
     for (const key of HIDEABLE_COLUMNS) {
       const label = GANTT_COLUMN_LABELS[key];
       expect(label, `no label for ${key}`).toBeTruthy();
-      expect(screen.getByRole('checkbox', { name: label as string })).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: label })).toBeInTheDocument();
     }
     // `Activity` is not offered: it identifies the row and carries the editor and the de-emphasis
     // marker, so a grid that could hide it is not a shorter grid but a broken one.

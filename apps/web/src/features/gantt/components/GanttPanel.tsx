@@ -38,7 +38,11 @@ import {
   type GanttBarDrag,
 } from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
-import { DEFAULT_HIDDEN_COLUMNS, type GanttColumnKey } from '../model/gantt-view-state';
+import {
+  DEFAULT_HIDDEN_COLUMNS,
+  MAX_COLLAPSED_IN_URL,
+  type GanttColumnKey,
+} from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttViewStateBundle } from '../model/use-gantt-view-state';
@@ -640,6 +644,29 @@ export function GanttPanel({
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const index = tabStopIndex;
     const row = rows[index];
+    // **`ContextMenu` / `Shift+F10` opens the focused row's menu** — the pattern `HierarchyTree`
+    // already ships for the identical shape (a roving-tabindex widget whose per-row `⋯` trigger is
+    // deliberately not a tab stop). Without it, Indent, Outdent and Insert — which exist ONLY in
+    // that menu, because the docked bar cannot carry them — were reachable by mouse alone (WCAG
+    // 2.1.1, Level A).
+    //
+    // It activates the row's OWN trigger rather than signalling the menu to open itself, so the
+    // keyboard and the pointer are one code path by construction and cannot drift about what the
+    // menu contains or where it anchors. The selector is the trigger's semantics
+    // (`aria-haspopup="menu"`), not a class or a test id, so restyling cannot break it.
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      const trigger = rowRefs.current
+        .get(rowId(row!))
+        ?.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+      // No trigger means no menu is rendered for this row (a bucket row, or a host that supplies no
+      // `rowMenuContextFor`). Leave the key alone rather than consuming it to show nothing, which
+      // reads as a broken control instead of an absent feature.
+      if (trigger) {
+        event.preventDefault();
+        trigger.click();
+      }
+      return;
+    }
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -812,6 +839,26 @@ export function GanttPanel({
           className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
         >
           {linkSet.withheld} more {linkSet.withheld === 1 ? 'link is' : 'links are'} not shown.
+        </div>
+      ) : null}
+      {/* **The collapse cap says what it withheld, for the same reason the link cap does.**
+          `serialiseCollapsed` computed this count from the day it shipped, its docblock said it was
+          "reported rather than silently truncated", ADR-0095 and `docs/TECH_DEBT.md` #136 both
+          recorded it as reported — and NOTHING read it. A planner on a programme with more than 40
+          collapsed phases reloaded, watched some re-expand, and was told nothing.
+          That is ADR-0081's shape exactly: a capability with no entry point, its unit test passing
+          because it drives the pure function the UI never calls. It shipped past the author, the
+          pull request, CI and the register row that claimed it — and was caught by the
+          reconciliation pass's own step 7, eight lines below a comment reading "Either the count is
+          visible or there is no cap." */}
+      {viewState !== undefined && viewState.collapsedWithheld > 0 ? (
+        <div
+          role="status"
+          className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
+        >
+          {viewState.collapsedWithheld} collapsed{' '}
+          {viewState.collapsedWithheld === 1 ? 'section is' : 'sections are'} not remembered in this
+          link — the address can only carry {MAX_COLLAPSED_IN_URL}.
         </div>
       ) : null}
       {notCalculated ? (
@@ -1072,6 +1119,7 @@ function GanttBucketRowView({
       onFocus={onFocusRow}
       onClick={() => onToggle(row.id, row.expanded)}
       onKeyDown={(event) => {
+        if (!rowOwnsKey(event)) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onToggle(row.id, row.expanded);
@@ -1187,6 +1235,30 @@ interface GanttRowViewProps {
   onToggle: (id: string, collapse: boolean) => void;
   /** True when a float path is selected and this row is not on it (audit F4). */
   offFloatPath?: boolean;
+}
+
+/**
+ * Should this row's own Enter/Space activation fire for this event?
+ *
+ * **No, when the keystroke came from a control inside the row** — and the case that forced this is
+ * one React makes easy to miss: `GanttRowMenu` portals its menu to `document.body`, so in the DOM
+ * it is nowhere near the row, but **React events follow the React tree**, so an item's `Enter`
+ * propagates straight into this handler. The handler called `preventDefault()` unconditionally,
+ * which suppressed the `<button>`'s native activation — so every menu item was dead to `Enter`, for
+ * every keyboard user, however they had opened the menu. The `⋯` trigger itself was dead the same
+ * way.
+ *
+ * Found by `e2e-gantt-editing`'s keyboard case on its first run: the menu opened and stayed open.
+ * No unit test could see it — jsdom renders the portal in the same tree and the assertion under
+ * test was "the menu opens" — and it is the ADR-0055 portal lesson (React events follow the React
+ * tree, native listeners follow the DOM) arriving through a door nobody had checked.
+ */
+function rowOwnsKey(event: React.KeyboardEvent<HTMLElement>): boolean {
+  const target = event.target as HTMLElement | null;
+  if (target === null || target === event.currentTarget) return true;
+  // Anything that handles its own activation keeps it. Deliberately a capability test rather than
+  // "is this the menu?": the next control put inside a row would hit the identical wall.
+  return target.closest('button,a,input,textarea,select,[role="menu"],[role="dialog"]') === null;
 }
 
 function GanttRowView({
@@ -1336,6 +1408,7 @@ function GanttRowView({
       // Activation lives on the row rather than the grid's key handler: the row knows which
       // activity it is, and a click-only row would be unreachable by keyboard.
       onKeyDown={(event) => {
+        if (!rowOwnsKey(event)) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onSelect?.(activity);
