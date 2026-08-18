@@ -67,6 +67,32 @@ on an unbound `--card`).
 
 ## Critical questions — four, everything else has a stated default
 
+## Answers (product owner, 2026-08-18) — settled, do not re-ask
+
+|                           | Answer                                        | Note                                                                                  |
+| ------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **CQ-A** diagram ground   | **Yes — a quiet ground in all three themes.** | As defaulted.                                                                         |
+| **CQ-B** row rhythm       | **One rhythm, at 28.**                        | As defaulted. A visible change to the Gantt (32 → 28) and the tables.                 |
+| **CQ-C** control height   | **Move to 36 IN THIS EPIC.**                  | **Departs from the default**, which was to tokenise 40 now and move later. See below. |
+| **CQ-D** separation floor | **Report in L0, assert ≥ 1.5:1 in L4.**       | As defaulted.                                                                         |
+
+**CQ-C's answer creates a measurement obligation, and the plan must carry it rather than absorb it.**
+The default existed because ADR-0090 and ADR-0091 derive the command surface's band floors from
+**measured** control widths, and `e2e-toolbar-fit` asserts them — those two epics spent most of their
+effort on a row that would not fit at 1646 px, and three of their milestones had a width expectation
+falsified by their own measurement. Moving every control from 40 px to 36 px changes the inputs to
+all of it.
+
+So the height move is **not** a token edit. It is: change the value, re-run `measure:toolbar` at
+1646, re-derive the band floors from what it reports, update `e2e-toolbar-fit`'s expectations to the
+new measurements, and run every journey — ADR-0091's retrospective records three journeys broken by a
+label change and found by CI rather than locally, and its own rule is that a layout change means
+running all of them. Vertical space is the point of the change (chrome takes 31 % of the height at
+1646), so **measure and report the vertical gain** rather than asserting one; four consecutive epics
+have had a headline width or height number contradicted by their own measurement.
+
+---
+
 > **CQ-A — Does the diagram get its own ground colour, distinct from the page, in Light and Dark as
 > well as Corporate?**
 > Today only Corporate does, and only behind `VITE_CANVAS_VISUAL_LANGUAGE`
