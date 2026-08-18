@@ -2436,9 +2436,18 @@ A lighter-weight running log of smaller decisions is in
   unblocked `VITE_PASSWORD_RESET`. What is still missing is knowing a send
   **failed**: Better Auth swallows the rejection after handoff, so a broken
   relay produces silently unrecoverable accounts (`docs/TECH_DEBT.md` #94).
-- **Every deletion is a soft delete.** There is no hard-delete or
-  data-erasure path: `deleted_at` is set, the row stays, and the recycle bin
-  restores it. Plan for that when reasoning about retention or a
+- **Every deletion a user can reach is a soft delete.** `deleted_at` is set, the
+  row stays, and the recycle bin restores it. **One path really does hard-delete
+  and this bullet said "there is no hard-delete path" until 2026-08-18:**
+  interchange's failure compensation (`interchange.service.ts:1134-1139`) issues
+  real `deleteMany`s across assignments, dependencies, activities and the plan
+  lock when phase 2's recalculation fails, honouring the "nothing is created on
+  failure" contract for a plan the importer had just created and nobody had yet
+  seen. That is not an erasure path — it cannot be aimed at existing data — but
+  the absolute phrasing was wrong in a load-bearing way: **ADR-0073 C3.4's
+  decision about when to write `interchange.imported` turns on exactly this**,
+  because a row written inside the transaction would outlive its subject and
+  permanently claim an import that was rolled back. Plan for that when reasoning about retention or a
   right-to-erasure request. (An **append-only audit log** and a **data-export
   path** were both listed here as missing until the 2026-08-04 reconciliation
   pass; both had shipped. The log is ADR-0072/0073 — `audit_events`, append-only
