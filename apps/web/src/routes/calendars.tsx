@@ -1,7 +1,6 @@
 import { ARCHIVED_FILTERS } from '@repo/types';
 import { useParams } from '@tanstack/react-router';
 
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import {
   CALENDAR_SCOPE_FILTERS,
   CalendarsTable,
@@ -52,7 +51,6 @@ export function CalendarsScreen(): React.ReactElement {
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 p-6">
-      <Breadcrumbs items={[{ label: 'Calendars' }]} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Calendars</h1>
         {canWrite ? <CreateCalendarButton orgSlug={orgSlug} canManageOrg={canManageOrg} /> : null}
