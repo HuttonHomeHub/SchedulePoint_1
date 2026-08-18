@@ -249,6 +249,25 @@ a different epic**, and reads as authoritative while doing it. Deactivated with 
 in the file, and the failure mode written into the script's docblock so the next epic's gate pass
 has something to act on rather than a sentence to remember.
 
+**CI found an eleventh, and it is the epic's own screen in the suite nobody could run.** The BASE
+Playwright journey — `apps/web/e2e/recently-deleted.spec.ts`, which covers the shipped default
+configuration — still asserted the pre-ADR-0096 list: an exact name cell, and
+`"Restore its parent first"` **twice**. The message this epic deliberately removed was pinned as
+required behaviour by the one suite that exercises what users actually get.
+
+The reason it escaped is more useful than the fix. `scripts/e2e-local.sh` maps `web:<suite>` to
+`test:e2e:<suite>`, and the base journey is `test:e2e` with **no suffix** — so the documented
+pre-push gate could run all 33 flag-on suites and not that one. A sweep for the _label_ I had
+changed came back clean; the _screen_ I had rewritten had a journey of its own with no way to run
+it. `web` is now a target, chromium-only, and `docs/TESTING.md` gains the row plus the rule: change
+a screen, run the base journey.
+
+One further claim of mine was wrong and is recorded rather than deleted: I concluded the base
+journey "cannot run in this container", having watched all 51 tests fail on a missing browser. The
+observation was real and the conclusion was not — I had bypassed `e2e-local.sh`, which already
+discovers the browser and exports `PLAYWRIGHT_CHROMIUM_PATH` for exactly that. ADR-0076 Class 3,
+inside the note written about a process failure.
+
 Every fix carries a regression test verified to fail against the old code first. Two non-blocking
 findings are `docs/TECH_DEBT.md` #140–#141.
 

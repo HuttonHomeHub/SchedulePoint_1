@@ -282,12 +282,28 @@ failure should surface at the earliest step that can see it.
 | 2   | `pnpm test`                                                 | always                                                                                  |
 | 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                  |
 | 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives    |
+| 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                  |
 | 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))    |
 | 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                          |
 | 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile              |
 | 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file         |
 | 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call` |
 | 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                |
+| 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**          |
+
+**Step 4a is not covered by step 4**, and the difference cost a CI round on 2026-08-18. Every `web:`
+target maps to `test:e2e:<suite>`; the base journey is `test:e2e` with no suffix, so until that day
+`scripts/e2e-local.sh` had no way to run the suite covering the **shipped default configuration** —
+and `e2e/recently-deleted.spec.ts` reached CI still asserting a screen ADR-0096 had replaced. A
+sweep for the changed _label_ found nothing; the changed _screen_ had a journey of its own that
+nobody could run. Change a screen, run the base journey.
+
+**Step 10 is the only gate that reads your branch's position.** `check:frontend-only` diffs
+`origin/main...HEAD`, so it needs a fetched base and answers differently depending on what has
+landed since. It is also the gate most likely to be **stale rather than wrong**: it reads an opt-in
+declaration (`scripts/frontend-only.json`) that a finished epic is supposed to remove, and on
+2026-08-18 it refused an unrelated branch on behalf of an epic that had shipped three weeks earlier.
+The other checks are cheap and worth running before pushing whether or not the table says you must.
 
 Step 9 exists because the web container's config is the one artefact no other
 gate reads. It substitutes `apps/web/nginx.conf` exactly as the container does

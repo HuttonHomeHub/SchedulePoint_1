@@ -12,6 +12,7 @@
 # Usage:
 #   scripts/e2e-local.sh                 # db + API e2e (the default gate)
 #   scripts/e2e-local.sh api             # API Supertest e2e only
+#   scripts/e2e-local.sh web             # the base Playwright journey (the shipped default)
 #   scripts/e2e-local.sh web:wbs         # one flag-on Playwright suite
 #   scripts/e2e-local.sh api web:wbs     # both
 #   scripts/e2e-local.sh --db-only       # just bring the database up
@@ -91,13 +92,30 @@ for target in "${targets[@]}"; do
       log "API end-to-end (Supertest)"
       pnpm --filter @repo/api test:e2e
       ;;
+    web)
+      # **The base journey — the one covering the SHIPPED default configuration**, and until
+      # 2026-08-18 the only suite this script could not run: every other target maps to
+      # `test:e2e:<suite>` and the base is `test:e2e` with no suffix, so `web` was an unknown
+      # target. That is how `e2e/recently-deleted.spec.ts` reached CI still asserting the screen
+      # ADR-0096 had replaced — the sweep that would have caught it had nothing to run.
+      #
+      # Chromium only, unlike CI, which also runs firefox and webkit: neither is installed in the
+      # dev container, and a local run that fails on a missing browser teaches nothing. Cross-
+      # browser stays CI's job (`docs/TECH_DEBT.md` #25a).
+      #
+      # Worker count is left at the config's default so this matches CI. Locally that means the
+      # journeys share a database other suites have already written to; if one fails on a missing
+      # fixture rather than on an assertion, re-run it alone before believing it.
+      log "Web end-to-end (base journey, chromium)"
+      pnpm --filter @repo/web exec playwright test --project=chromium
+      ;;
     web:*)
       suite="${target#web:}"
       log "Web end-to-end (${suite})"
       pnpm --filter @repo/web "test:e2e:${suite}"
       ;;
     *)
-      echo "Unknown target '${target}'. Use 'api', 'web:<suite>', or --db-only." >&2
+      echo "Unknown target '${target}'. Use 'api', 'web', 'web:<suite>', or --db-only." >&2
       exit 2
       ;;
   esac
