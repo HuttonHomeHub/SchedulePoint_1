@@ -10,13 +10,19 @@ import { RecentlyDeletedTable } from './RecentlyDeletedTable';
 import { ANCESTOR_PREVIEW_LIMIT } from './RestoreAncestorDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
 
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPagesWithMeta: vi.fn() }));
 const mockApiFetch = vi.mocked(apiFetch);
+
+/**
+ * 45 days and ACTIVE — deliberately not the 90-day default. A fixture on the default cannot tell a
+ * served value from a hardcoded one, which is the exact defect `meta.retentionDays` exists to stop.
+ */
+const META = { nextCursor: null, hasMore: false, retentionDays: 45, retentionActive: true };
 // The list read pages through every deleted row (`apiFetchAllPages`), so the post-restore refetch
 // resolves here rather than through `apiFetch` (which serves only the restore POST).
-const mockApiFetchAllPages = vi.mocked(apiFetchAllPages);
+const mockApiFetchAllPages = vi.mocked(apiFetchAllPagesWithMeta);
 
 const CLIENT_ID = '00000000-0000-4000-8000-000000000001';
 const PLAN_ID = '00000000-0000-4000-8000-000000000002';
@@ -58,7 +64,7 @@ function renderTable(canWrite: boolean, data: DeletedHierarchyItem[] = ITEMS) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(deletedItemKeys.list('acme'), data);
+  queryClient.setQueryData(deletedItemKeys.list('acme'), { rows: data, meta: META });
   return render(
     <QueryClientProvider client={queryClient}>
       <AnnouncerProvider>
@@ -69,7 +75,7 @@ function renderTable(canWrite: boolean, data: DeletedHierarchyItem[] = ITEMS) {
 }
 
 beforeEach(() => {
-  mockApiFetchAllPages.mockResolvedValue(ITEMS);
+  mockApiFetchAllPages.mockResolvedValue({ rows: ITEMS, meta: META });
 });
 
 afterEach(() => {
@@ -353,6 +359,47 @@ describe('RecentlyDeletedTable', () => {
       expect(pending).toHaveAttribute('aria-busy', 'true');
       expect(pending).not.toHaveAttribute('disabled');
       resolve({});
+    });
+  });
+
+  describe('the retention rule', () => {
+    it('STATES the rule, using the served period rather than a constant', () => {
+      // Without this sentence, the first time a member learns deletions expire is a countdown on
+      // something they came here to check. 45 is the fixture's period — a hardcoded 90 would fail.
+      renderTable(true);
+      expect(
+        screen.getByText('Deleted items are kept for 45 days, then permanently removed.'),
+      ).toBeInTheDocument();
+    });
+
+    it('counts each deletion down by the SERVED period', () => {
+      renderTable(true);
+      // ITEMS[0] was deleted 2026-07-10; with a 45-day period the row must reflect 45, not 90.
+      // Asserted as a pattern rather than a fixed number so the case survives the clock moving.
+      expect(screen.getAllByText(/Expir(es|ing)/).length).toBeGreaterThan(0);
+    });
+
+    it('says NOTHING about expiry while the sweep is not deleting yet', () => {
+      // M3 ships the words; M4 arms the delete. A countdown for a deletion that will not happen
+      // states a consequence the system does not deliver — worse than silence.
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      queryClient.setQueryData(deletedItemKeys.list('acme'), {
+        rows: ITEMS,
+        meta: { ...META, retentionActive: false },
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AnnouncerProvider>
+            <RecentlyDeletedTable orgSlug="acme" canWrite />
+          </AnnouncerProvider>
+        </QueryClientProvider>,
+      );
+      expect(screen.queryByText(/Expir(es|ing)/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/permanently removed/)).not.toBeInTheDocument();
+      // ...and the list itself still works.
+      expect(screen.getByText('Northgate')).toBeInTheDocument();
     });
   });
 

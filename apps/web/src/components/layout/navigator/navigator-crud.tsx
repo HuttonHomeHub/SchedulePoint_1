@@ -31,16 +31,16 @@ const KIND_NOUN: Record<NodeActionTarget['kind'], string> = {
   plan: 'plan',
 };
 
-/** Kind-appropriate cascade warning; every variant ends "You can restore it later." */
+/** Kind-appropriate cascade warning; every variant ends "You can restore it from Recently deleted for a limited time." */
 function deleteDescription(target: NodeActionTarget): string {
   const name = `“${target.name}”`;
   if (target.kind === 'client') {
-    return `Delete ${name} and all its projects and plans? You can restore it later.`;
+    return `Delete ${name} and all its projects and plans? You can restore it from Recently deleted for a limited time.`;
   }
   if (target.kind === 'project') {
-    return `Delete ${name} and all its plans? You can restore it later.`;
+    return `Delete ${name} and all its plans? You can restore it from Recently deleted for a limited time.`;
   }
-  return `Delete ${name}? You can restore it later.`;
+  return `Delete ${name}? You can restore it from Recently deleted for a limited time.`;
 }
 
 /**

@@ -33,6 +33,21 @@ export interface PageMeta {
 }
 
 /**
+ * The recycle bin's page metadata: pagination, plus the retention period in force (ADR-0096).
+ *
+ * **The period is served, never assumed.** It is an operator override
+ * (`RETENTION_HIERARCHY_DAYS`), so a client constant would make every "expires in N days" on the
+ * screen wrong on any host that changed it — wrong silently, with nothing able to detect the drift.
+ * Carrying it here costs one integer per page and makes the sentence true by construction.
+ */
+export interface DeletedItemsMeta extends PageMeta {
+  /** Days a soft-deleted row is kept before it is permanently removed. */
+  retentionDays: number;
+  /** Whether the sweep is actually deleting yet — false while the countdown ships ahead of it. */
+  retentionActive: boolean;
+}
+
+/**
  * Organisation-scoped roles, least → most privileged (ADR-0016). The API's
  * runtime `OrganizationRole` enum (apps/api/src/common/auth/principal.ts) is the
  * source of truth for values; this const is the cross-boundary contract the web

@@ -142,7 +142,11 @@ export function PlansTable({
             }}
             onConfirm={confirmDelete}
             title="Delete plan"
-            description={deleting ? `Delete “${deleting.name}”? You can restore it later.` : ''}
+            description={
+              deleting
+                ? `Delete “${deleting.name}”? You can restore it from Recently deleted for a limited time.`
+                : ''
+            }
             pending={deletePlan.isPending}
             pendingLabel="Deleting…"
             error={deleteError}

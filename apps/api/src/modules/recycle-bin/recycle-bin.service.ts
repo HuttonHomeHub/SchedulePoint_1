@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { DeletedHierarchyItem, PageMeta } from '@repo/types';
+import type { DeletedHierarchyItem, DeletedItemsMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { AppConfigService } from '../../config/app-config.service';
 import { ForbiddenError } from '../../common/errors/domain-errors';
 import { OrganizationsService } from '../organizations/organizations.service';
 
@@ -20,6 +21,7 @@ export class RecycleBinService {
   constructor(
     private readonly organizations: OrganizationsService,
     private readonly repo: RecycleBinRepository,
+    private readonly appConfig: AppConfigService,
     @InjectPinoLogger(RecycleBinService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -27,7 +29,7 @@ export class RecycleBinService {
     principal: Principal,
     orgSlug: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: DeletedHierarchyItem[]; meta: PageMeta }> {
+  ): Promise<{ items: DeletedHierarchyItem[]; meta: DeletedItemsMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     // Representative hierarchy-read permission — reads are granted together, so
     // any member who can browse the tree can see what's been removed from it.
@@ -58,7 +60,14 @@ export class RecycleBinService {
         deleteBatchId: row.deleteBatchId,
         blockedBy: row.blockedBy,
       })),
-      meta: { nextCursor, hasMore },
+      meta: {
+        nextCursor,
+        hasMore,
+        // Served rather than assumed: the period is an operator override, so a client constant
+        // would be silently wrong on any host that changed it (ADR-0096 D2/B9).
+        retentionDays: this.appConfig.retentionHierarchyDays,
+        retentionActive: this.appConfig.retentionHierarchyEnabled,
+      },
     };
   }
 

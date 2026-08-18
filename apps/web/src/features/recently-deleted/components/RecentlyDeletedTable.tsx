@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
 import { useDeletedItems, useRestoreItem } from '../api/use-deleted-items';
+import { expirySentence, expirySummary } from '../model/expiry-copy';
 import { describeMembers, groupDeletions, type DeletionGroup } from '../model/group-deletions';
 
 import { RestoreAncestorDialog } from './RestoreAncestorDialog';
@@ -54,7 +55,11 @@ export function RecentlyDeletedTable({
 
   // Grouping is a pure transform over the array already held — `useDeletedItems` pages to
   // exhaustion, which is what makes a group complete and therefore honest (TECH_DEBT #57).
-  const groups = useMemo(() => groupDeletions(deleted.data ?? []), [deleted.data]);
+  const groups = useMemo(() => groupDeletions(deleted.data?.rows ?? []), [deleted.data]);
+  // The SERVER's period, never a constant here: it is an operator override, so a hardcoded copy
+  // would make every sentence below wrong on any host that changed it (ADR-0096 D2).
+  const retentionDays = deleted.data?.meta?.retentionDays ?? null;
+  const retentionActive = deleted.data?.meta?.retentionActive ?? false;
   const groupQuery = useMemo(
     () => ({ ...deleted, data: groups }) as unknown as typeof deleted & { data: DeletionGroup[] },
     [deleted, groups],
@@ -166,9 +171,22 @@ export function RecentlyDeletedTable({
     },
     {
       header: 'Deleted',
-      cell: (group) => (
-        <span className="text-muted-foreground">{formatTimestamp(group.root.deletedAt)}</span>
-      ),
+      cell: (group) => {
+        const expiry =
+          retentionDays === null
+            ? null
+            : expirySentence(group.root.deletedAt, retentionDays, retentionActive);
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-muted-foreground">{formatTimestamp(group.root.deletedAt)}</span>
+            {/* Urgency is in the WORDING, never a colour (WCAG 1.4.1) — "Expires tomorrow" reads
+                the same to a colour-blind reader, in a print, and to a screen reader. */}
+            {expiry === null ? null : (
+              <span className="text-muted-foreground text-xs">{expiry}</span>
+            )}
+          </div>
+        );
+      },
     },
   ];
   if (canWrite) {
@@ -220,6 +238,25 @@ export function RecentlyDeletedTable({
           {restoreError}
         </p>
       ) : null}
+      {/* **The rule, stated — not left to be inferred from a countdown.** Without this the first
+          time a member learns deletions expire is a "expires tomorrow" on something they came here
+          to check on. The number is the server's, so this sentence is true on every host. */}
+      {retentionDays === null || !retentionActive ? null : (
+        <p className="text-muted-foreground text-sm">
+          Deleted items are kept for {retentionDays} days, then permanently removed.
+        </p>
+      )}
+      {(() => {
+        const summary =
+          retentionDays === null ? null : expirySummary(groups, retentionDays, retentionActive);
+        // A subset, said as a subset: "1 of 3" rather than a bare count that reads as though the
+        // whole list is imminent and sends a reader restoring things with months left.
+        return summary === null ? null : (
+          <p role="status" className="text-muted-foreground text-sm">
+            {summary}
+          </p>
+        );
+      })()}
       <DataTable
         caption="Recently deleted items"
         columns={columns}

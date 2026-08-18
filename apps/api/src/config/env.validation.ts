@@ -180,6 +180,22 @@ export const envSchema = z
      */
     RETENTION_MAIL_EVENTS_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
     /**
+     * Days a soft-deleted client/project/plan is kept before the sweep permanently deletes it
+     * (ADR-0096 D2). **The operator's override, and the reason the client is never allowed a
+     * hardcoded copy**: a host running 365 here would otherwise be told "expires in 87 days" by
+     * every row on the screen, wrongly and undetectably. It ships in the list response's `meta`.
+     *
+     * The clock is retroactive (D3): this counts from `deleted_at`, not from the release.
+     */
+    RETENTION_HIERARCHY_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+    /**
+     * Whether the hierarchy sweep DELETES. Separate from `RETENTION_SWEEP_ENABLED` on purpose: M3
+     * ships the countdown and the blast radius with this off, so a reader sees what would go before
+     * anything does. `retention-sweep.service.ts:110-113` runs an unawaited sweep at boot, so
+     * arming and deploying are one event — a single release cannot both preview and delete (D4).
+     */
+    RETENTION_HIERARCHY_ENABLED: z.coerce.boolean().default(false),
+    /**
      * How often the sweep runs. Hourly by default.
      *
      * Frequency is close to free: the idle batch — the one that runs forever and finds nothing —

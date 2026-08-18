@@ -82,6 +82,21 @@ export class AppConfigService {
     return this.config.get('RETENTION_MAIL_EVENTS_DAYS', { infer: true });
   }
 
+  /**
+   * Days a soft-deleted client/project/plan is kept (ADR-0096 D2).
+   *
+   * Read by the recycle-bin list so the countdown on screen is the SERVER's number. A client
+   * constant would be silently wrong on any host that overrode this, with nothing to detect it.
+   */
+  get retentionHierarchyDays(): number {
+    return this.config.get('RETENTION_HIERARCHY_DAYS', { infer: true });
+  }
+
+  /** Whether the hierarchy sweep deletes. Off through M3 — the countdown ships before the delete. */
+  get retentionHierarchyEnabled(): boolean {
+    return this.config.get('RETENTION_HIERARCHY_ENABLED', { infer: true });
+  }
+
   /** How often the sweep runs. */
   get retentionSweepIntervalMinutes(): number {
     return this.config.get('RETENTION_SWEEP_INTERVAL_MINUTES', { infer: true });

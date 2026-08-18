@@ -221,6 +221,19 @@ describe.skipIf(!hasDatabase)('Recycle bin API (e2e)', () => {
     expect(byId[planId]!.canRestore).toBe(false);
   });
 
+  it('serves the retention period and whether it is armed (ADR-0096)', async () => {
+    // The countdown on screen is only honest if the period comes from the server: it is an
+    // operator override, so a client constant would be silently wrong on any host that changed it.
+    const { actor } = await adminWithOrg();
+    const res = await actor.agent.get('/api/v1/organizations/acme/deleted').expect(200);
+    expect(res.body.meta).toMatchObject({
+      retentionDays: expect.any(Number),
+      // False by default: M3 ships the countdown, M4 arms the delete (ADR-0096 D4).
+      retentionActive: false,
+    });
+    expect(res.body.meta.retentionDays).toBeGreaterThan(0);
+  });
+
   it('restoring the root (via its own endpoint) empties the recycle bin', async () => {
     const { actor } = await adminWithOrg();
     const clientId = await createClient(actor, 'Northgate');

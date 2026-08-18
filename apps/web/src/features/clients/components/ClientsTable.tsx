@@ -139,7 +139,7 @@ export function ClientsTable({
             title="Delete client"
             description={
               deleting
-                ? `Delete “${deleting.name}” and all its projects and plans? You can restore it later.`
+                ? `Delete “${deleting.name}” and all its projects and plans? You can restore it from Recently deleted for a limited time.`
                 : ''
             }
             pending={deleteClient.isPending}

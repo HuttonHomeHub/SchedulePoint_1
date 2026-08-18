@@ -143,7 +143,7 @@ export function ProjectsTable({
             title="Delete project"
             description={
               deleting
-                ? `Delete “${deleting.name}” and all its plans? You can restore it later.`
+                ? `Delete “${deleting.name}” and all its plans? You can restore it from Recently deleted for a limited time.`
                 : ''
             }
             pending={deleteProject.isPending}

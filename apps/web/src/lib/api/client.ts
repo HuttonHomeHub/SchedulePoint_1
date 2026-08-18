@@ -85,6 +85,39 @@ const MAX_PAGES = 1000;
  * server reports no more, appending `limit`/`cursor` onto any query string the caller already set.
  * The list endpoints order deterministically by id, so the concatenation is stable across pages.
  */
+/**
+ * {@link apiFetchAllPages}, but keeping the LAST page's `meta`.
+ *
+ * A sibling rather than a signature change: `apiFetchAllPages` has ~100 call sites that want the
+ * rows and nothing else, and widening its return type to serve one caller would churn all of them.
+ *
+ * The last page's meta is the right one to keep. Pagination fields are per-page and spent by the
+ * time the walk ends; anything else in `meta` is a property of the QUERY — the recycle bin's
+ * retention period, say — and is identical on every page, so the final one is as good as the first
+ * and needs no merge rule that could later disagree with itself.
+ */
+export async function apiFetchAllPagesWithMeta<T, M>(
+  path: string,
+): Promise<{ rows: T[]; meta: M | null }> {
+  const rows: T[] = [];
+  let cursor: string | null = null;
+  let meta: M | null = null;
+  const separator = path.includes('?') ? '&' : '?';
+
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const cursorParam: string = cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+    const envelope: { data: T[]; meta?: M & PageMeta } = await apiFetchEnvelope<T[], M & PageMeta>(
+      `${path}${separator}limit=${MAX_PAGE_LIMIT}${cursorParam}`,
+    );
+    if (envelope.data) rows.push(...envelope.data);
+    const next = envelope.meta;
+    if (next) meta = next;
+    if (!next?.hasMore || next.nextCursor === null) return { rows, meta };
+    cursor = next.nextCursor;
+  }
+  return { rows, meta };
+}
+
 export async function apiFetchAllPages<T>(path: string): Promise<T[]> {
   const rows: T[] = [];
   let cursor: string | null = null;
