@@ -120,7 +120,15 @@ vi.mock('@/features/baselines', () => ({
   BaselineVarianceSummary: () => null,
 }));
 
-vi.mock('@/features/activities', () => ({
+// **Partial**, not total — the same lesson four occurrences deep. A total mock blanks every export
+// the workspace host imports rather than only the ones stubbed here, so the day it started importing
+// one more (`useUpdateActivityParents`, ADR-0095 M5-T4) all nine cases failed at RENDER with "no
+// export is defined on the mock", and the visible symptom was a missing dialog three assertions
+// later. `ActivityCreateDialog` is stubbed explicitly below for the opposite failure: the real one
+// calls `useCreateActivity` and this suite has no `QueryClientProvider`.
+vi.mock('@/features/activities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ActivityCreateDialog: () => null,
   useActivities: () => query(h.activities),
   useCreateActivity: () => ({ mutateAsync: vi.fn() }),
   useCreatePlacedActivity: () => ({ mutateAsync: h.createPlaced }),
