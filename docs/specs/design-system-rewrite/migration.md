@@ -221,5 +221,4 @@ Said here rather than discovered.
 - **Touch `brand` or `auth` values.** ADR-0077's theme-invariance is a decision, and `globals.css`
   says so in capitals for a reason.
 - **Add a component library, a chart library, a toaster or a command palette.** Each is an ADR of its
-own, and arriving under cover of a token rewrite is how a design system becomes a framework.
-</content>
+  own, and arriving under cover of a token rewrite is how a design system becomes a framework.

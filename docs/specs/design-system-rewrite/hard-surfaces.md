@@ -270,6 +270,5 @@ Said here rather than discovered later.
   hardware envelope ADR-0026 §16 names. This epic's obligation is to leave that measurable and to
   re-run the harness that exists, not to answer it.
 - **It does not add a chart library, a toaster or a command palette.** All three are absent, all three
-are named as absent in `docs/DESIGN_SYSTEM.md`, and adding one under cover of a token rewrite is how
-a design system becomes a framework.
-</content>
+  are named as absent in `docs/DESIGN_SYSTEM.md`, and adding one under cover of a token rewrite is how
+  a design system becomes a framework.

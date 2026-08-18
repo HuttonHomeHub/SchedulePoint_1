@@ -32,7 +32,7 @@
   mechanics. **Its findings are an input here and are not re-derived**; `diagnosis.md` §0 says which
   are carried, which are extended, and the one I contradict (with the arithmetic).
 - **`docs/specs/organisation-landing/`** (ADR-0098) — the first new primary screen in this world.
-  Its §0.3 asks this rewrite for five things it cannot express today. `design.md` §7 answers all
+  Its §0.3 asks this rewrite for five things it cannot express today. `design.md` §6 answers all
   five by name, and `migration.md` L3 lands them before that epic needs them.
 
 ## The one-sentence version
@@ -43,6 +43,27 @@ and no theme restates it), and the app it now has to dress is a Canvas-2D diagra
 Gantt, a 28-stop command surface and eleven data screens — so **the rewrite is not a new palette, it
 is three more axes and one more surface**: the diagram becomes a scope with a validated family,
 density becomes a token, and the type ramp gets a top and a data half.
+
+## The question that was asked of this design, and its answer
+
+> _"Which tokens belong to the rebound family, and how is 'complete' decided? Three separate people
+> have now found a token outside it that would fail if a component ever landed somewhere new, and
+> each time the answer has been 'add that one'."_
+
+**Completeness stops being a count and becomes a property**, and the rebound set stops being a list
+and becomes a closure (`design.md` §1.5):
+
+> **The defect is never "a token is not rebound". The defect is a pair whose two halves are governed
+> by different scopes. A scope is complete when no pair a compiled utility can composite is split
+> across two scopes.**
+
+Three parts: the page becomes an explicit `--page-*` family so all six scopes are symmetric; the
+rebound set is **computed** by closure from the scope's fill and asserted rather than authored (which
+pulls in `--destructive`, `--secondary`, `--destructive-hover` and the solid status triples with
+nobody having to notice them); and a second fill inside a scope — `Card`, `Popover` — is a **reset**
+rather than a member, which keeps ADR-0055's promise that a `Card` means the same thing everywhere
+_and_ closes a live split pair nobody has raised (`CardDescription` is a rebound `--muted-foreground`
+on an unbound `--card`).
 
 ## Critical questions — four, everything else has a stated default
 
