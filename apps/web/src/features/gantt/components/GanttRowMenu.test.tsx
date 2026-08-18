@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { GanttRowMenu } from './GanttRowMenu';
+import { GanttRowMenu, type GanttRowStructureActions } from './GanttRowMenu';
 
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 
@@ -115,5 +115,83 @@ describe('the items', () => {
     const edit = screen.getByRole('menuitem', { name: /^Edit/ });
     expect(edit).toHaveAttribute('aria-disabled', 'true');
     expect(edit).not.toBeDisabled();
+  });
+});
+
+/**
+ * **The grid's own gestures** (ADR-0095 M5-T4), which are NOT in the shared roster.
+ *
+ * Indent and Outdent are about a row's place in a grid; the canvas expresses the same hierarchy as
+ * a band ADR-0063 made select-only, because a summary's dates are an engine rollup with nothing to
+ * drag. Offering them there would be three controls the surface cannot honour.
+ *
+ * `selection-duplication.structural.test.ts` still passes, and that is not luck: it forbids this
+ * file naming an action the SHARED registry owns. These are not.
+ */
+describe('the structure gestures', () => {
+  const structure = (over: Partial<GanttRowStructureActions> = {}): GanttRowStructureActions => ({
+    indent: { run: vi.fn(), refusal: null },
+    outdent: { run: vi.fn(), refusal: null },
+    canEditSchedule: true,
+    penRefusal: null,
+    ...over,
+  });
+
+  const openWith = (s: GanttRowStructureActions) => {
+    render(<GanttRowMenu context={() => context()} activityName="Foundations" structure={s} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Foundations' }));
+  };
+
+  it('offers Indent and Outdent', () => {
+    openWith(structure());
+    expect(screen.getByRole('menuitem', { name: /^Indent/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^Outdent/ })).toBeInTheDocument();
+  });
+
+  it('runs the gesture the row resolved', () => {
+    const s = structure();
+    openWith(s);
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Indent/ }));
+    expect(s.indent.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('shades a refused gesture with the reason, still focusable', () => {
+    // ADR-0082: the option keeps its place so its reason is readable by keyboard. "There is no
+    // summary above this row" is a fact a planner can act on — by making one.
+    openWith(
+      structure({ indent: { run: vi.fn(), refusal: 'There is no summary above this row.' } }),
+    );
+    const item = screen.getByRole('menuitem', { name: /^Indent/ });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).not.toBeDisabled();
+  });
+
+  it('states the PEN first, not the gesture reason', () => {
+    // A planner without the pen told "there is no summary above this row" has been given a true
+    // and useless sentence — they cannot act on it, and the thing stopping them is elsewhere.
+    openWith(
+      structure({
+        canEditSchedule: false,
+        penRefusal: 'Start editing to change this.',
+        indent: { run: vi.fn(), refusal: 'There is no summary above this row.' },
+      }),
+    );
+    expect(screen.getByRole('menuitem', { name: /^Indent/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('renders NO Insert item while that milestone is unbuilt', () => {
+    // Absent, not shaded. A control whose only reason is "nobody has written this yet" is the
+    // lit-but-inert shape inverted.
+    openWith(structure());
+    expect(screen.queryByRole('menuitem', { name: /Insert/ })).toBeNull();
+  });
+
+  it('renders nothing structural when the host supplies no writer', () => {
+    render(<GanttRowMenu context={() => context()} activityName="Foundations" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Foundations' }));
+    expect(screen.queryByRole('menuitem', { name: /^Indent/ })).toBeNull();
   });
 });

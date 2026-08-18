@@ -40,9 +40,49 @@ export interface GanttRowMenuProps {
   context: () => SelectionBarContext | null;
   /** The row this menu belongs to, for the accessible name. */
   activityName: string;
+  /**
+   * The grid's own structure gestures (ADR-0095 M5-T4/T5), or absent.
+   *
+   * **Not in `selectionActionItems`, and that is deliberate rather than an oversight.** Indent,
+   * Outdent and Insert are gestures about a row's place in a GRID; the canvas expresses the same
+   * hierarchy as a band that ADR-0063 made select-only, precisely because a summary's dates are an
+   * engine rollup with nothing to drag. Putting them in the shared roster would offer three
+   * controls on a surface that cannot honour them.
+   *
+   * `selection-duplication.structural.test.ts` still holds: it forbids this file naming an action
+   * the SHARED registry owns, which these are not. The gate keeps its teeth against a third copy of
+   * `Report progress`; it was never a ban on a view having gestures of its own.
+   */
+  structure?: GanttRowStructureActions | undefined;
 }
 
-export function GanttRowMenu({ context, activityName }: GanttRowMenuProps): React.ReactElement {
+/** One grid gesture: what it does, and why it cannot (ADR-0082 — shaded with a reason, never gone). */
+export interface GanttRowStructureAction {
+  run: () => void;
+  /** Null when it can run; otherwise the sentence a planner can act on. */
+  refusal: string | null;
+}
+
+export interface GanttRowStructureActions {
+  indent: GanttRowStructureAction;
+  outdent: GanttRowStructureAction;
+  /**
+   * Absent while M5-T5 is unbuilt — and absent means **not rendered**, never a shaded "Insert
+   * activity below" whose reason is that nobody has written it yet. A control that exists to
+   * explain its own absence is the lit-but-inert shape this register keeps recording; a capability
+   * that is not there yet is simply not offered.
+   */
+  insert?: GanttRowStructureAction | undefined;
+  /** Whether these are pen-gated writes at all — false shades all three with the pen's own reason. */
+  canEditSchedule: boolean;
+  penRefusal: string | null;
+}
+
+export function GanttRowMenu({
+  context,
+  activityName,
+  structure,
+}: GanttRowMenuProps): React.ReactElement {
   // `Menu` anchors at a VIEWPORT POINT, not at an element — it clamps x/y to stay on screen, which
   // an element ref cannot express. Read from the trigger at open time rather than held in state, so
   // a row scrolled between two opens anchors where it now is.
@@ -136,7 +176,50 @@ export function GanttRowMenu({ context, activityName }: GanttRowMenuProps): Reac
             </MenuItem>
           );
         })}
+        {structure === undefined
+          ? null
+          : STRUCTURE_ITEMS.map(({ id, label, pick }) => {
+              const action = pick(structure);
+              if (action === undefined) return null;
+              // The pen first, then the gesture's own reason — a planner without the pen is told
+              // that, not "there is no summary above this row", which would be true and useless.
+              const refusal = !structure.canEditSchedule
+                ? (structure.penRefusal ?? 'You are not editing this plan.')
+                : action.refusal;
+              return (
+                <MenuItem
+                  key={id}
+                  disabled={refusal !== null}
+                  {...(refusal === null ? {} : { disabledReason: refusal })}
+                  onSelect={() => {
+                    setAnchor(null);
+                    setResolved(null);
+                    action.run();
+                  }}
+                >
+                  {label}
+                </MenuItem>
+              );
+            })}
       </Menu>
     </>
   );
 }
+
+/**
+ * The grid gestures, in the order a planner reads them: the two that move a row within the
+ * hierarchy, then the one that adds to it.
+ *
+ * A module constant rather than three inline blocks, so the pen rule and the refusal precedence are
+ * written once — the "one correct pattern applied to a control and not its neighbour" shape this
+ * register keeps recording.
+ */
+const STRUCTURE_ITEMS: ReadonlyArray<{
+  id: string;
+  label: string;
+  pick: (s: GanttRowStructureActions) => GanttRowStructureAction | undefined;
+}> = [
+  { id: 'indent', label: 'Indent', pick: (s) => s.indent },
+  { id: 'outdent', label: 'Outdent', pick: (s) => s.outdent },
+  { id: 'insert', label: 'Insert activity below', pick: (s) => s.insert },
+];

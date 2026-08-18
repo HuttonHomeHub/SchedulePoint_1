@@ -54,9 +54,6 @@ import { ZOOM_RANGE_LABELS } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
-
-import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
-import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import { useFirstUseHint } from './use-first-use-hint';
 
 import { Input } from '@/components/ui/input';
@@ -103,6 +100,8 @@ import {
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
+import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
+import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import { cn } from '@/lib/utils';
 
 const ZOOM_LABELS: Record<string, string> = {

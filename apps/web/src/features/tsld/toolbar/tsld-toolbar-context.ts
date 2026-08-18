@@ -8,8 +8,8 @@ import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
-import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { PlanViewMode } from '@/features/gantt';
+import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { InterchangeExportFormat } from '@/features/interchange';
 
 /**

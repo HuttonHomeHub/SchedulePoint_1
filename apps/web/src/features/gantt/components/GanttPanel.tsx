@@ -39,11 +39,13 @@ import {
 } from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
 import { DEFAULT_HIDDEN_COLUMNS, type GanttColumnKey } from '../model/gantt-view-state';
+import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttViewStateBundle } from '../model/use-gantt-view-state';
 
 import { GanttCell } from './GanttCell';
 import { GanttLinkOverlay } from './GanttLinkOverlay';
+import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
@@ -198,6 +200,20 @@ export interface GanttPanelProps {
    */
   rowMenuContextFor?: (activity: ActivitySummary) => SelectionBarContext | null;
   /**
+   * The structure WRITE, and whether the reader may make it (M5-T4).
+   *
+   * The panel resolves *where* a row goes, because Indent reads the DISPLAY order and this
+   * component is the only thing that knows it — sort and the collapse set are resolved here. The
+   * host supplies the mutation and the permission, which are equally its own.
+   */
+  rowStructure?:
+    | {
+        canEditSchedule: boolean;
+        penRefusal: string | null;
+        onReparent: (activity: ActivitySummary, parentId: string | null) => void;
+      }
+    | undefined;
+  /**
    * Draw EVERY link in the window, not only the selected row's. Default off (the product owner's
    * Q1 answer): logic on a dense programme is a thicket, and the selection path answers "why is
    * this bar here?" without it.
@@ -277,6 +293,7 @@ export function GanttPanel({
   emphasisIds,
   bringIntoViewActivityId,
   viewState,
+  rowStructure,
 }: GanttPanelProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -489,6 +506,39 @@ export function GanttPanel({
       setCollapsed(next);
     },
     [collapsed, setCollapsed],
+  );
+
+  /**
+   * Indent / Outdent for one row (M5-T4), resolved against the order the planner is LOOKING at.
+   *
+   * `orderedActivities` is the flattened row list, so "the summary above this row" means what it
+   * appears to mean. Answering from plan order would file a row under a summary that is elsewhere
+   * on screen — correct by some ordering, and wrong by the only one the planner can see.
+   */
+  const rowStructureFor = useCallback(
+    (activity: ActivitySummary): GanttRowStructureActions | undefined => {
+      if (rowStructure === undefined) return undefined;
+      const ordered = rows.flatMap((r) => (r.kind === 'bucket' ? [] : [r.activity]));
+      const indent = indentTarget(ordered, activity.id);
+      const outdent = outdentTarget(ordered, activity.id);
+      return {
+        indent: {
+          refusal: isRefusal(indent) ? indent.reason : null,
+          run: () => {
+            if (!isRefusal(indent)) rowStructure.onReparent(activity, indent.parentId);
+          },
+        },
+        outdent: {
+          refusal: isRefusal(outdent) ? outdent.reason : null,
+          run: () => {
+            if (!isRefusal(outdent)) rowStructure.onReparent(activity, outdent.parentId);
+          },
+        },
+        canEditSchedule: rowStructure.canEditSchedule,
+        penRefusal: rowStructure.penRefusal,
+      };
+    },
+    [rowStructure, rows],
   );
 
   const onSort = useCallback(
@@ -903,6 +953,7 @@ export function GanttPanel({
               dependencies,
               predecessorsById,
               rowMenuContextFor,
+              rowStructureFor,
               actionColumns,
               columns: COLUMNS,
               gridWidth,
@@ -975,6 +1026,8 @@ function GanttBucketRowView({
   actionColumns: number;
   /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
   columns: readonly GanttColumn[];
+  /** Shared with the activity rows; a bucket has no activity, so it never renders a menu. */
+  rowStructureFor?: unknown;
   isTabStop: boolean;
   registerRef: (element: HTMLDivElement | null) => void;
   onFocusRow: () => void;
@@ -1101,6 +1154,8 @@ interface GanttRowViewProps {
   dependencies: readonly DependencySummary[] | undefined;
   predecessorsById: ReadonlyMap<string, readonly string[]>;
   rowMenuContextFor: ((activity: ActivitySummary) => SelectionBarContext | null) | undefined;
+  rowStructureFor:
+    ((activity: ActivitySummary) => GanttRowStructureActions | undefined) | undefined;
   actionColumns: number;
   /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
   columns: readonly GanttColumn[];
@@ -1120,6 +1175,7 @@ interface GanttRowViewProps {
 function GanttRowView({
   actionColumns,
   columns: COLUMNS,
+  rowStructureFor,
   row,
   rowIndex,
   top,
@@ -1411,7 +1467,11 @@ function GanttRowView({
           // `e2e-gantt` journey's scan caught after this shipped. The sr-only link summary above is
           // untouched: it carries no role, so it is text content rather than an unallowed child.
           <div role="gridcell" aria-colindex={COLUMNS.length + 1} className="flex shrink-0">
-            <GanttRowMenu context={() => rowMenuContext(activity)} activityName={activity.name} />
+            <GanttRowMenu
+              context={() => rowMenuContext(activity)}
+              activityName={activity.name}
+              {...(rowStructureFor === undefined ? {} : { structure: rowStructureFor(activity) })}
+            />
           </div>
         )}
         {showVariance ? (

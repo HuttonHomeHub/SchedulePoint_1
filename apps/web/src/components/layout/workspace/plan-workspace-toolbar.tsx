@@ -50,6 +50,7 @@ import {
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities';
+import { useUpdateActivityParents } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import {
   FloatPathsPanel,
@@ -59,6 +60,7 @@ import {
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import type { GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
+import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
 import {
   buildSelectionBarContext,
@@ -79,7 +81,6 @@ import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remed
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
-import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import {
   useTsldToolbarContext,
   type PlanDialogKind,
@@ -276,6 +277,7 @@ export function ToolbarPlanWorkspace({
   // `View ▾` Columns chooser — and a second copy is the drift `barDateSource` and the float-path
   // set were both lifted to this file to end.
   const ganttViewState = useGanttViewState();
+  const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
 
   const ctx = useTsldToolbarContext({
     model,
@@ -829,6 +831,25 @@ export function ToolbarPlanWorkspace({
       selectionCount: 1,
     });
 
+  /**
+   * The grid's structure WRITE (M5-T4). The panel decides *where* a row goes — it is the only
+   * thing that knows the display order Indent reads — and this supplies the mutation.
+   *
+   * `useUpdateActivityParents` is the ADR-0063 M4b batch the Members panel and the bulk-assign bar
+   * already use, not a second reparent path: it carries each row's `version`, so a stale one
+   * rejects the whole write with a 409 rather than half-moving a tree, and it invalidates the
+   * baseline variance because `parentId` feeds the engine's WBS rollup.
+   */
+  const rowStructure = {
+    canEditSchedule: model.canEditSchedule,
+    penRefusal: model.scheduleRefusal?.('change the structure') ?? null,
+    onReparent: (activity: ActivitySummary, parentId: string | null) => {
+      updateParents.mutate({
+        parents: [{ id: activity.id, parentId, version: activity.version }],
+      });
+    },
+  };
+
   const surface =
     ctx.planView === 'gantt' ? (
       <>
@@ -866,6 +887,9 @@ export function ToolbarPlanWorkspace({
           // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
           // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
           viewState={ganttViewState}
+          // Indent / Outdent (M5-T4). The panel resolves WHERE from its own row order; this is the
+          // write.
+          rowStructure={rowStructure}
           // The baseline ghost + variance column (ADR-0025's deferred comparison), reusing the
           // variance rows the activities table already fetches — no extra query. Undefined when no
           // baseline is active, and the chart is then byte-for-byte what it was.
