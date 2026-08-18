@@ -83,7 +83,12 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
   });
 
   it('deletes in the verified foreign-key order', () => {
-    const order = [...code(RUNNER).matchAll(/tx\.(\w+)\.deleteMany/g)].map((m) => m[1]);
+    // **Consecutive repeats collapse; non-adjacent ones do not.** One table may take several
+    // statements — the cross-plan pass is split in two and every list is chunked — so a raw
+    // sequence would change whenever the chunking did. What must never happen is returning to a
+    // table after moving past it, and that still fails here.
+    const raw = [...code(RUNNER).matchAll(/tx\.(\w+)\.deleteMany/g)].map((m) => m[1]);
+    const order = raw.filter((name, i) => name !== raw[i - 1]);
     expect(order).toEqual([
       'crossPlanDependency',
       'activityDependency',

@@ -501,6 +501,19 @@ jobs:
       - name: Web end-to-end tests (WBS improvements flag on)
         run: pnpm --filter @repo/web test:e2e:wbs
 
+      # Recently deleted (playwright.recently-deleted.config.ts, ADR-0096), with the retention
+      # expiry ARMED at the API and a 3,650-day period — armed so `retentionActive` is true and the
+      # countdown copy renders, 3,650 so no row is eligible and a suite about a screen cannot
+      # permanently delete data as a side effect. Three things live only here: that a cascade
+      # really does stamp ONE delete_batch_id (grouping is built entirely on that column, and a
+      # mocked fetch hands the client whatever ids the test invented), that the cross-batch blocker
+      # computed in a raw UNION ALL exists at all — a plan deleted on its own, then its client
+      # deleted afterwards — and that the period on screen is the SERVER's number rather than a
+      # constant that would render 90 and look right. Runs after the prior suites tear down their
+      # servers, reusing the ports.
+      - name: Web end-to-end tests (recently deleted)
+        run: pnpm --filter @repo/web test:e2e:recently-deleted
+
       # Canvas authoring flow (playwright.authoring-flow.config.ts) with the pen enforced at the API
       # and the coalesced auto-recalculation live (ADR-0064). It exists because the epic's founding
       # defect — a link whose endpoints came back reversed — cannot be reached from a unit test: the

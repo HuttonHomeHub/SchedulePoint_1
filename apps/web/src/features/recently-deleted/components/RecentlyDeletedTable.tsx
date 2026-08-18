@@ -13,6 +13,9 @@ import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { formatTimestamp } from '@/lib/format-date';
 
+/** The retention caveat's id, so the table can point at it rather than merely sit under it. */
+const RETENTION_RULE_ID = 'recently-deleted-retention-rule';
+
 /** Human labels for each hierarchy level. */
 const KIND_LABEL: Record<DeletedHierarchyItem['kind'], string> = {
   client: 'Client',
@@ -52,6 +55,29 @@ export function RecentlyDeletedTable({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   /** The blocked group whose ancestor confirmation is open, by key. */
   const [ancestorFor, setAncestorFor] = useState<string | null>(null);
+  /**
+   * The button that opened the ancestor confirmation.
+   *
+   * The dialog is **unmounted** when it closes rather than toggled to `open={false}`, because its
+   * content is derived from a group that can vanish under a refetch. That bypasses the native
+   * `<dialog>`'s own close algorithm — focus restoration is a step of `close()`, not of removing
+   * the node — so Cancel, ✕ and a failed restore all dropped focus to `<body>` with nothing to
+   * bring it back. Third instance of the class in this repository (ADR-0080, ADR-0095 M6), and the
+   * codebase's own answer to an unmount-close is `HierarchyTree.tsx`'s: re-home focus by hand.
+   */
+  const ancestorInvokerRef = useRef<HTMLButtonElement | null>(null);
+
+  /**
+   * Close the confirmation and put focus back where it came from.
+   *
+   * Called on every close path, including confirm — where it is deliberately NOT the last word: a
+   * successful restore then moves focus to the region, because the invoker it just returned to is
+   * about to unmount with the row.
+   */
+  const closeAncestor = (): void => {
+    setAncestorFor(null);
+    ancestorInvokerRef.current?.focus();
+  };
 
   // Grouping is a pure transform over the array already held — `useDeletedItems` pages to
   // exhaustion, which is what makes a group complete and therefore honest (TECH_DEBT #57).
@@ -152,6 +178,14 @@ export function RecentlyDeletedTable({
                 // this screen does not have.
                 aria-expanded={open}
                 aria-controls={`deletion-${group.key}`}
+                // **Self-contained, and it has to contain the visible text.** Read serially the
+                // visible "and 1 project, 1 plan" is clear, because the root's name is the line
+                // above — but a reader arriving by rotor or by Tab hears it with no antecedent,
+                // and it is a strict substring of the Restore button's own name one cell along
+                // (which is how the journey first found this: two controls matched one query).
+                // Prefixing the subject fixes both without breaking WCAG 2.5.3, which requires
+                // the accessible name to contain the visible label rather than replace it.
+                aria-label={`${group.root.name}: and ${summary}`}
                 onClick={() => toggle(group.key)}
                 className="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1 text-xs"
               >
@@ -214,7 +248,10 @@ export function RecentlyDeletedTable({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setAncestorFor(group.key)}
+            onClick={(event) => {
+              ancestorInvokerRef.current = event.currentTarget;
+              setAncestorFor(group.key);
+            }}
             aria-haspopup="dialog"
           >
             Restore {group.root.blockedBy?.name} first…
@@ -242,7 +279,11 @@ export function RecentlyDeletedTable({
           time a member learns deletions expire is a "expires tomorrow" on something they came here
           to check on. The number is the server's, so this sentence is true on every host. */}
       {retentionDays === null || !retentionActive ? null : (
-        <p className="text-muted-foreground text-sm">
+        // Linked to the table by `describedById` below, not merely placed above it: a reader
+        // navigating by landmark lands INSIDE the table's region and never passes this sentence.
+        // The precedent is ADR-0073 C2.5, where the same caveat was reachable only by reading
+        // serially — and this one is the safety caveat for a screen about permanent deletion.
+        <p id={RETENTION_RULE_ID} className="text-muted-foreground text-sm">
           Deleted items are kept for {retentionDays} days, then permanently removed.
         </p>
       )}
@@ -259,6 +300,9 @@ export function RecentlyDeletedTable({
       })()}
       <DataTable
         caption="Recently deleted items"
+        {...(retentionDays === null || !retentionActive
+          ? {}
+          : { describedById: RETENTION_RULE_ID })}
         columns={columns}
         query={groupQuery}
         getRowKey={(group) => group.key}
@@ -295,16 +339,15 @@ export function RecentlyDeletedTable({
         return (
           <RestoreAncestorDialog
             open
-            onClose={() => setAncestorFor(null)}
+            onClose={closeAncestor}
             blocked={blocked}
             ancestor={ancestor}
             onConfirm={() => {
-              // Close FIRST, then restore. The dialog is a native `<dialog>`, which returns focus
-              // to its invoker asynchronously on close — and that invoker is the blocked row's
-              // button, whose label changes the instant this succeeds. Letting the browser race
-              // the refetch is how focus lands on <body> (ADR-0080, ADR-0095 M6). Closing first
-              // makes `onRestore`'s own focus move the last word.
-              setAncestorFor(null);
+              // Close FIRST, then restore. Closing re-homes focus onto the invoker, which is
+              // where it must end up if the restore FAILS — the row is still there and the reader
+              // can try again. On success `onRestore` moves it on to the region, because that
+              // invoker unmounts with the row it belongs to.
+              closeAncestor();
               onRestore(ancestor);
             }}
           />

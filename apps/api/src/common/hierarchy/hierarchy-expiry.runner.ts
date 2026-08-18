@@ -32,6 +32,44 @@ import type { Prisma } from '@prisma/client';
  * the caller escalates that code rather than absorbing it as ordinary sweep noise.
  */
 
+/**
+ * **The largest number of ids one `{ in: [...] }` may carry.**
+ *
+ * Prisma does not chunk an `in` list — it sends one bind parameter per element, and Postgres'
+ * extended protocol refuses more than 32,767 in a prepared statement. Measured against this
+ * repository's own generated client: 32,767 succeeds, 32,768 fails with `P2035` ("too many bind
+ * variables in prepared statement"). The cross-plan-edge delete below puts `activityIds` into the
+ * predicate **twice**, so it exhausts the budget at half that — measured failing at 16,384 ids.
+ *
+ * 8,000 leaves headroom for the plan ids and literals sharing the same statement, and the
+ * consequence of getting it wrong is not a slow query: a batch cannot be split (expiring half of
+ * one leaves an unrestorable remnant), so a statement that throws makes that subtree **permanently
+ * unexpirable**, retried hourly forever. The failure was inside the service's own worked example —
+ * its docblock reasons about a 200,000-activity cascade that would have thrown at 8% of the way
+ * there. Found by the ADR-0096 backend-performance review, by running the real client rather than
+ * reading the driver.
+ */
+const MAX_IDS_PER_STATEMENT = 8_000;
+
+/** Split a list into `MAX_IDS_PER_STATEMENT`-sized chunks; an empty list yields no chunks. */
+function chunked(ids: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += MAX_IDS_PER_STATEMENT) {
+    out.push(ids.slice(i, i + MAX_IDS_PER_STATEMENT));
+  }
+  return out;
+}
+
+/** Run one delete per chunk and sum the counts. Order within a table does not matter; across does. */
+async function deleteChunked(
+  ids: readonly string[],
+  run: (chunk: string[]) => Promise<{ count: number }>,
+): Promise<number> {
+  let total = 0;
+  for (const chunk of chunked(ids)) total += (await run(chunk)).count;
+  return total;
+}
+
 /** The rows one expired batch owns, resolved before anything is deleted. */
 export interface ExpiryScope {
   clientIds: readonly string[];
@@ -61,89 +99,117 @@ export async function deleteExpiredScope(
 
   // Resolved once. Every activity-keyed delete below reads this, so a second query would be a
   // second answer to "which activities are in scope" — and the two could differ under concurrency.
-  const activities =
-    planIds.length === 0
-      ? []
-      : await tx.activity.findMany({ where: { planId: { in: planIds } }, select: { id: true } });
-  const activityIds = activities.map((a) => a.id);
-
-  if (planIds.length > 0) {
-    // Cross-plan edges FIRST, and by a four-way predicate: no CHECK ties an endpoint's activity to
-    // its named plan, so an edge can reference this scope through either column pair.
-    await tx.crossPlanDependency.deleteMany({
-      where: {
-        OR: [
-          { predecessorPlanId: { in: planIds } },
-          { successorPlanId: { in: planIds } },
-          ...(activityIds.length > 0
-            ? [{ predecessorId: { in: activityIds } }, { successorId: { in: activityIds } }]
-            : []),
-        ],
-      },
-    });
-    await tx.activityDependency.deleteMany({ where: { planId: { in: planIds } } });
-  }
-  if (activityIds.length > 0) {
-    // Both of these are among the tables the cascade never stamps — the reason for ownership scope.
-    await tx.resourceAssignment.deleteMany({ where: { activityId: { in: activityIds } } });
-    await tx.activityStep.deleteMany({ where: { activityId: { in: activityIds } } });
-  }
-  if (planIds.length > 0) {
-    // ADR-0046 denormalises `plan_id` onto EVERY note, including an activity's — so one statement
-    // covers both kinds and no activity-keyed pass is needed.
-    await tx.note.deleteMany({ where: { planId: { in: planIds } } });
-
-    const baselines = await tx.baseline.findMany({
-      where: { planId: { in: planIds } },
+  const activityIds: string[] = [];
+  for (const chunk of chunked(planIds)) {
+    const rows = await tx.activity.findMany({
+      where: { planId: { in: chunk } },
       select: { id: true },
     });
-    const baselineIds = baselines.map((b) => b.id);
-    if (baselineIds.length > 0) {
-      await tx.baselineAssignment.deleteMany({ where: { baselineId: { in: baselineIds } } });
-      await tx.baselineActivity.deleteMany({ where: { baselineId: { in: baselineIds } } });
-      await tx.baseline.deleteMany({ where: { id: { in: baselineIds } } });
-    }
-    await tx.planShare.deleteMany({ where: { planId: { in: planIds } } });
+    activityIds.push(...rows.map((a) => a.id));
   }
 
-  // ONE statement, whatever the WBS depth — see the note above. `plan_locks` go by ON DELETE CASCADE.
-  const activityResult =
-    planIds.length === 0
-      ? { count: 0 }
-      : await tx.activity.deleteMany({ where: { planId: { in: planIds } } });
-  const planResult =
-    planIds.length === 0
-      ? { count: 0 }
-      : await tx.plan.deleteMany({ where: { id: { in: planIds } } });
+  // **Every `in` list below is chunked.** See `MAX_IDS_PER_STATEMENT`: Prisma sends one bind
+  // parameter per element and Postgres refuses more than 32,767, so an unchunked list made a large
+  // subtree permanently unexpirable. Chunking is safe within a table and never across one — the
+  // ORDER of the tables is what the foreign keys care about, not how many statements each takes.
+  //
+  // Chunking by `planId` is also safe for `activities.parent_id`: ADR-0038 makes the WBS tree
+  // same-plan, so a parent and its child are never in different chunks.
+  if (planIds.length > 0) {
+    // Cross-plan edges FIRST, and by a four-way predicate: no CHECK ties an endpoint's activity to
+    // its named plan, so an edge can reference this scope through either column pair. Split into a
+    // plan-keyed pass and an activity-keyed one — the original single `OR` put `activityIds` in
+    // twice, which halved the parameter budget and was the first statement to blow it.
+    await deleteChunked(planIds, (chunk) =>
+      tx.crossPlanDependency.deleteMany({
+        where: { OR: [{ predecessorPlanId: { in: chunk } }, { successorPlanId: { in: chunk } }] },
+      }),
+    );
+    await deleteChunked(activityIds, (chunk) =>
+      tx.crossPlanDependency.deleteMany({
+        where: { OR: [{ predecessorId: { in: chunk } }, { successorId: { in: chunk } }] },
+      }),
+    );
+    await deleteChunked(planIds, (chunk) =>
+      tx.activityDependency.deleteMany({ where: { planId: { in: chunk } } }),
+    );
+  }
+  // Both of these are among the tables the cascade never stamps — the reason for ownership scope.
+  await deleteChunked(activityIds, (chunk) =>
+    tx.resourceAssignment.deleteMany({ where: { activityId: { in: chunk } } }),
+  );
+  await deleteChunked(activityIds, (chunk) =>
+    tx.activityStep.deleteMany({ where: { activityId: { in: chunk } } }),
+  );
+  if (planIds.length > 0) {
+    // ADR-0046 denormalises `plan_id` onto EVERY note, including an activity's — so one pass
+    // covers both kinds and no activity-keyed pass is needed.
+    await deleteChunked(planIds, (chunk) =>
+      tx.note.deleteMany({ where: { planId: { in: chunk } } }),
+    );
+
+    const baselineIds: string[] = [];
+    for (const chunk of chunked(planIds)) {
+      const rows = await tx.baseline.findMany({
+        where: { planId: { in: chunk } },
+        select: { id: true },
+      });
+      baselineIds.push(...rows.map((b) => b.id));
+    }
+    await deleteChunked(baselineIds, (chunk) =>
+      tx.baselineAssignment.deleteMany({ where: { baselineId: { in: chunk } } }),
+    );
+    await deleteChunked(baselineIds, (chunk) =>
+      tx.baselineActivity.deleteMany({ where: { baselineId: { in: chunk } } }),
+    );
+    await deleteChunked(baselineIds, (chunk) =>
+      tx.baseline.deleteMany({ where: { id: { in: chunk } } }),
+    );
+    await deleteChunked(planIds, (chunk) =>
+      tx.planShare.deleteMany({ where: { planId: { in: chunk } } }),
+    );
+  }
+
+  // One statement per plan chunk, whatever the WBS depth — see the note above. `plan_locks` go by
+  // ON DELETE CASCADE.
+  const activityCount = await deleteChunked(planIds, (chunk) =>
+    tx.activity.deleteMany({ where: { planId: { in: chunk } } }),
+  );
+  const planCount = await deleteChunked(planIds, (chunk) =>
+    tx.plan.deleteMany({ where: { id: { in: chunk } } }),
+  );
 
   if (projectIds.length > 0) {
     // Calendars AFTER plans and activities: both `plans.calendar_id` and `activities.calendar_id`
     // are RESTRICT into it. PROJECT-scoped only — an ORG calendar is shared and outlives this
     // project entirely (ADR-0053). `calendar_shifts` and exception windows go by cascade.
-    const calendars = await tx.calendar.findMany({
-      where: { projectId: { in: projectIds } },
-      select: { id: true },
-    });
-    const calendarIds = calendars.map((c) => c.id);
-    if (calendarIds.length > 0) {
-      await tx.calendarException.deleteMany({ where: { calendarId: { in: calendarIds } } });
-      await tx.calendar.deleteMany({ where: { id: { in: calendarIds } } });
+    const calendarIds: string[] = [];
+    for (const chunk of chunked(projectIds)) {
+      const rows = await tx.calendar.findMany({
+        where: { projectId: { in: chunk } },
+        select: { id: true },
+      });
+      calendarIds.push(...rows.map((c) => c.id));
     }
+    await deleteChunked(calendarIds, (chunk) =>
+      tx.calendarException.deleteMany({ where: { calendarId: { in: chunk } } }),
+    );
+    await deleteChunked(calendarIds, (chunk) =>
+      tx.calendar.deleteMany({ where: { id: { in: chunk } } }),
+    );
   }
 
-  const projectResult =
-    projectIds.length === 0
-      ? { count: 0 }
-      : await tx.project.deleteMany({ where: { id: { in: projectIds } } });
-  const clientResult =
-    clientIds.length === 0
-      ? { count: 0 }
-      : await tx.client.deleteMany({ where: { id: { in: clientIds } } });
+  const projectCount = await deleteChunked(projectIds, (chunk) =>
+    tx.project.deleteMany({ where: { id: { in: chunk } } }),
+  );
+  const clientCount = await deleteChunked(clientIds, (chunk) =>
+    tx.client.deleteMany({ where: { id: { in: chunk } } }),
+  );
 
   return {
-    clients: clientResult.count,
-    projects: projectResult.count,
-    plans: planResult.count,
-    activities: activityResult.count,
+    clients: clientCount,
+    projects: projectCount,
+    plans: planCount,
+    activities: activityCount,
   };
 }

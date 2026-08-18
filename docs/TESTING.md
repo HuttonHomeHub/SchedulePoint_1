@@ -142,6 +142,16 @@ each as its own step. **A flag with no flag-on journey is untested in the state
 users actually see** — add the suite and the CI step in the same pull request as
 the flag.
 
+`apps/web/e2e-recently-deleted/` is the counter-example to the sentence above: it drives a surface
+with **no flag at all** (ADR-0096 ships unflagged), and it exists because a journey is not only a
+flag's rollout gate — it is the only thing that navigates away from a screen and comes back.
+Everything it proves is the server's or the router's: that a cascade really stamps one
+`delete_batch_id`, that the cross-batch blocker computed in a raw `UNION ALL` exists, and that the
+retention period on screen is the host's rather than a constant. It earned its place on the first
+run three times over, the sharpest being a delete that never invalidated the recycle bin's own
+query — the screen said "Nothing has been deleted" underneath a toast saying a client had just
+been. No unit suite could reach it: each mounts one screen and seeds its cache directly.
+
 `apps/web/e2e-authoring-flow/` is **both** — a flag-on journey for
 `VITE_CANVAS_AUTHORING_FLOW`, and a diagnostic whose `link-direction.spec.ts`
 half deliberately does not depend on that flag, because the defects it measures

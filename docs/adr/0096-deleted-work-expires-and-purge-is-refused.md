@@ -1,7 +1,8 @@
 # ADR-0096 — Deleted work expires, and purge is refused structurally
 
-- **Status:** Proposed (M0 landed 2026-08-18: the indexes, the FK-safe order, and the two
-  corrections below. M1–M5 not built.)
+- **Status:** Accepted (M0–M5 landed 2026-08-18. The expiry ships **disarmed** —
+  `RETENTION_HIERARCHY_ENABLED` defaults to `false` — so nothing has been permanently deleted on any
+  host until an operator opts in, deliberately, having read the countdown a release ahead of it.)
 - **Date:** 2026-08-18
 - **Supersedes:** nothing
 - **Amends:** ADR-0087 (narrows its scheduler to a second job with a different cost profile),
@@ -162,6 +163,84 @@ not a citation into zod's source — it is an executed expression, which is the 
 the two. What matters going forward is not what `z.coerce.boolean()` does but what **this switch**
 does, and `env.validation.spec.ts` asserts that directly, so a zod bump that changed the enum
 transform's behaviour fails a test rather than silently invalidating a paragraph.
+
+### D11 — The enablement gate pass, and what it found
+
+Six specialists over the combined diff. **Security passed with nothing blocking, having re-derived
+the epic's own claims from the code rather than from this ADR. The other five blocked, on seven
+findings**, three of them this register's recurring shapes. (This paragraph said "four blocked, on
+eight defects" until it was counted — written from an impression of the reviews rather than from
+them, in the section about claims that pass a human read. ADR-0076 Class 3, inside the record of a
+gate pass.)
+
+**The largest is measured, not argued.** Prisma does not chunk an `{ in: [...] }` filter — it sends
+one bind parameter per element, and Postgres refuses more than 32,767 in a prepared statement. The
+cross-plan-edge delete put `activityIds` in the predicate **twice**, so it threw at **16,384
+activities** (measured against this repository's own generated client: 16,000 succeeds, 16,384
+fails). The service's own docblock reasons about a 200,000-activity cascade and accepts its cost —
+a scenario that would have thrown at 8% of the way there. And the failure is `P2035`, which the
+catch block did not special-case, so it was logged as _"the next tick will retry it"_: true, and
+useless, because a batch cannot be split and the retry is deterministic. **The subtree would have
+been permanently unexpirable, hourly, forever, under a reassuring message.** Every list is now
+chunked at 8,000, and `P2035` is escalated beside `P2003` as what it is — a deterministic failure,
+not sweep noise.
+
+**Two more came from comparing this job with the sibling it copied.** `RetentionSweepService`
+carries a `running` guard so a sweep cannot overlap the next tick; this one copied the timer, the
+`.unref()`, the boot-time run and the docblock arguing that **its** batches cost seconds rather
+than milliseconds — and not the guard. Two concurrent runs contend on the same rows and the loser
+writes a second `hierarchy.expired` row with all-zero counts, into the one table that refuses
+`DELETE`. And the activity budget bounds the big-batch case while saying nothing about the mirror
+one, which is the shape a real backlog has: measured at ~10.2 ms per empty scope, 100,000 ordinary
+deletions is **~17 minutes** with the activity budget never moving, on a job configurable down to a
+five-minute interval — the run D3 guarantees on every installation's first armed tick. A scope cap
+and a scan limit now bound it, deliberately as separate numbers, because they bound different
+failures.
+
+**The accessibility finding is the third instance of one class.** `RestoreAncestorDialog` is
+**unmounted** on close rather than toggled to `open={false}`, and focus restoration is a step of
+the native `<dialog>`'s `close()` algorithm rather than of removing the node — so Cancel, ✕ and a
+failed restore each left focus on `<body>` with nothing to recover it (WCAG 2.4.3). ADR-0080 and
+ADR-0095 M6 record the same shape, and the confirm path here had already been written with those
+two cited in its comment: the reasoning was applied to the path its author was thinking about and
+not to its neighbours. No gate could see it — `test/setup.ts` stubs `showModal`/`close` to toggle a
+property and implements no focus behaviour at all.
+
+**And the epic's own honesty rule failed one screen along.** M3 changed all five delete
+confirmations to end "…from Recently deleted **for a limited time**". `RETENTION_HIERARCHY_ENABLED`
+defaults to `false`, so on every host that has not armed it there is no limit — the claim was
+asserted at the one moment a planner decides whether deleting is safe, in the same commit that
+taught the Recently deleted screen to withhold every expiry sentence unless the server says
+`retentionActive`. The sentence is now one shared function and says only what is true everywhere;
+the limit is stated where it can be stated honestly. `docs/TECH_DEBT.md` #140 records what that
+costs on an armed host and what would be needed to gate it.
+
+**The journey found a ninth defect the reviews could not**, which is the argument for ADR-0081's
+rule in one sentence. The three delete hooks invalidated the list the row **left** and not the one
+it **arrives in**: a soft delete moves a row rather than removing it, and `useRestoreItem` had
+always invalidated both. So once a session had opened Recently deleted, every later delete served
+the cached list — the screen said "Nothing has been deleted" underneath a toast saying a client
+had just been deleted. It needs a reader to delete, navigate away, come back, and delete again;
+every unit test mounts one screen and seeds its cache directly, so none of them can reach it. The
+key moves to `lib/query/hierarchy-keys.ts`, where the writers that invalidate it live, and a
+structural gate now pins all four call sites with its own blind spot written down.
+Three of the journey's own assumptions were wrong and each correction improved it. A plan cannot be
+created without a start date, and the field's label said **"(optional)"** over a required one whose
+own schema docblock says "**required**" in bold — while the refusal called it "a project start
+date", a third name for one control on one screen; fixed rather than worked around. The tables offer
+Edit/Delete buttons directly, not the Project Explorer's row menu. And the blocker on a plan whose
+project was deleted underneath it is **the project**, not the client — which is the two-press flow's
+whole point: the button names the row that must exist, and the dialog then names the larger deletion
+restoring it brings back.
+
+The seventh is the quietest: `docs/API.md` had never described this endpoint at all, and the diff
+gave its response four new fields — the document CLAUDE.md §6 makes non-negotiable, with no trace of
+a change that is the entire basis of the UX this ADR ships. Closed in the same pass, along with two
+stale `docs/DECISIONS.md` entries the reviewer found beside it, one of which still says the indexes
+were deliberately not built.
+
+Every fix carries a regression test verified to fail against the old code first. Two non-blocking
+findings are `docs/TECH_DEBT.md` #140–#141.
 
 ---
 

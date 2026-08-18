@@ -10,7 +10,7 @@ import {
 import type { ClientFormValues } from '../schemas/client-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { clientKeys } from '@/lib/query/hierarchy-keys';
+import { clientKeys, deletedItemKeys } from '@/lib/query/hierarchy-keys';
 import { clientsQueryOptions } from '@/lib/query/hierarchy-queries';
 
 // The list read-query lives in `lib` (shared) so the navigator rail can consume it
@@ -85,6 +85,12 @@ export function useDeleteClient(orgSlug: string) {
   return useMutation({
     mutationFn: (clientId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/clients/${clientId}`, { method: 'DELETE' }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: clientKeys.list(orgSlug) }),
+    // Both keys: the row leaves the Clients list and ARRIVES in the recycle bin. Invalidating
+    // only the first left Recently deleted serving a cached list — "Nothing has been deleted"
+    // under a toast saying otherwise (`hierarchy-keys.ts`, `deletedItemKeys`).
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: clientKeys.list(orgSlug) });
+      await queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) });
+    },
   });
 }

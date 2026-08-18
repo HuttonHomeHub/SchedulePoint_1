@@ -41,7 +41,9 @@ Successful responses wrap the payload (see `@repo/types`):
 ```
 
 `meta` is present only when a handler has something to add — pagination
-(`nextCursor`/`hasMore`), a bounded-list roll-up, or **`warnings`**: a
+(`nextCursor`/`hasMore`), a bounded-list roll-up, server configuration the response
+would otherwise force the client to hardcode (`GET …/deleted`'s `retentionDays`/
+`retentionActive`, ADR-0096), or **`warnings`**: a
 machine-readable list of adjustments the server applied to keep a write
 self-consistent (the write still succeeds and `data` reflects the corrected
 value). Today the progress endpoint (`PATCH …/activities/:id/progress`) emits
@@ -705,6 +707,46 @@ The organisation log never returns these rows whatever is asked of it.
 Filters go into the `WHERE`, never a post-filter over a fetched page, so `limit` is honoured with a
 filter that excludes most rows. **No index ships with the filter**; the composite is a per-slice
 decision for the coverage milestone, on a fresh measurement (ADR-0073 "Measured, C1").
+
+### The recycle bin, and what expires (ADR-0096)
+
+`GET /organizations/:orgSlug/deleted` — the organisation's soft-deleted clients, projects and plans
+in one keyset-paged list, ordered by `deletedAt DESC, id`. Requires `client:read`; a non-member gets
+**404**, never 403 (no existence oracle). Restore is per-entity on the owning resource
+(`POST …/clients/:id/restore` and siblings); **there is no purge route and there will not be one** —
+ADR-0096 D1 refuses it structurally, so permanent deletion is only ever the retention timer's.
+
+Each item carries:
+
+| Field                                | Meaning                                                                                                                                                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `kind` / `id` / `name` / `deletedAt` | The deleted thing.                                                                                                                                                                                                                         |
+| `canRestore`                         | Whether restoring this row alone is legal — false when a live ancestor is required.                                                                                                                                                        |
+| `deleteBatchId`                      | **The cascade's identity.** Deleting a client stamps ONE id across its projects and plans, and the restore is keyed on it, so those rows return together whatever the caller presses. Null only for a row deleted before batching existed. |
+| `blockedBy`                          | The ancestor that must come back first: `{ kind, id, name, deleteBatchId }`, or `null`. Drawn from the same organisation-scoped query as the row itself, so it can never name an ancestor in another organisation.                         |
+
+`blockedBy.deleteBatchId` is the field that matters: **equal to the row's own** means the blocker is
+part of the same cascade and a single restore of the batch root takes both — the caller should
+present them as one deletion. **Different** is the only case a caller must surface, because two
+separate restores are genuinely required.
+
+`meta` extends the usual page meta rather than replacing it — this is the first list that is both
+truly paged and carries fields that are not a roll-up of the page:
+
+```jsonc
+{
+  "nextCursor": null,
+  "hasMore": false,
+  "retentionDays": 90, // the SERVER's period
+  "retentionActive": false, // whether anything is actually deleted
+}
+```
+
+Both are **installation configuration, not organisation data**, and they are served here because a
+client that hardcoded the period would be silently wrong on any host that overrode it. Read them
+together: `retentionActive: false` is the shipped default, and it means deleted work is kept
+indefinitely — a countdown rendered from `retentionDays` alone would state a consequence the
+installation does not deliver.
 
 ## Pagination, filtering, sorting
 

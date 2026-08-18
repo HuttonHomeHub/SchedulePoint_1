@@ -37,6 +37,7 @@
     "e2e-gantt-editing",
     "e2e-activity-editor",
     "e2e-wbs",
+    "e2e-recently-deleted",
     "e2e-calendar-shifts",
     "e2e-sub-day",
     "e2e-assignment-lag",

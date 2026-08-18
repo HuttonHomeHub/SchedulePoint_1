@@ -210,7 +210,7 @@ keep `main` releasable.
   conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
   journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
   demote, so it pushed the command it labels off the row in the only state the epic exists for.
-- **Deleted work expires, and purge is refused structurally** (ADR-0096, _proposed_). The recycle
+- **Deleted work expires, and purge is refused structurally** (ADR-0096). The recycle
   bin was reported as hard to browse, with an unhelpful "Restore its parent first" and a duplicated
   heading — and reading the code changed two of the three answers. Deleting stamps a whole subtree
   with one `delete_batch_id` and restoring the root restores that batch, so most of those messages
@@ -226,7 +226,13 @@ keep `main` releasable.
   cannot both preview and arm it. Its measured half changed two decisions: the idle expiry scan cost
   13.1–19.0 ms to prove an absence and is now 0.73–1.39 ms, a second index was **rejected** at 0.5 ms
   an hour for 152 kB, and the spec's claim that `RESTRICT` forces level-order deletion was **false** —
-  two reviewers refuted it independently, by different methods.
+  two reviewers refuted it independently, by different methods. The enablement gate pass then blocked
+  on seven more, three of them measured rather than argued: Prisma does not chunk an `in` list, so a
+  cascade of more than **16,384 activities** threw a bind-parameter error the catch block reported as
+  "the next tick will retry it" — a subtree permanently unexpirable, hourly, forever, under a
+  reassuring message. And the journey found a ninth nothing else could: a delete never invalidated
+  the recycle bin's own list, so the screen said "Nothing has been deleted" beneath a toast saying a
+  client had just been.
 - **The Gantt becomes a working surface** (ADR-0095). ADR-0059 shipped the chart read-only; ADR-0093
   then moved `Report progress` onto the canvas dock — a surface the Gantt does not have — so the view
   had a selection and nothing to do with it. It now carries the **same** object-action bar (called,

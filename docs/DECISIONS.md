@@ -656,6 +656,12 @@ but deleted rows are a small minority of each table and nobody has profiled this
 three indexes on reasoning alone, inside a refactor, is what CLAUDE.md §15 means by premature. It is
 documented in the repository as the measure-first escalation.
 
+> **Superseded 2026-08-18 (ADR-0096 D6).** The three indexes shipped, after the profiling this
+> paragraph asked for: one screen open on the largest seeded organisation went **1,208 ms → 466 ms**
+> at 8,773 deleted rows, and the expiry's idle scan **13–19 ms → 0.7–1.4 ms**. A fourth candidate
+> index was **rejected** on the same measurement. Read the paragraph above as the reasoning that
+> deferred them, not as the current state.
+
 **Consequence.** The hand-written keyset is now ours to keep correct, so the e2e gained the case that
 would break it: a cascade stamps a client, its project and its plan with **one** `deleted_at`, so
 ordering falls entirely to the id tiebreaker and every page boundary lands mid-batch across three
@@ -1208,6 +1214,15 @@ queried for its own top `limit + 1` by `(deletedAt desc, id asc)` and the
 service merge-sorts and slices; the id tiebreaker gives a total order across the
 three tables (uuids are globally unique) and keeps a single cascade batch — which
 shares one `deletedAt` — deterministically ordered and safe to page.
+
+> **Amended 2026-08-18 (ADR-0096).** Two things above are no longer the shape. Each item now also
+> carries `deleteBatchId` and `blockedBy`, and `meta` carries `retentionDays`/`retentionActive`; see
+> `docs/API.md`, which is where this endpoint is documented rather than here. And the steering has
+> **inverted**: the response still lists every soft-deleted row, but the client groups them by
+> `deleteBatchId` and shows one row per deletion, because "restore the parent first" describes work
+> the product already does — a cascade restore is keyed on that batch. The only case that still
+> needs the message is a blocker in a _different_ batch, which is why `blockedBy` carries its own
+> batch id rather than only a name.
 
 **Why.** The "recently deleted" screen is one unified, deletion-time-ordered view
 with a per-row restore action; a combined endpoint serves it in one request and

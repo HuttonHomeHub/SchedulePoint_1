@@ -200,17 +200,61 @@ describe('the budget and the failure path', () => {
     expect(deleteScope).toHaveBeenCalledTimes(1);
   });
 
-  it('escalates a foreign-key violation rather than absorbing it as sweep noise', async () => {
-    // The symptom of a wrong delete order is silence: the batch rolls back and is retried hourly
-    // forever with nothing user-facing saying so.
-    deleteScope.mockRejectedValue(Object.assign(new Error('fk'), { code: 'P2003' }));
+  it.each([
+    ['P2003', 'a wrong delete order'],
+    ['P2035', 'a statement over the bind-parameter ceiling'],
+  ])('escalates %s rather than absorbing it as sweep noise', async (code) => {
+    // Both are DETERMINISTIC: the batch rolls back and is retried hourly forever, and the generic
+    // message says the next tick will retry it — true, and useless, because it never will. P2035
+    // is unreachable now that the runner chunks, and is caught anyway: a silent permanent stall is
+    // the failure this class is dangerous for.
+    deleteScope.mockRejectedValue(Object.assign(new Error('boom'), { code }));
     const { service } = build({ clients: [client('c1'), client('c2')] });
     await service.sweepNow(NOW);
     expect(logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'hierarchy_expiry.fk_violation' }),
-      expect.stringContaining('never expire'),
+      expect.objectContaining({ event: 'hierarchy_expiry.permanent_failure', code }),
+      expect.stringContaining('NEVER expire'),
     );
     // …and the next batch is still attempted: one bad subtree must not stall the queue.
     expect(deleteScope).toHaveBeenCalledTimes(2);
+  });
+
+  it('never lets two sweeps overlap', async () => {
+    // `RetentionSweepService` carries this guard deliberately and this service did not. Two
+    // concurrent runs contend on the same rows, and the loser writes a second `hierarchy.expired`
+    // row with all-zero counts — a permanent, misleading record in the one table that refuses
+    // DELETE.
+    let release!: () => void;
+    deleteScope.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ clients: 1, projects: 0, plans: 0, activities: 1 });
+        }),
+    );
+    const { service } = build({ clients: [client('c1')] });
+    const first = service.sweepNow(NOW);
+    // Let the first run reach its candidate scans before the overlapping tick arrives — otherwise
+    // this asserts the guard against a run that has not started, which passes for the wrong reason.
+    await Promise.resolve();
+    await Promise.resolve();
+    await service.sweepNow(NOW); // the overlapping tick
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'hierarchy_expiry.overlapped' }),
+      expect.any(String),
+    );
+    release();
+    await first;
+    // ONCE across both calls: the second tick did no work at all, rather than doing it later.
+    expect(deleteScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops once the scope budget is spent, however small each deletion is', async () => {
+    // The mirror of the activity budget, and the shape a real backlog has: hundreds of ordinary
+    // deletions carrying no activities at all, which the activity budget never bounds.
+    deleteScope.mockResolvedValue({ clients: 0, projects: 0, plans: 1, activities: 0 });
+    const plans = Array.from({ length: 2_100 }, (_, i) => plan(`p${i}`, `proj-${i}`));
+    const { service } = build({ plans });
+    await service.sweepNow(NOW);
+    expect(deleteScope).toHaveBeenCalledTimes(2_000);
   });
 });

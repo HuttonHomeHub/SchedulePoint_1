@@ -14,7 +14,7 @@ describe('planFormSchema', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.flatten().fieldErrors.plannedStart).toContain(
-        'A project start date is required.',
+        'A planned start date is required.',
       );
     }
   });

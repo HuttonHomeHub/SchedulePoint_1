@@ -4,13 +4,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
-import { deletedItemKeys } from '../api/use-deleted-items';
-
 import { RecentlyDeletedTable } from './RecentlyDeletedTable';
 import { ANCESTOR_PREVIEW_LIMIT } from './RestoreAncestorDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
+import { deletedItemKeys } from '@/lib/query/hierarchy-keys';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPagesWithMeta: vi.fn() }));
 const mockApiFetch = vi.mocked(apiFetch);
@@ -173,7 +172,7 @@ describe('RecentlyDeletedTable', () => {
       },
     ]);
 
-    const trigger = screen.getByRole('button', { name: 'and 1 plan' });
+    const trigger = screen.getByRole('button', { name: 'Northgate: and 1 plan' });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('Baseline')).not.toBeInTheDocument();
 
@@ -204,7 +203,7 @@ describe('RecentlyDeletedTable', () => {
         blockedBy: { kind: 'client', id: CLIENT_ID, name: 'Northgate', deleteBatchId: batch },
       },
     ]);
-    fireEvent.click(screen.getByRole('button', { name: 'and 1 plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Northgate: and 1 plan' }));
 
     const cell = screen.getByText('Baseline').closest('td');
     expect(cell, 'the disclosed panel is not inside a table cell').not.toBeNull();
@@ -230,7 +229,7 @@ describe('RecentlyDeletedTable', () => {
         blockedBy: { kind: 'client', id: CLIENT_ID, name: 'Northgate', deleteBatchId: batch },
       },
     ]);
-    fireEvent.click(screen.getByRole('button', { name: 'and 1 plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Northgate: and 1 plan' }));
     expect(screen.getByText('Baseline')).toBeInTheDocument(); // the panel really is open
     expect((await axe(container)).violations).toEqual([]);
   });
@@ -469,5 +468,35 @@ describe('RecentlyDeletedTable', () => {
     expect(button).toHaveTextContent('Restoring…');
 
     resolve?.();
+  });
+
+  it('returns focus to the button that opened the ancestor confirmation', () => {
+    // **Third instance of the class** (ADR-0080, ADR-0095 M6). The dialog is unmounted rather than
+    // toggled closed, and focus restoration is a step of the native `<dialog>`'s `close()` — not
+    // of removing the node — so Cancel, ✕ and a failed restore all left focus on `<body>` with
+    // nothing to bring it back. jsdom cannot see it either: `test/setup.ts` stubs `showModal`/
+    // `close` to toggle `.open` and implements no focus behaviour at all, so this asserts the
+    // explicit re-homing rather than the browser's.
+    const batch = 'batch-client';
+    renderTable(true, [
+      { ...ITEMS[0]!, deleteBatchId: batch },
+      {
+        kind: 'plan',
+        id: '00000000-0000-4000-8000-000000000015',
+        name: 'Baseline',
+        deletedAt: '2026-07-10T09:00:00.000Z',
+        canRestore: false,
+        deleteBatchId: 'batch-plan-alone',
+        blockedBy: { kind: 'client', id: CLIENT_ID, name: 'Northgate', deleteBatchId: batch },
+      },
+    ]);
+
+    const invoker = screen.getByRole('button', { name: /Restore Northgate first/ });
+    fireEvent.click(invoker);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(invoker);
   });
 });

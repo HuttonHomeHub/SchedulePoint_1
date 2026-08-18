@@ -115,8 +115,13 @@ export function PlanFormDialog({
             </option>
           ))}
         </SelectField>
+        {/* **Not "(optional)"** — `planFormSchema` requires it, and its own docblock says so in
+            bold. A planner told the field was optional left it blank, pressed Create plan and was
+            refused by the field they had just been told to skip; the refusal then called it "a
+            project start date", a third name for one control on one screen. Found by the ADR-0096
+            journey, which could not create a plan at all. */}
         <TextField
-          label="Planned start (optional)"
+          label="Planned start"
           type="date"
           error={errors.plannedStart?.message}
           {...register('plannedStart')}

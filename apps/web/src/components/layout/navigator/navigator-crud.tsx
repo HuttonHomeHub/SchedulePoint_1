@@ -16,6 +16,7 @@ import {
 } from '@/features/navigator';
 import { PlanFormDialog, plansQueryOptions, useDeletePlan } from '@/features/plans';
 import { ProjectFormDialog, projectsQueryOptions, useDeleteProject } from '@/features/projects';
+import { deleteCascadeWarning } from '@/lib/delete-copy';
 
 /** The dialog the coordinator is currently showing (one at a time). */
 type CrudDialog =
@@ -31,16 +32,9 @@ const KIND_NOUN: Record<NodeActionTarget['kind'], string> = {
   plan: 'plan',
 };
 
-/** Kind-appropriate cascade warning; every variant ends "You can restore it from Recently deleted for a limited time." */
+/** Kind-appropriate cascade warning — one shared sentence; see `delete-copy.ts` for why it is one. */
 function deleteDescription(target: NodeActionTarget): string {
-  const name = `“${target.name}”`;
-  if (target.kind === 'client') {
-    return `Delete ${name} and all its projects and plans? You can restore it from Recently deleted for a limited time.`;
-  }
-  if (target.kind === 'project') {
-    return `Delete ${name} and all its plans? You can restore it from Recently deleted for a limited time.`;
-  }
-  return `Delete ${name}? You can restore it from Recently deleted for a limited time.`;
+  return deleteCascadeWarning(target.kind, target.name);
 }
 
 /**

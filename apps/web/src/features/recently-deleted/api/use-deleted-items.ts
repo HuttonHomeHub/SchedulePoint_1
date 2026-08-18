@@ -8,12 +8,7 @@ import {
 } from '@tanstack/react-query';
 
 import { apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
-import { clientKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
-
-export const deletedItemKeys = {
-  all: (orgSlug: string) => ['deleted-items', orgSlug] as const,
-  list: (orgSlug: string) => [...deletedItemKeys.all(orgSlug), 'list'] as const,
-};
+import { clientKeys, deletedItemKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
 
 /** The soft-deleted clients/projects/plans in an org, newest-deleted first. */
 export function deletedItemsQueryOptions(orgSlug: string) {

@@ -858,6 +858,21 @@ design and permanently (`audit_events` refuses `DELETE`, ADR-0085 D1).
 Rollback is `RETENTION_HIERARCHY_ENABLED=false` and a recreate, which creates **no timer at all**.
 It does not bring anything back.
 
+What to watch in the log:
+
+| Event                                            | What it means                                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `hierarchy_expiry.disabled` (info)               | No timer exists. The default.                                                                                                                    |
+| `hierarchy_expiry.armed` (**warn**)              | Permanent deletion is live from this boot. Logged at warn deliberately: it belongs in a log an operator skims, not one they grep.                |
+| `hierarchy_expiry.batch` (info)                  | One subtree expired, with its counts and its duration — so the per-run caps can be re-derived from your data rather than from a bench.           |
+| `hierarchy_expiry.overlapped` (warn)             | A run was still going when the next tick fired, and the tick was skipped. Occasional is fine; repeated means the interval is shorter than a run. |
+| `hierarchy_expiry.permanent_failure` (**error**) | One subtree **can never expire** and will be retried hourly forever. Not transient — it needs a code fix.                                        |
+| `hierarchy_expiry.failed` (error)                | One subtree failed for some other reason; the next tick retries it.                                                                              |
+
+A run is bounded twice — by activities and by number of deletions — so a large backlog is worked
+through over several ticks rather than in one. That is by design, and it is why the first ticks after
+arming may report far less than you expect to see go.
+
 ### When it keeps failing
 
 If the sweep fails **three runs in a row**, one message is POSTed to `MAIL_ALERT_URL` — the same
