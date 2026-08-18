@@ -80,3 +80,6 @@ Thumbs.db
 
 # Measurement harness readings (apps/web/measure-toolbar) — evidence, not artefacts.
 measure-output/
+
+# Screenshot harness output (apps/web/scripts/shoot.mjs) — never committed.
+.screenshots/
