@@ -369,19 +369,29 @@ the mechanism for the gate exists.
    the flip is a branch in two files.
 4. **A flag would add a Class A alternative surface**, whose cap ADR-0088 D3 ratchets down.
 
-### 3.6 Architectural significance
+### 3.6 Architectural significance — **this spec claims no ADR number**
 
-**Milestones A and B need no ADR** — they are defect fixes and gate additions inside the existing
-model. **The flip does**, but it is a small decision and it sits underneath a much larger one: the
-recommendation is that the default-theme decision is recorded as a section in the
-**design-system-rewrite's ADR** rather than as its own, since "which theme is the product" is
-precisely that ADR's subject. If the flip ships first (CQ-2(a)), record it in `docs/DECISIONS.md`
-and cross-reference it when the larger ADR lands.
+Judged on what survives the trim, not on what the epic used to be:
 
-**Do not open a new ADR number for this spec without checking.** `docs/adr/` tops out at **0096**;
-the rewrite will claim the next one. ADR-0071 was cited by shipped code for a whole epic while
-absent from the register, and ADR-0079 was renumbered because its number was taken between the plan
-and the milestone.
+- **The four gaps are defects and drift, not decisions.** A missing assertion, an unverified prose
+  claim, a latent trap and a doc contradiction are fixes with regression tests. Finding B is a
+  shipped accessibility failure — that is a fix, emphatically not a decision record.
+- **The default flip is a consequence of ADR-0097, not a decision beside it.** "Which theme is the
+  product" is precisely that ADR's subject; recording the same choice twice, in two documents, by two
+  authors, on one afternoon, is how two decision records end up disagreeing. The flip is therefore
+  written up as a **section of ADR-0097**, and — if it ships ahead of it (CQ-2(a)) — noted in
+  `docs/DECISIONS.md` in the meantime and cross-referenced when ADR-0097 lands.
+
+**The numbers, so nobody has to guess:** `docs/adr/` tops out at **0096**.
+**0097 belongs to the ground-up design-system rewrite** (`docs/specs/design-system-rewrite/`,
+ui-architect — the decision that amends or supersedes ADR-0055 and ADR-0077). **0098 belongs to the
+landing page.** **This spec claims none.**
+
+That is not bookkeeping. ADR-0071 was cited by shipped code, two migrations and three other ADRs
+while being absent from the register entirely; ADR-0079 had to be filed under a number other than the
+one its own plan named, because the number was taken between the plan and the milestone. Both are
+recorded in `CLAUDE.md` §16 as instances of the same failure, and **three specs written in parallel
+on one afternoon is exactly the condition that produces it.**
 
 ---
 
