@@ -53,3 +53,35 @@ Measured on **PostgreSQL 16.13**. CI and the deployed host run **17**
 (`.github/workflows/ci.yml:166`, `docker-compose.yml:14`). The one finding that could differ
 is the absent Merge Append over `UNION ALL` (see the migration); the recommended repository
 rewrite is shaped so that it does not depend on the planner acquiring it.
+
+---
+
+## The activities hard-delete measurement (M0-T2 follow-up)
+
+`04-seed-activities.sql` builds a second population — 202,000 activities, 200,000 steps,
+200,000 notes, 200,000 assignments, with one target plan of 2,000 activities (100 of them WBS
+summaries in a chain) — and `05-delete-order.sql` runs the §4.5 delete order over it inside a
+transaction that rolls back, so it can be re-run.
+
+```bash
+psql -h localhost -U app -d recycle_bench -f 04-seed-activities.sql   # ~80 s
+psql -h localhost -U app -d recycle_bench -f 05-delete-order.sql
+```
+
+**Do not run `05` before `apps/api/prisma/migrations/20260818130000_activity_fk_restrict_indexes`
+is applied.** Against the pre-migration schema the `activities` statement alone takes **over
+three and a half minutes** for 2,000 rows, and the timing harness will look hung rather than slow.
+
+To reproduce the "before" deliberately:
+
+```sql
+DROP INDEX idx_activities_parent_id_fk, idx_notes_activity_id_fk,
+           idx_activity_steps_activity_id_fk, idx_resource_assignments_activity_id_fk;
+```
+
+### The same caveat, plus one more
+
+Everything in the sibling section applies. In addition: this population deliberately makes **all
+four** referencing tables large. A population where `notes`, `activity_steps` and
+`resource_assignments` are empty measures only the `activities.parent_id` scan and will report
+that fixing `parent_id` alone is sufficient. It is not — see the ablation in the migration.

@@ -1194,6 +1194,13 @@ model Activity {
   // delete orphaning children; the normal delete is the service-owned cascade
   // soft-delete (delete_batch_id), never a DB CASCADE. Same-plan/same-org and
   // acyclicity are service-enforced (see the parentId comment above).
+  //
+  // The RESTRICT check is backed by idx_activities_parent_id_fk (parent_id) WHERE
+  // parent_id IS NOT NULL — raw SQL in migration 20260818130000. The read-side
+  // idx_activities_parent_id cannot serve it: a RESTRICT check's generated query
+  // carries no `deleted_at`, so a `deleted_at IS NULL` predicate is not implied and
+  // the check sequentially scans the whole table once per deleted row. Measured at
+  // 3m47s for a 2,000-activity plan before the fix; see that migration.
   parent   Activity?  @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children Activity[] @relation("ActivityHierarchy")
 
@@ -2426,6 +2433,9 @@ model ResourceAssignment {
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  // The RESTRICT check is backed by idx_resource_assignments_activity_id_fk
+  // (migration 20260818130000); the uq_resource_assignments_* partials cannot serve
+  // it, for the reason given on ActivityStep.activity.
   activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Restrict)
   resource     Resource     @relation(fields: [resourceId], references: [id], onDelete: Restrict)
 
@@ -2445,6 +2455,12 @@ model ResourceAssignment {
   //   * idx_resource_assignments_delete_batch_id — batch restore (WHERE ... IS NOT NULL).
   // organization_id is a FULL index (backs its FK RESTRICT + org-scoped IDOR loads),
   // like every denormalised-org sibling.
+  //
+  // activity_id needs its own ALL-ROWS index for the same reason (migration 20260818130000):
+  // both uq_resource_assignments_* indexes are predicated on deleted_at, and a RESTRICT
+  // check's generated query carries no deleted_at, so neither can serve the check that fires
+  // when an activity is HARD-deleted. See ActivityStep for the measurement.
+  @@index([activityId], map: "idx_resource_assignments_activity_id_fk")
   @@index([organizationId])
   @@map("resource_assignments")
 }
@@ -2511,6 +2527,11 @@ model ActivityStep {
   deleteBatchId String?   @map("delete_batch_id") @db.Uuid
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  // The RESTRICT check is backed by idx_activity_steps_activity_id_fk (migration
+  // 20260818130000). uq_activity_steps_activity_seq cannot serve it — a RESTRICT
+  // check's generated query carries no `deleted_at`, so a `deleted_at IS NULL`
+  // predicate is not implied and the check scans this whole table once per deleted
+  // activity.
   activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Restrict)
 
   // organization_id is a FULL index (backs its FK RESTRICT + org-scoped IDOR loads), like
@@ -2519,10 +2540,19 @@ model ActivityStep {
   // NULL (raw SQL) has activity_id as its leftmost prefix, so it already serves the "load an
   // activity's ACTIVE steps ordered by seq" query — and the index is pre-sorted by seq — the
   // exact uq_resource_assignments_activity_resource precedent (activity_id prefix subsumes the
-  // assignment-list index). The FK RESTRICT referential check would need an all-rows index,
-  // but steps soft-delete only so it never fires (the service sweep is the real path). The
-  // partial idx_activity_steps_delete_batch_id (raw SQL, WHERE ... IS NOT NULL) backs batch
-  // restore.
+  // assignment-list index). The partial idx_activity_steps_delete_batch_id (raw SQL,
+  // WHERE ... IS NOT NULL) backs batch restore.
+  //
+  // THIS BLOCK USED TO SAY: "The FK RESTRICT referential check would need an all-rows index,
+  // but steps soft-delete only so it never fires (the service sweep is the real path)." The
+  // reasoning was right and the premise expired. Steps do soft-delete only, but the check
+  // fires when the ACTIVITY is hard-deleted, and two paths do that: interchange's failure
+  // compensation (interchange.service.ts:1134), which is live today, and the Recently-Deleted
+  // expiry. Without the all-rows index the check sequentially scanned this whole table once
+  // per deleted activity — measured at 3m47s for a 2,000-activity plan. So the all-rows index
+  // the old comment described is now here (migration 20260818130000). It is a FULL index and
+  // therefore declared, unlike its two partial siblings in the same migration.
+  @@index([activityId], map: "idx_activity_steps_activity_id_fk")
   @@index([organizationId])
   @@map("activity_steps")
 }
@@ -2585,6 +2615,9 @@ model Note {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  // The RESTRICT check is backed by idx_notes_activity_id_fk (activity_id) WHERE
+  // activity_id IS NOT NULL (migration 20260818130000); idx_notes_activity_created
+  // cannot serve it, for the reason given on ActivityStep.activity.
   activity     Activity?    @relation(fields: [activityId], references: [id], onDelete: Restrict)
 
   // Indexes (see docs/DATABASE.md "Domain hierarchy … Notes"). Two Prisma-expressible
