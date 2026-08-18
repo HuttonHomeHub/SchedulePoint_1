@@ -23,6 +23,8 @@ function row(overrides: Partial<DeletedRow> = {}): DeletedRow {
     name: 'Acme',
     deletedAt: new Date('2026-07-10T10:00:00.000Z'),
     parentActive: true,
+    deleteBatchId: null,
+    blockedBy: null,
     ...overrides,
   };
 }
@@ -70,6 +72,8 @@ describe('RecycleBinService', () => {
         name: 'Baseline',
         deletedAt: new Date('2026-07-10T09:00:00.000Z'),
         parentActive: false,
+        deleteBatchId: null,
+        blockedBy: null,
       }),
       row({
         kind: 'client',
@@ -77,6 +81,8 @@ describe('RecycleBinService', () => {
         name: 'Acme',
         deletedAt: new Date('2026-07-10T11:00:00.000Z'),
         parentActive: true,
+        deleteBatchId: null,
+        blockedBy: null,
       }),
       row({
         kind: 'project',
@@ -84,6 +90,8 @@ describe('RecycleBinService', () => {
         name: 'Riverside',
         deletedAt: new Date('2026-07-10T10:00:00.000Z'),
         parentActive: true,
+        deleteBatchId: null,
+        blockedBy: null,
       }),
     ]);
 

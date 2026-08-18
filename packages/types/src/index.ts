@@ -715,6 +715,34 @@ export interface DeletedHierarchyItem {
   name: string;
   deletedAt: string;
   canRestore: boolean;
+  /**
+   * The deletion this row was part of (ADR-0096). A cascade stamps ONE id on every row it touches
+   * and `restoreBatch` keys the whole restore on that value, so rows sharing this id come back
+   * together and are shown as one entry rather than as separate, separately-actionable rows.
+   *
+   * Null only for a row soft-deleted before the batch id existed.
+   */
+  deleteBatchId: string | null;
+  /**
+   * The still-deleted ancestor blocking this row's restore, or null when nothing blocks it.
+   *
+   * **Per row, not per group.** A descendant deleted in the SAME cascade also carries a blocker —
+   * its own batch's root — because this is computed from the row's immediate parent. Reading it
+   * per row rather than per group root re-creates exactly the "Restore its parent first" noise
+   * ADR-0096 exists to remove: the group's root is the only row whose blocker is a real obstacle.
+   *
+   * `kind` is never `'plan'`: a plan has no hierarchy descendants, so it can block nothing.
+   */
+  blockedBy: DeletedItemBlocker | null;
+}
+
+/** The ancestor standing between a deleted row and its restore. See {@link DeletedHierarchyItem}. */
+export interface DeletedItemBlocker {
+  kind: 'client' | 'project';
+  id: string;
+  name: string;
+  /** The blocker's OWN deletion, which is what a reader must restore — not this row's. */
+  deleteBatchId: string | null;
 }
 
 /**

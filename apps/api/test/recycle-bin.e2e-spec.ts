@@ -30,6 +30,13 @@ interface DeletedItem {
   name: string;
   deletedAt: string;
   canRestore: boolean;
+  deleteBatchId: string | null;
+  blockedBy: {
+    kind: 'client' | 'project';
+    id: string;
+    name: string;
+    deleteBatchId: string | null;
+  } | null;
 }
 
 describe.skipIf(!hasDatabase)('Recycle bin API (e2e)', () => {
@@ -144,6 +151,74 @@ describe.skipIf(!hasDatabase)('Recycle bin API (e2e)', () => {
     expect(byId[clientId]).toMatchObject({ kind: 'client', canRestore: true });
     expect(byId[projectId]).toMatchObject({ kind: 'project', canRestore: false });
     expect(byId[planId]).toMatchObject({ kind: 'plan', canRestore: false });
+  });
+
+  it("stamps one batch id across a cascade, and names each row's blocker (ADR-0096)", async () => {
+    // **The two fields the grouped list is built on, checked where the SQL actually runs.** They are
+    // computed in a raw `UNION ALL` with three different parent shapes; a unit test mocking the
+    // repository would assert the mapping and never the query that feeds it.
+    const { actor } = await adminWithOrg();
+    const clientId = await createClient(actor, 'Northgate');
+    const projectId = await createProject(actor, clientId, 'Riverside');
+    const planId = await createPlan(actor, projectId, 'Baseline');
+    await actor.agent.delete(`/api/v1/organizations/acme/clients/${clientId}`).expect(204);
+
+    const res = await actor.agent.get('/api/v1/organizations/acme/deleted').expect(200);
+    const byId = Object.fromEntries((res.body.data as DeletedItem[]).map((i) => [i.id, i]));
+
+    // ONE batch across all three. This is the whole premise of grouping: restoring the client
+    // restores this set, so presenting them as three independently-actionable rows is the defect.
+    const batch = byId[clientId]!.deleteBatchId;
+    expect(batch).toEqual(expect.any(String));
+    expect(byId[projectId]!.deleteBatchId).toBe(batch);
+    expect(byId[planId]!.deleteBatchId).toBe(batch);
+
+    // The root has no blocker; its descendants name their immediate parent — PER ROW, which is why
+    // the client groups by batch and reads only the root's blocker.
+    expect(byId[clientId]!.blockedBy).toBeNull();
+    expect(byId[projectId]!.blockedBy).toMatchObject({
+      kind: 'client',
+      id: clientId,
+      name: 'Northgate',
+    });
+    expect(byId[planId]!.blockedBy).toMatchObject({
+      kind: 'project',
+      id: projectId,
+      name: 'Riverside',
+    });
+    // A plan can never block anything. Asserted against the RAW body rather than the typed view:
+    // this file's `DeletedItem` forbids `'plan'` already, so a typed check would be the test
+    // agreeing with itself. The real guarantee is that the SQL emits the two kinds as literals —
+    // this is what fails if someone widens it.
+    const kinds = (res.body.data as { blockedBy: { kind: string } | null }[])
+      .map((i) => i.blockedBy?.kind)
+      .filter((k): k is string => k !== undefined);
+    expect(kinds).not.toContain('plan');
+    expect(kinds.length).toBeGreaterThan(0); // and the check is not vacuous
+  });
+
+  it('gives a CROSS-BATCH blocker its own batch id, which is the one to restore', async () => {
+    // The case grouping cannot solve and the whole reason `blockedBy` carries a batch id: a plan
+    // deleted on its own, then its project deleted later, are two different cascades. Restoring the
+    // plan's group is not enough — the blocker's OWN batch is what must come back first.
+    const { actor } = await adminWithOrg();
+    const clientId = await createClient(actor, 'Northgate');
+    const projectId = await createProject(actor, clientId, 'Riverside');
+    const planId = await createPlan(actor, projectId, 'Baseline');
+
+    await actor.agent.delete(`/api/v1/organizations/acme/plans/${planId}`).expect(204);
+    await actor.agent.delete(`/api/v1/organizations/acme/projects/${projectId}`).expect(204);
+
+    const res = await actor.agent.get('/api/v1/organizations/acme/deleted').expect(200);
+    const byId = Object.fromEntries((res.body.data as DeletedItem[]).map((i) => [i.id, i]));
+
+    expect(byId[planId]!.deleteBatchId).not.toBe(byId[projectId]!.deleteBatchId);
+    expect(byId[planId]!.blockedBy).toMatchObject({
+      kind: 'project',
+      id: projectId,
+      deleteBatchId: byId[projectId]!.deleteBatchId,
+    });
+    expect(byId[planId]!.canRestore).toBe(false);
   });
 
   it('restoring the root (via its own endpoint) empties the recycle bin', async () => {

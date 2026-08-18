@@ -55,6 +55,8 @@ export class RecycleBinService {
         name: row.name,
         deletedAt: row.deletedAt.toISOString(),
         canRestore: row.parentActive,
+        deleteBatchId: row.deleteBatchId,
+        blockedBy: row.blockedBy,
       })),
       meta: { nextCursor, hasMore },
     };

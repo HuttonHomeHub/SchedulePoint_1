@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { DeletedItemBlocker } from '@repo/types';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -13,6 +14,10 @@ export interface DeletedRow {
   deletedAt: Date;
   /** True when the row's parent is active (or it is a client) — i.e. restorable now. */
   parentActive: boolean;
+  /** The cascade this row was stamped by; the unit a restore actually operates on (ADR-0096). */
+  deleteBatchId: string | null;
+  /** The still-deleted ancestor, or null. Per row — see `DeletedHierarchyItem.blockedBy`. */
+  blockedBy: DeletedItemBlocker | null;
 }
 
 /** Keyset position in the merged deleted stream: `(deletedAt, id)`. */
@@ -28,6 +33,17 @@ interface DeletedUnionRow {
   name: string;
   deleted_at: Date;
   parent_active: boolean;
+  delete_batch_id: string | null;
+  /**
+   * The blocking ancestor, flattened across the union because the three branches have different
+   * parents (none, a client, a project) and a `UNION ALL` needs one column list. `blocker_kind` is
+   * non-null exactly when the parent is deleted, so it alone decides whether the other three mean
+   * anything — which is why the mapping reads it and not the others.
+   */
+  blocker_kind: string | null;
+  blocker_id: string | null;
+  blocker_name: string | null;
+  blocker_batch_id: string | null;
 }
 
 /**
@@ -68,7 +84,10 @@ export class RecycleBinRepository {
     const cursorId = cursor?.id ?? null;
 
     const rows = await this.prisma.$queryRaw<DeletedUnionRow[]>`
-      SELECT 'client' AS kind, c.id, c.name, c.deleted_at, true AS parent_active
+      SELECT 'client' AS kind, c.id, c.name, c.deleted_at, true AS parent_active,
+             c.delete_batch_id,
+             NULL::text AS blocker_kind, NULL::uuid AS blocker_id,
+             NULL::text AS blocker_name, NULL::uuid AS blocker_batch_id
         FROM clients c
        WHERE c.organization_id = ${organizationId}::uuid
          AND c.deleted_at IS NOT NULL
@@ -78,7 +97,12 @@ export class RecycleBinRepository {
            OR (c.deleted_at = ${cursorAt}::timestamptz AND c.id > ${cursorId}::uuid)
          )
       UNION ALL
-      SELECT 'project' AS kind, p.id, p.name, p.deleted_at, (cl.deleted_at IS NULL) AS parent_active
+      SELECT 'project' AS kind, p.id, p.name, p.deleted_at, (cl.deleted_at IS NULL) AS parent_active,
+             p.delete_batch_id,
+             CASE WHEN cl.deleted_at IS NULL THEN NULL ELSE 'client' END AS blocker_kind,
+             CASE WHEN cl.deleted_at IS NULL THEN NULL ELSE cl.id END AS blocker_id,
+             CASE WHEN cl.deleted_at IS NULL THEN NULL ELSE cl.name END AS blocker_name,
+             CASE WHEN cl.deleted_at IS NULL THEN NULL ELSE cl.delete_batch_id END AS blocker_batch_id
         FROM projects p
         JOIN clients cl ON cl.id = p.client_id
        WHERE p.organization_id = ${organizationId}::uuid
@@ -89,7 +113,12 @@ export class RecycleBinRepository {
            OR (p.deleted_at = ${cursorAt}::timestamptz AND p.id > ${cursorId}::uuid)
          )
       UNION ALL
-      SELECT 'plan' AS kind, pl.id, pl.name, pl.deleted_at, (pr.deleted_at IS NULL) AS parent_active
+      SELECT 'plan' AS kind, pl.id, pl.name, pl.deleted_at, (pr.deleted_at IS NULL) AS parent_active,
+             pl.delete_batch_id,
+             CASE WHEN pr.deleted_at IS NULL THEN NULL ELSE 'project' END AS blocker_kind,
+             CASE WHEN pr.deleted_at IS NULL THEN NULL ELSE pr.id END AS blocker_id,
+             CASE WHEN pr.deleted_at IS NULL THEN NULL ELSE pr.name END AS blocker_name,
+             CASE WHEN pr.deleted_at IS NULL THEN NULL ELSE pr.delete_batch_id END AS blocker_batch_id
         FROM plans pl
         JOIN projects pr ON pr.id = pl.project_id
        WHERE pl.organization_id = ${organizationId}::uuid
@@ -109,6 +138,19 @@ export class RecycleBinRepository {
       name: row.name,
       deletedAt: row.deleted_at,
       parentActive: row.parent_active,
+      deleteBatchId: row.delete_batch_id,
+      // Built from the SAME join `parent_active` already reads (ADR-0096) — the blocker costs
+      // columns, not a second query, so there is no N+1 here however long the page is.
+      // `blocker_kind` is non-null exactly when the parent is deleted, so one field decides all four.
+      blockedBy:
+        row.blocker_kind === null
+          ? null
+          : {
+              kind: row.blocker_kind as 'client' | 'project',
+              id: row.blocker_id!,
+              name: row.blocker_name!,
+              deleteBatchId: row.blocker_batch_id,
+            },
     }));
   }
 }
