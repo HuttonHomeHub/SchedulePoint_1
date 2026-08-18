@@ -3,7 +3,7 @@
 - **Status:** Draft — **stops for approval**. No application code, no CSS.
 - **Author:** ui-architect, 2026-08-18
 - **ADR number:** **0097**, assigned by the coordinator. Drafted here as
-  [`adr-0097-draft-a-theme-is-a-system-not-a-palette.md`](./adr-0097-draft-a-theme-is-a-system-not-a-palette.md)
+  [`adr-0097-draft-a-theme-is-a-system-not-a-palette.md`](../../adr/0097-a-theme-is-a-system-not-a-palette.md)
   and **filed into `docs/adr/` as the first task of the plan**, not the last — the ADR-0077 ordering,
   for the ADR-0071 reason. It cannot arrive alone: `scripts/check-counts.mjs:55` re-derives the ADR
   count from `docs/adr/`, so the file, the `CLAUDE.md` §16 entry, the banner count bump and the
@@ -33,15 +33,15 @@ class means: WCAG 2.2 AA; the canvas's colours carry meaning; it stays gated.
 
 ## Read in this order
 
-| Document                                                                    | What it is                                                                                  |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [`diagnosis.md`](./diagnosis.md)                                            | What is actually undesigned, on named screens, with the file and line. Three categories.    |
-| [`design.md`](./design.md)                                                  | The vocabulary: one theme, five scopes, three new axes, the typeface, the rules, the gates. |
-| [`screens.md`](./screens.md)                                                | **The product designed** — the six surfaces, at the level of composition and hierarchy.     |
-| [`command-surface.md`](./command-surface.md)                                | **The reshape** — why 32 commands in a row is the wrong instrument, and what replaces it.   |
-| [`hard-surfaces.md`](./hard-surfaces.md)                                    | The vocabulary worked through against the canvas, the Gantt, the toolbar, tables, dialogs.  |
-| [`migration.md`](./migration.md)                                            | Six landings, the early look, the landing-page recommendation, and what gets worse.         |
-| [`adr-0097-draft-…`](./adr-0097-draft-a-theme-is-a-system-not-a-palette.md) | The decision record.                                                                        |
+| Document                                                          | What it is                                                                                  |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [`diagnosis.md`](./diagnosis.md)                                  | What is actually undesigned, on named screens, with the file and line. Three categories.    |
+| [`design.md`](./design.md)                                        | The vocabulary: one theme, five scopes, three new axes, the typeface, the rules, the gates. |
+| [`screens.md`](./screens.md)                                      | **The product designed** — the six surfaces, at the level of composition and hierarchy.     |
+| [`command-surface.md`](./command-surface.md)                      | **The reshape** — why 32 commands in a row is the wrong instrument, and what replaces it.   |
+| [`hard-surfaces.md`](./hard-surfaces.md)                          | The vocabulary worked through against the canvas, the Gantt, the toolbar, tables, dialogs.  |
+| [`migration.md`](./migration.md)                                  | Six landings, the early look, the landing-page recommendation, and what gets worse.         |
+| [`ADR-0097`](../../adr/0097-a-theme-is-a-system-not-a-palette.md) | The decision record.                                                                        |
 
 ---
 

@@ -19,10 +19,10 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 56 migrations, 989 web
+> **Current stage: the application is substantially built.** 23 API modules
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 989 web
 > source files with 33 flag-scoped Playwright suites beside the base journey, and
-> 96 ADRs.
+> 97 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -105,10 +105,10 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   22 feature modules
+│   │   ├── src/modules/      #   23 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (29 models) + 56 migrations
+│   │   ├── prisma/           #   Schema (29 models) + 57 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -2296,6 +2296,72 @@ progress` off the command surface because **an object action belongs on the obje
   target, and `docs/TESTING.md` gains the rule: change a screen, run the base journey.
   **The CPM engine is not imported and the ADR-0034 recalculation parity gate is untouched** — in
   its honest form: there is nothing here to hold parity for. Builds on ADR-0046/0072/0073/0085/0086/0087.
+
+- **ADR-0097** _(Proposed; Landing A in progress)_ — A theme is a system, not a palette. The
+  product owner called the `.corporate` skin _"a badly designed skin"_ and asked for it to become
+  the theme the app is designed to, then widened the mandate three times — to layout and
+  typography, then to _"I remove all restraints"_, then to a single theme with the mechanism kept.
+  Reading the code turned the adjective into a work item: **a theme in this application can
+  structurally express nothing but colour.** All 117 of `.corporate`'s declarations are colours, and
+  `.dark`/`.corporate` declare **zero** non-colour tokens — so "designed" could only ever have meant
+  "recoloured", and every spacing, type, elevation and motion decision in the product is a literal
+  somewhere. **`--radius` is declared once, at `:root`**, which is the whole finding in one line.
+  **The single-theme answer does most of the work by making `:root` _be_ the theme block.** A
+  flash becomes structurally impossible rather than avoided: every stored value — `dark`, `light`,
+  `system`, garbage, or a throwing store — resolves to "stamp nothing", so `theme-boot.js` and
+  `use-theme.tsx` cannot disagree about what to paint because neither paints anything. The
+  mechanism stays **live rather than vestigial** (`THEME_SELECTORS` is a one-element list, `Theme`
+  stays a union, the boot script keeps running and keeps its test), and the cost of adding dark
+  back is stated rather than hand-waved: **a block of values and one entry** — ~110 declarations
+  against today's `.dark`'s ~117, so the new axes do not make it materially more expensive. The
+  caveat is not softened: choosing those values is a week of design judgement, and a dark diagram
+  whose colours carry meaning needs its plot separations **re-derived, not re-tinted**.
+  **Completeness stops being a count and becomes a property.** ADR-0055 §1's "complete (17 tokens)
+  or it is a trap" had been patched three times by three different people each finding a token
+  outside the family and adding it. The replacement rule: _the defect is never "a token is not
+  rebound" — it is a **pair whose two halves are governed by different scopes**_. The page becomes
+  an explicit `--page-*` family, `REBOUND_NAMES` is **computed by closure and asserted** rather
+  than authored, and `Card`/`Popover` become **resets** rather than exceptions — which closes a
+  **latent** split pair (`CardDescription`'s rebound `--muted-foreground` on an unbound `--card`).
+  Latent and verified so: it is compilable, one component move from real, and nothing would report
+  it.
+  **The diagram joins the design system**, which is ADR-0055's original defect surviving in the one
+  place ADR-0055 never reached: `resolveTsldPalette` resolves from `document.documentElement`, so a
+  bar's fill is the **page's** `--primary` painted on a ground that is not the page, and the
+  contrast matrix has **no canvas pair at all**. The canvas becomes a surface scope and the painter
+  does not change a line. Scopes go 6 → 5 while gaining it, because `auth` **retires** — it existed
+  only because ADR-0077 §2 was applied to half a screen — and a gate is **deleted**, the
+  cascade-trap assertion that exists only because a flag layer shadows a theme-scoped one.
+  **The command surface is reshaped rather than fitted a fourth time.** `TOOLBAR_GROUPS` is already
+  `frame · lens · find · tools · object · output · help` — a **menu structure**; ADR-0031 designed
+  the menus and three epics rendered them as a row and made the row fit. Five menus, eight commands,
+  one band: the registry is untouched and the **renderer** replaced, deleting the label pass, the
+  band floors, the hysteresis, the `⋯` and `CHROME_RESIDUAL_PX`. It is **gated on its own
+  measurement with the falsification condition written first**: under 120 px of slack at 1646 and it
+  is withdrawn.
+  **One of the spec's own decision-bearing claims was stale and is corrected here rather than
+  carried**: it costed the reshape partly on `CHROME_RESIDUAL_PX` over-charging Row 2 by ~47 px, and
+  **ADR-0091 M7 had already fixed that** — the constant is `16` today, its docblock records
+  recovering the 44 px, and the over-charge it describes is the pre-M7 state. The reshape's case
+  therefore rests on the menu argument alone, which is the stronger half anyway. ADR-0076 Class 2
+  inside a document written for this epic — the same shape ADR-0080 recorded, found the same way,
+  by opening the file instead of trusting the sentence.
+  **Two findings arrived that nobody was looking for.** The product has **never decided a
+  typeface** — no `@font-face` anywhere, no font file in `public/`, and `globals.css:278` opens with
+  `'Inter'`, so the product's face is whatever the reader's machine happens to have and every width
+  measurement in this repository was taken in whichever one resolved there. That is the canvas
+  finding one layer along: a value that looks decided, is cited, and was never set. And the
+  single-theme promise dies quietly unless it is gated, so **no design token may be declared outside
+  a theme block or a scope-rebind block**, with a theme contract asserted for every selector — a
+  spacing scale hardcoded at `:root` being exactly how it would go.
+  Sequenced A–F around one question, _how soon can somebody look at a whole screen in the new
+  language_: **A** foundations (nearly all invisible), **B** the organisation landing page as the
+  first fully-realised screen, then **C** the command surface, **D** the workspace shape, **E** the
+  diagram, **F** the rest. **B's condition is not negotiable** — it is built from the archetypes,
+  never a bespoke layout that happens to look right, because a beautiful one-off on the flagship
+  screen would falsify this epic's thesis on its first outing. No new `VITE_` flag: ADR-0088
+  established that a `VITE_` constant is inlined at build time and is not an operator rollback, so
+  the rollback is a commit boundary. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down

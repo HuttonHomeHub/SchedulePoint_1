@@ -5,7 +5,7 @@
 - **Deciders:** Product owner (the mandate, widened three times; the single-theme decision; CQ-A–CQ-D);
   ui-architect. Inputs from the `corporate-brand` feature-analyst pass and from the
   `--destructive-hover` fix that landed the same day.
-- **Spec:** [`../specs/design-system-rewrite/`](./README.md) — `diagnosis.md`, `design.md`,
+- **Spec:** [`../specs/design-system-rewrite/`](../specs/design-system-rewrite/README.md) — `diagnosis.md`, `design.md`,
   `screens.md`, `command-surface.md`, `hard-surfaces.md`, `migration.md`.
 
 > **On the scope of this ADR.** It was opened as a token-vocabulary decision and the mandate widened
@@ -41,6 +41,18 @@
 > taken between its plan and its milestone.
 
 ---
+
+> **One of this document's own decision-bearing claims was stale, and is withdrawn rather than
+> quietly dropped.** The command-surface argument (D16) originally costed the reshape partly on
+> `CHROME_RESIDUAL_PX` over-charging Row 2 by ~47 px, "within a couple of pixels of the width that
+> cost that row its labels at 1646". **ADR-0091 M7 had already fixed it**: the constant is `16`
+> (`apps/web/src/components/ui/toolbar/Toolbar.tsx:52`), and its own docblock records recovering the
+> 44 px and says the recovery "is within a couple of pixels of the width that costs Row 2 its labels
+> at the product owner's 1646" — which is where the sentence came from. The figure describes the
+> pre-M7 state. Found by opening the file rather than by anything failing, which is the only way this
+> class is ever found (ADR-0076 Class 2). **The reshape's case therefore rests on the menu argument
+> alone** — that `TOOLBAR_GROUPS` is already a menu structure — which is the stronger half and does
+> not depend on any width figure. That taxonomy claim was verified in the same pass and is exact.
 
 ## Context
 
@@ -425,9 +437,8 @@ the pen.** The **registry is untouched**: every `defineToolbar` item keeps its g
 dropped" and starts meaning "on the strip, or in the menu". Only the **renderer** changes.
 
 What it deletes: the label pass that _"sums the whole bar, not the inline half"_ so one 121 px label
-suppresses all of them; the four band floors; the 48 px hysteresis; `CHROME_RESIDUAL_PX`, which
-**over-charges Row 2 by ~47 px** — within a couple of pixels of the width that cost that row its
-labels at 1646; the `⋯` and the **four commands permanently exiled inside it**; and the trade
+suppresses all of them; the four band floors; the 48 px hysteresis; `CHROME_RESIDUAL_PX`; the
+`⋯` and the **four commands permanently exiled inside it**; and the trade
 `m2-item-widths.md` had to put to the product owner, that _"labels at 1920 cost all three of
 `shortcuts`, `next-conflict` and `float-paths`"_. **A design system that makes a product choose
 between naming its commands and having them is not serving the product.**

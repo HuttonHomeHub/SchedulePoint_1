@@ -120,3 +120,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0094](0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)        | One meaning of "conflict", a remedy on the object  | Accepted           |
 | [0095](0095-the-gantt-becomes-a-working-surface.md)                       | The Gantt becomes a working surface                | Accepted           |
 | [0096](0096-deleted-work-expires-and-purge-is-refused.md)                 | Deleted work expires, and purge is refused         | Accepted           |
+| [0097](0097-a-theme-is-a-system-not-a-palette.md)                         | A theme is a system, not a palette                 | Proposed           |
