@@ -6,11 +6,18 @@
 - **Date:** 2026-08-18 (drafted); 2026-08-18 (decisions folded in)
 - **Tracking issue / epic:** _(to be created)_
 - **Roadmap link:** [`docs/ROADMAP.md`](../../ROADMAP.md) → "Next → Product features"
-- **Related ADR(s):** proposed **ADR-0097** _(provisional number — confirm at filing time; ADR-0071
-  is the record of what happens when a number is assumed rather than checked)_. Builds on
-  ADR-0012/0016 (RBAC + tenancy), ADR-0028 (the pen), ADR-0029 (the shell), ADR-0055 (surface
-  scopes), ADR-0073 §3 (what the audit log permanently excludes), ADR-0082 (shade vs. omit),
-  ADR-0088 (flag classification), ADR-0091 (the chrome band), ADR-0096 (retention).
+- **Related ADR(s):** this epic files **ADR-0098**. _(The draft of this spec reserved **0097**; that
+  number was taken on 2026-08-18 by the design-system rewrite, being drafted in parallel by
+  `ui-architect`. **The collision is recorded rather than routed around** — ADR-0071 was cited by
+  shipped code while absent from the register, and ADR-0079 was filed under a number other than the
+  one its own plan named. Three specs were being written the same afternoon, which is exactly the
+  condition that produced both. Re-confirm 0098 is still free at filing time anyway; a number
+  assumed twice is a number assumed.)_
+  Builds on ADR-0012/0016 (RBAC + tenancy), ADR-0028 (the pen), ADR-0029 (the shell), ADR-0055
+  (surface scopes), ADR-0073 §3 (what the audit log permanently excludes), ADR-0082 (shade vs.
+  omit), ADR-0088 (flag classification), ADR-0091 (the chrome band), ADR-0096 (retention).
+  **Runs alongside ADR-0097** (design-system rewrite) — see §0.3 for how, and for what this screen
+  needs from it.
 
 ---
 
@@ -91,7 +98,52 @@ The retirement is cheap, which is why this epic should do it rather than file it
 no harness to convert — the ADR-0084 batch-1 trap does not apply. See §4.6 and **D7**.
 
 **(b) `CardTitle` renders an `<h1>`.** `apps/web/src/components/ui/card.tsx:50`. A dashboard of four
-cards would emit four `<h1>`s on the first screen after sign-in. §4.5 D12 says what to do about it.
+cards would emit four `<h1>`s on the first screen after sign-in. §4.6 says what to do about it.
+
+### 0.3 This screen and ADR-0097 — the design-system rewrite
+
+The product owner reopened the **entire visual design system** on 2026-08-18: the token vocabulary,
+the surface-scope model, spacing, density, the type scale, radius and elevation are all open, and
+`ui-architect` is drafting **ADR-0097** for it. This landing page is the **first new primary screen**
+in that world — the thing a user meets immediately after sign-in.
+
+**Three rules follow, and they shape §4.6 rather than sitting here as a caveat.**
+
+1. **This epic does not block on ADR-0097.** The landing page's value is its content and its data,
+   and both are settled: the derivation (§0.1), the sections (§4.7), the permissions (§2). None of
+   that is a visual question.
+2. **The screen is specified in structure, hierarchy and semantic tokens — never in colours,
+   spacing literals or bespoke treatments.** Anything hard-coded now is something the rewrite has to
+   unpick, and this epic would become the next instance of a screen "constrained to the existing
+   design protocol", which is the failure the owner is asking to end. The existing lint rule already
+   forbids colour literals in `className`/`style` (ADR-0055 §5); this spec extends the same
+   discipline to spacing, radius and density — **use the scale, name the intent, never a magic
+   value.**
+3. **Where the current vocabulary genuinely cannot express what the screen needs, that is a
+   requirement on ADR-0097 — not a one-off here.** A one-off is how the register filled up with
+   findings in the first place.
+
+**What this screen needs that the vocabulary does not have today.** Each was checked against
+`apps/web/src/components/ui/` rather than assumed:
+
+| Need                                                                            | Today's answer                                                                                                                                                                       | Why it is not enough here                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **An empty state** (icon + copy + action)                                       | **No primitive.** `NoticeStrip emphasis="dashed"` (`notice-strip.tsx:34-35`) is a one-line strip; `DataTable` takes an `empty` node the **caller** supplies (`data-table.tsx:30,62`) | Already registered as `docs/TECH_DEBT.md` **#21(d)** — "no shared `EmptyState` primitive; empty states are text-only". This screen has **three**, and they are the first thing a new customer sees. Building a fourth bespoke one is precisely the debt #21(d) records                                       |
+| **A skeleton**                                                                  | **No primitive at all.** `DataTable` takes a `loadingLabel` (`data-table.tsx:39,63`) — a spinner label                                                                               | `docs/UX_STANDARDS.md` "Perceived performance" says _skeletons over spinners for content; keep skeleton and final layout identical_. That standard currently has **no implementation anywhere in the product**. This spec asks for skeletons (§4.6); without a primitive that is a one-off on the LCP screen |
+| **A page-section archetype** with a real heading rank                           | `CardTitle` is hard-wired to `<h1>` (`card.tsx:50`); `FormSection` has `headingLevel?: 2 \| 3` but is a **form**-layout primitive with `role="group"` (`form-layout.tsx:61,107`)     | A multi-section content screen is a normal shape and the system has no word for it. §4.6's `CardTitle` `level` prop is a **bridge, not the answer**                                                                                                                                                          |
+| **A list / feed row** — scannable, linked, primary + secondary + metadata ranks | `DataTable`, which is a real `<table>`                                                                                                                                               | "Recently changed" is a list of links with supporting metadata, not tabular data. Forcing it into a table would misrepresent it to assistive technology and to the eye                                                                                                                                       |
+| **Density as a system concept**                                                 | Exists **per component** — `NoticeStrip` has its own `density` axis (`notice-strip.tsx:37-42`)                                                                                       | A reading-density content screen sits between the plan workspace (very dense) and a form. Raised as an **observation**, not a blocking requirement: one component having the axis is evidence the system may want it, not proof                                                                              |
+
+**One thing I was about to name and did not, because I checked.** A "this needs you, but nothing is
+wrong" rank already exists: `NoticeStrip` has `info` and `warning` tones over `--info-text` /
+`--warning-text` (`notice-strip.tsx:29-30`). The attention section uses `info`; it does **not** need
+a new tone, and it must not reach for `destructive` — "you are holding the editing lock" is a
+prompt, not a failure.
+
+**Sequencing.** If ADR-0097 lands an `EmptyState`, a `Skeleton`, a section archetype or a list-row
+archetype **before** the milestone that needs it, this epic **consumes it** rather than building the
+bridge. Each affected task below says so explicitly, so the choice is made by whichever lands first
+rather than by whoever is at the keyboard.
 
 ---
 
@@ -854,18 +906,35 @@ included in M1-T2's measurement anyway rather than assumed cheap.
   `components/ui` change and goes through **component-reviewer**. _(The alternative — reusing
   `FormSection`, which already has `headingLevel?: 2 | 3` at `form-layout.tsx:61,107` — is rejected:
   it is a **form**-layout primitive and its `role="group"` semantics are wrong for a list of plans.)_
+  **This is a bridge, and it is labelled one** (§0.3): if ADR-0097 lands a section archetype with a
+  heading rank before M2, this screen consumes that instead and the prop is not added.
 - `routes/plan-detail.tsx` — **one call**, `rememberPlan(...)`, where the plan resolves. It is the
   only touch this epic makes to the plan workspace, and it deliberately writes **ids only** plus the
   org and a timestamp — the name is not stored, because the name is what goes stale (§4.9 D10b).
 - The sign-out path — **one call**, `forgetAllForUser(userId)`, so a shared machine does not hand the
   next account the previous one's plan list.
 
-**Design-system compliance:** tokens only, no colour literals (the ADR-0055 lint rule); no new
-one-off spacing; the screen sits inside the shell's existing `<main>` and adds no landmark; the
-wordmark link's hover/focus treatment uses `chrome`-scope rebound names, and **if a new token pair
-is needed it lands in `token-contrast.test.ts` before the CSS is written** (the ADR-0083 ordering
-rule — a contrast gate written after the fact is a gate that passes because it was fitted to the
-answer).
+**Design-system compliance — and it is written for a system that is being rewritten underneath it
+(§0.3).**
+
+- **Semantic tokens only, never literals** — no colours in `className`/`style` (the ADR-0055 lint
+  rule), and the same discipline extended to **spacing, radius and density**: use the scale and name
+  the intent. A magic value is something ADR-0097 has to find and unpick.
+- **Structure and hierarchy are the specification; visual treatment is not.** This spec says "a
+  heading, then a list of linked rows, each with a primary name and two supporting facts". It does
+  **not** say how tall a row is, how the sections are separated, or whether a section is a card. Those
+  are ADR-0097's to answer, and if it answers them differently the screen should not need editing.
+- **Reach for the existing archetype or raise the requirement — never invent a one-off.** The four
+  gaps in §0.3 (`EmptyState`, `Skeleton`, a section archetype, a list-row archetype) are named there
+  as requirements on ADR-0097. If one has not landed when its milestone arrives, the bridge is built
+  **inside `features/overview/`, not in `components/ui/`**, and carries a docblock pointing at §0.3
+  — so it is visibly a stand-in rather than a fifth pattern with squatters' rights.
+- The screen sits inside the shell's existing `<main>` and adds **no landmark**.
+- The wordmark link's hover/focus treatment uses `chrome`-scope rebound names, and **if a new token
+  pair is needed it lands in `token-contrast.test.ts` before the CSS is written** (the ADR-0083
+  ordering rule — a contrast gate written after the fact is a gate that passes because it was fitted
+  to the answer). If ADR-0097 has re-cut the scopes by then, the rule survives the rename: the pair
+  is gated before it is painted.
 
 **States, all five, per the UX_STANDARDS "every view" rule:** loading (skeletons matching the final
 layout), empty (three distinct organisation states + two distinct section empties; "Jump back in"
