@@ -21,31 +21,33 @@ Product direction lives in [ROADMAP.md](ROADMAP.md) and
 the ADR-0034 capability matrix. Listed here only when a candidate is neither —
 a product idea that has not yet earned a roadmap line:
 
-- `M` **Gantt dependency arrows and Gantt editing.** The view itself shipped
-  (ADR-0059, default-on 2026-07-28) deliberately read-only and arrow-free:
-  arbitrary link routing is the one thing that forced canvas on the TSLD, so
-  drawing arrows would drag the rejected substrate back in through the side
-  door, and the brief says read-primary. Both are worth revisiting **on
-  evidence of use**, not before — that gate is the point.
-  **This epic inherits one requirement, decided elsewhere.** The
-  progress-entry convergence removed the command surface's `Report progress`
-  (ADR-0093), which was the only action reachable from a **Gantt** selection —
-  the canvas dock that replaces it is canvas-only. The product owner accepted
-  that cost on 2026-08-13 on the explicit basis that **progress reporting from
-  a Gantt selection is picked up here**, so a Contributor in the Gantt reaches
-  progress only through the activities-table row menu until this lands. Two
-  smaller holes belong to the same conversation: `add-note` and
-  `clear-visual-placement` are still reachable from a Gantt selection, so the
-  read-only claim above is currently true of the bars and not of the toolbar.
-  **Corrected 2026-08-14, and the correction is a behaviour change nobody recorded at the time.**
-  ADR-0094 M4-T1 moved `clear-visual-placement` off the command surface onto the canvas selection
-  bar, and the workspace renders `GanttPanel` **instead of** `TsldPanel` (one surface at a time,
-  `plan-workspace-toolbar.tsx`), so that bar never mounts in the Gantt. The item is therefore no
-  longer reachable from a Gantt selection at all. That **narrows this epic's inherited requirement
-  to `Report progress` plus `add-note`** and makes ADR-0059's read-only claim more nearly true — but
-  it is a capability removed from a view, decided as a side effect of a rule about which surface an
-  action belongs on, and it went into neither ADR-0094 nor its pull request. Recorded here rather
-  than left for the Gantt epic to rediscover, which is how the same omission is usually found.
+- `S` **The Gantt's remaining editing gaps.** The epic landed (ADR-0095, M1–M5,
+  `web-v0.92.0` 2026-08-18) and this entry is rewritten to be about what is
+  **left**, per this file's own convention — it previously described the whole
+  epic as unstarted, three days after it shipped.
+  **Delivered, and verified during the 2026-08-18 reconciliation pass rather
+  than assumed:** dependency arrows (behind a default-off `View ▾` toggle — the
+  substrate objection ADR-0059 §4 raised is answered by the geometry, since one
+  bar per row makes a link an elbow through whitespace); in-cell editing with
+  per-cell write scope; bar drag and `Alt+←/→`; the row menu; the columns
+  chooser; Indent/Outdent; Insert activity; and URL-backed view memory.
+  **The inherited requirement is discharged.** ADR-0093 removed the command
+  surface's `Report progress`, and the product owner accepted that on
+  2026-08-13 on the explicit basis that a Gantt selection would pick it up.
+  It has: `progress` is in the shared `plan-actions/selection-actions.tsx`
+  registry, which the Gantt calls with `canvas: null` — a context that gates
+  only `zoom-to-selection` and `isolate-logic` — and
+  `e2e-gantt-editing/object-actions.spec.ts` drives it against a real API.
+  `add-note` is gone from that registry entirely, with a journey pinning its
+  absence, and `clear-visual-placement` was narrowed out on 2026-08-14.
+  **What is actually left**, all named by the ADR rather than discovered here:
+  the **start-edge resize** (D4 — it carries a mode-dependent meaning, and
+  shipping it without the mode statement the canvas has beside it would leave a
+  planner unable to tell which of two writes their drag just made), the columns
+  **chooser's** grid-width memory (T6 names it; the grid has no resize handle,
+  so nothing can set it yet), and a **coarse-pointer** pass —
+  `docs/TECH_DEBT.md` #133. `PROJECT_BRIEF.md` §8's "edit supported" is
+  **substantially** met and deliberately not claimed closed.
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.
