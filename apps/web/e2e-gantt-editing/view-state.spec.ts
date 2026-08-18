@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import {
   createClient,
+  ensurePen,
   createPlan,
   createProject,
   ganttGrid,
@@ -130,11 +131,30 @@ test('Indent files a row under the summary above it, and the write reaches the A
     { org: orgSlug, id: planId },
   );
   await page.reload();
+  // The reload DROPS THE PEN LEASE, so every structure action shades with the pen's refusal rather
+  // than its own — which is what the first run of this case actually hit, and why it read as
+  // "Indent is refused" when the summary above it was perfectly valid. `grid-edit.spec.ts` records
+  // the same trap two files along. `ensurePen`, not `startEditing`: a reload may leave the lease
+  // already held, and clicking a button that is not there would hang.
+  await ensurePen(page);
   await expect(ganttGrid(page)).toBeVisible();
+
+  // Sort by Activity, so "Phase A" is deterministically ABOVE "Seeded 0". Indent reads the display
+  // order — deliberately, since it is a gesture about the picture in front of the planner — and the
+  // seeded rows take their `laneIndex` from the API, so the default `wbs` order does not place the
+  // summary reliably. The first run of this case proved the point by being correctly REFUSED:
+  // `aria-disabled`, with the reason that there is no summary above the row.
+  await page.getByRole('columnheader', { name: 'Activity' }).getByRole('button').click();
+  await expect(page.getByRole('columnheader', { name: 'Activity' })).toHaveAttribute(
+    'aria-sort',
+    'ascending',
+  );
 
   const row = ganttRow(page, 'Seeded 0');
   await row.getByRole('button', { name: /^Actions for/ }).click();
-  await page.getByRole('menuitem', { name: 'Indent' }).click();
+  const indent = page.getByRole('menuitem', { name: 'Indent' });
+  await expect(indent).toBeEnabled();
+  await indent.click();
 
   // Asserted at the API, never off the DOM: the reparent batch carries each row's `version`, and a
   // grid that redrew without the write landing would pass a DOM assertion and be wrong in the only
