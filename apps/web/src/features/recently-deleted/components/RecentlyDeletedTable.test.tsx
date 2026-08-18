@@ -1,12 +1,13 @@
 import type { DeletedHierarchyItem } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
 import { deletedItemKeys } from '../api/use-deleted-items';
 
 import { RecentlyDeletedTable } from './RecentlyDeletedTable';
+import { ANCESTOR_PREVIEW_LIMIT } from './RestoreAncestorDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
@@ -226,6 +227,133 @@ describe('RecentlyDeletedTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'and 1 plan' }));
     expect(screen.getByText('Baseline')).toBeInTheDocument(); // the panel really is open
     expect((await axe(container)).violations).toEqual([]);
+  });
+
+  describe('the cross-batch ancestor', () => {
+    const PROJECT_ID = '00000000-0000-4000-8000-000000000020';
+    /** A plan deleted alone, then its project deleted later — two batches, so grouping cannot help. */
+    const CROSS: DeletedHierarchyItem[] = [
+      {
+        kind: 'project',
+        id: PROJECT_ID,
+        name: 'Riverside',
+        deletedAt: '2026-07-11T09:00:00.000Z',
+        canRestore: true,
+        deleteBatchId: 'batch-project',
+        blockedBy: null,
+      },
+      {
+        kind: 'plan',
+        id: PLAN_ID,
+        name: 'Baseline',
+        deletedAt: '2026-07-10T08:00:00.000Z',
+        canRestore: false,
+        deleteBatchId: 'batch-plan',
+        blockedBy: {
+          kind: 'project',
+          id: PROJECT_ID,
+          name: 'Riverside',
+          deleteBatchId: 'batch-project',
+        },
+      },
+    ];
+
+    it('offers the blocker as an ACTION, not as a sentence to go and act on elsewhere', () => {
+      renderTable(true, CROSS);
+      const trigger = screen.getByRole('button', { name: 'Restore Riverside first…' });
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    });
+
+    it('names everything the confirmation will bring back, including unseen siblings', () => {
+      // A sibling the blocked row cannot see. This is exactly why an auto-cascade was rejected:
+      // one press on the plan would have resurrected this too, with nothing on screen saying so.
+      const withSibling: DeletedHierarchyItem[] = [
+        ...CROSS,
+        {
+          kind: 'plan',
+          id: '00000000-0000-4000-8000-000000000021',
+          name: 'Sibling plan',
+          deletedAt: '2026-07-11T09:00:00.000Z',
+          canRestore: false,
+          deleteBatchId: 'batch-project',
+          blockedBy: {
+            kind: 'project',
+            id: PROJECT_ID,
+            name: 'Riverside',
+            deleteBatchId: 'batch-project',
+          },
+        },
+      ];
+      renderTable(true, withSibling);
+      fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside first…' }));
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+      // NOT alertdialog: restoring destroys nothing, and the escalation would tell an AT user this
+      // is dangerous when it is undone by deleting again.
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(within(dialog).getByText('This will restore 2 items:')).toBeInTheDocument();
+      expect(within(dialog).getByText('Sibling plan')).toBeInTheDocument();
+    });
+
+    it('caps a large ancestor batch and still states the exact total', () => {
+      // A client-rooted cascade can hold hundreds. The cap changes how much is NAMED, never what is
+      // CLAIMED — a silent truncation would read as "that is all of it" (ADR-0090's no-silent-caps).
+      const many: DeletedHierarchyItem[] = [
+        CROSS[1]!,
+        CROSS[0]!,
+        ...Array.from({ length: 20 }, (_, n) => ({
+          kind: 'plan' as const,
+          id: `00000000-0000-4000-8000-0000000001${String(n).padStart(2, '0')}`,
+          name: `Plan ${n}`,
+          deletedAt: '2026-07-11T09:00:00.000Z',
+          canRestore: false,
+          deleteBatchId: 'batch-project',
+          blockedBy: {
+            kind: 'project' as const,
+            id: PROJECT_ID,
+            name: 'Riverside',
+            deleteBatchId: 'batch-project',
+          },
+        })),
+      ];
+      renderTable(true, many);
+      fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside first…' }));
+      const dialog = screen.getByRole('dialog');
+
+      expect(within(dialog).getByText('This will restore 21 items:')).toBeInTheDocument();
+      expect(within(dialog).getAllByRole('listitem')).toHaveLength(ANCESTOR_PREVIEW_LIMIT);
+      const more = within(dialog).getByRole('button', {
+        name: `Show ${21 - ANCESTOR_PREVIEW_LIMIT} more`,
+      });
+      fireEvent.click(more);
+      expect(within(dialog).getAllByRole('listitem')).toHaveLength(21);
+    });
+
+    it('closes on confirm and shows the in-flight state on the ROW, not the dialog', async () => {
+      // The dialog closes before the write starts, so the pending state belongs to the row the
+      // reader is now looking at. That is also what makes focus deterministic: `Dialog` is a native
+      // <dialog> whose close restores focus to its invoker ASYNCHRONOUSLY, and the invoker's label
+      // changes the moment this succeeds — closing first lets that restore happen immediately and
+      // the explicit focus move win afterwards, instead of racing it (ADR-0080, ADR-0095 M6).
+      let resolve: (v: unknown) => void = () => {};
+      mockApiFetch.mockImplementationOnce(
+        () =>
+          new Promise((r) => {
+            resolve = r;
+          }),
+      );
+      renderTable(true, CROSS);
+      fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside first…' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      const pending = screen.getByRole('button', { name: /Restore project Riverside/ });
+      // `aria-disabled`, never native `disabled`: the latter blurs to <body> when it flips.
+      expect(pending).toHaveAttribute('aria-busy', 'true');
+      expect(pending).not.toHaveAttribute('disabled');
+      resolve({});
+    });
   });
 
   it('hides restore actions entirely for non-writers', () => {

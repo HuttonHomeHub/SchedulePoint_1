@@ -5,6 +5,8 @@ import { useMemo, useRef, useState } from 'react';
 import { useDeletedItems, useRestoreItem } from '../api/use-deleted-items';
 import { describeMembers, groupDeletions, type DeletionGroup } from '../model/group-deletions';
 
+import { RestoreAncestorDialog } from './RestoreAncestorDialog';
+
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
@@ -47,6 +49,8 @@ export function RecentlyDeletedTable({
   const [restoringIds, setRestoringIds] = useState<ReadonlySet<string>>(new Set());
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  /** The blocked group whose ancestor confirmation is open, by key. */
+  const [ancestorFor, setAncestorFor] = useState<string | null>(null);
 
   // Grouping is a pure transform over the array already held — `useDeletedItems` pages to
   // exhaustion, which is what makes a group complete and therefore honest (TECH_DEBT #57).
@@ -55,6 +59,20 @@ export function RecentlyDeletedTable({
     () => ({ ...deleted, data: groups }) as unknown as typeof deleted & { data: DeletionGroup[] },
     [deleted, groups],
   );
+
+  /**
+   * The blocker's own group, found in the list the client already holds — no extra request, and no
+   * second source of truth about what a restore brings back.
+   *
+   * Null when the blocker is not in the fetched set. That is not expected (the list pages to
+   * exhaustion) but it is possible mid-refetch, and the caller shades rather than opening a dialog
+   * it cannot populate — an empty confirmation is worse than none.
+   */
+  const ancestorGroupFor = (group: DeletionGroup): DeletionGroup | null => {
+    const batch = group.root.blockedBy?.deleteBatchId;
+    if (batch === undefined || batch === null) return null;
+    return groups.find((candidate) => candidate.key === batch) ?? null;
+  };
 
   const toggle = (key: string): void =>
     setExpanded((prev) => {
@@ -171,10 +189,21 @@ export function RecentlyDeletedTable({
           >
             {restoringIds.has(group.root.id) ? 'Restoring…' : 'Restore'}
           </Button>
+        ) : ancestorGroupFor(group) !== null ? (
+          // Blocked by a deletion OUTSIDE this one — the only case grouping cannot dissolve. The
+          // control is a real button rather than a sentence: the reader can act from here, in two
+          // deliberate presses, instead of being told to go and find the row themselves.
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAncestorFor(group.key)}
+            aria-haspopup="dialog"
+          >
+            Restore {group.root.blockedBy?.name} first…
+          </Button>
         ) : (
-          // Blocked by a deletion OUTSIDE this one — the only case the grouping cannot dissolve,
-          // because the blocker belongs to a different batch and comes back on its own press.
-          // Named, so the reader knows what to restore rather than being told to go and find it.
+          // The blocker is not in the fetched set — possible mid-refetch. Say what is true rather
+          // than offering a button that would open an empty confirmation.
           <span className="text-muted-foreground text-sm">
             {group.root.blockedBy === null
               ? 'Restore its parent first'
@@ -219,6 +248,31 @@ export function RecentlyDeletedTable({
           </div>
         }
       />
+      {(() => {
+        if (ancestorFor === null) return null;
+        const blocked = groups.find((g) => g.key === ancestorFor);
+        const ancestor = blocked ? ancestorGroupFor(blocked) : null;
+        // Both can vanish under a refetch between opening and rendering; closing is the honest
+        // response, not rendering a dialog about rows that are no longer there.
+        if (!blocked || !ancestor) return null;
+        return (
+          <RestoreAncestorDialog
+            open
+            onClose={() => setAncestorFor(null)}
+            blocked={blocked}
+            ancestor={ancestor}
+            onConfirm={() => {
+              // Close FIRST, then restore. The dialog is a native `<dialog>`, which returns focus
+              // to its invoker asynchronously on close — and that invoker is the blocked row's
+              // button, whose label changes the instant this succeeds. Letting the browser race
+              // the refetch is how focus lands on <body> (ADR-0080, ADR-0095 M6). Closing first
+              // makes `onRestore`'s own focus move the last word.
+              setAncestorFor(null);
+              onRestore(ancestor);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
