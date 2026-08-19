@@ -263,6 +263,55 @@ with it** — the one that will be forgotten). Then the plot values: the critica
 so the reported figures clear the ≥ 1.5:1 floor, the gate promoted from reporting to asserting in the
 same commit. Then the Gantt's chart region, ruler and rows.
 
+### E's shape, decided before it is built
+
+**The pair to fix is `--warning` vs `--destructive` at 1.34:1**, not `--primary` vs `--destructive`.
+`diagnosis.md` §3.3 leads on 1.27:1, which was a **Light-theme** figure and went with its theme; the
+values that survived the collapse are the old Corporate row, re-derived there 2026-08-19. And the
+ground is **1.02:1 against the page**, which is why the trap has never shown: two greys nobody can
+tell apart. Both figures are recomputed in that section rather than restated here.
+
+**How the element reaches nine call sites is the one real design question, and it is not
+prop-drilling.** The resolvers are called in three places that cannot see the diagram's DOM node at
+the moment they run:
+
+| caller                                | when it runs                             | can it see the container?                                              |
+| ------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| `TsldCanvas.tsx:669,675,687` (`??=`)  | during the **first render**              | **No** — `containerRef` is declared on the next line                   |
+| `TsldCanvas.tsx:1555,1558,1559`       | a passive effect keyed on `themeVersion` | Yes, but after a paint — and with one theme that key never fires again |
+| `TsldPanel.tsx:1081,1086` (`useMemo`) | during render, **above** the canvas      | **No** — the canvas is its child                                       |
+| `use-diagram-image.ts:103`            | on demand, off the render path           | Only if something hands it one                                         |
+
+So the element is published as **state, not a ref** — the `useChromeSlot` pattern, and for the
+identical reason recorded there: `createPortal`/`getComputedStyle` need a real element at the moment
+they run, and a ref mutation re-renders nobody, so a consumer would resolve once against nothing and
+never recover. A callback ref feeding `useState` re-renders the consumers exactly once, when the node
+mounts, which is what makes `TsldPanel`'s two `useMemo`s correct rather than one-frame-stale forever.
+
+**And the fallback is the part to get right, because a plausible one is indistinguishable from
+success.** Today every resolver defaults to `document.documentElement`; keeping that default means a
+consumer that never receives the element paints page colours and **nothing anywhere reports it** —
+the failure `design.md` §1.2 names as E's one real risk, which is currently reachable by the most
+natural edit anyone would make. The default goes, and a resolver called with no scope element throws
+in development (the `Surface` nesting-guard precedent: fail loud in DEV, render anyway in
+production — a mis-wired palette must never blank a planner's diagram).
+
+**Task order, and the two that will be skipped if they are not written down:**
+
+1. `SurfaceTone` += `'canvas'`; the `[data-surface='canvas']` block at **today's resolved values**,
+   so arrival is byte-identical and the value work is a separate commit with its own diff.
+2. The PLOT pack moves out of `OUTSIDE_THE_CLOSURE.packs` and becomes declared **by** the scope —
+   `token-architecture.test.ts` already anticipates this in that constant's own comment.
+3. The element context, the `useLayoutEffect` resolution, and the DEV guard, together in one commit:
+   they are one mechanism and splitting them ships a window where the guard is absent.
+4. `token-contrast.test.ts` gains `canvas` and its pairs, **reporting** at L1.
+5. **`resolvePrintPalette` (`use-diagram-image.ts:103`)** — named separately because it is off the
+   render path, so no screen shows it wrong; a miss here paints page colours into a delivered PDF.
+6. **`resolveLensPalette` in `TsldPanel`'s two `useMemo`s** — the only consumers _above_ the canvas,
+   so they are the ones the state-not-ref decision exists for, and the ones a ref-based version would
+   leave permanently stale while looking correct.
+7. Then the values (L4-1) and the Gantt (L4-2), each with the measurement `migration.md` requires.
+
 `apps/web/scripts/measure-link-routing.mjs` runs before and after, and the numbers go in the
 milestone record. This epic must leave `docs/TECH_DEBT.md` #75 **measurable**; it must not quietly
 become the epic that answers it.
