@@ -1,12 +1,48 @@
 # ADR-0097: The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped
 
-- **Status:** **Proposed** — drafted 2026-08-18. **Landings A and B landed 2026-08-19** with the
-  product owner's approval of the plan (and of its four extensions: the typeface, controls and
-  interaction in scope, the A→B→review cadence, and both relocations with D split into D1/D2).
-  **Landing C is WITHDRAWN on its own measurement (2026-08-19)** — 27 px of slack against the 120 px
-  its spec required, 7 px at the worst point of the measured spread, and negative from 1440 down
-  ([`m0-menu-band-measurement.md`](../specs/design-system-rewrite/m0-menu-band-measurement.md)).
-  D–F remain.
+- **Status:** **Accepted** — drafted 2026-08-18, closed 2026-08-19 on the product owner's decision.
+  **A, B, D1, E and F landed**; **C and D1's band-merge half were withdrawn on their own
+  measurements**; **D2 is deferred out of this epic**. Four of the six landings shipped and two of
+  the things this ADR proposed were disproved by the instruments it insisted on, which is the
+  outcome its own method was for.
+
+  | landing                       | outcome                                                                           |
+  | ----------------------------- | --------------------------------------------------------------------------------- |
+  | **A** foundations             | landed — one theme, the computed closure, the type ramp, the six archetypes       |
+  | **B** organisation landing    | landed (ADR-0098)                                                                 |
+  | **C** command-surface reshape | **WITHDRAWN on its own falsification condition** — see below                      |
+  | **D1** one navigator          | landed; its **band merge** withdrawn on evidence — see below                      |
+  | **D2** docked activity editor | **deferred out of this epic** by the product owner, 2026-08-19                    |
+  | **E** the diagram             | landed — the canvas scope, the `--plot-*` family, the Gantt                       |
+  | **F** controls and documents  | landed — and three quarters of it turned out not to exist; see F's own note below |
+
+  **C is withdrawn on the number its spec demanded in advance.** The single menu band measured
+  **27 px of slack at 1646 against a required 120**, 7 px at the worst point of the measured trigger
+  spread, and negative from 1440 down
+  ([`m0-menu-band-measurement.md`](../specs/design-system-rewrite/m0-menu-band-measurement.md)). The
+  **diagnosis is not withdrawn** — only the single-band answer to it — and it stands on the two of
+  its four symptoms that survived verification; the other two described behaviour ADR-0091 M7 had
+  already fixed.
+
+  **D1's band merge is withdrawn on evidence rather than on a preference.** It shipped, and
+  `e2e-gantt` then failed twice on `getByRole('button', { name: 'Gantt' })` and `{ name: 'Diagram' }`
+  — the **view switch**, the one control that moves a planner between the two views of their plan,
+  reachable only through an overflow menu at every width. Four shrink arrangements were measured and
+  none fits the header while keeping the four modes visible, because the identity wants ~1170 px and
+  ~861 px is available at 1280. The approving estimate had said 795 px of content and +250 px of
+  slack: the **fifth consecutive width expectation in this epic contradicted by its own
+  measurement**, and the fourth in the same direction. The modes returned to the band, the header
+  kept the breadcrumb, the status pill and the edit pencil, and `aboveCanvas` returned to 240 px —
+  the 45 px given back exactly. Put to the product owner with those figures and with what a
+  re-attempt would cost; they chose to **leave it withdrawn**
+  ([`m0-landing-d1-measurement.md`](../specs/design-system-rewrite/m0-landing-d1-measurement.md)).
+
+  **D2 is deferred by decision, not by omission.** The product owner split D into D1 and D2 "a
+  release later", and on 2026-08-19 chose to close this epic without D2 rather than hold it open. It
+  is a workflow change rather than a styling one — ADR-0060's per-scope save and its unsaved-work
+  guard are dialog-shaped, and a docked panel removes the thing that guard hangs off — so it wants
+  its own epic and its own design pass. `docs/BACKLOG.md` carries it.
+
 - **Date:** 2026-08-18
 - **Deciders:** Product owner (the mandate, widened three times; the single-theme decision; CQ-A–CQ-D);
   ui-architect. Inputs from the `corporate-brand` feature-analyst pass and from the

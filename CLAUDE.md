@@ -2299,7 +2299,8 @@ progress` off the command surface because **an object action belongs on the obje
   **The CPM engine is not imported and the ADR-0034 recalculation parity gate is untouched** — in
   its honest form: there is nothing here to hold parity for. Builds on ADR-0046/0072/0073/0085/0086/0087.
 
-- **ADR-0097** _(Proposed; **Landings A and B landed 2026-08-19**, C–F to come)_ — A theme is a
+- **ADR-0097** _(Accepted; A, B, D1, E, F landed 2026-08-19; C and D1's band merge WITHDRAWN on
+  measurement; D2 deferred out of the epic)_ — A theme is a
   system, not a palette. The
   product owner called the `.corporate` skin _"a badly designed skin"_ and asked for it to become
   the theme the app is designed to, then widened the mandate three times — to layout and
@@ -2384,6 +2385,29 @@ progress` off the command surface because **an object action belongs on the obje
   screen would falsify this epic's thesis on its first outing. No new `VITE_` flag: ADR-0088
   established that a `VITE_` constant is inlined at build time and is not an operator rollback, so
   the rollback is a commit boundary. **The CPM engine is not imported and no migration runs.**
+  **The epic closed 2026-08-19 with two of its own proposals disproved by the instruments it
+  insisted on, which is what the method was for.** Beside C, **D1's band merge went the same way and
+  its evidence was a browser**: it shipped, and `e2e-gantt` then failed twice on the **view switch**
+  — the one control that moves a planner between the two views of their plan — reachable only
+  through an overflow menu at every width. Four shrink arrangements were measured and none fits the
+  header while keeping the four modes visible, because the identity wants ~1170 px against ~861 px
+  at 1280; the approving estimate had said 795 px and +250 px of slack. **Fifth** consecutive width
+  expectation contradicted by its own measurement. `aboveCanvas` returned to 240 px — the 45 px
+  given back exactly — and the product owner chose to leave it withdrawn. **D2 (the docked activity
+  editor) is deferred out of the epic** by the same decision: it is a workflow change, and ADR-0060's
+  per-scope save and unsaved-work guard are dialog-shaped, so it wants its own design pass.
+  **Landing F's lesson is that three quarters of it did not exist.** Its select conversion was
+  scoped at ~35 call sites and is **three**: the discriminator was written "server-paged", and
+  applying it to the first candidate showed all four of that dialog's pickers use `apiFetchAllPages`
+  — the opposite — so the rule would have left a 2,000-option `<select>` in place while reading as
+  decided; corrected to **unbounded by the data model**. Its row-action half was scoped at ~10 tables
+  "where `UX_STANDARDS.md` specifies the APG row menu", and that standard's subject is **dense list
+  and tree rows** while the named table already cited it as compliant; re-counted by subject-labelled
+  row actions rather than by `size="sm"` occurrences, **one** table was crowded. Each step needed a
+  count rather than a reading, and the estimate moved ten → two → one. F also found the drift class
+  **one layer in**: `account-chip.tsx`'s own docblock described a theme radio group "with four
+  themes" in a file with zero references to `useTheme` — not a document describing the code wrongly
+  but the code describing itself wrongly, where a reader is likeliest to trust it.
 
 - **ADR-0098** _(Accepted; M0–M5 landed 2026-08-19)_ — The landing is the organisation overview.
   `/orgs/:slug` is where **every sign-in lands**, and it showed a centred card saying "Select a plan
