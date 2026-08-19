@@ -133,6 +133,23 @@ than quietly absorbed.
 | **CQ-H** | How much visible change per release?            | **One landing per release**, A then B then review.                                                   |
 | **CQ-I** | Reshape: one epic or two?                       | **One epic, separate landings** — C stays liftable if the risk needs isolating.                      |
 
+**Two more, taken 2026-08-19 after the eight-specialist plan review:**
+
+> **Landing D splits into D1 (one navigator) and D2 (the docked editor).** As scoped it put three
+> changes to a planner's daily workflow into one overnight release on a host that auto-pulls, with
+> no way to attribute any resulting friction. Raised by `ux-reviewer` and the coordinator
+> independently; the product owner chose the split.
+
+> **Dark mode stays removed — re-affirmed after the loss was re-stated more strongly.** The first
+> framing given to the product owner was "the picker had one entry, now zero", which describes only
+> the _manual_ loss. `accessibility-reviewer` found the bigger one: `readStoredTheme()` defaulted an
+> unconfigured visitor to `system`, and `system` followed `prefers-color-scheme` live — so **every**
+> visitor whose OS is set to dark got a dark SchedulePoint automatically, with zero interaction,
+> including people who set OS dark for photophobia or migraine. Not a WCAG failure, and no SC
+> requires a dark theme; but it is a materially larger removal than the sentence in `design.md`
+> §0.5.6 described. Put back to the product owner in that frame and re-affirmed. Recorded so the
+> decision on file is the one that was actually made.
+
 Two further decisions were taken at the same time and are larger than any of the above:
 
 > **The typeface is Space Grotesk** (`typeface.md`), chosen from four candidates rendered on real

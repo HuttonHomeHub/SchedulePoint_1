@@ -180,9 +180,15 @@ Nine of thirty-three journeys touch the toolbar. All thirty-three are run.
 
 ---
 
-## D — The workspace shape
+## D — The workspace shape, **split in two** (product owner, 2026-08-19)
 
-The three moves that depend on C, in this order:
+**D was one landing and is now two.** Raised by `ux-reviewer` and independently by the coordinator:
+as scoped it bundled three changes to a planner's daily workflow into one overnight release — and
+the host auto-pulls (ADR-0047), so "merged" means "in use tomorrow". If the result felt worse, there
+would be no way to tell which of the three did it. Put to the product owner with that reasoning;
+they chose the split.
+
+### D1 — One navigator
 
 1. **The organisation nav leaves the header for the rail** (`screens.md` §0, §3). 637 px freed, one
    navigator, one `aria-current` treatment.
@@ -190,9 +196,61 @@ The three moves that depend on C, in this order:
    short**, with two measured cuts available. **If it does not fit, the two-band fallback ships**, which
    still returns 90 px and does not depend on the nav move at all. Named up front because ADR-0092 M5
    measured a merge, found it 134 px short, and withdrew it.
-3. **The activity editor becomes a docked panel** (`screens.md` §2) — the largest behavioural change
-   in the epic, gated on a `ux-reviewer` recommendation and a product-owner decision, and retiring
-   `Dialog`'s `xl` preset with it.
+
+**D1 owes two states the plan presented as free**, both found by `ux-reviewer` and both verified
+against the code:
+
+- **The collapsed rail.** `navigator-rail.tsx:123-148` `NavigatorRailCollapsed` renders **one button
+  and nothing else**. Today the org nav survives a collapse because it lives in the header. After
+  the move, collapsing the rail — which is exactly what a planner does to gain canvas width, the
+  thing this whole epic chases — would hide **all six** relocated destinations behind a single
+  toggle. An icon rail is the obvious answer; **nothing currently says so**, and D1 does not ship
+  until it does.
+- **Below `lg`.** `app-shell.tsx:143-151` renders the rail as an off-canvas `Sheet`. Today the nav is
+  in the header at every width; after the move six destinations sit behind a drawer that did not
+  previously stand between the planner and them.
+
+**And one thing that is not an organisation destination at all.** `screens.md` §3 lists `My activity`
+in the rail's org zone. `routes/my-activity.tsx` is `/me/activity` — no `orgSlug` — and ADR-0086 M6
+explicitly recorded finding that it _"sits outside any organisation"_. It needs a decision (a
+distinct non-org row, or staying in the account menu), not a silent fold-in.
+
+### D2 — The activity editor becomes a docked panel
+
+`screens.md` §2 — the largest behavioural change in the epic, retiring `Dialog`'s `xl` preset with
+it. **Ships alone, a release after D1**, because it is the one item in the plan explicitly gated on a
+UX decision _before_ the decision is taken, and therefore the one that benefits most from arriving
+alone and being judged alone.
+
+**Blocking preconditions, from `accessibility-reviewer`.** A modal `<dialog>` gives focus management
+for free; a docked panel gives none of it. These are specified before code, not reviewed after:
+
+1. Focus moves into the panel on open (`showModal()` did this; a `<div>` does not).
+2. The region carries an accessible name — `role="region"`/`"form"` with `aria-labelledby` naming
+   the activity — or a screen-reader user loses the modal's implicit "dialog: Edit activity X".
+3. An explicit polite announcement on open. A modal's arrival is inherently perceivable; a
+   non-modal panel's is not.
+4. **Escape precedence decided explicitly.** ADR-0064/0079 already built a deliberate Escape stack
+   for the canvas (tool → open pick → selection) with a target guard. The panel is a **fifth**
+   claimant. Decided in the plan, not left to whichever listener fires first.
+5. Focus returns to the triggering row/control on close.
+6. Tab order between the panel, `PanelResizer` and the canvas's ADR-0026 D7 listbox is specified —
+   the background stays operable, which is the whole point, so a keyboard user tabbing out of the
+   last field must not land mid-edit somewhere unoriented.
+7. The narrow-viewport sheet fallback **keeps** the trap the wide layout deliberately gives up: a
+   sheet does cover the canvas, so it is modal in fact and must be modal in behaviour.
+
+**And a mount-lifecycle answer, from `performance-reviewer`.** The prose describes the container and
+not the lifecycle, and two materially different designs satisfy it: conditionally rendered (mounts
+when an activity is being edited — no regression), or always mounted and hidden (four scope forms'
+RHF watchers, `Combobox` debounced searches and TanStack Query hooks live and re-rendering behind
+the canvas's rAF loop for as long as the workspace is open). The plan must say which, and ship a
+render-count regression test in the shape of ADR-0026 D7's invariant.
+
+**A dialog-shaped guard that a panel removes.** ADR-0060 M6 built regression tests for confirmation
+before discarding unsaved work across three independently-dirty scopes. That flow is backdrop-click
+and close-button shaped. A docked panel removes the thing it guards — named here as a required task
+rather than discovered by a failing suite (`test-engineer`).
 
 ---
 
