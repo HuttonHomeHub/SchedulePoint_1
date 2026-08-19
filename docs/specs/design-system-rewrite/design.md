@@ -213,6 +213,26 @@ the page values and the diagram paints in page colours **with nothing failing an
 today's behaviour, so no test would notice the regression. L1 lands a guard and a test that asserts
 the resolved fill differs from the page fill when the two token values differ.
 
+**And it is not hypothetical — the code is already shaped so that the obvious change hits it.**
+`TsldCanvas.tsx:669,675,687` initialise the three painter palettes with `paletteRef.current ??=
+resolveTsldPalette()`, which runs during the **first render**, and `containerRef` is declared on the
+line after (`:676`). So `containerRef.current` is `null` at that point and passing it resolves the
+**page** family — the exact silent failure above, arriving through the most natural edit anyone
+would make.
+
+The three are re-resolved in a `useEffect` keyed on `themeVersion` (`:1554-1564`), which does run on
+mount with the container available. That would repair it, but only after a frame — and it is a
+**passive** effect, so the rAF loop can paint page colours first. Worse, **that self-repair is
+exactly what ADR-0097 §1.5a removed**: with one theme `themeVersion` never bumps again, so if the
+mount pass ever fails to resolve there is no second chance for the life of the mount.
+
+So L1's shape is decided here rather than in the editor: **the resolution moves to a
+`useLayoutEffect`** — which runs before the browser paints and before the rAF loop's own passive
+effect — and the `??=` initialisers stop resolving from `document.documentElement`. Whatever they
+become, they must not be a plausible-looking page-resolved value, because a plausible fallback is
+indistinguishable from success. The guard belongs on the same line as the resolution, not in a test
+that runs somewhere else.
+
 ---
 
 **Problem statement re-verified 2026-08-19**, before any of E was built, under the rule CLAUDE.md

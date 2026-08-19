@@ -344,21 +344,49 @@ was.** §2 of `design.md` removes the coupling instead.
 Hand-computed, from `globals.css` via `src/test/colour.ts` (the achromatic identity `Y = L³` and the
 full transform for the chromatic values). Relative luminance:
 
-| theme     | ordinary (`--primary`) | near-critical (`--warning`) | critical (`--destructive`) | ground (`--canvas`) |
-| --------- | ---------------------: | --------------------------: | -------------------------: | ------------------: |
-| Light     |              `0.12328` |                   `0.44676` |                  `0.17040` |             `1.000` |
-| Corporate |              `0.01571` |                   `0.16721` |                  `0.11204` |  `~0.964` (flag-on) |
+> **Re-derived 2026-08-19, after Landing A, and the table below is now one column rather than three
+> — which changes which figure Landing E has to fix.** These rows were computed against Light, Dark
+> and Corporate; ADR-0097 §1.5a collapsed the product to one theme, and the surviving values are
+> **exactly the old Corporate row** (`--page-primary` `oklch(0.252 0.056 264)`, `--page-warning`
+> `oklch(0.56 0.115 55)`, `--page-destructive` `oklch(0.505 0.19 27.5)`, `--canvas`
+> `oklch(0.988 0.006 90)` — no longer behind a flag). So the Light column, and with it the
+> **1.27:1 ordinary-vs-critical** figure this section leads on, describes a theme that does not
+> exist. Left in place as the derivation's record; read the "today" column for what is live.
 
-Derived ratios:
+| value                       | OKLCH             | relative luminance |
+| --------------------------- | ----------------- | -----------------: |
+| ordinary (`--primary`)      | `0.252 0.056 264` |          `0.01571` |
+| near-critical (`--warning`) | `0.56 0.115 55`   |          `0.16721` |
+| critical (`--destructive`)  | `0.505 0.19 27.5` |          `0.11204` |
+| ground (`--canvas`)         | `0.988 0.006 90`  |          `0.96464` |
+| page (`--page-background`)  | `0.982 0.002 248` |          `0.94717` |
 
-| pair                      | Light      | Corporate  |
-| ------------------------- | ---------- | ---------- |
-| ordinary vs ground        | **6.06:1** | **15.4:1** |
-| near-critical vs ground   | **2.11:1** | **4.67:1** |
-| critical vs ground        | **4.76:1** | **6.26:1** |
-| ordinary vs critical      | **1.27:1** | 2.47:1     |
-| near-critical vs critical | 2.25:1     | **1.34:1** |
-| ordinary vs near-critical | 2.65:1     | 3.31:1     |
+Derived ratios (the historical columns kept struck through; **today** is the one that governs):
+
+| pair                      | ~~Light~~  | today       |
+| ------------------------- | ---------- | ----------- |
+| ordinary vs ground        | ~~6.06:1~~ | **15.44:1** |
+| near-critical vs ground   | ~~2.11:1~~ | **4.67:1**  |
+| critical vs ground        | ~~4.76:1~~ | **6.26:1**  |
+| ordinary vs critical      | ~~1.27:1~~ | 2.47:1      |
+| near-critical vs critical | ~~2.25:1~~ | **1.34:1**  |
+| ordinary vs near-critical | ~~2.65:1~~ | 3.31:1      |
+| **ground vs page**        | —          | **1.02:1**  |
+
+**Two consequences for Landing E, and the second is the more useful.**
+
+**The pair to fix is near-critical vs critical at 1.34:1**, not ordinary vs critical. The paragraphs
+below lead on 1.27:1, and that figure went with its theme; ordinary vs critical is now 2.47:1, which
+is not good but is not the worst. The two fills a planner scans a wall of bars to tell apart are
+**near-critical and critical**, and they differ by 1.34:1 — below the threshold at which a
+difference reads as intentional. The argument stands word for word; only the pair it names moves.
+
+**`--canvas` against the page is 1.02:1**, measured here rather than asserted, and that is the whole
+reason §3.1's trap has never produced a visible defect. §3.1 says the family survives because
+`--canvas` is "byte-identical to `--card` and near-identical to `--background`" — near-identical is
+now 1.02:1, i.e. two greys nobody can tell apart. **That is the number that makes the scope urgent
+rather than tidy**: the day the ground gets a real value, every ink on it is one validated against a
+surface it is not painted on, and there is no gate that would say so.
 
 Three things to say precisely, because two of them are easy to overstate and this register punishes
 that (ADR-0082 corrected its own author for citing a success criterion that did not apply).
